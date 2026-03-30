@@ -1,0 +1,13 @@
+{
+  "display_name": "LuminaWeave",
+  "loading_order": 100,
+  "requires": [],
+  "optional": [],
+  "js": "dist/index.js",
+  "css": "dist/style.css",
+  "author": "city-unit",
+  "version": "0.1.0",
+  "homePage": "https://github.com/city-unit/luminaweave-extension",
+  "auto_update": false,
+  "minimum_client_version": "1.12.0"
+}

@@ -29,10 +29,21 @@ declare global {
         user_avatar: string;
         main_api: string;
         oai_settings: Record<string, unknown>;
-        extension_settings: Record<string, unknown>;
+        extension_settings: Record<string, any>;
         selected_chat: string;
         world_info: Record<string, unknown>;
         world_info_active: Array<Record<string, unknown>>;
+        
+        // ST 核心对象
+        eventSource: {
+            on: (event: string, callback: (...args: any[]) => void) => void;
+            off: (event: string, callback: (...args: any[]) => void) => void;
+            emit: (event: string, ...args: any[]) => void;
+        };
+        SlashCommandParser: {
+            commands: Record<string, any>;
+            addCommand: (name: string, callback: any, aliases?: string[], hint?: string, ...args: any[]) => void;
+        };
         
         // 常用全局函数
         saveChat: () => Promise<void>;
