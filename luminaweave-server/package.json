@@ -1,0 +1,20 @@
+{
+    "name": "luminaweave-server",
+    "version": "1.0.0",
+    "description": "LuminaWeave Dedicated Server Plugin",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "build": "tsc"
+    },
+    "author": "LuminaWeave",
+    "license": "ISC",
+    "devDependencies": {
+        "@types/express": "^4.17.21",
+        "@types/node": "^20.11.0",
+        "typescript": "^5.3.3"
+    },
+    "dependencies": {
+        "openai": "^6.33.0"
+    }
+}

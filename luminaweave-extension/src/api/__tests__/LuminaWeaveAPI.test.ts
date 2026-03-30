@@ -1,0 +1,76 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { LuminaWeaveAPI } from '../index.js';
+
+// Mock dependecies
+vi.mock('../storage.js', () => ({
+    lwStorage: {
+        get: vi.fn(),
+        on: vi.fn(),
+        _getContextIds: vi.fn(() => ({ charId: '1', chatId: '1' })),
+    }
+}));
+
+vi.mock('../core/SyncEngine.js', () => ({
+    SyncEngine: {
+        compareStates: vi.fn(),
+        getFingerprint: vi.fn(),
+        generateNodeId: vi.fn(() => 'test-node-id'),
+    }
+}));
+
+// Mock window and SillyTavern
+(global as any).window = {
+    SillyTavern: {
+        getContext: vi.fn(() => ({
+            eventSource: { on: vi.fn() },
+            event_types: {},
+        })),
+    },
+    TavernHelper: {
+        formatAsTavernRegexedString: vi.fn((text) => text),
+    }
+};
+
+describe('LuminaWeaveAPI Streaming Cache', () => {
+    let api: LuminaWeaveAPI;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        api = new LuminaWeaveAPI();
+    });
+
+    it('should initialize lastStreamState as null', () => {
+        expect(api.lastStreamState).toBeNull();
+    });
+
+    it('should update lastStreamState when BUFFER_UPDATED is emitted from sub-components', () => {
+        const testText = 'Hello';
+        const testRaw = '<Chat_Reply>Hello</Chat_Reply>';
+        const filteredCount = testRaw.length - testText.length;
+        
+        api.streamHandler.emit('BUFFER_UPDATED', testText, testRaw, filteredCount, '回复中...');
+
+        expect(api.lastStreamState).not.toBeNull();
+        expect(api.lastStreamState?.text).toBe(testRaw);
+        expect(api.lastStreamState?.processed).toBe(testText);
+        expect(api.lastStreamState?.filteredCount).toBe(filteredCount);
+        expect(api.lastStreamState?.statusText).toBe('回复中...');
+    });
+
+    it('should keep forwarded filteredCount without recomputing from raw text', () => {
+        const emittedPayloads: Array<{ processed: string; raw: string; filteredCount: number; statusText?: string }> = [];
+
+        api.on('BUFFER_UPDATED', (processed: string, raw: string, nextFilteredCount: number, statusText?: string) => {
+            emittedPayloads.push({ processed, raw, filteredCount: nextFilteredCount, statusText });
+        });
+
+        api.streamHandler.emit('BUFFER_UPDATED', '你好', '<think>abc</think><Chat_Reply>你好', 18, '回复中...');
+
+        expect(emittedPayloads).toEqual([{
+            processed: '你好',
+            raw: '<think>abc</think><Chat_Reply>你好',
+            filteredCount: 18,
+            statusText: '回复中...'
+        }]);
+    });
+});
