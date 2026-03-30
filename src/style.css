@@ -1,0 +1,292 @@
+/* LuminaWeave Global Style */
+/* @license LuminaWeave Style */
+
+:root {
+  /* --- 基础色盘 (Core Palette) --- */
+  --lw-black: #000000;
+  --lw-white: #ffffff;
+  --lw-blue: #0061e0;
+  --lw-blue-deep: #0046b0;
+  --lw-cyan: #06b6d4;
+  --lw-green: #2ecc71;
+  --lw-red: #ef4444;
+  
+  /* --- 品牌增强 (Brand Enhancement) --- */
+  --lw-primary-container: #2976c7;
+  --lw-on-primary-container: #fdfcff;
+  --lw-secondary-container: #96a5ff;
+  --lw-tertiary-container: #cc4548;
+  --lw-on-tertiary-fixed: #410006;
+  --lw-tertiary-fixed: #ffdad8;
+
+
+  /* --- 字体系统 (Typography) --- */
+  --lw-font-main: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --lw-font-mono: 'JetBrains Mono', 'Fira Code', 'Roboto Mono', 'Consolas', monospace;
+
+
+  /* --- 语义化分层令牌 (Semantic Tokens) --- */
+  /* 背景层 */
+  --lw-bg-app: #f8fafc;
+  --lw-bg-surface: #ffffff;
+  --lw-bg-subtle: #f3f4f5;
+  --lw-bg-hover: #f9fafb;
+  --lw-bg-active: #edeeef;
+  
+  /* 容器阶梯 (Container Scale) */
+  --lw-surface-container-lowest: #ffffff;
+  --lw-surface-container-low: #f3f4f5;
+  --lw-surface-container: #edeeef;
+  --lw-surface-container-high: #e7e8e9;
+  --lw-surface-container-highest: #e1e3e4;
+
+
+  /* 文字层 */
+  --lw-text-main: #0f172a;
+  /* 标题与正文 - 深色增强 */
+  --lw-text-secondary: #334155;
+  --lw-text-muted: #64748b;
+  --lw-text-inverse: #ffffff;
+
+  /* 边框层 */
+  --lw-border-base: #e2e8f0;
+  --lw-border-subtle: rgba(0, 0, 0, 0.03);
+  --lw-border-strong: rgba(0, 0, 0, 0.08);
+  --lw-border-active: #000000;
+  --lw-border-hover: #cbd5e1;
+  --lw-border-cyan: rgba(6, 182, 212, 0.3);
+
+
+  /* 品牌与反馈 */
+  --lw-primary: var(--lw-blue);
+  --lw-primary-hover: var(--lw-blue-deep);
+  --lw-accent: var(--lw-primary);
+
+  /* 阴影与圆角 */
+  --lw-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  --lw-shadow-card: 0px 12px 32px rgba(25, 28, 29, 0.04);
+  --lw-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --lw-radius: 12px;
+  --lw-radius-sm: 8px;
+  --lw-radius-xl: 16px;
+  --lw-radius-3xl: 24px;
+
+
+  /* 间距与排版 */
+  --lw-panel-padding: 24px;
+  --lw-item-gap: 16px;
+  --lw-transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --lw-glass-blur: blur(12px);
+  --lw-bg-selection: rgba(37, 99, 235, 0.08);
+  --lw-mobile-breakpoint: 768px;
+
+}
+
+/* --- 全局 UI 工具类 (Global Utilities) --- */
+
+/* 1. 卡片与布局 */
+.lw-card {
+  background: var(--lw-bg-surface);
+  border: 1px solid var(--lw-border-base);
+  border-radius: var(--lw-radius);
+  padding: 20px;
+  transition: var(--lw-transition);
+}
+
+.lw-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: var(--lw-shadow-hover);
+}
+
+/* 2. 按钮系统 (Linear Style) */
+.lw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--lw-radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--lw-transition);
+  border: 1px solid transparent;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.lw-btn-primary {
+  background: #111827;
+  color: var(--lw-text-inverse);
+  border: none;
+}
+
+.lw-btn-primary:hover:not(:disabled) {
+  background: #000000;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.lw-gradient-primary {
+  background: linear-gradient(135deg, var(--lw-primary), var(--lw-primary-container));
+  color: white;
+}
+
+
+.lw-btn-secondary {
+  background: var(--lw-bg-surface);
+  border-color: var(--lw-border-base);
+  color: var(--lw-text-main);
+}
+
+.lw-btn-secondary:hover:not(:disabled) {
+  background: var(--lw-bg-hover);
+  border-color: #cbd5e1;
+}
+
+.lw-btn-ghost {
+  background: transparent;
+  color: var(--lw-text-secondary);
+}
+
+.lw-btn-ghost:hover:not(:disabled) {
+  background: var(--lw-bg-active);
+  color: var(--lw-text-main);
+}
+
+.lw-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 3. 输入与下拉 (Modern Minimalist) */
+.lw-input,
+.lw-select {
+  padding: 10px 14px;
+  border: 1px solid var(--lw-border-base) !important;
+  border-radius: var(--lw-radius-sm);
+  font-size: 12px;
+  color: var(--lw-text-main);
+  background-color: var(--lw-bg-surface) !important;
+  outline: none;
+  transition: var(--lw-transition);
+  font-family: inherit;
+  width: 100%;
+}
+
+.lw-input:focus,
+.lw-select:focus {
+  border-color: var(--lw-border-active) !important;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+}
+
+/* 4. 开关切换器 (iOS Style) */
+.lw-toggle {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.lw-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.lw-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #d1d5db;
+  transition: var(--lw-transition);
+  border-radius: 10px;
+}
+
+.lw-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: var(--lw-transition);
+  border-radius: 50%;
+  box-shadow: var(--lw-shadow);
+}
+
+.lw-toggle input:checked+.lw-toggle-slider {
+  background-color: var(--lw-accent);
+}
+
+.lw-toggle input:checked+.lw-toggle-slider:before {
+  transform: translateX(14px);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --lw-panel-padding: 12px;
+  }
+}
+
+/* 一些全局的平滑动画类 */
+.lw-fade-enter-active,
+.lw-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.lw-fade-enter-from,
+.lw-fade-leave-to {
+  opacity: 0;
+}
+
+/* 5. 徽章系统 (Badge System) */
+.lw-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.lw-badge-subtle {
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-muted);
+}
+
+.lw-badge-primary {
+  background: var(--lw-bg-selection);
+  color: var(--lw-primary);
+}
+
+.lw-badge-cyan {
+  background: rgba(6, 182, 212, 0.1);
+  color: var(--lw-cyan);
+}
+
+/* 自定义滚动条 (Scrollbar) */
+.scroll-container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-container::-webkit-scrollbar-thumb {
+  background: var(--lw-border-base);
+  border-radius: 10px;
+}
+
+.scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--lw-text-muted);
+}
