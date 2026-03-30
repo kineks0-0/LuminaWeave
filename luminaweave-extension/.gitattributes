@@ -1,0 +1,6 @@
+# 确保 dist 目录中的文件在合并冲突时始终优先保留本地版本 (或二进制处理)
+dist/** merge=ours-manual-merge
+# 如果没有定义 ours-manual-merge 驱动程序，也可以使用 binary 来避免差异混淆
+# 但建议在全局 git config 中配置 merge.ours.driver = true
+# 这样在 master 与别的分支合并时，会自动保留自己的产物而不产生冲突
+dist/** binary
