@@ -81,11 +81,11 @@ d:\LuminaWeave\
 本项目本地采用 **Monorepo (单体仓库)** 结构，但支持将子项目独立发布至 GitHub：
 - **本地仓库**: `D:\LuminaWeave` (根目录) 统一管理所有代码。
 - **发布策略**: 使用 `git subtree` 将子项目文件夹（如 `luminaweave-extension`）同步至独立的远程仓库。
-- **同步工具**: 可调用 `.agent/scripts/sync-projects.ps1` 进行一键推送/拉取。
+- **同步工具**: 可在项目根目录运行 `. .\sync-projects.ps1` 进行一键推送/拉取。
 
 ### 2. 冲突预防与构建产物
 为了方便用户直接安装，我们会在 Git 中保留 `dist/` 编译产物。
-- **防止合并冲突**: 在子项目根目录配置了 `.gitattributes`，设置 `dist/** merge=ours`。这确保了在分支合并时，始终优先保留当前分支的构建版本。
+- **防止合并冲突**: 在子项目根目录配置了 `.gitattributes`，设置 `dist/** merge=ours`。这确保了在分支合并时，始终优先保留当前分支的构建版本备份。
 
 ### 3. 国际化 (i18n) 规范
 插件支持多语言动态切换：
@@ -94,6 +94,18 @@ d:\LuminaWeave\
 
 ### 4. 数据隐私与安全
 - **严格忽略**: `luminaweave-server/data/` 被根目录全局忽略，禁止将任何用户敏感数据提交至版本库。
+
+---
+
+## 🚀 开发常用命令速查
+
+### 同步远程子项目
+```powershell
+. .\sync-projects.ps1
+Publish-LuminaExtension  # 发布插件更新
+Update-LuminaExtension   # 拉取远程插件更新
+Publish-LuminaServer     # 发布服务端更新
+```
 
 ---
 
