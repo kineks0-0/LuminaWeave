@@ -20,16 +20,29 @@
       <!-- 2. 下一回合规划 (Ephemeral Control) -->
       <div class="content-section">
         <div class="section-title-wrapper">
-          <h3 class="section-main-title">行动规划 (Next_Plan)</h3>
-          <span class="lw-badge" :class="isOrchestrationAsync ? 'lw-badge-primary' : 'lw-badge-subtle'">
-            {{ isOrchestrationAsync ? 'Async 模式' : 'Piggyback 模式' }}
-          </span>
+          <h3 class="section-main-title">当前规划 (Context Plan)</h3>
+          <div class="header-badges">
+            <span class="lw-badge" :class="isOrchestrationAsync ? 'lw-badge-primary' : 'lw-badge-subtle'">
+              {{ isOrchestrationAsync ? 'Async 模式' : 'Piggyback 模式' }}
+            </span>
+          </div>
         </div>
-        <div class="plan-bubble" :class="{ 'empty': !nextPlan }">
-          <div v-if="nextPlan" class="bubble-text">{{ nextPlan }}</div>
-          <div v-else class="bubble-placeholder">
-            <span class="loading-dots">...</span>
-            尚未探测到后续剧情波形
+        
+        <div class="plan-bubble-group">
+          <div class="plan-bubble" :class="{ 'empty': !nextPlan }">
+            <div class="bubble-label">下一轮规划 (Next_Plan)</div>
+            <div v-if="nextPlan" class="bubble-text">{{ nextPlan }}</div>
+            <div v-else class="bubble-placeholder">尚未探测到后续剧情波形</div>
+          </div>
+
+          <div class="plan-bubble summary-bubble">
+            <div class="bubble-label">剧情概况 (Story_Summary)</div>
+            <textarea 
+              class="summary-textarea" 
+              v-model="editableSummary" 
+              @blur="saveSummary"
+              placeholder="凝练地总结当前剧情状态..."
+            ></textarea>
           </div>
         </div>
       </div>
@@ -38,10 +51,14 @@
       <div class="content-section">
         <div class="section-title-wrapper">
           <h3 class="section-main-title">世界快照 (Mutation Tables)</h3>
+          <button class="lw-btn lw-btn-icon lw-btn-subtle" @click="isEditingTables = !isEditingTables" :title="isEditingTables ? '退出编辑' : '编辑表格'">
+             <svg v-if="!isEditingTables" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+             <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </button>
         </div>
         
         <div class="dynamic-tables-grid">
-           <div v-for="(meta, id) in tier1Store.tableRegistry" :key="id" class="lw-card table-card">
+           <div v-for="(meta, id) in tier1Store.tableRegistry" :key="id" class="lw-card table-card" :class="{ 'is-editing': isEditingTables }">
               <div class="table-card-header">
                  <span class="table-icon">{{ meta.icon || '📊' }}</span>
                  <span class="table-name">{{ meta.title }}</span>
@@ -53,7 +70,8 @@
                  <div v-if="meta.renderType === 'grid'" class="data-grid">
                     <div v-for="(val, key) in tables[id]" :key="key" class="grid-item">
                        <label>{{ key }}:</label>
-                       <span>{{ val }}</span>
+                       <input v-if="isEditingTables" type="text" v-model="tables[id][key]" class="inline-input" @change="saveTable(id)">
+                       <span v-else>{{ val }}</span>
                     </div>
                  </div>
 
@@ -62,13 +80,15 @@
                     <div v-for="(char, name) in tables[id].npcs" :key="name" class="relationship-item">
                        <div class="rel-info">
                           <span class="rel-name">{{ name }}</span>
-                          <span class="rel-status">{{ char.status }}</span>
+                          <input v-if="isEditingTables" type="text" v-model="char.status" class="inline-input status-input" @change="saveTable(id)">
+                          <span v-else class="rel-status">{{ char.status }}</span>
                        </div>
                        <div class="rel-affinity">
                           <div class="affinity-track">
                              <div class="affinity-fill" :style="{ width: char.affinity + '%' }"></div>
                           </div>
-                          <span class="affinity-num">{{ char.affinity }}</span>
+                          <input v-if="isEditingTables" type="number" v-model.number="char.affinity" class="inline-input affinity-input" min="0" max="100" @change="saveTable(id)">
+                          <span v-else class="affinity-num">{{ char.affinity }}</span>
                        </div>
                     </div>
                     <div v-if="Object.keys(tables[id].npcs).length === 0" class="data-empty">暂无人物数据</div>
@@ -79,9 +99,18 @@
                     <table class="data-table">
                        <tbody v-if="tables[id].length > 0">
                           <tr v-for="(item, idx) in tables[id]" :key="idx">
-                             <td class="cell-main">{{ item.item }}</td>
-                             <td class="cell-val">x{{ item.count }}</td>
-                             <td class="cell-dim">{{ item.desc || '-' }}</td>
+                             <td class="cell-main">
+                                <input v-if="isEditingTables" type="text" v-model="item.item" class="inline-input" @change="saveTable(id)">
+                                <span v-else>{{ item.item }}</span>
+                             </td>
+                             <td class="cell-val">
+                                <input v-if="isEditingTables" type="number" v-model.number="item.count" class="inline-input count-input" @change="saveTable(id)">
+                                <span v-else>x{{ item.count }}</span>
+                             </td>
+                             <td class="cell-dim">
+                                <input v-if="isEditingTables" type="text" v-model="item.desc" class="inline-input" @change="saveTable(id)">
+                                <span v-else>{{ item.desc || '-' }}</span>
+                             </td>
                           </tr>
                        </tbody>
                        <div v-else class="data-empty">列表为空</div>
@@ -90,14 +119,26 @@
 
                  <!-- 3.4 List 渲染 (例如 Skills) -->
                  <div v-else-if="meta.renderType === 'list'" class="tags-container">
-                    <span v-for="tag in tables[id]" :key="tag" class="data-tag">{{ tag }}</span>
-                    <div v-if="tables[id].length === 0" class="data-empty">暂未习得任何能力</div>
+                    <template v-if="isEditingTables">
+                        <div v-for="(tag, idx) in tables[id]" :key="idx" class="edit-tag-wrapper">
+                            <input type="text" v-model="tables[id][idx]" class="inline-input tag-input" @change="saveTable(id)">
+                            <button @click="tables[id].splice(idx, 1); saveTable(id)" class="tag-del">×</button>
+                        </div>
+                        <button @click="tables[id].push('新能力'); saveTable(id)" class="lw-btn lw-btn-subtle lw-btn-icon">+</button>
+                    </template>
+                    <template v-else>
+                        <span v-for="tag in tables[id]" :key="tag" class="data-tag">{{ tag }}</span>
+                    </template>
+                    <div v-if="tables[id].length === 0 && !isEditingTables" class="data-empty">暂未习得任何能力</div>
                  </div>
 
                  <!-- 3.5 Text/Plot 渲染 (例如 Plot) -->
                  <div v-else-if="meta.renderType === 'text'" class="text-block">
-                    <div class="plot-outline"><strong>大纲:</strong> {{ tables[id].outline }}</div>
-                    <div class="plot-tasks"><strong>任务:</strong> {{ tables[id].tasks?.join(', ') || '无' }}</div>
+                    <div class="plot-outline">
+                       <strong>大纲:</strong> 
+                       <textarea v-if="isEditingTables" v-model="tables[id].outline" class="inline-textarea" @change="saveTable(id)"></textarea>
+                       <span v-else>{{ tables[id].outline }}</span>
+                    </div>
                  </div>
               </div>
            </div>
@@ -135,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject } from 'vue';
+import { ref, computed, inject, watch } from 'vue';
 import { useDirectorStore } from '../DirectorStore';
 import { useTier1Store } from '../Tier1Store';
 import { lwStorage } from '../../../api/storage';
@@ -146,8 +187,23 @@ const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const directorStore = useDirectorStore();
 const tier1Store = useTier1Store();
 
-// 获取配置
+// --- 状态控制 ---
 const isOrchestrationAsync = computed(() => lwStorage.get('lumina-director.orchestrationMode', 'piggyback') === 'async');
+const isEditingTables = ref(false);
+
+// --- 剧情概况同步 ---
+const editableSummary = ref(directorStore.storySummary);
+watch(() => directorStore.storySummary, (newVal) => {
+    editableSummary.value = newVal;
+});
+
+const saveSummary = () => {
+    directorStore.setStorySummary(editableSummary.value);
+    // 触发世界书同步
+    if (lwApi) {
+        lwApi.promptWorldInfoMount.syncToWorldInfo();
+    }
+};
 
 // --- 数据解耦绑定 ---
 const tables = computed(() => tier1Store.tables);
@@ -171,6 +227,17 @@ const handleReExecuteMutations = async () => {
     }
 };
 
+const saveTable = (tableId: string) => {
+    // 强制触发持久化同步 (通过 lwApi)
+    if (lwApi) {
+        console.log(`[DirectorPanel] 手动更新表格数据: ${tableId}`);
+        // 确保 UI 更新能同步到 Lumina 的独立存储中
+        lwApi.chatManager.saveToIndependentChat();
+        // 如果正在生成，可能需要同步
+        lwApi.promptWorldInfoMount.syncToWorldInfo();
+    }
+};
+
 </script>
 
 <style scoped>
@@ -184,7 +251,7 @@ const handleReExecuteMutations = async () => {
   font-family: var(--lw-font-main);
 }
 
-/* 1. Header Styles - Simplified Actions Only */
+/* 1. Header Styles */
 .panel-header {
   padding: 12px 20px;
   background: var(--lw-bg-surface);
@@ -198,14 +265,13 @@ const handleReExecuteMutations = async () => {
   gap: 8px;
 }
 
-/* 按钮统一使用 lw-btn 逻辑，这里只需微调 header 内部间距 */
 .action-btn {
   padding: 6px 12px;
   font-size: 11px;
 }
 
 .action-btn.primary {
-  background: var(--lw-primary); /* 确保一致性 */
+  background: var(--lw-primary);
 }
 
 /* 2. Content Sections */
@@ -234,19 +300,28 @@ const handleReExecuteMutations = async () => {
   letter-spacing: 0.05em;
 }
 
-/* 3. Plan Bubble */
+/* 3. Plan Hub */
+.plan-bubble-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .plan-bubble {
   background: var(--lw-bg-surface);
   border: 1px solid var(--lw-border-base);
   border-left: 3px solid var(--lw-primary);
   border-radius: var(--lw-radius);
-  padding: 16px;
+  padding: 12px 16px;
   transition: var(--lw-transition);
 }
 
-.plan-bubble:hover {
-  border-color: var(--lw-border-hover);
-  box-shadow: var(--lw-shadow);
+.bubble-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--lw-text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
 }
 
 .bubble-text {
@@ -256,15 +331,28 @@ const handleReExecuteMutations = async () => {
   white-space: pre-wrap;
 }
 
+.summary-textarea {
+    width: 100%;
+    min-height: 60px;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--lw-text-main);
+    font-size: 12px;
+    line-height: 1.5;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.summary-bubble {
+    border-left-color: var(--lw-accent-teal, #26a69a);
+}
+
 .bubble-placeholder {
   color: var(--lw-text-muted);
   font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  padding: 8px 0;
 }
-
-.loading-dots { font-weight: 900; animation: blink 1.5s infinite; }
 
 /* 4. Dynamic Tables Grid */
 .dynamic-tables-grid {
@@ -274,8 +362,14 @@ const handleReExecuteMutations = async () => {
 }
 
 .table-card {
-  padding: 0; /* 内部 padding 重新控制 */
+  padding: 0;
   overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.table-card.is-editing {
+    border-color: var(--lw-primary);
+    box-shadow: 0 0 0 1px var(--lw-primary);
 }
 
 .table-card-header {
@@ -308,6 +402,60 @@ const handleReExecuteMutations = async () => {
 .table-card-body {
   padding: 12px;
 }
+
+/* Inline Editors */
+.inline-input {
+    background: var(--lw-bg-app);
+    border: 1px solid var(--lw-border-base);
+    border-radius: 4px;
+    color: var(--lw-text-main);
+    font-size: 11px;
+    padding: 2px 6px;
+    width: 100%;
+    outline: none;
+}
+
+.inline-input:focus {
+    border-color: var(--lw-primary);
+}
+
+.inline-textarea {
+    width: 100%;
+    min-height: 40px;
+    background: var(--lw-bg-app);
+    border: 1px solid var(--lw-border-base);
+    border-radius: 4px;
+    color: var(--lw-text-main);
+    font-size: 11px;
+    padding: 4px 8px;
+    margin-top: 4px;
+    outline: none;
+    resize: vertical;
+}
+
+.count-input { width: 50px; text-align: center; }
+.affinity-input { width: 60px; }
+.status-input { font-weight: bold; color: var(--lw-primary); }
+
+.edit-tag-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--lw-bg-subtle);
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.tag-del {
+    border: none;
+    background: transparent;
+    color: var(--lw-text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 4px;
+}
+
+.tag-del:hover { color: var(--lw-danger); }
 
 /* Specific Renderers */
 .data-grid {
@@ -358,11 +506,11 @@ const handleReExecuteMutations = async () => {
 .affinity-fill { height: 100%; background: var(--lw-primary); border-radius: 2px; transition: width 0.5s ease; }
 .affinity-num { font-size: 10px; font-weight: 800; color: var(--lw-primary); min-width: 20px; text-align: right; }
 
-.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.data-table td { padding: 8px 4px; border-bottom: 1px solid var(--lw-border-subtle); }
-.cell-main { font-weight: 600; color: var(--lw-text-secondary); }
-.cell-val { color: var(--lw-primary); font-weight: 800; text-align: center; }
-.cell-dim { color: var(--lw-text-muted); font-size: 11px; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.data-table td { padding: 6px 4px; border-bottom: 1px solid var(--lw-border-subtle); }
+.cell-main { font-weight: 600; color: var(--lw-text-secondary); width: 40%; }
+.cell-val { color: var(--lw-primary); font-weight: 800; text-align: center; width: 15%; }
+.cell-dim { color: var(--lw-text-muted); font-size: 10px; width: 45%; }
 
 .tags-container { display: flex; flex-wrap: wrap; gap: 6px; }
 .data-tag { 
@@ -380,7 +528,7 @@ const handleReExecuteMutations = async () => {
 
 .text-block { font-size: 12px; color: var(--lw-text-secondary); display: flex; flex-direction: column; gap: 6px; }
 
-.data-empty { padding: 12px; text-align: center; font-size: 12px; color: var(--lw-text-muted); font-style: italic; }
+.data-empty { padding: 12px; text-align: center; font-size: 11px; color: var(--lw-text-muted); font-style: italic; }
 
 /* 5. Memory Cards */
 .memory-cards { display: flex; flex-direction: column; gap: 16px; }
@@ -413,9 +561,7 @@ const handleReExecuteMutations = async () => {
 .memory-row:last-child { border-bottom: none; padding-bottom: 0; }
 
 .row-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
-.row-time { 
-  font-size: 9px;
-}
+.row-time { font-size: 9px; }
 .row-loc { font-size: 10px; color: var(--lw-text-muted); font-weight: 600; }
 .row-summary { font-size: 12px; color: var(--lw-text-main); font-weight: 500; line-height: 1.5; }
 

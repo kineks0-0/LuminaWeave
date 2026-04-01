@@ -42,19 +42,20 @@ export class ChatConverter {
 
         const charId = (extra.characterId as string | number | undefined) || (lwStorage as any)._getContextIds()?.charId;
 
+        const fingerprint = extra.fingerprint as string | undefined || SyncEngine.getFingerprint(rawContent);
+
         // 核心：ID 与指纹的稳定提取
         // 优先从 ST 的 extra 中提取持久化 ID，如果没有则回退到 ST 原生所在的 message_id，或者生成随机 ID
         let stableId = extra.id as string | undefined;
         if (!stableId) {
             if (m.message_id !== undefined && m.message_id !== null) {
-                stableId = `st_msg_${m.message_id}`;
+                stableId = `st_msg_${m.message_id}_${fingerprint}`;
             } else {
                 stableId = m.message_id;
             }
         }
         const id = stableId || SyncEngine.generateNodeId();
         
-        const fingerprint = extra.fingerprint as string | undefined || SyncEngine.getFingerprint(rawContent);
 
         // 核心修复：适配 ST 多用户身份以及 is_user 的判定
         const isUser = is_user !== undefined ? is_user : (m.role === 'user');
@@ -64,12 +65,18 @@ export class ChatConverter {
 
         return {
             id,
-            parentId: null, // 由 Manager 在链接时维护
+            /** 
+             * 此处显式设为 null。
+             * 理由：ChatConverter 仅负责协议转换，不具备全局 Worldline 拓扑上下文。
+             * 实际的 parentId 链式赋值由 STSyncService 在执行同步/缝合(Stitching)时完成。
+             */
+            parentId: null, 
             name: name,
             role: m.role || 'assistant',
             is_user: isUser,     // 从 ST 的 is_user 或 role 中提取
             mes: mesContent,     // Lumina 内部存储的 mes 应是原始的，显示时再动态应用正则
             mesRaw: rawContent,  // 显式保留原始备份
+            is_hidden: m.is_hidden || false,
             fingerprint: fingerprint,
             send_date: send_date,
             characterId: charId,
@@ -82,15 +89,15 @@ export class ChatConverter {
     /**
      * 将 Lumina 的消息对象转换为 ST 可接受的回写格式
      */
-    static toST(m: LuminaChatMessage): any {
+    static toST(m: LuminaChatMessage): ChatMessage {
         const mes_chat = XMLInterceptor.extractTagContent(m.mesRaw || m.mes, BuiltinXMLTags.CHAT_REPLY);
         const chat_reply = mes_chat.join('');
-        const item: any = {
+        const item: ChatMessage = {
             message_id: m.message_id!, // 由 STBridge 处理具体索引
             role: m.role as 'system' | 'assistant' | 'user',
             message: chat_reply,  // 写入 ST 的核心展示字段 (原始数据) - 注意使用的是 message
             name: m.name,
-            is_hidden: (m.extra.is_hidden as boolean | undefined) || false,
+            is_hidden: m.is_hidden || false,
             data: (m.extra.data as Record<string, unknown> | undefined) || {},
             extra: {
                 ...m.extra,
@@ -119,6 +126,7 @@ export class ChatConverter {
             role: m.role,
             is_user: m.is_user,
             mesRaw: m.mesRaw,
+            is_hidden: m.is_hidden,
             pluginRaw: m.pluginRaw,
             fingerprint: m.fingerprint,
             send_date: m.send_date,

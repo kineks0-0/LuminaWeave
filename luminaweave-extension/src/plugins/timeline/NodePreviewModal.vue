@@ -98,7 +98,7 @@ const renderedContent = computed(() => {
 
 @media (max-width: 768px) {
   .l-modal-overlay {
-    padding: 8px;
+    padding: 8px !important;
   }
 }
 
@@ -119,7 +119,7 @@ const renderedContent = computed(() => {
   .l-modal-container {
     width: 100%;
     max-width: 100%;
-    max-height: 85vh;
+    max-height: 100%;
     height: auto;
     border-radius: 16px;
   }
@@ -147,6 +147,15 @@ const renderedContent = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+
+@media (max-width: 768px) {
+  .title-area {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+  }
 }
 
 .brand-badge {
@@ -179,7 +188,7 @@ const renderedContent = computed(() => {
   .header-actions {
     width: 100%;
     justify-content: space-between;
-    gap: 10px;
+    gap: 10px !important;
   }
 }
 

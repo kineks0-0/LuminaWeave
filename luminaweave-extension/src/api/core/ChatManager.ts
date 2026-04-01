@@ -17,6 +17,7 @@ export interface LuminaChatMessage {
     is_user?: boolean;         // 是否为用户消息
     mesRaw: string;            // 原始对话内容: 用于编辑、同步与指纹生成
     mes: string;               // 显示对话内容: 经过正则/插件处理后的文本
+    is_hidden?: boolean;       // 是否隐藏 (不发送给大模型): ST 原生可见性控制
     pluginRaw?: string | null;  // 原始回复数据: 保存 LLM 的原始输出（含 XML 标签），mesRaw 仅为从中提取的对话部分
     fingerprint: string;       // 内容指纹: 仅由内容生成，用于检测内容是否发生变化
     send_date: number;
@@ -120,6 +121,9 @@ export class ChatManager extends LuminaWeaveAPIBase {
             
             // 只有当不跳过加载且（强制覆盖或本地池为空或明确要求强制加载）时才从磁盘加载
             if (policy === 'independent' && !options.skipIndependentLoad) {
+                // 核心修复：从后端拉取全量数据前，确保插件已同步并对齐最新的事务操作 ID
+                await this.persistence.alignTransactionState(chatId);
+
                 const alreadyHasData = this.store.nodePool.length > 0;
                 if (options.forceIndependentLoad || explicitForceOverwrite || !alreadyHasData || !this._isIndependentLoaded) {
                     this._isIndependentLoaded = await this.persistence.loadFromIndependentChat();

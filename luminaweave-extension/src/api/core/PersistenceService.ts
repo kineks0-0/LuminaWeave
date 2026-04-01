@@ -1,4 +1,4 @@
-﻿import { lwStorage } from '../storage.js';
+import { lwStorage } from '../storage.js';
 import { ChatConverter } from './ChatConverter.js';
 import { LuminaChatMessage as LuminaChatMessage } from './ChatManager.js';
 import { WorldlineStore } from './WorldlineStore.js';
@@ -9,12 +9,12 @@ import { TransactionContextPayload, TransactionErrorPayload, TransactionMutation
 
 /**
  * PersistenceService
- * ����Ի����ݵ�����־û��߼� (JSONL �洢�����)
+ * 负责对话数据的物理持久化逻辑 (JSONL 存储与加载)
  */
 export class PersistenceService {
     private _opQueue: Promise<unknown> = Promise.resolve();
     private _lastCommittedSeqByChat: Map<string, number> = new Map();
-    // integratedTxIdByChat ��ʾ��ǰ���ؽڵ�������ɣ����룩�ķ��������� ID
+    // integratedTxIdByChat 表示当前本地节点池所集成（对齐）的服务器事务 ID
     private _integratedTxIdByChat: Map<string, string> = new Map();
 
     // private _opQueue: Promise<any> = Promise.resolve();
@@ -25,7 +25,7 @@ export class PersistenceService {
     ) { }
 
     /**
-     * �������������ִ�У��������������� IO ���µ� Race Condition
+     * 将操作排入队列执行，物理上消除并发 IO 导致的 Race Condition
      */
     private _enqueue<T>(op: () => Promise<T>): Promise<T> {
         const nextOp = this._opQueue.then(() => op());
@@ -97,7 +97,7 @@ export class PersistenceService {
                 const conflict = await res.json() as TransactionMutationResponse;
                 const conflictSeq = typeof conflict.lastCommittedSeq === 'number' ? conflict.lastCommittedSeq : 0;
                 await this._persistLastCommittedSeq(chatId, conflictSeq);
-                const detail = conflict.error?.message || '�������г�ͻ';
+                const detail = conflict.error?.message || '事务序列冲突';
                 throw new Error(`TXN_SEQUENCE_CONFLICT:${detail}`);
             }
             throw new Error(`REQUEST_FAILED:${res.status}`);
@@ -114,7 +114,7 @@ export class PersistenceService {
         }
         const txError = payload.error as TransactionErrorPayload | undefined;
         if (txError && txError.code === 'TXN_SEQUENCE_CONFLICT') {
-            const detail = txError.message || '�������г�ͻ';
+            const detail = txError.message || '事务序列冲突';
             throw new Error(`TXN_SEQUENCE_CONFLICT:${detail}`);
         }
     }
@@ -211,7 +211,7 @@ export class PersistenceService {
     }
 
      /**
-     * �ȴ���������������
+     * 等待后端所有事务完成
      */
     private async _waitForTransactions(chatId: string, maxWaitMs = 10000): Promise<boolean> {
         const start = Date.now();
@@ -228,16 +228,51 @@ export class PersistenceService {
                     }
                 }
             } catch (e) {
-                console.warn(`[PersistenceService] ��ȡ����״̬ʧ��`, e);
+                console.warn(`[PersistenceService] 获取事务状态失败`, e);
             }
             await new Promise(r => setTimeout(r, 500));
         }
-        console.warn(`[PersistenceService] �ȴ�������ɳ�ʱ (${maxWaitMs}ms) [ID: ${chatId}]`);
+        console.warn(`[PersistenceService] 等待事务完成超时 (${maxWaitMs}ms) [ID: ${chatId}]`);
         return false;
     }
 
     /**
-     * �Ӷ����洢�������ݲ����� Store
+     * 事务 ID 对齐：主动从后端请求并刷新本地 Sequence
+     */
+    async alignTransactionState(chatId: string): Promise<void> {
+        return this._enqueue(async () => {
+            // 1. 等待正在进行的事务完成 (最大 10s)
+            await this._waitForTransactions(chatId);
+
+            try {
+                const csrfToken = await STBridge.getCsrfToken();
+                // 2. 请求当前最新的事务状态
+                const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}/sync-status`, {
+                    headers: { 'X-CSRF-Token': csrfToken }
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success) {
+                        const remoteSeq = typeof data.lastCommittedSeq === 'number' ? data.lastCommittedSeq : 0;
+                        const remoteTxId = data.lastTransactionId || '';
+                        
+                        // 3. 同步本地 ID 到前端存储
+                        console.log(`[PersistenceService] 执行事务对齐: LocalSeq=${this._getLastCommittedSeq(chatId)}, RemoteSeq=${remoteSeq}, RemoteTxId=${remoteTxId}`);
+                        await this._persistLastCommittedSeq(chatId, remoteSeq);
+                        if (remoteTxId) {
+                            this._setIntegratedTxId(chatId, remoteTxId);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn(`[PersistenceService] 事务 ID 对齐失败 [ID: ${chatId}]`, e);
+            }
+        });
+    }
+
+    /**
+     * 从独立存储加载数据并灌入 Store
      */
     async loadFromIndependentChat(): Promise<boolean> {
         return this._enqueue(async () => {
@@ -278,7 +313,7 @@ export class PersistenceService {
 
                         const normalizedNodes = SyncEngine.ensureFingerprints(messages);
 
-                        // ���䣺ȷ�������л�ʱ�ָ�������ɫ���ԣ���Ϊ�����洢����û�������� metadata
+                        // 补充：确保反序列化时恢复基础角色属性，因为独立存储可能没有完整的 metadata
                         normalizedNodes.forEach(n => {
                             if (!n.name) {
                                 n.name = n.is_user ? 'You' : 'Assistant';
@@ -293,7 +328,7 @@ export class PersistenceService {
                             this.store.activeLeafId = normalizedNodes[normalizedNodes.length - 1].id;
                         }
 
-                        console.log(`[PersistenceService] �ѴӶ����洢���� ${normalizedNodes.length} ����Ϣ`);
+                        console.log(`[PersistenceService] 已从独立存储加载 ${normalizedNodes.length} 条消息`);
 
                         if (metadata && metadata.pluginData) {
                             pluginManager.callHooks('onMetadataImport' as any, metadata.pluginData);
@@ -311,21 +346,21 @@ export class PersistenceService {
                         return true;
                     }
                 } else if (res.status === 404) {
-                    // �����޸����½��Ի�ʱ����Ȼû�ж����洢��ҲӦ����������ù���
+                    // 核心修复：新建对话时，虽然没有独立存储，也应触发插件重置钩子
                     pluginManager.callHooks('onMetadataImport' as any, null);
                     return true;
                 }
             } catch (e) {
-                console.warn('[PersistenceService] ����ʧ��:', e);
+                console.warn('[PersistenceService] 加载失败:', e);
             }
             return false;
         });
     }
 
     /**
-     * ����ͬ�����ؽڵ�ص����
-     * @param targetChatId Ŀ��Ự ID
-     * @param forceFull �Ƿ�ǿ��ȫ������
+     * 增量同步本地节点池到后端
+     * @param targetChatId 目标会话 ID
+     * @param forceFull 是否强制全量覆盖
      */
     async syncToIndependentChat(targetChatId?: string, forceFull = false): Promise<void> {
         return this._enqueue(async () => {
@@ -333,7 +368,7 @@ export class PersistenceService {
             if (chatId === 'default') return;
 
             if (!this.isLoadedProvider()) {
-                console.warn(`[PersistenceService] �ܾ�����д��: ��ǰ�Ự [ID: ${chatId}] �Ķ����洢������δͬ���ɹ����ʼ����ɡ�Ϊ�˱�����֧���ݣ����α��������ء�`);
+                console.warn(`[PersistenceService] 拒绝物理写回: 当前会话 [ID: ${chatId}] 的独立存储数据尚未同步成功或初始化中。为了保护分支数据，本次保存已拦截。`);
                 return;
             }
 
@@ -342,7 +377,7 @@ export class PersistenceService {
             try {
                 const csrfToken = await STBridge.getCsrfToken();
 
-                // 1. ��ȡ��˵�ǰ״̬ (���նԱ�)
+                // 1. 获取后端当前状态 (快照对比)
                 const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}`, {
                     headers: { 'X-CSRF-Token': csrfToken }
                 });
@@ -356,17 +391,17 @@ export class PersistenceService {
                     await this._persistLastCommittedSeq(chatId, remoteCommittedSeq);
                 }
 
-                // 2. Ԥ�������� (���� metadata)
+                // 2. 预处理数据 (过滤 metadata)
                 const remoteNodes = remoteData.filter(d => d.type !== 'metadata');
                 const localNodes = this.store.nodePool;
 
-                // 3. ��������
+                // 3. 分析差异
                 const diff = SyncEngine.comparePools(localNodes, remoteNodes);
                 const metadataChanged = (remoteMetadata?.activeLeafId || null) !== (this.store.activeLeafId || null);
 
-                // 4. ִ��ͬ������
+                // 4. 执行同步策略
                 if (forceFull || remoteNodes.length === 0) {
-                    console.log(`[PersistenceService] ִ��ȫ�����Ǳ��� [ID: ${chatId}]`);
+                    console.log(`[PersistenceService] 执行全量覆盖保存 [ID: ${chatId}]`);
                     const payload = this._prepareStoragePayload();
                     const payloadDigest = this._digestPayload(payload);
                     await this._mutateWithCompensation(chatId, 'chat.save', payloadDigest, csrfToken, async (transactionContext) => {
@@ -380,7 +415,7 @@ export class PersistenceService {
                 }
 
                 if (diff.added.length > 0 || diff.updated.length > 0 || diff.deletedIds.length > 0 || metadataChanged) {
-                    console.log(`[PersistenceService] ִ�� PATCH ����ͬ�� (����: ${diff.added.length}, ����: ${diff.updated.length}, ɾ��: ${diff.deletedIds.length})`);
+                    console.log(`[PersistenceService] 执行 PATCH 增量同步 (新增: ${diff.added.length}, 更新: ${diff.updated.length}, 删除: ${diff.deletedIds.length})`);
 
                     const pluginMetadata: Record<string, any> = {};
                     pluginManager.callHooks('onMetadataExport', pluginMetadata);
@@ -409,24 +444,24 @@ export class PersistenceService {
                     });
                 }
             } catch (e) {
-                console.error('[PersistenceService] ͬ��ʧ��:', e);
-                // ��������ʱ�������ǿ��ȫ�������Կ������Ի��¼
+                console.error('[PersistenceService] 同步失败:', e);
+                // 发生错误时，如果不强制全量，可以考虑重试或记录
             }
         });
     }
 
     /**
-     * �����Ա����ִ�б��涯��
+     * 兼容性保留：执行保存动作
      */
     async saveToIndependentChat(targetChatId?: string): Promise<void> {
         return this.syncToIndependentChat(targetChatId, true);
     }
 
     /**
-     * ����׷�ӵ�����Ϣ (�ض���ͬ���߼�)
+     * 增量追加单条消息 (重定向到同步逻辑)
      */
     async appendToIndependentChat(msg: LuminaChatMessage, targetChatId?: string): Promise<void> {
-        // ��ȷ����Ϣ�� ID ��ָ��
+        // 先确保消息有 ID 和指纹
         if (!msg.fingerprint) msg.fingerprint = SyncEngine.getFingerprint(msg.mesRaw);
         return this.syncToIndependentChat(targetChatId, false);
     }
@@ -437,7 +472,7 @@ export class PersistenceService {
 
         const messages = this.store.nodePool.map(m => {
             const stored = ChatConverter.toStorage(m);
-            // �ڵ�ע��״̬���� (���ڻ�Ծ�ڵ��ؼ��ڵ�)
+            // 节点注入状态快照 (仅在活跃节点或关键节点)
             if (m.id === this.store.activeLeafId) {
                 stored.extra = stored.extra || {};
                 stored.extra.tier1Snapshot = pluginMetadata.tier1;
@@ -450,7 +485,7 @@ export class PersistenceService {
         const metadata = {
             type: 'metadata',
             activeLeafId: this.store.activeLeafId,
-            version: 3.0, // �汾����
+            version: 3.0, // 版本升级
             updatedAt: Date.now(),
             pluginData: pluginMetadata
         };

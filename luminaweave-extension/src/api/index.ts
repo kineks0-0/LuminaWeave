@@ -8,6 +8,7 @@ import { TimelineManager, TimelineNode } from './core/TimelineManager.js';
 import { LorebookManager } from './core/LorebookManager.js';
 import { PromptWorldInfoMount } from './core/PromptWorldInfoMount.js';
 import { FontManager } from './core/FontManager.js';
+import { MeasureService } from './core/MeasureService.js';
 import { promptBuilder } from './core/PromptBuilder.js';
 import { globalPromptRegistry, PromptSlot } from './core/PromptRegistry.js';
 import { globalXMLInterceptor } from './core/XMLInterceptor.js';
@@ -34,6 +35,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     public lorebookManager: LorebookManager;
     public promptWorldInfoMount: PromptWorldInfoMount;
     public fontManager: FontManager;
+    public measureService: MeasureService;
+    public memoryManager: typeof globalMemoryManager;
 
     private _ready: boolean = false;
     private _readyPromise: Promise<boolean> | null = null;
@@ -55,12 +58,14 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.lorebookManager = new LorebookManager(this);
         this.promptWorldInfoMount = new PromptWorldInfoMount(this.lorebookManager);
         this.fontManager = new FontManager();
+        this.measureService = new MeasureService();
+        this.memoryManager = globalMemoryManager;
 
         // 基础元数据
         // 自动解析 SillyTavern 上下文由基类提供
 
         // 转发子组件事件至主 API 实例
-        [this.chatManager, this.streamHandler, this.timelineManager, this.lorebookManager, this.fontManager].forEach(mgr => {
+        [this.chatManager, this.streamHandler, this.timelineManager, this.lorebookManager, this.fontManager, this.measureService].forEach(mgr => {
             mgr.on('CHAT_UPDATED', () => this.emit('CHAT_UPDATED'));
             mgr.on('CHAT_CHANGED', () => this.emit('CHAT_CHANGED'));
             mgr.on('GENERATION_STARTED', () => this.emit('GENERATION_STARTED'));
@@ -1035,7 +1040,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 // 委托至 STBridge 追加物理消息
                 await STBridge.appendMessage({
                     role: newMsg.role,
-                    message: newMsg.mes,
+                    mes: newMsg.mes,
                     name: newMsg.name,
                     extra: {
                         ...newMsg.extra,

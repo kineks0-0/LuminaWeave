@@ -57,7 +57,7 @@ export class SyncEngine {
                 if (chatReplyBlocks && chatReplyBlocks.length > 0) {
                     // LLM 可能回复了多个标签块，全部用换行拼接作为完整主体
                     const completeReply = chatReplyBlocks.join('\n\n');
-                    console.log('[SyncEngine] extractMessageText: id', msg.id);
+                    //console.log('[SyncEngine] extractMessageText: id', msg.id);
                     return String(completeReply).replace(/[\u200B-\u200D\uFEFF]/g, '');
                 }
             }
@@ -66,7 +66,7 @@ export class SyncEngine {
 
         // 回退：优先提取 mes 作为最终显示文本
         const text = msg?.mes ?? msg?.mesRaw ?? msg?.extra?.mesRaw ?? '';
-        console.log('[SyncEngine] extractMessageText: id', msg.id, 'text', text);
+        //console.log('[SyncEngine] extractMessageText: id', msg.id, 'text', text);
         return String(text || '').replace(/[\u200B-\u200D\uFEFF]/g, '');
     }
 
@@ -74,7 +74,7 @@ export class SyncEngine {
     /**
      * 转换为可比较的消息对象
      */
-    private static toComparableMessage(msg: LuminaChatMessage): { id: string; name: string; role: string; mes: string; mesRaw: string; fingerprint: string } {
+    private static toComparableMessage(msg: LuminaChatMessage): { id: string; name: string; role: string; mes: string; mesRaw: string; fingerprint: string; is_hidden?: boolean } {
         const mesRaw = this.extractMessageText(msg);
         const fingerprint = msg?.fingerprint || msg?.extra?.fingerprint || this.getFingerprint(mesRaw);
         return {
@@ -83,7 +83,8 @@ export class SyncEngine {
             role: msg?.role || '',
             mes: mesRaw,
             mesRaw,
-            fingerprint
+            fingerprint,
+            is_hidden: msg.is_hidden
         };
     }
 
@@ -185,7 +186,10 @@ export class SyncEngine {
     public static isMessageEqual(m1: LuminaChatMessage, m2: LuminaChatMessage): boolean {
         if (!m1 || !m2) return false;
 
-        // 统一萃取基准显示文本或扩展层核心标签（如 Chat_Reply），再对比
+        // 1. 隐藏状态不一致直接视为不相等 (触发更新)
+        if (m1.is_hidden !== m2.is_hidden) return false;
+
+        // 2. 统一萃取基准显示文本或扩展层核心标签（如 Chat_Reply），再对比
         const content1 = this.cleanContent(this.extractMessageText(m1));
         const content2 = this.cleanContent(this.extractMessageText(m2));
 
@@ -267,7 +271,7 @@ export class SyncEngine {
         // 1. 无需再进行规范化，因为现在的 ChatMessage 已经是标准化后的
         const stProcessed = stChat;
 
-        const updates: { index: number, content: string, name?: string, role?: string, extra: any }[] = [];
+        const updates: { index: number, content: string, name?: string, role?: string, is_hidden?: boolean, extra: any }[] = [];
         const messagesToAppend: any[] = [];
         const indicesToDelete: number[] = [];
 
@@ -292,6 +296,7 @@ export class SyncEngine {
                         content: localMsg.mes,
                         name: localMsg.name,
                         role: localMsg.role,
+                        is_hidden: localMsg.is_hidden || false,
                         extra: {
                             ...localMsg.extra,
                             ...this.createSyncSourceMeta(),
@@ -299,7 +304,8 @@ export class SyncEngine {
                             fingerprint: localMsg.fingerprint,
                             mesRaw: localMsg.mesRaw,
                             pluginRaw: localMsg.pluginRaw,
-                            send_date: localMsg.send_date
+                            send_date: localMsg.send_date,
+                            is_hidden: localMsg.is_hidden // 双重保险：同时写在 extra 中
                         }
                     });
                 }
@@ -311,6 +317,7 @@ export class SyncEngine {
                     role: localMsg.role,
                     name: localMsg.name,
                     message: localMsg.mes,
+                    is_hidden: localMsg.is_hidden || false,
                     extra: {
                         ...localMsg.extra,
                         ...this.createSyncSourceMeta(),
@@ -318,7 +325,8 @@ export class SyncEngine {
                         fingerprint: localMsg.fingerprint,
                         mesRaw: localMsg.mesRaw,
                         pluginRaw: localMsg.pluginRaw,
-                        send_date: localMsg.send_date
+                        send_date: localMsg.send_date,
+                        is_hidden: localMsg.is_hidden
                     }
                 });
             } else if (i < stProcessed.length) {

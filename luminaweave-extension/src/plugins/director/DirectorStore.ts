@@ -23,6 +23,7 @@ export const useDirectorStore = defineStore('lumina-director', () => {
     // === 1. 剧情规划状态 (Ephemeral) ===
     const currentPlan = ref<string | null>(null);
     const nextPlan = ref<string | null>(null);
+    const storySummary = ref<string>(''); // 新增：剧情概况 (Story Overview)
 
     // === 2. 长期记忆状态 (Long-term, 原 MemoryStore 迁移) ===
     const overallOutline = ref<string>('');
@@ -45,6 +46,19 @@ export const useDirectorStore = defineStore('lumina-director', () => {
                    `You MUST follow this plan for your current response:\n` +
                    `${nextPlan.value}\n` +
                    `IMPORTANT: If the plan involves state changes, use <M> tags for synchronization.`;
+        }
+    });
+
+    // 注册：剧情概况 (Story Summary) - 用于世界书注入
+    globalPromptRegistry.register({
+        id: 'director-story-summary',
+        slot: PromptSlot.ST_MAIN,
+        targetIdentifier: STIdentifier.WORLD_INFO_AFTER,
+        label: 'Story Summary',
+        priority: 180,
+        getFragment: () => {
+            if (!storySummary.value) return null;
+            return `[Story Overview / Current Status]\n${storySummary.value}`;
         }
     });
 
@@ -80,6 +94,14 @@ export const useDirectorStore = defineStore('lumina-director', () => {
                 if (typeof val === 'string') overallOutline.value = val;
             }
         });
+
+        // 注册剧情概况模型
+        globalMutationEngine.registerDataModel('summary', {
+            description: "当前剧情的高度凝练概括 (Tier 2/Overview)。用于长线状态同步。",
+            onUpdate: (val: any) => {
+                if (typeof val === 'string') storySummary.value = val;
+            }
+        });
     };
 
     // === MemoryManager 接口实现 ===
@@ -87,6 +109,7 @@ export const useDirectorStore = defineStore('lumina-director', () => {
     const exportSnapshot = () => ({
         currentPlan: currentPlan.value,
         nextPlan: nextPlan.value,
+        storySummary: storySummary.value,
         overallOutline: overallOutline.value,
         characterProfiles: [...characterProfiles.value],
         pastMemories: [...pastMemories.value],
@@ -97,6 +120,7 @@ export const useDirectorStore = defineStore('lumina-director', () => {
         if (!snapshot) return;
         currentPlan.value = snapshot.currentPlan || null;
         nextPlan.value = snapshot.nextPlan || null;
+        storySummary.value = snapshot.storySummary || '';
         overallOutline.value = snapshot.overallOutline || '';
         characterProfiles.value = Array.isArray(snapshot.characterProfiles) ? [...snapshot.characterProfiles] : [];
         pastMemories.value = Array.isArray(snapshot.pastMemories) ? [...snapshot.pastMemories] : [];
@@ -106,6 +130,7 @@ export const useDirectorStore = defineStore('lumina-director', () => {
     const reset = () => {
         currentPlan.value = null;
         nextPlan.value = null;
+        storySummary.value = '';
         overallOutline.value = '';
         characterProfiles.value = [];
         pastMemories.value = [];
@@ -118,6 +143,7 @@ export const useDirectorStore = defineStore('lumina-director', () => {
     function clearNextPlan() { nextPlan.value = null; }
     function setCurrentPlan(plan: string) { currentPlan.value = plan; }
     function clearCurrentPlan() { currentPlan.value = null; }
+    function setStorySummary(summary: string) { storySummary.value = summary; }
 
     /**
      * 添加向量记忆片段
@@ -150,11 +176,11 @@ export const useDirectorStore = defineStore('lumina-director', () => {
     return {
         id: 'director',
         // State
-        currentPlan, nextPlan, overallOutline, characterProfiles, pastMemories, vectorMemories,
+        currentPlan, nextPlan, storySummary, overallOutline, characterProfiles, pastMemories, vectorMemories,
         // Getters
         getFormattedMemoryState,
         // Actions
-        setCurrentPlan, clearCurrentPlan, setNextPlan, clearNextPlan, addVectorMemory,
+        setCurrentPlan, clearCurrentPlan, setNextPlan, clearNextPlan, setStorySummary, addVectorMemory,
         // Core API
         initializeModels, exportSnapshot, importSnapshot, reset
     };

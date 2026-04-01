@@ -1,7 +1,7 @@
 <template>
   <div class="lw-chat-stream" :class="{ 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document' }"
     :style="streamStyle">
-    <div class="chat-scroll-area" ref="chatScrollArea" @wheel.stop>
+    <div class="chat-scroll-area" ref="chatScrollArea" @wheel.stop @scroll="handleScroll">
       <div class="chat-content-wrapper" :style="msgMaxWidthStyle">
         <!-- 临时插标物：章节线 -->
         <div class="chat-chapter-divider" v-if="messages.length > 0">
@@ -229,6 +229,8 @@ const streamingStatusText = ref('');  // 当前生成的 XML 标签状态
 const generationError = ref('');
 const editingIndex = ref(-1);         // 当前内联编辑的消息索引，-1 表示未编辑
 const editingText = ref('');          // 内联编辑中的文本
+const lastStreamingHeight = ref(0);   // 上一次流式气泡的测量高度
+const isAtBottom = ref(true);         // 响应式追踪是否处于底部
 
 // 订阅流式事件
 const onGenerationStarted = () => {
@@ -241,6 +243,24 @@ const onGenerationStarted = () => {
   scrollToBottom(true); // 强制触底以适应新出现的消息气泡
 };
 const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number, statusText?: string) => {
+  const area = chatScrollArea.value;
+  
+  if (area && lwApi?.measureService) {
+    const fontSize = parseFloat(String(streamStyle.value['--lw-size'])) || 16;
+    const lineHeight = (parseFloat(String(streamStyle.value['--lw-line-height'])) || 1.6) * fontSize;
+    
+    const measureOptions = {
+      width: area.clientWidth - 80, 
+      lineHeight,
+      fontSize,
+      fontFamily: String(streamStyle.value['--lw-font']),
+      fontWeight: streamStyle.value['--lw-font-weight'],
+    };
+    
+    const result = lwApi.measureService.measure(text, measureOptions);
+    lastStreamingHeight.value = result.height;
+  }
+
   streamingBuffer.value = text;
   generationError.value = '';
   if (rawText !== undefined) {
@@ -252,8 +272,11 @@ const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number,
   if (statusText !== undefined) {
     streamingStatusText.value = statusText;
   }
-  // 仅在生成中尝试跟随滚动
-  scrollToBottom();
+  
+  // 仅在之前就贴底的情况下跟随滚动
+  if (isAtBottom.value) {
+    scrollToBottom();
+  }
 };
 const onGenerationEnded = () => {
   console.log('[ChatStream] Generation ended signal received.');
@@ -403,13 +426,30 @@ const scrollToBottom = async (force = false) => {
   await nextTick();
   if (chatScrollArea.value) {
     const area = chatScrollArea.value;
-    // 降低阈值到 80px。防止用户稍微往上划一点点就被“吸”回底部。
-    const threshold = 80;
-    const isAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight <= threshold;
+    const threshold = 120; // 稍大的阈值，适应不同分辨率和滚动速度
+    const currentIsAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight <= threshold;
 
-    if (force || isAtBottom) {
-      area.scrollTop = area.scrollHeight;
+    if (force || currentIsAtBottom) {
+      // 使用 requestAnimationFrame 确保在浏览器重绘前计算出最新的 scrollHeight
+      requestAnimationFrame(() => {
+        area.scrollTo({
+          top: area.scrollHeight,
+          behavior: force ? 'auto' : 'smooth' // 强制触发时（如刚开始生成）使用 auto，过程中使用 smooth 对冲抖动
+        });
+        isAtBottom.value = true;
+      });
     }
+  }
+};
+
+const handleScroll = (e: Event) => {
+  const area = e.target as HTMLElement;
+  const threshold = 100;
+  const atBottom = area.scrollHeight - area.scrollTop - area.clientHeight <= threshold;
+  
+  // 仅当状态确实发生变化时才更新，减少 Vue 响应式开销
+  if (isAtBottom.value !== atBottom) {
+    isAtBottom.value = atBottom;
   }
 };
 
@@ -653,7 +693,17 @@ const handleDelete = async (index: number) => {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  transition: all 0.3s;
+  transition: background 0.3s, color 0.3s, border-color 0.3s;
+  overflow: hidden;
+}
+
+.streaming-bubble {
+  border-color: var(--lw-primary);
+  border-style: dashed;
+  position: relative;
+  min-height: 24px;
+  /* 核心修复：增加平滑过渡，减缓布局跳动感 */
+  transition: min-height 0.1s ease-out;
 }
 
 .msg-text {

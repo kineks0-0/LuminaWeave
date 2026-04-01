@@ -47,7 +47,7 @@ export class EnvDetector {
 
             // 如果宿主环境中注入了可用的 waitGlobalInitialized（通常由 TavernHelper 本身提供），优先尝试利用它
             // 注意：当 key 就是 'TavernHelper' 时，TavernHelper 还没加载，一定找不到这个方法，自然优雅降级到轮询
-            const waitGlobalInit = glob.TavernHelper?.waitGlobalInitialized;
+            const waitGlobalInit = (glob.TavernHelper as typeof TavernHelper)?.waitGlobalInitialized;
 
             if (typeof waitGlobalInit === 'function') {
                 console.log(`[EnvDetector] 使用 TavernHelper 提供的 waitGlobalInitialized API 等待 ${key}`);
@@ -78,7 +78,7 @@ export class EnvDetector {
         if (typeof SillyTavern !== 'undefined') return SillyTavern;
         // 2. 依托全局空间探测
         const glob = this.stGlobal;
-        return glob ? glob.SillyTavern : undefined;
+        return glob ? (glob.SillyTavern as typeof SillyTavern) : undefined;
     }
 
     /** 获取 TavernHelper 全局工具集对象 */
@@ -87,7 +87,7 @@ export class EnvDetector {
         if (typeof TavernHelper !== 'undefined') return TavernHelper;
         // 2. 依托全局空间探测
         const glob = this.stGlobal;
-        return glob ? glob.TavernHelper : undefined;
+        return glob ? (glob.TavernHelper as typeof TavernHelper) : undefined;
     }
 
     /** 获取 SillyTavern 上下文镜像 */
@@ -103,9 +103,9 @@ export class EnvDetector {
      * 获取标准化的 SillyTavern 事件源 (EventEmitter)
      * 探测优先级：Context > Main API > Global
      */
-    static get stEventSource(): any | undefined {
-        const core = this.ctx;
-        const main = this.stMain;
+    static get stEventSource(): { on: Function; emit: Function; removeListener: Function } | undefined {
+        const core = this.ctx as any;
+        const main = this.stMain as any;
 
         let source = core?.eventSource || main?.eventSource;
         if (!source) {
@@ -119,16 +119,16 @@ export class EnvDetector {
         if (source && typeof (source as any).on !== 'function') {
             source = undefined;
         }
-        return source;
+        return source as any;
     }
 
     /** 
      * 获取 SillyTavern 事件类型映射
      * 兼容性：eventTypes (新版) / event_types (旧版)
      */
-    static get stEventTypes(): any | undefined {
-        const core = this.ctx;
-        const main = this.stMain;
+    static get stEventTypes(): Record<string, string> | undefined {
+        const core = this.ctx as any;
+        const main = this.stMain as any;
 
         let types = core?.eventTypes || core?.event_types || main?.eventTypes || main?.event_types;
         if (!types) {

@@ -3,6 +3,26 @@ import { LuminaChatMessage } from './ChatManager';
 import { EnvDetector } from './EnvDetector.js';
 
 /**
+ * 内部使用的消息更新载荷接口
+ */
+interface STMessageUpdate {
+    index: number;
+    content: string;
+    name?: string;
+    role?: string;
+    extra?: Record<string, any>;
+}
+
+/**
+ * 指令模式设置接口
+ */
+interface STInstructSettings {
+    enabled: boolean;
+    template: Record<string, any>;
+    settings: Record<string, any>;
+}
+
+/**
  * STBridge - 专门负责与 SillyTavern 环境进行物理数据交换与消息列表维护
  * 职责：内存操作、API 适配、差量写入(Delta Sync)
  */
@@ -47,7 +67,8 @@ export class STBridge {
         const helper = this.stHelper;
         if (helper && typeof helper.getChatMessages === 'function') {
             try {
-                return helper.getChatMessages('0-{{lastMessageId}}');
+                // 明确仅获取 ChatMessage[]，不包含 swipes 信息
+                return helper.getChatMessages('0-{{lastMessageId}}', { include_swipes: false });
             } catch (e) {
                 console.error('[STBridge] getChatMessages 失败:', e);
                 throw new Error('无法从 TavernHelper 获取消息列表，API 调用执行失败');
@@ -55,15 +76,30 @@ export class STBridge {
         }
 
         console.warn('[STBridge] 无法找到可用或者包含 getChatMessages 方法的 TavernHelper，从 Context 回退...');
-        const messages = (this.ctx as any)?.chat;
+        const ctx = this.ctx;
+        const messages = ctx?.chat;
         if (!Array.isArray(messages)) {
             throw new Error('STBridge: 无法从上下文获取 chat 数组，环境可能未就绪或获取完全失败');
         }
-        return [...messages];
+        
+        // 显式从 SillyTavern.ChatMessage[] 转换为 ChatMessage[]
+        // 解决 mes -> message 等字段差异
+        return messages.map((m, index) => ({
+            message_id: (m as any).message_id ?? index,
+            name: m.name || '',
+            role: (m as any).role || (m.is_user ? 'user' : 'assistant'),
+            is_hidden: m.is_system || false,
+            message: m.mes || '',
+            data: (m as any).data || {},
+            extra: m.extra || {}
+        } as ChatMessage));
     }
 
     /**
      * 获取当前 ST 环境中的消息列表并转换为插件内部格式
+     * 注意：此方法返回的消息 parentId 为 null。
+     * 由于 ST 提供的是扁平数组且不包含树状拓扑信息，parentId 的建立（Stitching）
+     * 统一由 STSyncService 在同步流程中根据线性顺序或指纹匹配完成。
      * @returns 已转换的 ChatMessage 数组
      */
     static getMessages(): LuminaChatMessage[] {
@@ -78,30 +114,27 @@ export class STBridge {
      * 将符合 ST 原生格式的对象包装好
      * @param msg Lumina 传来的基础创建对象
      */
-    private static _formatToSTRaw(msg: any): any {
+    private static _formatToSTRaw(msg: Partial<LuminaChatMessage> & { message?: string }): ChatMessageCreating {
         const isUser = msg.role === 'user';
         const isSystem = msg.role === 'system';
-        const payload: any = {
+        const payload: ChatMessageCreating = {
             name: msg.name || (isUser ? 'You' : 'Assistant'),
-            role: msg.role || (isUser ? 'user' : (isSystem ? 'system' : 'assistant')),
-            message: msg.message || msg.mes || '',
+            role: (msg.role as any) || (isUser ? 'user' : (isSystem ? 'system' : 'assistant')),
+            message: msg.mesRaw || msg.mes || msg.message || '',
             extra: { ...msg.extra }
         };
 
-        if (msg.is_hidden !== undefined) {
-            payload.is_hidden = msg.is_hidden;
+        if (msg.is_user !== undefined) {
+            payload.is_hidden = !msg.is_user && msg.role === 'user'; // 示例逻辑，视具体需求调整
         }
-        if (msg.data !== undefined) {
-            payload.data = msg.data;
-        }
-
+        
         return payload;
     }
 
     /**
      * 更新 ST 中的多条消息 (批量操作，只触发一次刷新)
      */
-    static async updateMessages(updates: { index: number, content: string, name?: string, role?: string, extra?: any }[], skipFlush = false): Promise<void> {
+    static async updateMessages(updates: STMessageUpdate[], skipFlush = false): Promise<void> {
         if (updates.length === 0) return;
         const helper = this.stHelper;
         if (!helper || typeof helper.setChatMessages !== 'function' || typeof helper.getChatMessages !== 'function') {
@@ -109,7 +142,7 @@ export class STBridge {
             return;
         }
 
-        const targets: any[] = [];
+        const targets: ({ message_id: number } & Partial<ChatMessage> & Partial<ChatMessageSwiped>)[] = [];
         for (const update of updates) {
             try {
                 // 先通过 TavernHelper 获取现有消息的状态 (包含 swipes 和 extra)
@@ -122,7 +155,7 @@ export class STBridge {
                 }
 
                 // 仅保留必要字段
-                const targetPayload: any = { message_id: existingMsg.message_id };
+                const targetPayload: { message_id: number } & Partial<ChatMessage> & Partial<ChatMessageSwiped> = { message_id: existingMsg.message_id };
                 targetPayload.message = update.content;
 
                 // 修复：如果不显式传递 name 和 role，部分版本 ST (尤其是带有多角色群聊时) 会在 setChatMessages 中意外丢失它们
@@ -130,15 +163,15 @@ export class STBridge {
                     targetPayload.name = update.name;
                 }
                 if (update.role) {
-                    targetPayload.role = update.role;
+                    targetPayload.role = update.role as any;
                 }
 
                 // 合并 extra 数据
                 if (update.extra) {
-                    targetPayload.extra = { ...((existingMsg as any).extra || {}), ...update.extra };
+                    targetPayload.extra = { ...(existingMsg as any).extra, ...update.extra };
                 }
 
-                // Swipe 处理：如果在原有消息中存在有效的 swipes 数组和 swipe_id
+                // Swipe 处理：如果在原有消息中存在有效的 swipes 数组 and swipe_id
                 if (Array.isArray(existingMsg.swipes) && existingMsg.swipe_id !== undefined && existingMsg.swipe_id >= 0 && existingMsg.swipe_id < existingMsg.swipes.length) {
                     // 深拷贝 swipes 数组
                     targetPayload.swipes = [...existingMsg.swipes];
@@ -157,14 +190,14 @@ export class STBridge {
         }
     }
 
-    static async updateMessage(index: number, msgContent: string, name?: string, role?: string, extraData: any = {}, skipFlush = false): Promise<void> {
+    static async updateMessage(index: number, msgContent: string, name?: string, role?: string, extraData: Record<string, any> = {}, skipFlush = false): Promise<void> {
         await this.updateMessages([{ index, content: msgContent, name, role, extra: extraData }], skipFlush);
     }
 
     /**
      * 向 ST 后端发送带有 CSRF 校验的请求
      */
-    private static async stFetch(url: string, body: any): Promise<Response> {
+    private static async stFetch(url: string, body: Record<string, any>): Promise<Response> {
         const token = await this.getCsrfToken();
         return await fetch(url, {
             method: 'POST',
@@ -179,7 +212,7 @@ export class STBridge {
     /**
      * 向 ST 追加批量消息
      */
-    static async appendMessages(msgs: any[], skipFlush = false): Promise<void> {
+    static async appendMessages(msgs: Partial<LuminaChatMessage>[], skipFlush = false): Promise<void> {
         if (msgs.length === 0) return;
 
         console.log(`[STBridge] 执行 API 批量追加 (${msgs.length} 条)...`);
@@ -203,7 +236,7 @@ export class STBridge {
     /**
      * 向 ST 追加单条消息
      */
-    static async appendMessage(msg: any, skipFlush = false): Promise<void> {
+    static async appendMessage(msg: Partial<LuminaChatMessage>, skipFlush = false): Promise<void> {
         await this.appendMessages([msg], skipFlush);
     }
 
@@ -279,7 +312,7 @@ export class STBridge {
     /**
      * 获取ST的预设
      */
-    static async getPreset(name: string): Promise<any> {
+    static async getPreset(name: string): Promise<Record<string, any> | null> {
         const helper = this.stHelper;
         if (helper && typeof helper.getPreset === 'function') {
             return helper.getPreset(name);
@@ -322,8 +355,8 @@ export class STBridge {
     /**
      * 获取当前环境的指令模式 (Instruct Mode) 设置
      */
-    static getInstructSettings(): any {
-        const st = this.stMain;
+    static getInstructSettings(): STInstructSettings {
+        const st = this.stMain as any;
         return {
             enabled: st?.powerUserSettings?.instruct?.enabled ?? false,
             template: st?.powerUserSettings?.instruct ?? {},
@@ -359,9 +392,8 @@ export class STBridge {
      */
     static getActiveWorldInfoItems(): { id: string, content: string, role: number }[] {
         // 在 ST 内部，从世界书管理器或全局变量中尝试提取
-        const glob = EnvDetector.stGlobal;
-        const worldInfo = glob?.world_info || (typeof window !== 'undefined' && window.world_info);
-        const activatedItems: any[] = glob?.world_info_active || (typeof window !== 'undefined' && window.world_info_active) || [];
+        const glob = EnvDetector.stGlobal as any;
+        const activatedItems: any[] = glob?.world_info_active || (typeof window !== 'undefined' && (window as any).world_info_active) || [];
 
         if (Array.isArray(activatedItems)) {
             return activatedItems.map(item => ({

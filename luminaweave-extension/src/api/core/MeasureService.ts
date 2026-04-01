@@ -76,8 +76,13 @@ export class MeasureService extends LuminaWeaveAPIBase {
     // 5. 执行布局计算
     const { height, lineCount } = layout(prepared, options.width, options.lineHeight);
     
+    // 保护机制：如果文本非空但测得高度过低（可能是字体未加载），至少返回一个行高
+    const safeHeight = (plainText.length > 0 && height < options.lineHeight) 
+      ? options.lineHeight 
+      : height;
+
     // 6. 处理 line-clamp 逻辑
-    let finalHeight = height;
+    let finalHeight = safeHeight;
     let isClamped = false;
     
     if (options.maxLines && lineCount > options.maxLines) {
