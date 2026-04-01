@@ -129,7 +129,7 @@
             <span>时空图谱</span>
           </div>
           <div class="header-tools">
-            <button class="lw-btn lw-btn-ghost tool-btn" title="居中对齐" @click="resetTransform">
+            <button class="lw-btn lw-btn-ghost tool-btn" title="居中对齐" @click="focusOnActiveLeaf">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M12 2v2m0 16v2m10-10h-2M4 12H2"></path>
@@ -239,16 +239,13 @@ import { storeToRefs } from 'pinia';
 import { luminaWeaveApi as lwApi, TimelineNode } from '../../api/index';
 import LogicFlow, { HtmlNodeModel, PolylineEdgeModel } from '@logicflow/core';
 //import { Menu } from '@logicflow/extension';
-// @ts-ignore
 import { register, getTeleport } from '@logicflow/vue-node-registry';
-// @ts-ignore
 import { VueNodeModel } from '@logicflow/vue-node-registry';
 import { PolylineEdge } from '@logicflow/core';
 import '@logicflow/core/dist/index.css';
 import '@logicflow/extension/lib/style/index.css';
 
-import ELK from 'elkjs/lib/elk.bundled.js';
-const elk = new ELK();
+import { Dagre } from '@logicflow/layout';
 import HistoryNode from './HistoryNode.vue';
 import NodePreviewModal from './NodePreviewModal.vue';
 import ConfirmationModal from './ConfirmationModal.vue';
@@ -284,23 +281,36 @@ export interface HistoryNodeProperties {
   height?: number;
 }
 
+// --- 布局常量配置 ---
+const NODE_LAYOUT_CONFIG = {
+  WIDTH: 340,
+  SAFE_MARGIN: 10,
+  MIN_HEIGHT: 160,
+  // 测量参数
+  MEASURE_WIDTH: 267, // 340 - 30(wrapper) - 40(body) - 3(border)
+  LINE_HEIGHT: 22.4,
+  FONT_SIZE: 14,
+  MAX_LINES: 10,
+  // 基础高度校准 (需匹配 HistoryNode.vue 的非文本区域高度)
+  // Wrapper(30) + Border(3) + Header(26+24) + BodyPadding(16) + Footer(24+26) + Border(1) = ~150
+  BASE_HEIGHT: 154, 
+  ACTIVE_INCREMENT: 32, // Badge 占据的空间与额外间距
+};
+
 // --- LogicFlow 定制模型 ---
 class HistoryNodeModel extends VueNodeModel {
+  //private __height = -1;
   setAttributes() {
+    // 强制固定宽度，高度由 properties.nodeHeight 决定（由 calculateNodeHeight 计算并注入）
+    //super.setAttributes();
+    this.width = NODE_LAYOUT_CONFIG.WIDTH;
     // @ts-ignore
-    this.width = 340;
-    // @ts-ignore
-    const { height } = this.properties;
-    if (height) {
-      // @ts-ignore
-      this.height = height;
-    }
+    this.height = this.properties.nodeHeight ?? NODE_LAYOUT_CONFIG.MIN_HEIGHT;
+    //console.log('[HistoryNodeModel] setAttributes2: width', this.width, 'height', this.height);
   }
 
   getDefaultAnchor() {
-    // @ts-ignore
     const { orientation } = this.properties;
-    // @ts-ignore
     const { width, height, x, y } = this;
     if (orientation === 'vertical') {
       // 竖向布局：上下锚点
@@ -335,31 +345,44 @@ class TimelineEdgeModel extends PolylineEdgeModel {
   }
 }
 
+
+
 /**
- * 动态估算节点高度
- * 基准宽度 340px，结合文本长度估算实际组件渲染高度
+ * 动态测量节点高度
+ * 基准宽度 340px，利用 pretext 进行精确测量
  */
 const calculateNodeHeight = (text: string, isActive: boolean) => {
-  const plainText = text.replace(/<[^>]+>/g, '').trim();
-  // 每行约 22 个混合字符 (340px 宽度 - 30px padding)
-  const charsPerLine = 22;
-  const lineCount = Math.ceil(plainText.length / charsPerLine) || 1;
-  // 与 HistoryNode.vue 中的 line-clamp 10 保持一致
-  const clampedLines = Math.min(10, lineCount);
+  if (!lwApi?.measureService) {
+    // Fallback: 如果服务未就绪，使用旧的保守估算法
+    const plainText = text;//getPreviewText(text);//text.replace(/<[^>]+>/g, '').trim();
+    const charsPerLine = Math.floor(NODE_LAYOUT_CONFIG.MEASURE_WIDTH / 7); // 估算字符宽度
+    const lineCount = Math.ceil(plainText.length / charsPerLine) || 1;
+    const clampedLines = Math.min(NODE_LAYOUT_CONFIG.MAX_LINES, lineCount);
+    const height = NODE_LAYOUT_CONFIG.BASE_HEIGHT + (clampedLines * NODE_LAYOUT_CONFIG.LINE_HEIGHT) + (isActive ? NODE_LAYOUT_CONFIG.ACTIVE_INCREMENT : 0);
+    return Math.max(NODE_LAYOUT_CONFIG.MIN_HEIGHT, height + NODE_LAYOUT_CONFIG.SAFE_MARGIN);
+  }
 
-  const baseHeight = 150; // Header + Footer + Padding
-  const lineHeight = 22.4; // 1.6 * 14px
+  // 使用 pretext 测量服务
+  const result = lwApi.measureService.measure(text, {
+    width: NODE_LAYOUT_CONFIG.MEASURE_WIDTH,
+    lineHeight: NODE_LAYOUT_CONFIG.LINE_HEIGHT,
+    fontSize: NODE_LAYOUT_CONFIG.FONT_SIZE,
+    fontFamily: "Inter, 'PingFang SC', sans-serif",
+    fontWeight: 500,
+    maxLines: NODE_LAYOUT_CONFIG.MAX_LINES
+  });
 
-  let totalHeight = baseHeight + (clampedLines * lineHeight);
-  if (isActive) totalHeight += 28; // Badge 偏移
+  let totalHeight = NODE_LAYOUT_CONFIG.BASE_HEIGHT + result.height;
+  if (isActive) totalHeight += NODE_LAYOUT_CONFIG.ACTIVE_INCREMENT;
 
-  // 增加 10px 的安全边际，防止因字重或渲染差异导致的高度溢出
-  return Math.max(160, Math.ceil(totalHeight) + 10);
+  const finalResult = Math.max(NODE_LAYOUT_CONFIG.MIN_HEIGHT, Math.ceil(totalHeight) + NODE_LAYOUT_CONFIG.SAFE_MARGIN);
+  return finalResult;
 };
 
 // 增加锁，防止并发 ELK 布局导致的时序错乱
 let isLayouting = false;
 let pendingRefresh = false;
+let shouldCenterNextLayout = false; // 标志位：是否在下次布局后居中活跃节点
 
 const props = defineProps<{
   mode?: 'small' | 'large',
@@ -438,7 +461,7 @@ const initLogicFlow = () => {
     },
     edgeTextDraggable: false,
     hoverOutline: false,
-    //plugins: [Menu],
+    plugins: [Dagre],
     hideAnchors: true,
     // 默认开启滚轮缩放，禁用滚轮滚动（由切换按钮控制）
     // 移动端默认不拦截，以便手势生效
@@ -512,7 +535,7 @@ const initLogicFlow = () => {
 const getPreviewText = (text?: string): string => {
   if (!text) return '...';
   let plain = text.replace(/<[^>]+>/g, '');
-  return plain.length > 80 ? plain.substring(0, 80) + '...' : plain;
+  return plain.length > 500 ? plain.substring(0, 500) + '...' : plain;
 };
 
 // --- Git Color System ---
@@ -555,7 +578,7 @@ const isLaneActiveAt = (laneIndex: number, rowIndex: number): boolean => {
 
   // 分支车道：检查当前节点所在的链是否在该车道上经过
   if (node.laneIndex === laneIndex) return true;
-  
+
   // 检查是否有任何属于该 laneIndex 的 track 跨越了当前行
   for (const [key, bounds] of laneTrackBounds.value.entries()) {
     if (key.startsWith(`${laneIndex}_`)) {
@@ -564,14 +587,14 @@ const isLaneActiveAt = (laneIndex: number, rowIndex: number): boolean => {
       }
     }
   }
-  
+
   return false;
 };
 
 const isFirstInLane = (laneIndex: number, rowIndex: number): boolean => {
   const node = flattenedTree.value[rowIndex];
   if (node.laneIndex !== laneIndex) return false;
-  
+
   const key = `${laneIndex}_${node.trackIndex}`;
   const bounds = laneTrackBounds.value.get(key);
   return bounds ? bounds.first === rowIndex : false;
@@ -584,7 +607,7 @@ const isLastInLaneAt = (laneIndex: number, rowIndex: number): boolean => {
   const key = `${laneIndex}_${node.trackIndex}`;
   const bounds = laneTrackBounds.value.get(key);
   const isLast = bounds ? bounds.last === rowIndex : false;
-  
+
   if (!isLast) return false;
 
   // 特殊：如果是主线节点，且它有任何孩子（包括开启分支的孩子），
@@ -647,6 +670,7 @@ const switchSibling = async (node: TimelineViewNode) => {
 
 const toggleOrientation = () => {
   layoutOrientation.value = layoutOrientation.value === 'horizontal' ? 'vertical' : 'horizontal';
+  shouldCenterNextLayout = true; // 切换布局时请求居中
   refreshTree();
 };
 
@@ -667,7 +691,6 @@ const handleZoom = (isZoomIn: boolean) => {
     onUpdate: () => {
       // 核心：使用 transformModel.zoom 配合视口中心进行平滑缩放
       //const center: [number, number] = [transformModel.TRANSLATE_X * -1 * transformModel.SCALE_X, transformModel.TRANSLATE_Y * -1 * transformModel.SCALE_Y];
-      // 核心：使用可由控制台调试的中心点进行缩放
       //transformModel.zoom(animProxy.scale, center);
       if (lf.value) lf.value.zoom(animProxy.scale);
     }
@@ -716,16 +739,22 @@ const resetTransform = () => {
   }
 };
 
-
+const focusOnActiveLeaf = () => {
+  if (lf.value && activeLeafId.value) {
+    lf.value.focusOn({ id: String(activeLeafId.value) });
+  } else {
+    resetTransform();
+  }
+};
 
 const refreshTree = async () => {
   if (!isTimelineReady.value) return;
-  
+
   if (props.mode === 'large' && isLayouting) {
     pendingRefresh = true;
     return;
   }
-  
+
   const graphData = timelineGraph.value as Record<string, TimelineNode>;
   const rawNodes = Object.values(graphData);
   activeLeafId.value = storeActiveLeafId.value;
@@ -760,131 +789,120 @@ const refreshTree = async () => {
     }
   }
 
-  // --- Large Mode Layout logic (ELKjs) ---
+  // --- Large Mode Layout logic (Dagre Layout) ---
   if (props.mode === 'large') {
     isLayouting = true;
     try {
-      const elkGraph = {
-        id: 'root',
-        layoutOptions: {
-          'elk.algorithm': 'layered',
-          'elk.direction': layoutOrientation.value === 'horizontal' ? 'RIGHT' : 'DOWN',
-          'elk.spacing.nodeNode': '120',
-          'elk.layering.strategy': 'NETWORK_SIMPLEX',
-          'elk.edgeRouting': 'ORTHOGONAL',
-        },
-        children: [] as any[],
-        edges: [] as any[]
-      };
+      if (!lf.value) return;
 
+      const lfNodes: any[] = [];
+      const lfEdges: any[] = [];
+
+      // 1. 准备初始节点数据
       rawNodes.forEach((n) => {
-        const nodeHeight = calculateNodeHeight(n.text || '', n.id === activeLeafId.value);
-        elkGraph.children.push({
+        const previewText = getPreviewText(n.text || '');
+        const nodeHeight = calculateNodeHeight(previewText, n.id === activeLeafId.value);
+        const childrenCount = childrenMap.get(n.id)?.length || 0;
+
+        lfNodes.push({
           id: String(n.id),
-          width: 340,
-          height: nodeHeight
+          type: 'history-node',
+          x: 0, // 初始坐标由 Dagre 覆盖
+          y: 0,
+          draggable: false,
+          properties: {
+            node: {
+              ...n,
+              children: [],
+              depth: (n as any).depth || 0,
+              childrenCount,
+              isRoot: !n.parentId,
+              isLeaf: childrenCount === 0
+            },
+            isActive: n.id === activeLeafId.value,
+            isInActivePath: activePathIds.value.has(n.id),
+            activeLeafId: activeLeafId.value,
+            activePathIds: Array.from(activePathIds.value),
+            isFocused: focusedNodeId.value === n.id,
+            onBranch: handleBranchNode,
+            onRollback: handleRollbackNode,
+            onPreview: handlePreviewNode,
+            onSwitchBranch: handleSwitchBranch,
+            onFocusChange: (id: string | null) => { focusedNodeId.value = id; refreshTree(); },
+            orientation: layoutOrientation.value,
+            width: NODE_LAYOUT_CONFIG.WIDTH,
+            height: nodeHeight,
+            previewText: previewText,
+            nodeHeight: nodeHeight
+          }
         });
 
         if (n.parentId && graphData[n.parentId]) {
-          elkGraph.edges.push({
+          const isMainChain = activePathIds.value.has(n.parentId) && activePathIds.value.has(n.id);
+          const isFocusedPath = focusedPathIds.has(n.parentId) && focusedPathIds.has(n.id);
+          const isHighlighted = isMainChain || isFocusedPath;
+
+          lfEdges.push({
             id: `e-${n.parentId}-${n.id}`,
-            sources: [String(n.parentId)],
-            targets: [String(n.id)]
+            type: 'timeline-edge',
+            sourceNodeId: String(n.parentId),
+            targetNodeId: String(n.id),
+            properties: {
+              isHighlighted
+            }
           });
         }
       });
 
-      const layoutedGraph = await elk.layout(elkGraph);
-      if (!layoutedGraph.children || !lf.value) {
-        isLayouting = false;
-        // do not return, continue to small mode
-      } else if (props.mode !== 'large') {
-        // user switched mode during layout
-        isLayouting = false;
+      // 2. 渲染基础图表
+      console.log('Rendering base graph for layout', lfNodes, lfEdges);
+      lf.value.render({
+        nodes: lfNodes,
+        edges: lfEdges
+      });
+
+      // 3. 调用 Dagre 布局
+      const rankdir = layoutOrientation.value === 'horizontal' ? 'LR' : 'TB';
+      console.log('[LuminaTimeline] Applying Dagre layout:', rankdir);
+      
+      // 使用 nextTick 或微任务确保渲染层已根据 properties.height 调整
+      await nextTick();
+      
+      const dagreInstance = lf.value.extension.dagre;
+      if (dagreInstance instanceof Dagre) {
+        dagreInstance.layout({
+          // @ts-ignore
+          rankdir: rankdir,
+          nodesep: 80,
+          ranksep: 100,
+          marginx: 100,
+          marginy: 100,
+          isDefaultAnchor: true // 自动根据方向对齐连线锚点
+        });
       } else {
-        const lfNodes: any[] = [];
-        const lfEdges: any[] = [];
-
-        layoutedGraph.children.forEach(c => {
-          const n = graphData[c.id];
-          const childrenCount = childrenMap.get(n.id)?.length || 0;
-          const currentHeight = c.height || 160;
-
-          lfNodes.push({
-            id: c.id,
-            type: 'history-node',
-            x: (c.x || 0) + (c.width || 340) / 2,
-            y: (c.y || 0) + currentHeight / 2,
-            draggable: false,
-            properties: {
-              node: {
-                ...n,
-                children: [],
-                depth: (n as any).depth || 0,
-                childrenCount,
-                isRoot: !n.parentId,
-                isLeaf: childrenCount === 0
-              },
-              isActive: n.id === activeLeafId.value,
-              isInActivePath: activePathIds.value.has(n.id),
-              activeLeafId: activeLeafId.value,
-              activePathIds: Array.from(activePathIds.value),
-              isFocused: focusedNodeId.value === n.id,
-              onBranch: handleBranchNode,
-              onRollback: handleRollbackNode,
-              onPreview: handlePreviewNode,
-              onSwitchBranch: handleSwitchBranch,
-              onFocusChange: (id: string | null) => { focusedNodeId.value = id; refreshTree(); },
-              orientation: layoutOrientation.value,
-              width: c.width || 340,
-              height: currentHeight
-            }
-          });
-        });
-
-        if (layoutedGraph.edges) {
-          layoutedGraph.edges.forEach(e => {
-            const sourceId = e.sources[0];
-            const targetId = e.targets[0];
-
-            const isMainChain = activePathIds.value.has(sourceId) && activePathIds.value.has(targetId);
-            const isFocusedPath = focusedPathIds.has(sourceId) && focusedPathIds.has(targetId);
-            const isHighlighted = isMainChain || isFocusedPath;
-
-            lfEdges.push({
-              id: e.id,
-              type: 'timeline-edge',
-              sourceNodeId: sourceId,
-              targetNodeId: targetId,
-              properties: {
-                isHighlighted
-              }
-            });
-          });
-        }
-
-        console.log('Rendering large mode', lfNodes, lfEdges);
-        lf.value.render({
-          nodes: lfNodes,
-          edges: lfEdges
-        });
-
-        setTimeout(() => {
-          if (!lf.value || props.mode !== 'large') return;
-
-          if (!isFirstLargeLayoutDone.value) {
-            if (activeLeafId.value) {
-              lf.value.zoom(1);
-              lf.value.focusOn({ id: String(activeLeafId.value) });
-              console.log('[LuminaTimeline] First layout: Focused on', activeLeafId.value);
-            } else {
-              lf.value.fitView(100);
-              console.log('[LuminaTimeline] First layout: Fit view');
-            }
-            isFirstLargeLayoutDone.value = true;
-          }
-        }, 60);
+        console.warn('[LuminaTimeline] Dagre plugin instance not found or invalid type');
       }
+
+      // 4. 重置视图/居中显示
+      setTimeout(() => {
+        if (!lf.value || props.mode !== 'large') return;
+
+        if (!isFirstLargeLayoutDone.value || shouldCenterNextLayout) {
+          if (activeLeafId.value) {
+            lf.value.zoom(1);
+            lf.value.focusOn({ id: String(activeLeafId.value) });
+            console.log('[LuminaTimeline] Dagre Layout completed: Focused on', activeLeafId.value);
+          } else {
+            lf.value.fitView(100, 100);
+            console.log('[LuminaTimeline] Dagre Layout completed: Fit view');
+          }
+          isFirstLargeLayoutDone.value = true;
+          shouldCenterNextLayout = false;
+        }
+      }, 10);
+
+    } catch (err) {
+      console.error('[LuminaTimeline] Dagre layout failed:', err);
     } finally {
       isLayouting = false;
       if (pendingRefresh) {
@@ -947,7 +965,7 @@ const refreshTree = async () => {
   // Build cache for O(1) lane queries
   const bounds = new Map<string, { first: number, last: number }>();
   let lastActive = -1;
-  
+
   flat.forEach((node, idx) => {
     if (activePathIds.value.has(node.id)) {
       lastActive = idx;
@@ -959,7 +977,7 @@ const refreshTree = async () => {
       bounds.get(key)!.last = idx;
     }
   });
-  
+
   laneTrackBounds.value = bounds;
   lastActivePathIndex.value = lastActive;
 
@@ -1091,12 +1109,12 @@ watch(
   [() => props.mode, isTimelineReady, timelineRevision],
   ([mode, ready], [oldMode]) => {
     if (!ready) return;
-    
+
     if (mode === 'large' && oldMode !== 'large') {
       // 容器重建，清空旧实例
       lf.value = null;
     }
-    
+
     if (mode === 'large') {
       nextTick(() => {
         initLogicFlow();

@@ -43,7 +43,7 @@ export class PromptWorldInfoMount {
         const isGlobalEnabled = lwStorage.get('lumina-settings.isPromptInjectionEnabled', true, 'Global');
 
         if (!isGlobalEnabled) {
-            console.log(`[PromptWorldInfoMount] 插件提示词已禁用，正在注销世界?? ${bookName}`);
+            console.log(`[PromptWorldInfoMount] 插件提示词已禁用，正在注销世界书 ${bookName}`);
             await this.lorebookManager.deactivateFromGlobal(bookName);
             return;
         }
@@ -72,7 +72,7 @@ export class PromptWorldInfoMount {
             }
         });
 
-        // 3. 将片段写入常??(Constant) 条目
+        // 3. 将片段写入常量 (Constant) 条目
         for (const f of fragmentsToMount) {
             let contentText = '';
             const raw = f.getFragment();

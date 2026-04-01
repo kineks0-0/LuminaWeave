@@ -10,7 +10,7 @@ export enum WorldlineEvent {
 
 /**
  * WorldlineStore
- * ר�Ź�����Ϣͼ�ף��ڵ�أ��ͻ�Ծָ������ݲ�
+ * 负责管理消息图谱，节点池，分支指针等数据
  */
 export class WorldlineStore extends LuminaWeaveAPIBase {
     private nodes: Map<string, LuminaChatMessage> = new Map();
@@ -46,7 +46,7 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
         }
     }
 
-    // --- ����״̬���� ---
+    // --- 状态管理 ---
 
     public get activeLeafId(): string | null {
         return this._activeLeafId;
@@ -63,10 +63,10 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
         return Array.from(this.nodes.values());
     }
 
-    // --- �ڵ���� ---
+    // --- 节点管理 ---
 
     /**
-     * ����ȫ���ڵ�أ�ͨ�����ڳ�ʼ���أ�
+     * 设置全部节点
      */
     public setNodes(nodes: LuminaChatMessage[]): void {
         this.nodes.clear();
@@ -80,7 +80,7 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * ��ӻ���µ����ڵ�
+     * 插入或更新节点
      */
     public upsertNode(node: LuminaChatMessage, silent: boolean = false): void {
         const existing = this.nodes.get(node.id);
@@ -93,7 +93,7 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * �����ϲ��ڵ�
+     * 合并节点
      */
     public mergeNodes(newNodes: LuminaChatMessage[]): void {
         let changed = false;
@@ -108,16 +108,16 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * ��ȡָ���ڵ�
+     * 获取指定节点
      */
     public getNode(id: string): LuminaChatMessage | undefined {
         return this.nodes.get(id);
     }
 
-    // --- ͼ�㷨 ---
+    // --- 图谱算法 ---
 
     /**
-     * ��ȡ��ָ��Ҷ�ӽڵ���ǰ��Դ������������· (Trace)
+     * 获取指定节点的完整链
      */
     public getTrace(leafId: string | null): LuminaChatMessage[] {
         if (!leafId) return [];
@@ -127,7 +127,7 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
 
         while (currId !== null) {
             if (visited.has(currId)) {
-                console.warn('[WorldlineStore] ��⵽ѭ�����ã�׷���ж�:', currId);
+                console.warn('[WorldlineStore] 发现循环:', currId);
                 break;
             }
             const node = this.nodes.get(currId);
@@ -141,7 +141,7 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * ɾ��ָ���ĵ����ڵ�
+     * 删除指定节点
      */
     public removeNode(id: string, silent: boolean = false): void {
         const node = this.nodes.get(id);
@@ -153,17 +153,17 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * �����֦���Ƴ�ָ���ڵ㼰�����к�����֧�ڵ�
-     * �Ż���ͨ�������ڽӱ�������Ӷȴ� O(N^2) ���� O(N)
+     * 删除指定节点
+     * 优化：通过childrenMap直接获取子节点，避免O(N^2)遍历
      */
     public removeSubtree(rootId: string): void {
         const toDelete = new Set<string>();
         
-        // 2. �ݹ��ռ���������
+        // 2. 递归收集所有子节点
         const collect = (pid: string) => {
             const children = this.childrenMap.get(pid);
             if (children) {
-                // �������飬������ɾ���������޸���������
+                // 复制数组，避免在遍历时修改原数组
                 [...children].forEach(id => {
                     toDelete.add(id);
                     collect(id);
@@ -173,7 +173,7 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
 
         collect(rootId);
         
-        // 3. ִ������ɾ��
+        // 3. 批量删除
         toDelete.forEach(id => {
             const node = this.nodes.get(id);
             if (node) {
@@ -187,7 +187,7 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     }
     
     /**
-     * ��ȡָ���ڵ��ֱ���ӽڵ�
+     * 获取指定节点
      */
     public getChildren(parentId: string | null): LuminaChatMessage[] {
         const childrenIds = this.childrenMap.get(parentId);
@@ -196,14 +196,14 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * ���ڵ��Ƿ�����ڳ���
+     * 节点是否存在于图中
      */
     public hasNode(id: string): boolean {
         return this.nodes.has(id);
     }
 
     /**
-     * ��մ洢
+     * 清空存储
      */
     public clear(): void {
         this.nodes.clear();

@@ -134,6 +134,7 @@ onMounted(() => {
   if (getNode && getGraph) {
     const nodeInstance = getNode();
     const graphInstance = getGraph();
+    //console.log('[HistoryNode] Mounting node:', props.node.id);
 
     const updateHandler = (eventData: any) => {
       // 仅处理当前 ID 匹配的属性变更
@@ -149,6 +150,7 @@ onMounted(() => {
     graphInstance.eventCenter.on(EventType.NODE_PROPERTIES_CHANGE, updateHandler);
 
     onUnmounted(() => {
+      console.log('[HistoryNode] Unmounting node:', props.node.id);
       graphInstance.eventCenter.off(EventType.NODE_PROPERTIES_CHANGE, updateHandler);
     });
   }
@@ -188,6 +190,8 @@ const formatTime = (ts?: number) => {
   flex-direction: column;
   padding: 15px;
   perspective: 1000px;
+  width: 100%;
+  height: 100%;
 }
 
 .active-badge {

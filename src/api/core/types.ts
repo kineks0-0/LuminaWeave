@@ -9,6 +9,7 @@ export interface StoredChatMessage {
     role: string;
     is_user?: boolean;
     mesRaw: string;
+    is_hidden?: boolean;
     pluginRaw?: string | null;
     fingerprint: string;
     send_date: number;

@@ -92,7 +92,7 @@ import './style.css';
                 }
 
                 // 检查 href 是否明确指向 LuminaWeave 插件目录
-                return href.includes('LuminaWeave') || href.includes('style.css');
+                return href.includes('LuminaWeave') && href.includes('style.css');
             }
 
             return false;

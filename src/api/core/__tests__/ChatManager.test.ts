@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+﻿import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../ChatManager';
 import { STBridge } from '../STBridge';
 import { SyncEngine } from '../SyncEngine';
@@ -69,7 +69,7 @@ describe('ChatManager Data Priority Sync', () => {
 
         await manager.syncFromST();
 
-        // Ӧ���Զ�ǿ�� ST
+        // 自动推送到 ST
         expect(manager.commitToST).toHaveBeenCalled();
         expect(manager.sync.syncFromST).not.toHaveBeenCalled();
     });

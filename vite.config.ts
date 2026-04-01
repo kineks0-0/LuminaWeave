@@ -30,10 +30,15 @@ export default defineConfig({
         '/script.js'
       ],
       output: {
+        codeSplitting: false,
         assetFileNames: (assetInfo) => {
-          if (assetInfo.names?.includes('luminaweave-extension.css')) return 'style.css';
-          return assetInfo.names?.[0] || '';
+          if (assetInfo.name?.endsWith('.css')) return 'style.css';
+          return assetInfo.name || '';
         }
+      },
+      onwarn(warning, warn) {
+        if (warning.code === 'FILE_NAME_CONFLICT') return;
+        warn(warning);
       }
     }
   }

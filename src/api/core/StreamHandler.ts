@@ -12,6 +12,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
     private _smoothQueue: string[] = [];
     private _smoothTimer: any = null;
     private _smoothEmitText: string = "";
+    private _lastDisplayFullText: string = "";
     private _initialized: boolean = false;
     private _latestSemanticState: StreamSemanticState = {
         rawText: '',
@@ -51,6 +52,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
             statusText: '',
             activeTag: null
         };
+        this._lastDisplayFullText = "";
         this.clearSmoothTimer();
     }
 
@@ -85,15 +87,22 @@ export class StreamHandler extends LuminaWeaveAPIBase {
         }
 
         if (isSmooth && smoothness > 0) {
-            // 待平滑的实际增量，在过滤模式下，我们需要用 displayFullText 和 _smoothEmitText 计算差值
+            // 核心修复：待平滑的实际增量，改用 displayFullText 与上一个 fullText 的差值计算。
+            // 之前的逻辑使用 displayFullText 与 _smoothEmitText 差值，
+            // 会导致如果 handleChunk 被重复调用（尽管全量文本未变），且展示进度落后时，同样的字符被重复推入队列。
             let actualChunk = "";
-            if (displayFullText.startsWith(this._smoothEmitText)) {
-                actualChunk = displayFullText.substring(this._smoothEmitText.length);
+
+            if (displayFullText.startsWith(this._lastDisplayFullText)) {
+                actualChunk = displayFullText.substring(this._lastDisplayFullText.length);
             } else {
+                // 如果数据不连贯（例如重置或断层），同步对齐输出进度
                 this._smoothEmitText = displayFullText;
                 this._smoothQueue = [];
                 this.emit('BUFFER_UPDATED', displayFullText, rawFullText, semanticState.filteredCount, semanticState.statusText);
             }
+
+            // 更新稳态记录
+            this._lastDisplayFullText = displayFullText;
 
             if (actualChunk.length > 0) {
                 for (const char of actualChunk) {
@@ -104,7 +113,9 @@ export class StreamHandler extends LuminaWeaveAPIBase {
             if (!this._smoothTimer) {
                 this._smoothTimer = setInterval(() => {
                     if (this._smoothQueue.length > 0) {
-                        let step = Math.ceil(this._smoothQueue.length / (8 - smoothness));
+                        // 核心增强：防止 smoothness 参数过载导致除零或步长异常 (smoothness 范围通常为 1-7)
+                        const divisor = Math.max(0.1, 8 - smoothness);
+                        let step = Math.ceil(this._smoothQueue.length / divisor);
 
                         if (this._smoothQueue.length > 50) step = Math.max(step, 2);
                         if (this._smoothQueue.length > 150) step = Math.max(step, 5);

@@ -62,7 +62,7 @@ export class PromptBuilder {
         const allTags = globalPromptRegistry.getAllXMLTags();
         if (allTags.length > 0) {
             const tagRules = allTags.map((t, index) => {
-                const tagStr = t.aliases ? `<${t.tag}> (简??<${t.aliases.join('> <')}>)` : `<${t.tag}>`;
+                const tagStr = t.aliases ? `<${t.tag}> (简写<${t.aliases.join('> <')}>)` : `<${t.tag}>`;
                 return `${index + 1}. ${tagStr} : ${t.description}`;
             }).join('\n');
 

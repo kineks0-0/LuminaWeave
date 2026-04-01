@@ -12,10 +12,11 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@chenglou/pretext": "^0.0.3",
     "@logicflow/core": "^2.2.0-alpha.7",
     "@logicflow/extension": "^2.2.0-alpha.7",
+    "@logicflow/layout": "^2.1.0",
     "@logicflow/vue-node-registry": "^1.2.0-alpha.7",
-    "elkjs": "^0.11.1",
     "gsap": "^3.14.2",
     "openai": "^6.33.0",
     "pinia": "^3.0.4",

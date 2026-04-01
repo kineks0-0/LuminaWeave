@@ -15,7 +15,7 @@ export const BuiltinXMLTags = {
 export type LifecycleType = 'transient' | 'ephemeral' | 'persistent';
 
 /**
- * 拦截器处理函数的返回?? */
+ * 拦截器处理函数的返回值 */
 export type InterceptorCallback = (tagContent: string, fullMatchText: string) => string | void;
 
 export interface ParserRegistration {
