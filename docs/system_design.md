@@ -1,7 +1,7 @@
 # LuminaWeave 系统架构与设计文档（System Design）
 
 **版本:** v5.3-dev
-**最后更新时间:** 2026-03-27
+**最后更新时间:** 2026-04-01
 
 ## 一、系统架构理念
 
@@ -13,7 +13,8 @@
 
 沟通原生 ST 平台和诸多子插件的中间层，包括：
 
-- **核心快照与记忆中心 (MemoryManager)** [NEW]：负责协调所有子插件的状态持久化，提供基于定点快照与增量重放的“时空回溯”服务。
+- **核心快照与记忆中心 (MemoryManager)** [NEW]：负责协调所有子插件的状态持久化。
+- **全局文本测量服务 (MeasureService) [NEW]**：集成 `@chenglou/pretext` 库，提供毫秒级、基于 LRU 缓存的文本高度预计算，服务于 Timeline 布局与虚拟列表。
 - **上下文自动解析 (Context Resolver) [Standardized]**：
     - **统一 API 探测器 (Unified API Discovery)**：通过 `LuminaWeaveAPIBase` 基类实现。
     - **三层探测机制 (Triple-Layer Discovery)**：
@@ -140,8 +141,13 @@ LuminaWeave 提供了一套开放式的正则流式拦截机制，要求所有�
 
 为了模拟人类极其精准的剧情召回能力，系统引入了 `MemoryVectorService`:
 - **自动切割与索引**: 剧情总结生成的“小总结”被自动分割为带上下文标签的片段。
-- **语义加权召回**: 结合最近对话的关键词熵值（Keyness）进行 Embedding 距离计算或语义增强搜索，实现对比传统 RAG 精准度大幅提升。
-- **降维存储**: 向量数据库作为 Tier 4 记忆，仅在需要时通过检索器（Retriever）挂载至 `SCENARIO` 插槽。
+- **语义加权召回**: 结合最近对话的关键词统计进行 Embedding 检索。
+
+### 10.4 消息发送范围控制 (MemoryController) [NEW]
+
+为了实现基于“全量+概况”的非侵入式上下文管理，引入了- **MemoryController**: 根据 `Full Content Range` 配置（条数/Token/字符数）计算溢出边界。支持按类型条件化选择配置项，并提供可视化步进交互。
+- **is_hidden 标记**: 计算出的“过期”消息通过 TavernHelper 被物理标记为 `is_hidden`，从而在不破坏对话完整性的前提下，阻止 ST 将其发送至大模型。
+- **背景补全**: 被隐藏的消息通过 `Tier 3 (剧情概况)` 自动总结并注入世界书，确保 AI 依然拥有逻辑连续性。
 
 ### 11. 发送流程 (OpenAI-Edge 增强版)
 
@@ -222,7 +228,10 @@ graph LR
 - **ChatConverter (数据隔离层)**: 将 ST 对象与 Lumina 模型彻底解耦。所有的同步比提强制采用 `mesRaw` (原始文本) 进行双向转换与冲突比对，彻底隔离正则处理带来的分歧噪音。
 - **View Router (动态面板总线)**:
     - **Panel 注册**: 允许任何插件通过 `lwApi.registerPanel` 挂载 UI 单元。
-    - **多模态展示**: 统一由 `openPanel` 调度，根据配置或实时参数决定以 Modal (弹窗) 或 Tab (标签页) 形态呈现，实现组件的高度复用。
+    - **多模态展示**: 统一由 `openPanel` 调度，根据配置或实时参数决定以 Modal (弹窗) 或 Tab (标签页) 形态呈现。
+- **条件呈现设置 (Conditional Settings) [v5.8.2]**:
+    - **showIf 协议**: 支持在 `settingsManifest` 中注册谓词函数，根据全局状态感应实时切换设置项可见性，显著简化复杂插件的配置界面。
+    - **自研扩展组件**: 引入 `LuminaStepper` 等业务驱动的 UI 单元，替换原生及过时的配置控件。
 
 ### 16. 差量同步与 ST 桥接层 (v4.8) [NEW]
 

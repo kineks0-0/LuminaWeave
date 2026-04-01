@@ -16,6 +16,8 @@ export interface SettingDefinition {
     min?: number;
     max?: number;
     step?: number;
+    /** 条件显示：根据当前设置状态决定该项是否显示 */
+    showIf?: (settings: Record<string, any>) => boolean;
 }
 
 export interface LuminaPlugin {

@@ -33,12 +33,87 @@ export const DirectorPlugin: LuminaPlugin = {
             ],
             allowedScopes: ["Global", "Character"]
         },
+        fullLimitType: {
+            label: "全量对话限制类型",
+            type: "options",
+            default: "count",
+            common: true,
+            options: [
+                { label: "按消息条数", value: "count" },
+                { label: "按 Token 数量", value: "token" },
+                { label: "按字符长度", value: "char" }
+            ],
+            allowedScopes: ["Global", "Character"]
+        },
+        fullLimitValueCount: {
+            label: "全量对话限制值 (条数)",
+            type: "stepper",
+            default: 20,
+            min: 1,
+            max: 500,
+            step: 1,
+            common: true,
+            allowedScopes: ["Global", "Character"],
+            showIf: (s) => s['lumina-director.fullLimitType'] === 'count'
+        },
+        fullLimitValueToken: {
+            label: "全量对话限制值 (Token)",
+            type: "stepper",
+            default: 2000,
+            min: 100,
+            max: 8000,
+            step: 100,
+            common: true,
+            allowedScopes: ["Global", "Character"],
+            showIf: (s) => s['lumina-director.fullLimitType'] === 'token'
+        },
+        fullLimitValueChar: {
+            label: "全量对话限制值 (字符数)",
+            type: "stepper",
+            default: 5000,
+            min: 100,
+            max: 20000,
+            step: 100,
+            common: true,
+            allowedScopes: ["Global", "Character"],
+            showIf: (s) => s['lumina-director.fullLimitType'] === 'char'
+        },
+        fullSplit: {
+            label: "溢出时强制分割",
+            description: "如果关闭，将允许内容在浮动比例内超过限制而不被隐藏",
+            type: "boolean",
+            default: false,
+            common: true,
+            allowedScopes: ["Global"]
+        },
+        fullFloating: {
+            label: "非分割模式浮动比例 (%)",
+            type: "stepper",
+            default: 10,
+            min: 0,
+            max: 50,
+            step: 1,
+            common: true,
+            allowedScopes: ["Global"],
+            showIf: (s) => s['lumina-director.fullLimitType'] !== 'count' && s['lumina-director.fullSplit'] === false
+        },
         enableVectorMemory: {
             label: "启用类人向量记忆",
             description: "基于语义搜索动态检索并注入历史瞬间",
             type: "boolean",
             default: true,
             common: true,
+            allowedScopes: ["Global", "Character"]
+        },
+        memoryMode: {
+            label: "长线记忆同步模式",
+            type: "options",
+            default: "async",
+            common: true,
+            options: [
+                { label: "随显挂载 - 快/省Token", value: "piggyback" },
+                { label: "独立后台总结 - 极稳", value: "async" }
+            ],
             allowedScopes: ["Global", "Character"]
         }
     },
@@ -67,6 +142,11 @@ export const DirectorPlugin: LuminaPlugin = {
 
         globalXMLInterceptor.registerXMLParser('Next_Plan', 'ephemeral', (content) => {
             useDirectorStore().setNextPlan(content.trim());
+            return '';
+        });
+
+        globalXMLInterceptor.registerXMLParser('Story_Summary', 'persistent', (content) => {
+            useDirectorStore().setStorySummary(content.trim());
             return '';
         });
 
@@ -99,26 +179,49 @@ export const DirectorPlugin: LuminaPlugin = {
                 anchor: 'Chat_Reply',
                 position: 'after',
                 priority: 60
+            }, {
+                tag: 'Story_Summary',
+                description: '凝练地总结并更新当前的剧情概况。这将作为长线背景通过世界书同步。',
+                statusText: '总结剧情中...',
+                anchor: 'Next_Plan',
+                position: 'after',
+                priority: 70
             }],
             getFragment: () => null
         });
 
-        // --- 5. 监听核心事件 ---
-        // 显式监听新对话创建事件，执行状态重置 (满足用户对“监听处理”的要求)
+        // 注册剧情概况作为虚拟世界书条目 (长线背景)
+        globalPromptRegistry.register({
+            id: 'director-story-summary',
+            slot: PromptSlot.ST_MAIN,
+            label: 'Story Summary',
+            priority: 100,
+            getFragment: () => {
+                const summary = useDirectorStore().storySummary;
+                if (!summary) return null;
+                return `[剧情前情提要]\n${summary}`;
+            }
+        });
+
+        // --- 5. 监听核心事件与范围控制启动 ---
         if (typeof (window as any).LuminaWeave?.on === 'function') {
             (window as any).LuminaWeave.on('CHAT_CREATED', () => {
                 console.log('[LuminaDirector] 监听到新对话创建事件，正在重置引擎状态...');
                 const store = useDirectorStore();
                 store.reset();
             });
+            
+            // 启动消息范围同步器
+            (window as any).LuminaWeave.on('MESSAGE_RECEIVED', () => {
+                import('./MemoryController').then(m => m.globalMemoryController.syncVisibility());
+            });
         }
 
-        console.log('[LuminaDirector] Plugin initialized with central memory support.');
+        console.log('[LuminaDirector] Plugin initialized with central memory and scope control.');
     },
     hooks: {
         onMessageAdding(newMsg, currentTrace) {
             // 调度核心记忆管理器的状态捕获 (处理 Deltas 与 Snapshots)
-            // 核心修复：仅对 AI 节点执行捕获，用户节点不保存独立记忆快照
             if (!newMsg.is_user) {
                 globalMemoryManager.captureState(newMsg, currentTrace);
             }
@@ -127,6 +230,7 @@ export const DirectorPlugin: LuminaPlugin = {
             const directorStore = useDirectorStore();
             if (directorStore.currentPlan) newMsg.extra.currentPlan = directorStore.currentPlan;
             if (directorStore.nextPlan) newMsg.extra.nextPlan = directorStore.nextPlan;
+            if (directorStore.storySummary) newMsg.extra.storySummary = directorStore.storySummary;
         },
         onMessageAdded(newMsg, currentTrace) {
             if (!newMsg.is_user) {
@@ -143,7 +247,6 @@ export const DirectorPlugin: LuminaPlugin = {
         onChatLoaded(activeLeafId, nodePool) {
             console.log(`[LuminaDirector] chat loaded: ${activeLeafId}, nodes: ${nodePool?.length || 0}`);
             
-            // 核心增强：如果是新对话（节点池为空），则执行物理重置逻辑
             if (!nodePool || nodePool.length === 0) {
                 console.log('[LuminaDirector] New chat detected, resetting all engine states.');
                 const store = useDirectorStore();
@@ -154,11 +257,7 @@ export const DirectorPlugin: LuminaPlugin = {
             }
         },
         onMetadataExport(metadata: any) {
-            // 已移除：不再导出全量状态，强制依赖 Timeline 节点回溯
-            metadata.director_sync_v2 = true;
-        },
-        onMetadataImport(metadata: any) {
-            // 已移除：不再导入全量状态，状态恢复由 ChatManager 触发的 onMessageSelected 处理
+            metadata.director_sync_v3 = true;
         }
     }
 };
