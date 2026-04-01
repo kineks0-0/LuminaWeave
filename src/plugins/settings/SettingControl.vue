@@ -1,5 +1,5 @@
 <template>
-  <div class="setting-row" :class="isVerticalLayout ? 'layout-vertical' : 'layout-horizontal'">
+  <div v-if="isVisible" class="setting-row" :class="isVerticalLayout ? 'layout-vertical' : 'layout-horizontal'">
     <div class="setting-left">
       <div class="label-row">
         <label class="setting-label">{{ config.label }}</label>
@@ -76,18 +76,10 @@
         </label>
       </template>
 
-      <!-- Stepper (A- / A+) 字重/字号步进器 -->
+      <!-- Stepper (LuminaStepper) 通用步进器 -->
       <template v-else-if="config.type === 'stepper'">
-        <div class="stepper-wrap">
-          <button class="stepper-btn" @click="updateValue(currentValue - (config.step || 1))">
-            {{ stepperChar }}-
-          </button>
-          <input type="number" class="stepper-val-input" :value="currentValue" :min="config.min" :max="config.max"
-            :step="config.step || 1" @input="handleNumberInput" />
-          <button class="stepper-btn" @click="updateValue(currentValue + (config.step || 1))">
-            {{ stepperChar }}+
-          </button>
-        </div>
+        <LuminaStepper :modelValue="currentValue" :min="config.min" :max="config.max" :step="config.step"
+          @update:modelValue="updateValue" />
       </template>
 
       <!-- Slider -->
@@ -123,6 +115,7 @@
 import { computed } from 'vue';
 import { activeSettings, activeScopes, useSettings } from './useSettings';
 import { lwStorage } from '../../api/storage';
+import LuminaStepper from './LuminaStepper.vue';
 
 const { updateSetting, updateScope } = useSettings();
 
@@ -142,6 +135,7 @@ interface SettingConfig {
   max?: number;
   step?: number;
   common?: boolean;
+  showIf?: (settings: Record<string, any>) => boolean;
 }
 
 const props = defineProps<{
@@ -162,6 +156,13 @@ const currentScope = computed({
   set: (val: string) => {
     activeScopes[storageKey.value] = val;
   }
+});
+
+const isVisible = computed(() => {
+  if (typeof props.config.showIf === 'function') {
+    return props.config.showIf(activeSettings);
+  }
+  return true;
 });
 
 const scopeLabels: Record<string, string> = {
