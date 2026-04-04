@@ -1,17 +1,16 @@
 import { globalPromptRegistry, PromptSlot, PromptType, STIdentifier } from './PromptRegistry';
-import { useDirectorStore } from '../../plugins/director/DirectorStore';
-import { globalMutationEngine } from '../../plugins/director/MutationEngine';
-import { useTier1Store } from '../../plugins/director/Tier1Store';
 import { p } from './PromptUtils';
+import { lwStorage } from '../storage';
+
+import { viewComponentRegistry } from './ViewComponentRegistry';
 
 /**
  * 系统级提示词提供者
- * 负责注册核心 XML 协议、元数据标签以及全局世界观上下文
  */
 export class SystemPromptProvider {
     public static registerAll(): void {
         this.registerXMLMetadata();
-        this.registerWorldContext();
+        this.registerLuminaViewDSL();
     }
 
     /**
@@ -33,7 +32,6 @@ export class SystemPromptProvider {
             getFragment: () => null
         });
 
-        // 该字段对内容质量没有优化，暂时注释掉
         /* globalPromptRegistry.register({
             id: 'core-character-action-metadata',
             slot: PromptSlot.ST_MAIN,
@@ -41,7 +39,7 @@ export class SystemPromptProvider {
             priority: 0,
             xmlTags: [{
                 tag: 'Character_Action',
-                description: '角色在当前回合采取的物理或环境动作',
+                description: '[已弃用] 角色在当前回合采取的物理或环境动作。建议直接合并至 Chat_Reply 中输出，流式展示时将自动屏蔽此标签内容。',
                 statusText: '行动中..',
                 priority: 2
             }],
@@ -61,39 +59,69 @@ export class SystemPromptProvider {
             }],
             getFragment: () => null
         });
+
+        globalPromptRegistry.register({
+            id: 'core-luminaview-metadata',
+            slot: PromptSlot.ST_MAIN,
+            targetIdentifier: STIdentifier.MAIN,
+            priority: 0,
+            xmlTags: [{
+                tag: 'V',
+                aliases: ['View'],
+                description: '视觉化组件容器。用于在对话中穿插展示属性条、进度、选项等 UI 元素。内容必须使用 LuminaView DSL 编写',
+                statusText: '渲染界面..',
+                anchor: 'Chat_Reply',
+                position: 'before',
+                priority: 10,
+                parent: 'Chat_Reply'
+            }],
+            getFragment: () => null
+        });
     }
 
     /**
-     * 注册统一的世界拓扑、记忆与数据协议
+     * 注册 LuminaView DSL 说明
      */
-    private static registerWorldContext(): void {
+    private static registerLuminaViewDSL(): void {
         globalPromptRegistry.register({
-            id: 'director-world-context-unified',
+            id: 'core-luminaview-dsl-docs',
             slot: PromptSlot.ST_MAIN,
-            type: PromptType.WORLD_VIEW,
+            type: PromptType.CONSTRAINTS,
             targetIdentifier: STIdentifier.WORLD_INFO_BEFORE,
-            label: '记忆系统-导演推演',
-            priority: 100,
+            label: 'UI 渲染指令',
+            priority: 110,
             getFragment: () => {
-                const directorStore = useDirectorStore();
-                const tier1Store = useTier1Store();
+                const dialogueUIFrequency = lwStorage?.get ? lwStorage.get('lumina-chat.dialogueUIFrequency', 1, 'Global') : 1;
+                
+                // 如果频率为 0，则不注入 UI 渲染协议
+                if (dialogueUIFrequency === 0) return null;
 
-                const memState = directorStore.getFormattedMemoryState;
-                const tier1State = tier1Store.getFormattedTier1State;
+                // 频率权重引导
+                const frequencyPrompts: Record<number, string> = {
+                    1: '仅在重大部分或关键抉择（如需用户进行关键抉择）时才使用 UI 组件。',
+                    2: '适量使用 UI 组件展示关键数值变化（如 HP、亲密、任务），以增强沉浸感。',
+                    3: '较积极地使用 UI 组件来增强剧情的互动性与视觉表现。',
+                    4: '尽可能频繁地使用 UI 组件作为叙事手段的一环，使交互更加生动和结构化。'
+                };
+                
+                const weightDesc = frequencyPrompts[dialogueUIFrequency] || frequencyPrompts[2];
 
-                let parts: string[] = [];
-                if (tier1State) parts.push(tier1State);
-                if (memState) parts.push(memState);
+                let output = '# [协议] LuminaView UI 交互渲染规范\n\n';
+                output += `## 0. 活跃度配置 (Frequency: ${dialogueUIFrequency}/4)\n`;
+                output += `**指令**: ${weightDesc}\n\n`;
+                
+                output += '## 1. 基础语法 (Basic Syntax)\n';
+                output += '所有结构化 UI 必须且只能包裹在 `<V>` 标签内。支持以下两种调用方式：\n';
+                output += '- **函数式 (推荐)**: `ComponentName("参数1", 123)` - 极其清晰，适合逻辑理解。\n';
+                output += '- **管道式 (极致压缩)**: `Code|参数1|123` - 适合节省 Token。\n\n';
+                
+                output += '## 2. 混合输出示例 (Usage Example)\n';
+                output += '如果发生了好感度变化，你可以这样输出：\n';
+                output += '\"这一路上多亏了你，我不再是一个人。\"\n';
+                output += '<V> Stat("好感度", 88, 100) </V>\n';
+                output += '随后她露出了少见的羞涩微笑。\n\n';
 
-                if (parts.length === 0) return null;
-
-                let output = '';
-                output += '你必须使用标准指令实时同步世界线状态 根据 <Chat_Reply> 内的对话内容。\n';
-                output += '如果没有任何内容的表格，请必须进行一次初始化内容更新。\n\n';
-                output += parts.join('\n\n').trim();
-                output += '\n\n';
-                output += globalMutationEngine.getDocumentation();
-
+                output += viewComponentRegistry.getDocumentation();
                 return output;
             }
         });

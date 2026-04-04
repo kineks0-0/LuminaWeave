@@ -1,9 +1,9 @@
 import { lwStorage } from '../storage.js';
-import { ChatConverter } from './ChatConverter.js';
+import { STProtocol } from './st-adapter/STProtocol.js';
 import { LuminaChatMessage as LuminaChatMessage } from './ChatManager.js';
 import { WorldlineStore } from './WorldlineStore.js';
-import { SyncEngine } from './SyncEngine.js';
-import { STBridge } from './STBridge.js';
+import { SyncUtils } from './SyncUtils.js';
+import { STClient } from './st-adapter/STClient.js';
 import { pluginManager } from '../../core/PluginManager.js';
 import { TransactionContextPayload, TransactionErrorPayload, TransactionMutationResponse, TransactionQueryResponse, TransactionScope } from './TransactionProtocol.js';
 
@@ -217,7 +217,7 @@ export class PersistenceService {
         const start = Date.now();
         while (Date.now() - start < maxWaitMs) {
             try {
-                const csrfToken = await STBridge.getCsrfToken();
+                const csrfToken = await STClient.getCsrfToken();
                 const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}/sync-status`, {
                     headers: { 'X-CSRF-Token': csrfToken }
                 });
@@ -245,7 +245,7 @@ export class PersistenceService {
             await this._waitForTransactions(chatId);
 
             try {
-                const csrfToken = await STBridge.getCsrfToken();
+                const csrfToken = await STClient.getCsrfToken();
                 // 2. 请求当前最新的事务状态
                 const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}/sync-status`, {
                     headers: { 'X-CSRF-Token': csrfToken }
@@ -283,7 +283,7 @@ export class PersistenceService {
             await this._waitForTransactions(chatId);
 
             try {
-                const csrfToken = await STBridge.getCsrfToken();
+                const csrfToken = await STClient.getCsrfToken();
                 const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}`, {
                     headers: { 'X-CSRF-Token': csrfToken }
                 });
@@ -311,7 +311,7 @@ export class PersistenceService {
                             this._setIntegratedTxId(chatId, remoteLastTxId);
                         }
 
-                        const normalizedNodes = SyncEngine.ensureFingerprints(messages);
+                        const normalizedNodes = SyncUtils.ensureFingerprints(messages);
 
                         // 补充：确保反序列化时恢复基础角色属性，因为独立存储可能没有完整的 metadata
                         normalizedNodes.forEach(n => {
@@ -375,7 +375,7 @@ export class PersistenceService {
             await this._waitForTransactions(chatId);
 
             try {
-                const csrfToken = await STBridge.getCsrfToken();
+                const csrfToken = await STClient.getCsrfToken();
 
                 // 1. 获取后端当前状态 (快照对比)
                 const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}`, {
@@ -396,7 +396,7 @@ export class PersistenceService {
                 const localNodes = this.store.nodePool;
 
                 // 3. 分析差异
-                const diff = SyncEngine.comparePools(localNodes, remoteNodes);
+                const diff = SyncUtils.comparePools(localNodes, remoteNodes);
                 const metadataChanged = (remoteMetadata?.activeLeafId || null) !== (this.store.activeLeafId || null);
 
                 // 4. 执行同步策略
@@ -421,8 +421,8 @@ export class PersistenceService {
                     pluginManager.callHooks('onMetadataExport', pluginMetadata);
 
                     const patchPayload = {
-                        added: diff.added.map(m => ChatConverter.toStorage(m)),
-                        updated: diff.updated.map(m => ChatConverter.toStorage(m)),
+                        added: diff.added.map(m => STProtocol.toStorage(m)),
+                        updated: diff.updated.map(m => STProtocol.toStorage(m)),
                         deletedIds: diff.deletedIds,
                         metadata: {
                             activeLeafId: this.store.activeLeafId,
@@ -462,7 +462,7 @@ export class PersistenceService {
      */
     async appendToIndependentChat(msg: LuminaChatMessage, targetChatId?: string): Promise<void> {
         // 先确保消息有 ID 和指纹
-        if (!msg.fingerprint) msg.fingerprint = SyncEngine.getFingerprint(msg.mesRaw);
+        if (!msg.fingerprint) msg.fingerprint = SyncUtils.getFingerprint(msg.mesRaw);
         return this.syncToIndependentChat(targetChatId, false);
     }
 
@@ -471,7 +471,7 @@ export class PersistenceService {
         pluginManager.callHooks('onMetadataExport', pluginMetadata);
 
         const messages = this.store.nodePool.map(m => {
-            const stored = ChatConverter.toStorage(m);
+            const stored = STProtocol.toStorage(m);
             // 节点注入状态快照 (仅在活跃节点或关键节点)
             if (m.id === this.store.activeLeafId) {
                 stored.extra = stored.extra || {};

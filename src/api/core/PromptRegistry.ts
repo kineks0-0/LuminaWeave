@@ -59,6 +59,11 @@ export interface XMLTagInfo {
     position?: 'before' | 'after';
     /** 同层级排序优先级/权重 (数字越小越靠前) */
     priority: number;
+    /** 
+     * 父级标签名 (可选)
+     * 设置后，该标签将在 System Protocol 列表中作为子项缩进显示，并采用嵌套编号 (如 3.1)
+     */
+    parent?: string;
 }
 
 /**
@@ -131,6 +136,13 @@ export class PromptRegistry {
         this.fragments.sort((a, b) => b.priority - a.priority);
 
         console.debug(`[PromptRegistry] Registered fragment: ${fragment.id} at ${fragment.slot} (priority: ${fragment.priority})`);
+    }
+
+    /**
+     * 获取所有已注册的提示词片段 (用于 PromptBuilder 遍历)
+     */
+    public getAllFragments(): PromptFragment[] {
+        return [...this.fragments];
     }
 
     /**

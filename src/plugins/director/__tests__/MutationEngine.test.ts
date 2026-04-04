@@ -91,6 +91,12 @@ describe('IncrementalMutationEngine JS Execution', () => {
         );
     });
 
+    it('should handle Chinese full-width punctuation (； ： ，) and execute correctly', () => {
+        engine.executeMutation('global.time = "清晨"； characters["岩烈"].status = "极度虚弱"；');
+        expect(mockGlobalProxy.onUpdate).toHaveBeenCalledWith({ time: "清晨" }, undefined, undefined);
+        expect(mockCharactersProxy.onUpdate).toHaveBeenCalledWith({ status: "极度虚弱" }, undefined, "岩烈");
+    });
+
     it('should correctly capture deltas into deltaCache', () => {
         engine.executeMutation('global.time = "黄昏"');
         const deltas = engine.flushDeltas();

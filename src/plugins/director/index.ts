@@ -1,5 +1,5 @@
 import { globalXMLInterceptor } from '../../api/core/XMLInterceptor';
-import { globalPromptRegistry, PromptSlot, STIdentifier } from '../../api/core/PromptRegistry';
+import { globalPromptRegistry, PromptSlot, PromptType, STIdentifier } from '../../api/core/PromptRegistry';
 import { globalMemoryManager } from '../../api/core/MemoryManager';
 
 // 导出核心引擎组件
@@ -32,70 +32,6 @@ export const DirectorPlugin: LuminaPlugin = {
                 { label: "独立后台推演 - 极稳", value: "async" }
             ],
             allowedScopes: ["Global", "Character"]
-        },
-        fullLimitType: {
-            label: "全量对话限制类型",
-            type: "options",
-            default: "count",
-            common: true,
-            options: [
-                { label: "按消息条数", value: "count" },
-                { label: "按 Token 数量", value: "token" },
-                { label: "按字符长度", value: "char" }
-            ],
-            allowedScopes: ["Global", "Character"]
-        },
-        fullLimitValueCount: {
-            label: "全量对话限制值 (条数)",
-            type: "stepper",
-            default: 20,
-            min: 1,
-            max: 500,
-            step: 1,
-            common: true,
-            allowedScopes: ["Global", "Character"],
-            showIf: (s) => s['lumina-director.fullLimitType'] === 'count'
-        },
-        fullLimitValueToken: {
-            label: "全量对话限制值 (Token)",
-            type: "stepper",
-            default: 2000,
-            min: 100,
-            max: 8000,
-            step: 100,
-            common: true,
-            allowedScopes: ["Global", "Character"],
-            showIf: (s) => s['lumina-director.fullLimitType'] === 'token'
-        },
-        fullLimitValueChar: {
-            label: "全量对话限制值 (字符数)",
-            type: "stepper",
-            default: 5000,
-            min: 100,
-            max: 20000,
-            step: 100,
-            common: true,
-            allowedScopes: ["Global", "Character"],
-            showIf: (s) => s['lumina-director.fullLimitType'] === 'char'
-        },
-        fullSplit: {
-            label: "溢出时强制分割",
-            description: "如果关闭，将允许内容在浮动比例内超过限制而不被隐藏",
-            type: "boolean",
-            default: false,
-            common: true,
-            allowedScopes: ["Global"]
-        },
-        fullFloating: {
-            label: "非分割模式浮动比例 (%)",
-            type: "stepper",
-            default: 10,
-            min: 0,
-            max: 50,
-            step: 1,
-            common: true,
-            allowedScopes: ["Global"],
-            showIf: (s) => s['lumina-director.fullLimitType'] !== 'count' && s['lumina-director.fullSplit'] === false
         },
         enableVectorMemory: {
             label: "启用类人向量记忆",
@@ -203,7 +139,39 @@ export const DirectorPlugin: LuminaPlugin = {
             }
         });
 
-        // --- 5. 监听核心事件与范围控制启动 ---
+        // --- 5. 注册统一的世界拓扑、记忆与数据协议 ---
+        globalPromptRegistry.register({
+            id: 'director-world-context-unified',
+            slot: PromptSlot.ST_MAIN,
+            type: PromptType.WORLD_VIEW,
+            targetIdentifier: STIdentifier.WORLD_INFO_BEFORE,
+            label: '记忆系统-导演推演',
+            priority: 100,
+            getFragment: () => {
+                const directorStore = useDirectorStore();
+                const tier1Store = useTier1Store();
+
+                const memState = directorStore.getFormattedMemoryState;
+                const tier1State = tier1Store.getFormattedTier1State;
+
+                let parts: string[] = [];
+                if (tier1State) parts.push(tier1State);
+                if (memState) parts.push(memState);
+
+                if (parts.length === 0) return null;
+
+                let output = '';
+                output += '你必须使用标准指令实时同步世界线状态 根据 <Chat_Reply> 内的对话内容。\n';
+                output += '如果没有任何内容的表格，请必须进行一次初始化内容更新。\n\n';
+                output += parts.join('\n\n').trim();
+                output += '\n\n';
+                output += globalMutationEngine.getDocumentation();
+
+                return output;
+            }
+        });
+
+        // --- 6. 监听核心事件与范围控制启动 ---
         if (typeof (window as any).LuminaWeave?.on === 'function') {
             (window as any).LuminaWeave.on('CHAT_CREATED', () => {
                 console.log('[LuminaDirector] 监听到新对话创建事件，正在重置引擎状态...');
@@ -211,10 +179,7 @@ export const DirectorPlugin: LuminaPlugin = {
                 store.reset();
             });
             
-            // 启动消息范围同步器
-            (window as any).LuminaWeave.on('MESSAGE_RECEIVED', () => {
-                import('./MemoryController').then(m => m.globalMemoryController.syncVisibility());
-            });
+            // 旧的范围同步器 (MemoryController) 已被废弃并移除，其功能由核心模块 ContextCompactor 接管
         }
 
         console.log('[LuminaDirector] Plugin initialized with central memory and scope control.');
@@ -254,6 +219,17 @@ export const DirectorPlugin: LuminaPlugin = {
                 store.reset();
                 tier1.reset();
                 globalMemoryManager.resetAll();
+            } else if (activeLeafId) {
+                // 核心修复：加载已有对话时，必须基于当前活跃节点回溯恢复记忆状态
+                // 否则初始加载后内存将为空，直到下一次生成或手动切换节点
+                const timelineManager = (window as any).LuminaWeave?.timelineManager;
+                if (timelineManager) {
+                    const trace = timelineManager.getTrace(activeLeafId);
+                    if (trace && trace.length > 0) {
+                        console.log(`[LuminaDirector] Initializing memory from active node: ${activeLeafId}`);
+                        globalMemoryManager.restoreState(activeLeafId, trace);
+                    }
+                }
             }
         },
         onMetadataExport(metadata: any) {

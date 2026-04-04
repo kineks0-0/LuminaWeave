@@ -20,6 +20,7 @@
             <div v-if="!isApiReady" class="lw-global-loading">
               <div class="spinner"></div>
               <span>环境加载中... 若长时间无响应请检查 ST 相关扩展(例如 JS-Slash-Runner)是否正常。</span>
+              <span style="color: var(--lw-primary); font-weight: bold; margin-top: 8px;">当前进度: {{ initStatusText }}</span>
             </div>
 
             <template v-else>
@@ -110,6 +111,7 @@
 
     <!-- Global Conflict Resolver Popup -->
     <ConflictDiffViewer ref="globalConflictViewer" />
+    <SyncReportViewer ref="globalSyncReportViewer" />
 
     <!-- Global Toast Notifier for LuminaWeave -->
     <ToastNotification />
@@ -130,11 +132,14 @@ import ToastNotification from './components/ToastNotification.vue';
 
 // Import dynamic components for tabs
 import ConflictDiffViewer from './plugins/chat/ConflictDiffViewer.vue';
+import SyncReportViewer from './plugins/chat/SyncReportViewer.vue';
 import SettingsRoot from './plugins/settings/SettingsRoot.vue';
 import LauncherRoot from './plugins/launcher/LauncherRoot.vue';
+import CardMakerPanel from './plugins/forge/CardMakerPanel.vue';
 
 const componentMap: Record<string, any> = {
   'ConflictDiffViewer': ConflictDiffViewer,
+  'SyncReportViewer': SyncReportViewer,
   'SettingsRoot': SettingsRoot,
   'LauncherRoot': LauncherRoot
 };
@@ -142,11 +147,17 @@ const componentMap: Record<string, any> = {
 registerLuminaPlugins();
 
 const mainPlugins = computed(() => pluginManager.getPluginsInSlot('mainView'));
-const widgetPlugins = computed(() => pluginManager.getPluginsInSlot('widget'));
+const settingsRevision = ref(0);
+const widgetPlugins = computed(() => {
+  // 依赖 settingsRevision 以确保设置变更时（如开发模式切换）实时刷新插件列表
+  settingsRevision.value;
+  return pluginManager.getPluginsInSlot('widget');
+});
 
 const isExpanded = ref(false);
 const isApiReady = ref(false);
 const isMobile = ref(window.innerWidth < 768);
+const initStatusText = ref('等待系统启动...');
 
 const handleResizeWindow = () => {
   isMobile.value = window.innerWidth < 768;
@@ -158,6 +169,7 @@ const dynamicTabs = ref<any[]>([]);
 const activeRightPanel = ref('lumina-settings');
 const showWidgetDropdown = ref(false);
 const globalConflictViewer = ref<any>(null);
+const globalSyncReportViewer = ref<any>(null);
 
 // 性能优化：记录是否加载过时空图谱，避免切回主 Tab 时重新挂载（保持 LogicFlow 物理内存持久）
 const isTimelineLoadedOnce = ref(false);
@@ -252,8 +264,9 @@ const toggleExpand = async () => {
     }, 400);
 
     setTimeout(() => {
-      const state = lwApi.getConflictState?.();
-      if (state?.hasConflict) {
+      const state = lwApi.getSyncDiff?.();
+      // 遵循 PDR: 仅在检测到不可合并的“分歧 (Divergence)”时才自动弹出
+      if (state?.hasDivergence) {
         globalConflictViewer.value?.open();
       }
     }, 100);
@@ -265,13 +278,31 @@ onMounted(async () => {
     title: '版本分歧比对',
     icon: '⚡',
   });
+  lwApi.registerPanel('sync_report', SyncReportViewer, {
+    title: '同步对比报告',
+    icon: '🧾',
+  });
+
+  lwApi.registerPanel('card_maker', CardMakerPanel, {
+    title: '制卡工坊',
+    icon: '🧩',
+    defaultMode: 'tab'
+  });
 
   lwApi.on('OPEN_TAB', handleOpenTab);
   lwApi.on('SWITCH_WIDGET_PANEL', (panelId: string) => {
     activeRightPanel.value = panelId;
   });
 
+  lwApi.on('INIT_PROGRESS', (text: string) => {
+    initStatusText.value = text;
+  });
+
   initSettings();
+
+  lwApi.on('SETTINGS_CHANGED', () => {
+    settingsRevision.value++;
+  });
 
   // 核心优化：直接调用 lwApi.init()，内部已整合环境探测 (ST, Helper, EventSource)
   await lwApi.init();
@@ -280,6 +311,9 @@ onMounted(async () => {
 
   lwApi.on('OPEN_PANEL_CONFLICT', () => {
     globalConflictViewer.value?.open();
+  });
+  lwApi.on('OPEN_PANEL_SYNC_REPORT', () => {
+    globalSyncReportViewer.value?.open();
   });
 
   window.addEventListener('resize', handleResizeWindow);

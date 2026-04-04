@@ -2,7 +2,7 @@ import { llmEngine } from '../../api/llmEngine';
 import { useDirectorStore } from './DirectorStore';
 import { globalXMLInterceptor } from '../../api/core/XMLInterceptor';
 import { useTier1Store } from './Tier1Store';
-import { SyncEngine } from '../../api/core/SyncEngine';
+import { SyncUtils } from '../../api/core/SyncUtils';
 import { LuminaChatMessage } from '../../api/core/ChatManager';
 
 export class AsyncGateway {
@@ -48,7 +48,7 @@ export class AsyncGateway {
                         responseText = chunk; // llmEngine 的 onChunk 会传 fullText（从代码来看，有时可能传 delta，但 api/index.ts 里是 fullText）
                     },
                     onDone: (finalText: string) => {
-                        // 利用拦截器过滤并触发副作用 (执行 MutationEngine)
+                        // 利用拦截器过滤并触发副作用 (执行 SyncUtils)
                         const cleanedText = globalXMLInterceptor.processAndCleanText(finalText);
                         console.log(`[AsyncGateway] 后台规划归纳完成。模型可能已触发 Mutation。清理后的闲聊废话长度: ${cleanedText.length}`);
                         resolve();

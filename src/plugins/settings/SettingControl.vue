@@ -59,11 +59,24 @@
           </div>
         </template>
         <template v-else>
-          <div class="segment-control">
-            <button v-for="opt in config.options" :key="opt.value" :class="{ active: currentValue === opt.value }"
-              @click="updateValue(opt.value)">
-              {{ opt.label }}
-            </button>
+          <div class="segment-control-container">
+            <div class="segment-control">
+              <button v-for="opt in config.options" :key="opt.value" :class="{ active: currentValue === opt.value }"
+                @click="updateValue(opt.value)">
+                {{ opt.label }}
+              </button>
+            </div>
+            <!-- 展现选中项的详细描述 -->
+            <transition name="fade-slide">
+              <div v-if="activeOptionDescription" class="option-description-tip">
+                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                {{ activeOptionDescription }}
+              </div>
+            </transition>
           </div>
         </template>
       </template>
@@ -122,6 +135,7 @@ const { updateSetting, updateScope } = useSettings();
 interface SettingOption {
   value: any;
   label: string;
+  description?: string; // 选项级详细描述
 }
 
 interface SettingConfig {
@@ -163,6 +177,13 @@ const isVisible = computed(() => {
     return props.config.showIf(activeSettings);
   }
   return true;
+});
+
+// 计算当前激活选项的描述文字
+const activeOptionDescription = computed(() => {
+  if (!props.config.options) return null;
+  const opt = props.config.options.find(o => o.value === currentValue.value);
+  return opt?.description || null;
 });
 
 const scopeLabels: Record<string, string> = {
@@ -422,6 +443,13 @@ const onScopeChange = (e: Event) => {
 }
 
 /* ---- Segment Control ---- */
+.segment-control-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
 .segment-control {
   background: var(--lw-bg-subtle);
   border-radius: var(--lw-radius-sm);
@@ -456,6 +484,42 @@ const onScopeChange = (e: Event) => {
 .segment-control button:hover:not(.active) {
   color: var(--lw-text-main);
   background: rgba(0, 0, 0, 0.04);
+}
+
+.option-description-tip {
+  font-size: 11px;
+  color: var(--lw-text-muted);
+  background: var(--lw-bg-subtle);
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.4;
+  border-left: 2px solid var(--lw-accent);
+  animation: slide-in-top 0.2s ease-out;
+}
+
+@keyframes slide-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.2s ease;
+}
+
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 /* ---- Theme Color Swatches ---- */

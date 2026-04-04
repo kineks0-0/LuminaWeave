@@ -39,7 +39,7 @@
                     <div class="lw-side-label">Lumina 独立存储 (影子数据库)</div>
                     <div class="lw-side-status">当前影子副本</div>
                   </div>
-                  <button class="lw-apply-btn" @click="resolve('lumina')">保留此版本</button>
+                  <button class="lw-apply-btn" @click="resolve('lumina')">以Lumina为准</button>
                 </div>
               </div>
 
@@ -49,18 +49,27 @@
                 <div class="lw-side-header">
                   <div class="lw-node-dot st-dot"></div>
                   <div class="lw-side-info">
-                    <div class="lw-side-label">SillyTavern 运行时状态</div>
-                    <div class="lw-side-status">内存即时数据</div>
+                    <div class="lw-side-label">SillyTavern 原生状态</div>
+                    <div class="lw-side-status">ST 消息列表中的实际内容</div>
                   </div>
-                  <button class="lw-apply-btn secondary" @click="resolve('st')">拉取此版本</button>
+                  <button class="lw-apply-btn secondary" @click="resolve('st')">以ST为准</button>
                 </div>
               </div>
             </div>
 
+            <!-- 控制栏：选择查看模式 -->
+            <div class="lw-diff-controls">
+              <label><input type="radio" value="diff" v-model="viewMode"> 仅显示差异项</label>
+              <label><input type="radio" value="all" v-model="viewMode"> 显示完整链路</label>
+            </div>
+
             <div class="lw-diff-scroll scrollbar-thin">
-              <div v-for="row in diffRows" :key="row.index" class="lw-diff-pair">
+              <div v-for="row in filteredDiffRows" :key="row.index" class="lw-diff-pair">
                 <div class="lw-diff-cell" :class="row.leftClass">
-                  <div class="lw-mobile-tag lumina">LUMINA / 独立存储</div>
+                  <div class="lw-mobile-tag lumina">
+                    <span>LUMINA / 独立存储</span>
+                    <span v-if="row.leftClass !== 'is-same'" class="lw-status-badge">{{ row.leftClass === 'is-empty' ? '空' : (row.leftClass === 'is-add' ? '新增' : '修改') }}</span>
+                  </div>
                   <div class="lw-code-row">
                     <span class="lw-code-no">{{ row.leftLine }}</span>
                     <span class="lw-code-sign">{{ row.leftSign }}</span>
@@ -71,7 +80,10 @@
                 <div class="lw-diff-vs row">VS</div>
 
                 <div class="lw-diff-cell" :class="row.rightClass">
-                  <div class="lw-mobile-tag st">ST / 内存即时数据</div>
+                  <div class="lw-mobile-tag st">
+                    <span>ST / 内存数据</span>
+                    <span v-if="row.rightClass !== 'is-same'" class="lw-status-badge">{{ row.rightClass === 'is-empty' ? '空' : (row.rightClass === 'is-add' ? '新增' : '修改') }}</span>
+                  </div>
                   <div class="lw-code-row">
                     <span class="lw-code-no">{{ row.rightLine }}</span>
                     <span class="lw-code-sign">{{ row.rightSign }}</span>
@@ -79,7 +91,7 @@
                   </div>
                 </div>
               </div>
-              <div v-if="diffRows.length === 0" class="lw-empty-node">无可展示差异</div>
+              <div v-if="filteredDiffRows.length === 0" class="lw-empty-node">无可展示差异</div>
             </div>
           </div>
         </div>
@@ -97,7 +109,9 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 
-const lwApi = (window as any).LuminaWeave;
+import { DiffVisualizer } from '../../api/core/SyncUtils.js';
+
+const lwApi = (window as any).LuminaWeave_API;
 const props = defineProps<{
   isTabMode?: boolean | string
 }>();
@@ -105,15 +119,54 @@ const props = defineProps<{
 const emit = defineEmits(['close']);
 const isOpen = ref(false);
 const diffData = ref<any>(null);
+const viewMode = ref<'all' | 'diff'>('diff');
 
-const diffRows = computed(() => Array.isArray(diffData.value?.rows) ? diffData.value.rows : []);
+const diffRows = computed(() => {
+  if (diffData.value) {
+    return Array.isArray(diffData.value.rows) 
+      ? diffData.value.rows 
+      : DiffVisualizer.generateDiffRows(diffData.value);
+  }
+  return [];
+});
+
+const filteredDiffRows = computed(() => {
+  if (viewMode.value === 'all') {
+    return diffRows.value;
+  }
+  return diffRows.value.filter((row: any) => row.leftClass !== 'is-same' || row.rightClass !== 'is-same');
+});
 
 const handleConflict = (data: any) => {
-  if (!data?.hasDivergence || !data?.diffCount) {
+  if (!data?.hasConflict || !data?.diffCount) {
     diffData.value = null;
     isOpen.value = false;
     return;
   }
+  
+  // 埋点日志：输出两边的消息列表，方便排查伪冲突和对比基准
+  console.groupCollapsed(`[ConflictViewer] 检测到数据分歧 - 差异项: ${data.diffCount}`);
+  console.log('--- Lumina 独立存储 (左侧) ---');
+  console.table(data.independentSequence?.map((m: any) => ({
+    id: m.id,
+    name: m.name,
+    role: m.role,
+    mesST_or_mes: m.mes,
+    fingerprint: m.fingerprint,
+    is_hidden: m.is_hidden
+  })) || []);
+  
+  console.log('--- ST 内存状态 (右侧) ---');
+  console.table(data.stSequence?.map((m: any) => ({
+    id: m.id,
+    name: m.name,
+    role: m.role,
+    actual_mes: m.mes,
+    fingerprint: m.fingerprint,
+    is_hidden: m.is_hidden
+  })) || []);
+  console.groupEnd();
+
   diffData.value = data;
   isOpen.value = true;
 };
@@ -121,15 +174,22 @@ const handleConflict = (data: any) => {
 // 外部调用打开弹窗
 const open = () => {
   if (props.isTabMode) return;
-  const currentState = lwApi?.getConflictState?.();
-  if (currentState?.hasDivergence && currentState?.diffCount) {
-    handleConflict(currentState);
-  } else {
-    const latestDiff = lwApi?.getSyncDiff?.();
-    if (latestDiff?.hasDivergence && latestDiff?.diffCount) {
-      handleConflict(latestDiff);
+  
+  // 强行通过 store 与 stBridge 比对一次最新数据，避免旧缓存误判
+  try {
+    const diff = lwApi?.getSyncDiff?.();
+    if (diff?.hasConflict && diff?.diffCount) {
+        handleConflict(diff);
+        return;
     }
+  } catch (e) {
+      console.warn('Manual diff check failed, fallback to state.', e);
   }
+
+  // 如果依然没有冲突，强行关闭并提示
+  diffData.value = null;
+  isOpen.value = false;
+  lwApi?.showToast?.('未检测到实质性数据差异，已自动同步', 'success');
 };
 
 // 外放至大窗口（标签页）
@@ -142,7 +202,7 @@ const externalize = () => {
 onMounted(() => {
   if (lwApi) {
     lwApi.on('CHAT_CONFLICT', handleConflict);
-    const state = lwApi.getConflictState?.();
+    const state = lwApi.getSyncDiff?.();
     if (state?.hasDivergence && state?.diffCount) {
       handleConflict(state);
     }
@@ -170,19 +230,22 @@ const resolve = async (winner: 'st' | 'lumina') => {
     await lwApi.syncFromST({ resolveIntent: winner });
 
     // 刷新差异数据，确认是否已解决
-    const newState = lwApi.getSyncDiff?.();
-    if (newState?.hasDivergence && newState?.diffCount) {
-      diffData.value = newState;
-    } else {
-      diffData.value = null;
-    }
+    // 给系统一点时间完成存储和加载
+    setTimeout(() => {
+      const newState = lwApi.getSyncDiff?.();
+      if (newState?.hasConflict && newState?.diffCount) {
+        diffData.value = newState;
+      } else {
+        diffData.value = null;
+        if (!props.isTabMode && isOpen.value) {
+          isOpen.value = false;
+        }
+        emit('close');
+      }
+    }, 400);
 
-    lwApi.showToast(winner === 'lumina' ? '已成功应用本地版本至全局' : '已成功同步 ST 版本', 'success');
+    lwApi.showToast(winner === 'lumina' ? '已成功覆盖 ST 版本' : '已成功拉取 ST 版本', 'success');
 
-    if (!props.isTabMode && isOpen.value) {
-      isOpen.value = false;
-    }
-    emit('close');
   } catch (err: any) {
     console.error('[ConflictViewer] 解决冲突失败:', err);
     lwApi.showToast(`解决失败: ${err.message || '未知错误'}`, 'error');
@@ -218,7 +281,7 @@ defineExpose({ open });
 
 @media (max-width: 768px) {
   .conflict-overlay {
-    padding: 10px;
+    padding: 0;
     height: 100vh;
   }
 }
@@ -251,8 +314,11 @@ defineExpose({ open });
   .conflict-window {
     width: 100%;
     max-width: 100%;
-    height: calc(100% - 20px);
-    border-radius: 16px;
+    height: 100%; /* 高度占满屏幕 */
+    border-radius: 0; /* 去掉圆角，使其像全屏应用 */
+  }
+  .conflict-overlay {
+    padding: 0; /* 移除内边距，让内容顶到边缘 */
   }
 }
 
@@ -381,8 +447,8 @@ defineExpose({ open });
 
 @media (max-width: 768px) {
   .lw-body {
-    padding: 12px;
-    gap: 12px;
+    padding: 0; /* 移动端完全去掉 padding */
+    gap: 0; /* 移动端去掉 gap */
   }
 }
 
@@ -405,6 +471,14 @@ defineExpose({ open });
   border: 1px solid #e2e8f0;
 }
 
+@media (max-width: 768px) {
+  .lw-diff-container {
+    border-radius: 0; /* 去掉圆角 */
+    border-left: none;
+    border-right: none;
+  }
+}
+
 .lw-diff-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
@@ -416,9 +490,9 @@ defineExpose({ open });
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 4px;
+    padding: 8px; /* 增加头部 padding */
     background: #f1f5f9;
-    border-radius: 12px;
+    border-radius: 0; /* 去掉圆角 */
     border-bottom: none;
   }
 }
@@ -449,10 +523,10 @@ defineExpose({ open });
 
 @media (max-width: 768px) {
   .lw-side-header {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row; /* 恢复为横向排列以节省空间 */
+    align-items: center;
     gap: 10px;
-    margin-bottom: 12px;
+    margin-bottom: 8px; /* 减少下边距 */
   }
 }
 
@@ -499,13 +573,14 @@ defineExpose({ open });
   cursor: pointer;
   transition: 0.2s;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  white-space: nowrap; /* 避免换行 */
 }
 
 @media (max-width: 768px) {
   .lw-apply-btn {
-    width: 100%;
-    padding: 10px;
-    font-size: 13px;
+    width: auto; /* 恢复自适应宽度 */
+    padding: 8px 12px; /* 适当减小 padding */
+    font-size: 12px;
   }
 }
 
@@ -526,12 +601,43 @@ defineExpose({ open });
   color: #1e293b;
 }
 
+.lw-diff-controls {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+  .lw-diff-controls {
+    padding: 12px 8px; /* 增加移动端点击区域 */
+    border-bottom: none; /* 移动端可以考虑不显示这个边框 */
+  }
+}
+
+.lw-diff-controls label {
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .lw-diff-scroll {
   flex: 1;
   overflow-y: auto;
   background: #0b1220;
   border-radius: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+@media (max-width: 768px) {
+  .lw-diff-scroll {
+    border-radius: 0; /* 去掉圆角 */
+  }
 }
 
 .lw-diff-pair {
@@ -546,7 +652,7 @@ defineExpose({ open });
     display: flex;
     flex-direction: column;
     gap: 0;
-    border-bottom: 4px solid #1e293b;
+    border-bottom: 8px solid #1e293b; /* 增加分隔 */
   }
 }
 
@@ -556,31 +662,37 @@ defineExpose({ open });
 
 @media (max-width: 768px) {
   .lw-mobile-tag {
-    display: block;
-    font-size: 9px;
-    font-weight: 800;
-    padding: 4px 10px;
+    display: flex; /* 改为 flex 以支持右侧对齐信息 */
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px; /* 稍微调大一点，提升可读性 */
+    font-weight: 700; /* 去掉极粗的字重，看起来更和谐 */
+    padding: 6px 12px; /* 增加一点内边距 */
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: rgba(30, 41, 59, 0.8);
-    color: #94a3b8;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    letter-spacing: 0.02em;
+    background: #1e293b; /* 使用稍微亮一点的背景，区分内容区 */
+    color: #cbd5e1; /* 提升对比度 */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .lw-mobile-tag.lumina {
-    color: #a78bfa;
-    border-left: 3px solid var(--lw-primary);
+    border-left: 4px solid var(--lw-primary);
   }
 
   .lw-mobile-tag.st {
-    color: #f87171;
-    border-left: 3px solid #ef4444;
+    border-left: 4px solid #ef4444;
   }
 
-  /* 当行内无实质差异且被收起时，为了节省空间，可以不重复显示这些标签 */
   .is-same .lw-mobile-tag {
-    opacity: 0.5;
-    font-weight: 500;
+    opacity: 0.7; /* 不那么透明 */
+    background: rgba(30, 41, 59, 0.6);
+  }
+
+  .lw-status-badge {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
   }
 }
 
@@ -602,6 +714,7 @@ defineExpose({ open });
   .lw-code-row {
     grid-template-columns: 32px 20px 1fr;
     min-height: 28px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08); /* 稍微减弱移动端边框 */
   }
 }
 
@@ -635,8 +748,8 @@ defineExpose({ open });
   line-height: 1.6;
   padding: 8px 12px;
   white-space: pre-wrap;
-  word-break: normal;
-  overflow-wrap: anywhere;
+  word-break: break-word; /* 确保长单词不会撑破布局 */
+  overflow-wrap: break-word; /* 同上 */
   min-width: 0;
 }
 

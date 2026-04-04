@@ -1,4 +1,4 @@
-﻿import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
+import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 import { LuminaChatMessage } from './ChatManager.js';
 
 export enum WorldlineEvent {
@@ -98,9 +98,10 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     public mergeNodes(newNodes: LuminaChatMessage[]): void {
         let changed = false;
         newNodes.forEach(n => {
-            if (!this.nodes.has(n.id)) {
-                this.nodes.set(n.id, n);
-                this._addChild(n);
+            const existing = this.nodes.get(n.id);
+            // 只要节点不存在，或者内容/拓扑关系发生变化，就执行更新
+            if (!existing || existing.fingerprint !== n.fingerprint || existing.parentId !== n.parentId) {
+                this.upsertNode(n, true);
                 changed = true;
             }
         });
@@ -117,7 +118,8 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     // --- 图谱算法 ---
 
     /**
-     * 获取指定节点的完整链
+     * 获取指定节点的完整链 (溯源路径)
+     * 作为系统唯一的链路计算权威实现
      */
     public getTrace(leafId: string | null): LuminaChatMessage[] {
         if (!leafId) return [];
@@ -127,7 +129,7 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
 
         while (currId !== null) {
             if (visited.has(currId)) {
-                console.warn('[WorldlineStore] 发现循环:', currId);
+                console.warn('[WorldlineStore] 发现循环引用，已截断路径:', currId);
                 break;
             }
             const node = this.nodes.get(currId);
@@ -138,6 +140,59 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
             currId = node.parentId || null;
         }
         return trace;
+    }
+
+    /**
+     * 自去重 (selfDeduplicate)
+     * 职责：清洗并合并指纹相同的同父级节点，确保数据层面的单向唯一性。
+     * 从 STSyncService 迁移并下沉至此。
+     */
+    public selfDeduplicate(): { count: number, changed: boolean } {
+        let deduplicatedCount = 0;
+        let changed = false;
+        
+        // 1. 按 parentId 分组检查子节点指纹
+        const parentToChildren = new Map<string | null, LuminaChatMessage[]>();
+        for (const node of this.nodePool) {
+            const children = parentToChildren.get(node.parentId || null) || [];
+            children.push(node);
+            parentToChildren.set(node.parentId || null, children);
+        }
+        
+        for (const [parentId, children] of parentToChildren.entries()) {
+            if (children.length <= 1) continue;
+            
+            const fingerprintMap = new Map<string, LuminaChatMessage>();
+            for (const child of children) {
+                if (!child.fingerprint) continue;
+                
+                const existing = fingerprintMap.get(child.fingerprint);
+                if (existing && existing.id !== child.id) {
+                    // 发现实质重复节点！保留 existing，将 child 移除
+                    console.log(`[WorldlineStore] 自动去重: 移除同源重复节点 ${child.id} (保留 ${existing.id})`);
+                    
+                    // 将以 child 为父节点的所有子节点转移给 existing 继承
+                    const childsChildren = parentToChildren.get(child.id) || [];
+                    for (const cc of childsChildren) {
+                        cc.parentId = existing.id;
+                        this.upsertNode(cc, true);
+                    }
+                    
+                    // 物理移除冗余节点
+                    this.removeNode(child.id, true);
+                    deduplicatedCount++;
+                    changed = true;
+                } else {
+                    fingerprintMap.set(child.fingerprint, child);
+                }
+            }
+        }
+
+        if (changed) {
+            this.emit(WorldlineEvent.UPDATED);
+        }
+        
+        return { count: deduplicatedCount, changed };
     }
 
     /**
@@ -153,8 +208,8 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * 删除指定节点
-     * 优化：通过childrenMap直接获取子节点，避免O(N^2)遍历
+     * 物理回退与剪枝：保留根节点，递归删除其下属的所有子孙分支
+     * 优化：通过 childrenMap 直接获取子节点，避免 O(N^2) 遍历
      */
     public removeSubtree(rootId: string): void {
         const toDelete = new Set<string>();

@@ -1,4 +1,4 @@
-import { globalXMLInterceptor } from './XMLInterceptor';
+import { globalXMLInterceptor, BuiltinXMLTags } from './XMLInterceptor';
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase';
 
 /**
@@ -24,9 +24,10 @@ export class RegexSyncService extends LuminaWeaveAPIBase {
         }
 
         // 获取需要过滤的标签 (transient, ephemeral, 以及非显示的 persistent 标签，如 <M>)
-        const excludeFromSTFilter = ['Chat_Reply'];
+        // 注意：排除 Chat_Reply（核心对话内容）和 presentational 标签（展示层组件，应保留在消息中）
+        const excludeFromSTFilter = [BuiltinXMLTags.CHAT_REPLY.toLowerCase()];
         const tags = globalXMLInterceptor.getTagsByLifecycle(['transient', 'ephemeral', 'persistent'])
-            .filter(tag => !excludeFromSTFilter.includes(tag));
+            .filter(tag => !excludeFromSTFilter.includes(tag.toLowerCase()));
 
         if (tags.length === 0) {
             console.log('[RegexSyncService] 没有需要同步的标签');

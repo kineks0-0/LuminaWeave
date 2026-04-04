@@ -1,13 +1,15 @@
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 import { lwStorage } from '../storage.js';
-import { ChatConverter } from './ChatConverter.js';
-import { SyncEngine } from './SyncEngine.js';
+import { STProtocol } from './st-adapter/STProtocol.js';
+import { SyncUtils } from './SyncUtils.js';
 import { WorldlineStore, WorldlineEvent } from './WorldlineStore.js';
 import { PersistenceService } from './PersistenceService.js';
 import { STSyncService } from './STSyncService.js';
-import { STBridge } from './STBridge.js';
+import { STAdapter } from './STAdapter.js';
+import { STClient } from './st-adapter/STClient.js';
 import { pluginManager } from '../../core/PluginManager.js';
 import { STSwipeInfo } from './types.js';
+import { DCCManager } from './DCCManager.js';
 
 export interface LuminaChatMessage {
     id: string;                // 节点唯一 ID (UUID 或稳定随机串)，不随内容改变，是持久化与索引的关键
@@ -17,16 +19,17 @@ export interface LuminaChatMessage {
     is_user?: boolean;         // 是否为用户消息
     mesRaw: string;            // 原始对话内容: 用于编辑、同步与指纹生成
     mes: string;               // 显示对话内容: 经过正则/插件处理后的文本
+    mesST?: string;            // ST 侧实际呈现文本
+    mesSummary?: string;       // 剧情概况文本
     is_hidden?: boolean;       // 是否隐藏 (不发送给大模型): ST 原生可见性控制
     pluginRaw?: string | null;  // 原始回复数据: 保存 LLM 的原始输出（含 XML 标签），mesRaw 仅为从中提取的对话部分
     fingerprint: string;       // 内容指纹: 仅由内容生成，用于检测内容是否发生变化
-    send_date: number;
+    stFingerprint?: string;    // ST 写回口径指纹: 基于写回 ST 的文本口径生成
     characterId?: string | number; 
     extra: Record<string, any>; // 扩展元数据
     avatarUrl?: string;        // UI 渲染用的头像 URL
     
     // 以下为 SillyTavern 兼容性字段，仅在内存/同步期间存在，不建议持久化至独立存储
-    message_id?: number | null; 
     swipe_id?: number;
     swipes?: string[];
     swipes_info?: STSwipeInfo[];
@@ -56,6 +59,7 @@ export class ChatManager extends LuminaWeaveAPIBase {
     public store: WorldlineStore;
     public persistence: PersistenceService;
     public sync: STSyncService;
+    public dcc: DCCManager;
 
     // 兼容性字段代理
     public syncState: ChatSyncState;
@@ -72,6 +76,7 @@ export class ChatManager extends LuminaWeaveAPIBase {
         this.store = new WorldlineStore();
         this.persistence = new PersistenceService(this.store, () => this.isIndependentLoaded);
         this.sync = new STSyncService(this.store);
+        this.dcc = new DCCManager(this.store);
 
         this.syncState = {
             status: 'idle',
@@ -84,6 +89,18 @@ export class ChatManager extends LuminaWeaveAPIBase {
         // 转发 Store 事件
         this.store.on(WorldlineEvent.SWITCHED, (id: string | null) => this.emit('CHAT_UPDATED'));
         this.store.on(WorldlineEvent.UPDATED, () => this.emit('CHAT_UPDATED'));
+
+        // 监听 DCC 设置的实时变动并触发重计算与同步
+        lwStorage.on('*', (data: { key: string, value: any, scope: string }) => {
+            if (data?.key?.startsWith('lumina-chat.contextControl')) {
+                console.log(`[ChatManager] 检测到 DCC 设置变动 (${data.key})，安排全量重新压实与同步...`);
+                // 让 DCC 调度计算，同时让 SyncService 将新结果刷入 ST
+                this.dcc.scheduleCompact(100);
+                setTimeout(() => {
+                    this.sync.commitToST().catch(e => console.error('[ChatManager] 设置变动引起的重同步失败:', e));
+                }, 200);
+            }
+        });
     }
 
     // --- 兼容性属性代理 ---
@@ -97,7 +114,7 @@ export class ChatManager extends LuminaWeaveAPIBase {
     /**
      * 同步数据 (兼容旧版调用)
      */
-    async syncFromST(retryCount: number = 0, options: { skipSave?: boolean; forceOverwrite?: boolean; skipIndependentLoad?: boolean; forceIndependentLoad?: boolean; resolveIntent?: 'st' | 'lumina' } = {}): Promise<void> {
+    async syncFromST(retryCount: number = 0, options: { skipSave?: boolean; forceOverwrite?: boolean; skipIndependentLoad?: boolean; forceIndependentLoad?: boolean; resolveIntent?: 'st' | 'lumina'; ignoreST?: boolean } = {}): Promise<void> {
         if (this.syncState.status === 'syncing') return;
 
         const { chatId } = lwStorage._getContextIds();
@@ -144,6 +161,9 @@ export class ChatManager extends LuminaWeaveAPIBase {
             } else if (!forceOverwriteReason && hasLocalAuthority) {
                 console.log('[ChatManager] 同步决策: LOCAL_AUTHORITATIVE_SKIP_IMPORT');
             }
+
+            const ignoreSTSetting = Boolean(lwStorage.get('lumina-chat.syncIgnoreST', false, 'Global'));
+            const ignoreST = (options.ignoreST ?? ignoreSTSetting) && hasLocalAuthority && !options.resolveIntent;
             
             let totalDiff = 0;
             let details: any = null;
@@ -155,28 +175,20 @@ export class ChatManager extends LuminaWeaveAPIBase {
                 details = syncResult.details;
             } else {
                 // 1.2 插件已有数据，先做前置冲突嗅探
-                const messages = STBridge.getMessages();
-                
-                // 修复：在执行比较前，如果独立存储已经加载，尝试将独立存储的 name/role 补回给本地节点池
-                // 以防刚加载完还没完全刷新时丢失
-                if (independentLoaded) {
-                    const stRawMap = new Map(messages.map((m: LuminaChatMessage) => [m.fingerprint, m]));
-                    for (const node of this.store.nodePool) {
-                        const raw = stRawMap.get(node.fingerprint);
-                        if (raw && raw.name && raw.name !== node.name) {
-                            node.name = raw.name;
-                        }
-                    }
-                }
-
-                const activeTrace = this.store.getTrace(this.store.activeLeafId);
-                const localForCompare = activeTrace.length > 0 ? activeTrace : this.store.nodePool;
-                const diffData = SyncEngine.compareStates(localForCompare, messages);
+                // 我们调用一次 getSyncDiff，利用内部新的 compareStates 逻辑进行最严格比对
+                const diffData = this.parentApi.getSyncDiff();
                 details = diffData;
                 totalDiff = diffData.diffCount;
 
-                // 如果用户有明确的冲突决议意图
-                if (options.resolveIntent) {
+                if (ignoreST) {
+                    if (diffData.diffCount > 0) {
+                        console.log('[ChatManager] 同步决策: IGNORE_ST_FORCE_LUMINA');
+                        await this.commitToST();
+                    } else {
+                        console.log('[ChatManager] 数据一致，无需同步。');
+                    }
+                    totalDiff = 0;
+                } else if (options.resolveIntent) {
                     if (options.resolveIntent === 'lumina') {
                         console.log('[ChatManager] 用户决议：以 Lumina 版本为准，写回 ST');
                         await this.commitToST();
@@ -201,18 +213,30 @@ export class ChatManager extends LuminaWeaveAPIBase {
                         this.syncState.error = '检测到时空分歧（ST 侧与本地均有独特改动）。';
                         this.emit('CHAT_CONFLICT', diffData);
                         return; // 终止同步，等待用户操作
-                    } else if (diffData.onlyInST.length > 0 && diffData.onlyInIndependent.length === 0) {
-                        // 只有 ST 有新数据（如其他插件生成的），安全合并进来
-                        console.log('[ChatManager] 检测到 ST 有新数据，执行安全拉取合并...');
-                        const syncResult = await this.sync.syncFromST();
-                        totalDiff = syncResult.totalDiff;
-                    } else if (diffData.onlyInIndependent.length > 0 && diffData.onlyInST.length === 0) {
-                        // 插件有新数据，ST 没有（或落后），以插件为准推送到 ST
-                        console.log('[ChatManager] 检测到本地数据领先，尝试向 ST 同步...');
-                        await this.commitToST();
                     } else {
-                        // 完全一致
-                        console.log('[ChatManager] 数据一致，无需同步。');
+                        // 根据更新来源判定同步方向
+                        const luminaOriginatedUpdates = diffData.updated.filter((u: any) => !u._isSTEdit);
+                        const stOriginatedUpdates = diffData.updated.filter((u: any) => u._isSTEdit);
+
+                        if (diffData.onlyInST.length > 0 || stOriginatedUpdates.length > 0) {
+                            // ST 有新数据或 ST 侧有用户编辑（如 Swipe），安全合并进来
+                            console.log('[ChatManager] 检测到 ST 有新数据或编辑，执行安全拉取合并...');
+                            const syncResult = await this.sync.syncFromST();
+                            totalDiff = syncResult.totalDiff;
+                            
+                            // 合并完成后，如果还有 Lumina 独有的数据（如 DCC 压缩状态），再推回 ST
+                            if (diffData.onlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0) {
+                                console.log('[ChatManager] 拉取后检测到本地仍有领先数据，向 ST 同步...');
+                                await this.commitToST();
+                            }
+                        } else if (diffData.onlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0) {
+                            // 插件有新数据或已有数据内容发生质变（如摘要化），以插件为准推送到 ST
+                            console.log('[ChatManager] 检测到本地数据领先，尝试向 ST 同步...');
+                            await this.commitToST();
+                        } else {
+                            // 完全一致
+                            console.log('[ChatManager] 数据一致，无需同步。');
+                        }
                     }
                 }
             }
@@ -330,7 +354,7 @@ export class ChatManager extends LuminaWeaveAPIBase {
      * 兼容性代理：获取精简版数据
      */
     getSafeChatDataForStorage(): any[] {
-        const messages = this.store.nodePool.map(m => ChatConverter.toStorage(m));
+        const messages = this.store.nodePool.map(m => STProtocol.toStorage(m));
         const metadata = {
             type: 'metadata',
             activeLeafId: this.store.activeLeafId,
@@ -356,5 +380,53 @@ export class ChatManager extends LuminaWeaveAPIBase {
         console.log(`[ChatManager] 触发插件时空回溯: ${targetNodeId}`);
         pluginManager.callHooks('onMessageSelected', targetNodeId, trace);
         this._lastRestoredNodeId = targetNodeId;
+    }
+
+    /**
+     * 获取所有包含快照或增量数据的节点
+     */
+    public getSnapshotNodes() {
+        return this.store.nodePool.filter(node => {
+            if (!node.extra) return false;
+            return Object.keys(node.extra).some(key => 
+                key.endsWith('_snapshot') || key.endsWith('_delta')
+            );
+        }).map(node => {
+            const snapshots = Object.keys(node.extra).filter(k => k.endsWith('_snapshot')).map(k => k.replace('_snapshot', ''));
+            const deltas = Object.keys(node.extra).filter(k => k.endsWith('_delta')).map(k => k.replace('_delta', ''));
+            return {
+                id: node.id,
+                role: node.role,
+                mesRaw: node.mesRaw,
+                snapshots,
+                deltas
+            };
+        });
+    }
+
+    /**
+     * 清空所有快照与增量数据
+     */
+    public async clearAllSnapshots(): Promise<{ cleared: number }> {
+        let clearedCount = 0;
+        this.store.nodePool.forEach(node => {
+            if (!node.extra) return;
+            const keysToRemove = Object.keys(node.extra).filter(key => 
+                key.endsWith('_snapshot') || key.endsWith('_delta')
+            );
+            if (keysToRemove.length > 0) {
+                keysToRemove.forEach(k => delete node.extra[k]);
+                clearedCount++;
+            }
+        });
+
+        if (clearedCount > 0) {
+            // 物理应用并触发持久化
+            await this.commitToST();
+            await this.saveToIndependentChat();
+            // 触发 UI 刷新
+            this.emit('CHAT_UPDATED');
+        }
+        return { cleared: clearedCount };
     }
 }

@@ -1,18 +1,27 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { STSyncService } from '../STSyncService';
 import { WorldlineStore } from '../WorldlineStore';
 import type { LuminaChatMessage } from '../ChatManager';
-import { STBridge } from '../STBridge';
-import { SyncEngine } from '../SyncEngine';
-import { ChatConverter } from '../ChatConverter';
+import { STAdapter } from '../STAdapter';
+import { STProtocol } from '../st-adapter/STProtocol';
+import { STClient } from '../st-adapter/STClient';
+import { SyncUtils } from '../SyncUtils';
 
-// Mock STBridge
-vi.mock('../STBridge', () => ({
-    STBridge: {
+// Mock STAdapter
+vi.mock('../STAdapter', () => ({
+    STAdapter: {
+        getSnapshot: vi.fn(),
+        compareStates: vi.fn(),
+        applyDelta: vi.fn(),
+    }
+}));
+
+// Mock STClient
+vi.mock('../st-adapter/STClient', () => ({
+    STClient: {
         getRawMessages: vi.fn(),
         getMessages: vi.fn(),
         updateMessages: vi.fn(),
-        appendMessage: vi.fn(),
         appendMessages: vi.fn(),
         deleteMessages: vi.fn(),
         flush: vi.fn()
@@ -20,10 +29,11 @@ vi.mock('../STBridge', () => ({
 }));
 
 // Mock lwStorage
-vi.mock('../../storage.js', () => ({
+vi.mock('../../storage', () => ({
     lwStorage: {
         _getContextIds: vi.fn(() => ({ charId: 'c1' })),
-        get: vi.fn((key, def) => def)
+        get: vi.fn((key, def) => def),
+        set: vi.fn()
     }
 }));
 
@@ -40,28 +50,49 @@ describe('STSyncService', () => {
         ...overrides
     } as LuminaChatMessage);
 
-    const createSTNode = (message: string, extra: any = {}, overrides: any = {}): any => ({
-        message_id: 0,
-        name: 'Tester',
-        role: 'user',
-        is_hidden: false,
-        message: message,
-        data: {},
-        extra: extra,
-        ...overrides
-    });
+    const createSTNode = (message: string, extra: any = {}, overrides: any = {}) => {
+        return STProtocol.fromST({
+            message_id: 0,
+            name: 'Tester',
+            role: 'user',
+            is_hidden: false,
+            message: message,
+            data: {},
+            extra: {
+                stFingerprint: extra.stFingerprint || extra.fingerprint || 'sfp1',
+                ...extra
+            },
+            ...overrides
+        });
+    };
 
     beforeEach(() => {
         store = new WorldlineStore();
         service = new STSyncService(store);
         vi.clearAllMocks();
+        
+        (STAdapter.compareStates as any).mockReturnValue({
+            diffCount: 0,
+            hasConflict: false,
+            hasDivergence: false,
+            divergenceIndex: -1,
+            onlyInIndependent: [],
+            onlyInST: [],
+            updated: [],
+            independentSequence: [],
+            stSequence: []
+        });
     });
 
     it('should sync new messages from ST (safe append)', async () => {
         const messages = [
-            ChatConverter.fromST(createSTNode('A', { id: '1', fingerprint: 'fp1' }))
+            createSTNode('A', { id: '1', fingerprint: 'fp1' })
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
 
         const result = await service.syncFromST();
         
@@ -80,10 +111,14 @@ describe('STSyncService', () => {
 
         // ST has 1 -> 3 (diverged or edited)
         const messages = [
-            ChatConverter.fromST(createSTNode('A', { id: '1', fingerprint: 'fp1' })),
-            ChatConverter.fromST(createSTNode('C', { id: '3', fingerprint: 'fp3' }))
+            createSTNode('A', { id: '1', fingerprint: 'fp1' }),
+            createSTNode('C', { id: '3', fingerprint: 'fp3' })
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
 
         // Force Sync
         await service.syncFromST({ forceOverwrite: true });
@@ -107,15 +142,35 @@ describe('STSyncService', () => {
 
         // ST has only 1
         const messages = [
-            ChatConverter.fromST(createSTNode('A', { id: '1', fingerprint: 'fp1' }))
+            createSTNode('A', { id: '1', fingerprint: 'fp1' })
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
+
+        (STAdapter.compareStates as any).mockReturnValue({
+            diffCount: 1,
+            hasConflict: false,
+            hasDivergence: true,
+            divergenceIndex: 1,
+            onlyInIndependent: [],
+            onlyInST: [],
+            updated: [],
+            independentSequence: store.getTrace('2'),
+            stSequence: [messages[0]]
+        });
+
+        (STAdapter.applyDelta as any).mockImplementation(async () => {
+            await STClient.appendMessages([{ extra: { id: '2' } } as any]);
+        });
 
         await service.commitToST();
 
         // Should call appendMessages
-        expect(STBridge.appendMessages).toHaveBeenCalled();
-        const appendArgs = (STBridge.appendMessages as any).mock.calls[0][0];
+        expect(STClient.appendMessages).toHaveBeenCalled();
+        const appendArgs = (STClient.appendMessages as any).mock.calls[0][0];
         expect(appendArgs[0].extra.id).toBe('2');
     });
 
@@ -128,11 +183,15 @@ describe('STSyncService', () => {
         store.activeLeafId = '2';
 
         const messages = [
-            ChatConverter.fromST(createSTNode('A', { id: '1', fingerprint: 'fp1' })),
-            ChatConverter.fromST(createSTNode('B', { id: '2', fingerprint: 'fp2' })),
-            ChatConverter.fromST(createSTNode('C', { id: '3', fingerprint: 'fp3' }))
+            createSTNode('A', { id: '1', fingerprint: 'fp1' }),
+            createSTNode('B', { id: '2', fingerprint: 'fp2' }),
+            createSTNode('C', { id: '3', fingerprint: 'fp3' })
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
 
         await service.syncFromST();
 
@@ -147,11 +206,15 @@ describe('STSyncService', () => {
         store.activeLeafId = '2';
 
         const messages = [
-            ChatConverter.fromST(createSTNode('A', { id: '1', fingerprint: 'fp1' })),
-            ChatConverter.fromST(createSTNode('B', { id: '2', fingerprint: 'fp2' })),
-            ChatConverter.fromST(createSTNode('C', { id: '3', fingerprint: 'fp3' }))
+            createSTNode('A', { id: '1', fingerprint: 'fp1' }),
+            createSTNode('B', { id: '2', fingerprint: 'fp2' }),
+            createSTNode('C', { id: '3', fingerprint: 'fp3' })
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
 
         await service.syncFromST();
 
@@ -166,10 +229,14 @@ describe('STSyncService', () => {
         store.activeLeafId = '2';
 
         const stAfterCommit = [
-            ChatConverter.fromST(createSTNode('A', { id: '1', fingerprint: 'fp1' })),
-            ChatConverter.fromST(createSTNode('B', { id: '2', fingerprint: 'fp2' }))
+            createSTNode('A', { id: '1', fingerprint: 'fp1' }),
+            createSTNode('B', { id: '2', fingerprint: 'fp2' })
         ];
-        (STBridge.getMessages as any).mockReturnValue(stAfterCommit);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: stAfterCommit,
+            idToIndex: new Map()
+        }));
 
         await service.commitToST();
 
@@ -196,11 +263,15 @@ describe('STSyncService', () => {
         store.activeLeafId = 'node_rb';
 
         const messages = [
-            ChatConverter.fromST(createSTNode('SFX', { id: 'node_sfx', fingerprint: 'fp_sfx' })),
-            ChatConverter.fromST(createSTNode('MID', { fingerprint: 'fp_mid' }, { message_id: 1 })),
-            ChatConverter.fromST(createSTNode('RB', { id: 'node_rb', fingerprint: 'fp_rb' }))
+            createSTNode('SFX', { id: 'node_sfx', fingerprint: 'fp_sfx' }),
+            createSTNode('MID', { fingerprint: 'fp_mid' }, { message_id: 1 }),
+            createSTNode('RB', { id: 'node_rb', fingerprint: 'fp_rb' })
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
 
         const result = await service.syncFromST();
         const idsAfterSync = store.nodePool.map(n => n.id);
@@ -222,14 +293,18 @@ describe('STSyncService', () => {
         store.activeLeafId = 'node_origin';
 
         const messages = [
-            ChatConverter.fromST(createSTNode('A', { id: 'node_origin', fingerprint: 'fp1' })),
-            ChatConverter.fromST(createSTNode('A', {
+            createSTNode('A', { id: 'node_origin', fingerprint: 'fp1' }),
+            createSTNode('A', {
                 fingerprint: 'fp1',
-                [SyncEngine.SYNC_SOURCE_KEY]: SyncEngine.SYNC_SOURCE_LUMINA,
-                [SyncEngine.SYNC_TS_KEY]: Date.now()
-            }, { message_id: 9 }))
+                '_lw_sync_source': 'lumina',
+                '_lw_sync_ts': Date.now()
+            }, { message_id: 9 })
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
 
         await service.syncFromST();
 
@@ -244,10 +319,14 @@ describe('STSyncService', () => {
         store.activeLeafId = 'node_local';
 
         const messages = [
-            ChatConverter.fromST(createSTNode('SAME', { id: 'node_local', fingerprint: 'fp_same' })),
-            ChatConverter.fromST(createSTNode('SAME', { fingerprint: 'fp_same' }, { message_id: 22 }))
+            createSTNode('SAME', { id: 'node_local', fingerprint: 'fp_same' }),
+            createSTNode('SAME', { fingerprint: 'fp_same' }, { message_id: 22 })
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
 
         await service.syncFromST();
 
@@ -266,11 +345,15 @@ describe('STSyncService', () => {
         store.activeLeafId = 'child_of_2';
 
         const messages = [
-            ChatConverter.fromST(createSTNode('root', { id: 'root', fingerprint: 'fp_root' })),
-            ChatConverter.fromST(createSTNode('duplicate_content', { id: 'branch1', fingerprint: 'fp_dup' })),
-            ChatConverter.fromST(createSTNode('child', { id: 'child_of_2', fingerprint: 'fp_child' }))
+            createSTNode('root', { id: 'root', fingerprint: 'fp_root' }),
+            createSTNode('duplicate_content', { id: 'branch1', fingerprint: 'fp_dup' }),
+            createSTNode('child', { id: 'child_of_2', fingerprint: 'fp_child' }),
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
 
         // This sync should trigger the deduplication pass
         await service.syncFromST();
@@ -301,11 +384,15 @@ describe('STSyncService', () => {
         store.activeLeafId = 'dupA';
 
         const messages = [
-            ChatConverter.fromST(createSTNode('root', { id: 'root', fingerprint: 'fp_root' })),
-            ChatConverter.fromST(createSTNode('A', { id: 'branchA', fingerprint: 'fpA' })),
-            ChatConverter.fromST(createSTNode('same', { id: 'dupA', fingerprint: 'fp_same' }))
+            createSTNode('root', { id: 'root', fingerprint: 'fp_root' }),
+            createSTNode('A', { id: 'branchA', fingerprint: 'fpA' }),
+            createSTNode('same', { id: 'dupA', fingerprint: 'fp_same' }),
         ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
 
         await service.syncFromST();
 

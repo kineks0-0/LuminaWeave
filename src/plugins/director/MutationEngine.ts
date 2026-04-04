@@ -247,11 +247,16 @@ export class IncrementalMutationEngine {
         if (!code.trim()) return;
 
         try {
-            // 1. 预处理：替换中文引号、分号结尾等，使之更接近标准 JS
-            // 核心修复：采用保护模式，不替换已在英引号内部的中文引号，防止内容损坏导致语法错误
-            const processedCode = code.replace(/("[^"]*")|('[^']*')|[\u201C\u201D]|[\u2018\u2019]/g, (match, g1, g2) => {
+            // 1. 语法预处理：提供对中文标点的兼容性支持 (Lumina Compatibility Syntax)
+            // 核心逻辑：采用非捕获模式保护字符串内容，仅替换外部的标点，防止内容损坏导致语法错误
+            const processedCode = code.replace(/("[^"]*")|('[^']*')|[；：，（）【】\u201C\u201D\u2018\u2019]/g, (match, g1, g2) => {
                 if (g1 || g2) return match; // 保护已有字符串内容
-                return (match === '“' || match === '”') ? '"' : "'";
+                const charMap: Record<string, string> = {
+                    '；': ';', '：': ':', '，': ',', 
+                    '（': '(', '）': ')', '【': '[', '】': ']',
+                    '“': '"', '”': '"', '‘': "'", '’': "'"
+                };
+                return charMap[match] || match;
             }).trim();
 
             // 2. 创建沙箱环境
@@ -272,6 +277,8 @@ export class IncrementalMutationEngine {
     private createSandbox(): any {
         const self = this;
         const baseSandbox: any = {};
+        // 核心模型白名单，用于在注册前拦截 ReferenceError
+        const coreModels = ['global', 'characters', 'inventory', 'skills', 'plot', 'outline', 'summary'];
 
         // 注入所有已注册的模型代理
         this.models.forEach((proxy, name) => {
@@ -282,6 +289,13 @@ export class IncrementalMutationEngine {
         return new Proxy(baseSandbox, {
             get(target, prop) {
                 if (prop in target) return target[prop as string];
+
+                // 如果是核心模型但尚未注册，返回占位代理以防止全局逃逸导致的 ReferenceError
+                if (typeof prop === 'string' && coreModels.includes(prop)) {
+                    console.warn(`[MutationEngine] 警告: 模型 "${prop}" 尚未注册。这通常发生在插件初始化完成前的历史同步过程中。`);
+                    return self.createPlaceholderProxy(prop);
+                }
+
                 // 允许 undefined 访问而非抛错
                 return undefined;
             },
@@ -298,9 +312,24 @@ export class IncrementalMutationEngine {
                 return false;
             },
             has(target, prop) {
-                // 告诉 with 语句这些变量在沙箱中
-                return prop in target;
+                // 允许 Symbol.unscopables 正常工作，防止数组解构等报错
+                if (prop === Symbol.unscopables) return false;
+                // 强制拦截所有变量查找，防止全局作用域逃逸
+                return true;
             }
+        });
+    }
+
+    /**
+     * 创建一个不执行任何操作的占位代理
+     * 用于在真实模型注册前接管调用，防止程序崩溃
+     */
+    private createPlaceholderProxy(name: string): any {
+        const noop = () => { };
+        return new Proxy(noop, {
+            get: () => noop,
+            apply: () => noop,
+            set: () => true
         });
     }
 

@@ -45,9 +45,10 @@ export interface NexusStatusResponse {
  * LLM 生成配置项
  */
 export interface GenerateOptions {
+    chatId?: string;
     nexusPresetId?: string;
     parentId?: string | null;
-    settings?: Record<string, any>;
+    settings?: Record<string, unknown>;
     signal?: AbortSignal;
     onChunk?: (chunk: string) => void;
     onDone?: (fullText: string) => Promise<void> | void;

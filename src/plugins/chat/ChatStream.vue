@@ -28,12 +28,12 @@
             <template v-if="editingIndex === index">
               <div class="msg-edit-wrap">
                 <textarea class="msg-edit-textarea" v-model="editingText" rows="4" autofocus
-                  @keydown.ctrl.enter="confirmEdit(index)" @keydown.esc="editingIndex = -1"></textarea>
+                  @keydown.ctrl.enter="confirmEdit" @keydown.esc="editingIndex = -1"></textarea>
                 <div class="msg-edit-actions-row">
                   <div class="edit-tip">Ctrl + Enter 确认，Esc 取消</div>
                   <div class="edit-btns">
                     <button class="edit-cancel-btn" @click="editingIndex = -1">取消</button>
-                    <button class="edit-confirm-btn" @click="confirmEdit(index)">保存修改</button>
+                    <button class="edit-confirm-btn" @click="confirmEdit">保存修改</button>
                   </div>
                 </div>
               </div>
@@ -41,7 +41,13 @@
             <!-- 正常显示模式 -->
             <template v-else>
               <div class="msg-bubble">
-                <div class="msg-text" v-html="renderMarkdown(msg.mes)"></div>
+                  <!-- AI 消息使用 MessageRenderer 支持 <V> 块组件渲染 -->
+                  <MessageRenderer v-if="!msg.is_user" 
+                    :mes="msg.mes" 
+                    :mesRaw="msg.mesRaw" 
+                    :pluginRaw="msg.pluginRaw" 
+                    :renderMarkdown="renderMarkdown" />
+                  <div v-else v-html="renderMarkdown(msg.mes)"></div>
                 <!-- 动作栏内置于消息框底部常驻 -->
                 <div class="msg-actions" v-if="!msg.is_user">
                   <button title="编辑 (Edit)" @click="handleEdit(index, msg)">
@@ -66,7 +72,7 @@
                       <polyline points="9 5 5 5 5 9"></polyline>
                     </svg>
                   </button>
-                  <button title="删除 (Delete)" @click="handleDelete(index)" class="delete-btn">
+                  <button title="删除 (Delete)" @click="handleDelete(index, msg)" class="delete-btn">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                       <polyline points="3 6 5 6 21 6"></polyline>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -81,7 +87,7 @@
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                  <button title="删除 (Delete)" @click="handleDelete(index)" class="delete-btn">
+                  <button title="删除 (Delete)" @click="handleDelete(index, msg)" class="delete-btn">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                       <polyline points="3 6 5 6 21 6"></polyline>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -106,21 +112,29 @@
           </div>
           <div class="msg-content">
             <div class="msg-bubble streaming-bubble">
-              <div class="msg-text" v-if="streamingBuffer" v-html="renderMarkdown(streamingBuffer)"></div>
-              <div class="typing-indicator" v-else-if="!generationError">
+              <!-- 核心变更：流式显示提纯后的内容 (streamingBuffer) 而非原始流 (streamingRaw) -->
+              <div class="msg-text" v-if="streamingBuffer" :class="effectClass">
+                <MessageRenderer :mesRaw="streamingBuffer" :renderMarkdown="renderMarkdown" :isStreaming="true" />
+                <span class="typing-cursor">|</span>
+              </div>
+
+              <!-- 当正文为空但有状态或已过滤内容时，展示显著的状态占位符 -->
+              <div class="streaming-status-placeholder" v-if="!streamingBuffer && (streamingStatusText || streamingFilteredLength > 0) && !generationError">
+                <div class="status-pulse"></div>
+                <span class="status-label">{{ streamingStatusText || '正在处理内容...' }}</span>
+                <span class="status-count" v-if="streamingFilteredLength > 0">(已过滤 {{ streamingFilteredLength }} 字)</span>
+              </div>
+
+              <div class="typing-indicator" v-else-if="!streamingBuffer && !generationError && !streamingStatusText">
                 <span></span><span></span><span></span>
               </div>
-              <div class="status-text" v-if="streamingStatusText && !generationError"
-                style="color: var(--lw-text-light); font-size: 0.9em; font-style: italic; margin-top: 8px;">
-                {{ streamingStatusText }}
-              </div>
+
               <div class="stream-error" v-if="generationError">{{ generationError }}</div>
-              <div class="filtered-text-info" v-if="streamingFilteredLength > 0">
-                <span class="filtered-tag">
-                  已过滤 {{ streamingFilteredLength }} 字
-                  <span v-if="streamingStatusText" style="margin-left: 6px; font-weight: 500;">({{ streamingStatusText
-                  }})</span>
-                </span>
+              
+              <!-- 辅助信息行（仅在有正文时作为底部栏显示） -->
+              <div class="streaming-meta-info" v-if="(streamingFilteredLength > 0 || streamingStatusText) && streamingBuffer">
+                <span class="meta-item status" v-if="streamingStatusText">{{ streamingStatusText }}</span>
+                <span class="meta-item filtered" v-if="streamingFilteredLength > 0">已过滤 {{ streamingFilteredLength }} 字</span>
               </div>
             </div>
           </div>
@@ -202,6 +216,7 @@
 import { ref, watch, inject, nextTick, computed, onMounted, onUnmounted } from 'vue';
 import { useSettings } from '../settings/useSettings';
 import PromptInspector from './PromptInspector.vue';
+import MessageRenderer from './components/MessageRenderer.vue';
 import { LuminaWeaveAPI, LuminaChatMessage } from '../../api/index';
 
 interface Props {
@@ -224,13 +239,28 @@ const inputCollapsed = ref(false);    // 输入框折叠状态
 const isGenerating = ref(lwApi?.isGenerating || false);
 const streamingBuffer = ref('');      // 实时流式文本缓冲 (正则处理后)
 const streamingRaw = ref('');         // 实时流式文本 (处理前)
+const streamingConfirmed = ref('');   // 已确认显示的文本（无动画）
+const streamingPending = ref('');     // 本帧新增文本（需要动画）
 const streamingFilteredLength = ref(0); // 核心修复：后端计算的过滤字数总额
 const streamingStatusText = ref('');  // 当前生成的 XML 标签状态
 const generationError = ref('');
 const editingIndex = ref(-1);         // 当前内联编辑的消息索引，-1 表示未编辑
 const editingText = ref('');          // 内联编辑中的文本
+const editingTargetId = ref<string | null>(null);
 const lastStreamingHeight = ref(0);   // 上一次流式气泡的测量高度
 const isAtBottom = ref(true);         // 响应式追踪是否处于底部
+
+// 流式效果模式
+const effectMode = computed(() => {
+  return (activeSettings['lumina-chat.streamingEffect'] as string) || 'instant';
+});
+const effectClass = computed(() => {
+  const mode = effectMode.value;
+  if (mode === 'fade-in') return 'lw-effect-fade-in';
+  if (mode === 'gpt-style') return 'lw-effect-gpt-reveal';
+  // typewriter 模式下文本本身不需要额外 class，光标在模板中单独渲染
+  return '';
+});
 
 // 订阅流式事件
 const onGenerationStarted = () => {
@@ -242,7 +272,7 @@ const onGenerationStarted = () => {
   generationError.value = '';
   scrollToBottom(true); // 强制触底以适应新出现的消息气泡
 };
-const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number, statusText?: string) => {
+const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number, statusText?: string, pendingText?: string) => {
   const area = chatScrollArea.value;
   
   if (area && lwApi?.measureService) {
@@ -263,6 +293,17 @@ const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number,
 
   streamingBuffer.value = text;
   generationError.value = '';
+
+  // 双层输出拆分：confirmed = 全文减去 pending
+  if (pendingText && effectMode.value !== 'instant') {
+    streamingConfirmed.value = text.slice(0, text.length - pendingText.length);
+    streamingPending.value = pendingText;
+  } else {
+    // instant 模式或无 pending：全部作为 confirmed
+    streamingConfirmed.value = text;
+    streamingPending.value = '';
+  }
+
   if (rawText !== undefined) {
     streamingRaw.value = rawText;
   }
@@ -283,6 +324,8 @@ const onGenerationEnded = () => {
   isGenerating.value = false;
   streamingBuffer.value = ''; // 清除流式气泡，正式消息已由 crud 写入
   streamingRaw.value = '';
+  streamingConfirmed.value = '';
+  streamingPending.value = '';
   streamingFilteredLength.value = 0;
   streamingStatusText.value = '';
   generationError.value = '';
@@ -495,13 +538,16 @@ const handleEdit = (index: number, msg: LuminaChatMessage) => {
   // 内联编辑：使用 mesRaw（原始未经正则处理的文本），如果没有 mesRaw 则回退到 mes
   editingText.value = msg.mesRaw ?? msg.mes ?? '';
   editingIndex.value = index;
+  editingTargetId.value = msg.id || null;
 };
 
-const confirmEdit = async (index: number) => {
+const confirmEdit = async () => {
   if (lwApi && editingText.value.trim() !== '') {
-    await lwApi.crudChatRecord(index, 'edit', editingText.value);
+    const target = editingTargetId.value ?? editingIndex.value;
+    await lwApi.crudChatRecord(target, 'edit', editingText.value);
   }
   editingIndex.value = -1;
+  editingTargetId.value = null;
 };
 
 const handleRegen = async () => {
@@ -521,10 +567,10 @@ const handleBranch = async (index: number, msg: LuminaChatMessage) => {
   }
 };
 
-const handleDelete = async (index: number) => {
+const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   if (confirm(`确定要删除此条消息吗？\n删除后无法撤销 (楼层 ${index})`)) {
     if (lwApi) {
-      await lwApi.crudChatRecord(index, 'delete');
+      await lwApi.crudChatRecord(msg.id || index, 'delete');
     }
   }
 };
@@ -662,6 +708,16 @@ const handleDelete = async (index: number) => {
   display: flex;
   align-items: baseline;
   gap: 12px;
+}
+
+.status-label {
+  font-weight: 500;
+}
+
+.status-count {
+  opacity: 0.7;
+  font-size: 0.85em;
+  font-weight: normal;
 }
 
 .msg-name {
@@ -1235,5 +1291,102 @@ const handleDelete = async (index: number) => {
 .chat-input-area .input-container {
   overflow: hidden;
   transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* === 流式平滑显示效果 === */
+
+/* 淡入效果 */
+.lw-effect-fade-in {
+  animation: lw-fade-in 0.3s ease-out forwards;
+}
+@keyframes lw-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* GPT 风格：淡入 + 颜色从浅灰过渡到正文色 */
+.lw-effect-gpt-reveal {
+  animation: lw-gpt-reveal 0.6s ease-out forwards;
+}
+@keyframes lw-gpt-reveal {
+  from {
+    opacity: 0;
+    color: var(--lw-text-light, #94a3b8);
+  }
+  to {
+    opacity: 1;
+    color: var(--lw-color, inherit);
+  }
+}
+
+/* 打字机光标 */
+.typing-cursor {
+  display: inline;
+  animation: lw-blink 0.8s step-end infinite;
+  color: var(--lw-primary, #8b5cf6);
+  font-weight: 300;
+  user-select: none;
+}
+@keyframes lw-blink {
+  50% { opacity: 0; }
+}
+
+.streaming-status-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  background: var(--lw-bg);
+  border-radius: 6px;
+  color: var(--lw-text-light);
+  font-size: 0.9em;
+  font-style: italic;
+  animation: status-fade-in 0.3s ease-out;
+}
+
+@keyframes status-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.status-pulse {
+  width: 8px;
+  height: 8px;
+  background: var(--lw-primary);
+  border-radius: 50%;
+  animation: pulse-ring 1.5s infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(var(--lw-primary-rgb), 0.4); }
+  70% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 6px rgba(var(--lw-primary-rgb), 0); }
+  100% { transform: scale(0.8); opacity: 0.5; box-shadow: 0 0 0 0 rgba(var(--lw-primary-rgb), 0); }
+}
+
+.streaming-meta-info {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--lw-border);
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.meta-item.status {
+  color: var(--lw-primary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+.meta-item.status::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 6px;
 }
 </style>

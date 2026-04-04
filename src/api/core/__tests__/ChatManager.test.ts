@@ -1,24 +1,15 @@
-﻿import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../ChatManager';
-import { STBridge } from '../STBridge';
-import { SyncEngine } from '../SyncEngine';
+import { SyncUtils } from '../SyncUtils';
 import { LuminaChatMessage } from '../ChatManager';
-import { ChatConverter } from '../ChatConverter';
-
-vi.mock('../STBridge', () => ({
-    STBridge: {
-        getRawMessages: vi.fn(),
-        getMessages: vi.fn(),
-        updateMessages: vi.fn(),
-        appendMessage: vi.fn(),
-        deleteMessages: vi.fn()
-    }
-}));
 
 vi.mock('../../storage.js', () => ({
     lwStorage: {
-        _getContextIds: vi.fn(() => ({ chatId: 'chat_1', charId: 'char_1' })),
-        get: vi.fn((key, def) => def)
+        _getContextIds: vi.fn(() => ({ charId: 'c1', chatId: 'chat1' })),
+        get: vi.fn((key, def) => def),
+        set: vi.fn(),
+        on: vi.fn(),
+        emit: vi.fn()
     }
 }));
 
@@ -26,7 +17,9 @@ vi.mock('../PersistenceService', () => ({
     PersistenceService: vi.fn(function () {
         return {
             loadFromIndependentChat: vi.fn().mockResolvedValue(true),
-            saveToIndependentChat: vi.fn().mockResolvedValue(true)
+            saveToIndependentChat: vi.fn().mockResolvedValue(true),
+            appendToIndependentChat: vi.fn().mockResolvedValue(true),
+            alignTransactionState: vi.fn().mockResolvedValue(true)
         };
     })
 }));
@@ -37,6 +30,10 @@ describe('ChatManager Data Priority Sync', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         manager = new ChatManager();
+        // 提供一个虚拟的 parentApi 供 getSyncDiff 调用
+        manager.parentApi = {
+            getSyncDiff: vi.fn()
+        };
         // Spy on internal methods
         vi.spyOn(manager.sync, 'syncFromST').mockResolvedValue({ totalDiff: 0, details: {} });
         vi.spyOn(manager, 'commitToST').mockResolvedValue();
@@ -55,15 +52,12 @@ describe('ChatManager Data Priority Sync', () => {
 
     it('1.2 When plugin has data, it should push to ST if local is ahead of ST (no divergence)', async () => {
         manager.store.setNodes([{ id: '1', fingerprint: 'fp1' } as any]);
-        const messages = [
-            ChatConverter.fromST({ message_id: 0, name: 'You', role: 'user', is_hidden: false, message: 'A', data: {}, extra: { id: '1', fingerprint: 'fp1' } })
-        ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
         
-        vi.spyOn(SyncEngine, 'compareStates').mockReturnValue({
+        vi.spyOn(manager.parentApi, 'getSyncDiff').mockReturnValue({
             hasDivergence: false,
             onlyInIndependent: [{ id: '2' }], // Local is ahead
             onlyInST: [],
+            updated: [],
             diffCount: 1
         } as any);
 
@@ -76,18 +70,15 @@ describe('ChatManager Data Priority Sync', () => {
 
     it('1.2.1 When encountering unmergeable conflicts, it should notify user', async () => {
         manager.store.setNodes([{ id: '1', fingerprint: 'fp1' } as any]);
-        const messages = [
-            ChatConverter.fromST({ message_id: 0, name: 'You', role: 'user', is_hidden: false, message: 'A', data: {}, extra: { id: '2', fingerprint: 'fp2' } })
-        ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
         
         const mockDiffData = {
             hasDivergence: true,
+            hasConflict: true,
             onlyInIndependent: [{ id: '1' }],
             onlyInST: [{ id: '2' }],
             diffCount: 2
         };
-        vi.spyOn(SyncEngine, 'compareStates').mockReturnValue(mockDiffData as any);
+        vi.spyOn(manager.parentApi, 'getSyncDiff').mockReturnValue(mockDiffData as any);
 
         await manager.syncFromST();
 
@@ -96,19 +87,36 @@ describe('ChatManager Data Priority Sync', () => {
         expect(manager.sync.syncFromST).not.toHaveBeenCalled();
     });
 
-    it('1.2.2 should not auto force overwrite on divergence even if global setting enables it', async () => {
+    it('should force ignore ST info and resolve to Lumina when ignoreST is enabled', async () => {
         manager.store.setNodes([{ id: '1', fingerprint: 'fp1' } as any]);
-        const messages = [
-            ChatConverter.fromST({ message_id: 0, name: 'You', role: 'user', is_hidden: false, message: 'A', data: {}, extra: { id: '2', fingerprint: 'fp2' } })
-        ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
+
         const mockDiffData = {
             hasDivergence: true,
+            hasConflict: true,
+            onlyInIndependent: [{ id: '1' }],
+            onlyInST: [{ id: '2' }],
+            updated: [],
+            diffCount: 2
+        };
+        vi.spyOn(manager.parentApi, 'getSyncDiff').mockReturnValue(mockDiffData as any);
+
+        await manager.syncFromST(0, { ignoreST: true });
+
+        expect(manager.commitToST).toHaveBeenCalled();
+        expect(manager.emit).not.toHaveBeenCalledWith('CHAT_CONFLICT', mockDiffData);
+        expect(manager.sync.syncFromST).not.toHaveBeenCalled();
+    });
+
+    it('1.2.2 should not auto force overwrite on divergence even if global setting enables it', async () => {
+        manager.store.setNodes([{ id: '1', fingerprint: 'fp1' } as any]);
+        const mockDiffData = {
+            hasDivergence: true,
+            hasConflict: true,
             onlyInIndependent: [{ id: '1' }],
             onlyInST: [{ id: '2' }],
             diffCount: 2
         };
-        vi.spyOn(SyncEngine, 'compareStates').mockReturnValue(mockDiffData as any);
+        vi.spyOn(manager.parentApi, 'getSyncDiff').mockReturnValue(mockDiffData as any);
         const storageMock = await import('../../storage.js');
         (storageMock.lwStorage.get as any).mockImplementation((key: string, def: any) => {
             if (key === 'lumina-chat.storagePolicy') return 'independent';
@@ -130,21 +138,23 @@ describe('ChatManager Data Priority Sync', () => {
             { id: 'branch', parentId: 'root', fingerprint: 'fp_branch', mesRaw: 'C' }
         ] as any);
         manager.store.activeLeafId = 'active';
-        const messages = [
-            ChatConverter.fromST({ message_id: 0, name: 'You', role: 'user', is_hidden: false, message: 'A', data: {}, extra: { id: 'root', fingerprint: 'fp_root' } }),
-            ChatConverter.fromST({ message_id: 1, name: 'You', role: 'user', is_hidden: false, message: 'B', data: {}, extra: { id: 'active', fingerprint: 'fp_active' } })
-        ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
-        const compareSpy = vi.spyOn(SyncEngine, 'compareStates').mockReturnValue({
-            hasDivergence: false,
-            onlyInIndependent: [],
-            onlyInST: [],
-            diffCount: 0
-        } as any);
+        manager.parentApi = {
+            getSyncDiff: vi.fn().mockImplementation(() => {
+                const activeTrace = manager.store.getTrace(manager.store.activeLeafId);
+                const localForCompare = activeTrace.length > 0 ? activeTrace : manager.store.nodePool;
+                return {
+                    localCompared: localForCompare,
+                    hasDivergence: false,
+                    onlyInIndependent: [],
+                    onlyInST: [],
+                    diffCount: 0
+                }
+            })
+        };
 
         await manager.syncFromST();
 
-        const localCompared = compareSpy.mock.calls[0][0].map((m: any) => m.id);
+        const localCompared = manager.parentApi.getSyncDiff().localCompared.map((m: any) => m.id);
         expect(localCompared).toEqual(['root', 'active']);
         expect(localCompared.includes('branch')).toBe(false);
     });
@@ -156,11 +166,7 @@ describe('ChatManager Data Priority Sync', () => {
             manager.store.activeLeafId = 'node_local_1';
             return true;
         });
-        const messages = [
-            ChatConverter.fromST({ message_id: 0, name: 'You', role: 'user', is_hidden: false, message: 'A', data: {}, extra: { id: 'st_1', fingerprint: 'fp_local_1' } })
-        ];
-        (STBridge.getMessages as any).mockReturnValue(messages);
-        vi.spyOn(SyncEngine, 'compareStates').mockReturnValue({
+        vi.spyOn(manager.parentApi, 'getSyncDiff').mockReturnValue({
             hasDivergence: false,
             onlyInIndependent: [],
             onlyInST: [],

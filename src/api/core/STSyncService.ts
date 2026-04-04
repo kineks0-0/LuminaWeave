@@ -1,8 +1,11 @@
-import { STBridge } from './STBridge.js';
-import { SyncEngine } from './SyncEngine.js';
-import { WorldlineStore, WorldlineEvent } from './WorldlineStore.js';
-import { LuminaChatMessage } from './ChatManager.js';
-import { lwStorage } from '../storage.js';
+import { WorldlineStore, WorldlineEvent } from './WorldlineStore';
+import { LuminaChatMessage } from './ChatManager';
+import { lwStorage } from '../storage';
+import { ContextCompactor } from './ContextCompactor';
+import { ContextControlSettings } from './types';
+import { STAdapter } from './STAdapter';
+import { STProtocol } from './st-adapter/STProtocol';
+import { SyncUtils } from './SyncUtils';
 
 /**
  * STSyncService
@@ -26,7 +29,7 @@ export class STSyncService {
     public pauseAutoSync(): void { this._autoSyncPaused = true; }
     public resumeAutoSync(): void { this._autoSyncPaused = false; }
 
-    private _repairLinks(nodeInStore: LuminaChatMessage, targetParentId: string | null, stNode: any): boolean {
+    private _repairLinks(nodeInStore: LuminaChatMessage, targetParentId: string | null, stNode: any, ignoreST: boolean): boolean {
         let nodeChanged = false;
         
         if (nodeInStore.id === targetParentId) {
@@ -36,66 +39,88 @@ export class STSyncService {
             nodeInStore.parentId = targetParentId;
             nodeChanged = true;
         }
-        
-        // 更新 ST 侧状态 (如时间戳，message_id)
-        if (stNode.send_date && nodeInStore.send_date !== stNode.send_date) {
-            nodeInStore.send_date = stNode.send_date;
-            nodeChanged = true;
-        }
-        if (stNode.message_id !== undefined && nodeInStore.message_id !== stNode.message_id) {
-            nodeInStore.message_id = stNode.message_id;
-            nodeChanged = true;
+
+        if (!ignoreST) {
+            const stWriteText = STProtocol.normalize(stNode?.mes ?? '');
+            const localWriteText = STProtocol.normalize(STProtocol.resolveForSTWrite(nodeInStore));
+            const stExtraMesRaw = typeof stNode?.extra?.mesRaw === 'string' ? stNode.extra.mesRaw : undefined;
+            const stHasStableFingerprint = typeof stNode?.extra?.fingerprint === 'string' && stNode.extra.fingerprint.length > 0;
+            const stHasStableStFingerprint = typeof stNode?.extra?.stFingerprint === 'string' && stNode.extra.stFingerprint.length > 0;
+            const stFingerprint = stHasStableStFingerprint ? stNode.extra.stFingerprint : STProtocol.getSTFingerprint(stWriteText);
+            const localStFingerprint =
+                nodeInStore.stFingerprint
+                || (typeof nodeInStore?.extra?.stFingerprint === 'string' ? nodeInStore.extra.stFingerprint : '')
+                || STProtocol.getSTFingerprint(localWriteText);
+
+            const stActualState = { ...stNode, mesST: stWriteText };
+            const isStateEqual = STProtocol.isStateEqual(nodeInStore, stActualState);
+            const isSTFingerprintChanged = localStFingerprint !== stFingerprint;
+            const isUserEditedInST = isSTFingerprintChanged && (!isStateEqual || stWriteText !== localWriteText);
+            const isFingerprintChanged = stHasStableFingerprint && nodeInStore.fingerprint !== stNode.extra.fingerprint;
+
+            if (isUserEditedInST || isFingerprintChanged || isSTFingerprintChanged) {
+                // Inline mergeNodeState equivalent
+                if (stNode.mes !== undefined) nodeInStore.mes = stNode.mes;
+                if (stNode.name !== undefined) nodeInStore.name = stNode.name;
+                if (stNode.role !== undefined) nodeInStore.role = stNode.role;
+                if (stNode.is_hidden !== undefined) nodeInStore.is_hidden = stNode.is_hidden;
+
+                nodeInStore.mesST = stWriteText;
+                nodeInStore.extra = { ...(stNode.extra || {}), ...(nodeInStore.extra || {}) };
+                nodeInStore.extra.mesST = stWriteText;
+                nodeInStore.stFingerprint = stFingerprint;
+                nodeInStore.extra.stFingerprint = stFingerprint;
+
+                if (stExtraMesRaw) {
+                    const nextMesRaw = STProtocol.normalize(stExtraMesRaw);
+                    if (nextMesRaw && nodeInStore.mesRaw !== nextMesRaw) {
+                        nodeInStore.mesRaw = nextMesRaw;
+                        nodeInStore.extra.mesRaw = nextMesRaw;
+                    }
+                } else if (isUserEditedInST) {
+                    if (stWriteText && nodeInStore.mesRaw !== stWriteText) {
+                        nodeInStore.mesRaw = stWriteText;
+                        nodeInStore.extra.mesRaw = stWriteText;
+                    }
+                }
+
+                if (stHasStableFingerprint) {
+                    nodeInStore.fingerprint = stNode.extra.fingerprint;
+                } else if (isUserEditedInST) {
+                    const canonicalForFp = STProtocol.resolveForFingerprint({ mesRaw: nodeInStore.mesRaw, extra: { mesRaw: nodeInStore.mesRaw } });
+                    nodeInStore.fingerprint = STProtocol.getFingerprint(canonicalForFp);
+                    nodeInStore.extra.fingerprint = nodeInStore.fingerprint;
+                }
+
+                nodeChanged = true;
+            }
+
+            if (stNode.mesSummary !== undefined && nodeInStore.mesSummary !== stNode.mesSummary) {
+                nodeInStore.mesSummary = stNode.mesSummary;
+                nodeChanged = true;
+            }
+            if (stNode.extra?.compressionState !== nodeInStore.extra?.compressionState) {
+                nodeInStore.extra = nodeInStore.extra || {};
+                nodeInStore.extra.compressionState = stNode.extra?.compressionState;
+                nodeChanged = true;
+            }
         }
         
         return nodeChanged;
     }
 
-    private _deduplicateNodes(): { count: number, changed: boolean } {
-        let deduplicatedCount = 0;
-        let changed = false;
-        // 遍历所有节点，按 parentId 分组检查子节点指纹
-        const parentToChildren = new Map<string | null, LuminaChatMessage[]>();
-        for (const node of this.store.nodePool) {
-            const children = parentToChildren.get(node.parentId) || [];
-            children.push(node);
-            parentToChildren.set(node.parentId, children);
-        }
-        
-        for (const [parentId, children] of parentToChildren.entries()) {
-            if (children.length <= 1) continue;
-            
-            const fingerprintMap = new Map<string, LuminaChatMessage>();
-            for (const child of children) {
-                if (!child.fingerprint) continue;
-                
-                const existing = fingerprintMap.get(child.fingerprint);
-                if (existing) {
-                    // 发现重复节点！保留 existing，将 child 移除
-                    console.log(`[STSyncService] 去重验证: 移除同源重复节点 ${child.id} (保留 ${existing.id})`);
-                    // 将以 child 为父节点的所有子节点转移给 existing
-                    const childsChildren = parentToChildren.get(child.id) || [];
-                    for (const cc of childsChildren) {
-                        cc.parentId = existing.id;
-                        this.store.upsertNode(cc, true);
-                    }
-                    this.store.removeNode(child.id, true);
-                    deduplicatedCount++;
-                    changed = true;
-                } else {
-                    fingerprintMap.set(child.fingerprint, child);
-                }
-            }
-        }
-        return { count: deduplicatedCount, changed };
-    }
 
-    async syncFromST(options: { forceOverwrite?: boolean } = {}): Promise<{ totalDiff: number; details?: any }> {
-        const messages = STBridge.getMessages();
+    async syncFromST(options: { forceOverwrite?: boolean; ignoreST?: boolean } = {}): Promise<{ totalDiff: number; details?: any }> {
+        const snapshot = await STAdapter.getSnapshot({ ensureStableIds: true });
+        const messages = snapshot.lumina;
         const previousActiveLeafId = this.store.activeLeafId;
         const nowTs = Date.now();
         const suppressLoopbackWindowMs = Number(lwStorage.get('lumina-chat.syncLoopbackWindowMs', 1600, 'Global')) || 1600;
+        const ignoreSTSetting = Boolean(lwStorage.get('lumina-chat.syncIgnoreST', false, 'Global'));
+        const hasLocalAuthority = this.store.nodePool.length > 0;
+        const ignoreST = (options.ignoreST ?? ignoreSTSetting) && hasLocalAuthority;
 
-        console.log(`[STSyncService] syncFromST: ST 消息数=${messages.length}, 本地池数=${this.store.nodePool.length}, forceOverwrite=${options.forceOverwrite}`);
+        console.log(`[STSyncService] syncFromST: ST 消息数=${messages.length}, 本地池数=${this.store.nodePool.length}, forceOverwrite=${options.forceOverwrite}, ignoreST=${ignoreST}`);
 
         if (options.forceOverwrite) {
             console.log('[STSyncService] 执行强行分支对齐 (Force Branch Alignment)...');
@@ -108,12 +133,12 @@ export class STSyncService {
                 // 核心修复：如果是强制覆盖，检测本地是否已存在该节点
                 const existing = this.store.getNode(stNode.id);
                 if (existing && existing.extra) {
-                    // 合并元数据，优先保留本地特有的插件指令增量与快照
+                    // 落实插件权威：合并元数据时优先保留本地特有数据 (如快照、变更量)
                     stNode.extra = {
-                        ...existing.extra,
-                        ...stNode.extra // ST 侧的新数据覆盖同名冲突
+                        ...(stNode.extra || {}),
+                        ...(existing.extra || {}) 
                     };
-                    console.debug(`[STSyncService] 强行对齐时合并元数据: ${stNode.id}`);
+                    console.debug(`[STSyncService] 强行对齐时落实插件权威，合并元数据: ${stNode.id}`);
                 }
 
                 // 使用 upsert 确保节点存在且链接正确
@@ -161,14 +186,14 @@ export class STSyncService {
                 const exactMatch: LuminaChatMessage | undefined = candidates.find(c => c.parentId === targetParentId);
                 if (exactMatch) {
                     dedupCandidate = exactMatch;
-                } else if (candidates.length > 0) {
-                    // 如果没有同父级的，退而求其次找第一个，但后续会修正 parentId
-                    dedupCandidate = candidates[0];
+                }
+                if (!dedupCandidate && lastNodeInStore && lastNodeInStore.fingerprint === stNode.fingerprint) {
+                    dedupCandidate = lastNodeInStore;
                 }
             }
 
-            const isLoopback = SyncEngine.isLuminaSyncMessage(msgNode, nowTs, suppressLoopbackWindowMs)
-                || SyncEngine.isLuminaSyncMessage(stNode, nowTs, suppressLoopbackWindowMs);
+            const isLoopback = SyncUtils.isLuminaSyncMessage(msgNode, nowTs, suppressLoopbackWindowMs)
+                || SyncUtils.isLuminaSyncMessage(stNode, nowTs, suppressLoopbackWindowMs);
 
             if (!nodeInStore && dedupCandidate) {
                 nodeInStore = dedupCandidate;
@@ -176,17 +201,7 @@ export class STSyncService {
 
             if (nodeInStore) {
                 const targetParentId = lastNodeInStore ? lastNodeInStore.id : null;
-                let nodeChanged = this._repairLinks(nodeInStore, targetParentId, stNode);
-                
-                // 核心修复：如果是从 ST 拉取的，且 ST 侧的名字或角色有更新，应同步回本地
-                if (stNode.name && stNode.name !== nodeInStore.name) {
-                    nodeInStore.name = stNode.name;
-                    nodeChanged = true;
-                }
-                if (stNode.role && stNode.role !== nodeInStore.role) {
-                    nodeInStore.role = stNode.role;
-                    nodeChanged = true;
-                }
+                let nodeChanged = this._repairLinks(nodeInStore, targetParentId, stNode, ignoreST);
                 
                 if (nodeChanged) {
                     this.store.upsertNode(nodeInStore, true); // 静默更新
@@ -194,6 +209,9 @@ export class STSyncService {
                 }
                 lastNodeInStore = nodeInStore;
             } else {
+                if (ignoreST) {
+                    continue;
+                }
                 if (isLoopback) {
                     loopbackSuppressed++;
                     continue;
@@ -214,7 +232,7 @@ export class STSyncService {
         // 去重验证 (Deduplication Pass)
         let deduplicatedCount = 0;
         if (changed || externalNewNodesAdded > 0) {
-            const result = this._deduplicateNodes();
+            const result = this.store.selfDeduplicate();
             deduplicatedCount = result.count;
             if (result.changed) {
                 changed = true;
@@ -240,9 +258,10 @@ export class STSyncService {
 
         const activeTrace = this.store.getTrace(this.store.activeLeafId);
         const localForCompare = activeTrace.length > 0 ? activeTrace : this.store.nodePool;
-        const diffData = SyncEngine.compareStates(localForCompare, messages);
+        // 确保对比前能获取到 ST 呈现的最准确的 mesST
+        const diffData = STAdapter.compareStates(localForCompare, messages);
         return { 
-            totalDiff: diffData.onlyInST.length, 
+            totalDiff: diffData.diffCount, 
             details: diffData 
         };
     }
@@ -258,28 +277,23 @@ export class STSyncService {
         try {
             console.log('[STSyncService] 开始回写 ST...');
             const activeTrace = this.store.getTrace(this.store.activeLeafId);
-            
             if (activeTrace.length === 0 && this.store.nodePool.length > 0) {
                 console.warn('[STSyncService] 活跃链路为空，取消同步。');
                 return;
             }
 
-            // 检查 trace 是否存在明显的异常重复（例如连续相同的指纹超过 10 个且跨度巨大）
-            // 这只是一个简单的安全卫检
-            if (activeTrace.length > 100) {
-                let dupCount = 0;
-                for (let i = 1; i < activeTrace.length; i++) {
-                    if (activeTrace[i].fingerprint === activeTrace[i-1].fingerprint) dupCount++;
-                }
-                if (dupCount > activeTrace.length * 0.5) {
-                    console.error('[STSyncService] 检测到 trace 中存在大量重复内容，可能存在数据损坏，已拦截同步。', { traceLen: activeTrace.length, dupCount });
-                    return;
-                }
-            }
+            // 1. 获取动态上下文压缩设置
+            const settings = SyncUtils.getDccSettings();
 
-            const stCurrent = STBridge.getMessages();
-            console.log(`[STSyncService] 应用差量: Trace(${activeTrace.length}) -> ST(${stCurrent.length})`);
-            await SyncEngine.applyDelta(activeTrace, stCurrent);
+            // 2. 执行压缩计算
+            console.log(`[STSyncService] 执行上下文压缩逻辑 (${settings.fullMode}, ${settings.summaryMode})...`);
+            const compactedTrace = await ContextCompactor.compact(activeTrace, settings);
+            
+            const snapshot = await STAdapter.getSnapshot({ ensureStableIds: true });
+            const stCurrent = snapshot.lumina;
+            console.log(`[STSyncService] 应用差量: Trace(${compactedTrace.length}) -> ST(${stCurrent.length})`);
+            const diffData = STAdapter.compareStates(compactedTrace, stCurrent);
+            await STAdapter.applyDelta(diffData, compactedTrace, stCurrent, snapshot.idToIndex);
             console.log('[STSyncService] ST 同步完成。');
         } catch (err) {
             console.error('[STSyncService] 同步失败:', err);

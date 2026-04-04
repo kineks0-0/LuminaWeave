@@ -86,8 +86,10 @@ export const useDirectorStore = defineStore('lumina-director', () => {
         }
     });
 
+    const _isInitialized = ref(false);
     // === Mutation Engine 模型绑定 ===
     const initializeModels = () => {
+        if (_isInitialized.value) return;
         globalMutationEngine.registerDataModel('outline', {
             description: "故事核心脉络与大纲 (Tier 3)。建议在每章结束时更新。",
             onUpdate: (val: any) => {
@@ -102,6 +104,8 @@ export const useDirectorStore = defineStore('lumina-director', () => {
                 if (typeof val === 'string') storySummary.value = val;
             }
         });
+
+        _isInitialized.value = true;
     };
 
     // === MemoryManager 接口实现 ===

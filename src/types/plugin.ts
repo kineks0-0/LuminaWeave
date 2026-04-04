@@ -3,6 +3,7 @@ import { Component } from 'vue';
 export interface SettingOption {
     value: string | number;
     label: string;
+    description?: string;
 }
 
 export interface SettingDefinition {
@@ -46,5 +47,10 @@ export interface LuminaPlugin {
         onMetadataExport?: (metadata: Record<string, any>) => void;
         /** 载入含有全局状态的对话快照时，派发给各插件用来恢复环境 */
         onMetadataImport?: (metadata: Record<string, any> | null) => void;
-    }
+    },
+    /** 
+     * 动态判断插件是否启用/显示。
+     * 用于根据设置实时切换功能入口（如开发菜单）。
+     */
+    isEnabled?: () => boolean;
 }

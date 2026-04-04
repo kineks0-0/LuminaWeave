@@ -10,8 +10,8 @@ vi.mock('../../storage.js', () => ({
     }
 }));
 
-vi.mock('../STBridge.js', () => ({
-    STBridge: {
+vi.mock('../st-adapter/STClient', () => ({
+    STClient: {
         getCsrfToken: vi.fn(async () => 'csrf-token')
     }
 }));
@@ -53,7 +53,6 @@ describe('PersistenceService Transaction Protocol', () => {
                 mesRaw: 'hello',
                 mes: 'hello',
                 fingerprint: 'fp1',
-                send_date: 1,
                 extra: {}
             }
         ]);
@@ -87,7 +86,6 @@ describe('PersistenceService Transaction Protocol', () => {
                 mesRaw: 'A-new',
                 mes: 'A-new',
                 fingerprint: 'fp_new',
-                send_date: 1,
                 extra: {}
             }
         ]);
@@ -126,7 +124,6 @@ describe('PersistenceService Transaction Protocol', () => {
                         mesRaw: 'A-old',
                         mes: 'A-old',
                         fingerprint: 'fp_old',
-                        send_date: 1,
                         extra: {}
                     }
                 ]);
@@ -170,7 +167,6 @@ describe('PersistenceService Transaction Protocol', () => {
                 mesRaw: 'B-new',
                 mes: 'B-new',
                 fingerprint: 'fp_new2',
-                send_date: 1,
                 extra: {}
             }
         ]);
@@ -184,7 +180,7 @@ describe('PersistenceService Transaction Protocol', () => {
             if (url.includes('/api/plugins/luminaweave/chat/chat_1') && !url.includes('/transactions') && !init?.method) {
                 return mockResponse(200, [
                     { type: 'metadata', activeLeafId: 'n1', transaction: { lastCommittedSeq: 5 } },
-                    { id: 'n1', parentId: null, name: 'User', role: 'user', mesRaw: 'B-old', mes: 'B-old', fingerprint: 'fp_old2', send_date: 1, extra: {} }
+                    { id: 'n1', parentId: null, name: 'User', role: 'user', mesRaw: 'B-old', mes: 'B-old', fingerprint: 'fp_old2', extra: {} }
                 ]);
             }
             if (url.endsWith('/api/plugins/luminaweave/chat/chat_1') && init?.method === 'PATCH' && !url.includes('/transactions')) {

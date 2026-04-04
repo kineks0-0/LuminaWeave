@@ -1,6 +1,6 @@
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 import { lwStorage } from '../storage.js';
-import { STBridge } from './STBridge.js';
+import { STClient } from './st-adapter/STClient';
 import { globalXMLInterceptor, StreamSemanticState } from './XMLInterceptor.js';
 
 /**
@@ -9,10 +9,12 @@ import { globalXMLInterceptor, StreamSemanticState } from './XMLInterceptor.js';
 export class StreamHandler extends LuminaWeaveAPIBase {
     public responseBuffer: string = "";
     public isGenerating: boolean = false;
-    private _smoothQueue: string[] = [];
+    private _smoothRemaining: string = "";
     private _smoothTimer: any = null;
     private _smoothEmitText: string = "";
     private _lastDisplayFullText: string = "";
+    /** 已确认显示的文本（无动画），用于流式效果的双层输出 */
+    private _confirmedText: string = "";
     private _initialized: boolean = false;
     private _latestSemanticState: StreamSemanticState = {
         rawText: '',
@@ -43,8 +45,10 @@ export class StreamHandler extends LuminaWeaveAPIBase {
     handleRestart(options: { silent?: boolean } = {}): void {
         this.isGenerating = !options.silent;
         this.responseBuffer = "";
-        this._smoothQueue = [];
+        this._smoothRemaining = "";
         this._smoothEmitText = "";
+        this._confirmedText = "";
+        this._lastDisplayFullText = "";
         this._latestSemanticState = {
             rawText: '',
             displayText: '',
@@ -65,6 +69,8 @@ export class StreamHandler extends LuminaWeaveAPIBase {
         const isSmooth = lwStorage.get('lumina-chat.streamingSmoothness', false, 'Global');
         const smoothness = lwStorage.get('lumina-chat.streamingSmoothnessFactor', 2, 'Global');
         const filterChatReply = lwStorage.get('lumina-chat.filterChatReply', false, 'Global');
+        const allowTopLevel = lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global');
+        const implicitThinking = lwStorage.get('lumina-chat.implicitThinkingInFilter', false, 'Global');
 
         if (rawFullText.length < this.responseBuffer.length) {
             console.warn(`[StreamHandler] Raw Buffer Shrank (${this.responseBuffer.length} -> ${rawFullText.length}). Resetting local raw buffer.`);
@@ -72,17 +78,17 @@ export class StreamHandler extends LuminaWeaveAPIBase {
         }
 
         this.responseBuffer = rawFullText;
-        const semanticState = this.resolveDisplayState(rawFullText, filterChatReply);
+        const semanticState = this.resolveDisplayState(rawFullText, filterChatReply, allowTopLevel, implicitThinking);
         const displayFullText = semanticState.displayText;
         this._latestSemanticState = semanticState;
 
         if (displayFullText.length < this._smoothEmitText.length) {
             console.warn(`[StreamHandler] Display Buffer Shrank (${this._smoothEmitText.length} -> ${displayFullText.length}). Resetting smooth queue.`);
             this._smoothEmitText = displayFullText;
-            this._smoothQueue = [];
+            this._smoothRemaining = "";
         }
 
-        if (chunk.length > 0 && this._smoothQueue.length % 50 === 0) {
+        if (chunk.length > 0 && this._smoothRemaining.length % 50 === 0) {
             console.log(`[StreamHandler] Chunk received. Raw delta=${chunk.length}, raw total=${rawFullText.length}, display total=${displayFullText.length}, filter=${filterChatReply ? 'on' : 'off'}`);
         }
 
@@ -97,7 +103,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
             } else {
                 // 如果数据不连贯（例如重置或断层），同步对齐输出进度
                 this._smoothEmitText = displayFullText;
-                this._smoothQueue = [];
+                this._smoothRemaining = "";
                 this.emit('BUFFER_UPDATED', displayFullText, rawFullText, semanticState.filteredCount, semanticState.statusText);
             }
 
@@ -105,26 +111,27 @@ export class StreamHandler extends LuminaWeaveAPIBase {
             this._lastDisplayFullText = displayFullText;
 
             if (actualChunk.length > 0) {
-                for (const char of actualChunk) {
-                    this._smoothQueue.push(char);
-                }
+                this._smoothRemaining += actualChunk;
             }
 
             if (!this._smoothTimer) {
                 this._smoothTimer = setInterval(() => {
-                    if (this._smoothQueue.length > 0) {
+                    if (this._smoothRemaining.length > 0) {
                         // 核心增强：防止 smoothness 参数过载导致除零或步长异常 (smoothness 范围通常为 1-7)
                         const divisor = Math.max(0.1, 8 - smoothness);
-                        let step = Math.ceil(this._smoothQueue.length / divisor);
+                        let step = Math.ceil(this._smoothRemaining.length / divisor);
 
-                        if (this._smoothQueue.length > 50) step = Math.max(step, 2);
-                        if (this._smoothQueue.length > 150) step = Math.max(step, 5);
-                        if (this._smoothQueue.length > 300) step = Math.max(step, 10);
+                        if (this._smoothRemaining.length > 50) step = Math.max(step, 2);
+                        if (this._smoothRemaining.length > 150) step = Math.max(step, 5);
+                        if (this._smoothRemaining.length > 300) step = Math.max(step, 10);
 
                         const maxSpeed = lwStorage.get('lumina-chat.streamingMaxSpeed', 20, 'Global');
                         step = Math.min(step, maxSpeed);
 
-                        const batch = this._smoothQueue.splice(0, step).join('');
+                        const batch = this._smoothRemaining.substring(0, step);
+                        this._smoothRemaining = this._smoothRemaining.substring(step);
+                        // 双层输出核心：上一帧的全文 → confirmed，本帧新增 → pending
+                        this._confirmedText = this._smoothEmitText;
                         this._smoothEmitText += batch;
 
                         this.emit(
@@ -132,29 +139,33 @@ export class StreamHandler extends LuminaWeaveAPIBase {
                             this._smoothEmitText,
                             this.responseBuffer,
                             this._latestSemanticState.filteredCount,
-                            this._latestSemanticState.statusText
+                            this._latestSemanticState.statusText,
+                            batch
                         );
                     } else if (!this.isGenerating) {
                         this.clearSmoothTimer();
                         this.emit('GENERATION_ENDED', this.responseBuffer);
                     }
                 }, 20);
-            } else if (this._smoothQueue.length === 0) {
-                this.emit('BUFFER_UPDATED', this._smoothEmitText, this.responseBuffer, semanticState.filteredCount, semanticState.statusText);
+            } else if (this._smoothRemaining.length === 0) {
+                this.emit('BUFFER_UPDATED', this._smoothEmitText, this.responseBuffer, semanticState.filteredCount, semanticState.statusText, '');
             }
         } else {
             this.clearSmoothTimer();
+            // 非平滑模式：整段文本作为 pending（instant 模式下前端忽略此值）
+            const pendingChunk = displayFullText.substring(this._smoothEmitText.length);
+            this._confirmedText = this._smoothEmitText;
             this._smoothEmitText = displayFullText;
-            this.emit('BUFFER_UPDATED', displayFullText, rawFullText, semanticState.filteredCount, semanticState.statusText);
+            this.emit('BUFFER_UPDATED', displayFullText, rawFullText, semanticState.filteredCount, semanticState.statusText, pendingChunk);
         }
     }
 
-    private resolveDisplayState(rawFullText: string, filterChatReply: boolean): StreamSemanticState {
-        const semanticState = globalXMLInterceptor.deriveStreamState(rawFullText, filterChatReply);
+    private resolveDisplayState(rawFullText: string, filterChatReply: boolean, allowTopLevel: boolean = true, implicitThinking: boolean = false): StreamSemanticState {
+        const semanticState = globalXMLInterceptor.deriveStreamState(rawFullText, filterChatReply, allowTopLevel, implicitThinking);
 
-        if (this._smoothQueue.length % 50 === 0) {
+        if (this._smoothRemaining.length % 50 === 0) {
             console.log(
-                `[StreamHandler] Resolved stream state. raw=${semanticState.rawText.length}, display=${semanticState.displayText.length}, filtered=${semanticState.filteredCount}, status=${semanticState.statusText || 'idle'}, filter=${filterChatReply ? 'on' : 'off'}`
+                `[StreamHandler] Filter decision: active=${filterChatReply}, topLevel=${allowTopLevel}, implicitThink=${implicitThinking}. raw=${semanticState.rawText.length}, display=${semanticState.displayText.length}, status="${semanticState.statusText || 'none'}"`
             );
         }
 
@@ -170,7 +181,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
 
         const isSmooth = lwStorage.get('lumina-chat.streamingSmoothness', false, 'Global');
         // 如果没有开启平滑，或者队列本来就是空的，立即结束
-        if (!isSmooth || this._smoothQueue.length === 0) {
+        if (!isSmooth || this._smoothRemaining.length === 0) {
             this.clearSmoothTimer();
             // 核心修复：保留 responseBuffer 直到下一次 restart
             // 这样当 UI 收到 GENERATION_ENDED 信号时，即便立即清空了组件内部的 buffer，
@@ -195,7 +206,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
         if (this._syncing) return;
         this._syncing = true;
         try {
-            const csrfToken = await STBridge.getCsrfToken();
+            const csrfToken = await STClient.getCsrfToken();
             const res = await fetch(`/api/plugins/luminaweave/nexus/status/${chatId}`, {
                 headers: { 'X-CSRF-Token': csrfToken }
             });
@@ -249,7 +260,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
                     console.warn(`[StreamHandler] 检测到本地 Buffer 与后端断层，执行全量覆盖对齐`);
                     this.responseBuffer = '';
                     this._smoothEmitText = '';
-                    this._smoothQueue = [];
+                    this._smoothRemaining = "";
                     delta = serverBuffer;
                 }
                 this.isGenerating = state.isGenerating;

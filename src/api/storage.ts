@@ -3,7 +3,7 @@
  * 负责集中管理插件的所有设置项及拓展数据，支持细粒度的作用域 (Scopes) 分发。
  */
 
-import { STBridge } from './core/STBridge.js';
+import { STClient } from './core/st-adapter/STClient.js';
 import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
 
 export type StorageScope = 'Global' | 'Character' | 'Chat' | 'Session';
@@ -62,8 +62,8 @@ export class StorageCore extends LuminaWeaveAPIBase {
      */
     async _saveIndependentGlobalData(): Promise<void> {
         try {
-            // 使用 STBridge 统一获取 Token
-            const csrfToken = await STBridge.getCsrfToken();
+            // 使用 STClient 统一获取 Token
+            const csrfToken = await STClient.getCsrfToken();
 
             const res = await fetch('/api/plugins/luminaweave/settings/save', {
                 method: 'POST',
@@ -169,7 +169,14 @@ export class StorageCore extends LuminaWeaveAPIBase {
 
         // 兜底路径: window 全局变量或 ID 探测
         if (!chatId || chatId === 'undefined' || chatId === 'null') {
-            chatId = ctx?.chatId ?? (typeof window !== 'undefined' ? (window as any).selected_chat : 'default');
+            const messages = STClient.getRawMessages();
+            if (messages.length > 0) {
+                const lastMessage = messages[messages.length - 1];
+                if (lastMessage && lastMessage.extra && lastMessage.extra._lw_sync_chat_id) {
+                    chatId = String(lastMessage.extra._lw_sync_chat_id);
+                    console.log('[LuminaWeave] storage.ts: fallback to chat_id from ST last message:', chatId);
+                }
+            }
         }
 
         return { charId: String(charId), chatId: String(chatId) };
