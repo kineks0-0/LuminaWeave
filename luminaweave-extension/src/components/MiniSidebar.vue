@@ -45,7 +45,7 @@
           <div class="node-indicator"></div>
           <div class="node-content">
             <span class="node-title">活跃时空端点</span>
-            <span class="node-desc">实时指纹捕获中...</span>
+            <span class="node-desc">{{ initStatusText }}</span>
           </div>
         </div>
       </div>
@@ -54,12 +54,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue';
+import { ref, reactive, watch, onMounted, onUnmounted } from 'vue';
 import { lwStorage } from '../api/storage';
+import { luminaWeaveApi as lwApi } from '../api/index';
 
 defineEmits<{
   (e: 'expand'): void
 }>();
+
+// --- 状态与初始化进度 ---
+const initStatusText = ref('系统启动中...');
+const handleProgress = (text: string) => {
+  initStatusText.value = text;
+};
+
+onMounted(() => {
+  lwApi.on('INIT_PROGRESS', handleProgress);
+  if ((lwApi as any)._ready) {
+    initStatusText.value = '实时指纹捕获中...';
+  }
+});
+
+onUnmounted(() => {
+  lwApi.off('INIT_PROGRESS', handleProgress);
+});
 
 // --- 状态持久化 ---
 const isBubbled = ref(lwStorage.get('lumina-ui.miniSidebar.isBubbled', false, 'Global'));

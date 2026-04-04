@@ -1,4 +1,4 @@
-﻿import { STBridge } from './STBridge';
+import { STClient } from './st-adapter/STClient.js';
 import type { LuminaChatMessage } from './ChatManager';
 
 /**

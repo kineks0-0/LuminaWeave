@@ -1,7 +1,7 @@
 # LuminaWeave 系统架构与设计文档（System Design）
 
 **版本:** v5.3-dev
-**最后更新时间:** 2026-04-01
+**最后更新时间:** 2026-04-02
 
 ## 一、系统架构理念
 
@@ -49,18 +49,18 @@
 | 字段 | 含义 | 用途 |
 |---|---|---|
 | `pluginRaw` | 完整原始 LLM 响应 | 保存包含 XML 标签的完整输出，作为最原始的数据源 |
-| `mesRaw` | 原始 AI 输出文本 | 提取后的干净文本，用于编辑、重新计算正则 |
+| `mesRaw` | 提取后的干净对话文本 | 优先从 `<Chat_Reply>` 提取，用于编辑、同步与内容指纹对比 |
 | `mes` | ST 正则处理后的显示文本 | UI 展示 |
-| `characterId` | 所属角色 ID | 用于多角色/群组模式下的角色溯源 |
+| `characterId` | 所属角色 ID | 用于多角色/群组模式后的角色溯源 |
 
-`crudChatRecord()` 写入时统一调用 `applySTRegex(text, source, 'display', depth)` 生成 `mes`，`mesRaw` 永久保存原始文本。
+`crudChatRecord()` 写入时，AI 消息优先从 `pluginRaw` 中提取 `<Chat_Reply>` 标签内容存入 `mesRaw`；若无标签则回退至清洗后的全量文本。UI 渲染 (`mes`) 基于 `mesRaw` 应用 `applySTRegex`。
 
 - **独立对话存储架构 (v5.5 优化)**:
     - **一条消息即一个节点**: JSONL 物理结构实现了消息与记忆（Deltas & Snapshots）的强耦合映射。
     - **双标识符机制 [NEW]**: 
         - `id`: 稳定的、不可变的随机 UUID，用于时间线定位。
         - `fingerprint`: 基于内容的哈希值，用于精确追踪内容变更与同步。
-    - **高度精简**: 剔除所有 ST 线性环境字段（如 swipes 系列），仅保留树状引用。
+    - **高度精简**: 彻底剔除所有 ST 线性环境特有字段（如 `swipes` 系列、`send_date`、`message_id`），消除状态比对中的冗余噪音，仅保留树状引用与内容特征。
     - **智能同步引擎 [NEW]**: 内置前端 `DiffEngine`，根据 `id` 与 `fingerprint` 计算差异，实现“追加优先，全量回退”的性能闭环。
     - **分歧检测 (Divergence Detection) [NEW]**: 只有当本地的分支与 ST 的线性流均包含各自唯一的节点时，系统才判定为“不可自动合并的分歧”，触发 UI 比对。
     - **分支对齐同步 (Branch Alignment Sync) [NEW]**: 冲突解决（以 ST 为准）时不再抹除物理节点池，而是通过重新绑定 parentId 将 ST 的序列强制构筑为一条新的活跃路径。
@@ -75,7 +75,10 @@
 
 - **导入规范化**：为了消除 Vite 编译路径歧义，核心 API 模块统一采用静态导入。
 - **配置先行原则 (v5.2) [NEW]**：`index.ts` 在挂载 Vue 应用前，强制 `await lwStorage.loadIndependentGlobalData()`。这是因为 Shadow DOM 的创建是不可逆的底层动作，必须先从独立存储中读取 `useShadowDom` 标记，才能决定后续的挂载目标（Shadow Root 或普通 Div）。
-- **初始化导入守卫 (v5.8.2) [NEW]**：`LuminaWeaveAPI.init()` 采用 `_ready + _readyPromise + _probing` 组合守卫，避免重复初始化与并发重入；`ChatManager.syncFromST` 在独立存储恢复后若本地节点已存在，直接进入本地权威路径，跳过 `BOOTSTRAP_EMPTY_LOCAL` 引导覆盖。
+- **初始化导入守卫与时序管控 (v5.8.3) [UPDATED]**：
+    - `LuminaWeaveAPI.init()` 增加了强时序控制：`initializeAllPlugins()`（插件及其模型注册）必须优于 `syncFromST()`（历史数据同步解析）。
+    - 这一时序调整确保了 `MutationEngine` 在处理既有对话中的指令时，相关的 `global`、`inventory` 等模型已经全量挂载，避开了模型未定义导致的运行期错误。
+    - 引入 **沙箱分层兜底机制**：`MutationEngine` 沙箱对核心内置模型（如 `characters`, `inventory` 等）实施 `has` 拦截及占位代理（Placeholder Proxy）。即使用户或历史消息中存在提前访问，系统也会优雅降级而非中断解析流程。
 
 ### 8. LorebookManager (世界书同步代理) [NEW]
 
@@ -143,13 +146,25 @@ LuminaWeave 提供了一套开放式的正则流式拦截机制，要求所有�
 - **自动切割与索引**: 剧情总结生成的“小总结”被自动分割为带上下文标签的片段。
 - **语义加权召回**: 结合最近对话的关键词统计进行 Embedding 检索。
 
-### 10.4 消息发送范围控制 (MemoryController) [NEW]
+### 10.4 动态上下文压缩 (DCC) 与发送范围控制 [REFACTORED]
 
-为了实现基于“全量+概况”的非侵入式上下文管理，引入了- **MemoryController**: 根据 `Full Content Range` 配置（条数/Token/字符数）计算溢出边界。支持按类型条件化选择配置项，并提供可视化步进交互。
-- **is_hidden 标记**: 计算出的“过期”消息通过 TavernHelper 被物理标记为 `is_hidden`，从而在不破坏对话完整性的前提下，阻止 ST 将其发送至大模型。
-- **背景补全**: 被隐藏的消息通过 `Tier 3 (剧情概况)` 自动总结并注入世界书，确保 AI 依然拥有逻辑连续性。
+为了实现基于“全量+概况+隐藏”的非侵入式上下文管理，系统引入了专用的 **ContextCompactor** 逻辑：
 
-### 11. 发送流程 (OpenAI-Edge 增强版)
+- **分层算法 (Tiered Compaction Strategy)**：
+  - **核心计算逻辑**：从活跃叶子节点（Active Leaf）反向向上溯源。
+  - **全量区 (FULL)**：在用户设定的 `Full Range` 阈值内（支持条数/Token/字符），消息保持原始内容。
+  - **概览区 (SUMMARY)**：超出全量但仍处于 `Overview Range` 内的消息。此时消息内容被物理替换为摘要标签 `<Story_Summary>`，确保大模型能感知背景但大幅降低 Token 消耗。
+  - **隐藏区 (HIDDEN)**：超出两级阈值的消息。
+- **数据字段解耦 (Field Decoupling)**：
+  - **mesST (权威写回字段)**：它是 DCC 处理后的最终产物。同步引擎 `STSyncService` 强制将此字段写入 ST 消息列表，作为发送给模型的真实输入。
+  - **mesSummary (摘要存储)**：缓存 AI 生成或提取的消息级剧情快照，作为概览模式的素材来源。
+- **is_hidden 物理标记**：计算出的“隐藏区”消息通过 `STClient.updateMessages(..., { is_hidden: true })` 写入原生属性（同时同步 `is_system`）。这实现在不删除消息节点的前提下，阻止 ST 将其组装进请求载荷中。
+- **统一访问与生命周期管理 (v5.9) [NEW]**：
+    - **Explicit Property Assignment**：移除了基于代理的属性拦截（MessageProxy），改为在 DCC 等阶段显式计算并分配 `mesST` 和 `is_hidden`，提升执行效率并减少生命周期隐患。
+    - **透明访问**：同步引擎和视图直接读取计算好的物理属性，不再依赖动态提取函数，大幅降低重复计算开销。
+- **同步集成与一致性**：压缩计算发生在 `commitToST` 的预处理阶段，确保“计算 → 压缩 → 写入 ST → 生成”是一次性的原子操作，防止状态延迟。
+
+### 11. 发送流程 (Official OpenAI SDK 增强版)
 
 ```
 handleSend() → lwApi.sendMessage(text)
@@ -162,18 +177,36 @@ probePrompt()                                // 拦截并获取 ST 的组装载�
   ↓
 DirectorPromptBuilder.build(payload)         // 【拦截重塑】注入前置状态、`<Next_Plan>`与后置格式锁
   ↓
-llmEngine.generateCustomStream(mutatedPayload) // 使用 OpenAI-Edge 发信
+llmEngine.generateCustomStream(mutatedPayload) // 使用 OpenAI SDK 发送请求给后端处理发信
   ↓
 Nexus XML Interceptor                        // 【流式切割】剥离 XML 标签并触发对应的注册扩展
 ```
 
-### 12. llmEngine 路由策略 (OpenAI-Edge)
+#### 11.1 Forge / 制卡会话 (card_maker) 流程 [MVP]
+制卡属于**非 ST 会话**：不读取/写入 ST 消息列表，不触发 `syncFromST/commitToST/saveChat/reload`。其核心目标是实现与主聊天**并行生成且状态隔离**。
+
+```
+open Forge Panel → 用户选择 preset + 输入需求
+  ↓
+POST /api/plugins/luminaweave/prompt/compile   // 后端按 preset(prompts + prompt_order) 编译出 messages[] + settings
+  ↓
+POST /api/plugins/luminaweave/nexus/generate   // 使用 sessionChatId=lw_card_* 发起生成（与 ST chatId 隔离）
+  ↓
+GET  /api/plugins/luminaweave/nexus/status/:sessionChatId
+```
+
+关键约束：
+- `sessionChatId` 必须全局唯一，避免覆盖主聊天的后端流式状态。
+- Preset 以完整 JSON blob 形式由后端持久化，前端不承担复杂的 preset 业务逻辑（仅 list/select/import/export）。
+
+### 12. llmEngine 路由策略 (OpenAI SDK)
 
 ```js
-import { Configuration, OpenAIApi } from 'openai-edge';
+import OpenAI from 'openai';
 // 规格化 URL 并创建客户端
 const client = this.getClient(node); 
-const response = await client.createChatCompletion({ model: node.model, messages: promptPayload, stream: true });
+// 后端或前端按需通过 SDK 获取或生成
+const response = await client.chat.completions.create({ model: node.model, messages: promptPayload, stream: true });
 ```
 
 ### 13. ST 正则后处理与过滤网关 (v5.2)
@@ -217,6 +250,7 @@ graph LR
     1. **显式覆盖**: `options.forceOverwrite=true` 或冲突决议 `resolveIntent='st'`，直接执行 ST 强覆盖对齐。
     2. **启动引导**: 本地空池且独立存储未恢复时，触发 `BOOTSTRAP_EMPTY_LOCAL` 从 ST 构建初始链路。
     3. **非覆盖路径**: 命中 `hasDivergence` 时抛出 `CHAT_CONFLICT` 等待用户决议；本地领先则 `commitToST`，仅 ST 领先则安全拉取，双方一致则不动作。
+- **忽略 ST 信息 (Force Ignore ST)**: 支持通过 `options.ignoreST=true` 或全局设置 `lumina-chat.syncIgnoreST=true` 在“本地已有权威数据”前提下强制忽略 ST 侧新增/编辑，始终选择 `commitToST` 以插件侧为准回写（不触发冲突弹窗）。
 - **主动分歧嗅探 (Proactive Sniffing)**: 当本地分支与 ST 的线性流产生**真实的不可自动合并**（hasDivergence）分歧时，强制中断同步，抛出 `CHAT_CONFLICT` 事件并交由全局弹窗解决。
 - **Swipes 规范化递归 (Swipes Parsing)**: `_normalizeSTMessage` 负责递归解包 ST 的 `swipes_info` 结构。支持将当前活跃的 Swipe 内容合并入 `mes` 字段，确保比对视图内容的完整性。
 - **双向数据映射 (Dual-Field Mapping)**: `commitToST()` 在回写时同时维护 `mes` (展示层) 与 `message` (逻辑层) 字段，实现对 SillyTavern 不同版本 API 的全量覆盖。
@@ -225,7 +259,7 @@ graph LR
 ### 15. 解耦转换与动态视图路由 (v4.7)
 
 - **MVVM 单向数据流约束**: UI 组件（Vue 组件、LuminaTimeline、ConflictDiffViewer）被严格限制。它们只负责“视图渲染”与“发起意图 (Intent)”，严禁包含同步判定逻辑或调用底层的持久化 API (`commitToST` / `saveToIndependentChat`)。所有状态更改必须通过 `useChatStore` 和 `useTimelineStore` 的单向流完成。
-- **ChatConverter (数据隔离层)**: 将 ST 对象与 Lumina 模型彻底解耦。所有的同步比提强制采用 `mesRaw` (原始文本) 进行双向转换与冲突比对，彻底隔离正则处理带来的分歧噪音。
+- **ST Adapter Layer (st-adapter 命名空间)**：将 ST 环境 I/O、消息协议与同步门面收敛为稳定边界，后续“对比什么/怎么对比”只需调整协议层（指纹/文本解析），避免业务层散落口径。
 - **View Router (动态面板总线)**:
     - **Panel 注册**: 允许任何插件通过 `lwApi.registerPanel` 挂载 UI 单元。
     - **多模态展示**: 统一由 `openPanel` 调度，根据配置或实时参数决定以 Modal (弹窗) 或 Tab (标签页) 形态呈现。
@@ -233,28 +267,51 @@ graph LR
     - **showIf 协议**: 支持在 `settingsManifest` 中注册谓词函数，根据全局状态感应实时切换设置项可见性，显著简化复杂插件的配置界面。
     - **自研扩展组件**: 引入 `LuminaStepper` 等业务驱动的 UI 单元，替换原生及过时的配置控件。
 
-### 16. 差量同步与 ST 桥接层 (v4.8) [NEW]
+### 16. st-adapter：ST 适配层与差量同步 (v5.9) [REFACTORED]
 
-- **STBridge (物理通讯层)**: 独立模块负责接管所有与 SillyTavern 的环境交互。解耦了业务逻辑与环境 API。
-    - **CSRF 令牌管理 (Centralized Security)**: 引入了 `getCsrfToken` 静态方法，带有 5 分钟自动缓存机制，统一为所有持久化与设置请求提供安全令牌。
-- **Delta Sync (差量同步算法)**: 
-    - **按需写入**: 通过 `STBridge` 封装的原子方法，仅在检测到具体差异时（索引一致但指纹不同，或长度变化）发起对应的 `create/update/delete` 请求。
-    - **指纹稳定性**: 改用 `(index + name + content)` 组合哈希（移除 role 依赖）。同步引擎逻辑层（SyncEngine）已强制将比对基准从 `id` 切换为 `fingerprint` 值。
-- **UI 指纹可视化 (v4.9)**: 冲突比对弹窗统一显示 `FP-XXXX` 格式的内容指纹，提升了多分身/多版本数据的可辨识性。
-- **写回来源标记与回灌抑制 (v5.8.2) [NEW]**:
-    - `applyDelta` 在 `append/update` 请求中统一写入 `_lw_sync_source='lumina'`、`_lw_sync_ts`、`_lw_sync_chat_id`。
-    - `syncFromST` 读取 ST 消息时结合来源标记与时间窗 (`lumina-chat.syncLoopbackWindowMs`) 判定回灌，窗口内标记消息不再反向导入，防止“自写自读”循环。
-- **防双节点保障 (v5.8.2) [NEW]**:
-    - `ChatConverter.fromST` 在初始转换期直接锁定稳定 ID (`extra.id` / `message_id`) 并在没有外置 ID 时生成一致的 `fingerprint` 或 ID。
-    - `syncFromST` 通过 `processedIds` 去重并用 `fingerprint` 复用已有节点，阻断“同内容不同 ID”重复落点。
-    - 父链修复时增加自引拦截（`node.id === targetParentId` 跳过），避免构建环和双节点级联。
+st-adapter 的目标是把“**ST 环境交互** / **协议转换** / **同步门面**”收敛成一个可维护的命名空间与依赖方向：业务层不再直接触达宿主 API，也不直接拼装 ST 消息结构。
+
+#### 16.1 模块划分与依赖方向
+
+- **协议层 (Pure / Deterministic)**：`src/api/core/st-adapter/STProtocol.ts`
+  - **职责**：统一文本解析与清洗、Canonical 指纹计算 `fingerprint`、ST 写回指纹 `stFingerprint`、ST ↔ Lumina 消息互转、独立存储序列化/反序列化。
+  - **约束**：不得调用任何宿主 API（不读 `SillyTavern`/`TavernHelper`），保证单测可预测。
+
+- **I/O 层 (Host-bound)**：`src/api/core/st-adapter/STClient.ts`
+  - **职责**：封装与 SillyTavern 的物理交互（读写 chat messages、flush、读取 preset、宏替换、CSRF token 等）。
+  - **关键点**：`getCsrfToken()` 在此集中管理缓存与降级。
+
+- **门面层 (Facade)**：`src/api/core/STAdapter.ts`
+  - **职责**：对业务层暴露“同步相关”的高阶接口：`compareStates()` / `applyDelta()` / `getSnapshot()` 等。
+  - **实现**：内部组合 `STProtocol + STClient`，并统一写入 `_lw_sync_*` 来源标记。
+
+依赖方向强制为：`STAdapter → (STProtocol, STClient)`；业务层（如 `ChatManager`/`STSyncService`）只依赖 `STAdapter` 和/或 `STProtocol`，不得再直接依赖 I/O 细节。
+
+#### 16.2 指纹口径（统一对比与“ST 编辑”识别）
+
+- **canonical `fingerprint`**：以“内容本体”为基准（通常来自 `mesRaw`），经统一清洗后计算；用于“内容是否发生质变”的判定。
+- **`stFingerprint`**：以“写回 ST 的内容”为基准（通常来自 `mesST`），经统一清洗后计算；用于识别“ST 侧展示/发送口径变化”（如 DCC 压缩、用户在 ST 面板编辑造成的差异）。
+
+> 对比逻辑统一以 `id + fingerprint + stFingerprint + (name/role/is_hidden)` 驱动。需要调整对齐策略或对比口径时，优先修改 `STProtocol` 的文本解析与指纹生成函数。
+
+#### 16.3 差量写回与回灌抑制
+
+- **按需写入**：`STAdapter.applyDelta()` 会在检测到差异时，选择性调用 `STClient.updateMessages / appendMessages / deleteMessages`。
+- **写回来源标记**：所有写回统一注入 `_lw_sync_source='lumina'`、`_lw_sync_ts`、`_lw_sync_chat_id`，供回读时在时间窗内抑制回灌。
+
+#### 16.4 迁移映射（旧模块 → 新命名空间）
+
+- `STBridge` → `STClient`（宿主 I/O）
+- `ChatConverter` → `STProtocol`（协议转换 + 指纹）
+- `SyncUtils.compareStates/applyDelta` → `STAdapter.compareStates/applyDelta`（门面 API）
+
 - **物理回滚与图谱同步策略 (v5.0) [NEW]**:
     - **图谱化存储 (Node Pool)**：底层存储从线性 List 升级为 Graph（节点池），通过 `parentId` 链接形成树图。
     - **性能优化 (Optimized Traversal)**：`WorldlineStore` 维护全局的邻接表（Children Map），将 `getChildren` 和 `removeSubtree` (物理剪枝) 等依赖子节点的查询操作复杂度降至 $O(1)$ 或 $O(N)$ 遍历，确保在大规模数据下的响应稳定性。
     - **活跃路径溯源**：`TimelineManager.getTrace(activeLeafId)` 负责从池中动态计算出当前的线性对话流，供 ST 同步使用。
     - **节点合并算法**：`SyncEngine.mergeNodePool` 确保从 ST 读取新消息时，能正确识别重复节点并链入新分支。
     - **首行元数据机制**：JSONL 存储时在数组首位注入 `{"type":"metadata", "activeLeafId": "..."}`，读取时剥离并恢复状态。
-    - **差量截断机制**: `applyDelta` 时比较 Lumina(L) 与 ST(S) 的长度。若 `L.length < S.length`，则从 S 的尾部反向执行 `STBridge.deleteMessage`，实现物理意义上的世界线重置。
+    - **差量截断机制**: `applyDelta` 时比较 Lumina(L) 与 ST(S) 的长度。若 `L.length < S.length`，则从 S 的尾部反向执行 `STClient.deleteMessages`，实现物理意义上的世界线重置。
     - **Dagre 布局引擎 (v5.3) [NEW]**：
         - **高效分层布局**：放弃 `elkjs`，改用 `@logicflow/layout` 中的 Dagre 算法，通过 `rankdir` 实现横/纵向逻辑流自动分层。
         - **轴向对齐布局**：优化 `trackIndex` 映射逻辑，同一分支节点在主轴（深度）一致的同时，在侧轴（轨道）上也严格对齐，彻底消除“阶梯式”重叠干扰。

@@ -10,8 +10,8 @@ vi.mock('../storage.js', () => ({
     }
 }));
 
-vi.mock('../core/SyncEngine.js', () => ({
-    SyncEngine: {
+vi.mock('../core/SyncUtils.js', () => ({
+    SyncUtils: {
         compareStates: vi.fn(),
         getFingerprint: vi.fn(),
         generateNodeId: vi.fn(() => 'test-node-id'),

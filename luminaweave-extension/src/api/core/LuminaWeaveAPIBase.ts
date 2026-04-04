@@ -53,15 +53,19 @@ export class LuminaWeaveAPIBase {
     public async waitForEnvironment(timeout: number = 10000): Promise<boolean> {
         const startTime = Date.now();
         console.log('[LuminaWeave] 等待环境就绪 (ST, EventSource, Helper)...');
+        this.emit('INIT_PROGRESS', '等待 TavernHelper 就绪...');
 
         // 1. 同步阻塞等待：确保 TavernHelper 实体通过 JS-Slash-Runner 回调完成就绪
         const helperReady = await EnvDetector.waitForGlobal('TavernHelper', timeout);
         if (!helperReady) {
             console.warn('[LuminaWeave] 等待 TavernHelper 超时！获取世界书或 API 数据可能受限或为空。');
+            this.emit('INIT_PROGRESS', '等待 TavernHelper 超时');
         } else {
             console.log('[LuminaWeave] TavernHelper 已成功就绪。');
+            this.emit('INIT_PROGRESS', 'TavernHelper 已就绪');
         }
 
+        this.emit('INIT_PROGRESS', '等待 ST 核心环境就绪...');
         // 2. 检查其余变量 (SillyTavern Core 等) 的加载状态
         return new Promise((resolve) => {
             const check = () => {
@@ -71,6 +75,7 @@ export class LuminaWeaveAPIBase {
 
                 if (hasST && hasEventSource && hasHelper) {
                     console.log('[LuminaWeave] 环境就绪检测通过:');
+                    this.emit('INIT_PROGRESS', '环境就绪检测通过');
                     resolve(true);
                     return;
                 }
@@ -79,6 +84,7 @@ export class LuminaWeaveAPIBase {
                     console.warn('[LuminaWeave] 环境探测超时，部分功能可能受限:', {
                         hasST, hasEventSource, hasHelper
                     });
+                    this.emit('INIT_PROGRESS', '环境探测超时');
                     resolve(false);
                     return;
                 }

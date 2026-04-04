@@ -98,6 +98,7 @@ class LuminaWeaveServer {
     dataDir;
     dataFile;
     streaming;
+    presetsFile;
     chatCache = new Map();
     transactionCache = new Map();
     dirtyChats = new Set();
@@ -107,6 +108,7 @@ class LuminaWeaveServer {
     constructor() {
         this.dataDir = path_1.default.join(__dirname, 'data');
         this.dataFile = path_1.default.join(this.dataDir, 'LuminaWeave.json');
+        this.presetsFile = path_1.default.join(this.dataDir, 'presets.json');
         this.streaming = new StreamingManager();
         if (!fs_1.default.existsSync(this.dataDir)) {
             fs_1.default.mkdirSync(this.dataDir, { recursive: true });
@@ -185,6 +187,21 @@ class LuminaWeaveServer {
             hash |= 0;
         }
         return `dg_${Math.abs(hash).toString(16)}`;
+    }
+    normalizeForFingerprint(text) {
+        return (text || '')
+            .replace(/[\u200B-\u200D\uFEFF]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+    computeFingerprint(text) {
+        const cleanedForHash = this.normalizeForFingerprint(text);
+        let hash = 0;
+        for (let i = 0; i < cleanedForHash.length; i++) {
+            hash = ((hash << 5) - hash) + cleanedForHash.charCodeAt(i);
+            hash |= 0;
+        }
+        return `fp_${Math.abs(hash).toString(16).substring(0, 8)}`;
     }
     generateTransactionId() {
         return `tx_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
@@ -310,6 +327,136 @@ class LuminaWeaveServer {
             updatedAt: Date.now()
         };
     }
+    seedDefaultPresetsIfNeeded(records) {
+        if (records.some(r => r.isDefault))
+            return records;
+        const now = Date.now();
+        const defaultPreset = {
+            id: 'preset_default_forge',
+            name: 'Lumina Forge Default',
+            isDefault: true,
+            createdAt: now,
+            updatedAt: now,
+            blob: {
+                name: 'Lumina Forge Default',
+                settings: {
+                    temperature: 0.7,
+                    max_tokens: 1200
+                },
+                prompts: [
+                    {
+                        identifier: 'forge_system',
+                        role: 'system',
+                        content: [
+                            '你是 Lumina Forge 的制卡助手。',
+                            '你的任务是根据用户给出的设定与需求，生成一张结构清晰、可直接用于 SillyTavern 的角色卡内容。',
+                            '回答时保持信息密度，避免无关闲聊。'
+                        ].join('\n')
+                    }
+                ],
+                prompt_order: [
+                    { identifier: 'forge_system', enabled: true }
+                ]
+            }
+        };
+        return [defaultPreset, ...records];
+    }
+    readPresets() {
+        try {
+            if (!fs_1.default.existsSync(this.presetsFile)) {
+                const seeded = this.seedDefaultPresetsIfNeeded([]);
+                this.writePresets(seeded);
+                return seeded;
+            }
+            const raw = fs_1.default.readFileSync(this.presetsFile, 'utf8');
+            const parsed = JSON.parse(raw);
+            const list = Array.isArray(parsed) ? parsed : [];
+            const normalized = list
+                .map(item => item)
+                .filter(item => typeof item.id === 'string')
+                .map(item => ({
+                id: String(item.id),
+                name: typeof item.name === 'string' ? item.name : String(item.id),
+                isDefault: Boolean(item.isDefault),
+                createdAt: typeof item.createdAt === 'number' ? item.createdAt : Date.now(),
+                updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : Date.now(),
+                blob: item.blob
+            }));
+            const seeded = this.seedDefaultPresetsIfNeeded(normalized);
+            if (seeded.length !== normalized.length) {
+                this.writePresets(seeded);
+            }
+            return seeded;
+        }
+        catch {
+            const seeded = this.seedDefaultPresetsIfNeeded([]);
+            this.writePresets(seeded);
+            return seeded;
+        }
+    }
+    writePresets(records) {
+        const tmp = `${this.presetsFile}.tmp`;
+        fs_1.default.writeFileSync(tmp, JSON.stringify(records, null, 2), 'utf8');
+        fs_1.default.renameSync(tmp, this.presetsFile);
+    }
+    generatePresetId() {
+        return `preset_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+    }
+    normalizePresetBlob(blob) {
+        if (typeof blob === 'string') {
+            try {
+                return JSON.parse(blob);
+            }
+            catch {
+                return { raw: blob };
+            }
+        }
+        return blob;
+    }
+    compilePromptFromPreset(presetBlob, sessionMessages) {
+        const blob = (presetBlob && typeof presetBlob === 'object') ? presetBlob : {};
+        const settingsRaw = (blob.settings && typeof blob.settings === 'object') ? blob.settings : {};
+        const promptsRaw = Array.isArray(blob.prompts) ? blob.prompts : [];
+        const orderRaw = Array.isArray(blob.prompt_order) ? blob.prompt_order : [];
+        const prompts = promptsRaw
+            .map(p => (p && typeof p === 'object') ? p : null)
+            .filter((p) => Boolean(p));
+        const order = orderRaw
+            .map(o => (o && typeof o === 'object') ? o : null)
+            .filter((o) => Boolean(o))
+            .map(o => ({
+            identifier: typeof o.identifier === 'string' ? o.identifier : '',
+            enabled: o.enabled !== false
+        }))
+            .filter(o => o.identifier);
+        const promptById = new Map();
+        for (const p of prompts) {
+            const id = typeof p.identifier === 'string' ? p.identifier : '';
+            if (id && !promptById.has(id))
+                promptById.set(id, p);
+        }
+        const orderedPrompts = order.length > 0
+            ? order.map(o => ({ ...o, prompt: promptById.get(o.identifier) })).filter(o => o.prompt && o.enabled).map(o => o.prompt)
+            : prompts.filter(p => p.enabled !== false);
+        const compiledPrefix = orderedPrompts
+            .map(p => {
+            const role = (typeof p.role === 'string' ? p.role : 'system');
+            const contentValue = typeof p.content === 'string'
+                ? p.content
+                : (typeof p.system_prompt === 'string' ? p.system_prompt : '');
+            const content = contentValue.trim();
+            if (!content)
+                return null;
+            const msg = { role, content };
+            if (typeof p.name === 'string')
+                msg.name = p.name;
+            return msg;
+        })
+            .filter((m) => Boolean(m));
+        const msgs = Array.isArray(sessionMessages) ? sessionMessages : [];
+        const compiledMessages = [...compiledPrefix, ...msgs];
+        return { messages: compiledMessages, settings: settingsRaw };
+    }
     init(router) {
         router.get('/settings', (req, res) => {
             try {
@@ -330,6 +477,159 @@ class LuminaWeaveServer {
                 res.sendStatus(200);
             }
             catch (error) {
+                res.status(500).json({ error: 'Failed' });
+            }
+        });
+        // --- Presets & Prompt Compiler (Forge / Non-ST Sessions) ---
+        router.get('/presets', (req, res) => {
+            try {
+                const presets = this.readPresets()
+                    .map(p => ({ id: p.id, name: p.name, isDefault: p.isDefault, createdAt: p.createdAt, updatedAt: p.updatedAt }));
+                res.status(200).json({ presets });
+            }
+            catch {
+                res.status(500).json({ error: 'Failed' });
+            }
+        });
+        router.get('/presets/:presetId', (req, res) => {
+            try {
+                const presetId = String(req.params.presetId);
+                const presets = this.readPresets();
+                const found = presets.find(p => p.id === presetId);
+                if (!found)
+                    return res.status(404).json({ error: 'Not found' });
+                res.status(200).json({ preset: found });
+            }
+            catch {
+                res.status(500).json({ error: 'Failed' });
+            }
+        });
+        router.get('/presets/:presetId/export', (req, res) => {
+            try {
+                const presetId = String(req.params.presetId);
+                const presets = this.readPresets();
+                const found = presets.find(p => p.id === presetId);
+                if (!found)
+                    return res.status(404).json({ error: 'Not found' });
+                res.status(200).json({ blob: found.blob });
+            }
+            catch {
+                res.status(500).json({ error: 'Failed' });
+            }
+        });
+        router.post('/presets', (req, res) => {
+            try {
+                const name = typeof req.body?.name === 'string' ? req.body.name : 'Untitled Preset';
+                const blob = this.normalizePresetBlob(req.body?.blob);
+                const now = Date.now();
+                const preset = {
+                    id: this.generatePresetId(),
+                    name,
+                    isDefault: false,
+                    createdAt: now,
+                    updatedAt: now,
+                    blob
+                };
+                const presets = this.readPresets();
+                presets.push(preset);
+                this.writePresets(presets);
+                res.status(201).json({ preset });
+            }
+            catch {
+                res.status(500).json({ error: 'Failed' });
+            }
+        });
+        router.put('/presets/:presetId', (req, res) => {
+            try {
+                const presetId = String(req.params.presetId);
+                const presets = this.readPresets();
+                const idx = presets.findIndex(p => p.id === presetId);
+                if (idx === -1)
+                    return res.status(404).json({ error: 'Not found' });
+                const current = presets[idx];
+                const next = {
+                    ...current,
+                    name: typeof req.body?.name === 'string' ? req.body.name : current.name,
+                    blob: req.body?.blob !== undefined ? this.normalizePresetBlob(req.body.blob) : current.blob,
+                    updatedAt: Date.now()
+                };
+                presets[idx] = next;
+                this.writePresets(presets);
+                res.status(200).json({ preset: next });
+            }
+            catch {
+                res.status(500).json({ error: 'Failed' });
+            }
+        });
+        router.delete('/presets/:presetId', (req, res) => {
+            try {
+                const presetId = String(req.params.presetId);
+                const presets = this.readPresets();
+                const found = presets.find(p => p.id === presetId);
+                if (!found)
+                    return res.status(404).json({ error: 'Not found' });
+                if (found.isDefault)
+                    return res.status(409).json({ error: 'Default preset cannot be deleted' });
+                const next = presets.filter(p => p.id !== presetId);
+                this.writePresets(next);
+                res.sendStatus(204);
+            }
+            catch {
+                res.status(500).json({ error: 'Failed' });
+            }
+        });
+        router.post('/presets/import', (req, res) => {
+            try {
+                const blob = this.normalizePresetBlob(req.body?.blob);
+                const providedName = typeof req.body?.name === 'string' ? req.body.name : undefined;
+                const nameFromBlob = (blob && typeof blob === 'object' && typeof blob.name === 'string')
+                    ? String(blob.name)
+                    : undefined;
+                const name = providedName || nameFromBlob || 'Imported Preset';
+                const now = Date.now();
+                const preset = {
+                    id: this.generatePresetId(),
+                    name,
+                    isDefault: false,
+                    createdAt: now,
+                    updatedAt: now,
+                    blob
+                };
+                const presets = this.readPresets();
+                presets.push(preset);
+                this.writePresets(presets);
+                res.status(201).json({ preset });
+            }
+            catch {
+                res.status(500).json({ error: 'Failed' });
+            }
+        });
+        router.post('/presets/restore-defaults', (req, res) => {
+            try {
+                const presets = this.readPresets();
+                const nonDefault = presets.filter(p => !p.isDefault);
+                const seeded = this.seedDefaultPresetsIfNeeded(nonDefault);
+                this.writePresets(seeded);
+                res.status(200).json({ success: true });
+            }
+            catch {
+                res.status(500).json({ error: 'Failed' });
+            }
+        });
+        router.post('/prompt/compile', (req, res) => {
+            try {
+                const presetId = typeof req.body?.presetId === 'string' ? req.body.presetId : '';
+                const sessionType = typeof req.body?.sessionType === 'string' ? req.body.sessionType : '';
+                if (!presetId || sessionType !== 'card_maker')
+                    return res.status(400).json({ error: 'Missing params' });
+                const presets = this.readPresets();
+                const found = presets.find(p => p.id === presetId);
+                if (!found)
+                    return res.status(404).json({ error: 'Preset not found' });
+                const compiled = this.compilePromptFromPreset(found.blob, req.body?.messages);
+                res.status(200).json(compiled);
+            }
+            catch {
                 res.status(500).json({ error: 'Failed' });
             }
         });
@@ -649,13 +949,7 @@ class LuminaWeaveServer {
                             const finalCleaned = ServerXMLInterceptor.cleanText(fullText);
                             let data = this.readChat(chatId);
                             const newNodeId = 'node_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36).substring(4);
-                            let hash = 0;
-                            const cleanedForHash = finalCleaned.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
-                            for (let k = 0; k < cleanedForHash.length; k++) {
-                                hash = ((hash << 5) - hash) + cleanedForHash.charCodeAt(k);
-                                hash |= 0;
-                            }
-                            const fingerprint = `fp_${Math.abs(hash).toString(16).substring(0, 8)}`;
+                            const fingerprint = this.computeFingerprint(finalCleaned);
                             const metadata = data.find(item => item.type === 'metadata');
                             const nodeIds = new Set(data.filter(item => item.type !== 'metadata').map(item => item.id));
                             const requestedParentId = req.body.parentId || null;

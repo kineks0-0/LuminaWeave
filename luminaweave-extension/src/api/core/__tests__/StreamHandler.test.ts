@@ -8,8 +8,8 @@ vi.mock('../../storage.js', () => ({
     }
 }));
 
-vi.mock('../STBridge.js', () => ({
-    STBridge: {
+vi.mock('../st-adapter/STClient', () => ({
+    STClient: {
         getCsrfToken: vi.fn(async () => 'csrf-token')
     }
 }));

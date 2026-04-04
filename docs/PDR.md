@@ -1,7 +1,7 @@
 # LuminaWeave 产品需求文档 (PDR)
 
-**版本:** v5.3-dev (Orchestration Refresh)
-**最后更新时间:** 2026-04-01
+**版本:** v5.3-dev (Orchestration & Rendering Refresh)
+**最后更新时间:** 2026-04-02
 
 ## 一、产品定位
 
@@ -24,11 +24,22 @@
 
 2. **Lumina Director (幻光导演引擎) [Consolidated]**
    - **记忆与策划一体化**：整合原 `Lumina Memory` 插件，由 Director 统一控制对话上下文的“深度”与“广度”。
+   - **权限管控下放到子插件维度，用户可以随意启停 Timeline, Director 的独立提示词流入，保留绝对的数据安全与控制感。**
+   - **物理隔离与频率引导 (Physical Isolation & Frequency Weighting) [NEW v5.8.3]**
+     - `PromptBuilder` 在组装提示词时实时感应 `dialogueUIFrequency`。
+     - 如果设为 0，系统会自动从 `PromptRegistry` 的汇总结果中执行黑名单过滤，强制移除 `V` 标签协议。
+     - 非 0 时，通过 `weightDesc` 指令将用户的频率偏好显式告知 LLM，利用指令从属度（Instruction Following）实现软性频率控制。
    - **消息范围控制 (Message Scope Control) [v5.8.2 增强]**：通过原生 `is_hidden` 实现非侵入管理，支持条数/Token/字符限制。引入条件化 UI 呈现与专用步进组件，提升配置精准度。
+   - **动态上下文压缩 (Dynamic Context Compaction, DCC) [NEW]**：针对长对话历史实施分层发送策略，极大节省 Context 资源。
+     - **全量区 (Full Range)**：最近 N 条或 X Token 内的消息，按原样发送，保留所有叙事细节。
+     - **概览区 (Overview Range)**：全量区之外的消息。内容不再按原样发送，而是替换为 `<Story_Summary>` 标签中的摘要。使 AI 在看不到历史细节的情况下依然能感知完整的剧情脉络。
+     - **隐藏区 (Hidden Range)**：超出概览限制的消息被物理标记为 `is_hidden`，彻底移出上下文。
    - **剧情概况 (Story Summary)**：隐藏的消息由 AI 自动摘要并通过虚拟世界书注入补充。
 
 3. **Lumina Forge（幻光工坊）**
    - 全屏高可用制卡器，对偏好与人设系统进行模块封装，实现"一键套用"和环境切换。
+   - **并行会话**：制卡流程与主聊天可同时生成，互不影响（独立 `sessionChatId` 流式状态）。
+   - **预设下沉后端**：Preset 管理与 Prompt 编译由后端提供 API，前端仅负责选择 preset 并发起生成请求。
 
 4. **Lumina Settings & Storage（统一设置与存储引擎）**
    - 彻底解耦的 Storage API，支持 `全局`、`随角色`、`随对话`、`临时会话` 等多级作用域。
@@ -85,6 +96,17 @@
         - **工具集接入 (`stHelper`)**：透明适配全局 `TavernHelper`，屏蔽不同部署环境导致的路径差异。
     - **平滑兼容**：确保插件逻辑与宿主运行模式（Iframe 嵌套 vs 标准插件）完全脱钩。
 
+10. **LuminaView 结构化渲染引擎 (Structured UI Engine) [NEW v5.3]**
+    - **双模式 DSL 解析**：支持高级函数式语法（如 `Stat()`）与极简管道语法（如 `C|`），针对大模型输出进行极致 Token 压缩。
+    - **组件化渲染管线**：消息不再是纯文本，而是一个有序的组件流（TextBlock, StatBlock, ChoiceBlock 等）。
+    - **展示层标签隔离**：引入 `<V>` 标签作为 UI 容器，通过 `Presentational` 生命周期将其从文本过滤规则中隔离，确保渲染完整性。
+    - **交互行为可配置 (Configurable Interaction) [NEW v5.8.3]**：支持在“直接发送”与“填充输入框”模式间切换，赋予用户对 AI 建议选项的二次确认权。
+    - **动态频率与物理隔离 (Dynamic Frequency & Physical Isolation) [NEW v5.8.3]**：通过系统提示词注入 5 档频率权重（关闭、极低、适中、频繁、总是）。在“关闭”状态下，系统执行“物理隔离”策略，彻底剔除所有 UI 渲染协议、元数据及相关 XML 标签说明，确保 AI 无法感应相关功能。
+
+11. **流式平滑显示系统 (Streaming UX) [NEW v5.3]**
+    - **双层缓存输出**：将流式输出拆分为 `Confirmed`（已确认文本）与 `Pending`（本帧新增文本），解决流式更新时的闪烁问题。
+    - **多样化视觉效果**：支持 `fade-in`（淡入）、`gpt-style`（渐变显现）及 `typewriter`（带光标打字机）等多种流式动画模式。
+
 ## 三、用户界面体验（UI/UX）
 
 LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核心品牌色，提供两种交互形态：
@@ -94,23 +116,31 @@ LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核
 
 ## 四、开发状态与风险评估
 
-### 已完成阶段（v5.2）
+### 已完成阶段（v5.3）
 
 - **Lumina Core 微内核架构**：`PluginManager` 驱动，影子数据库与 ST `window.chat` 完全切割。
-- **Chat 发送流（OpenAI-Edge 重构）**：
+- **高性能解析引擎 (Refactored Interceptor)**：从正则迁移至 `TagTokenizer` 栈式解析，支持嵌套标签与 `Presentational` 生命周期。
+- **结构化 UI 系统 (LuminaView)**：实现了 DSL 解析、组件注册中心及消息流式渲染器。
+- **流式 UX 增强**：支持平滑文本输出与 CSS 动画。
+- **Chat 发送流（Official OpenAI SDK 重构）**：
   - `sendMessage()` → `triggerGenerate()`。
   - **拦截阶段**：利用 `probePrompt()` 截获 ST 组装的完整消息载荷（含世界书、宏等）。
-  - **生成阶段**：`llmEngine.generateCustomStream(promptPayload)` 使用 **OpenAI-Edge** 库发起请求，通过手动解析 SSE 流实现极致轻量且高度兼容的生成体验。
+  - **生成阶段**：`llmEngine.generateCustomStream(promptPayload)` 使用官方 **OpenAI SDK** 请求后端路由，通过 SSE 流实现极致轻量且高度兼容的生成体验。
   - **Nexus 路由**：支持根据 Nexus 节点配置动态切换 Provider。
   - **终态感知增强 [NEW]**：后端状态新增 `success | error | aborted`，并回传 `errorMessage`；前端据此区分成功收尾与异常结束，避免流式中途消失后无反馈。
   - **流式过滤稳定化 [NEW]**：过滤模式下统一以原始 XML 缓冲派生显示文本、状态文本与已过滤字数，显著降低状态抖动、过滤闪烁与后台恢复后的错乱。
 - **消息存储分离**：每条消息存储 `mesRaw`（原始文本）和 `mes`（ST 正则处理后的显示文本），`crudChatRecord` 统一调用 `applySTRegex()` 处理。
-  | 字段名 | 描述 | 用途 |
-  |---|---|---|
-  | `pluginRaw` | 完整原始 LLM 响应 | 支持跨生命周期的原始数据分析与再处理 |
-  | `mesRaw` | 原始 AI 输出文本 | 编辑、重新计算正则 |
-  | `mes` | ST 正则处理后的显示文本 | UI 展示 |
-  | `characterId` | 所属角色 ID | 用于多角色/群组模式下的角色溯源 |
+| 字段 | 含义 | 用途 |
+|---|---|---|
+| `pluginRaw` | 完整原始 LLM 响应 | 保存包含 XML 标签的完整输出，作为最原始的数据源 |
+| `mesRaw` | 提取后的干净对话文本 | 优先从 `<Chat_Reply>` 提取，用于内容指纹对比与编辑 |
+| `mesST` | ST 同步专用展示文本 | **(DCC 核心)** 压缩后的写入内容。全量时同 `mesRaw`，概览时替换为摘要标签 |
+| `mesSummary` | 剧情概览 | 存储该消息节点关联的局部剧情总结 (用于概览模式发送) |
+| `mes` | ST 正则处理后的显示文本 | 插件内部 UI 展示 |
+| `characterId` | 所属角色 ID | 用于多角色/群组模式下的角色溯源 |
+
+`crudChatRecord()` 写入时，AI 消息优先从 `pluginRaw` 中提取 `<Chat_Reply>` 标签内容存入 `mesRaw`；若无标签则回退至清洗后的全量文本。UI 渲染 (`mes`) 基于 `mesRaw` 应用 `applySTRegex`。标签，确保 UI 组件在生成过程中即时呈现。
+  - **数据源绑定**：AI 消息渲染优先绑定 `pluginRaw`，确保包含生命周期标签的完整内容流入渲染器。
 - **消息动作增强 (v4.3 Native 改版)**：
   - 支持用户消息 and AI 消息的内联编辑与删除。
   - **编辑重塑**：从“对象重建同步”方案切换至“原生原地修改 (In-place Edit)”。直接操作 `getContext().chat` 中的原始对象引用，严格保留 `swipe_id` 和 `swipes_info` 等所有 ST 隐藏元数据。
@@ -128,7 +158,11 @@ LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核
     - **显式强覆盖条件收敛 (v5.8.2, Task5 更新)**: `forceOverwrite` 仅在两类场景触发：显式用户意图（`options.forceOverwrite=true` 或 `resolveIntent='st'`）与本地空池启动引导（`BOOTSTRAP_EMPTY_LOCAL`）；命中分歧时不再自动强覆盖，统一进入冲突提示与人工决议流程。
 - **解耦式同步引擎与插件化视图路由 (v4.7)**:
     - **MVVM 单向数据流**: UI 视图层（如时间线、冲突比对组件）仅做数据渲染与动作意图（Intent）分发。所有的业务同步决策、网络请求、独立存储回写，被彻底下放至底层的 `ChatManager` 与 `STSyncService`。
-    - **ChatConverter (解耦转换器)**: 引入独立转换层，强制以 `mesRaw` (原始文本) 为基准进行双向转换与冲突比对，彻底隔离正则处理带来的分歧噪音。
+    - **st-adapter 命名空间 (ST Adapter Layer)**: 将 ST 环境交互、消息协议转换与指纹口径收敛为稳定边界：
+      - `STProtocol` 统一文本清洗与双指纹（`fingerprint`/`stFingerprint`）生成，并提供 ST ↔ Lumina、Storage 序列化互转；
+      - `STClient` 负责与 SillyTavern/TavernHelper 的物理 I/O；
+      - `STAdapter` 对业务层暴露 `compareStates/applyDelta/getSnapshot` 等高阶同步门面。
+      以后“需要对比什么/怎么对比”只需调整 `STProtocol`，避免业务层散落口径。
     - **Dynamic Panel API**: 重构 `LuminaWeaveAPI`，支持 `registerPanel` 机制。插件可动态注册视图组件并由系统统一调度展示模式 (Modal/Tab)。
     - **原始数据优先策略**: 确保数据回传至独立存储或写回 ST 时，始终保留最完整的原始输出流。
 - **物理回滚与图谱同步策略 (v5.0)**:
@@ -149,7 +183,7 @@ LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核
 - **写回来源标记防回灌 (v5.8.2) [NEW]**：`SyncEngine.applyDelta` 在写入 ST 的 `extra` 中注入 `_lw_sync_source/_lw_sync_ts/_lw_sync_chat_id`；回读时在可配置时间窗内识别 Lumina 写回消息并抑制反向再导入，阻断“写回→监听→再写回”的回灌环。
 - **防双节点与链路自愈 (v5.8.2) [NEW]**：ST 归一化阶段对稳定 ID 去重，增量同步阶段执行 `processedIds` 与 `fingerprint` 双重去重，并拦截自引 `parentId` 关联，避免同内容/同 ID 在同一链路重复成节点。
 - **UI 跨设备自适应定位 (v5.2)**：针对移动端和 PC 端屏幕尺寸差异，在 `MiniSidebar` 中引入实时视口纠偏算法。读取持久化坐标时自动执行边界检测，确保悬浮组件始终在有效可视区域内，解决移动端“组件丢失”问题。
-- **极致轻量 (337KB)**：成功从 Vercel AI SDK 迁移至 OpenAI-Edge。
+- **极致轻量且高度兼容**：成功从过时的 OpenAI-Edge 迁移至官方的 OpenAI SDK。
 - **Shadow DOM 深度隔离 (v5.7)**：实现样式过滤算法，仅注入插件自身样式，解决 SillyTavern 全局样式对插件 UI 的负面覆盖。
 
 ### 待办与演进方向

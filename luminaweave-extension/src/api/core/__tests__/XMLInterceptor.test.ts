@@ -36,6 +36,42 @@ describe('XMLInterceptor stream semantics', () => {
         expect(state.filteredCount).toBe(raw.length - 'Hello'.length);
     });
 
+    it('should drop trailing "<" or "</" fragments from filtered reply text', () => {
+        const interceptor = new XMLInterceptor();
+
+        const raw1 = '<think>abc</think><Chat_Reply>Hello<';
+        const state1 = interceptor.deriveStreamState(raw1, true);
+        expect(state1.displayText).toBe('Hello');
+
+        const raw2 = '<think>abc</think><Chat_Reply>Hello</';
+        const state2 = interceptor.deriveStreamState(raw2, true);
+        expect(state2.displayText).toBe('Hello');
+    });
+
+    it('should drop trailing partial tags with attributes from filtered reply text', () => {
+        const interceptor = new XMLInterceptor();
+        const raw = '<think>abc</think><Chat_Reply>Hello<Chat_Reply foo="1"';
+        const state = interceptor.deriveStreamState(raw, true);
+
+        expect(state.displayText).toBe('Hello');
+        expect(state.statusText).toBe('回复中...');
+        expect(state.filteredCount).toBe(raw.length - 'Hello'.length);
+    });
+
+    it('should not display Story_Summary content when filtering is enabled', () => {
+        const interceptor = new XMLInterceptor();
+        const raw = '<Story_Summary>SUM</Story_Summary><Chat_Reply>Hello</Chat_Reply>';
+        const state = interceptor.deriveStreamState(raw, true);
+        expect(state.displayText).toBe('Hello');
+    });
+
+    it('should not display Mutation/M/m content when filtering is enabled', () => {
+        const interceptor = new XMLInterceptor();
+        const raw = '<m>add({\"target\":\"inventory\"})</m><Chat_Reply>Hello</Chat_Reply>';
+        const state = interceptor.deriveStreamState(raw, true);
+        expect(state.displayText).toBe('Hello');
+    });
+
     it('should keep raw text untouched when filter is disabled', () => {
         const interceptor = new XMLInterceptor();
         const raw = '<Chat_Reply>Hello</Chat_Reply>';
@@ -119,4 +155,3 @@ describe('XMLInterceptor.extractTagContent()', () => {
         expect(result).toEqual(['This is 1 < 3 and 5 > 4! <br/> Also <fake> tags.']);
     });
 });
-

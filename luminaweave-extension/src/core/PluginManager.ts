@@ -1,10 +1,10 @@
-import { reactive, markRaw } from 'vue';
+import { shallowReactive, markRaw } from 'vue';
 import { LuminaPlugin, SettingDefinition } from '../types/plugin';
 import { lwStorage } from '../api/storage';
 
 class PluginManager {
-    public plugins: Record<string, LuminaPlugin> = reactive({});
-    public slots: Record<string, LuminaPlugin[]> = reactive({
+    public plugins: Record<string, LuminaPlugin> = shallowReactive({});
+    public slots: Record<string, LuminaPlugin[]> = shallowReactive({
         mainView: [],
         widget: [],
         headerExtension: [],
@@ -12,7 +12,7 @@ class PluginManager {
         headerRight: []
     });
 
-    public registeredSettings: Record<string, Record<string, SettingDefinition>> = reactive({});
+    public registeredSettings: Record<string, Record<string, SettingDefinition>> = shallowReactive({});
 
     constructor() {
         console.log('[LuminaWeave PluginManager] Initialized');
@@ -91,7 +91,8 @@ class PluginManager {
 
 
     getPluginsInSlot(slotName: string): LuminaPlugin[] {
-        return this.slots[slotName] || [];
+        const plugins = this.slots[slotName] || [];
+        return plugins.filter(p => !p.isEnabled || p.isEnabled());
     }
 
     getPlugin(id: string): LuminaPlugin | undefined {

@@ -1,5 +1,5 @@
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
-import { STBridge } from './STBridge.js';
+import { STClient } from './st-adapter/STClient';
 
 /**
  * LorebookManager (世界书管理器)
@@ -151,7 +151,7 @@ export class LorebookManager extends LuminaWeaveAPIBase {
 
         this.isLoading = true;
         try {
-            const csrfToken = await STBridge.getCsrfToken();
+            const csrfToken = await STClient.getCsrfToken();
             const res = await fetch('/api/worldinfo/get', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },

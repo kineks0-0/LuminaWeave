@@ -64,8 +64,8 @@
         </div>
 
         <!-- 差异详情查看器 -->
-        <div v-if="syncDiff && syncDiff.totalDiff > 0" class="sync-diff-viewer">
-          <div class="diff-header">检测到数据差异 ({{ syncDiff.totalDiff }} 项)</div>
+        <div v-if="syncDiff && syncDiff.diffCount > 0" class="sync-diff-viewer">
+          <div class="diff-header">检测到数据差异 ({{ syncDiff.diffCount }} 项)</div>
           <div class="diff-actions">
             <button class="lw-btn lw-btn-ghost lw-btn-small" @click="openDetailedDiff">详细差异</button>
             <button class="lw-btn lw-btn-ghost lw-btn-small" @click="overwriteToIndependent">覆盖独立存储</button>
@@ -93,10 +93,30 @@
         <div class="setting-item">
           <label class="lw-toggle-label">
             <span class="label-text">仅输出 Chat_Reply 内容 (流式过滤)</span>
-            <span class="label-desc">开启后，流式生成时将屏蔽预思考与动作标签，仅展示回复主体内容。</span>
+            <span class="label-desc">开启后，将屏蔽预思考与动作标签（如 Character_Action），仅展示回复主体。</span>
           </label>
           <label class="lw-toggle">
             <input type="checkbox" v-model="filterChatReply" @change="onFilterChatReplyChange" />
+            <span class="lw-toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-item" v-if="filterChatReply">
+          <label class="lw-toggle-label" style="padding-left: 20px; border-left: 2px solid var(--lw-primary-bg);">
+            <span class="label-text">展示非标签正文 (顶层文本保护)</span>
+            <span class="label-desc">开启后，如果模型输出了不带任何标签的文本，将予以显示。关闭则强制仅显示指定标签内容。</span>
+          </label>
+          <label class="lw-toggle">
+            <input type="checkbox" v-model="allowTopLevelInFilter" @change="onAllowTopLevelChange" />
+            <span class="lw-toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-item" v-if="filterChatReply">
+          <label class="lw-toggle-label" style="padding-left: 20px; border-left: 2px solid var(--lw-primary-bg);">
+            <span class="label-text">起始非标签内容视为思考 (thinking)</span>
+            <span class="label-desc">开启后，如果消息开头是普通文本而非标签，将自动被视为思考过程并予以隐藏（直到遇到下一个标签）。</span>
+          </label>
+          <label class="lw-toggle">
+            <input type="checkbox" v-model="implicitThinkingInFilter" @change="onImplicitThinkingChange" />
             <span class="lw-toggle-slider"></span>
           </label>
         </div>
@@ -166,7 +186,61 @@
         </div>
       </div>
     </div>
+    
+    <!-- 上下文窗口与概览控制 (DCC) -->
+    <div class="plugin-settings-block context-block lw-card">
+      <div class="block-header">
+        <div class="block-title">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>上下文窗口与概览控制 (DCC)</span>
+        </div>
+      </div>
+      <div class="block-content">
+        <div class="engine-desc" style="margin-bottom: 12px;">
+          动态管理长对话历史的发送策略。超出全量范围的消息将以“概览标签”形式发送以节省 Context。
+        </div>
 
+        <!-- 1. 全量区设置 -->
+        <div class="dcc-section">
+          <div class="dcc-section-label">全量发送范围 (Full Content)</div>
+          <SettingControl v-if="chatManifest['contextControl.fullMode']"
+            pluginId="lumina-chat" settingKey="contextControl.fullMode" :config="chatManifest['contextControl.fullMode']" />
+          <SettingControl v-if="chatManifest['contextControl.fullValueCount']"
+            pluginId="lumina-chat" settingKey="contextControl.fullValueCount" :config="chatManifest['contextControl.fullValueCount']" />
+          <SettingControl v-if="chatManifest['contextControl.fullValueToken']"
+            pluginId="lumina-chat" settingKey="contextControl.fullValueToken" :config="chatManifest['contextControl.fullValueToken']" />
+          <SettingControl v-if="chatManifest['contextControl.fullValueChar']"
+            pluginId="lumina-chat" settingKey="contextControl.fullValueChar" :config="chatManifest['contextControl.fullValueChar']" />
+        </div>
+        
+        <!-- 2. 概览区设置 -->
+        <div class="dcc-section" style="margin-top: 16px; border-top: 1px dashed var(--lw-border-subtle); padding-top: 16px;">
+          <div class="dcc-section-label">概览发送范围 (Summary/Overview)</div>
+          <SettingControl v-if="chatManifest['contextControl.summaryMode']"
+            pluginId="lumina-chat" settingKey="contextControl.summaryMode" :config="chatManifest['contextControl.summaryMode']" />
+          <SettingControl v-if="chatManifest['contextControl.summaryValueCount']"
+            pluginId="lumina-chat" settingKey="contextControl.summaryValueCount" :config="chatManifest['contextControl.summaryValueCount']" />
+          <SettingControl v-if="chatManifest['contextControl.summaryValueToken']"
+            pluginId="lumina-chat" settingKey="contextControl.summaryValueToken" :config="chatManifest['contextControl.summaryValueToken']" />
+          <SettingControl v-if="chatManifest['contextControl.summaryValueChar']"
+            pluginId="lumina-chat" settingKey="contextControl.summaryValueChar" :config="chatManifest['contextControl.summaryValueChar']" />
+        </div>
+        
+        <!-- 3. 进阶参数 -->
+        <div class="dcc-section" style="margin-top: 16px; padding-top: 8px; opacity: 0.8; background: var(--lw-bg-subtle); border-radius: var(--lw-radius-sm); padding: 10px;">
+          <SettingControl v-if="chatManifest['contextControl.tokenMaxFloat']"
+            pluginId="lumina-chat" settingKey="contextControl.tokenMaxFloat" :config="chatManifest['contextControl.tokenMaxFloat']" />
+          <div style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border-top: 1px dashed var(--lw-border-subtle); padding-top: 12px;">
+            <SettingControl v-if="directorManifest['fullSplit']"
+              pluginId="lumina-director" settingKey="fullSplit" :config="directorManifest['fullSplit']" />
+            <SettingControl v-if="directorManifest['fullFloating']"
+              pluginId="lumina-director" settingKey="fullFloating" :config="directorManifest['fullFloating']" />
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- 各子插件的常用设置 -->
     <div v-for="block in unifiedBlocks" :key="block.pluginId" class="plugin-settings-block lw-card"
@@ -260,6 +334,18 @@ const filterChatReply = ref(lwStorage.get('lumina-chat.filterChatReply', false, 
 
 const onFilterChatReplyChange = () => {
   lwStorage.set('lumina-chat.filterChatReply', filterChatReply.value, 'Global');
+};
+
+const allowTopLevelInFilter = ref(lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global'));
+
+const onAllowTopLevelChange = () => {
+  lwStorage.set('lumina-chat.allowTopLevelInFilter', allowTopLevelInFilter.value, 'Global');
+};
+
+const implicitThinkingInFilter = ref(lwStorage.get('lumina-chat.implicitThinkingInFilter', false, 'Global'));
+
+const onImplicitThinkingChange = () => {
+  lwStorage.set('lumina-chat.implicitThinkingInFilter', implicitThinkingInFilter.value, 'Global');
 };
 
 const unlimitedResponse = ref(lwStorage.get('lumina-chat.unlimitedResponse', false, 'Global'));
@@ -388,6 +474,9 @@ const refreshLlmData = async () => {
 };
 
 const onGenPresetChange = () => (window as any).LuminaWeave?.selectPreset(currentApi.value, activeGenPreset.value);
+
+const chatManifest = computed(() => (pluginManager as any).registeredSettings['lumina-chat'] || {});
+const directorManifest = computed(() => (pluginManager as any).registeredSettings['lumina-director'] || {});
 // ==========================
 
 interface UnifiedBlock {
@@ -407,7 +496,12 @@ const unifiedBlocks = computed(() => {
     if (!p) return;
 
     const manifest = registered[pluginId];
-    const commonKeys = Object.keys(manifest).filter(k => manifest[k].common);
+    const commonKeys = Object.keys(manifest).filter(k => {
+      if (!manifest[k].common) return false;
+      // 过滤掉已手动提取并美化的 DCC 区块设置项
+      if (pluginId === 'lumina-chat' && k.startsWith('contextControl.')) return false;
+      return true;
+    });
     const hasMore = Object.keys(manifest).length > commonKeys.length;
 
     if (commonKeys.length > 0 || hasMore) {
@@ -727,5 +821,81 @@ const unifiedBlocks = computed(() => {
 .lw-btn-small {
   padding: 4px 10px;
   font-size: 11px;
+}
+
+/* ---- Engine Settings Configuration Items (Fixed) ---- */
+/* ---- Engine Settings Configuration Items (Fixed) ---- */
+.engine-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--lw-border-subtle);
+  gap: 24px; /* 增大间距，防止文字紧贴开关 */
+}
+
+.setting-item:last-child {
+  border-bottom: none;
+}
+
+.lw-toggle-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.label-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lw-text-main);
+  line-height: 1.5;
+}
+
+.label-desc {
+  font-size: 11px;
+  color: var(--lw-text-muted);
+  line-height: 1.6;
+}
+
+.lw-toggle {
+  margin-top: 4px; /* 垂直微调，对齐首行文字 */
+  cursor: pointer;
+}
+
+/* Radio Group styling */
+.radio-group {
+  margin-top: 14px;
+}
+
+.radio-text {
+  flex: 1;
+  min-width: 0;
+}
+.dcc-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lw-text-muted);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  letter-spacing: 0.05em;
+}
+
+.dcc-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--lw-border-subtle);
+  margin-left: 10px;
+  opacity: 0.5;
 }
 </style>

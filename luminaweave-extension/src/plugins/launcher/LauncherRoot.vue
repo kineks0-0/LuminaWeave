@@ -30,6 +30,16 @@
       <div class="launcher-section">
         <h2 class="section-title">系统工具</h2>
         <div class="launcher-grid small-grid">
+          <div class="launcher-item tool-item" @click="openCardMaker">
+            <div class="launcher-icon-box">🧩</div>
+            <div class="launcher-info">
+              <span class="launcher-name">制卡工坊</span>
+              <span class="launcher-desc">Card Maker</span>
+            </div>
+            <div class="launcher-action-hint">
+              <span class="tab-badge">Tab</span>
+            </div>
+          </div>
           <div v-for="plugin in widgetPlugins" :key="plugin.id" 
                class="launcher-item tool-item"
                @click="openToolPlugin(plugin)">
@@ -84,6 +94,10 @@ const openToolPlugin = (plugin: any) => {
   } else {
     lwApi.emit('SWITCH_WIDGET_PANEL', plugin.id);
   }
+};
+
+const openCardMaker = () => {
+  lwApi.openPanel('card_maker', {}, { mode: 'tab' });
 };
 </script>
 

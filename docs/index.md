@@ -30,8 +30,11 @@ LuminaWeave 运行于独立的 Vue 3 实例中，通过 `Lumina Core` 桥接原�
 
 ---
 
-## 📂 目录结构指南
+## 📂 目录结构与核心文件指南
 
+本项目采用多层解耦的插件化架构，主要包含前端增强插件（Extension）与独立后端存储服务（Server）。
+
+### 1. 项目概览 (Tree View)
 ```text
 d:\LuminaWeave\
 ├── .agents/                    # AI 代理工作流与指令集
@@ -43,19 +46,93 @@ d:\LuminaWeave\
 │   ├── settings/               # 统一设置面板设计
 │   ├── storage/                # 底层存储与持久化引擎
 │   ├── server/                 # 后端存储插件 (Node.js) 说明
-│   ├── index.md                # 您当前所在的位置 (项目向导)
+│   ├── index.md                # [ROOT] 项目向导 (当前文件)
 │   ├── PDR.md                  # 全局产品需求文档 (Master PDR)
 │   ├── system_design.md        # 全局系统架构设计 (Master System Design)
 │   └── luminaweave_api.md      # 子插件开发 API 参考手册
 ├── luminaweave-extension/      # 🚀 核心前端插件 (Vue 3 + Vite)
 │   ├── src/
-│   │   ├── api/                # 通讯层 (OpenAI-Edge, ST 桥接, Storage)
-│   │   ├── core/               # 微内核逻辑 (PluginManager, Lifecycle)
-│   │   ├── plugins/            # 子插件实现 (Timeline, Director, etc.)
-│   │   └── App.vue             # 宿主入口组件
+│   │   ├── api/
+│   │   │   ├── core/           # 🧩 微内核服务核心 (Services)
+│   │   │   │   ├── ChatManager.ts        # 本地消息节点池管理
+│   │   │   │   ├── ContextCompactor.ts   # DCC 上下文压缩
+│   │   │   │   ├── LorebookManager.ts    # 世界书同步代理
+│   │   │   │   ├── LVParser.ts           # LuminaView DSL 解析器
+│   │   │   │   ├── MeasureService.ts     # 全局文本测量服务
+│   │   │   │   ├── MemoryManager.ts      # 核心快照与记忆中心
+│   │   │   │   ├── SyncUtils.ts          # 统一指纹与差异计算
+│   │   │   │   ├── PersistenceService.ts # 事务化持久化协议
+│   │   │   │   ├── PromptBuilder.ts      # 提示词组装与插槽化
+│   │   │   │   ├── st-adapter/           # ST 适配层命名空间 (Protocol + Client)
+│   │   │   │   │   ├── STProtocol.ts     # ST ↔ Lumina 协议转换 + 指纹口径 (pure)
+│   │   │   │   │   └── STClient.ts       # SillyTavern/TavernHelper I/O 封装
+│   │   │   │   ├── STAdapter.ts          # 同步门面：compare/applyDelta/getSnapshot
+│   │   │   │   ├── STSyncService.ts      # 对话同步逻辑
+│   │   │   │   ├── TagTokenizer.ts       # 健壮性 XML 分词器
+│   │   │   │   ├── TimelineManager.ts    # 时间线路径计算
+│   │   │   │   ├── TransactionProtocol.ts# 事务状态机机制
+│   │   │   │   ├── WorldlineStore.ts     # 图谱化存储邻接表
+│   │   │   │   └── XMLInterceptor.ts     # 标签解析与生命周期管理
+│   │   │   ├── index.ts        # API 全局单例入口
+│   │   │   ├── llmEngine.ts    # 官方 OpenAI SDK 请求生成控制
+│   │   │   └── storage.ts      # 统一存储引擎
+│   │   ├── core/
+│   │   │   └── PluginManager.ts# 插件解耦注册中心
+│   │   ├── plugins/            # 📦 子插件实现目录
+│   │   │   ├── chat/           # 消息流渲染增强 (包含组件化渲染管线)
+│   │   │   ├── director/       # 导演引擎、增量更新引擎与规则编排
+│   │   │   ├── launcher/       # UI 启动器
+│   │   │   ├── lorebook/       # 世界书同步编辑器
+│   │   │   ├── memory/         # 记忆子面板展示
+│   │   │   ├── settings/       # 统一设置面板
+│   │   │   ├── stats/          # 游戏化数值系统状态栏
+│   │   │   └── timeline/       # 幻光时间线 (LogicFlow)
+│   │   ├── App.vue             # 视觉根组件 (UI Shell)
+│   │   └── index.ts            # Extension 挂载点与样式隔离引导
+│   └── i18n/                   # 国际化语言包 (zh-CN, en)
 ├── luminaweave-server/         # 💾 独立后端存储服务 (Node.js)
+│   ├── index.ts                # 服务端入口 (JSONL 事务存储与 OpenAI SDK 路由)
+│   └── data/                   # [IGNORED] 用户本地数据库存储区
+├── TavernHelper@types/         # SillyTavern 插件环境类型定义
+├── dev-start.ps1               # 一键开发启动脚本
+├── sync-projects.ps1           # 远程仓库同步脚本
 └── stitch/                     # 构建与部署工具链
 ```
+
+### 2. 核心文件功能映射
+
+| 路径分层 | 核心文件 | 功能描述 |
+|:---|:---|:---|
+| **项目根目录** | `dev-start.ps1` | 一键启动开发环境，同步运行前端热更新与后端服务。 |
+| | `sync-projects.ps1` | 自动化子项目同步工具，维护多个独立仓库的一致性。 |
+| **Extension 入口** | `src/index.ts` | 插件生命周期底座，处理 Shadow DOM 容器挂载与样式沙盒隔离。 |
+| | `src/App.vue` | 视觉根组件，负责面板状态管理、侧边栏悬浮及右侧 Slot 调度。 |
+| **微内核 (API Core)** | `src/api/index.ts` | 全局 API 单例导出，提供跨组件的统一通讯网关。 |
+| | `src/api/llmEngine.ts` | 请求与生成控制核心，桥接后端基于官方 OpenAI SDK 的生成路由。 |
+| | `src/api/storage.ts` | 统一存储引擎，实现 Global/Chat/Local 多级作用域的持久化。 |
+| | `st-adapter/STClient.ts` | ST 环境 I/O 层，封装对 SillyTavern/TavernHelper 的物理操作与 CSRF 令牌。 |
+| | `st-adapter/STProtocol.ts` | ST 协议层，统一文本清洗、双指纹与 ST ↔ Lumina/Storage 的互转。 |
+| | `STAdapter.ts` | 同步门面层，统一 compare/applyDelta/getSnapshot 等高阶同步接口。 |
+| | `STSyncService.ts` | 对话同步服务，处理线性聊天记录与图谱节点池的双向映射。 |
+| | `WorldlineStore.ts` | 图谱化存储邻接表中心，大幅降低树图节点遍历与寻址复杂度。 |
+| | `XMLInterceptor.ts` | 消息解析流水线，利用栈式解析器处理 XML 标签的生命周期拦截。 |
+| | `ChatManager.ts` | 影子数据库管理器，维护本地消息节点池（Local Chat Data）。 |
+| | `TimelineManager.ts` | 时间线逻辑中心，计算活跃世界线路径及节点关联上下文。 |
+| | `PersistenceService.ts`| 事务化存储协议，通过序列对账与竞态锁定保障 IO 安全性。 |
+| | `LVParser.ts` | LuminaView 结构化渲染解析器，支持极简 DSL 组件化渲染。 |
+| | `ContextCompactor.ts` | DCC 动态上下文压缩引擎，实现“全量+摘要+隐藏”的分层策略。 |
+| | `TagTokenizer.ts` | 健壮性 XML 分词器，支持流式解析中的残损/嵌套标签捕捉。 |
+| | `LorebookManager.ts` | 世界书同步代理，利用代理函数驱动 ST 原生世界书实时更新。 |
+| | `MemoryManager.ts` | 核心快照与记忆中心，负责协调子插件状态并管理时间游走回放。 |
+| **子插件 (Plugins)** | `chat/` | 对话增强系统。包含组件流渲染器与 `ChatStream.vue` 等流式界面核心。 |
+| | `timeline/` | 幻光时间线。基于 Dagre 排版与 LogicFlow 实现可视化世界线导航。 |
+| | `director/` | 导演引擎。处理 XML 增量更新、规划链构建与 `MutationEngine` 沙箱拦截。 |
+| | `settings/` | 统一设置。支持子插件动态向主面板通过 Manifest 注册表单组件。 |
+| | `lorebook/` | 世界书管理面板，实现插件端可视化条目编排。 |
+| | `stats/` | 面向 RPG 游戏的数值与状态栏。 |
+| **后端 (Server)** | `index.ts` | Node.js 事务化存储与生成代理，基于 JSONL 与 OpenAI SDK 提供高可用支撑。 |
+
+---
 
 ---
 
@@ -64,7 +141,7 @@ d:\LuminaWeave\
 ### 技术选型
 - **Frontend**: Vue 3 (Composition API) + Pinia + Vite + TS.
 - **Backend**: Node.js (Express-like, JSONL Storage). *Note: Modify `index.ts` only; `index.js` is a build artifact.*
-- **Communication**: OpenAI-Edge (Ultra-lightweight SSE parser).
+- **Communication**: Official OpenAI SDK (High-performance API interactions).
 - **Style**: Vanilla CSS (Scoped) / CSS Modules.
 
 ### 核心开发规范 (IMPORTANT)

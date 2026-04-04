@@ -4,8 +4,8 @@ import StatsPlugin from '../plugins/stats';
 import SettingsPlugin from '../plugins/settings';
 import LorebookPlugin from '../plugins/lorebook';
 import { DirectorPlugin } from '../plugins/director';
-import { MemoryPlugin } from '../plugins/memory';
 import LauncherPlugin from '../plugins/launcher';
+import DevPlugin from '../plugins/dev';
 import { pluginManager } from '../core/PluginManager';
 
 let hasRegisteredPlugins = false;
@@ -20,8 +20,8 @@ export const registerLuminaPlugins = () => {
         SettingsPlugin,
         LorebookPlugin,
         DirectorPlugin,
-        MemoryPlugin,
-        LauncherPlugin
+        LauncherPlugin,
+        DevPlugin
     ].forEach(plugin => {
         pluginManager.register(plugin);
     });

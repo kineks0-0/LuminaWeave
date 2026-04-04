@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { lwStorage } from './storage.js';
-import { STBridge } from './core/STBridge';
+import { STClient } from './core/st-adapter/STClient.js';
 import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
 import { 
     NexusNode, 
@@ -168,12 +168,13 @@ export class LuminaWeaveLLMEngine extends LuminaWeaveAPIBase {
             });
         }
 
-        const { chatId } = lwStorage._getContextIds();
+        const { chatId: contextChatId } = lwStorage._getContextIds();
+        const chatId = options.chatId || contextChatId;
 
         try {
             console.log(`[Lumina LLM Engine] 请求后端开始生成 (chatId: ${chatId})`);
             
-            const csrfToken = await STBridge.getCsrfToken();
+            const csrfToken = await STClient.getCsrfToken();
             const charName = this.ctx?.characterId ? this.ctx.characters?.[Number(this.ctx.characterId)]?.name : 'Assistant';
 
             // 1. 发起后端生成请求
@@ -239,4 +240,3 @@ export class LuminaWeaveLLMEngine extends LuminaWeaveAPIBase {
 }
 
 export const llmEngine = new LuminaWeaveLLMEngine();
-

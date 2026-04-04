@@ -143,7 +143,7 @@ export const useTier1Store = defineStore('lumina-tier1', () => {
             });
         }
 
-        if (globalMutationEngine.models.size === 0)
+        if (!_isInitialized.value)
             initializeModels();
 
         const availableTargets = globalMutationEngine.getAvailableTargets();
@@ -188,10 +188,10 @@ export const useTier1Store = defineStore('lumina-tier1', () => {
         };
     };
 
-    /**
-     * 为 MutationEngine 注册目标回调，绑定到动态 tables 结构
-     */
+    const _isInitialized = ref(false);
+    // === Mutation Engine 模型绑定 ===
     const initializeModels = () => {
+        if (_isInitialized.value) return;
         // 1. 全局环境
         globalMutationEngine.registerDataModel('global', {
             description: tableRegistry.value.global.schema,
@@ -279,6 +279,8 @@ export const useTier1Store = defineStore('lumina-tier1', () => {
                 }
             }
         });
+
+        _isInitialized.value = true;
     };
 
     // 暴露核心 Getter 和 Action
