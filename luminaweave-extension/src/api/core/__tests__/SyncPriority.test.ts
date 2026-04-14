@@ -14,11 +14,10 @@ describe('SyncPriority - STProtocol 数据提取优先级', () => {
 
         const result = STProtocol.fromST(mockSTMessage);
         
-        // 验证优先级：pluginRaw(extracted) 胜出
+        // 验证优先级：pluginRaw(extracted) 胜出，且 mes (呈现层) 被自动纠偏同步
         expect(result.mesRaw).toBe('AI 原始生成的回答');
         expect(result.pluginRaw).toBe(mockSTMessage.extra.pluginRaw);
-        // mesContent 应该保持 ST 的原始消息以供显示比对
-        expect(result.mes).toBe('ST 界面手动修改后的文本');
+        expect(result.mes).toBe('AI 原始生成的回答');
     });
 
     it('如果 pluginRaw 存在但没有标签，应回退至全量 pluginRaw', () => {

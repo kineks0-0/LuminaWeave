@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../ChatManager';
 import { SyncUtils } from '../SyncUtils';
-import { LuminaChatMessage } from '../ChatManager';
+import { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
 
 vi.mock('../../storage.js', () => ({
     lwStorage: {
@@ -29,7 +29,9 @@ describe('ChatManager Data Priority Sync', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        manager = new ChatManager();
+        manager = new ChatManager({ ctx: {} });
+        // 核心修复：激活管理器以通过激活锁，允许同步逻辑运行
+        manager.activate();
         // 提供一个虚拟的 parentApi 供 getSyncDiff 调用
         manager.parentApi = {
             getSyncDiff: vi.fn()

@@ -1,7 +1,7 @@
 # LuminaWeave 系统架构与设计文档（System Design）
 
-**版本:** v5.3-dev
-**最后更新时间:** 2026-04-02
+**版本:** v6.0-dev
+**最后更新时间:** 2026-04-12
 
 ## 一、系统架构理念
 
@@ -20,11 +20,14 @@
     - **三层探测机制 (Triple-Layer Discovery)**：
         - `SillyTavern` (容器): 探测全局变量。
         - `getContext()` (数据): 获取当前活跃的会话及其属性快照。
-        - `TavernHelper` (工具): 访问更底层的原生控制函数和扩展 API。
+        - `TavernHelper` (工具): 访问更底层的原生控制函数 and 扩展 API。
     - **EventEmitter 定位器**：针对 `eventSource` 执行 `Context > Main > Window` 的层级搜索，确保跨环境事件监听的 100% 成功率。
     - **逻辑解耦**：所有业务模块（Lorebook, Storage 等）统一接入，不再关心宿主运行模式，极大地增强了系统的鲁棒性。
-- **生命周期网关**：截取 Prompt 构建与响应接收期，允许插入系统规则或并行/串行后台任务。
-- **同构 RPC 跨环境通信**：前端 UI 渲染请求与后端 Node.js 异步拉取图谱。
+- **生命周期网关与事件流 (EventFlow) [NEW v6.0]**：引入基于 Kotlin Flow 风格的阻塞式异步事件机制。
+    - `beforeGenerationStartFlow`: 用于在生成触发前收集操作（如 DCC 压缩）。
+    - `messageReceivedFlow`: 允许 UI 与存储层在收到流式消息后异步协调刷新。
+    从之前将挂载逻辑硬编码进 `sendMessage` 的老旧耦合中解放出来，将重型操作统一注册为流响应。在执行生成操作前按条件切片安全执行等待处理，彻底杜绝数据在流生成时的竞态不同步。
+- **同构 RPC 与双端路由规范层 [NEW v6.0]**：抽离出统一的 `shared/ApiEndpoints.ts` 文件以枚举收拢所有网络交互端点（包括但不限于 `GET/PUT/DELETE /presets`、`POST /chat/save` 等），取代前端遍布的零散硬编码调用，统一后端 `luminaweave-server/src/index.ts` 注册，大大降低接口迁移成本和 404 集成错误率。
 
 ### 2. UI 渲染宿主 - 可选的 Shadow DOM 沙盒隔离层 [v5.7 优化]
 
@@ -41,19 +44,24 @@
 - **影子图谱缓存**：所有修改首先发生在 `localChatData`（影子数据库）中，UI 层单向订阅。
 - **多级作用域（Scope Resolver）**：`Global`、`Character`、`Chat`、`Session` 等多级持久化。
 - **选择性同步（Selective Sync）**：用户发送消息后，`commitToST()` 将本地 `localChatData` 压回 `window.chat`，然后通过 TavernHelper 调用生成函数。
+- **会话类型扩展 (Conversation-aware Nodes) [NEW v6.0-dev]**：节点模型开始扩展 `conversationType`、`conversationId` 与 `nodeKind` 等元数据，用于承载主聊天、Forge 及后续更多扩展会话。系统正在从“只为聊天消息服务”的节点设计，演进为“统一会话节点容器”。
+- **统一会话查看上下文 (Conversation Context) [NEW v6.0-dev]**：在节点模型之上新增前端级 `ConversationContext` 解析层，统一提供当前 `source/session/activeLeaf/messages/lorebookView/memorySnapshot`。消息型插件默认消费这个解析层，而不是各自直连主聊天状态。
 
-### 5. 消息存储分离机制（v4.0 新增）
+### 5. 消息归一化流水线 (Normalization Pipeline) [NEW v6.0]
 
-每条消息对象存储两个文本字段：
+为了确保消息数据在多端同步与流式生成过程中的绝对一致性，系统建立了一套单向归一化管道：
 
-| 字段 | 含义 | 用途 |
+| 字段 | 含义 | 授权源与同步逻辑 |
 |---|---|---|
-| `pluginRaw` | 完整原始 LLM 响应 | 保存包含 XML 标签的完整输出，作为最原始的数据源 |
-| `mesRaw` | 提取后的干净对话文本 | 优先从 `<Chat_Reply>` 提取，用于编辑、同步与内容指纹对比 |
-| `mes` | ST 正则处理后的显示文本 | UI 展示 |
-| `characterId` | 所属角色 ID | 用于多角色/群组模式后的角色溯源 |
+| `pluginRaw` | **权威源** | LLM 原始输出。作为所有字段的物理事实来源。 |
+| `mesRaw` | **内容源** | 当 `pluginRaw` 存在时，通过 `XMLInterceptor` 自动提取。其一致性由 `fingerprint` 保证。 |
+| `mes` | **呈现源** | 派生字段。通过 `cleanText` 清洗 `mesRaw` 得到。当 `mesRaw` 变更时自动重写。 |
+| `thinkingText` | **本地思维链源** | 从 `pluginRaw` 中的 `<thinking>` 或兼容别名 `<think>` 提取，仅供 Lumina 本地折叠视图使用，不写回 ST。 |
+| `fingerprint`| **指纹** | `mesRaw` 的哈希值。作为缓存 Valid 标识。 |
 
-`crudChatRecord()` 写入时，AI 消息优先从 `pluginRaw` 中提取 `<Chat_Reply>` 标签内容存入 `mesRaw`；若无标签则回退至清洗后的全量文本。UI 渲染 (`mes`) 基于 `mesRaw` 应用 `applySTRegex`。
+- **存储层自动纠错 (Self-Healing Store)**：`WorldlineStore.upsertNode` 强制注入同步钩子。任何字段缺失或指纹不匹配的节点在存入时都会被自动规范化。
+- **指纹驱动的派生缓存**：通过指纹判定内容是否发生质变，从而避免在大规模对话列表滚动时重复解析 XML 标签，确保 O(1) 的渲染效率。
+- **流式显示解耦**：流式生成期间，系统会自动跳过指纹计算等重型操作（Streaming Skip），确保 UI 的“打字机”效果不因哈希计算而卡顿，仅在生成结束（Finalize）时固化状态。
 
 - **独立对话存储架构 (v5.5 优化)**:
     - **一条消息即一个节点**: JSONL 物理结构实现了消息与记忆（Deltas & Snapshots）的强耦合映射。
@@ -67,17 +75,21 @@
     - **活跃叶子记忆锚定**: 同步时在活跃节点注入 Tier 1/3 快照。
     - **事务日志层 (v5.8 新增)**: 每个 chat 独立维护 `chat_<chatId>.tx.jsonl`，记录 `id/seq/status/scope/payloadDigest/idempotencyKey/error`。
     - **事务状态机 (v5.8 新增)**: 写路径统一遵循 `pending → running → committed|aborted|rolled_back`，禁止非法跃迁。
-    - **幂等与序列校验 (v5.8 新增)**: 请求需携带 `transactionContext(expectedSeq,idempotencyKey)`；后端优先命中幂等重放，序列不一致时返回 `TXN_SEQUENCE_CONFLICT`。
-    - **元数据序列锚点 (v5.8 新增)**: `metadata.transaction.lastCommittedSeq` 与 `lastTransactionId` 作为重连和增量写入的对账基准。
-    - **对账补偿链路 (v5.8.1 新增)**: 后端事务查询支持 `afterSeq` 增量拉取，前端在重连后若写入命中 `TXN_SEQUENCE_CONFLICT`，会先按序列拉取未确认事务、回滚同幂等键下的 `pending/running` 悬挂事务，并基于刷新后的 `lastCommittedSeq` 自动重试一次。
+    - **幂等与序列校验 (v5.8 新增)**: 请求需携带 `t**开放扩展机制 [v6.0 增强]:**
+- **原生语义切割 (Deterministic Parsing)**：`BaseXMLInterceptor` 引入基于 Tokenizer 的确定性切割，支持通过 `deriveStreamState` 实时探测文本分段。
+- **动态注册 (Dynamic Registration)**：向子插件暴露 `registerXMLParser(tagName, options)` 接口，其中 `options` 需明确保定生命周期 (`lifecycle: 'transient' | 'ephemeral' | 'persistent'`)。
+- **防回溅泄露保护 (Backsplash Shielding)**：利用 `isPreOrphanZone` 识别流式生成的孤立闭合标签，动态截断泄露到显示区域的原始思考文本。
+
 
 ### 7. 模块导入与初始化时序优化 (v4.1, v5.2)
 
 - **导入规范化**：为了消除 Vite 编译路径歧义，核心 API 模块统一采用静态导入。
 - **配置先行原则 (v5.2) [NEW]**：`index.ts` 在挂载 Vue 应用前，强制 `await lwStorage.loadIndependentGlobalData()`。这是因为 Shadow DOM 的创建是不可逆的底层动作，必须先从独立存储中读取 `useShadowDom` 标记，才能决定后续的挂载目标（Shadow Root 或普通 Div）。
-- **初始化导入守卫与时序管控 (v5.8.3) [UPDATED]**：
+- **初始化导入守卫与时序管控 (v6.0) [UPDATED]**：
     - `LuminaWeaveAPI.init()` 增加了强时序控制：`initializeAllPlugins()`（插件及其模型注册）必须优于 `syncFromST()`（历史数据同步解析）。
-    - 这一时序调整确保了 `MutationEngine` 在处理既有对话中的指令时，相关的 `global`、`inventory` 等模型已经全量挂载，避开了模型未定义导致的运行期错误。
+    - **冷启动日志静默 (Silence Mode)**：`EnvDetector` 在探测阶段执行静默控制，消除 Helper 缺失时的报错干扰。
+    - **组件激活锁 (Activation Lock)**：`ChatManager` 仅在环境确认就绪后通过 `activate()` 激活，确保首次同步时监听器已准备好处理响应式变动。
+    - **系统初始化死锁修复**：在初始化阶段通过非阻塞 `emit` 转发消息流信号，隔离 UI 渲染对 API 初始化完成的硬性等待，打破循环依赖。
     - 引入 **沙箱分层兜底机制**：`MutationEngine` 沙箱对核心内置模型（如 `characters`, `inventory` 等）实施 `has` 拦截及占位代理（Placeholder Proxy）。即使用户或历史消息中存在提前访问，系统也会优雅降级而非中断解析流程。
 
 ### 8. LorebookManager (世界书同步代理) [NEW]
@@ -101,6 +113,10 @@
    - 当拦截到最终将要传递给模型的 `payload` 时，扫描其中的预设占位符（如 `{{lumina_director_rules}}`）并进行实装，用于精准注入需要绝对前置或后置指令。
 3. **插件颗粒度授权 (Sub-plugin Permissions)**
    - 权限管控下放到子插件维度，用户可以随意启停 Timeline, Director 的独立提示词流入，保留绝对的数据安全与控制感。
+4. **上下文化 Prompt Registry [NEW v6.0-dev]**
+   - `PromptRegistry` 不再默认以主聊天为全局协议中心，而是为每个片段与 XML 协议说明声明 `chat / forge / director / shared` 上下文。
+   - `PromptBuilder` 在构建 Prompt 或世界书挂载内容时，必须按上下文过滤片段与协议。
+   - Forge Planner/Executor 只读取 Forge 与 shared 协议说明，不再混入主聊天专用的 `Chat_Reply` 等标签说明。
 
 ### 10. 可扩展的 XML 解析与切割流水线 (Interceptor Pipeline) [NEW]
 
@@ -113,7 +129,14 @@ LuminaWeave 提供了一套开放式的正则流式拦截机制，要求所有�
 - **Core (核心对话)**: 剔除以上所有标签后的纯文本，如 `<Chat_Reply>`。
 
 **开放扩展机制:**
-- **动态注册 (Dynamic Registration)**：向子插件暴露 `registerXMLParser(tagName, options)` 接口，其中 `options` 需明确保定生命周期 (`lifecycle: 'transient' | 'ephemeral' | 'persistent'`)。子插件可据此自由拦截特化指令（如 `<Dice_Roll>`），彻底解耦数据与视图流。
+- **统一元数据注册源 (XMLTagRegistry) [UPDATED v6.0-dev]**：canonical 标签名、别名、生命周期、状态文案、UI 隐藏标记与协议排序统一收敛到 `XMLTagRegistry`。`PromptRegistry` 不再承担 XML 元数据真相源。
+- **协议可见性按 Prompt Context 过滤 [UPDATED v6.0-dev]**：`XMLTagRegistry` 的协议展示能力新增 `promptContexts` 边界。相同标签元数据仍然只有一份真相源，但 System Protocol 在 `chat`、`forge` 等上下文中只暴露当前场景需要的标签说明。
+- **元数据/处理器双层模型 [UPDATED v6.0-dev]**：
+  - **元数据层**：插件通过 `XMLTagRegistry.register()` 注册标签、别名与生命周期。
+  - **行为层**：插件通过 `XMLInterceptor.registerHandler()` 或兼容入口 `registerXMLParser()` 挂载副作用处理器。
+  - 这样既保持插件可热插拔扩展，又保证 Prompt 协议、流式状态与解析行为都读同一份标签元数据。
+- **thinking 标签规范 [NEW v6.0-dev]**：`thinking` 为唯一 canonical 名称，`think` 仅保留为兼容别名。解析后独立写入 `thinkingText`，由聊天与 Forge 共用的折叠视图渲染，不混入正文。
+  - 思考区默认只在 `streaming && no_visible_body` 时展开；正文文本或 `<V>` 组件一旦出现，折叠视图自动收起，并通过受控面板提供过渡动画。
 
 ### 10.1 通用增量更新引擎 (Incremental Mutation Engine) [NEW]
 
@@ -148,23 +171,41 @@ LuminaWeave 提供了一套开放式的正则流式拦截机制，要求所有�
 
 ### 10.4 动态上下文压缩 (DCC) 与发送范围控制 [REFACTORED]
 
-为了实现基于“全量+概况+隐藏”的非侵入式上下文管理，系统引入了专用的 **ContextCompactor** 逻辑：
+为了实现基于”全量+概况+隐藏”的非侵入式上下文管理，系统引入了专用的 **ContextCompactor** 逻辑：
 
 - **分层算法 (Tiered Compaction Strategy)**：
   - **核心计算逻辑**：从活跃叶子节点（Active Leaf）反向向上溯源。
-  - **全量区 (FULL)**：在用户设定的 `Full Range` 阈值内（支持条数/Token/字符），消息保持原始内容。
-  - **概览区 (SUMMARY)**：超出全量但仍处于 `Overview Range` 内的消息。此时消息内容被物理替换为摘要标签 `<Story_Summary>`，确保大模型能感知背景但大幅降低 Token 消耗。
-  - **隐藏区 (HIDDEN)**：超出两级阈值的消息。
+  - **全量区 (`compressionState = 'full'`)**：在用户设定的 `Full Range` 阈值内（支持条数/Token/字符），消息保持原始内容。
+  - **概览区 (`compressionState = 'summary'`)**：超出全量但仍处于 `Overview Range` 内、且具备有效摘要的 AI 消息，内容被替换为摘要文本（`mesST` 含 `剧情概览：` 前缀）。
+  - **概览区降级 (`compressionState = 'full_in_summary'`)**：处于概览范围内但无有效摘要（如用户消息、尚未生成摘要的 AI 消息），以全量形式保留。`enableFallbackSummary=true` 时可改为截取前 100 字摘要。
+  - **隐藏区 (`is_hidden = true`)**：超出两级阈值的消息，阻止其进入模型上下文。
+  - **钉固 (`compressionState = 'pinned'`, `isPinned = true`)**：被钉固的消息豁免隐藏区，始终以最优摘要形式（`mesSummary` > `Story_Summary` > `Current_Plan` > 截取 200 字）保留在上下文，并在 `mesST` 中添加 `[📌 钉固]` 前缀。
 - **数据字段解耦 (Field Decoupling)**：
-  - **mesST (权威写回字段)**：它是 DCC 处理后的最终产物。同步引擎 `STSyncService` 强制将此字段写入 ST 消息列表，作为发送给模型的真实输入。
-  - **mesSummary (摘要存储)**：缓存 AI 生成或提取的消息级剧情快照，作为概览模式的素材来源。
-- **is_hidden 物理标记**：计算出的“隐藏区”消息通过 `STClient.updateMessages(..., { is_hidden: true })` 写入原生属性（同时同步 `is_system`）。这实现在不删除消息节点的前提下，阻止 ST 将其组装进请求载荷中。
-- **统一访问与生命周期管理 (v5.9) [NEW]**：
-    - **Explicit Property Assignment**：移除了基于代理的属性拦截（MessageProxy），改为在 DCC 等阶段显式计算并分配 `mesST` 和 `is_hidden`，提升执行效率并减少生命周期隐患。
-    - **透明访问**：同步引擎和视图直接读取计算好的物理属性，不再依赖动态提取函数，大幅降低重复计算开销。
-- **同步集成与一致性**：压缩计算发生在 `commitToST` 的预处理阶段，确保“计算 → 压缩 → 写入 ST → 生成”是一次性的原子操作，防止状态延迟。
+  - **mesST (权威写回字段)**：DCC 处理后的最终产物，同步引擎 `STSyncService` 强制将其写入 ST。
+  - **mesSummary (摘要存储)**：缓存 AI 生成或提取的消息级剧情快照。
+  - **isPinned (钉固标记)**：用户可手动钉固重要消息节点，使其永不被隐藏。
+- **is_hidden 物理标记**：计算出的隐藏区消息通过 `STClient.updateMessages(..., { is_hidden: true })` 写入原生属性。
+- **统一访问与生命周期管理**：
+    - **Explicit Property Assignment**：显式计算并分配 `mesST`、`is_hidden`、`compressionState`，无代理拦截。
+    - **透明访问**：同步引擎和视图直接读取计算好的物理属性。
+- **同步集成与一致性**：压缩计算发生在 `commitToST` 的预处理阶段，确保”计算 → 压缩 → 写入 ST → 生成”是一次性的原子操作。
+- **设置项**（`lumina-chat.contextControl.*`）：`fullMode/fullValue*`、`summaryMode/summaryValue*`、`tokenMaxFloat`、`tokenSplitAllowed`、`enableFallbackSummary`（是否启用无摘要消息兜底截断，默认关闭）。
 
-### 11. 发送流程 (Official OpenAI SDK 增强版)
+### 10.5 LLM 引擎分布式架构 (Factory/Data/Logic) [NEW v6.0]
+
+为了消除单例状态污染并支持多会话并行生成，LLM 引擎从混合单例重构为清晰的三层架构：
+
+1.  **Factory 层 (`llmEngine.ts`)**: 
+    - 职责：作为单例入口，负责 `GenerationSession` 的工厂化创建及全局业务配置（如预设解析）。
+    - 隔离：不保存任何生成过程中的中间状态。
+2.  **数据层 (`GenerationSession.ts`)**: 
+    - 职责：原子化数据容器。保存 `chatId`、`nodes`、`finalText` 以及后端确认的 `committedInfo`。
+    - 意义：支持同时存在多个独立的生成会话（如：主聊天会话 + 制卡后台会话 + 剧情导演会话）。
+3.  **逻辑层 (`LuminaGenerationTask.ts`)**: 
+    - 职责：逻辑执行者。封装了与后端 Nexus 的 SSE 通讯、状态轮询、看门狗自动恢复以及回调分发。
+    - 独立性：每个 Task 绑定一个 Session，随用随弃，不产生全局副作用。
+
+### 11. 发送流程 (Vercel AI SDK + SSE 增强版)
 
 ```
 handleSend() → lwApi.sendMessage(text)
@@ -173,40 +214,127 @@ crudChatRecord('add', text, {is_user:true})
   ↓
 triggerGenerate('normal')
   ↓
-probePrompt()                                // 拦截并获取 ST 的组装载荷
+llmEngine.createSession(...)                  // 【v6.0 变更】初始化独立数据容器
   ↓
-DirectorPromptBuilder.build(payload)         // 【拦截重塑】注入前置状态、`<Next_Plan>`与后置格式锁
+Task = new LuminaGenerationTask(session)      // 【v6.0 变更】生成原子逻辑任务
   ↓
-llmEngine.generateCustomStream(mutatedPayload) // 使用 OpenAI SDK 发送请求给后端处理发信
+probePrompt()                                 // 拦截并获取 ST 的组装载荷
   ↓
-Nexus XML Interceptor                        // 【流式切割】剥离 XML 标签并触发对应的注册扩展
+DirectorPromptBuilder.build(payload)          // 【拦截重塑】注入前置状态、`<Next_Plan>`与后置格式锁
+  ↓
+Task.run(mutatedPayload, callbacks)           // 【v6.0 变更】执行逻辑，结果异步回写至 Session
+  ↓
+onDone + onBackendCommitted                   // 【并行竞态处理】Task 回调触发表层状态同步
+  ↓
+finalizeGeneration()                          // 【原子收口】满足条件后执行权位同步与状态回刷
+  ↓
+Nexus XML Interceptor                         // 【流式切割】剥离 XML 标签并触发对应的注册扩展
 ```
 
-#### 11.1 Forge / 制卡会话 (card_maker) 流程 [MVP]
-制卡属于**非 ST 会话**：不读取/写入 ST 消息列表，不触发 `syncFromST/commitToST/saveChat/reload`。其核心目标是实现与主聊天**并行生成且状态隔离**。
+#### 11.1 Forge / 制卡会话 (card_maker) 架构 [v6.0 增强]
+制卡作为高精度、长周期的 Agent 任务，采用了 **角色分离 (Role Separation)** 与 **透明追踪 (Transparency Trace)** 架构：
 
+- **Planner-Executor 双模型协作流**：
+    - **规划者 (Planner)**：驻留在 `lw_card_*` 会话中，负责意图理解与方案导出。
+    - **前端合成引擎 (PromptBuilder)**: 拦截请求并执行“导演级”合成。动态注入 ST 的环境宏 ({{user}}) 与已激活的世界书 (Lorebook) 条目，构建最终的 Context 载荷。
+    - **隔离执行器 (Isolated Executor)**：采用双重隔离模式。重写任务由前端合成精简指令（指令+条目+计划），极大提升了条目修订的精度与格式遵循度。旋
+
+- **detailMode 分流的可见阶段 + 七层后台模型 [UPDATED v6.0-dev]**：
+    - **前台可见阶段**：
+      - `detailed`：`alignment / entity_world / state_topology / narrative_style / variables_index / output_delivery`
+      - `quick`：`kickoff / build / finalize`
+    - **后台层模型**：`concept / entity / state_machine / description / variables / summary / output`
+    - `workflowSnapshot` 同时保存内部 `stage` 与前台 `visiblePhase`；前者用于编排判断，后者用于 UI 展示与提示词注入。
+    - 前台阶段负责用户可见进度与节奏控制；后台层模型负责真正的条目组织、表单蓝图和虚拟工作区推进。
+
+- **双节奏模式与启动协议 [NEW v6.0-dev]**：
+    - Forge 会话新增 `detailMode: detailed | quick`。
+    - `detailed`：优先自然语言追问，表单作为主动细化工具。
+    - `quick`：只暴露当前推进所需的最小表单。
+    - 启动阶段采用“单消息双区块 + 消息级统一提交”，由 `ForgeChoiceGroup + ForgeFacetChecklist + ForgeMessageSubmit` 组成。
+
+- **统一世界线节点化 (Unified Worldline-backed Forge) [NEW v6.0-dev]**：
+    - Forge 会话不再仅使用独立消息数组，而是使用与主聊天相同的 `WorldlineStore` 节点图结构。
+    - 每个 Forge 节点通过 `conversationType='forge'`、`conversationId=sessionChatId` 等元数据标记来源。
+    - 这使 Timeline、Staging Area、后续 Diff Center 以及更多扩展能力可以围绕同一套节点流协作，而非重复维护一套“制卡专用消息格式”。
+
+- **统一工作流时间线 (Unified Forge Timeline) [UPDATED v6.0-dev]**：
+    - Forge UI 不再通过“消息列表 + 临时 activityLog”拼接执行状态，而是引入持久化 `timelineItems`。
+    - `worldlineNodes` 继续保存真正的消息节点，负责 Prompt 构建、世界线切换与正文渲染。
+    - `timelineItems` 负责统一编排消息引用节点与操作节点（如技能执行、规划、表单提交、审阅、冻结结果），UI 以单一时间线顺序渲染两者。
+    - 这使得运行中/已完成的系统动作可以稳定落盘、刷新恢复，并在视觉上与 Assistant 正文保持同一条工作流语义。
+
+- **Forge Runtime Orchestrator（前端编排层）[UPDATED v6.0-dev]**：
+    - Forge 在前端新增 `LangGraph runtime orchestrator`，统一接收 `ForgeUserCommand`，读取 `workspace/session/worldline/structuredState/draftTree/staging/commitReady/virtualLorebook`，产出 `workflowSnapshot / executionRequest / effects / requiresGeneration`。
+    - Runtime Context 新增 `detailMode` 与 `forgeMemoryTree`，供 Planner / Analyst / Executor 共享。
+    - `CardMakerStore` 退回为真状态源与 effect applier；不再直接承担 Prompt 装配、流式 XML 事件解释与 staging 写入等跨层编排职责。
+    - effect 层至少覆盖 `append_message`、`add_operation`、`set_detail_mode`、`set_entry_mode`、`set_active_layer`、`submit_form_result`、`memory_upsert`、`memory_remove`、`memory_read`、`history_read`、`lorebook_read`、`upsert_staging_entry`、`move_staging_to_commit_ready`、`move_commit_ready_to_staging`、`freeze_workspace`、`persist_session`，并允许补充运行中 trace 所需的 operation upsert/complete effect。
+
+- **Forge 独立文件化记忆 [NEW v6.0-dev]**：
+    - 每个 Forge 会话持久化 `forgeMemoryTree`，与 `structuredState`、`draftTree`、`virtualLorebookEntries` 并列保存。
+    - 默认目录约定包括：`启动/用户偏好`、`约束/用户禁止内容`、`参考内容/片段-*`、`设定决议/核心想法`、`设定决议/世界观`、`设定决议/角色骨架`、`设定决议/叙事与表现`、`规划/待确认问题`。
+    - 用户明确表达偏好、禁忌、参考内容或确认设定时，控制层会自动写入该记忆树，并在统一时间线中留下 `memory_update` / `context_read` 操作痕迹。
+
+- **组件驱动的表单采集协议 (Component-first Intake Protocol) [NEW v6.0-dev]**：
+    - Planner 在“信息不足”阶段默认不再输出大段自然语言问卷，而是优先输出基于 LuminaView `<V>` DSL 的结构化收集组件。
+    - 首批目标组件包括：`ForgeForm`、`ForgeInput`、`ForgeTextarea`、`ForgeSelect`、`ForgeChecklist`、`ForgeChoiceGroup`、`ForgeFacetChecklist`、`ForgeMessageSubmit`、`ForgeSummaryCard`、`ForgeMissingFields`。
+    - 用户提交后，前端将结果整理为结构化表单状态或 `FORGE_FORM_RESULT` 一类协议块回送给 Planner，避免模型自行从自由文本里二次抽取字段。
+    - `quick` 节奏下若 Planner 判断仍需结构化收集，但当前层本地表单已存在，则优先输出 `<form_prefill>` 只回填建议字段值，而不是重复生成一整套 `<V>` 表单定义。控制层只会写入当前仍为空的字段，避免覆盖用户手动编辑。
+    - 启动阶段不再使用“结构化流程 / 自由对话流程”双入口，而是切换为 `详细定制 / 快速开始` 双节奏；消息内如果有多个待填组件，统一由底部单个提交入口提交。
+
+- **V 协议复用与渲染实现解耦 [NEW v6.0-dev]**：
+    - `LVParser` 与 `ViewComponentRegistry` 继续作为统一协议入口。
+    - 新增按上下文选择组件实现的渲染绑定层；至少区分 `chat` 与 `forge` 两类上下文。
+    - 相同 DSL 名称可绑定不同渲染实现，例如 `Choices(...)` 在聊天区使用默认分支块，在 Forge 中使用可直接操作结构化状态与层推进的专属组件。
+
+- **Prompt / 协议 / 控制三层拆分 (Prompt-Protocol-Control Separation) [NEW v6.0-dev]**：
+    - **Prompt 层**：只定义 Planner/Executor 行为规则、当前阶段上下文与输出约束。
+    - **Prompt 层**：现已扩展为 Planner / Conversation / Analyst / Executor 四类角色；Planner 负责主流程推进，Conversation 负责轻量协作回复，Analyst 负责隔离读取上下文并只回注摘要，Executor 负责局部重写。
+    - **协议层**：统一定义 `<V>` 展示型 DSL、`<forge_skill>` 追踪型标签、`<draft_plan>` / `<entry_update>` / `<memory_update>` / `<context_read>` / `<analysis_handoff>` / `<form_prefill>` 等操作型标签。
+    - **控制层**：由前端控制器与存储层解释模型意图、驱动步骤状态机、调起 Analyst / Executor、维护 Staging Area 与 forgeMemoryTree，并在用户确认后执行正式写回。
+    - **运行时服务拆分 [UPDATED v6.0-dev]**：
+      - `ForgePromptContextService` 负责 planner/executor Prompt 载荷拼装。
+      - `ForgeExecutionGateway` 继续复用 `llmEngine + LuminaGenerationTask + Nexus SSE`，但把 XML 流解析为 typed runtime events，而不是直接写 Store。
+      - `ForgeWorkspaceSessionService` 负责 session 序列化/反序列化，`ForgeSessionRepository` 继续做本地与后端镜像。
+
+- **活动追踪与 Staging Area (UI/State Logic)**：
+    - **Action Trace**：前端监视 XML 流中的特定标记，向实时追踪流推送模型动态（Reading/Thinking/Writing）。
+    - **Staging Area (暂存区)**：所有模型修改均进入暂存状态。UI 自动调取 `ConflictDiffViewer.vue` 展示修改建议。用户确认后，通过后端事务 API 物理提交。
+    - **Virtual Workspace Freeze**：Forge 默认提交目标不再是真实世界书，而是虚拟工作区。`proposal -> approved_for_workspace -> publish_candidate` 三段状态用于区分提案、工作区冻结准备和后续发布候选。
+    - **Draft Projection 来源元数据 [UPDATED v6.0-dev]**：`proposal / approved_for_workspace / publish_candidate` 节点投影必须携带 `layer`、`sourceTag`、`sourceMessageId`、`sourceSessionId`，供统一时间线、审阅面板和后续发布流程追溯。
+
+- **素材引导层 (Seed Ingestion)**：
+    - **Snippet Extraction**：通过启发式算法自动识别附件中的关键对话与描写，作为冷启动种子。
+
+- **Forge Workspace UI (Codex-like Workshop) [NEW v6.0-dev]**：
+    - Forge 主界面向深色开发工作台收敛，但当前已拆为“主对话区 + 辅助区系统”。
+    - 启动阶段在主对话区前置入口模式卡片；进入工作态后，Forge 专属 `<V>` 组件直接嵌入消息流承载表单、摘要卡、层导航和选择动作。
+    - `ForgeActivityTrace` 以消息流内联 trace 形式存在，不再要求独立的右侧运行轨。
+    - 自由工作台模式下，Forge 主窗新增会话级 `auxPresentationMode = embedded | detached`。`embedded` 直接在主窗右侧渲染单一辅助栏；`detached` 则将 `虚拟世界书 / 记忆管理 / 审阅中心 / 导出发布 / 后置轨` 注册为独立 workspace panel，通过 `openWorkspaceApp('panel:...')` 打开并共享同一 `CardMakerStore`。
+    - Forge 主窗在 `detached` 态下切换为贴窗体布局：去掉内部 hero/topbar、外层边距与卡片壳感，只保留 `WorkspaceWindow` 顶栏；原会话列表、模式切换、素材导入、Prompt 预览与重置等操作迁移到窗口顶栏 actions，其中非高频动作收纳到二级菜单。
+    - 传统桌面模式下，Forge 不在全局 Shell 维持独立漂浮窗，而是在 Forge 前台内部提供单一辅助区切换器；当前只渲染一个辅助面板，离开 Forge 后入口随主界面一起隐藏。
+    - `ForgeStagingArea` 仍负责 `proposal / approved_for_workspace` 审阅逻辑，但承载位置已从主窗底部默认区域迁移到 `审阅中心` 辅助面板。
+    - 整体目标不是“传统聊天页”，而是“面向复杂制卡流程的工作台界面”。
+    - Forge 顶层 Prompt 采用 A.U.T.O 半专用化模板，显式感知 `visiblePhase / 七层 / 结构化收集 / 虚拟工作区 / <thinking>` 规则，并通过 Forge 专属协议快照约束 `<forge_skill>`、`<draft_plan>`、`<entry_update>` 与 Forge `<V>` 渲染。
+
+```mermaid
+graph TD
+    User([用户意见/附件]) --> Planner[Planner: 规划方案]
+    Planner -- FORGE_SKILL:READ --> WorldBook[(Lumina 世界书)]
+    Planner -- <DRAFT_PLAN> --> UI_Review[UI 展示 & 差异预演]
+    UI_Review -- 用户批准 --> Executor[Executor: 隔离重写]
+    Executor -- <ENTRY_UPDATE> --> FinalDiff[最终差异确认]
+    FinalDiff -- 提交 --> Commit[(物理存储)]
 ```
-open Forge Panel → 用户选择 preset + 输入需求
-  ↓
-POST /api/plugins/luminaweave/prompt/compile   // 后端按 preset(prompts + prompt_order) 编译出 messages[] + settings
-  ↓
-POST /api/plugins/luminaweave/nexus/generate   // 使用 sessionChatId=lw_card_* 发起生成（与 ST chatId 隔离）
-  ↓
-GET  /api/plugins/luminaweave/nexus/status/:sessionChatId
-```
 
-关键约束：
-- `sessionChatId` 必须全局唯一，避免覆盖主聊天的后端流式状态。
-- Preset 以完整 JSON blob 形式由后端持久化，前端不承担复杂的 preset 业务逻辑（仅 list/select/import/export）。
+### 11.2 异步更新协议 (Step 2.4)
+集成于 `ForgeAgentController`，通过监听回合计数器触发“后台反思流”。反思生成的变量突变指令进入 Staging Area，流程复用上述的透明流水线。
 
-### 12. llmEngine 路由策略 (OpenAI SDK)
+### 12. llmEngine 路由策略 (Vercel AI SDK Provider)
 
 ```js
-import OpenAI from 'openai';
-// 规格化 URL 并创建客户端
-const client = this.getClient(node); 
-// 后端或前端按需通过 SDK 获取或生成
-const response = await client.chat.completions.create({ model: node.model, messages: promptPayload, stream: true });
+// 后端按节点 Provider 类型选择 Vercel AI SDK Provider，并以 SSE 推送 token
+POST /api/plugins/luminaweave/nexus/generate-sse
 ```
 
 ### 13. ST 正则后处理与过滤网关 (v5.2)
@@ -226,6 +354,7 @@ graph LR
 - **轻量事件网关**：`LuminaWeaveAPI` 转发 `BUFFER_UPDATED` 时不再自行重算过滤统计，仅对 `displayText` 应用 `applySTRegex` 后透传给 UI，避免同一批缓冲被重复解释成不同状态。
 - **最终一致性**：生成结束时，`onDone` 强制对完整文本再次应用正则，并由 `crudChatRecord` 写入影子数据库，确保物理保存的数据与视图层完全一致。
 - **后端终态透传**：`/nexus/status/:chatId` 返回 `status`、`errorMessage` 与 `rawBuffer`。其中 `rawBuffer` 保留了未被清理的完整 XML 标签流，供前端焦点恢复（Focus Restore）时准确接管状态；前端轮询在 `isGenerating=false` 时按 `success | error | aborted` 分流，分别触发正常收尾或错误事件，避免“静默结束”。
+- **可恢复生成会话**：后端为每次生成分配 `generationId` 并写入状态；前端在刷新/后台恢复后优先拉取 `/nexus/status/:chatId` 对齐最新 `rawBuffer`，再通过 `/nexus/stream/:chatId?generationId=...&from=...` 订阅并从偏移续传，直到终态；若 SSE 订阅失败则降级为持续 status 轮询直至终态。若生成期间长时间无任何 SSE 订阅者，后端会在超时后自动中止本次生成以避免资源泄露。生成持久化完成后，后端会通过 SSE 事件 `committed` 主动通知（携带 `lastTransactionId/activeLeafId`），前端据此展示“同步对话中...”并触发一次权威同步更新消息列表。
 - **中断一致性策略**：`GENERATION_STOPPED` 事件改为先执行同步再收尾；主动停止触发 `aborted` 终态并执行一次强制对齐同步，确保 `activeLeafId`、ST 线性流与影子节点池不出现回退。
 - **复用去重策略**：命中同内容子节点时仅切换 `activeLeafId` 并回写当前活跃链路，不再向 ST 追加同 ID 消息，避免归一化阶段生成 `_dup_` 节点。
 
@@ -246,10 +375,9 @@ graph LR
     1. **初始化引导 (Bootstrap)**: 插件本地数据库为空时，自动从 ST 内存全量拉取。
     2. **权威同步 (Authoritative Push)**: 插件本地存在数据且 ST 仅有陈旧数据时，以插件侧为主，自动向 ST 触发差量追加/更新。
     3. **安全拉取 (Safe Pull)**: 当 ST 存在新生成的游离消息且插件本地无新变动时，静默拉取并合并 ST 消息至本地树中。
-- **显式 `forceOverwrite` 决策矩阵 (v5.8.2) [NEW]**:
-    1. **显式覆盖**: `options.forceOverwrite=true` 或冲突决议 `resolveIntent='st'`，直接执行 ST 强覆盖对齐。
-    2. **启动引导**: 本地空池且独立存储未恢复时，触发 `BOOTSTRAP_EMPTY_LOCAL` 从 ST 构建初始链路。
-    3. **非覆盖路径**: 命中 `hasDivergence` 时抛出 `CHAT_CONFLICT` 等待用户决议；本地领先则 `commitToST`，仅 ST 领先则安全拉取，双方一致则不动作。
+- **分歧决议策略 (Conflict Resolution Policy) [v6.0 完善]**: 
+  - **通知并等待 (Notify and Wait)**：命中 `hasDivergence` 时触发 `CHAT_CONFLICT` 信号并中断物理同步，将决议权完全交还用户，严禁在未确认前执行不可逆覆盖。
+  - **增量后代跟随 (Incremental Descendant Following)**：在 `Lumina-First` 模式下，若 ST 侧新节点是当前活跃指针的直接后代（如生成追加），系统会自动跟随刷新，保障操作连贯性。
 - **忽略 ST 信息 (Force Ignore ST)**: 支持通过 `options.ignoreST=true` 或全局设置 `lumina-chat.syncIgnoreST=true` 在“本地已有权威数据”前提下强制忽略 ST 侧新增/编辑，始终选择 `commitToST` 以插件侧为准回写（不触发冲突弹窗）。
 - **主动分歧嗅探 (Proactive Sniffing)**: 当本地分支与 ST 的线性流产生**真实的不可自动合并**（hasDivergence）分歧时，强制中断同步，抛出 `CHAT_CONFLICT` 事件并交由全局弹窗解决。
 - **Swipes 规范化递归 (Swipes Parsing)**: `_normalizeSTMessage` 负责递归解包 ST 的 `swipes_info` 结构。支持将当前活跃的 Swipe 内容合并入 `mes` 字段，确保比对视图内容的完整性。
@@ -263,6 +391,14 @@ graph LR
 - **View Router (动态面板总线)**:
     - **Panel 注册**: 允许任何插件通过 `lwApi.registerPanel` 挂载 UI 单元。
     - **多模态展示**: 统一由 `openPanel` 调度，根据配置或实时参数决定以 Modal (弹窗) 或 Tab (标签页) 形态呈现。
+    - **传统桌面移动端临时标签页 [NEW v6.0-dev]**: 当视口进入移动端尺寸时，原先的 widget / auxiliary panel 不再强制占据右栏，而是转换为临时 Tab 进入主内容区；顶部状态区同时隐藏 `weather-chip` 与用户头像，降低头部噪音。
+    - **自由工作台台前调度模型 [NEW v6.0-dev]**: `App.vue` 的自由工作台已从“主窗 + 辅助窗”二元模型升级为 `workspace stage + window instances + dock` 的统一窗口系统。窗口布局采用二维 `x/y/width/height` 状态，允许相互覆盖；系统仅做舞台边界约束，不再执行碰撞避让重排。
+    - **Stage Strip / Dock 编排 [NEW v6.0-dev]**: 左侧 Stage Strip 维护最近舞台组，底部 Dock 作为启动台与核心插件入口；两者默认不常驻，而是由工作台菜单、手动开关、空舞台状态或桌面端边缘悬停触发显隐。点击已存在于其他舞台的 App 时，优先切回所属舞台，而不是无条件创建重复窗口；关闭最后一个窗口时保留空舞台。
+- **阻尼交互层 [NEW v6.0-dev]**: `WorkspaceWindow` 在拖拽与缩放收尾阶段增加轻微阻尼 / settle 动画，并为窗口进场、关闭与切换提供更明确的过渡；窗口只执行舞台边界裁剪与弹性回收，不再在靠近舞台边缘时强制磁吸。宽高在 `1/3`、`1/2`、`2/3` 等比例附近提供分段卡点，用“目标位置 + 微小残余位移衰减”的方式模拟 iPadOS 式手感，避免生硬停靠。
+    - **多会话时间线数据源 (Timeline Source Switching) [NEW v6.0-dev]**：
+    - `useTimelineStore` 开始支持多数据源切换，但来源状态由更上层的 `ConversationContextStore` 统一提供。
+    - 当前至少支持 `chat` 与 `forge` 两种来源，未来可继续扩展。
+    - 时间线、Lorebook 与其他消息型视图默认跟随 Header 中的全局上下文切换器，不再在各自界面常驻重复 source switcher。
 - **条件呈现设置 (Conditional Settings) [v5.8.2]**:
     - **showIf 协议**: 支持在 `settingsManifest` 中注册谓词函数，根据全局状态感应实时切换设置项可见性，显著简化复杂插件的配置界面。
     - **自研扩展组件**: 引入 `LuminaStepper` 等业务驱动的 UI 单元，替换原生及过时的配置控件。
@@ -311,7 +447,7 @@ st-adapter 的目标是把“**ST 环境交互** / **协议转换** / **同步�
     - **活跃路径溯源**：`TimelineManager.getTrace(activeLeafId)` 负责从池中动态计算出当前的线性对话流，供 ST 同步使用。
     - **节点合并算法**：`SyncEngine.mergeNodePool` 确保从 ST 读取新消息时，能正确识别重复节点并链入新分支。
     - **首行元数据机制**：JSONL 存储时在数组首位注入 `{"type":"metadata", "activeLeafId": "..."}`，读取时剥离并恢复状态。
-    - **差量截断机制**: `applyDelta` 时比较 Lumina(L) 与 ST(S) 的长度。若 `L.length < S.length`，则从 S 的尾部反向执行 `STClient.deleteMessages`，实现物理意义上的世界线重置。
+    - **差量截断机制**: `applyDelta`时比较 Lumina(L) 与 ST(S) 的长度。若 `L.length < S.length`，则从 S 的尾部反向执行 `STClient.deleteMessages`，实现物理意义上的世界线重置。
     - **Dagre 布局引擎 (v5.3) [NEW]**：
         - **高效分层布局**：放弃 `elkjs`，改用 `@logicflow/layout` 中的 Dagre 算法，通过 `rankdir` 实现横/纵向逻辑流自动分层。
         - **轴向对齐布局**：优化 `trackIndex` 映射逻辑，同一分支节点在主轴（深度）一致的同时，在侧轴（轨道）上也严格对齐，彻底消除“阶梯式”重叠干扰。

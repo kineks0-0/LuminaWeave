@@ -3,16 +3,16 @@ import { LuminaPlugin, SettingDefinition } from '../types/plugin';
 import { lwStorage } from '../api/storage';
 
 class PluginManager {
-    public plugins: Record<string, LuminaPlugin> = shallowReactive({});
+    public plugins: Record<string, LuminaPlugin> = shallowReactive({} as Record<string, LuminaPlugin>);
     public slots: Record<string, LuminaPlugin[]> = shallowReactive({
         mainView: [],
         widget: [],
         headerExtension: [],
         headerCenter: [],
         headerRight: []
-    });
+    } as Record<string, LuminaPlugin[]>);
 
-    public registeredSettings: Record<string, Record<string, SettingDefinition>> = shallowReactive({});
+    public registeredSettings: Record<string, Record<string, SettingDefinition>> = shallowReactive({} as Record<string, Record<string, SettingDefinition>>);
 
     constructor() {
         console.log('[LuminaWeave PluginManager] Initialized');

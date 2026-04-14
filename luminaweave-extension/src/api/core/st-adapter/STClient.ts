@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from '../ChatManager.js';
+import { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
 import { EnvDetector } from '../EnvDetector.js';
 import { STProtocol } from './STProtocol.js';
 
@@ -14,6 +14,7 @@ export interface STMessageUpdate {
 export class STClient {
     private static _csrfToken: string | null = null;
     private static _csrfTime: number = 0;
+    private static readonly INVALID_CSRF_ERROR = 'LW_INVALID_CSRF_TOKEN';
 
     private static get stMain(): typeof SillyTavern | undefined {
         return EnvDetector.stMain;
@@ -27,13 +28,68 @@ export class STClient {
         return EnvDetector.ctx;
     }
 
+    private static _fetchPromise: Promise<string> | null = null;
+
+    static invalidateCsrfToken(): void {
+        this._csrfToken = null;
+        this._csrfTime = 0;
+    }
+
+    static async refreshCsrfToken(): Promise<string> {
+        this.invalidateCsrfToken();
+        return this.getCsrfToken();
+    }
+
+    static isInvalidCsrfError(error: unknown): boolean {
+        return error instanceof Error && error.message === this.INVALID_CSRF_ERROR;
+    }
+
+    static async isInvalidCsrfResponse(response: Response): Promise<boolean> {
+        if (response.status !== 403) return false;
+
+        try {
+            const text = await response.clone().text();
+            return /csrf/i.test(text) || /invalid csrf token/i.test(text);
+        } catch {
+            return /csrf/i.test(response.statusText);
+        }
+    }
+
+    static createInvalidCsrfError(): Error {
+        return new Error(this.INVALID_CSRF_ERROR);
+    }
+
     static async getCsrfToken(): Promise<string> {
-        if (!this._csrfToken || Date.now() - this._csrfTime > 300000) {
-            const tokenRes = await fetch('/csrf-token');
-            if (!tokenRes.ok) throw new Error('CSRF Token 获取失败');
-            const tokenData = await tokenRes.json();
-            this._csrfToken = tokenData.token;
-            this._csrfTime = Date.now();
+        // 如果正在请求中，直接复用已有的 Promise
+        if (this._fetchPromise) return this._fetchPromise;
+
+        const isExpired = Date.now() - this._csrfTime > 300000;
+        if (!this._csrfToken || isExpired) {
+            this._fetchPromise = (async () => {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                try {
+                    const tokenRes = await fetch('/csrf-token', { signal: controller.signal });
+                    if (!tokenRes.ok) throw new Error(`CSRF Token 获取失败 (HTTP ${tokenRes.status})`);
+                    
+                    const tokenData = await tokenRes.json();
+                    if (!tokenData?.token) throw new Error('CSRF Token 数据格式异常');
+
+                    this._csrfToken = tokenData.token;
+                    this._csrfTime = Date.now();
+                    return this._csrfToken as string;
+                } catch (e: any) {
+                    console.error('[STClient] 获取 CSRF Token 异常:', e.name === 'AbortError' ? '请求超时 (5s)' : e.message);
+                    // 如果获取失败，但原本已有 Token（即便过期了点点），可能仍可尝试复用，除非是彻底没 Token
+                    if (this._csrfToken) return this._csrfToken;
+                    throw e;
+                } finally {
+                    clearTimeout(timeoutId);
+                    this._fetchPromise = null;
+                }
+            })();
+            return this._fetchPromise;
         }
         return this._csrfToken || '';
     }
@@ -47,16 +103,16 @@ export class STClient {
                     return res.filter(Boolean);
                 }
             } catch (e) {
-                console.warn('[STClient] getChatMessages 失败，准备回退:', e);
+                if (!EnvDetector.isSilenceMode) console.warn('[STClient] getChatMessages 失败，准备回退:', e);
             }
         }
 
-        console.warn('[STClient] 尝试从 Context 回退...');
+        if (!EnvDetector.isSilenceMode) console.warn('[STClient] 尝试从 Context 回退...');
         const ctx = this.ctx;
         const messages = ctx?.chat;
         
         if (!Array.isArray(messages)) {
-            console.warn('STClient: 无法从上下文获取 chat 数组，环境可能未就绪。返回空数组以避免异常。');
+            if (!EnvDetector.isSilenceMode) console.warn('STClient: 无法从上下文获取 chat 数组，环境可能未就绪。返回空数组以避免异常。');
             return [];
         }
         
@@ -181,15 +237,34 @@ export class STClient {
     }
 
     private static async stFetch(url: string, body: Record<string, any>): Promise<Response> {
-        const token = await this.getCsrfToken();
-        return await fetch(url, {
+        return await this.fetchWithCsrf(url, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': token
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(body)
         });
+    }
+
+    static async fetchWithCsrf(url: string, options: RequestInit = {}, allowRetry = true): Promise<Response> {
+        const performFetch = async (csrfToken: string) => {
+            const headers = new Headers(options.headers || {});
+            headers.set('X-CSRF-Token', csrfToken);
+            return await fetch(url, {
+                ...options,
+                headers
+            });
+        };
+
+        let response = await performFetch(await this.getCsrfToken());
+        if (!allowRetry) return response;
+
+        if (await this.isInvalidCsrfResponse(response)) {
+            console.warn('[STClient] 检测到失效 CSRF Token，自动刷新后重试请求');
+            response = await performFetch(await this.refreshCsrfToken());
+        }
+
+        return response;
     }
 
     static async appendMessages(msgs: Partial<LuminaChatMessage>[], skipFlush = false): Promise<void> {
@@ -346,5 +421,27 @@ export class STClient {
         }
 
         return [];
+    }
+
+    // --- 预设管理桥接 (ST 原生) ---
+
+    static getPresets(type: string): string[] {
+        const glob = typeof window !== 'undefined' ? (window as any) : {};
+        const manager = glob.getPresetManager?.(type);
+        return manager?.getAllPresets() || [];
+    }
+
+    static getActivePresetName(type: string): string | null {
+        const glob = typeof window !== 'undefined' ? (window as any) : {};
+        const manager = glob.getPresetManager?.(type);
+        return manager?.getSelectedPresetName() || null;
+    }
+
+    static selectPreset(type: string, name: string): void {
+        const glob = typeof window !== 'undefined' ? (window as any) : {};
+        const manager = glob.getPresetManager?.(type);
+        if (manager && typeof manager.selectPreset === 'function') {
+            manager.selectPreset(name);
+        }
     }
 }

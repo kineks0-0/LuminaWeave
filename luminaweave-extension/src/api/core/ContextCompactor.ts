@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from './ChatManager';
+import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
 import { STClient } from './st-adapter/STClient.js';
 import { BuiltinXMLTags, XMLInterceptor } from './XMLInterceptor';
 import { SyncUtils, MessageTextResolver } from './SyncUtils';
@@ -43,11 +43,10 @@ export class ContextCompactor {
             );
 
             if (isInFullRange) {
-                // 全量区：清除压缩状态，显示原文
-                if (msg.extra) {
-                    delete msg.extra.compressionState;
-                    delete msg.extra.is_hidden; // 显式清除粘性隐藏状态
-                }
+                // 全量区：标记为 'full'，清除旧的压缩状态
+                msg.extra = msg.extra || {};
+                msg.extra.compressionState = 'full';
+                delete msg.extra.is_hidden; // 显式清除粘性隐藏状态
                 msg.is_hidden = false;
                 
                 // 核心修复：全量区需要设置 mesST 为清洗后的文本，作为后续 ST 同步和差异对比的唯一标准
@@ -87,15 +86,16 @@ export class ContextCompactor {
                     delete msg.extra.is_hidden; // 显式清除粘性隐藏状态
                     msg.mesSummary = summary;
                     msg.is_hidden = false;
-                    
+
                     // 核心修复：为了让差异弹窗和 UI 显示正确的摘要内容，我们需要强制更新 ST 侧对应的显示字段
                     msg.mesST = summary.startsWith('剧情概览：') ? summary : `剧情概览：\n${summary}`;
                 } else {
-                    // 在概览区但不满足摘要条件 (如用户输入) -> 降级为全量可见
-                    if (msg.extra) {
-                        delete msg.extra.compressionState;
-                        delete msg.extra.is_hidden;
-                    }
+                    // 在概览区但不满足摘要条件 (如用户输入，或 AI 回复尚无有效摘要)
+                    // 降级为全量可见，并标记 compressionState = 'full_in_summary'，
+                    // 使 UI 能区分"全量区的全量"与"概况区降级为全量"两种状态。
+                    msg.extra = msg.extra || {};
+                    msg.extra.compressionState = 'full_in_summary';
+                    delete msg.extra.is_hidden;
                     msg.is_hidden = false;
                     msg.mesST = MessageTextResolver.extractMessageText(msg, false);
                 }
@@ -117,7 +117,24 @@ export class ContextCompactor {
             }
         }
 
-        console.log(`[DCC] 压实完成: 全量=${currentFullCount}, 概览=${currentSummaryCount}, 隐藏=${trace.length - currentFullCount - currentSummaryCount}`);
+        // ── 钉固消息补救：被隐藏但 isPinned=true 的消息，强制保留为摘要形式 ──
+        let pinnedCount = 0;
+        for (const msg of results) {
+            if (!msg.isPinned || !msg.is_hidden) continue;
+
+            msg.is_hidden = false;
+            msg.extra = msg.extra || {};
+            msg.extra.compressionState = 'pinned';
+            delete msg.extra.is_hidden;
+
+            // 优先使用 mesSummary，其次截取前 200 字作为精简快照
+            const pinnedText = this.resolvePinnedText(msg);
+            msg.mesST = pinnedText;
+            pinnedCount++;
+        }
+
+        const hiddenCount = trace.length - currentFullCount - currentSummaryCount - pinnedCount;
+        console.log(`[DCC] 压实完成: 全量=${currentFullCount}, 概览=${currentSummaryCount}, 钉固=${pinnedCount}, 隐藏=${hiddenCount}`);
         return results;
     }
 
@@ -196,6 +213,26 @@ export class ContextCompactor {
         }
 
         return false;
+    }
+
+    /**
+     * 为钉固消息解析最优摘要文本。
+     * 优先级：mesSummary > Story_Summary 标签 > Current_Plan > 截取前 200 字
+     */
+    private static resolvePinnedText(msg: LuminaChatMessage): string {
+        if (msg.mesSummary?.trim()) return `[📌 钉固] ${msg.mesSummary.trim()}`;
+
+        const rawSource = msg.pluginRaw || msg.mesRaw || msg.extra?.mesRaw;
+        if (rawSource) {
+            const summaryBlocks = XMLInterceptor.extractTagContent(rawSource as string, BuiltinXMLTags.STORY_SUMMARY);
+            if (summaryBlocks.length > 0) return `[📌 钉固] ${summaryBlocks.join('\n')}`;
+        }
+
+        if (msg.extra?.Current_Plan) return `[📌 钉固] ${String(msg.extra.Current_Plan)}`;
+
+        const raw = (msg.mesRaw || msg.mes || '').trim();
+        const excerpt = raw.length > 200 ? `${raw.slice(0, 200)}…` : raw;
+        return excerpt ? `[📌 钉固] ${excerpt}` : '[📌 钉固消息]';
     }
 
     private static resolveSummary(msg: LuminaChatMessage, enableFallback: boolean = false): string {

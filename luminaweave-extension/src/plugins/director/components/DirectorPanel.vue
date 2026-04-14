@@ -245,7 +245,8 @@ const saveTable = (tableId: string) => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--lw-bg-app);
+  background:
+    linear-gradient(180deg, rgba(var(--lw-bg-elevated-rgb), 0.42), rgba(var(--lw-bg-elevated-rgb), 0));
   color: var(--lw-text-main);
   overflow: hidden;
   font-family: var(--lw-font-main);
@@ -253,8 +254,8 @@ const saveTable = (tableId: string) => {
 
 /* 1. Header Styles */
 .panel-header {
-  padding: 12px 20px;
-  background: var(--lw-bg-surface);
+  padding: 14px 18px;
+  background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
   border-bottom: 1px solid var(--lw-border-base);
   z-index: 10;
 }
@@ -278,10 +279,18 @@ const saveTable = (tableId: string) => {
 .panel-content-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
+}
+
+.content-section {
+  background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
+  border: 1px solid var(--lw-border-base);
+  border-radius: 20px;
+  padding: 16px;
+  box-shadow: var(--lw-shadow);
 }
 
 .section-title-wrapper {
@@ -293,11 +302,11 @@ const saveTable = (tableId: string) => {
 
 .section-main-title {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--lw-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.12em;
 }
 
 /* 3. Plan Hub */
@@ -310,8 +319,7 @@ const saveTable = (tableId: string) => {
 .plan-bubble {
   background: var(--lw-bg-surface);
   border: 1px solid var(--lw-border-base);
-  border-left: 3px solid var(--lw-primary);
-  border-radius: var(--lw-radius);
+  border-radius: 16px;
   padding: 12px 16px;
   transition: var(--lw-transition);
 }
@@ -345,7 +353,7 @@ const saveTable = (tableId: string) => {
 }
 
 .summary-bubble {
-    border-left-color: var(--lw-accent-teal, #26a69a);
+    background: color-mix(in srgb, var(--lw-bg-surface) 88%, var(--lw-primary-soft));
 }
 
 .bubble-placeholder {
@@ -365,6 +373,7 @@ const saveTable = (tableId: string) => {
   padding: 0;
   overflow: hidden;
   transition: all 0.2s ease;
+  border-radius: 16px;
 }
 
 .table-card.is-editing {
@@ -536,7 +545,7 @@ const saveTable = (tableId: string) => {
 .memory-card {
   background: var(--lw-bg-surface);
   border: 1px solid var(--lw-border-base);
-  border-radius: var(--lw-radius);
+  border-radius: 16px;
   padding: 16px;
 }
 

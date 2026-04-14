@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContextCompactor } from '../ContextCompactor';
 import { ContextControlSettings } from '../types';
-import { LuminaChatMessage } from '../ChatManager';
+import { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
 import { STClient } from '../st-adapter/STClient';
 
 vi.mock('../st-adapter/STClient', () => ({
@@ -50,10 +50,10 @@ describe('ContextCompactor', () => {
         // 1 -> Hidden
         const compacted = await ContextCompactor.compact(trace, settings);
 
-        expect(compacted[4].extra?.compressionState).toBeUndefined(); // Full
+        expect(compacted[4].extra?.compressionState).toBe('full'); // Full 区
         expect(compacted[4].is_hidden).toBe(false);
 
-        expect(compacted[3].extra?.compressionState).toBeUndefined(); // Full
+        expect(compacted[3].extra?.compressionState).toBe('full'); // Full 区
         expect(compacted[2].extra?.compressionState).toBe('summary'); // Summary
         expect(compacted[1].extra?.compressionState).toBe('summary'); // Summary
         expect(compacted[0].is_hidden).toBe(true); // Hidden
@@ -88,8 +88,8 @@ describe('ContextCompactor', () => {
         //   After 2, currentSummaryTokens += 9 = 18.
         // 1 (10 tokens): Summary. Additional budget (Sum 18 + Msg 10) = 28 <= 40. OK.
 
-        expect(compacted[4].extra?.compressionState).toBeUndefined(); // Full
-        expect(compacted[3].extra?.compressionState).toBeUndefined(); // Full
+        expect(compacted[4].extra?.compressionState).toBe('full'); // Full 区
+        expect(compacted[3].extra?.compressionState).toBe('full'); // Full 区
         expect(compacted[2].extra?.compressionState).toBe('summary'); // Summary
         expect(compacted[1].extra?.compressionState).toBe('summary'); // Summary
         expect(compacted[0].extra?.compressionState).toBe('summary'); // Summary
@@ -124,7 +124,7 @@ describe('ContextCompactor', () => {
 
         // 20 > 15 but < 15 + 10 = 25. Should be Full.
         const compacted = await ContextCompactor.compact(trace, floatSettings);
-        expect(compacted[0].extra?.compressionState).toBeUndefined();
+        expect(compacted[0].extra?.compressionState).toBe('full'); // 在 maxFloat 容差内，仍为 full
 
         // If it was 30
         const trace2 = [createMsg('2', '123456789012345678901234567890')]; // 30 tokens
@@ -158,7 +158,7 @@ describe('ContextCompactor', () => {
         // Summary of Msg 2: 0 + 10 <= 10. OK. Summary.
         // Msg 1: Summary check: 10 + 10 > 10. Hidden.
 
-        expect(compacted[2].extra?.compressionState).toBeUndefined(); // Full
+        expect(compacted[2].extra?.compressionState).toBe('full'); // Full 区
         expect(compacted[1].extra?.compressionState).toBe('summary'); // Summary
         expect(compacted[0].is_hidden).toBe(true); // Hidden
     });
@@ -174,8 +174,8 @@ describe('ContextCompactor', () => {
         
         const compacted = await ContextCompactor.compact(trace, s);
         
-        // Should NOT be summarized even if in summary range
-        expect(compacted[0].extra?.compressionState).toBeUndefined();
+        // 用户消息在概况区内无法被摘要化，降级为全量（full_in_summary）
+        expect(compacted[0].extra?.compressionState).toBe('full_in_summary');
         expect(compacted[0].is_hidden).toBe(false); // Stays visible (full)
     });
 
@@ -231,7 +231,7 @@ describe('ContextCompactor', () => {
         ];
 
         const res1 = await ContextCompactor.compact(trace, s);
-        expect(res1[0].extra?.compressionState).toBeUndefined(); // Stays full because 14 <= 10 + 5
+        expect(res1[0].extra?.compressionState).toBe('full'); // Stays full because 14 <= 10 + 5
 
         const trace2 = [
             createMsg('2', '1234567890123456'), // 16 tokens
@@ -276,8 +276,8 @@ describe('ContextCompactor', () => {
         ];
         
         const stackRes = await ContextCompactor.compact(stackTrace, stackSettings);
-        expect(stackRes[3].extra?.compressionState).toBeUndefined(); // d: Full
-        expect(stackRes[2].extra?.compressionState).toBeUndefined(); // c: Full (The only allowed overflow)
+        expect(stackRes[3].extra?.compressionState).toBe('full'); // d: Full
+        expect(stackRes[2].extra?.compressionState).toBe('full'); // c: Full (The only allowed overflow)
         
         // EXPECTATION: Once 'c' pushed us over 10, 'b' must NOT be Full.
         expect(stackRes[1].extra?.compressionState).toBe('summary'); // b: Summary
@@ -304,7 +304,8 @@ describe('ContextCompactor', () => {
         expect(compacted[0].is_hidden).toBe(false);
         // extra 中的 is_hidden 和 compressionState 应该被清除
         expect(compacted[0].extra?.is_hidden).toBeUndefined();
-        expect(compacted[0].extra?.compressionState).toBeUndefined();
+        // 全量区消息应标记为 'full'（而非保留旧的 undefined）
+        expect(compacted[0].extra?.compressionState).toBe('full');
     });
 
     it('should account for pluginRaw in cost calculation', async () => {

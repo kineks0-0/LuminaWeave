@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "CommonJS",
+    "module": "Node16",
     "lib": ["ESNext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -9,14 +9,14 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": false,
-    "baseUrl": ".",
+    "types": ["node"],
     "paths": {
-      "*": ["node_modules/*"]
+      "@shared/*": ["../shared/*"]
     }
   },
-  "include": ["index.ts"]
+  "include": ["src/**/*.ts", "../shared/**/*.ts"]
 }

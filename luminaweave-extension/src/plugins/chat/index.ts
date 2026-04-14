@@ -199,6 +199,14 @@ const plugin: LuminaPlugin = {
             max: 2000,
             common: false,
             allowedScopes: ['Global', 'Character']
+        },
+        'contextControl.enableFallbackSummary': {
+            label: '无摘要消息兜底截断',
+            type: 'boolean',
+            default: false,
+            description: '开启后，概况区内没有有效摘要的 AI 消息将截取原文前 100 字作为摘要（而非保留全量）。关闭（默认）则这类消息在概况区内以全量形式保留，更安全但占用更多 token。',
+            common: false,
+            allowedScopes: ['Global', 'Character']
         }
     },
     init() {

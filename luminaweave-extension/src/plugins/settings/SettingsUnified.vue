@@ -120,6 +120,16 @@
             <span class="lw-toggle-slider"></span>
           </label>
         </div>
+        <div class="setting-item" v-if="filterChatReply && implicitThinkingInFilter">
+          <label class="lw-toggle-label" style="padding-left: 40px; border-left: 2px solid var(--lw-primary-bg);">
+            <span class="label-text">激进模式 (强制过滤直到 &lt;/thinking&gt;)</span>
+            <span class="label-desc">开启后，首个 &lt;/thinking&gt; 标签及其之前的所有内容都将被视为思考过程而予以隐藏。</span>
+          </label>
+          <label class="lw-toggle">
+            <input type="checkbox" v-model="aggressiveThinking" @change="onAggressiveThinkingChange" />
+            <span class="lw-toggle-slider"></span>
+          </label>
+        </div>
         <div class="setting-item">
           <label class="lw-toggle-label">
             <span class="label-text">流式无限输出 (不限制 max_tokens)</span>
@@ -127,6 +137,26 @@
           </label>
           <label class="lw-toggle">
             <input type="checkbox" v-model="unlimitedResponse" @change="onUnlimitedResponseChange" />
+            <span class="lw-toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-item">
+          <label class="lw-toggle-label">
+            <span class="label-text">思维链显示模式</span>
+            <span class="label-desc">同时作用于聊天面板和 Forge 工作台。正文保持独立显示，思维链仅作为单独折叠区出现。</span>
+          </label>
+          <select class="lw-select thinking-mode-select" v-model="thinkingDisplayMode" @change="onThinkingDisplayModeChange">
+            <option value="collapsible">可折叠显示</option>
+            <option value="hidden">隐藏思维链</option>
+          </select>
+        </div>
+        <div class="setting-item" v-if="thinkingDisplayMode === 'collapsible'">
+          <label class="lw-toggle-label">
+            <span class="label-text">无输出时自动展开思维链</span>
+            <span class="label-desc">开启后，当消息只有思维链内容、没有正文输出时，自动展开思维链区域；一旦出现正文则自动收起。</span>
+          </label>
+          <label class="lw-toggle">
+            <input type="checkbox" v-model="thinkingAutoExpand" @change="onThinkingAutoExpandChange" />
             <span class="lw-toggle-slider"></span>
           </label>
         </div>
@@ -262,6 +292,11 @@
       <div class="block-content">
         <SettingControl v-for="key in block.commonKeys" :key="key" :pluginId="block.pluginId" :settingKey="key"
           :config="block.manifest[key]" />
+        <component
+          v-if="block.inlineComponent"
+          :is="block.inlineComponent"
+          style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--lw-border-subtle);"
+        />
       </div>
     </div>
   </div>
@@ -348,10 +383,28 @@ const onImplicitThinkingChange = () => {
   lwStorage.set('lumina-chat.implicitThinkingInFilter', implicitThinkingInFilter.value, 'Global');
 };
 
+const aggressiveThinking = ref(lwStorage.get('lumina-chat.aggressiveThinking', false, 'Global'));
+
+const onAggressiveThinkingChange = () => {
+  lwStorage.set('lumina-chat.aggressiveThinking', aggressiveThinking.value, 'Global');
+};
+
 const unlimitedResponse = ref(lwStorage.get('lumina-chat.unlimitedResponse', false, 'Global'));
 
 const onUnlimitedResponseChange = () => {
   lwStorage.set('lumina-chat.unlimitedResponse', unlimitedResponse.value, 'Global');
+};
+
+const thinkingDisplayMode = ref(lwStorage.get('lumina-settings.thinkingDisplayMode', 'collapsible', 'Global'));
+
+const onThinkingDisplayModeChange = () => {
+  lwStorage.set('lumina-settings.thinkingDisplayMode', thinkingDisplayMode.value, 'Global');
+};
+
+const thinkingAutoExpand = ref(Boolean(lwStorage.get('lumina-settings.thinkingAutoExpand', true, 'Global')));
+
+const onThinkingAutoExpandChange = () => {
+  lwStorage.set('lumina-settings.thinkingAutoExpand', thinkingAutoExpand.value, 'Global');
 };
 
 // ==== 子插件权限状态 ====
@@ -486,6 +539,7 @@ interface UnifiedBlock {
   manifest: any;
   commonKeys: string[];
   hasMore: boolean;
+  inlineComponent?: any;
 }
 
 const unifiedBlocks = computed(() => {
@@ -504,14 +558,15 @@ const unifiedBlocks = computed(() => {
     });
     const hasMore = Object.keys(manifest).length > commonKeys.length;
 
-    if (commonKeys.length > 0 || hasMore) {
+    if (commonKeys.length > 0 || hasMore || p.settingsInlineComponent) {
       blocks.push({
         pluginId,
         pluginName: p.name,
         pluginIcon: p.icon,
         manifest,
         commonKeys,
-        hasMore
+        hasMore,
+        inlineComponent: p.settingsInlineComponent
       });
     }
   });
@@ -525,7 +580,7 @@ const unifiedBlocks = computed(() => {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
   gap: var(--lw-item-gap);
-  background: var(--lw-bg-app);
+  background: transparent;
 }
 
 .core-block {
@@ -556,7 +611,7 @@ const unifiedBlocks = computed(() => {
 
 .block-title {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--lw-text-main);
   display: flex;
   align-items: center;
@@ -568,12 +623,13 @@ const unifiedBlocks = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--lw-primary);
-  background: #5c73f614;
+  color: var(--lw-text-main);
+  background: var(--lw-bg-subtle);
   padding: 6px;
-  border-radius: var(--lw-radius-sm);
+  border-radius: 12px;
   width: 28px;
   height: 28px;
+  border: 1px solid var(--lw-border-subtle);
 }
 
 .sync-badges {
@@ -594,18 +650,18 @@ const unifiedBlocks = computed(() => {
 }
 
 .badge.syncing {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: var(--lw-primary-soft);
+  color: var(--lw-primary);
   animation: pulse 2s infinite;
 }
 
 .badge.success {
-  background: #dcfce7;
+  background: rgba(34, 197, 94, 0.12);
   color: #15803d;
 }
 
 .badge.error {
-  background: #fee2e2;
+  background: rgba(239, 68, 68, 0.12);
   color: #b91c1c;
 }
 
@@ -632,7 +688,7 @@ const unifiedBlocks = computed(() => {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   padding: 14px;
-  background: var(--lw-bg-subtle);
+  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
   border-radius: var(--lw-radius-sm);
   border: 1px solid var(--lw-border-subtle);
 }
@@ -697,7 +753,7 @@ const unifiedBlocks = computed(() => {
   padding: 10px 14px;
   background: var(--lw-bg-subtle);
   border: 1px solid var(--lw-border-subtle);
-  border-radius: var(--lw-radius-sm);
+  border-radius: 14px;
   transition: var(--lw-transition);
 }
 
@@ -798,15 +854,15 @@ const unifiedBlocks = computed(() => {
 .sync-diff-viewer {
   margin-top: 8px;
   padding: 16px;
-  background: #fffcf0;
-  border: 1px solid #ffedd5;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.18);
   border-radius: var(--lw-radius);
 }
 
 .diff-header {
   font-size: 11px;
   font-weight: 700;
-  color: #c2410c;
+  color: var(--lw-warning);
   margin-bottom: 14px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -868,6 +924,11 @@ const unifiedBlocks = computed(() => {
 .lw-toggle {
   margin-top: 4px; /* 垂直微调，对齐首行文字 */
   cursor: pointer;
+}
+
+.thinking-mode-select {
+  min-width: 160px;
+  margin-top: 4px;
 }
 
 /* Radio Group styling */

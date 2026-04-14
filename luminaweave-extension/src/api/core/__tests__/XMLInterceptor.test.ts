@@ -1,29 +1,62 @@
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
 import { XMLInterceptor, BuiltinXMLTags } from '../XMLInterceptor';
 import { globalPromptRegistry, PromptSlot, STIdentifier } from '../PromptRegistry';
+import { globalXMLTagRegistry } from '../../../../../shared/XMLTagRegistry.js';
 
 describe('XMLInterceptor stream semantics', () => {
     it('should derive stable prelude and reply states from the same raw buffer', () => {
         const interceptor = new XMLInterceptor();
-        const thinkState = interceptor.deriveStreamState('<think>abc</think>', true);
-        const actionState = interceptor.deriveStreamState('<think>abc</think><Character_Action>挥剑</Character_Action>', true);
+        const thinkState = interceptor.deriveStreamState('<think>abc', true);
+        const actionState = interceptor.deriveStreamState('<think>abc</think><Character_Action>挥剑', true);
         const replyState = interceptor.deriveStreamState('<think>abc</think><Character_Action>挥剑</Character_Action><Chat_Reply>你好', true);
 
         expect(thinkState).toMatchObject({
             displayText: '',
             statusText: '思考中...',
-            filteredCount: '<think>abc</think>'.length
+            filteredCount: '<think>abc'.length,
+            thinkingText: 'abc'
         });
         expect(actionState).toMatchObject({
             displayText: '',
             statusText: '行动中...',
-            filteredCount: '<think>abc</think><Character_Action>挥剑</Character_Action>'.length
+            filteredCount: '<think>abc</think><Character_Action>挥剑'.length
         });
         expect(replyState).toMatchObject({
             displayText: '你好',
             statusText: '回复中...',
             filteredCount: '<think>abc</think><Character_Action>挥剑</Character_Action><Chat_Reply>你好'.length - '你好'.length
         });
+    });
+
+    it('should stop reporting thinking state after an explicit closing tag', () => {
+        const interceptor = new XMLInterceptor();
+        const state = interceptor.deriveStreamState('<thinking>先想一下</thinking>', true);
+
+        expect(state.displayText).toBe('');
+        expect(state.activeTag).toBeNull();
+        expect(state.statusText).toBe('');
+        expect(state.thinkingText).toBe('先想一下');
+    });
+
+    it('should not append post-thinking reply content into thinkingText after duplicate closing tags', () => {
+        const interceptor = new XMLInterceptor();
+        const state = interceptor.deriveStreamState('<thinking>先想一下</thinking><Chat_Reply>正常回复</Chat_Reply></thinking>', true);
+
+        expect(state.displayText).toBe('正常回复');
+        expect(state.thinkingText).toBe('先想一下');
+    });
+
+    it('should use the first closing thinking tag as aggressive boundary', () => {
+        const interceptor = new XMLInterceptor();
+        const state = interceptor.deriveStreamState('<thinking>分析</thinking>正文', {
+            filterChatReply: true,
+            allowTopLevel: true,
+            implicitThinking: false,
+            aggressiveThinking: true
+        });
+
+        expect(state.displayText).toBe('正文');
+        expect(state.statusText).toBe('回复中...');
     });
 
     it('should drop trailing partial tags from filtered reply text', () => {
@@ -82,6 +115,15 @@ describe('XMLInterceptor stream semantics', () => {
             filteredCount: 0,
             statusText: ''
         });
+    });
+
+    it('should normalize <think> alias to canonical thinking and expose thinkingText separately', () => {
+        const interceptor = new XMLInterceptor();
+        const state = interceptor.deriveStreamState('<think>先想想</think><Chat_Reply>答复</Chat_Reply>', true);
+
+        expect(globalXMLTagRegistry.resolveCanonical('think')).toBe('thinking');
+        expect(state.thinkingText).toBe('先想想');
+        expect(state.displayText).toBe('答复');
     });
 });
 
@@ -153,5 +195,36 @@ describe('XMLInterceptor.extractTagContent()', () => {
         const raw = '<Chat_Reply>This is 1 < 3 and 5 > 4! <br/> Also <fake> tags.</Chat_Reply>';
         const result = XMLInterceptor.extractTagContent(raw, BuiltinXMLTags.CHAT_REPLY);
         expect(result).toEqual(['This is 1 < 3 and 5 > 4! <br/> Also <fake> tags.']);
+    });
+
+    it('should allow plugin metadata registration and cleanup without touching core constants', () => {
+        globalXMLTagRegistry.register({
+            sourceId: 'xml-interceptor-test-plugin',
+            tag: 'Dice_Roll',
+            aliases: ['Roll'],
+            lifecycle: 'ephemeral',
+            description: '掷骰结果',
+            statusText: '掷骰中...',
+            exposeInProtocol: true
+        });
+
+        expect(globalXMLTagRegistry.resolveCanonical('Roll')).toBe('Dice_Roll');
+        expect(globalPromptRegistry.getAllXMLTags().some(tag => tag.tag === 'Dice_Roll')).toBe(true);
+
+        globalXMLTagRegistry.unregister('xml-interceptor-test-plugin', 'Dice_Roll');
+
+        expect(globalXMLTagRegistry.resolveCanonical('Roll')).toBeNull();
+        expect(globalPromptRegistry.getAllXMLTags().some(tag => tag.tag === 'Dice_Roll')).toBe(false);
+    });
+
+    it('should filter protocol tags by prompt context', () => {
+        const chatTags = globalPromptRegistry.getAllXMLTags('chat').map(tag => tag.tag);
+        const forgeTags = globalPromptRegistry.getAllXMLTags('forge').map(tag => tag.tag);
+
+        expect(chatTags).toContain('Chat_Reply');
+        expect(chatTags).not.toContain('forge_skill');
+        expect(forgeTags).toContain('forge_skill');
+        expect(forgeTags).toContain('V');
+        expect(forgeTags).not.toContain('Chat_Reply');
     });
 });

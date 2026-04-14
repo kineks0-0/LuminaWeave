@@ -1,331 +1,164 @@
-import { globalPromptRegistry } from './PromptRegistry.js';
-import { tokenize, extractBlocks, detectTrailingPartialTag, type Token } from './TagTokenizer.js';
+import { globalXMLTagRegistry, type LifecycleType } from '../../../../shared/XMLTagRegistry.js';
+import {
+    BaseXMLInterceptor,
+    BuiltinXMLTags as SharedBuiltinXMLTags,
+    type StreamSemanticState,
+    type StreamingPolicy
+} from '@shared/BaseXMLInterceptor.js';
+import { tokenize, extractBlocks, type Token, type TagBlock } from '@shared/TagTokenizer.js';
 
 /**
- * 内置核心 XML 标签字典，供各模块统一引用以避免硬编码字面值
+ * 核心 XML 标签字典 (兼容导出)
  */
-export const BuiltinXMLTags = {
-    THINKING: 'thinking',
-    CHARACTER_ACTION: 'Character_Action', // [已废弃]
-    CHAT_REPLY: 'Chat_Reply',
-    MUTATION: 'Mutation',
-    VIEW: 'V',
-    STORY_SUMMARY: 'Story_Summary'
-} as const;
+export const BuiltinXMLTags = SharedBuiltinXMLTags;
 
 /**
- * 核心生命周期级别 (Data Tagging Schema)
- *
- * - transient:      纯内部推理标签，剥离后丢弃（如 <thinking>）
- * - ephemeral:      短期状态标签，执行 handler 后丢弃（如 <Current_Plan>）
- * - persistent:     落库标签，执行 handler 后保留其内部文本内容（如 <Chat_Reply>）
- * - presentational: 纯展示层标签，原样保留在输出中（如 <V>），不执行 handler
+ * 从 entry_update 内容中提取可读标题。
+ * 支持 JSON（title/标题/name 字段）、YAML（title: 行）、TOML（title = 行）以及纯文本首行。
  */
-export type LifecycleType = 'transient' | 'ephemeral' | 'persistent' | 'presentational';
+function extractTitleFromEntryContent(content: string): string {
+    const trimmed = content.trim();
 
-/**
- * 拦截器处理函数的返回值
- */
+    // JSON
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+            const obj = JSON.parse(trimmed);
+            const src = Array.isArray(obj) ? obj[0] : obj;
+            if (src && typeof src === 'object') {
+                const t = src.title || src['标题'] || src.name || src.comment || src.description;
+                if (t && typeof t === 'string') return t.trim();
+            }
+        } catch { /* ignore */ }
+    }
+
+    // YAML: `title: value` or `title: "value"`
+    const yamlMatch = trimmed.match(/^title\s*:\s*["']?(.+?)["']?\s*$/im);
+    if (yamlMatch) return yamlMatch[1].trim();
+
+    // TOML: `title = "value"` or `title = 'value'`
+    const tomlMatch = trimmed.match(/^title\s*=\s*["'](.+?)["']\s*$/im);
+    if (tomlMatch) return tomlMatch[1].trim();
+
+    // 纯文本：首行非空文本（最多 40 字）
+    const firstLine = trimmed.split('\n').find(l => l.trim().length > 0) || '';
+    return firstLine.slice(0, 40).trim();
+}
+
 export type InterceptorCallback = (tagContent: string, fullMatchText: string) => string | void;
 
 export interface ParserRegistration {
-    tagName?: string;
+    sourceId?: string;
+    canonicalTag?: string;
     regex?: RegExp;
     lifecycle: LifecycleType;
     handler: InterceptorCallback;
 }
 
-export interface StreamSemanticState {
-    rawText: string;
-    displayText: string;
-    filteredCount: number;
-    statusText: string;
-    activeTag: string | null;
-}
+export type { StreamSemanticState, LifecycleType };
 
 /**
- * 核心 XML 拦截引擎 (v2 - TagTokenizer 驱动)
+ * 核心 XML 拦截引擎
  *
- * 架构改进：
- * 1. 所有标签解析统一使用 TagTokenizer 单遍扫描
- * 2. 消除了三套独立正则解析逻辑的重复
- * 3. 新增 presentational 生命周期支持 <V> 标签
+ * 元数据来自 XMLTagRegistry，解析副作用由 handler 动态挂载。
  */
-export class XMLInterceptor {
-    private parsers: ParserRegistration[] = [];
+export class XMLInterceptor extends BaseXMLInterceptor {
+    private extensionHandlers: ParserRegistration[] = [];
+    private patternParsers: ParserRegistration[] = [];
 
     constructor() {
-        this.registerDefaultParsers();
+        super();
+        this.registerDefaultExtensionParsers();
     }
 
-    // ──────────────────────────────────────────────
-    // 公开 API（签名完全不变，内部替换为 Tokenizer）
-    // ──────────────────────────────────────────────
-
-    /**
-     * 静态提纯工具：从原始文本中提取指定 XML 标签包裹的内容
-     *
-     * 行为保持不变：
-     * - 大小写不敏感匹配
-     * - 自动兼容 PromptRegistry 中注册的别名
-     * - 支持嵌套同名标签、未闭合标签兜底、只有闭合标签的情况
-     */
-    public static extractTagContent(rawText: string, tagName: string): string[] {
-        if (!rawText) return [];
-
-        // 构建目标标签池（本体 + 别名，全部小写化）
-        const targetTags = new Set<string>([tagName.toLowerCase()]);
-        const registryTag = globalPromptRegistry.getAllXMLTags()
-            .find(t => t.tag.toLowerCase() === tagName.toLowerCase());
-        if (registryTag?.aliases) {
-            registryTag.aliases.forEach(a => targetTags.add(a.toLowerCase()));
-        }
-
-        // 使用 Tokenizer 提取
-        const blocks = extractBlocks(rawText, targetTags);
-        return blocks.map(b => b.content);
-    }
-
-    /**
-     * 开放扩展接口：给子插件注册自己的生命周期与解析器
-     */
     public registerXMLParser(
         tagName: string,
         lifecycle: LifecycleType,
-        handler: InterceptorCallback
+        handler: InterceptorCallback,
+        sourceId?: string
     ): void {
-        this.parsers.push({ tagName, lifecycle, handler });
-        console.debug(`[XMLInterceptor] Registered parser for <${tagName}> (${lifecycle})`);
+        const canonicalTag = globalXMLTagRegistry.resolveCanonical(tagName) || tagName;
+        if (!globalXMLTagRegistry.getDefinition(canonicalTag)) {
+            globalXMLTagRegistry.register({
+                sourceId: sourceId || `xml-interceptor:${canonicalTag.toLowerCase()}`,
+                tag: canonicalTag,
+                lifecycle,
+                exposeInProtocol: false
+            });
+        }
+        this.registerHandler(canonicalTag, handler, sourceId);
+        console.debug(`[XMLInterceptor] Registered extension parser for <${tagName}> (${lifecycle})`);
     }
 
-    /**
-     * 注册一种非 XML 的正则模式拦截器 (例如 [物品栏更新])
-     */
+    public registerHandler(canonicalTag: string, handler: InterceptorCallback, sourceId?: string): void {
+        const normalizedCanonical = globalXMLTagRegistry.resolveCanonical(canonicalTag) || canonicalTag;
+        const handlerSource = sourceId || `xml-handler:${normalizedCanonical.toLowerCase()}`;
+        this.extensionHandlers = this.extensionHandlers.filter(item => !(item.sourceId === handlerSource && item.canonicalTag === normalizedCanonical));
+        this.extensionHandlers.push({
+            sourceId: handlerSource,
+            canonicalTag: normalizedCanonical,
+            lifecycle: this.getLifecycle(normalizedCanonical) || 'persistent',
+            handler
+        });
+    }
+
+    public unregisterHandler(canonicalTag: string, sourceId?: string): void {
+        const normalizedCanonical = globalXMLTagRegistry.resolveCanonical(canonicalTag) || canonicalTag;
+        this.extensionHandlers = this.extensionHandlers.filter(item => {
+            if (item.canonicalTag !== normalizedCanonical) return true;
+            if (!sourceId) return false;
+            return item.sourceId !== sourceId;
+        });
+    }
+
     public registerPatternParser(
         regex: RegExp,
         lifecycle: LifecycleType,
         handler: InterceptorCallback
     ): void {
-        this.parsers.push({ regex, lifecycle, handler });
+        this.patternParsers.push({ regex, lifecycle, handler });
         console.debug(`[XMLInterceptor] Registered pattern parser: ${regex.source}`);
     }
 
-    /**
-     * 卸载指定的解析器
-     */
     public unregisterXMLParser(tagName: string): void {
-        this.parsers = this.parsers.filter(p => p.tagName !== tagName);
+        const canonicalTag = globalXMLTagRegistry.resolveCanonical(tagName) || tagName;
+        this.extensionHandlers = this.extensionHandlers.filter(item => item.canonicalTag !== canonicalTag);
     }
 
-    /**
-     * 获取指定生命周期的所有标签名
-     */
-    public getTagsByLifecycle(lifecycles: LifecycleType[]): string[] {
-        return this.parsers
-            .filter(p => p.tagName && lifecycles.includes(p.lifecycle))
-            .map(p => p.tagName as string);
-    }
+    public override deriveStreamState(
+        rawText: string,
+        policyOrFilter: StreamingPolicy | boolean,
+        argAllowTopLevel?: boolean,
+        argImplicitThinking?: boolean,
+        argAggressiveThinking?: boolean
+    ): StreamSemanticState {
+        const state = super.deriveStreamState(rawText, policyOrFilter, argAllowTopLevel, argImplicitThinking, argAggressiveThinking);
+        const filterChatReply = typeof policyOrFilter === 'boolean' ? policyOrFilter : (policyOrFilter.filterChatReply ?? false);
 
-    /**
-     * 流式语义状态推导
-     *
-     * 重构：使用 Tokenizer 单遍解析，替代原来的手动正则+栈遍历
-     */
-    public deriveStreamState(rawText: string, filterChatReply: boolean, allowTopLevel: boolean = true, implicitStartThinking: boolean = false): StreamSemanticState {
-        if (!rawText) {
-            return { rawText: '', displayText: '', filteredCount: 0, statusText: '', activeTag: null };
+        if (filterChatReply !== false) {
+            const resolvedStatusText = this.resolveExtensionStatusText(state.activeTag, state.displayText.length > 0);
+            state.statusText = state.activeTag ? resolvedStatusText : (state.statusText || resolvedStatusText);
         }
 
-        // 过滤模式关闭时，直接返回原始文本
-        if (!filterChatReply) {
-            return { rawText, displayText: rawText, filteredCount: 0, statusText: '', activeTag: null };
-        }
-
-        const tokens = tokenize(rawText);
-        const stack: string[] = [];
-        const displayParts: string[] = [];
-        let lastMeaningfulTag: string | null = null;
-
-        // 1. 预扫描：检测是否存在孤立的 transient 闭合标签（用于回溯屏蔽顶层文本）
-        const orphanTransientCloseIndices = new Set<number>();
-        const tempStack: string[] = [];
-        for (let i = 0; i < tokens.length; i++) {
-            const t = tokens[i];
-            if (t.type === 'open_tag') {
-                tempStack.push(t.value.toLowerCase());
-            } else if (t.type === 'close_tag') {
-                const tagName = t.value.toLowerCase();
-                const foundIdx = tempStack.lastIndexOf(tagName);
-                if (foundIdx !== -1) {
-                    tempStack.splice(foundIdx, 1);
-                } else {
-                    // 孤立闭合标签
-                    const p = this.parsers.find(p => p.tagName?.toLowerCase() === tagName);
-                    if (p?.lifecycle === 'transient') {
-                        orphanTransientCloseIndices.add(i);
-                        // console.log(`[XMLInterceptor] Found orphan transient close tag: </${tagName}> at index ${i}`);
-                    }
-                }
-            }
-        }
-
-        // 2. 隐式起始处理：如果开启且首个 Token 为文本，则假定处于思考中
-        let isImplicitThinking = false;
-        if (implicitStartThinking && tokens.length > 0 && tokens[0].type === 'text') {
-            isImplicitThinking = true;
-            stack.push('thinking');
-        }
-
-        const hiddenPersistentTags = new Set<string>([
-            BuiltinXMLTags.STORY_SUMMARY.toLowerCase(),
-            BuiltinXMLTags.MUTATION.toLowerCase(),
-            'm'
-        ]);
-
-        const hasDisplayPersistentTagInStack = () => {
-            return stack.some(tag => {
-                const tagLower = tag.toLowerCase();
-                if (hiddenPersistentTags.has(tagLower)) return false;
-                const p = this.parsers.find(p => p.tagName?.toLowerCase() === tagLower);
-                return p?.lifecycle === 'persistent';
+        const forgeTags = ['forge_skill', 'draft_plan', 'entry_update'];
+        if (state.activeTag && forgeTags.includes(state.activeTag.toLowerCase())) {
+            (window as any).LuminaWeave?.emit('FORGE_TRACE', {
+                tag: state.activeTag,
+                status: state.statusText,
+                timestamp: Date.now()
             });
-        };
-
-        // 辅助：检查当前栈是否处于“应当隐藏”的标签内 (Transient/Ephemeral)
-        const isCurrentlyHidden = () => {
-            if (stack.length === 0) return false;
-            const topTag = stack[stack.length - 1];
-            const p = this.parsers.find(p => p.tagName?.toLowerCase() === topTag.toLowerCase());
-            return p?.lifecycle === 'transient' || p?.lifecycle === 'ephemeral';
-        };
-
-        for (let i = 0; i < tokens.length; i++) {
-            const token = tokens[i];
-            const rawTagStr = rawText.slice(token.start, token.end);
-            const tagName = token.value?.toLowerCase();
-            const parser = tagName ? this.parsers.find(p => p.tagName?.toLowerCase() === tagName) : null;
-            const isPresentational = parser?.lifecycle === 'presentational';
-
-            if (token.type === 'text') {
-                const inReply = hasDisplayPersistentTagInStack();
-                const inPresentational = this.hasPresentationalInStack(stack);
-                const inHidden = isCurrentlyHidden();
-                const isTopLevel = stack.length === 0;
-
-                // 核心增强：孤立标签回溯保护。如果后续存在孤立的思考闭合标签，当前顶层文本也应视为隐藏。
-                let isPreOrphanZone = false;
-                if (isTopLevel && allowTopLevel && orphanTransientCloseIndices.size > 0) {
-                    for (const orphanIdx of orphanTransientCloseIndices) {
-                        if (orphanIdx > i) {
-                            isPreOrphanZone = true;
-                            // console.log(`[XMLInterceptor] Text at index ${i} hidden by subsequent orphan tag at ${orphanIdx}`);
-                            break;
-                        }
-                    }
-                }
-
-                // 核心过滤逻辑：
-                // 1. 如果在回复标签或展示型标签内，展示。
-                // 2. 如果在隐藏标签内（含隐式思考），绝对屏蔽。
-                // 3. 如果在顶层，根据 allowTopLevel 决定，但受孤立标签回溯保护。
-                const shouldShow = (inReply || inPresentational || (isTopLevel && allowTopLevel && !isPreOrphanZone)) && !inHidden;
-
-                if (shouldShow) {
-                    // 检查末尾是否有未完成的标签片段
-                    const partialTag = detectTrailingPartialTag(token.value);
-                    if (partialTag !== null) {
-                        const ltIndex = token.value.lastIndexOf('<');
-                        displayParts.push(token.value.slice(0, ltIndex));
-                    } else {
-                        displayParts.push(token.value);
-                    }
-                }
-            } else if (token.type === 'open_tag') {
-                // 如果当前处于隐式思考，而模型输出了新标签，则终结隐式思考
-                if (isImplicitThinking) {
-                    isImplicitThinking = false;
-                    stack.pop();
-                }
-                stack.push(token.value);
-                lastMeaningfulTag = token.value;
-                // 如果是展示型标签，保留标签本身
-                if (isPresentational) {
-                    displayParts.push(rawTagStr);
-                }
-            } else if (token.type === 'close_tag') {
-                // 如果当前处于隐式思考，且闭合的是思考标签，则正常终结
-                if (isImplicitThinking && token.value.toLowerCase() === 'thinking') {
-                    isImplicitThinking = false;
-                    stack.pop();
-                } else {
-                    // 如果在隐式思考期间尝试闭合其他标签，先终结隐式思考（防错处理）
-                    if (isImplicitThinking) {
-                        isImplicitThinking = false;
-                        stack.pop();
-                    }
-                    this.popMatchingTag(stack, token.value);
-                }
-                lastMeaningfulTag = token.value;
-                // 如果是展示型标签，保留标签本身
-                if (isPresentational) {
-                    displayParts.push(rawTagStr);
-                }
-            } else if (token.type === 'self_closing_tag') {
-                lastMeaningfulTag = token.value;
-                // 如果是展示型标签，保留标签本身
-                if (isPresentational) {
-                    displayParts.push(rawTagStr);
-                }
-            }
         }
 
-        // 尾部未完成标签片段处理（tailing text 中的部分标签）
-        const lastToken = tokens[tokens.length - 1];
-        if (lastToken?.type === 'text' && this.isTagInStack(stack, BuiltinXMLTags.CHAT_REPLY)) {
-            const partialTag = detectTrailingPartialTag(lastToken.value);
-            if (partialTag !== null) {
-                lastMeaningfulTag = lastMeaningfulTag || partialTag;
-            }
-        }
-
-        const activeTag = this.resolveActiveTag(stack, lastMeaningfulTag);
-        const displayText = displayParts.join('');
-
-        return {
-            rawText,
-            displayText,
-            filteredCount: Math.max(0, rawText.length - displayText.length),
-            statusText: this.resolveStatusText(activeTag),
-            activeTag
-        };
+        return state;
     }
 
-    /**
-     * 核心切割流水线：将混合 XML 的原始字符串清洗提纯
-     *
-     * 重构：使用 Tokenizer 单遍构建标签块映射，再按生命周期处理
-     *
-     * @param rawText 原始文本
-     * @param executeHandlers 是否执行拦截器回调（流式中间态应为 false）
-     */
     public processAndCleanText(rawText: string, executeHandlers: boolean = true): string {
         if (!rawText) return '';
 
-        if (executeHandlers) {
-            console.group(`[XMLInterceptor] Processing Text (${rawText.length} chars)`);
-        }
+        let cleanText = executeHandlers
+            ? this.processXMLWithHandlers(rawText)
+            : this.cleanText(rawText, { allowTopLevel: true });
 
-        let cleanText = rawText;
-
-        // 阶段 1：处理 XML 标签类解析器（使用 Tokenizer）
-        const xmlParsers = this.parsers.filter(p => p.tagName);
-        if (xmlParsers.length > 0) {
-            cleanText = this.processXMLTags(cleanText, xmlParsers, executeHandlers);
-        }
-
-        // 阶段 2：处理正则模式类解析器（保持原逻辑）
-        const regexParsers = this.parsers.filter(p => p.regex);
-        for (const reg of regexParsers) {
+        for (const reg of this.patternParsers) {
             cleanText = cleanText.replace(reg.regex!, (matchSubString: string, capturedContent: string) => {
                 let handlerResult: string | void = undefined;
                 if (executeHandlers) {
@@ -334,312 +167,189 @@ export class XMLInterceptor {
                 } else if (reg.lifecycle === 'persistent') {
                     return capturedContent !== undefined ? capturedContent : matchSubString;
                 }
-                return (typeof handlerResult === 'string') ? handlerResult : '';
+                return typeof handlerResult === 'string' ? handlerResult : '';
             });
-        }
-
-        if (executeHandlers) {
-            console.groupEnd();
         }
 
         return cleanText.trim();
     }
 
-    // ──────────────────────────────────────────────
-    // 内部实现
-    // ──────────────────────────────────────────────
-
-    /**
-     * 使用 Tokenizer 处理所有 XML 标签
-     *
-     * 遍历 Token 流，根据每个标签的生命周期决定如何输出：
-     * - transient / ephemeral → 整块丢弃（执行 handler 后不保留）
-     * - persistent → 执行 handler，保留 handler 返回的文本（或标签内部内容）
-     * - presentational → 原样保留（不执行 handler）
-     */
-    private processXMLTags(text: string, xmlParsers: ParserRegistration[], executeHandlers: boolean): string {
-        // 构建标签名到解析器的查找表
-        const parserMap = new Map<string, ParserRegistration>();
-        for (const p of xmlParsers) {
-            if (p.tagName) {
-                parserMap.set(p.tagName.toLowerCase(), p);
-            }
+    private resolveExtensionStatusText(tagName: string | null, hasDisplayText: boolean): string {
+        const normalizedTag = globalXMLTagRegistry.resolveCanonical(tagName || '')?.toLowerCase();
+        if (hasDisplayText && (normalizedTag === 'thinking' || normalizedTag === 'think' || !normalizedTag)) {
+            return '回复中...';
         }
 
+        if (!normalizedTag) return hasDisplayText ? '回复中...' : '';
+
+        const registryTag = globalXMLTagRegistry.getDefinition(normalizedTag);
+        if (registryTag?.statusText) return registryTag.statusText;
+
+        return super.resolveStatusText(tagName, hasDisplayText);
+    }
+
+    private processXMLWithHandlers(text: string): string {
         const tokens = tokenize(text);
         const outputParts: string[] = [];
-
-        // 栈：追踪正在处理的标签层级
         const stack: Array<{
             tagNameLower: string;
-            parser: ParserRegistration;
             openToken: Token;
-            /** 收集标签内部内容 */
             contentParts: string[];
-            /** 内部嵌套深度（防止同名标签嵌套导致的提前匹配） */
             nestingDepth: number;
         }> = [];
 
         for (const token of tokens) {
-            // 获取当前栈顶（如果有）
             const top = stack.length > 0 ? stack[stack.length - 1] : null;
 
             if (token.type === 'open_tag') {
-                const tagLower = token.value.toLowerCase();
-                const parser = parserMap.get(tagLower);
+                const canonicalTag = this.resolveCanonicalTag(token.value);
+                const lifecycle = this.getLifecycle(canonicalTag);
 
                 if (top) {
-                    // 当已在某个标签块内部时
-                    if (top.tagNameLower === tagLower) {
-                        // 同名嵌套：增加深度计数
+                    if (canonicalTag && top.tagNameLower === canonicalTag) {
                         top.nestingDepth++;
                         top.contentParts.push(text.slice(token.start, token.end));
-                    } else if (parser) {
-                        // 异名的已注册标签：开启新的栈帧
-                        stack.push({
-                            tagNameLower: tagLower,
-                            parser,
-                            openToken: token,
-                            contentParts: [],
-                            nestingDepth: 0
-                        });
+                    } else if (lifecycle && canonicalTag) {
+                        stack.push({ tagNameLower: canonicalTag, openToken: token, contentParts: [], nestingDepth: 0 });
                     } else {
-                        // 无注册的标签：作为内容保留
                         top.contentParts.push(text.slice(token.start, token.end));
                     }
-                } else if (parser) {
-                    // 顶层的已注册标签：开启新的栈帧
-                    stack.push({
-                        tagNameLower: tagLower,
-                        parser,
-                        openToken: token,
-                        contentParts: [],
-                        nestingDepth: 0
-                    });
+                } else if (lifecycle && canonicalTag) {
+                    stack.push({ tagNameLower: canonicalTag, openToken: token, contentParts: [], nestingDepth: 0 });
                 } else {
-                    // 顶层未注册的标签：原样输出
                     outputParts.push(text.slice(token.start, token.end));
                 }
             } else if (token.type === 'close_tag') {
-                const tagLower = token.value.toLowerCase();
-
-                if (top && top.tagNameLower === tagLower) {
+                const canonicalTag = this.resolveCanonicalTag(token.value);
+                if (canonicalTag && top && top.tagNameLower === canonicalTag) {
                     if (top.nestingDepth > 0) {
-                        // 闭合嵌套的同名标签
                         top.nestingDepth--;
                         top.contentParts.push(text.slice(token.start, token.end));
                     } else {
-                        // 闭合当前栈顶标签
                         const finished = stack.pop()!;
-                        const fullContent = finished.contentParts.join('');
+                        const content = finished.contentParts.join('');
                         const fullMatch = text.slice(finished.openToken.start, token.end);
+                        const lifecycle = this.getLifecycle(canonicalTag);
+                        const result = this.resolveExtensionTagOutput(canonicalTag, lifecycle!, content, fullMatch);
 
-                        const result = this.resolveTagOutput(finished.parser, fullContent, fullMatch, executeHandlers);
-
-                        // 将结果推入父级（如果有）或顶层输出
-                        if (stack.length > 0) {
-                            stack[stack.length - 1].contentParts.push(result);
-                        } else {
-                            outputParts.push(result);
-                        }
+                        if (stack.length > 0) stack[stack.length - 1].contentParts.push(result);
+                        else outputParts.push(result);
                     }
+                } else if (top) {
+                    top.contentParts.push(text.slice(token.start, token.end));
                 } else {
-                    // 没有匹配的开放标签：原样输出闭合标签
-                    if (top) {
-                        top.contentParts.push(text.slice(token.start, token.end));
-                    } else {
-                        outputParts.push(text.slice(token.start, token.end));
-                    }
+                    outputParts.push(text.slice(token.start, token.end));
                 }
             } else if (token.type === 'self_closing_tag') {
-                const tagLower = token.value.toLowerCase();
-                const parser = parserMap.get(tagLower);
-                const fullMatch = text.slice(token.start, token.end);
-
-                if (parser) {
-                    const result = this.resolveTagOutput(parser, '', fullMatch, executeHandlers);
-                    if (top) {
-                        top.contentParts.push(result);
-                    } else {
-                        outputParts.push(result);
-                    }
+                const canonicalTag = this.resolveCanonicalTag(token.value);
+                const lifecycle = this.getLifecycle(canonicalTag);
+                if (lifecycle && canonicalTag) {
+                    const result = this.resolveExtensionTagOutput(canonicalTag, lifecycle, '', text.slice(token.start, token.end));
+                    if (top) top.contentParts.push(result);
+                    else outputParts.push(result);
                 } else {
-                    // 无注册的自闭合标签：原样保留
-                    if (top) {
-                        top.contentParts.push(fullMatch);
-                    } else {
-                        outputParts.push(fullMatch);
-                    }
+                    const fullMatch = text.slice(token.start, token.end);
+                    if (top) top.contentParts.push(fullMatch);
+                    else outputParts.push(fullMatch);
                 }
+            } else if (top) {
+                top.contentParts.push(token.value);
             } else {
-                // text token
-                if (top) {
-                    top.contentParts.push(token.value);
-                } else {
-                    outputParts.push(token.value);
-                }
+                outputParts.push(token.value);
             }
         }
 
-        // 处理栈中残余的未闭合标签
         while (stack.length > 0) {
             const unclosed = stack.pop()!;
-            const fullContent = unclosed.contentParts.join('');
-
-            if (unclosed.parser.lifecycle === 'presentational') {
-                // 展示型标签（如 <V>）：未闭合也应保留其原始标签头，供下游解析器（如 LVParser）处理流式内容
-                const openTagStr = text.slice(unclosed.openToken.start, unclosed.openToken.end);
-                const fullLiteral = openTagStr + fullContent;
-                if (stack.length > 0) {
-                    stack[stack.length - 1].contentParts.push(fullLiteral);
-                } else {
-                    outputParts.push(fullLiteral);
-                }
-            } else if (unclosed.parser.lifecycle === 'persistent') {
-                // 持久型标签：剥离外壳，仅保留内部内容
-                if (stack.length > 0) {
-                    stack[stack.length - 1].contentParts.push(fullContent);
-                } else {
-                    outputParts.push(fullContent);
-                }
+            const content = unclosed.contentParts.join('');
+            const lifecycle = this.getLifecycle(unclosed.tagNameLower);
+            if (lifecycle === 'presentational') {
+                const result = text.slice(unclosed.openToken.start, unclosed.openToken.end) + content;
+                if (stack.length > 0) stack[stack.length - 1].contentParts.push(result);
+                else outputParts.push(result);
             } else {
-                // 临时/短暂型标签（如 <thinking>）：整块丢弃
-                // 核心修复：如果模型被中断，或内容包含标签导致解析未闭合
-                // 对于未闭合的 transient 标签，不论是执行提取还是非执行提取模式，
-                // 由于它本身未闭合，直接吞噬后续所有内容风险极大，可能吞噬掉整个 Chat_Reply 的文本。
-                // 因此针对未闭合的 transient 标签，我们选择剥离标签外壳让内部内容流出，
-                // 以防止在获取 mesST 时因异常格式而导致 ST 侧截断和差异弹窗截断。
-                if (stack.length > 0) {
-                    stack[stack.length - 1].contentParts.push(fullContent);
-                } else {
-                    outputParts.unshift(fullContent);
-                }
+                if (stack.length > 0) stack[stack.length - 1].contentParts.push(content);
+                else outputParts.push(content);
             }
         }
 
         return outputParts.join('');
     }
 
-    /**
-     * 根据生命周期决定标签块的输出结果
-     */
-    private resolveTagOutput(
-        parser: ParserRegistration,
-        content: string,
-        fullMatch: string,
-        executeHandlers: boolean
-    ): string {
-        // presentational 标签：无论如何都原样保留
-        if (parser.lifecycle === 'presentational') {
-            return fullMatch;
+    private resolveExtensionTagOutput(tagName: string, lifecycle: LifecycleType, content: string, fullMatch: string): string {
+        if (lifecycle === 'presentational') return fullMatch;
+
+        const canonicalTag = globalXMLTagRegistry.resolveCanonical(tagName) || tagName;
+        const registration = [...this.extensionHandlers].reverse().find(item => item.canonicalTag === canonicalTag);
+        if (registration) {
+            const result = registration.handler(content, fullMatch);
+            if (typeof result === 'string') return result;
         }
 
-        if (executeHandlers) {
-            const handlerResult = parser.handler(content, fullMatch);
-            if (typeof handlerResult === 'string') return handlerResult;
-            // handler 未返回字符串：按默认规则
+        return lifecycle === 'persistent' ? content : '';
+    }
+
+    private parseAttributes(xmlOpenTag: string): Record<string, string> {
+        const attributes: Record<string, string> = {};
+        const attributeRegex = /([a-zA-Z_][\w:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g;
+        let match: RegExpExecArray | null = null;
+        while ((match = attributeRegex.exec(xmlOpenTag)) !== null) {
+            attributes[match[1]] = match[2] ?? match[3] ?? match[4] ?? '';
+        }
+        return attributes;
+    }
+
+    public static override extractTagContent(text: string, tagName: string): string[] {
+        const definition = globalXMLTagRegistry.getDefinition(tagName);
+        const canonicalTag = definition?.tag || tagName;
+        const targetTags = new Set([canonicalTag.toLowerCase()]);
+        for (const alias of definition?.aliases || []) {
+            targetTags.add(alias.toLowerCase());
         }
 
-        // 非执行模式下（流式中间态）
-        if (!executeHandlers && parser.lifecycle === 'persistent') {
-            return content; // 剥去外壳，保留内容
-        }
-
-        // 默认：transient/ephemeral 丢弃，persistent 在执行后也按 handler 结果决定
-        return '';
+        return extractBlocks(text, targetTags).map((block: TagBlock) => block.content);
     }
 
-    // ──────────────────────────────────────────────
-    // 辅助方法
-    // ──────────────────────────────────────────────
+    private registerDefaultExtensionParsers(): void {
+        this.registerXMLParser(BuiltinXMLTags.THINKING, 'transient', () => '', 'core-thinking-handler');
+        this.registerXMLParser(BuiltinXMLTags.CHAT_REPLY, 'persistent', (content) => content, 'core-chat-reply-handler');
+        this.registerXMLParser(BuiltinXMLTags.CHARACTER_ACTION, 'transient', () => '', 'core-character-action-handler');
+        this.registerXMLParser(BuiltinXMLTags.STORY_SUMMARY, 'persistent', (content) => content, 'core-story-summary-handler');
+        this.registerXMLParser(BuiltinXMLTags.VIEW, 'presentational', () => '', 'core-view-handler');
 
-    private isTagInStack(stack: string[], tagName: string): boolean {
-        return stack.some(tag => tag.toLowerCase() === tagName.toLowerCase());
-    }
-
-    private popMatchingTag(stack: string[], tagName: string): void {
-        const normalizedTag = tagName.toLowerCase();
-        for (let index = stack.length - 1; index >= 0; index -= 1) {
-            if (stack[index].toLowerCase() === normalizedTag) {
-                stack.splice(index, 1);
-                return;
-            }
-        }
-    }
-
-    private resolveActiveTag(stack: string[], lastMeaningfulTag: string | null): string | null {
-        const activeTag = stack[stack.length - 1];
-        if (activeTag) return activeTag;
-        return lastMeaningfulTag;
-    }
-
-    private hasPresentationalInStack(stack: string[]): boolean {
-        return stack.some(tagName => {
-            const normalized = tagName.toLowerCase();
-            return this.parsers.some(p => p.tagName?.toLowerCase() === normalized && p.lifecycle === 'presentational');
-        });
-    }
-
-    private resolveStatusText(tagName: string | null): string {
-        if (!tagName) {
-            // 没有标签，可能是预思考导致模型回复没有 thinking 标签
-            return '思考中...';
-        }
-
-        const normalizedTag = tagName.toLowerCase();
-        const knownStatuses: Record<string, string> = {
-            think: '思考中...',
-            thinking: '思考中...',
-            character_action: '行动中...',
-            chat_reply: '回复中...',
-        };
-
-        const registryTag = globalPromptRegistry.getAllXMLTags().find(tag => {
-            if (tag.tag.toLowerCase() === normalizedTag) return true;
-            return tag.aliases?.some(alias => alias.toLowerCase() === normalizedTag) || false;
-        });
-
-        if (registryTag?.statusText) {
-            return registryTag.statusText;
-        }
-
-        return knownStatuses[normalizedTag] || `${tagName}处理中..`;
-    }
-
-    /**
-     * 内置基础系统解析器 (无插件依赖)
-     */
-    private registerDefaultParsers(): void {
-        // 1. <thinking> (思维推演) - Transient
-        this.registerXMLParser(BuiltinXMLTags.THINKING, 'transient', (_content) => {
-            return ''; // 剥离并不显示内容
-        });
-
-        // 1.1 <Character_Action> (动作描述) - Transient [已废弃]
-        this.registerXMLParser(BuiltinXMLTags.CHARACTER_ACTION, 'transient', (_content) => {
-            return ''; // 强制剥离废弃标签
-        });
-
-        // 2. <Chat_Reply> (核心对话) - Persistent
-        this.registerXMLParser(BuiltinXMLTags.CHAT_REPLY, 'persistent', (content) => {
-            return content; // 剥去外壳，保留真实文本
-        });
-
-        // 3. <V> (LuminaView 展示块) - Presentational
-        this.registerXMLParser(BuiltinXMLTags.VIEW, 'presentational', (_content) => {
-            // presentational 标签不会执行此 handler
-            // 在 resolveTagOutput 中已被拦截为原样保留
+        this.registerXMLParser(BuiltinXMLTags.FORGE_SKILL, 'transient', (content, fullMatch) => {
+            (window as any).LuminaWeave?.emit('FORGE_ACTION_COMPLETED', { type: 'skill', content, raw: fullMatch });
             return '';
-        });
-        
-        // 4. <Story_Summary> (剧情概况) - Persistent
-        this.registerXMLParser(BuiltinXMLTags.STORY_SUMMARY, 'persistent', (content) => {
-            return content; // 剥去外壳，保留内容；后续由下游逻辑提取并更新至 mesSummary 字段
-        });
+        }, 'core-forge-skill-handler');
+        this.registerXMLParser(BuiltinXMLTags.DRAFT_PLAN, 'ephemeral', (content, fullMatch) => {
+            (window as any).LuminaWeave?.emit('FORGE_ACTION_COMPLETED', { type: 'plan', content, raw: fullMatch });
+            return '';
+        }, 'core-draft-plan-handler');
+        this.registerXMLParser(BuiltinXMLTags.ENTRY_UPDATE, 'persistent', (content, fullMatch) => {
+            (window as any).LuminaWeave?.emit('FORGE_ACTION_COMPLETED', { type: 'update', content, raw: fullMatch });
+            const attrs = this.parseAttributes(fullMatch);
+            const id = attrs.id || attrs.entry_id || `new_entry_${Date.now().toString(36)}`;
+            const category = attrs.type || attrs.category || '';
+            // title 优先取 XML 属性，其次从内容中提取（支持 JSON / YAML / TOML）
+            const titleFromAttrs = attrs.title || attrs.description || '';
+            const title = titleFromAttrs || extractTitleFromEntryContent(content) || id;
+            return `<V>ForgeEntryProposal(${JSON.stringify(id)}, ${JSON.stringify(title)}, ${JSON.stringify(content)}, ${JSON.stringify(category)})</V>`;
+        }, 'core-entry-update-handler');
+
+        this.registerXMLParser((BuiltinXMLTags as any).FORGE_AUTO_LIST || 'forge_auto_list', 'persistent', (content, fullMatch) => {
+            const escaped = content.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+            return `<V>ForgeAutoList(\`${escaped}\`)</V>`;
+        }, 'core-forge-auto-list-handler');
+
+        this.registerXMLParser(BuiltinXMLTags.MEMORY_UPDATE, 'ephemeral', (content, fullMatch) => {
+            (window as any).LuminaWeave?.emit('FORGE_ACTION_COMPLETED', { type: 'memory', content, raw: fullMatch });
+            const attrs = this.parseAttributes(fullMatch);
+            const path = attrs.path || 'Forge Memory';
+            const title = attrs.title || path.split('/').slice(-1)[0] || 'Memory Update';
+            const escaped = content.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+            return `<V>ForgeMemoryProposal("${path}", "${title}", \`${escaped}\`)</V>`;
+        }, 'core-memory-update-handler');
     }
 }
 
-/**
- * 全局单例拦截器 (核心)
- */
 export const globalXMLInterceptor = new XMLInterceptor();

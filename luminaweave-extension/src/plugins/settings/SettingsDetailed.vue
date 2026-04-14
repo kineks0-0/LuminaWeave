@@ -38,7 +38,7 @@ const manifest = computed(() => {
 <style scoped>
 .settings-detailed {
   padding: var(--lw-panel-padding);
-  background: var(--lw-bg-app);
+  background: transparent;
   display: flex;
   flex-direction: column;
   gap: var(--lw-item-gap);
@@ -59,9 +59,9 @@ const manifest = computed(() => {
 .block-content {
   display: flex;
   flex-direction: column;
-  background: var(--lw-bg-surface);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
   border: 1px solid var(--lw-border-base);
-  border-radius: var(--lw-radius);
+  border-radius: 24px;
   padding: 24px;
   box-shadow: var(--lw-shadow-card);
 }

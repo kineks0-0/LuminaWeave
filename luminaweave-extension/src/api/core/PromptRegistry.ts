@@ -1,3 +1,12 @@
+import {
+    globalXMLTagRegistry,
+    type LifecycleType,
+    type PromptContext,
+    type XMLTagDefinition
+} from '../../../../shared/XMLTagRegistry.js';
+
+export type { PromptContext } from '../../../../shared/XMLTagRegistry.js';
+
 /**
  * 提示词插槽位置标记
  */
@@ -40,6 +49,7 @@ export interface XMLTagInfo {
     tag: string;
     /** 标签别名，如 ["M"] */
     aliases?: string[];
+    lifecycle?: LifecycleType;
     /** 对标签功能的简要说明 */
     description: string;
     /** 
@@ -59,11 +69,14 @@ export interface XMLTagInfo {
     position?: 'before' | 'after';
     /** 同层级排序优先级/权重 (数字越小越靠前) */
     priority: number;
+    uiHidden?: boolean;
+    exposeInProtocol?: boolean;
     /** 
      * 父级标签名 (可选)
      * 设置后，该标签将在 System Protocol 列表中作为子项缩进显示，并采用嵌套编号 (如 3.1)
      */
     parent?: string;
+    promptContexts?: PromptContext[];
 }
 
 /**
@@ -108,6 +121,10 @@ export interface PromptFragment {
     label?: string;
     /** 优先级：数字越大越靠前 (注入顺序控制) */
     priority: number;
+    /**
+     * 该片段生效的上下文。未声明时兼容视为 chat。
+     */
+    contexts?: PromptContext[];
     /** 
      * 该片段贡献的 XML 标签说明 (可选)
      */
@@ -124,13 +141,46 @@ export interface PromptFragment {
 export class PromptRegistry {
     private fragments: PromptFragment[] = [];
 
+    private normalizeContexts(contexts?: PromptContext[]): PromptContext[] {
+        const fallback: PromptContext[] = ['chat'];
+        return Array.from(new Set((contexts && contexts.length > 0 ? contexts : fallback).filter(Boolean)));
+    }
+
+    private matchesContext(contexts: PromptContext[] | undefined, context: PromptContext): boolean {
+        const normalized = this.normalizeContexts(contexts);
+        return normalized.includes('shared') || normalized.includes(context);
+    }
+
+    private syncFragmentXMLTags(fragment: PromptFragment): void {
+        for (const xmlTag of fragment.xmlTags || []) {
+            const existing = globalXMLTagRegistry.getDefinition(xmlTag.tag);
+            const nextDefinition: XMLTagDefinition = {
+                sourceId: fragment.id,
+                tag: xmlTag.tag,
+                aliases: xmlTag.aliases,
+                lifecycle: xmlTag.lifecycle || existing?.lifecycle || 'persistent',
+                description: xmlTag.description,
+                statusText: xmlTag.statusText,
+                uiHidden: xmlTag.uiHidden ?? existing?.uiHidden,
+                exposeInProtocol: xmlTag.exposeInProtocol ?? true,
+                anchor: xmlTag.anchor,
+                position: xmlTag.position,
+                priority: xmlTag.priority,
+                parent: xmlTag.parent,
+                promptContexts: this.normalizeContexts(xmlTag.promptContexts || fragment.contexts || existing?.promptContexts)
+            };
+            globalXMLTagRegistry.register(nextDefinition);
+        }
+    }
+
     /**
      * 注册一个新的提示词片段
      */
     public register(fragment: PromptFragment) {
+        this.unregister(fragment.id);
         // 如果存在同名 ID，先移除旧的 (支持热更新/覆盖)
-        this.fragments = this.fragments.filter(f => f.id !== fragment.id);
         this.fragments.push(fragment);
+        this.syncFragmentXMLTags(fragment);
 
         // 按优先级降序排序，优先级高的在前面
         this.fragments.sort((a, b) => b.priority - a.priority);
@@ -145,11 +195,19 @@ export class PromptRegistry {
         return [...this.fragments];
     }
 
+    public getFragmentsForContext(context: PromptContext): PromptFragment[] {
+        return this.fragments.filter(fragment => this.matchesContext(fragment.contexts, context));
+    }
+
     /**
      * 获取指定插槽的所有片段
      */
     public getSlotFragments(slot: PromptSlot): PromptFragment[] {
         return this.fragments.filter(f => f.slot === slot);
+    }
+
+    public getSlotFragmentsForContext(slot: PromptSlot, context: PromptContext): PromptFragment[] {
+        return this.fragments.filter(f => f.slot === slot && this.matchesContext(f.contexts, context));
     }
 
     /**
@@ -166,23 +224,36 @@ export class PromptRegistry {
         return this.fragments.filter(f => f.targetIdentifier === id);
     }
 
+    public getIdentifierFragmentsForContext(id: STIdentifier, context: PromptContext): PromptFragment[] {
+        return this.fragments.filter(f => f.targetIdentifier === id && this.matchesContext(f.contexts, context));
+    }
+
     /**
      * 手动移除某个片段
      */
     public unregister(id: string) {
         this.fragments = this.fragments.filter(f => f.id !== id);
+        globalXMLTagRegistry.unregister(id);
     }
 
     /**
      * 获取所有已注册的 XML 标签信息汇总，并执行基于锚点的排序逻辑
      */
-    public getAllXMLTags(): XMLTagInfo[] {
-        const rawTags: XMLTagInfo[] = [];
-        this.fragments.forEach(f => {
-            if (f.xmlTags) {
-                rawTags.push(...f.xmlTags);
-            }
-        });
+    public getAllXMLTags(context: PromptContext = 'chat'): XMLTagInfo[] {
+        const rawTags: XMLTagInfo[] = globalXMLTagRegistry.getProtocolDefinitions(context).map(definition => ({
+            tag: definition.tag,
+            aliases: definition.aliases,
+            lifecycle: definition.lifecycle,
+            description: definition.description || '',
+            statusText: definition.statusText,
+            anchor: definition.anchor,
+            position: definition.position,
+            priority: definition.priority || 0,
+            parent: definition.parent,
+            uiHidden: definition.uiHidden,
+            exposeInProtocol: definition.exposeInProtocol,
+            promptContexts: definition.promptContexts
+        }));
 
         // 1. 初始化排序列表
         // 规则：

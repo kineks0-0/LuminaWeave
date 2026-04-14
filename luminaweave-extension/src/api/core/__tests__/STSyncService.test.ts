@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { STSyncService } from '../STSyncService';
 import { WorldlineStore } from '../WorldlineStore';
-import type { LuminaChatMessage } from '../ChatManager';
+import type { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
 import { STAdapter } from '../STAdapter';
 import { STProtocol } from '../st-adapter/STProtocol';
 import { STClient } from '../st-adapter/STClient';
@@ -367,7 +367,7 @@ describe('STSyncService', () => {
         expect(nodeIds).toContain('child_of_2');
         
         // Ensure child_of_2 was properly reparented to the surviving branch
-        const survivingBranch = store.nodePool.find(n => n.fingerprint === 'fp_dup');
+        const survivingBranch = store.getNode('branch1');
         expect(survivingBranch).toBeDefined();
         const childNode = store.getNode('child_of_2');
         expect(childNode?.parentId).toBe(survivingBranch?.id);

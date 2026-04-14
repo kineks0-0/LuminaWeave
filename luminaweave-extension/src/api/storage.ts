@@ -5,6 +5,8 @@
 
 import { STClient } from './core/st-adapter/STClient.js';
 import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
+import { pluginFetch } from './core/PluginHttpClient.js';
+import { API_BASE, API_ROUTES } from '../../../shared/ApiEndpoints.js';
 
 export type StorageScope = 'Global' | 'Character' | 'Chat' | 'Session';
 
@@ -42,7 +44,8 @@ export class StorageCore extends LuminaWeaveAPIBase {
      */
     async loadIndependentGlobalData(): Promise<void> {
         try {
-            const res = await fetch('/api/plugins/luminaweave/settings');
+            const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.SETTINGS.GET}`;
+            const res = await pluginFetch(endpoint);
             if (res.ok) {
                 this.globalIndependentData = await res.json();
                 // 如果当前处在独立模式，拉取完毕后通知全体渲染刷新
@@ -62,14 +65,11 @@ export class StorageCore extends LuminaWeaveAPIBase {
      */
     async _saveIndependentGlobalData(): Promise<void> {
         try {
-            // 使用 STClient 统一获取 Token
-            const csrfToken = await STClient.getCsrfToken();
-
-            const res = await fetch('/api/plugins/luminaweave/settings/save', {
+            const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.SETTINGS.SAVE}`;
+            const res = await pluginFetch(endpoint, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': csrfToken
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(this.globalIndependentData)
             });
@@ -179,7 +179,11 @@ export class StorageCore extends LuminaWeaveAPIBase {
             }
         }
 
-        return { charId: String(charId), chatId: String(chatId) };
+        // 核心修复：避免强制 String() 转换导致 null 变成 "null"
+        const finalCharId = charId !== null && charId !== undefined ? String(charId) : 'Global';
+        const finalChatId = (chatId !== null && chatId !== undefined && chatId !== 'null' && chatId !== 'undefined') ? String(chatId) : '';
+
+        return { charId: finalCharId, chatId: finalChatId };
     }
 
     /**

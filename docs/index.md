@@ -12,6 +12,7 @@
 - **解决痛点**：消除原生插件堆叠导致的 UI 卡顿，解决长线剧情中的“失忆”与逻辑崩塌。
 - **核心定位**：提供 Git 化的树状时间线管理、分层记忆系统、以及高自由度的请求编排能力。
 - **设计哲学**：**深度接管** (拦截 Prompt 与生成流) 与 **绝对隔离** (拥有独立的存储与渲染沙盒)。
+- **工作区策略 [UPDATED]**：前端 Shell 同时维护传统桌面与自由工作台两种模式；其中自由工作台已向 iPadOS Stage Manager 式的舞台调度、Dock 与重叠窗口模型演进。
 
 ---
 
@@ -42,6 +43,7 @@ d:\LuminaWeave\
 │   ├── chat/                   # 聊天流渲染引擎设计 (PDR, System Design)
 │   ├── timeline/               # 时间线与 Git 轨道逻辑 (PDR, System Design)
 │   ├── director/               # 导演引擎与编排逻辑
+│   ├── forge/                  # Forge 制卡文档：规划 / 实现 / 进度看板
 │   ├── stats/                  # 状态栏与游戏化数值系统
 │   ├── settings/               # 统一设置面板设计
 │   ├── storage/                # 底层存储与持久化引擎
@@ -127,6 +129,13 @@ d:\LuminaWeave\
 | **子插件 (Plugins)** | `chat/` | 对话增强系统。包含组件流渲染器与 `ChatStream.vue` 等流式界面核心。 |
 | | `timeline/` | 幻光时间线。基于 Dagre 排版与 LogicFlow 实现可视化世界线导航。 |
 | | `director/` | 导演引擎。处理 XML 增量更新、规划链构建与 `MutationEngine` 沙箱拦截。 |
+| | `forge/` | 制卡工作台。当前已演进为 `detailMode 分流可见阶段 + 七层后台设计模型 + 双模式辅助区 + 虚拟工作区闭环` 的 Forge 工作流：`detailed` 暴露 6 段可见阶段，`quick` 压缩为 `kickoff / build / finalize`；自由工作台下 Forge 主窗支持 `内嵌右栏 / 拆出小窗` 双态切换，并按会话记忆当前辅助区呈现模式，传统模式则继续在 Forge 前台内部切换单辅助区。Forge 同时支持专属 `<V>` 组件渲染、A.U.T.O 半专用化 Prompt、`LangGraph runtime orchestrator + typed effect/apply` 编排层与共享 `<thinking>` 思考链协议。 |
+
+### 3. Forge 文档入口
+- **[Forge 文档索引](./forge/index.md)**：Forge 专属文档导航。
+- **[Forge 规划文档](./forge/planning.md)**：产品目标、交互方向与协议规划。
+- **[Forge 实现与技术交接](./forge/implementation.md)**：当前实现链路、技术选型与重构判断。
+- **[Forge 进度看板](./forge/progress-board.md)**：已完成项、剩余待办与短期推进顺序。
 | | `settings/` | 统一设置。支持子插件动态向主面板通过 Manifest 注册表单组件。 |
 | | `lorebook/` | 世界书管理面板，实现插件端可视化条目编排。 |
 | | `stats/` | 面向 RPG 游戏的数值与状态栏。 |
@@ -195,10 +204,10 @@ Publish-LuminaServer     # 发布服务端更新
 ---
 
 ## 🧭 快速链接
-- [产品愿景 (PDR) v5.2](./PDR.md)
-- [系统架构 (System Design) v5.2](./system_design.md)
+- [产品愿景 (PDR) v6.0](./PDR.md)
+- [系统架构 (System Design) v6.0](./system_design.md)
 - [API 开发手册](./luminaweave_api.md)
 
 ---
-*Last Updated: 2026-03-28*  
-*Status: Architecture v5.3-dev Active*
+*Last Updated: 2026-04-12*  
+*Status: Architecture v6.0-dev Active (Lifecycle & Stability)*

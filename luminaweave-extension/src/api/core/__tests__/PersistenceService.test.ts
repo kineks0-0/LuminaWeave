@@ -86,7 +86,8 @@ describe('PersistenceService Transaction Protocol', () => {
                 mesRaw: 'A-new',
                 mes: 'A-new',
                 fingerprint: 'fp_new',
-                extra: {}
+                extra: {},
+                syncStatus: 'local'
             }
         ]);
         store.activeLeafId = 'n1';
@@ -167,7 +168,8 @@ describe('PersistenceService Transaction Protocol', () => {
                 mesRaw: 'B-new',
                 mes: 'B-new',
                 fingerprint: 'fp_new2',
-                extra: {}
+                extra: {},
+                syncStatus: 'local'
             }
         ]);
         store.activeLeafId = 'n1';
@@ -239,5 +241,51 @@ describe('PersistenceService Transaction Protocol', () => {
         expect(fetchMock.mock.calls[4][0]).toContain('/transactions/tx_running_1/rollback');
         const retryPatchBody = JSON.parse((fetchMock.mock.calls[5][1] as Record<string, string>).body);
         expect(retryPatchBody.transactionContext.expectedSeq).toBe(7);
+    });
+    it('should skip network sync if all nodes are already synced and metadata is unchanged', async () => {
+        store.setNodes([
+            { id: 'n1', parentId: null, mesRaw: 'hello', syncStatus: 'synced', fingerprint: 'fp1' } as any
+        ]);
+        store.activeLeafId = 'n1';
+
+        const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+        fetchMock.mockImplementation(async (url: string) => {
+            if (url.includes('/sync-status')) return mockResponse(200, { success: true, isTransactionsCompleted: true });
+            // 模拟后端返回完全一致的状态
+            if (url.endsWith('/api/plugins/luminaweave/chat/chat_1')) {
+                return mockResponse(200, [
+                    { type: 'metadata', activeLeafId: 'n1', transaction: { lastCommittedSeq: 5 } },
+                    { id: 'n1', parentId: null, mesRaw: 'hello', fingerprint: 'fp1' }
+                ]);
+            }
+            return mockResponse(500, {});
+        });
+
+        await service.syncToIndependentChat('chat_1', false);
+
+        // 验证 fetch 仅被调用用于获取状态 (sync-status 和 GET)，而没有 PATCH/SAVE
+        const mutationCalls = fetchMock.mock.calls.filter(c => ['PATCH', 'POST'].includes(c[1]?.method));
+        expect(mutationCalls.length).toBe(0);
+    });
+
+    it('should mark local nodes as synced after successful patch', async () => {
+         store.upsertNode({ id: 'n_new', parentId: null, mesRaw: 'new', fingerprint: 'fp_new' } as any);
+         expect(store.getNode('n_new')?.syncStatus).toBe('local');
+
+         const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+         fetchMock.mockImplementation(async (url: string, init?: any) => {
+            if (url.includes('/sync-status')) return mockResponse(200, { success: true, isTransactionsCompleted: true });
+            if (url.endsWith('/chat/chat_1') && !init?.method) return mockResponse(200, []);
+            if (url.includes('/chat_1') && init?.method === 'PATCH') {
+                return mockResponse(200, { success: true, lastCommittedSeq: 10 });
+            }
+            if (url.includes('/save/chat_1') && init?.method === 'POST') {
+                return mockResponse(200, { success: true, lastCommittedSeq: 10 });
+            }
+            return mockResponse(500, {});
+        });
+
+        await service.syncToIndependentChat('chat_1', false);
+        expect(store.getNode('n_new')?.syncStatus).toBe('synced');
     });
 });

@@ -89,6 +89,7 @@ export const DirectorPlugin: LuminaPlugin = {
         // --- 4. 注册 XML 协议说明 ---
         globalPromptRegistry.register({
             id: 'director-current-plan-protocol',
+            contexts: ['chat', 'director'],
             slot: PromptSlot.ST_MAIN,
             targetIdentifier: STIdentifier.MAIN,
             priority: 10,
@@ -98,13 +99,15 @@ export const DirectorPlugin: LuminaPlugin = {
                 statusText: '制定意图中...',
                 anchor: 'Chat_Reply',
                 position: 'before',
-                priority: 10
+                priority: 10,
+                promptContexts: ['chat', 'director']
             }],
             getFragment: () => null
         });
 
         globalPromptRegistry.register({
             id: 'director-next-plan-protocol',
+            contexts: ['chat', 'director'],
             slot: PromptSlot.ST_MAIN,
             targetIdentifier: STIdentifier.MAIN,
             priority: 20,
@@ -114,14 +117,16 @@ export const DirectorPlugin: LuminaPlugin = {
                 statusText: '制定计划中...',
                 anchor: 'Chat_Reply',
                 position: 'after',
-                priority: 60
+                priority: 60,
+                promptContexts: ['chat', 'director']
             }, {
                 tag: 'Story_Summary',
                 description: '凝练地总结并更新当前的剧情概况。这将作为长线背景通过世界书同步。',
                 statusText: '总结剧情中...',
                 anchor: 'Next_Plan',
                 position: 'after',
-                priority: 70
+                priority: 70,
+                promptContexts: ['chat', 'director']
             }],
             getFragment: () => null
         });
@@ -129,6 +134,7 @@ export const DirectorPlugin: LuminaPlugin = {
         // 注册剧情概况作为虚拟世界书条目 (长线背景)
         globalPromptRegistry.register({
             id: 'director-story-summary',
+            contexts: ['chat', 'director'],
             slot: PromptSlot.ST_MAIN,
             label: 'Story Summary',
             priority: 100,
@@ -142,6 +148,7 @@ export const DirectorPlugin: LuminaPlugin = {
         // --- 5. 注册统一的世界拓扑、记忆与数据协议 ---
         globalPromptRegistry.register({
             id: 'director-world-context-unified',
+            contexts: ['chat', 'director'],
             slot: PromptSlot.ST_MAIN,
             type: PromptType.WORLD_VIEW,
             targetIdentifier: STIdentifier.WORLD_INFO_BEFORE,

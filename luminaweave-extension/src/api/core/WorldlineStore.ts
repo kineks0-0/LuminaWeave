@@ -1,11 +1,13 @@
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
-import { LuminaChatMessage } from './ChatManager.js';
+import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { STProtocol } from './st-adapter/STProtocol.js';
 
 export enum WorldlineEvent {
     SWITCHED = 'WORLDLINE_SWITCHED',
     BRANCHED = 'WORLDLINE_BRANCHED',
     ROLLED_BACK = 'WORLDLINE_ROLLED_BACK',
-    UPDATED = 'WORLDLINE_UPDATED'
+    UPDATED = 'WORLDLINE_UPDATED',
+    NODE_UPDATED = 'WORLDLINE_NODE_UPDATED'
 }
 
 /**
@@ -73,6 +75,12 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
         this.childrenMap.clear();
         this.parentMap.clear();
         nodes.forEach(n => {
+            // 批量加载的消息默认为已同步
+            if (!n.syncStatus) n.syncStatus = 'synced';
+            
+            // 核心同步管道：确保加载的消息字段完整
+            STProtocol.syncMessageCalculatedFields(n);
+
             this.nodes.set(n.id, n);
             this._addChild(n);
         });
@@ -81,15 +89,45 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
 
     /**
      * 插入或更新节点
+     * @param options 参数对象，兼容旧版布尔值 (silent)
      */
-    public upsertNode(node: LuminaChatMessage, silent: boolean = false): void {
+    public upsertNode(node: LuminaChatMessage, options: boolean | { silent?: boolean, source?: 'local' | 'backend' } = false): void {
+        const silent = typeof options === 'boolean' ? options : !!options.silent;
+        const source = (typeof options === 'object' && options.source) || 'local';
+        
+        // 1. 获取现有节点用于差异检测
         const existing = this.nodes.get(node.id);
+        const oldFingerprint = existing?.fingerprint;
+
+        // 2. 核心同步属性注入
+        if (!node.syncStatus) {
+            node.syncStatus = source === 'backend' ? 'synced' : 'local';
+        }
+
+        // 3. 核心：单向数据流自动对齐管道
+        // 性能优化：如果在流态 (streaming)，跳过指纹重算以保持打字机流畅度
+        const skipFingerprint = node.syncStatus === 'streaming';
+        STProtocol.syncMessageCalculatedFields(node, { skipFingerprint });
+
         if (existing) {
             this._removeChild(node.id);
         }
         this.nodes.set(node.id, node);
         this._addChild(node);
-        if (!silent) this.emit(WorldlineEvent.UPDATED);
+
+        if (!silent) {
+            // 4. 差异化事件派发：如果指纹发生变更，触发细粒度更新事件
+            if (existing && oldFingerprint !== node.fingerprint) {
+                console.log(`[WorldlineStore] 检测到节点内容变更: ${node.id} (${oldFingerprint} -> ${node.fingerprint})`);
+                this.emit(WorldlineEvent.NODE_UPDATED, { 
+                    nodeId: node.id, 
+                    oldFingerprint, 
+                    newFingerprint: node.fingerprint,
+                    node
+                });
+            }
+            this.emit(WorldlineEvent.UPDATED);
+        }
     }
 
     /**

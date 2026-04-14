@@ -30,6 +30,8 @@ export interface LuminaPlugin {
     headerCenterComponent?: Component;
     headerRightComponent?: Component;
     settingsPreviewComponent?: Component;
+    /** 内嵌于 SettingsUnified 对应插件 card 底部的自定义组件（无需跳转至 SettingsDetailed 即可访问） */
+    settingsInlineComponent?: Component;
     settingsManifest?: Record<string, SettingDefinition>;
     init?: () => void;
     hooks?: {
@@ -39,7 +41,9 @@ export interface LuminaPlugin {
         onMessageAdded?: (message: any, trace: any[]) => void;
         /** 在 LLM 生成彻底结束后触发，常用于状态清理 */
         onGenerationEnded?: (finalText: string) => void;
-        /** 当用户在时间轴切换选中的消息节点时触发，用于“时空倒流”状态恢复 */
+        /** 当用户在时间轴进行“时间穿越”（回溯或分支切换）时触发 [推荐使用] */
+        onTimeTravel?: (nodeId: string, trace: any[], options: { isBranchSwitch: boolean }) => void;
+        /** [已废弃] 当用户在时间轴切换选中的消息节点时触发，请迁移至 onTimeTravel */
         onMessageSelected?: (messageId: string, trace: any[]) => void;
         /** 当整个对话（Chat）加载完成后触发，用于恢复初始状态 */
         onChatLoaded?: (activeLeafId: string | null, nodes: any[]) => void;

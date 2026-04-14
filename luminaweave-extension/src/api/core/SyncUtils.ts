@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from './ChatManager.js';
+import { LuminaChatMessage, MessageUtils } from '../../../../shared/LuminaMessage.js';
 import { lwStorage } from '../storage.js';
 import { BuiltinXMLTags, XMLInterceptor, globalXMLInterceptor } from './XMLInterceptor.js';
 import { ContextControlSettings } from './types.js';
@@ -6,21 +6,12 @@ import { STClient } from './st-adapter/STClient.js';
 import { STProtocol } from './st-adapter/STProtocol.js';
 
 export class MessageTextResolver {
-    /**
-     * 规范化文本，移除不可见字符并清除首尾空格
-     */
     public static normalize(text: string): string {
-        return (text || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+        return MessageUtils.normalize(text);
     }
 
-    /**
-     * 指纹用规范化：去零宽 + 空白折叠 + trim
-     */
     public static normalizeForFingerprint(text: string): string {
-        return (text || '')
-            .replace(/[\u200B-\u200D\uFEFF]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
+        return MessageUtils.normalizeForFingerprint(text);
     }
 
     /**
@@ -73,8 +64,9 @@ export class MessageTextResolver {
             text = msg?.mes ?? msg?.mesRaw ?? msg?.extra?.mesRaw ?? '';
         }
 
-        // 2. 统一标签清洗 (剥离 Story_Summary, Chat_Reply, 丢弃 thinking, 保留 V)
-        let cleaned = globalXMLInterceptor.processAndCleanText(text, false);
+        // 2. 统一策略清洗 (对齐流式过滤偏好)
+        const policy = SyncUtils.getStreamingPolicy();
+        let cleaned = globalXMLInterceptor.cleanText(text, policy);
 
         // 3. 终极清理 (不可见字符处理)
         return MessageTextResolver.normalize(cleaned);
@@ -207,6 +199,18 @@ export class DiffVisualizer {
 }
 
 export class SyncUtils {
+    /**
+     * 获取流式策略配置
+     */
+    public static getStreamingPolicy(): { filterChatReply: boolean, allowTopLevel: boolean, implicitThinking: boolean, aggressiveThinking: boolean } {
+        return {
+            filterChatReply: Boolean(lwStorage.get('lumina-chat.filterChatReply', false, 'Global')),
+            allowTopLevel: Boolean(lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global')),
+            implicitThinking: Boolean(lwStorage.get('lumina-chat.implicitStartThinking', false, 'Global')),
+            aggressiveThinking: Boolean(lwStorage.get('lumina-chat.aggressiveThinking', false, 'Global'))
+        };
+    }
+
     public static readonly SYNC_SOURCE_KEY = '_lw_sync_source';
     public static readonly SYNC_TS_KEY = '_lw_sync_ts';
     public static readonly SYNC_CHAT_KEY = '_lw_sync_chat_id';
@@ -353,34 +357,23 @@ export class SyncUtils {
         };
     }
 
-    /**
-     * 生成内容指纹
-     */
     public static getFingerprint(content: string): string {
-        const cleaned = MessageTextResolver.normalizeForFingerprint(content);
-        return this._hashFingerprint(cleaned);
+        return MessageUtils.getFingerprint(content);
     }
 
     public static getSTFingerprint(stWriteText: string): string {
-        const cleaned = MessageTextResolver.normalizeForFingerprint(stWriteText);
-        return this._hashFingerprint(cleaned);
+        return MessageUtils.getFingerprint(stWriteText);
     }
 
     private static _hashFingerprint(cleaned: string): string {
-        let hash = 0;
-        for (let i = 0; i < cleaned.length; i++) {
-            hash = ((hash << 5) - hash) + cleaned.charCodeAt(i);
-            hash |= 0;
-        }
-        const contentHash = Math.abs(hash);
-        return `fp_${contentHash.toString(16).substring(0, 8)}`;
+        return MessageUtils.getFingerprint(cleaned);
     }
 
     /**
      * 生成随机稳定的节点 ID
      */
     public static generateNodeId(): string {
-        return 'node_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36).substring(4);
+        return MessageUtils.generateNodeId();
     }
 
     /**

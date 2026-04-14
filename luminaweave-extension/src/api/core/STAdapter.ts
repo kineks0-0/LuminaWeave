@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from './ChatManager.js';
+import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
 import { STProtocol } from './st-adapter/STProtocol.js';
 import { STClient } from './st-adapter/STClient.js';
 import { MessageListGateway } from './MessageListGateway.js';

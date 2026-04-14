@@ -192,8 +192,13 @@
             <h5>重建当前对话 (UI Rebuild)</h5>
             <p>从插件原始数据重新解析并对齐 ST 展示层。</p>
           </div>
-          <button class="lw-btn primary ghost sm" :disabled="isRebuilding" @click="handleRebuild">
-            {{ isRebuilding ? '正在执行' : '立即执行' }}
+          <button 
+            class="lw-btn primary ghost sm rebuild-btn" 
+            :disabled="isRebuilding" 
+            @click="handleRebuild"
+          >
+            <span v-if="isRebuilding" class="rebuild-spinner"></span>
+            {{ isRebuilding ? '正在重写核心归一化字段...' : '重建 & 深度校准对话' }}
           </button>
         </div>
       </div>
@@ -214,8 +219,9 @@ const nodeSearchQuery = ref('');
 const parentSearchQuery = ref('');
 
 const tabs = [
-  { id: 'mesRaw', label: '正文 (mesRaw)' },
-  { id: 'pluginRaw', label: '原始 (pluginRaw)' },
+  { id: 'mesRaw', label: '原始正文 (mesRaw)' },
+  { id: 'mes', label: '显示正文 (mes)' },
+  { id: 'pluginRaw', label: '插件原始 (pluginRaw)' },
   { id: 'extra', label: '元数据 (extra)' },
   { id: 'parentId', label: '父节点 (parentId)' },
 ];
@@ -412,13 +418,23 @@ const handleClearAllSnapshots = async () => {
 };
 
 const handleRebuild = async () => {
-  if (!confirm('确定要重建吗？')) return;
+  if (!confirm('【深度重构确认】\n这将触发全局归一化管道：\n1. 重新从 pluginRaw 提取 mesRaw\n2. 重新应用正则表达式生成 mes\n3. 重新计算内容指纹\n4. 强制同步至 ST 与独立存储\n\n确定要执行吗？')) return;
+  
   isRebuilding.value = true;
+  const startTime = Date.now();
+  
   try {
     const res = await luminaWeaveApi.rebuildCurrentChatMessages();
-    luminaWeaveApi.showToast(`重建完成: 更新 ${res.rebuilt} 条`, 'success');
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    
+    luminaWeaveApi.showToast(
+      `重构完成！\n处理节点: ${res.total}\n实质变更: ${res.rebuilt}\n耗时: ${duration}s`, 
+      'success',
+      '深度校准成功'
+    );
   } catch (e) {
-    luminaWeaveApi.showToast('重建失败: ' + e.message, 'error');
+    luminaWeaveApi.showToast('重建过程中发生错误: ' + e.message, 'error');
+    console.error('[DevSettings] Rebuild failed:', e);
   } finally {
     isRebuilding.value = false;
   }
@@ -906,6 +922,27 @@ const truncate = (str, len) => {
 }
 
 /* Buttons */
+.rebuild-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.rebuild-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(var(--lw-primary-rgb), 0.2);
+  border-top-color: var(--lw-primary);
+  border-radius: 50%;
+  animation: lw-spin 0.8s linear infinite;
+}
+
+@keyframes lw-spin {
+  to { transform: rotate(360deg); }
+}
+
 .lw-btn {
   border-radius: 8px;
   font-weight: 600;

@@ -7,6 +7,10 @@
 
     <!-- Small Mode: Vertical Timeline -->
     <div v-if="mode === 'small'" class="small-timeline-wrapper">
+      <div class="timeline-context-pill compact">
+        <span>{{ currentSourceLabel }}</span>
+      </div>
+
       <div class="timeline-tree small" ref="timelineTreeRef">
         <div class="s-node" v-for="(item, index) in flattenedTree" :key="item.id">
           <!-- Multi-Track Graph Column (Modified to 2-lane layout) -->
@@ -127,6 +131,7 @@
               <polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
             <span>时空图谱</span>
+            <span class="header-source-pill">{{ currentSourceLabel }}</span>
           </div>
           <div class="header-tools">
             <button class="lw-btn lw-btn-ghost tool-btn" title="居中对齐" @click="focusOnActiveLeaf">
@@ -367,7 +372,7 @@ const calculateNodeHeight = (text: string, isActive: boolean) => {
     width: NODE_LAYOUT_CONFIG.MEASURE_WIDTH,
     lineHeight: NODE_LAYOUT_CONFIG.LINE_HEIGHT,
     fontSize: NODE_LAYOUT_CONFIG.FONT_SIZE,
-    fontFamily: "Inter, 'PingFang SC', sans-serif",
+    fontFamily: "Aptos, 'MiSans', 'PingFang SC', sans-serif",
     fontWeight: 500,
     maxLines: NODE_LAYOUT_CONFIG.MAX_LINES
   });
@@ -401,7 +406,9 @@ const {
   graph: timelineGraph,
   activeLeafId: storeActiveLeafId,
   isReady: isTimelineReady,
-  revision: timelineRevision
+  revision: timelineRevision,
+  activeSourceId,
+  sources: timelineSources
 } = storeToRefs(timelineStore);
 
 const flattenedTree = ref<TimelineViewNode[]>([]);
@@ -426,6 +433,10 @@ const isActionNodeConnected = computed(() => {
   const lastNode = flattenedTree.value[flattenedTree.value.length - 1];
   // 只有当最后一个展示的节点属于活跃路径时，继续对话按钮才与之相连
   return activePathIds.value.has(lastNode.id);
+});
+
+const currentSourceLabel = computed(() => {
+  return timelineSources.value.find(source => source.id === activeSourceId.value)?.label ?? '剧情演播';
 });
 
 const toggleWheelMode = () => {
@@ -1082,6 +1093,17 @@ const handleConfirmRollback = async () => {
   }
 };
 
+
+const handleJumpNode = async (node: TimelineViewNode) => {
+  isSwitching.value = true;
+  try {
+    await timelineStore.switchToNode(node.id);
+  } finally {
+    isSwitching.value = false;
+    focusedNodeId.value = null;
+  }
+};
+
 const handleNodeAction = ({ type, node }: { type: string, node: TimelineViewNode }) => {
   console.log(`[LuminaTimeline] Received node action: ${type}`, node);
   switch (type) {
@@ -1096,6 +1118,9 @@ const handleNodeAction = ({ type, node }: { type: string, node: TimelineViewNode
       break;
     case 'switch':
       handleSwitchBranch(node);
+      break;
+    case 'jump':
+      handleJumpNode(node);
       break;
   }
 };
@@ -1148,7 +1173,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--lw-bg-app);
+  background:
+    linear-gradient(180deg, rgba(var(--lw-bg-elevated-rgb), 0.42), rgba(var(--lw-bg-elevated-rgb), 0));
   position: relative;
   font-family: inherit;
   overflow: hidden;
@@ -1164,7 +1190,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255, 255, 255, 0.7);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 88%, transparent);
   backdrop-filter: var(--lw-glass-blur);
   border-bottom: 1px solid var(--lw-border-base);
   position: absolute;
@@ -1190,6 +1216,82 @@ onUnmounted(() => {
   letter-spacing: -0.01em;
 }
 
+.header-source-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lw-text-secondary);
+  background: var(--lw-bg-subtle);
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.timeline-context-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.timeline-context-pill.compact {
+  margin-bottom: 16px;
+}
+
+.timeline-source-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timeline-source-switcher.compact {
+  padding: 0 0 16px;
+  overflow-x: auto;
+}
+
+.source-chip {
+  border: 1px solid var(--lw-border-base);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--lw-text-dim);
+  border-radius: 999px;
+  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--lw-transition);
+  white-space: nowrap;
+}
+
+.source-chip strong {
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.78;
+}
+
+.source-chip.active {
+  background: var(--lw-black);
+  border-color: var(--lw-black);
+  color: var(--lw-text-inverse);
+  box-shadow: var(--lw-shadow);
+}
+
+.source-chip:hover {
+  transform: translateY(-1px);
+  border-color: var(--lw-border-hover);
+  color: var(--lw-text-main);
+}
+
+.source-chip.active:hover {
+  color: #fff;
+}
+
 .header-tools {
   display: flex;
   gap: 6px;
@@ -1209,8 +1311,8 @@ onUnmounted(() => {
   gap: 8px;
   font-size: 11px;
   font-weight: 700;
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.08);
+  color: var(--lw-success);
+  background: color-mix(in srgb, var(--lw-success) 12%, white);
   padding: 4px 10px;
   border-radius: 20px;
 }
@@ -1218,9 +1320,9 @@ onUnmounted(() => {
 .pulse-dot {
   width: 6px;
   height: 6px;
-  background: #10b981;
+  background: var(--lw-success);
   border-radius: 50%;
-  box-shadow: 0 0 8px #10b981;
+  box-shadow: 0 0 0 6px rgba(19, 137, 92, 0.08);
   animation: pulse-ring 2s infinite;
 }
 
@@ -1244,10 +1346,10 @@ onUnmounted(() => {
   display: flex;
   gap: 12px;
   padding: 8px;
-  background: rgba(255, 255, 255, 0.8);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 90%, transparent);
   backdrop-filter: var(--lw-glass-blur);
   border: 1px solid var(--lw-border-base);
-  border-radius: 16px;
+  border-radius: 20px;
   box-shadow: var(--lw-shadow-hover);
   z-index: 100;
 }
@@ -1351,7 +1453,7 @@ onUnmounted(() => {
 }
 
 .s-card.active {
-  border-color: var(--lw-primary);
+  border-color: var(--lw-border-active);
   box-shadow: var(--lw-shadow-hover);
 }
 
@@ -1362,7 +1464,7 @@ onUnmounted(() => {
 
 .s-card:hover {
   transform: translateY(-2px);
-  border-color: var(--lw-primary);
+  border-color: var(--lw-border-hover);
 }
 
 .s-card-header {
@@ -1388,13 +1490,13 @@ onUnmounted(() => {
 }
 
 .s-role-tag.user {
-  background: #f0fdf4;
-  color: #166534;
+  background: color-mix(in srgb, var(--lw-success) 12%, white);
+  color: var(--lw-success);
 }
 
 .s-role-tag.char {
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--lw-primary);
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-secondary);
 }
 
 .s-card-content {
@@ -1484,18 +1586,18 @@ onUnmounted(() => {
 }
 
 .s-action-btn.branch {
-  background: #eef2ff;
-  color: #4338ca;
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-main);
 }
 
 .s-action-btn.rollback {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--lw-danger) 10%, white);
+  color: var(--lw-danger);
 }
 
 .s-action-btn.grey {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-secondary);
 }
 
 .s-action-btn:hover {
@@ -1534,7 +1636,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(8px) saturate(180%);
   z-index: 2000;
   display: flex;
@@ -1583,14 +1685,14 @@ onUnmounted(() => {
 .loading-title {
   font-size: 18px;
   font-weight: 800;
-  color: #1e293b;
+  color: var(--lw-text-main);
   margin: 0 0 8px 0;
   letter-spacing: 0.5px;
 }
 
 .loading-desc {
   font-size: 13px;
-  color: #64748b;
+  color: var(--lw-text-secondary);
   margin: 0;
   font-weight: 500;
 }
@@ -1647,7 +1749,7 @@ onUnmounted(() => {
   width: 100%;
   max-width: 800px;
   max-height: 80vh;
-  background: white;
+  background: var(--lw-bg-elevated);
   border-radius: 20px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   display: flex;

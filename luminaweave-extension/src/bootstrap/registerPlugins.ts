@@ -6,6 +6,7 @@ import LorebookPlugin from '../plugins/lorebook';
 import { DirectorPlugin } from '../plugins/director';
 import LauncherPlugin from '../plugins/launcher';
 import DevPlugin from '../plugins/dev';
+import ForgePlugin from '../plugins/forge';
 import { pluginManager } from '../core/PluginManager';
 
 let hasRegisteredPlugins = false;
@@ -21,7 +22,8 @@ export const registerLuminaPlugins = () => {
         LorebookPlugin,
         DirectorPlugin,
         LauncherPlugin,
-        DevPlugin
+        DevPlugin,
+        ForgePlugin
     ].forEach(plugin => {
         pluginManager.register(plugin);
     });

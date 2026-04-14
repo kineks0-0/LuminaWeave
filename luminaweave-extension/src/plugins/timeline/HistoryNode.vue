@@ -69,6 +69,12 @@
                 <path d="M18 9a9 9 0 0 1-9 9"></path>
               </svg>
             </button>
+            <button class="l-action-btn-mini jump" @click.stop="handleAction('jump')" title="跳转到此路径">
+              <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none">
+                <polyline points="13 17 18 12 13 7"></polyline>
+                <polyline points="6 17 11 12 6 7"></polyline>
+              </svg>
+            </button>
             <button class="l-action-btn-mini rollback" @click.stop="handleAction('rollback')" title="物理回退">
               <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none">
                 <path d="M3 10h10a5 5 0 1 1 5 5v3"></path>

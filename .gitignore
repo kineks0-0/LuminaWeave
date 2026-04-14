@@ -14,8 +14,9 @@ thumbs.db
 *.log
 *.tmp
 
-# 第三方 TavernHelper 文档
+# 第三方 文档
 TavernHelper@types/
+A.U.T.O制卡思路/
 
 # 插件本身数据
 luminaweave-server/data/
@@ -28,6 +29,7 @@ luminaweave-server/data/
 .docs/
 tmp/
 *.code-workspace
+.omm/
 
 # 编译脚本
 *.ps1

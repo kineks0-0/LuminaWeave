@@ -28,6 +28,19 @@ describe('WorldlineStore', () => {
         expect(trace.map(n => n.id)).toEqual(['1', '2', '3']);
     });
 
+    it('should handle syncStatus and source correctly', () => {
+        const n1 = { id: 'local_1', mesRaw: 'hello' } as any;
+        store.upsertNode(n1); // Default is local
+        expect(store.getNode('local_1')?.syncStatus).toBe('local');
+
+        const n2 = { id: 'backend_1', mesRaw: 'hi' } as any;
+        store.upsertNode(n2, { source: 'backend' });
+        expect(store.getNode('backend_1')?.syncStatus).toBe('synced');
+
+        store.setNodes([{ id: 'loaded_1', mesRaw: 'loaded' } as any]);
+        expect(store.getNode('loaded_1')?.syncStatus).toBe('synced');
+    });
+
     it('should remove subtree (incremental prune) correctly', () => {
         // Tree: 1 -> 2 -> 3
         //            \ -> 4

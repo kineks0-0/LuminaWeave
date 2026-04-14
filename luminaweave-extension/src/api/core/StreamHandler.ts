@@ -1,13 +1,33 @@
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 import { lwStorage } from '../storage.js';
-import { STClient } from './st-adapter/STClient';
 import { globalXMLInterceptor, StreamSemanticState } from './XMLInterceptor.js';
+import { ST_EVENT } from './STEvent.js';
+import { llmEngine } from '../llmEngine.js';
+import { NexusClient } from './NexusClient.js';
+import type { NexusStatusResponse } from '../../types/nexus.js';
+import { pluginFetch } from './PluginHttpClient.js';
+
+/**
+ * 流式输出的聚合状态 (MVI 模式)
+ */
+export interface StreamState {
+    isGenerating: boolean;
+    isSyncing: boolean;
+    rawText: string;
+    displayText: string;
+    filteredCount: number;
+    statusText: string;
+    activeTag: string | null;
+    thinkingText: string;
+    lastChunk: string;
+}
 
 /**
  * 负责流式输出的拦截、缓冲与平滑分发
  */
 export class StreamHandler extends LuminaWeaveAPIBase {
     public responseBuffer: string = "";
+    public isSyncing: boolean = false;
     public isGenerating: boolean = false;
     private _smoothRemaining: string = "";
     private _smoothTimer: any = null;
@@ -15,14 +35,25 @@ export class StreamHandler extends LuminaWeaveAPIBase {
     private _lastDisplayFullText: string = "";
     /** 已确认显示的文本（无动画），用于流式效果的双层输出 */
     private _confirmedText: string = "";
+    private _lastStatusText: string = "";
+    private _lastFilteredCount: number = -1;
+    private _lastThinkingText: string = "";
     private _initialized: boolean = false;
     private _latestSemanticState: StreamSemanticState = {
         rawText: '',
         displayText: '',
         filteredCount: 0,
         statusText: '',
-        activeTag: null
+        activeTag: null,
+        thinkingText: ''
     };
+
+    private _lastActivityTime: number = 0;
+    private _watchdogTimer: any = null;
+    private _syncing = false;
+    private _resuming = false;
+    private _resumeChatId: string | null = null;
+    private _resumeAbort: AbortController | null = null;
 
     constructor() {
         super();
@@ -30,12 +61,24 @@ export class StreamHandler extends LuminaWeaveAPIBase {
 
     init(providedEventSource?: any): void {
         if (this._initialized) return;
-
-        // 核心修复：不再在 StreamHandler 内部直接监听 ST 事件
-        // 改为由 LuminaWeaveAPI 统一监听并根据状态（如 _probing）决定是否转发给 StreamHandler
-        // 这解决了双重监听以及探测请求误触生成状态的问题
         this.handleEnd();
         this._initialized = true;
+        this.emitStateUpdate();
+    }
+
+    private emitStateUpdate(lastChunk: string = "") {
+        const state: StreamState = {
+            isGenerating: this.isGenerating,
+            isSyncing: this.isSyncing,
+            rawText: this.responseBuffer,
+            displayText: this._smoothEmitText || this._latestSemanticState.displayText,
+            filteredCount: this._latestSemanticState.filteredCount,
+            statusText: this._latestSemanticState.statusText,
+            activeTag: this._latestSemanticState.activeTag,
+            thinkingText: this._latestSemanticState.thinkingText,
+            lastChunk: lastChunk
+        };
+        this.emit('STREAM_STATE_UPDATED', state);
     }
 
     /**
@@ -43,21 +86,28 @@ export class StreamHandler extends LuminaWeaveAPIBase {
      * @param options 配置项 { silent?: boolean } 如果为 true，则不设置 isGenerating 标记 (用于探测请求)
      */
     handleRestart(options: { silent?: boolean } = {}): void {
+        console.log(`[StreamHandler] Restarting stream (silent: ${!!options.silent})`);
         this.isGenerating = !options.silent;
+        this.isSyncing = false;
         this.responseBuffer = "";
         this._smoothRemaining = "";
         this._smoothEmitText = "";
         this._confirmedText = "";
         this._lastDisplayFullText = "";
+        this._lastStatusText = "";
+        this._lastFilteredCount = -1;
+        this._lastThinkingText = "";
         this._latestSemanticState = {
             rawText: '',
             displayText: '',
             filteredCount: 0,
             statusText: '',
-            activeTag: null
+            activeTag: null,
+            thinkingText: ''
         };
-        this._lastDisplayFullText = "";
         this.clearSmoothTimer();
+        this.startWatchdog();
+        this.emitStateUpdate();
     }
 
     /**
@@ -71,6 +121,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
         const filterChatReply = lwStorage.get('lumina-chat.filterChatReply', false, 'Global');
         const allowTopLevel = lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global');
         const implicitThinking = lwStorage.get('lumina-chat.implicitThinkingInFilter', false, 'Global');
+        const aggressiveThinking = lwStorage.get('lumina-chat.aggressiveThinking', false, 'Global');
 
         if (rawFullText.length < this.responseBuffer.length) {
             console.warn(`[StreamHandler] Raw Buffer Shrank (${this.responseBuffer.length} -> ${rawFullText.length}). Resetting local raw buffer.`);
@@ -78,9 +129,24 @@ export class StreamHandler extends LuminaWeaveAPIBase {
         }
 
         this.responseBuffer = rawFullText;
-        const semanticState = this.resolveDisplayState(rawFullText, filterChatReply, allowTopLevel, implicitThinking);
+        const semanticState = this.resolveDisplayState(rawFullText, { 
+            filterChatReply, 
+            allowTopLevel, 
+            implicitThinking,
+            aggressiveThinking
+        });
         const displayFullText = semanticState.displayText;
         this._latestSemanticState = semanticState;
+
+        // 检测元数据是否变更
+        const metadataChanged = 
+            semanticState.statusText !== this._lastStatusText || 
+            semanticState.filteredCount !== this._lastFilteredCount ||
+            semanticState.thinkingText !== this._lastThinkingText;
+        
+        this._lastStatusText = semanticState.statusText;
+        this._lastFilteredCount = semanticState.filteredCount;
+        this._lastThinkingText = semanticState.thinkingText;
 
         if (displayFullText.length < this._smoothEmitText.length) {
             console.warn(`[StreamHandler] Display Buffer Shrank (${this._smoothEmitText.length} -> ${displayFullText.length}). Resetting smooth queue.`);
@@ -88,107 +154,122 @@ export class StreamHandler extends LuminaWeaveAPIBase {
             this._smoothRemaining = "";
         }
 
-        if (chunk.length > 0 && this._smoothRemaining.length % 50 === 0) {
-            console.log(`[StreamHandler] Chunk received. Raw delta=${chunk.length}, raw total=${rawFullText.length}, display total=${displayFullText.length}, filter=${filterChatReply ? 'on' : 'off'}`);
-        }
-
         if (isSmooth && smoothness > 0) {
-            // 核心修复：待平滑的实际增量，改用 displayFullText 与上一个 fullText 的差值计算。
-            // 之前的逻辑使用 displayFullText 与 _smoothEmitText 差值，
-            // 会导致如果 handleChunk 被重复调用（尽管全量文本未变），且展示进度落后时，同样的字符被重复推入队列。
             let actualChunk = "";
-
             if (displayFullText.startsWith(this._lastDisplayFullText)) {
                 actualChunk = displayFullText.substring(this._lastDisplayFullText.length);
             } else {
-                // 如果数据不连贯（例如重置或断层），同步对齐输出进度
+                console.log('[StreamHandler] Output jump detected, resyncing display buffer');
                 this._smoothEmitText = displayFullText;
                 this._smoothRemaining = "";
-                this.emit('BUFFER_UPDATED', displayFullText, rawFullText, semanticState.filteredCount, semanticState.statusText);
+                this.emitBufferUpdate(displayFullText);
             }
-
-            // 更新稳态记录
             this._lastDisplayFullText = displayFullText;
-
             if (actualChunk.length > 0) {
                 this._smoothRemaining += actualChunk;
             }
 
-            if (!this._smoothTimer) {
-                this._smoothTimer = setInterval(() => {
-                    if (this._smoothRemaining.length > 0) {
-                        // 核心增强：防止 smoothness 参数过载导致除零或步长异常 (smoothness 范围通常为 1-7)
-                        const divisor = Math.max(0.1, 8 - smoothness);
-                        let step = Math.ceil(this._smoothRemaining.length / divisor);
-
-                        if (this._smoothRemaining.length > 50) step = Math.max(step, 2);
-                        if (this._smoothRemaining.length > 150) step = Math.max(step, 5);
-                        if (this._smoothRemaining.length > 300) step = Math.max(step, 10);
-
-                        const maxSpeed = lwStorage.get('lumina-chat.streamingMaxSpeed', 20, 'Global');
-                        step = Math.min(step, maxSpeed);
-
-                        const batch = this._smoothRemaining.substring(0, step);
-                        this._smoothRemaining = this._smoothRemaining.substring(step);
-                        // 双层输出核心：上一帧的全文 → confirmed，本帧新增 → pending
-                        this._confirmedText = this._smoothEmitText;
-                        this._smoothEmitText += batch;
-
-                        this.emit(
-                            'BUFFER_UPDATED',
-                            this._smoothEmitText,
-                            this.responseBuffer,
-                            this._latestSemanticState.filteredCount,
-                            this._latestSemanticState.statusText,
-                            batch
-                        );
-                    } else if (!this.isGenerating) {
-                        this.clearSmoothTimer();
-                        this.emit('GENERATION_ENDED', this.responseBuffer);
-                    }
-                }, 20);
-            } else if (this._smoothRemaining.length === 0) {
-                this.emit('BUFFER_UPDATED', this._smoothEmitText, this.responseBuffer, semanticState.filteredCount, semanticState.statusText, '');
+            if (metadataChanged) {
+                this.emitBufferUpdate(this._smoothEmitText);
             }
+            
+            this.startSmoothTimer(smoothness);
         } else {
-            this.clearSmoothTimer();
-            // 非平滑模式：整段文本作为 pending（instant 模式下前端忽略此值）
-            const pendingChunk = displayFullText.substring(this._smoothEmitText.length);
-            this._confirmedText = this._smoothEmitText;
             this._smoothEmitText = displayFullText;
-            this.emit('BUFFER_UPDATED', displayFullText, rawFullText, semanticState.filteredCount, semanticState.statusText, pendingChunk);
-        }
-    }
-
-    private resolveDisplayState(rawFullText: string, filterChatReply: boolean, allowTopLevel: boolean = true, implicitThinking: boolean = false): StreamSemanticState {
-        const semanticState = globalXMLInterceptor.deriveStreamState(rawFullText, filterChatReply, allowTopLevel, implicitThinking);
-
-        if (this._smoothRemaining.length % 50 === 0) {
-            console.log(
-                `[StreamHandler] Filter decision: active=${filterChatReply}, topLevel=${allowTopLevel}, implicitThink=${implicitThinking}. raw=${semanticState.rawText.length}, display=${semanticState.displayText.length}, status="${semanticState.statusText || 'none'}"`
-            );
+            this.emitBufferUpdate(displayFullText);
         }
 
-        return semanticState;
+        // 核心架构：每次 Chunk 到达都同步最新的聚合状态
+        this.emitStateUpdate(chunk);
+        this._lastActivityTime = Date.now();
+    }
+    
+    notifyActivity(): void {
+        this._lastActivityTime = Date.now();
     }
 
-    /**
-     * 生成结束处理
-     */
-    handleEnd(): void {
-        this.isGenerating = false;
-        console.log('[StreamHandler] generation ended.');
+    private emitBufferUpdate(displayFullText: string) {
+        this.emit(
+            'BUFFER_UPDATED',
+            displayFullText,
+            this.responseBuffer,
+            this._latestSemanticState.filteredCount,
+            this._latestSemanticState.statusText,
+            this._latestSemanticState.thinkingText,
+            ''
+        );
+    }
+
+    private startSmoothTimer(smoothness: number) {
+        if (this._smoothTimer) return;
+        this._smoothTimer = setInterval(() => {
+            if (this._smoothRemaining.length > 0) {
+                const divisor = Math.max(0.1, 8 - smoothness);
+                let step = Math.ceil(this._smoothRemaining.length / divisor);
+
+                if (this._smoothRemaining.length > 50) step = Math.max(step, 2);
+                if (this._smoothRemaining.length > 150) step = Math.max(step, 5);
+                if (this._smoothRemaining.length > 300) step = Math.max(step, 10);
+
+                const maxSpeed = lwStorage.get('lumina-chat.streamingMaxSpeed', 20, 'Global');
+                step = Math.min(step, maxSpeed);
+
+                const batch = this._smoothRemaining.substring(0, step);
+                this._smoothRemaining = this._smoothRemaining.substring(step);
+                this._confirmedText = this._smoothEmitText;
+                this._smoothEmitText += batch;
+
+                this.emit(
+                    'BUFFER_UPDATED',
+                    this._smoothEmitText,
+                    this.responseBuffer,
+                    this._latestSemanticState.filteredCount,
+                    this._latestSemanticState.statusText,
+                    this._latestSemanticState.thinkingText,
+                    batch
+                );
+                
+                // 平滑吐字时也广播聚合状态
+                this.emitStateUpdate(batch);
+            } else if (!this.isGenerating) {
+                this.clearSmoothTimer();
+                this.emit('GENERATION_ENDED', this.responseBuffer);
+                this.emitStateUpdate();
+            }
+        }, 20);
+    }
+
+    private resolveDisplayState(rawFullText: string, policy: any): StreamSemanticState {
+        return globalXMLInterceptor.deriveStreamState(rawFullText, policy);
+    }
+
+    handleEnd(options: { stayActive?: boolean } = {}): void {
+        if (options.stayActive) {
+            this.isSyncing = true;
+            console.log('[StreamHandler] Stream ended via chunk end, entering syncing state...');
+        } else {
+            console.log('[StreamHandler] Stream ended normally.');
+            this.isGenerating = false;
+            this.isSyncing = false;
+            this.stopWatchdog();
+        }
 
         const isSmooth = lwStorage.get('lumina-chat.streamingSmoothness', false, 'Global');
-        // 如果没有开启平滑，或者队列本来就是空的，立即结束
-        if (!isSmooth || this._smoothRemaining.length === 0) {
+        if ((!isSmooth || this._smoothRemaining.length === 0) && !options.stayActive) {
             this.clearSmoothTimer();
-            // 核心修复：保留 responseBuffer 直到下一次 restart
-            // 这样当 UI 收到 GENERATION_ENDED 信号时，即便立即清空了组件内部的 buffer，
-            // 如果 formal messages 同步稍有延迟，至少 API 层的数据还是完整的。
             this.emit('GENERATION_ENDED', this.responseBuffer);
-            // this.responseBuffer = ""; // 移除这里的清空逻辑
+            this.emitStateUpdate();
         }
+    }
+
+    finishSync(): void {
+        this.isSyncing = false;
+        this.isGenerating = false;
+        this.clearSmoothTimer();
+        this.stopWatchdog();
+        console.log('[StreamHandler] sync finished, releasing generation lock.');
+        this.emit('GENERATION_ENDED', this.responseBuffer);
+        this.emitStateUpdate();
     }
 
     clearSmoothTimer(): void {
@@ -198,78 +279,237 @@ export class StreamHandler extends LuminaWeaveAPIBase {
         }
     }
 
-    private _syncing = false;
-    /**
-     * 与后端同步流状态 (用于初始化或断线重连)
-     */
+    cancelResume(): void {
+        if (this._resumeAbort) {
+            this._resumeAbort.abort();
+        }
+        this._resuming = false;
+    }
+
+    private async fetchServerState(chatId: string, signal?: AbortSignal): Promise<NexusStatusResponse | null> {
+        try {
+            const res = await pluginFetch(`/api/plugins/luminaweave/nexus/status/${chatId}`, {
+                signal
+            });
+            if (!res.ok) return null;
+            return (await res.json()) as NexusStatusResponse;
+        } catch {
+            return null;
+        }
+    }
+
+    private applyServerBuffer(serverBuffer: string, serverIsGenerating: boolean): void {
+        if (serverIsGenerating && !this.isGenerating) {
+            this.handleRestart({ silent: false });
+        }
+
+        if (serverBuffer !== this.responseBuffer) {
+            let delta = '';
+            if (serverBuffer.startsWith(this.responseBuffer)) {
+                delta = serverBuffer.substring(this.responseBuffer.length);
+            } else {
+                this.responseBuffer = '';
+                this._smoothEmitText = '';
+                this._smoothRemaining = '';
+                this._lastDisplayFullText = '';
+                delta = serverBuffer;
+            }
+            this.isGenerating = serverIsGenerating;
+            this.handleChunk(delta, serverBuffer);
+        } else {
+            this.isGenerating = serverIsGenerating;
+        }
+    }
+
     async syncWithServer(chatId: string): Promise<void> {
         if (this._syncing) return;
         this._syncing = true;
         try {
-            const csrfToken = await STClient.getCsrfToken();
-            const res = await fetch(`/api/plugins/luminaweave/nexus/status/${chatId}`, {
-                headers: { 'X-CSRF-Token': csrfToken }
-            });
-            if (!res.ok) return;
-            const state = await res.json();
+            const state = await this.fetchServerState(chatId);
+            if (!state) return;
 
-            // 核心修复：如果在刚打开插件时，后端由于某些原因（比如历史记录缓存）返回了旧的 buffer
-            // 且 isGenerating 为 false，我们不应该盲目触发流式展示
             const serverBuffer = typeof state.rawBuffer === 'string' ? state.rawBuffer : (typeof state.buffer === 'string' ? state.buffer : "");
-
             if (!state.isGenerating) {
                 if ((state.status === 'error' || state.status === 'aborted') && this.isGenerating) {
                     this.emit('GENERATION_FAILED', state.errorMessage || '后端生成已中断', state.status);
                 }
                 if (this.isGenerating || serverBuffer !== this.responseBuffer) {
-                    // 优化：在触发同步前，检查本地集成的事务是否已经与后端对齐
-                    const persistenceService = window.LuminaWeave?.chatManager?.persistence;
+                    const persistenceService = (window as any).LuminaWeave?.chatManager?.persistence;
                     const integratedTxId = persistenceService ? persistenceService.getIntegratedTxId(chatId) : null;
 
-                    if (state.lastTransactionId && integratedTxId === state.lastTransactionId) {
-                        console.log(`[StreamHandler] 后端生成已结束且本地集成事务 ID (${integratedTxId}) 已最新，跳过强制拉取。`);
-                    } else if (state.lastTransactionId && state.lastTransactionId !== 'undefined' && state.lastTransactionId !== '') {
-                        // 仅当后端真的提供了有效的 lastTransactionId，且我们本地落后时，才触发强制拉取
-                        console.log(`[StreamHandler] 发现后端有未集成的完成数据 (tx: ${state.lastTransactionId} vs local: ${integratedTxId})，触发同步拉取..`);
-                        setTimeout(() => {
-                            window.LuminaWeave?.syncFromST({ forceIndependentLoad: true, skipSave: true });
-                        }, 50);
-                    } else {
-                        // 如果后端没返回 transaction ID，说明可能是旧版数据或未初始化，跳过以防无限循环
-                        console.log(`[StreamHandler] 后端生成已结束但无事务 ID 记录，跳过强制拉取以防循环。`);
+                    if (state.lastTransactionId) {
+                        this.emit('TRANSACTION_COMMITTED', {
+                            lastTransactionId: state.lastTransactionId,
+                            activeLeafId: state.activeLeafId,
+                            generationId: state.generationId
+                        });
+
+                        if (integratedTxId !== state.lastTransactionId) {
+                            setTimeout(() => {
+                                (window as any).LuminaWeave?.syncFromST({ forceIndependentLoad: true, skipSave: true });
+                            }, 50);
+                        }
                     }
                 }
-
                 if (this.isGenerating) {
                     this.handleEnd();
                 }
                 return;
             }
-
             if (!this.isGenerating) {
                 this.handleRestart({ silent: false });
             }
-
             if (serverBuffer !== this.responseBuffer) {
-                console.log(`[StreamHandler] 从后端同步 Buffer: ${this.responseBuffer.length} -> ${serverBuffer.length}`);
-                let delta = '';
-                if (serverBuffer.startsWith(this.responseBuffer)) {
-                    delta = serverBuffer.substring(this.responseBuffer.length);
-                } else {
-                    // 直接将本地环境重置，用后端全量数据覆盖
-                    console.warn(`[StreamHandler] 检测到本地 Buffer 与后端断层，执行全量覆盖对齐`);
-                    this.responseBuffer = '';
-                    this._smoothEmitText = '';
-                    this._smoothRemaining = "";
-                    delta = serverBuffer;
-                }
-                this.isGenerating = state.isGenerating;
-                this.handleChunk(delta, serverBuffer);
+                this.applyServerBuffer(serverBuffer, true);
             }
         } catch (e) {
             console.warn('[StreamHandler] 同步后端状态失败', e);
         } finally {
             this._syncing = false;
+        }
+    }
+
+    async resumeToTerminal(chatId: string): Promise<void> {
+        if (!chatId || chatId === 'null' || chatId === 'undefined') return;
+        if (this._resuming && this._resumeChatId === chatId) return;
+
+        if (this._resumeAbort) {
+            this._resumeAbort.abort();
+        }
+        const controller = new AbortController();
+        this._resumeAbort = controller;
+        this._resumeChatId = chatId;
+        this._resuming = true;
+
+        try {
+            const state = await this.fetchServerState(chatId, controller.signal);
+            if (!state) return;
+
+            const serverBuffer = typeof state.rawBuffer === 'string' ? state.rawBuffer : (typeof state.buffer === 'string' ? state.buffer : '');
+            const serverIsGenerating = !!state.isGenerating;
+            if (serverBuffer) {
+                this.applyServerBuffer(serverBuffer, serverIsGenerating);
+            } else if (serverIsGenerating && !this.isGenerating) {
+                this.handleRestart({ silent: false });
+            }
+
+            if (!serverIsGenerating) {
+                if (state.status === 'error' || state.status === 'aborted') {
+                    this.emit('GENERATION_FAILED', state.errorMessage || (state.status === 'aborted' ? '已停止生成' : '后端生成失败'), state.status);
+                } else if (this.isGenerating) {
+                    this.handleEnd();
+                }
+                return;
+            }
+
+            const generationId = typeof state.generationId === 'string' ? state.generationId : '';
+            if (!generationId) {
+                await this.pollUntilTerminal(chatId, controller.signal);
+                return;
+            }
+
+            const nexus = new NexusClient();
+            try {
+                await nexus.attachStream({
+                    chatId,
+                    generationId,
+                    from: this.responseBuffer.length,
+                    initialText: this.responseBuffer
+                }, {
+                    onDelta: (delta: string) => {
+                        if (controller.signal.aborted) return;
+                        const full = this.responseBuffer + delta;
+                        this.isGenerating = true;
+                        this.handleChunk(delta, full);
+                    },
+                    onBackendCommitted: (info) => {
+                        if (controller.signal.aborted) return;
+                        this.emit('TRANSACTION_COMMITTED', info);
+                    },
+                    onDone: (res) => {
+                        if (controller.signal.aborted) return;
+                        if (res.status === 'error' || res.status === 'aborted') {
+                            this.isGenerating = false;
+                            this.clearSmoothTimer();
+                            this.emit('GENERATION_FAILED', res.status === 'aborted' ? '已停止生成' : '后端生成失败', res.status);
+                        } else {
+                            if (res.lastTransactionId) {
+                                this.emit('TRANSACTION_COMMITTED', {
+                                    lastTransactionId: res.lastTransactionId,
+                                    activeLeafId: res.activeLeafId,
+                                    generationId: res.generationId
+                                });
+                            }
+                            this.handleEnd();
+                        }
+                    },
+                    onError: (err) => {
+                        if (controller.signal.aborted) return;
+                        this.isGenerating = false;
+                        this.clearSmoothTimer();
+                        this.emit('GENERATION_FAILED', err.message || '连接异常');
+                    }
+                }, controller.signal);
+                return;
+            } catch {
+                if (!controller.signal.aborted) {
+                    await this.pollUntilTerminal(chatId, controller.signal);
+                }
+            }
+        } finally {
+            if (this._resumeAbort === controller) {
+                this._resuming = false;
+            }
+        }
+    }
+
+    private async pollUntilTerminal(chatId: string, signal: AbortSignal): Promise<void> {
+        let delay = 500;
+        while (!signal.aborted) {
+            const state = await this.fetchServerState(chatId, signal);
+            if (!state) {
+                delay = Math.min(2000, delay * 2);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+
+            const serverBuffer = typeof state.rawBuffer === 'string' ? state.rawBuffer : (typeof state.buffer === 'string' ? state.buffer : '');
+            this.applyServerBuffer(serverBuffer, !!state.isGenerating);
+
+            if (!state.isGenerating) {
+                if (state.status === 'error' || state.status === 'aborted') {
+                    this.emit('GENERATION_FAILED', state.errorMessage || (state.status === 'aborted' ? '已停止生成' : '后端生成失败'), state.status);
+                    this.clearSmoothTimer();
+                } else {
+                    this.handleEnd();
+                }
+                await this.syncWithServer(chatId);
+                return;
+            }
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+
+    private startWatchdog(): void {
+        this.stopWatchdog();
+        this._lastActivityTime = Date.now();
+        this._watchdogTimer = setInterval(() => {
+            const timeout = 20000;
+            if (this.isGenerating && !this.isSyncing && Date.now() - this._lastActivityTime > timeout) {
+                const { chatId } = lwStorage._getContextIds();
+                if (chatId) {
+                    console.warn(`[StreamHandler] Watchdog 触发：自动恢复 [Chat: ${chatId}]`);
+                    this._lastActivityTime = Date.now();
+                    this.resumeToTerminal(chatId);
+                }
+            }
+        }, 5000);
+    }
+
+    private stopWatchdog(): void {
+        if (this._watchdogTimer) {
+            clearInterval(this._watchdogTimer);
+            this._watchdogTimer = null;
         }
     }
 }

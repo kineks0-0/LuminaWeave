@@ -59,7 +59,7 @@ export function splitToSegments(mesRaw: string): MessageSegment[] {
         // 视图段：解析 <V> 内部内容
         const viewContent = match[1].trim();
         if (viewContent) {
-            console.log(`[LVParser] Found closed <V> block: "${viewContent.substring(0, 30)}..."`);
+            console.debug(`[LVParser] Found closed <V> block: "${viewContent.substring(0, 30)}..."`);
             const components = parseViewBlock(viewContent);
             segments.push({
                 type: 'view',
@@ -130,7 +130,7 @@ function parseViewBlock(content: string): ParsedViewComponent[] {
 
         const parsed = parseLine(line);
         if (parsed) {
-            console.log(`[LVParser] Line parsed successfully:`, parsed);
+            console.debug(`[LVParser] Line parsed successfully:`, parsed);
             components.push(parsed);
         }
     }
@@ -198,8 +198,8 @@ function parseLine(line: string): ParsedViewComponent | null {
             return parseFunctionCall(funcMatch[1], funcMatch[2]);
         }
 
-        // 管道微 DSL 检测：X|arg1|arg2|...
-        if (line.includes('|')) {
+        // 管道微 DSL 检测：X|arg1... 或 X｜arg1...
+        if (/[|｜丨]/.test(line)) {
             return parsePipeLine(line);
         }
     } catch (e) {
@@ -281,7 +281,7 @@ function fallbackParseArgs(argsStr: string): unknown[] {
             continue;
         }
 
-        if (ch === '"' || ch === "'") {
+        if (ch === '"' || ch === "'" || ch === '`') {
             inString = ch;
             current += ch;
             continue;
@@ -324,8 +324,10 @@ function fallbackParseArgs(argsStr: string): unknown[] {
 function coerceValue(raw: string): unknown {
     if (!raw) return null;
 
-    // 去除引号包裹
-    if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
+    // 去除引号包裹（双引号、单引号、反引号）
+    if ((raw.startsWith('"') && raw.endsWith('"')) ||
+        (raw.startsWith("'") && raw.endsWith("'")) ||
+        (raw.startsWith('`') && raw.endsWith('`'))) {
         return raw.slice(1, -1);
     }
 
@@ -366,7 +368,7 @@ function coerceValue(raw: string): unknown {
  *        S|生命值|75|100
  */
 function parsePipeLine(line: string): ParsedViewComponent | null {
-    const parts = line.split('|').map(p => p.trim());
+    const parts = line.split(/[\s\n]*[|｜丨│┃‖¦][\s\n]*/).map(p => p.trim());
     if (parts.length < 1) return null;
 
     const typeCode = parts[0];

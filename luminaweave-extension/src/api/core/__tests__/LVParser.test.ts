@@ -92,4 +92,20 @@ C([
         expect(segments[0].components![0].component).toBe('Stat');
         expect(segments[0].components![0].props.value).toBe(50);
     });
+
+    it('should parse multi-character forge pipe syntax', () => {
+        const input = '<V>\nFI|role_core_profile|name|角色姓名|例如：林雾\n</V>';
+        const segments = splitToSegments(input);
+        expect(segments[0].components![0].component).toBe('ForgeInput');
+        expect(segments[0].components![0].props.formId).toBe('role_core_profile');
+        expect(segments[0].components![0].props.fieldKey).toBe('name');
+        expect(segments[0].components![0].props.label).toBe('角色姓名');
+    });
+
+    it('should parse forge select pipe syntax with array options', () => {
+        const input = '<V>\nFS|role_core_profile|faction|阵营 / 立场|["教会","帝国","中立"]\n</V>';
+        const segments = splitToSegments(input);
+        expect(segments[0].components![0].component).toBe('ForgeSelect');
+        expect(segments[0].components![0].props.options).toEqual(['教会', '帝国', '中立']);
+    });
 });

@@ -1,6 +1,5 @@
 import { LuminaPlugin } from '../../types/plugin';
 import LuminaTimeline from './LuminaTimeline.vue';
-import { useTimelineStore } from '../../stores/useTimelineStore';
 
 const plugin: LuminaPlugin = {
     id: 'lumina-timeline',
