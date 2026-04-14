@@ -1,4 +1,11 @@
 import { EnvDetector } from './EnvDetector.js';
+import { EventFlow } from '../../../../shared/EventFlow.js';
+
+export interface BeforeGenerationPayload {
+    chatId: string;
+    chatType: 'st' | 'plugin';
+    text?: string;
+}
 
 /**
  * LuminaWeaveAPI 核心基类
@@ -6,6 +13,12 @@ import { EnvDetector } from './EnvDetector.js';
  */
 export class LuminaWeaveAPIBase {
     protected _events: Record<string, Function[]>;
+    
+    // 生成前的统一阻塞等待生命周期流
+    public readonly beforeGenerationStartFlow = new EventFlow<BeforeGenerationPayload>();
+
+    /** 核心消息更新流 (取代旧 MESSAGE_RECEIVED)，支持异步监听并阻塞等待同步完成 */
+    public readonly messageReceivedFlow = new EventFlow<void>();
 
     constructor() {
         this._events = {};

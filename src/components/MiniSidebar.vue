@@ -221,19 +221,19 @@ export default {
   backdrop-filter: var(--lw-glass-blur);
   -webkit-backdrop-filter: var(--lw-glass-blur);
   border: 1px solid var(--lw-border);
-  border-radius: 28px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: grab;
-  box-shadow: var(--lw-shadow);
+  box-shadow: var(--lw-shadow-card);
   position: relative;
   transition: all 0.3s ease;
 }
 
 .lw-bubble:hover {
-  transform: scale(1.1);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: var(--lw-shadow-hover);
 }
 
 .lw-bubble:active {
@@ -243,11 +243,11 @@ export default {
 .bubble-hover-hint {
   position: absolute;
   bottom: -24px;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
+  background: var(--lw-black);
+  color: var(--lw-text-inverse);
   font-size: 10px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 999px;
   opacity: 0;
   transition: opacity 0.2s;
   pointer-events: none;
@@ -264,8 +264,8 @@ export default {
   backdrop-filter: var(--lw-glass-blur);
   -webkit-backdrop-filter: var(--lw-glass-blur);
   border: 1px solid var(--lw-border);
-  border-radius: var(--lw-radius);
-  box-shadow: var(--lw-shadow);
+  border-radius: 20px;
+  box-shadow: var(--lw-shadow-card);
   overflow: hidden;
 }
 
@@ -273,9 +273,9 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--lw-border);
-  background: rgba(255, 255, 255, 0.5);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 88%, transparent);
   cursor: grab;
 }
 
@@ -284,7 +284,8 @@ export default {
 }
 
 .lw-logo {
-  font-weight: 600;
+  font-family: var(--lw-font-display);
+  font-weight: 700;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -296,8 +297,8 @@ export default {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--lw-primary);
-  box-shadow: 0 0 8px var(--lw-primary);
+  background-color: var(--lw-black);
+  box-shadow: 0 0 0 4px rgba(17, 18, 21, 0.08);
   animation: pulse 2s infinite ease-in-out;
 }
 
@@ -320,8 +321,8 @@ export default {
 }
 
 .lw-btn-action:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--lw-primary);
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-main);
 }
 
 .lw-sidebar-content {
@@ -342,18 +343,19 @@ export default {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 6px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.02);
+  padding: 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
+  border: 1px solid var(--lw-border-subtle);
 }
 
 .node-indicator {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  border: 2px solid var(--lw-primary);
-  background: var(--lw-primary);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+  border: 2px solid var(--lw-black);
+  background: var(--lw-bg-elevated);
+  box-shadow: 0 0 0 3px rgba(17, 18, 21, 0.06);
   margin-top: 3px;
 }
 
@@ -374,8 +376,8 @@ export default {
 }
 
 @keyframes pulse {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.7); }
-  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(139, 92, 246, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(17, 18, 21, 0.18); }
+  70% { transform: scale(1.08); box-shadow: 0 0 0 8px rgba(17, 18, 21, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(17, 18, 21, 0); }
 }
 </style>

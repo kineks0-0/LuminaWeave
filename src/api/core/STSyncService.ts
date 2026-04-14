@@ -1,5 +1,5 @@
 import { WorldlineStore, WorldlineEvent } from './WorldlineStore';
-import { LuminaChatMessage } from './ChatManager';
+import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
 import { lwStorage } from '../storage';
 import { ContextCompactor } from './ContextCompactor';
 import { ContextControlSettings } from './types';
@@ -43,53 +43,35 @@ export class STSyncService {
         if (!ignoreST) {
             const stWriteText = STProtocol.normalize(stNode?.mes ?? '');
             const localWriteText = STProtocol.normalize(STProtocol.resolveForSTWrite(nodeInStore));
-            const stExtraMesRaw = typeof stNode?.extra?.mesRaw === 'string' ? stNode.extra.mesRaw : undefined;
-            const stHasStableFingerprint = typeof stNode?.extra?.fingerprint === 'string' && stNode.extra.fingerprint.length > 0;
+            
             const stHasStableStFingerprint = typeof stNode?.extra?.stFingerprint === 'string' && stNode.extra.stFingerprint.length > 0;
             const stFingerprint = stHasStableStFingerprint ? stNode.extra.stFingerprint : STProtocol.getSTFingerprint(stWriteText);
-            const localStFingerprint =
-                nodeInStore.stFingerprint
-                || (typeof nodeInStore?.extra?.stFingerprint === 'string' ? nodeInStore.extra.stFingerprint : '')
-                || STProtocol.getSTFingerprint(localWriteText);
+            const localStFingerprint = nodeInStore.stFingerprint || STProtocol.getSTFingerprint(localWriteText);
 
             const stActualState = { ...stNode, mesST: stWriteText };
             const isStateEqual = STProtocol.isStateEqual(nodeInStore, stActualState);
             const isSTFingerprintChanged = localStFingerprint !== stFingerprint;
+            
+            // 核心冲突判定：如果 ST 指纹变了且内容不一致，视为用户在 ST 侧进行了编辑
             const isUserEditedInST = isSTFingerprintChanged && (!isStateEqual || stWriteText !== localWriteText);
-            const isFingerprintChanged = stHasStableFingerprint && nodeInStore.fingerprint !== stNode.extra.fingerprint;
 
-            if (isUserEditedInST || isFingerprintChanged || isSTFingerprintChanged) {
-                // Inline mergeNodeState equivalent
+            if (isUserEditedInST || isSTFingerprintChanged) {
+                // 将 ST 的核心字段同步到内存对象中
                 if (stNode.mes !== undefined) nodeInStore.mes = stNode.mes;
                 if (stNode.name !== undefined) nodeInStore.name = stNode.name;
                 if (stNode.role !== undefined) nodeInStore.role = stNode.role;
                 if (stNode.is_hidden !== undefined) nodeInStore.is_hidden = stNode.is_hidden;
-
+                
+                // 设置 mesST，触发后续 upsertNode -> sync
                 nodeInStore.mesST = stWriteText;
-                nodeInStore.extra = { ...(stNode.extra || {}), ...(nodeInStore.extra || {}) };
-                nodeInStore.extra.mesST = stWriteText;
                 nodeInStore.stFingerprint = stFingerprint;
-                nodeInStore.extra.stFingerprint = stFingerprint;
 
-                if (stExtraMesRaw) {
-                    const nextMesRaw = STProtocol.normalize(stExtraMesRaw);
-                    if (nextMesRaw && nodeInStore.mesRaw !== nextMesRaw) {
-                        nodeInStore.mesRaw = nextMesRaw;
-                        nodeInStore.extra.mesRaw = nextMesRaw;
-                    }
+                // 采纳 ST 侧的源码记录或将当前编辑文本视为源码
+                const stExtraMesRaw = stNode?.extra?.mesRaw;
+                if (typeof stExtraMesRaw === 'string' && stExtraMesRaw.length > 0) {
+                    nodeInStore.mesRaw = STProtocol.normalize(stExtraMesRaw);
                 } else if (isUserEditedInST) {
-                    if (stWriteText && nodeInStore.mesRaw !== stWriteText) {
-                        nodeInStore.mesRaw = stWriteText;
-                        nodeInStore.extra.mesRaw = stWriteText;
-                    }
-                }
-
-                if (stHasStableFingerprint) {
-                    nodeInStore.fingerprint = stNode.extra.fingerprint;
-                } else if (isUserEditedInST) {
-                    const canonicalForFp = STProtocol.resolveForFingerprint({ mesRaw: nodeInStore.mesRaw, extra: { mesRaw: nodeInStore.mesRaw } });
-                    nodeInStore.fingerprint = STProtocol.getFingerprint(canonicalForFp);
-                    nodeInStore.extra.fingerprint = nodeInStore.fingerprint;
+                    nodeInStore.mesRaw = stWriteText;
                 }
 
                 nodeChanged = true;
@@ -97,11 +79,6 @@ export class STSyncService {
 
             if (stNode.mesSummary !== undefined && nodeInStore.mesSummary !== stNode.mesSummary) {
                 nodeInStore.mesSummary = stNode.mesSummary;
-                nodeChanged = true;
-            }
-            if (stNode.extra?.compressionState !== nodeInStore.extra?.compressionState) {
-                nodeInStore.extra = nodeInStore.extra || {};
-                nodeInStore.extra.compressionState = stNode.extra?.compressionState;
                 nodeChanged = true;
             }
         }
@@ -244,13 +221,22 @@ export class STSyncService {
             this.store.emit(WorldlineEvent.UPDATED); // 统一触发一次 UI 更新
         }
         
-        if (previousActiveLeafId && this.store.hasNode(previousActiveLeafId) && externalNewNodesAdded === 0) {
-            this.store.activeLeafId = previousActiveLeafId;
-        } else if (externalNewNodesAdded > 0 && lastNodeInStore) {
-            this.store.activeLeafId = lastNodeInStore.id;
-        } else if (previousActiveLeafId && this.store.hasNode(previousActiveLeafId)) {
-            this.store.activeLeafId = previousActiveLeafId;
+        // 核心架构：Lumina 权威优先策略 (Lumina-First Authority)
+        // 优先保留本地之前的活跃指针，防止同步过程中指针跳回 ST 的线性末尾（导致分歧点丢失）
+        const isLuminaFirst = lwStorage.get('lumina-chat.syncLuminaFirst', true, 'Global');
+
+        if (previousActiveLeafId && this.store.hasNode(previousActiveLeafId)) {
+            // 核心对齐逻辑：如果是 Lumina 模式，我们通常保持当前指针。
+            // 但是！如果外部 ST 侧确实追加了新节点，且该节点是当前指针的直接后裔，则应该紧跟（例如用户在 ST 侧进行了 Swipe 或生成）
+            const isDescendantOfCurrent = lastNodeInStore && this.store.getTrace(lastNodeInStore.id).some(n => n.id === previousActiveLeafId);
+
+            if ((isLuminaFirst && !isDescendantOfCurrent) || externalNewNodesAdded === 0) {
+                this.store.activeLeafId = previousActiveLeafId;
+            } else if (lastNodeInStore) {
+                this.store.activeLeafId = lastNodeInStore.id;
+            }
         } else if (lastNodeInStore) {
+            // 本地无指针，则跟随同步链的末尾
             this.store.activeLeafId = lastNodeInStore.id;
         } else {
             this.store.activeLeafId = null;

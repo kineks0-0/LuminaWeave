@@ -1,62 +1,41 @@
 <template>
   <div class="lw-widgets-pane">
     <div class="widget-content">
-      <div class="stats-container">
-        <!-- Top Cards Row -->
+      <div class="stats-shell">
+        <div class="stats-head">
+          <div>
+            <span class="stats-kicker">Live Readout</span>
+            <h3>状态轨</h3>
+          </div>
+          <span class="stats-badge">Synced</span>
+        </div>
+
         <div class="stats-grid">
-          <!-- Health Card -->
-          <div class="stat-card pink-card">
-            <div class="card-top">
-              <span class="icon-circle red-icon">
-                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
-                  fill="currentColor">
-                  <path
-                    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z">
-                  </path>
-                </svg>
-              </span>
-              <span class="card-val red-text">{{ getStatValue('hp', 100) }}%</span>
-            </div>
-            <div class="card-bottom">
-              <div class="stat-name red-text">生命值</div>
-              <div class="stat-bar-bg">
-                <div class="stat-bar-fill val-red" :style="{ width: getStatValue('hp', 100) + '%' }"></div>
-              </div>
+          <div class="stat-card">
+            <div class="metric-label">Integrity / HP</div>
+            <div class="metric-value">{{ getStatValue('hp', 100) }}%</div>
+            <div class="metric-rail">
+              <span class="metric-fill" :style="{ width: getStatValue('hp', 100) + '%' }"></span>
             </div>
           </div>
 
-          <!-- Affinity Card -->
-          <div class="stat-card pink-card">
-            <div class="card-top">
-              <span class="icon-circle pink-icon">
-                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
-                  fill="currentColor">
-                  <path
-                    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z">
-                  </path>
-                </svg>
-              </span>
-              <span class="card-val pink-text">Lvl {{ Math.max(1, Math.floor(getStatValue('affection', 10) / 10))
-              }}</span>
-            </div>
-            <div class="card-bottom">
-              <div class="stat-name pink-text">亲密度</div>
-              <div class="stat-bar-bg">
-                <div class="stat-bar-fill val-pink" :style="{ width: getStatValue('affection', 0) + '%' }"></div>
-              </div>
+          <div class="stat-card">
+            <div class="metric-label">Affinity / Level</div>
+            <div class="metric-value">Lvl {{ Math.max(1, Math.floor(getStatValue('affection', 10) / 10)) }}</div>
+            <div class="metric-rail">
+              <span class="metric-fill is-soft" :style="{ width: getStatValue('affection', 0) + '%' }"></span>
             </div>
           </div>
         </div>
 
-        <!-- Tags Row -->
-        <div class="tags-row">
-          <div class="tag-pill"><span class="dot blue"></span>酒馆</div>
-          <div class="tag-pill"><span class="dot purple"></span>夜晚</div>
-          <div class="tag-pill"><span class="dot orange"></span>剧情判定点</div>
+        <div class="tag-row">
+          <span class="tag-pill">Tavern</span>
+          <span class="tag-pill">Night</span>
+          <span class="tag-pill">Decision Point</span>
         </div>
 
         <div class="helper-info">
-          <span>✔️ 已连通 LuminaWeave 数据流</span>
+          数据总线已连接，状态随世界线切换同步刷新。
         </div>
       </div>
     </div>
@@ -91,152 +70,142 @@ const getStatValue = (key: string, fallback: number): number => {
 .widget-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 18px;
 }
 
-
-
-.stats-container {
+.stats-shell {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  margin-top: 8px;
-}
-
-/* Grid for the two square cards */
-.stats-grid {
-  display: flex;
   gap: 16px;
-}
-
-.stat-card.pink-card {
-  flex: 1;
-  background: #fff4f5;
-  /* Very light pink background */
-  border-radius: 12px;
+  background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
+  border: 1px solid var(--lw-border-base);
+  border-radius: 20px;
   padding: 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 110px;
+  box-shadow: var(--lw-shadow);
 }
 
-.card-top {
+.stats-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 12px;
 }
 
-.icon-circle {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #fff;
-}
-
-.red-icon {
-  color: #f43f5e;
-  box-shadow: 0 2px 4px rgba(244, 63, 94, 0.1);
-}
-
-.pink-icon {
-  color: #ec4899;
-  box-shadow: 0 2px 4px rgba(236, 72, 153, 0.1);
-}
-
-.card-val {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.red-text {
-  color: #e11d48;
-}
-
-.pink-text {
-  color: #be185d;
-}
-
-.card-bottom {
-  margin-top: auto;
-}
-
-.stat-name {
+.stats-kicker {
+  display: inline-block;
+  margin-bottom: 4px;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
+  color: var(--lw-text-muted);
 }
 
-.stat-bar-bg {
+.stats-head h3 {
+  font-family: var(--lw-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--lw-text-main);
+  letter-spacing: -0.02em;
+}
+
+.stats-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--lw-bg-subtle);
+  border: 1px solid var(--lw-border-subtle);
+  color: var(--lw-text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--lw-bg-surface);
+  border: 1px solid var(--lw-border-subtle);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metric-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lw-text-muted);
+}
+
+.metric-value {
+  font-family: var(--lw-font-display);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--lw-text-main);
+  letter-spacing: -0.04em;
+}
+
+.metric-rail {
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 3px;
+  height: 8px;
+  background: var(--lw-bg-active);
+  border-radius: 999px;
   overflow: hidden;
 }
 
-.stat-bar-fill {
+.metric-fill {
+  display: block;
   height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
+  border-radius: inherit;
+  background: var(--lw-black);
+  transition: width 0.24s ease;
 }
 
-.val-red {
-  background: #f43f5e;
+.metric-fill.is-soft {
+  background: var(--lw-primary);
 }
 
-.val-pink {
-  background: #ec4899;
-}
-
-/* Tags row */
-.tags-row {
+.tag-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
 .tag-pill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #475569;
-}
-
-.tag-pill .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.dot.blue {
-  background: var(--lw-primary);
-}
-
-.dot.purple {
-  background: var(--lw-primary);
-}
-
-.dot.orange {
-  background: #f59e0b;
+  min-height: 28px;
+  padding: 0 10px;
+  background: var(--lw-bg-subtle);
+  border: 1px solid var(--lw-border-subtle);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lw-text-secondary);
 }
 
 .helper-info {
-  margin-top: 12px;
-  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--lw-border-subtle);
   font-size: 11px;
-  color: #10b981;
-  font-weight: 600;
+  color: var(--lw-text-muted);
+  line-height: 1.6;
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

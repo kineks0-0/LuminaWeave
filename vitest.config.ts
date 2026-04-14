@@ -10,6 +10,7 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     alias: {
       '@': resolve(__dirname, './src'),
+      '@shared': resolve(__dirname, '../shared'),
     }
   },
 });

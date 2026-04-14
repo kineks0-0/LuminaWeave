@@ -8,6 +8,32 @@ const plugin: LuminaPlugin = {
     slots: ['widget'],
     component: SettingsRoot,
     settingsManifest: {
+        appearance: {
+            default: 'system',
+            label: '界面外观',
+            description: '统一 LuminaWeave 全局外观。System 会跟随系统浅深色切换。',
+            common: true,
+            type: 'options',
+            allowedScopes: ['Global'],
+            options: [
+                { value: 'system', label: '跟随系统', description: '自动匹配系统浅色或深色外观。' },
+                { value: 'light', label: '浅色', description: '使用明亮的 Codex 风格工作区。' },
+                { value: 'dark', label: '深色', description: '使用低眩光的 Codex 风格工作区。' }
+            ]
+        },
+        motionPerformance: {
+            default: 'full',
+            label: '动效性能',
+            description: '控制工作台的动画与滤镜效果。若在低端设备上感到卡顿，建议使用省电模式。',
+            common: true,
+            type: 'options',
+            allowedScopes: ['Global'],
+            options: [
+                { value: 'full', label: '最高性能 (Full)', description: '启用所有物理弹性、模糊滤镜与流畅动画。' },
+                { value: 'light', label: '省电模式 (Light)', description: '移除高开销的模糊滤镜，保留基本过渡动画。' },
+                { value: 'none', label: '禁用动效 (None)', description: '完全关闭所有 UI 过渡与动画。' }
+            ]
+        },
         useShadowDom: {
             default: true,
             label: '启用 Shadow DOM 样式隔离 (需要刷新)',
@@ -29,6 +55,60 @@ const plugin: LuminaPlugin = {
             description: '插件将提示词和宏注入到该独立世界书中。修改后需点击“强制同步”以生效。',
             common: true,
             type: 'text',
+            allowedScopes: ['Global']
+        },
+        luminaViewSyntaxStyle: {
+            default: 'functional',
+            label: 'V 语法风格',
+            description: '控制提示词中 `<V>` DSL 只使用函数式还是管道式，避免同时给模型两套语法。',
+            common: true,
+            type: 'options',
+            allowedScopes: ['Global'],
+            options: [
+                { value: 'functional', label: '函数式', description: '输出 `ComponentName(\"参数\")` 形式，清晰稳定。' },
+                { value: 'pipe', label: '管道式', description: '输出 `Code|参数` 形式，更短，但要求统一使用缩写。' }
+            ]
+        },
+        workspaceAllowUnderStageStrip: {
+            default: false,
+            label: '自由工作台窗口允许压到台前调度下方',
+            description: '开启后，窗口拖拽和布局将不再避让左侧台前调度区域，可延伸到其下方。',
+            common: true,
+            type: 'boolean',
+            allowedScopes: ['Global']
+        },
+        workspaceShowStageStrip: {
+            default: true,
+            label: '显示自由工作台台前调度栏',
+            description: '关闭后，左侧台前调度栏将被隐藏，工作台按钮也不会再显示它。',
+            common: true,
+            type: 'boolean',
+            allowedScopes: ['Global']
+        },
+        workspaceAllowUnderDock: {
+            default: false,
+            label: '自由工作台窗口允许压到 Dock 下方',
+            description: '开启后，窗口拖拽和布局将不再避让底部 Dock，可延伸到其下方。',
+            common: true,
+            type: 'boolean',
+            allowedScopes: ['Global']
+        },
+        workspaceShowDock: {
+            default: true,
+            label: '显示自由工作台 Dock 栏',
+            description: '关闭后，底部 Dock 将被隐藏，工作台按钮也不会再显示它。',
+            common: true,
+            type: 'boolean',
+            allowedScopes: ['Global']
+        },
+        workspaceMaxWindowsPerStage: {
+            default: 4,
+            label: '台前调度限制窗口数量',
+            description: '当当前舞台窗口达到此限制时，新打开的窗口将自动创建并跳转至新舞台。',
+            common: true,
+            type: 'stepper',
+            min: 1,
+            max: 10,
             allowedScopes: ['Global']
         }
     },

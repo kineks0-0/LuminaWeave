@@ -13,11 +13,20 @@ const localStorageMock = (() => {
   };
 })();
 
-(global as any).localStorage = localStorageMock;
+// 使用 globalThis 及其类型断言
+const g = globalThis as unknown as Record<string, unknown>;
+
+g.localStorage = localStorageMock;
 
 // Mock window and SillyTavern globals
-(global as any).window = {
+g.window = {
     localStorage: localStorageMock,
+    location: {
+        hostname: 'localhost',
+        port: '8080',
+        protocol: 'http:',
+        href: 'http://localhost:8080/'
+    },
     SillyTavern: {
         getContext: () => ({
             characterId: 'test_char',
@@ -31,7 +40,7 @@ const localStorageMock = (() => {
 };
 
 // Mock fetch
-(global as any).fetch = vi.fn(() =>
+g.fetch = vi.fn(() =>
   Promise.resolve({
     ok: true,
     status: 200,

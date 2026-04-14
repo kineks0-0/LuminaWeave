@@ -1,6 +1,6 @@
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 import { SyncUtils } from './SyncUtils.js';
-import { LuminaChatMessage } from './ChatManager.js';
+import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
 
 export interface TimelineNode extends LuminaChatMessage {
     text: string; // 兼容旧版 UI 字段
@@ -20,6 +20,18 @@ export class TimelineManager extends LuminaWeaveAPIBase {
     constructor(parentApi: any) {
         super();
         this.parentApi = parentApi;
+
+        // 核心架构优化：将 TimelineManager 升级为响应式数据源 (SSOT)
+        // 订阅底层存储的变动及指针切换，自动流向视图层
+        const store = this.parentApi.chatManager.store;
+        store.on('WORLDLINE_UPDATED', () => {
+            console.log('[TimelineManager] 检测到存储更新，自动重新同步视图流...');
+            void this.syncTimelineWithCurrentChat();
+        });
+        store.on('WORLDLINE_SWITCHED', () => {
+            console.log('[TimelineManager] 检测到世界线切换，自动同步视图流...');
+            void this.syncTimelineWithCurrentChat();
+        });
     }
 
     /**

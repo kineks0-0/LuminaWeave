@@ -105,6 +105,7 @@
 <script setup lang="ts">
 import { ref, inject, onMounted } from 'vue';
 import { llmEngine } from '../../api/llmEngine';
+import { LuminaGenerationTask } from '../../api/core/LuminaGenerationTask';
 import { lwStorage } from '../../api/storage';
 import { LuminaWeaveAPI } from '../../api/index';
 
@@ -205,23 +206,31 @@ const sendEdited = () => {
     lwApi.generateAbortController = new AbortController();
     lwApi.emit('GENERATION_STARTED');
 
-    (llmEngine as any).generateCustomStream(customPayload, {
-        nexusPresetId: chatPresetId,
-                // @ts-ignore
-        signal: lwApi.generateAbortController.signal,
-        onChunk: (fullText: string) => {
+    const nodes = llmEngine.resolveNodesFromPreset(chatPresetId);
+    // @ts-ignore
+    const session = llmEngine.createSession({
+        chatId: lwStorage._getContextIds().chatId || '',
+        charName: lwApi.getCharName(),
+        parentId: lwApi.getLastMessageId(),
+        nodes
+    });
+
+    const task = new LuminaGenerationTask(session);
+    // @ts-ignore
+    lwApi._currentTask = task;
+
+    task.run(llmEngine.cleanMessages([{ role: 'user', content: customPayload }]), {
+        onChunk: (chunk: string, fullText: string) => {
             if (!lwApi) return;
-            // 核心修复：复用 StreamHandler 进行增量管理。
-            // 这样会自动触发 Facade 层的正则网关处理，保持与正常发送逻辑 100% 一致的过滤统计。
             const lastRawLen = lwApi.streamHandler.responseBuffer.length;
             const rawDelta = fullText.substring(lastRawLen);
             lwApi.streamHandler.handleChunk(rawDelta, fullText);
         },
         onDone: async (finalText: string) => {
             if (!lwApi) return;
-            // 核心修复：调用 handleEnd 清理流状态，触发最终正则处理与 GENERATION_ENDED 事件
             lwApi.streamHandler.handleEnd();
-            lwApi.generateAbortController = null;
+            // @ts-ignore
+            lwApi._currentTask = null;
             
             const chat = await lwApi.getChat();
             const chatIndex = chat.length;
@@ -412,6 +421,7 @@ const sendEdited = () => {
     background: var(--lw-bg-surface);
     border: 1px solid var(--lw-border-base);
     border-radius: var(--lw-radius-sm);
+    overflow: clip;
 }
 
 .prompt-role {

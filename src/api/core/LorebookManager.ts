@@ -1,5 +1,11 @@
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 import { STClient } from './st-adapter/STClient';
+import { LorebookTimelineResolver } from './LorebookTimelineResolver';
+import type {
+    LorebookEntrySnapshot,
+    LorebookTimelineContext,
+    LorebookVersionMode
+} from '../../types/LorebookViewTypes';
 
 /**
  * LorebookManager (世界书管理器)
@@ -7,17 +13,84 @@ import { STClient } from './st-adapter/STClient';
  */
 export class LorebookManager extends LuminaWeaveAPIBase {
     private parentApi: any;
+    private readonly snapshotStorageKey = 'lumina-lorebook.entry-snapshots';
+    /** 每本书最多保留的快照数量，超出时删除最旧的 */
+    private readonly MAX_SNAPSHOTS_PER_BOOK = 5;
     public entries: LuminaLorebookEntry[] = [];
     public books: { name: string, id: string }[] = [];
     public selectedBook: string | null = null;
     public currentBookData: LorebookData | null = null; // 存储当前独立编辑的书籍全量数据
     public activeEditingEntry: LuminaLorebookEntry | null = null; // 全局活跃编辑项 (多窗口协作用)
     public isLoading: boolean = false;
+    public versionMode: LorebookVersionMode = 'follow-timeline';
+    public pinnedSnapshotKey: string | null = null;
+    public manualSnapshotKey: string | null = null;
+    public snapshotRevision: number = 0;
+    private snapshots = new Map<string, LorebookEntrySnapshot>();
 
 
     constructor(parentApi: any) {
         super();
         this.parentApi = parentApi;
+        this.restoreSnapshots();
+    }
+
+    private restoreSnapshots(): void {
+        if (typeof window === 'undefined') return;
+        try {
+            const raw = window.localStorage.getItem(this.snapshotStorageKey);
+            if (!raw) return;
+            const list = JSON.parse(raw) as LorebookEntrySnapshot[];
+            this.snapshots = new Map(
+                list
+                    .filter(snapshot => snapshot?.key && snapshot?.bookId)
+                    .map(snapshot => [snapshot.key, snapshot])
+            );
+            this.snapshotRevision = this.snapshots.size;
+        } catch (error) {
+            console.warn('[LorebookManager] 恢复世界书快照失败', error);
+        }
+    }
+
+    private persistSnapshots(): void {
+        if (typeof window === 'undefined') return;
+
+        const tryWrite = (list: LorebookEntrySnapshot[]): boolean => {
+            try {
+                window.localStorage.setItem(this.snapshotStorageKey, JSON.stringify(list));
+                return true;
+            } catch {
+                return false;
+            }
+        };
+
+        // 按时间倒序（最新优先）排列，优先保留最近的快照
+        let list = Array.from(this.snapshots.values())
+            .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+
+        // 首次尝试
+        if (tryWrite(list)) return;
+
+        // QuotaExceededError：逐步裁剪最旧的快照直到写入成功
+        while (list.length > 0) {
+            list = list.slice(0, Math.max(1, Math.floor(list.length * 0.7)));
+            if (tryWrite(list)) {
+                // 同步内存中的快照 Map，移除已被裁剪的条目
+                const keepKeys = new Set(list.map(s => s.key));
+                for (const key of Array.from(this.snapshots.keys())) {
+                    if (!keepKeys.has(key)) this.snapshots.delete(key);
+                }
+                console.warn(`[LorebookManager] 存储配额不足，已裁剪至 ${list.length} 个快照`);
+                return;
+            }
+        }
+
+        // 完全无法写入时清空，避免后续持续报错
+        try {
+            window.localStorage.removeItem(this.snapshotStorageKey);
+            this.snapshots.clear();
+            console.warn('[LorebookManager] 存储配额严重不足，已清空所有世界书快照');
+        } catch { /* ignore */ }
     }
 
     /**
@@ -402,6 +475,98 @@ export class LorebookManager extends LuminaWeaveAPIBase {
     public setEditingEntry(entry: LuminaLorebookEntry | null): void {
         this.activeEditingEntry = entry ? JSON.parse(JSON.stringify(entry)) : null;
         this.emit('EDITING_ENTRY_CHANGED', this.activeEditingEntry);
+        this.emit('UPDATED');
+    }
+
+    public captureSnapshot(context: LorebookTimelineContext, entries: LuminaLorebookEntry[] = this.entries): string | null {
+        const key = LorebookTimelineResolver.createSnapshotKey(context);
+        if (!key || !context.bookId || !entries.length) return null;
+
+        const snapshot: LorebookEntrySnapshot = {
+            key,
+            bookId: context.bookId,
+            sourceId: context.sourceId,
+            activeLeafId: context.activeLeafId,
+            sessionId: context.sessionId,
+            capturedAt: new Date().toISOString(),
+            label: LorebookTimelineResolver.createSnapshotLabel(context),
+            entries: JSON.parse(JSON.stringify(entries))
+        };
+
+        this.snapshots.set(key, snapshot);
+        this.pruneSnapshotsForBook(context.bookId);
+        this.snapshotRevision += 1;
+        this.persistSnapshots();
+        this.emit('LOREBOOK_SNAPSHOTS_UPDATED', { key, revision: this.snapshotRevision });
+        this.emit('UPDATED');
+        return key;
+    }
+
+    /**
+     * 每本书只保留最新的 MAX_SNAPSHOTS_PER_BOOK 个快照，超出时删除最旧的。
+     */
+    private pruneSnapshotsForBook(bookId: string): void {
+        const bookSnapshots = Array.from(this.snapshots.values())
+            .filter(s => s.bookId === bookId)
+            .sort((a, b) => a.capturedAt.localeCompare(b.capturedAt)); // 最旧在前
+
+        const excess = bookSnapshots.length - this.MAX_SNAPSHOTS_PER_BOOK;
+        if (excess > 0) {
+            bookSnapshots.slice(0, excess).forEach(s => this.snapshots.delete(s.key));
+        }
+    }
+
+    public getSnapshotsForBook(bookId: string | null): LorebookEntrySnapshot[] {
+        if (!bookId) return [];
+        return Array.from(this.snapshots.values())
+            .filter(snapshot => snapshot.bookId === bookId)
+            .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+    }
+
+    public setVersionMode(mode: LorebookVersionMode): void {
+        this.versionMode = mode;
+        this.emit('UPDATED');
+    }
+
+    public enterFollowTimelineMode(): void {
+        this.versionMode = 'follow-timeline';
+        this.manualSnapshotKey = null;
+        this.emit('UPDATED');
+    }
+
+    public enterPinnedMode(snapshotKey: string | null): void {
+        this.pinnedSnapshotKey = snapshotKey;
+        this.versionMode = snapshotKey ? 'pinned' : 'follow-timeline';
+        this.manualSnapshotKey = null;
+        this.emit('UPDATED');
+    }
+
+    public enterManualMode(snapshotKey: string | null): void {
+        if (!snapshotKey) {
+            this.manualSnapshotKey = null;
+            this.versionMode = 'follow-timeline';
+            this.emit('UPDATED');
+            return;
+        }
+
+        this.manualSnapshotKey = snapshotKey;
+        this.versionMode = 'manual';
+        this.emit('UPDATED');
+    }
+
+    public pinSnapshot(snapshotKey: string | null): void {
+        this.pinnedSnapshotKey = snapshotKey;
+        if (snapshotKey) {
+            this.versionMode = 'pinned';
+        }
+        this.emit('UPDATED');
+    }
+
+    public setManualSnapshot(snapshotKey: string | null): void {
+        this.manualSnapshotKey = snapshotKey;
+        if (snapshotKey) {
+            this.versionMode = 'manual';
+        }
         this.emit('UPDATED');
     }
 

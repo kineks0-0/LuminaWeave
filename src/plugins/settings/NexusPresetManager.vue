@@ -46,9 +46,20 @@
                     </div>
                     <div class="item-fields">
                         <div class="field-item">
+                            <label>Provider</label>
+                            <select v-model="api.type" class="lw-select" @change="saveApis">
+                                <option value="openai_compatible">OpenAI 兼容</option>
+                                <option value="openai">OpenAI 官方</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="google">Google</option>
+                            </select>
+                        </div>
+                        <div class="field-item">
                             <label>Base URL</label>
-                            <input type="text" v-model="api.url" class="lw-input" @change="saveApis"
+                            <input v-if="api.type === 'openai' || api.type === 'openai_compatible'" type="text"
+                                v-model="api.url" class="lw-input" @change="saveApis"
                                 placeholder="https://api.deepseek.com/v1" />
+                            <div v-else class="st-indicator">该 Provider 无需 Base URL</div>
                         </div>
                         <div class="field-item">
                             <label>API Key</label>
@@ -78,14 +89,23 @@
                         <span class="sub-hint">组合多个 API 实现高可用备用方案</span>
                     </div>
                 </div>
-                <button class="lw-btn lw-btn-primary lw-btn-small" @click="createPreset">
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:12px; color: var(--lw-text-muted);">传输模式:</span>
+                        <select v-model="useSSE" @change="saveFlags" class="lw-select" style="height:28px; font-size:12px; padding:0 8px; width:auto;">
+                            <option :value="true">SSE 流式 (推荐)</option>
+                            <option :value="false">轮询 (兼容模式)</option>
+                        </select>
+                    </div>
+                    <button class="lw-btn lw-btn-primary lw-btn-small" @click="createPreset">
                     <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5"
                         fill="none">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
                     新建编排
-                </button>
+                    </button>
+                </div>
             </div>
 
             <div class="preset-list" v-if="presets.length > 0">
@@ -197,6 +217,7 @@ const lwApi = (window as any).LuminaWeave as LuminaWeaveAPI;
 interface NexusApi {
     id: string;
     name: string;
+    type: 'openai' | 'openai_compatible' | 'anthropic' | 'google';
     url: string;
     key: string;
 }
@@ -220,6 +241,7 @@ interface ModelOption {
 
 const presets = ref<NexusPreset[]>([]);
 const customApis = ref<NexusApi[]>([]);
+const useSSE = ref<boolean>(true);
 
 const _generateId = () => 'nx_' + Math.random().toString(36).substring(2, 11);
 
@@ -227,26 +249,36 @@ onMounted(() => {
     // 从全局存储加载 API 配置
     const loadedApis = lwStorage.get('nexus.apis', [], 'Global');
     customApis.value = JSON.parse(JSON.stringify(loadedApis));
+    for (const api of customApis.value) {
+        if (!api.type) api.type = 'openai_compatible';
+    }
 
     // 从全局存储加载 Preset 配置
     const loadedPresets = lwStorage.get('nexus.presets', [], 'Global');
     presets.value = JSON.parse(JSON.stringify(loadedPresets));
     console.log('[LuminaWeave] presets', presets.value);
     console.log('[LuminaWeave] customApis', customApis.value);
+
+    useSSE.value = lwStorage.get('nexus.useSSE', true, 'Global') === true;
 });
 
 const saveApis = () => {
-    (lwStorage as any).set('nexus.apis', JSON.parse(JSON.stringify(customApis.value)), 'Global');
+    void lwStorage.set('nexus.apis', JSON.parse(JSON.stringify(customApis.value)), 'Global');
 };
 
 const save = () => {
-    (lwStorage as any).set('nexus.presets', JSON.parse(JSON.stringify(presets.value)), 'Global');
+    void lwStorage.set('nexus.presets', JSON.parse(JSON.stringify(presets.value)), 'Global');
+};
+
+const saveFlags = () => {
+    void lwStorage.set('nexus.useSSE', useSSE.value, 'Global');
 };
 
 const createApi = () => {
     customApis.value.push({
         id: _generateId(),
         name: '未命名接口 ' + (customApis.value.length + 1),
+        type: 'openai_compatible',
         url: 'https://api.openai.com/v1',
         key: ''
     });
@@ -304,14 +336,25 @@ const fetchModels = async (node: NexusNode) => {
         return;
     }
 
-    if (!targetApi.url || !targetApi.key) {
+    if (!targetApi.key) {
         const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
         lw?.showToast('该接口的地址或密钥为空！', 'warning');
         return;
     }
 
-    // 调用新的大前端直连原生获取法
-    const models = await (llmEngine as any).fetchCustomModelsApi(targetApi.url, targetApi.key, targetApi.name) as Record<string, ModelOption[]>;
+    if (targetApi.type !== 'openai' && targetApi.type !== 'openai_compatible') {
+        const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
+        lw?.showToast('该 Provider 暂不支持自动拉取模型列表，请手动填写模型名。', 'warning');
+        return;
+    }
+
+    if (!targetApi.url) {
+        const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
+        lw?.showToast('该接口的地址为空！', 'warning');
+        return;
+    }
+
+    const models = await llmEngine.fetchProviderModels(targetApi.id, targetApi.name) as Record<string, ModelOption[]>;
 
     if (Object.keys(models).length > 0) {
         fetchedModels.value[node.id] = models;

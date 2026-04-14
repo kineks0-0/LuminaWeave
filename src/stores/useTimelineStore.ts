@@ -1,9 +1,26 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { luminaWeaveApi, LuminaWeaveAPI, TimelineNode } from '../api';
+import { useCardMakerStore } from '../plugins/forge/CardMakerStore';
+import { useConversationContextStore } from './useConversationContextStore';
 
 type TimelineGraph = Record<string, TimelineNode>;
 type TimelineEventName = 'TIMELINE_UPDATED' | 'MESSAGE_RECEIVED' | 'CHAT_CHANGED';
+export type TimelineSourceId = 'chat' | 'forge';
+
+export interface TimelineSourceOption {
+    id: TimelineSourceId;
+    label: string;
+    description: string;
+    count: number;
+    activeLeafId: string | null;
+}
+
+export interface TimelineActiveContext {
+    sourceId: TimelineSourceId;
+    activeLeafId: string | null;
+    sessionId: string | null;
+}
 
 const TIMELINE_EVENTS: TimelineEventName[] = [
     'TIMELINE_UPDATED',
@@ -16,10 +33,21 @@ export const useTimelineStore = defineStore('lumina-timeline-view-model', () => 
     const activeLeafId = ref<string | null>(null);
     const isReady = ref(false);
     const revision = ref(0);
+    const contextStore = useConversationContextStore();
+    const activeSourceId = computed<TimelineSourceId>(() => contextStore.activeSourceId);
+    const sources = computed<TimelineSourceOption[]>(() => contextStore.sources);
+    const activeContext = computed<TimelineActiveContext>(() => {
+        return {
+            sourceId: contextStore.activeSourceId,
+            activeLeafId: contextStore.activeLeafId,
+            sessionId: contextStore.activeSessionId
+        };
+    });
 
     let apiRef: LuminaWeaveAPI | null = null;
     let bindCount = 0;
     let refreshPromise: Promise<void> | null = null;
+    let stopForgeWatcher: (() => void) | null = null;
 
     const handleRefresh = () => {
         void refreshFromApi();
@@ -31,8 +59,14 @@ export const useTimelineStore = defineStore('lumina-timeline-view-model', () => 
         if (refreshPromise) return refreshPromise;
 
         refreshPromise = Promise.resolve().then(() => {
-            graph.value = { ...(api.getTimelineNodes() as TimelineGraph) };
-            activeLeafId.value = api.activeLeafId;
+            if (activeSourceId.value === 'forge') {
+                graph.value = { ...(contextStore.activeTimelineGraph as TimelineGraph) };
+                activeLeafId.value = contextStore.activeLeafId;
+            } else {
+                graph.value = { ...(contextStore.activeTimelineGraph as TimelineGraph) };
+                activeLeafId.value = contextStore.activeLeafId;
+            }
+
             isReady.value = true;
             revision.value += 1;
         }).finally(() => {
@@ -52,6 +86,15 @@ export const useTimelineStore = defineStore('lumina-timeline-view-model', () => 
             api.on(eventName, handleRefresh);
         });
 
+        const forgeStore = useCardMakerStore();
+        stopForgeWatcher = watch(
+            () => [forgeStore.timelineRevision, forgeStore.sessionChatId, forgeStore.activeLeafId, forgeStore.messageCount],
+            () => {
+                void refreshFromApi();
+            },
+            { immediate: true }
+        );
+
         void api.waitForReady().then((ready) => {
             if (!ready) return;
             return refreshFromApi();
@@ -69,17 +112,43 @@ export const useTimelineStore = defineStore('lumina-timeline-view-model', () => 
             });
             apiRef = null;
         }
+
+        stopForgeWatcher?.();
+        stopForgeWatcher = null;
     };
 
     const branchFromNode = async (targetNodeId: string) => {
         const api = apiRef ?? luminaWeaveApi;
-        await api.branchFromNode(targetNodeId);
+        if (activeSourceId.value === 'forge') {
+            await useCardMakerStore().branchFromNode(targetNodeId);
+        } else {
+            await api.branchFromNode(targetNodeId);
+        }
         await refreshFromApi();
     };
 
     const rollbackFromNode = async (targetNodeId: string) => {
         const api = apiRef ?? luminaWeaveApi;
-        await api.rollbackFromNode(targetNodeId);
+        if (activeSourceId.value === 'forge') {
+            await useCardMakerStore().rollbackFromNode(targetNodeId);
+        } else {
+            await api.rollbackFromNode(targetNodeId);
+        }
+        await refreshFromApi();
+    };
+
+    const switchToNode = async (targetNodeId: string) => {
+        const api = apiRef ?? luminaWeaveApi;
+        if (activeSourceId.value === 'forge') {
+            useCardMakerStore().switchToNode(targetNodeId);
+        } else {
+            api.activeLeafId = targetNodeId;
+        }
+        await refreshFromApi();
+    };
+
+    const switchSource = async (sourceId: TimelineSourceId) => {
+        await contextStore.switchSource(sourceId);
         await refreshFromApi();
     };
 
@@ -88,10 +157,15 @@ export const useTimelineStore = defineStore('lumina-timeline-view-model', () => 
         activeLeafId,
         isReady,
         revision,
+        activeSourceId,
+        sources,
+        activeContext,
         bind,
         unbind,
         refreshFromApi,
         branchFromNode,
-        rollbackFromNode
+        rollbackFromNode,
+        switchToNode,
+        switchSource
     };
 });

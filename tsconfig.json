@@ -25,6 +25,9 @@
       ],
       "@st-iframe/*": [
         "../TavernHelper@types/iframe/*"
+      ],
+      "@shared/*": [
+        "../shared/*"
       ]
     },
     "sourceMap": true
@@ -34,6 +37,7 @@
     "src/**/*.d.ts",
     "src/**/*.tsx",
     "src/**/*.vue",
+    "../shared/**/*.ts",
     "../TavernHelper@types/function/*.d.ts",
     "../TavernHelper@types/iframe/*.d.ts"
   ],

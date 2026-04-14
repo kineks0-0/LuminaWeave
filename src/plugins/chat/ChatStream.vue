@@ -1,5 +1,5 @@
 <template>
-  <div class="lw-chat-stream" :class="{ 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document' }"
+  <div class="lw-chat-stream" :class="{ 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document', 'is-compact': isCompact }"
     :style="streamStyle">
     <div class="chat-scroll-area" ref="chatScrollArea" @wheel.stop @scroll="handleScroll">
       <div class="chat-content-wrapper" :style="msgMaxWidthStyle">
@@ -45,7 +45,8 @@
                   <MessageRenderer v-if="!msg.is_user" 
                     :mes="msg.mes" 
                     :mesRaw="msg.mesRaw" 
-                    :pluginRaw="msg.pluginRaw" 
+                    :pluginRaw="msg.pluginRaw"
+                    :thinkingText="msg.thinkingText || null"
                     :renderMarkdown="renderMarkdown" />
                   <div v-else v-html="renderMarkdown(msg.mes)"></div>
                 <!-- 动作栏内置于消息框底部常驻 -->
@@ -99,10 +100,13 @@
           </div>
         </div>
         <!-- 流式 buffer 气泡：在生成过程中显示当前返回的实时文本 -->
-        <div class="chat-msg streaming-msg" v-if="isGenerating || streamingBuffer || generationError">
+        <div class="chat-msg streaming-msg" v-if="isGenerating || isSyncing || streamingBuffer || generationError">
           <div class="msg-avatar">
-            <div class="streaming-avatar">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+            <div class="streaming-avatar" :class="{ 'syncing': isSyncing }">
+              <svg v-if="isSyncing" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" class="spin">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
                 <circle cx="12" cy="12" r="10"></circle>
                 <path d="M8 12h.01"></path>
                 <path d="M12 12h.01"></path>
@@ -111,21 +115,24 @@
             </div>
           </div>
           <div class="msg-content">
-            <div class="msg-bubble streaming-bubble">
+            <div class="msg-bubble streaming-bubble" :class="{ 'syncing': isSyncing }">
               <!-- 核心变更：流式显示提纯后的内容 (streamingBuffer) 而非原始流 (streamingRaw) -->
               <div class="msg-text" v-if="streamingBuffer" :class="effectClass">
-                <MessageRenderer :mesRaw="streamingBuffer" :renderMarkdown="renderMarkdown" :isStreaming="true" />
-                <span class="typing-cursor">|</span>
+                <MessageRenderer :mesRaw="streamingBuffer" :thinkingText="streamingThinkingText" :renderMarkdown="renderMarkdown" :isStreaming="true" />
+                <span class="typing-cursor" v-if="!isSyncing">|</span>
               </div>
 
               <!-- 当正文为空但有状态或已过滤内容时，展示显著的状态占位符 -->
               <div class="streaming-status-placeholder" v-if="!streamingBuffer && (streamingStatusText || streamingFilteredLength > 0) && !generationError">
-                <div class="status-pulse"></div>
+                <div class="status-pulse" v-if="!isSyncing"></div>
+                <div class="status-spin spin" v-else>
+                   <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+                </div>
                 <span class="status-label">{{ streamingStatusText || '正在处理内容...' }}</span>
                 <span class="status-count" v-if="streamingFilteredLength > 0">(已过滤 {{ streamingFilteredLength }} 字)</span>
               </div>
 
-              <div class="typing-indicator" v-else-if="!streamingBuffer && !generationError && !streamingStatusText">
+              <div class="typing-indicator" v-else-if="!streamingBuffer && !generationError && !streamingStatusText && !isSyncing">
                 <span></span><span></span><span></span>
               </div>
 
@@ -133,7 +140,12 @@
               
               <!-- 辅助信息行（仅在有正文时作为底部栏显示） -->
               <div class="streaming-meta-info" v-if="(streamingFilteredLength > 0 || streamingStatusText) && streamingBuffer">
-                <span class="meta-item status" v-if="streamingStatusText">{{ streamingStatusText }}</span>
+                <span class="meta-item status" v-if="streamingStatusText">
+                  <svg v-if="isSyncing" viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="3" fill="none" class="spin" style="margin-right: 4px;">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                  </svg>
+                  {{ streamingStatusText }}
+                </span>
                 <span class="meta-item filtered" v-if="streamingFilteredLength > 0">已过滤 {{ streamingFilteredLength }} 字</span>
               </div>
             </div>
@@ -189,7 +201,7 @@
           <div class="input-actions">
             <!-- 生成中：显示停止按钮 -->
             <button v-if="isGenerating" class="lw-btn stop-btn"
-              style="background: #ef4444; color: white; width: 38px; height: 38px; padding: 0;" @click="handleStop"
+              style="width: 38px; height: 38px; padding: 0;" @click="handleStop"
               title="停止生成">
               <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5"
                 fill="currentColor">
@@ -217,14 +229,19 @@ import { ref, watch, inject, nextTick, computed, onMounted, onUnmounted } from '
 import { useSettings } from '../settings/useSettings';
 import PromptInspector from './PromptInspector.vue';
 import MessageRenderer from './components/MessageRenderer.vue';
-import { LuminaWeaveAPI, LuminaChatMessage } from '../../api/index';
+import { LuminaWeaveAPI } from '../../api/index';
+import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
 
 interface Props {
   messages: LuminaChatMessage[];
+  isMobile?: boolean;
+  workspaceCompact?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  messages: () => []
+  messages: () => [],
+  isMobile: false,
+  workspaceCompact: false
 });
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
@@ -237,12 +254,14 @@ const showInspector = ref(false);     // 提示词查看器开关
 const inspectorExpanded = ref(false); // 展开到全屏模式
 const inputCollapsed = ref(false);    // 输入框折叠状态
 const isGenerating = ref(lwApi?.isGenerating || false);
+const isSyncing = ref(lwApi?.streamHandler.isSyncing || false);
 const streamingBuffer = ref('');      // 实时流式文本缓冲 (正则处理后)
 const streamingRaw = ref('');         // 实时流式文本 (处理前)
 const streamingConfirmed = ref('');   // 已确认显示的文本（无动画）
 const streamingPending = ref('');     // 本帧新增文本（需要动画）
 const streamingFilteredLength = ref(0); // 核心修复：后端计算的过滤字数总额
 const streamingStatusText = ref('');  // 当前生成的 XML 标签状态
+const streamingThinkingText = ref(''); // 独立思维链缓冲
 const generationError = ref('');
 const editingIndex = ref(-1);         // 当前内联编辑的消息索引，-1 表示未编辑
 const editingText = ref('');          // 内联编辑中的文本
@@ -262,17 +281,21 @@ const effectClass = computed(() => {
   return '';
 });
 
+const isCompact = computed(() => props.isMobile || props.workspaceCompact);
+
 // 订阅流式事件
 const onGenerationStarted = () => {
   isGenerating.value = true;
+  isSyncing.value = false;
   streamingBuffer.value = '';
   streamingRaw.value = '';
   streamingFilteredLength.value = 0; // 重置过滤计数器
   streamingStatusText.value = '';
+  streamingThinkingText.value = '';
   generationError.value = '';
   scrollToBottom(true); // 强制触底以适应新出现的消息气泡
 };
-const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number, statusText?: string, pendingText?: string) => {
+const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number, statusText?: string, thinkingText?: string, pendingText?: string) => {
   const area = chatScrollArea.value;
   
   if (area && lwApi?.measureService) {
@@ -313,6 +336,12 @@ const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number,
   if (statusText !== undefined) {
     streamingStatusText.value = statusText;
   }
+  if (thinkingText !== undefined) {
+    streamingThinkingText.value = thinkingText;
+  }
+
+  // 同步状态追踪
+  isSyncing.value = lwApi?.streamHandler.isSyncing || false;
   
   // 仅在之前就贴底的情况下跟随滚动
   if (isAtBottom.value) {
@@ -322,13 +351,22 @@ const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number,
 const onGenerationEnded = () => {
   console.log('[ChatStream] Generation ended signal received.');
   isGenerating.value = false;
-  streamingBuffer.value = ''; // 清除流式气泡，正式消息已由 crud 写入
-  streamingRaw.value = '';
-  streamingConfirmed.value = '';
-  streamingPending.value = '';
-  streamingFilteredLength.value = 0;
-  streamingStatusText.value = '';
-  generationError.value = '';
+  isSyncing.value = false;
+
+  // 核心优化：底层 API 已经通过 EventFlow 阻塞了 GENERATION_ENDED 信号，
+  // 此时 messages 数组已经更新。增加 nextTick 确保 Vue 已完成 DOM 更新渲染，
+  // 从而在物理层面实现两个气泡的无缝衔接，消除闪烁。
+  nextTick(() => {
+    streamingBuffer.value = ''; // 清除流式气泡，正式消息已由 crud 写入
+    streamingRaw.value = '';
+    streamingConfirmed.value = '';
+    streamingPending.value = '';
+    streamingFilteredLength.value = 0;
+    streamingStatusText.value = '';
+    streamingThinkingText.value = '';
+    generationError.value = '';
+  });
+  
   // 核心优化：传输完成后不再强制触底，保持用户当前的滚动位置
   // 这样用户在生成过程中向上翻阅时，不会在结束那一瞬间被强制拉回底部
 };
@@ -340,6 +378,7 @@ const onGenerationFailed = (message?: string) => {
     streamingRaw.value = '';
     streamingFilteredLength.value = 0;
   }
+  streamingThinkingText.value = '';
 };
 
 const onWorldlineChanged = () => {
@@ -349,6 +388,7 @@ const onWorldlineChanged = () => {
   streamingRaw.value = '';
   streamingFilteredLength.value = 0;
   streamingStatusText.value = '';
+  streamingThinkingText.value = '';
   generationError.value = '';
   scrollToBottom(true);
 };
@@ -385,8 +425,8 @@ onMounted(() => {
   // 核心修复：如果正在生成中重新挂载，立即恢复流式状态
   if (lwApi?.isGenerating && lwApi.lastStreamState) {
     isGenerating.value = true;
-    const { processed, text, filteredCount, statusText } = lwApi.lastStreamState;
-    onBufferUpdated(processed, text, filteredCount, statusText);
+    const { processed, text, filteredCount, statusText, thinkingText } = lwApi.lastStreamState;
+    onBufferUpdated(processed, text, filteredCount, statusText, thinkingText);
   }
 });
 
@@ -441,9 +481,16 @@ const streamStyle = computed(() => {
 });
 
 const msgMaxWidthStyle = computed(() => {
+  if (isCompact.value) {
+    return {
+      width: '100%',
+      maxWidth: '100%',
+      margin: '0 auto'
+    };
+  }
   const w = activeSettings['lumina-chat.pageWidth'];
   if (!w || w === 'auto') return { maxWidth: '100%' };
-  return { maxWidth: w + 'px', margin: '0 auto' };
+  return { width: '100%', maxWidth: w + 'px', margin: '0 auto' };
 });
 
 // 简易 Markdown 渲染 (支持基于段落间距要求的 <p> 排版)
@@ -586,9 +633,11 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   background: var(--lw-bg);
   color: var(--lw-color);
   width: 100%;
-  min-width: 600px;
-  border-right: 1px solid #e2e8f0;
+  min-width: 0;
+  border-right: 1px solid var(--lw-border-base);
   overflow-x: hidden;
+  container-type: inline-size;
+  container-name: chat-stream;
   transition: background 0.3s, color 0.3s;
 }
 
@@ -622,6 +671,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   flex-direction: column;
   gap: 24px;
   width: 100%;
+  min-width: 0;
   transition: max-width 0.3s;
 }
 
@@ -638,7 +688,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   padding: 6px 16px;
   border-radius: 20px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--lw-text-muted);
   border: 1px solid var(--lw-border);
   display: flex;
   align-items: center;
@@ -697,7 +747,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   flex-direction: column;
   gap: 6px;
   flex: 1;
-  /* max-width: calc(100% - 56px); */
+  min-width: 0;
 }
 
 .chat-msg.user .msg-content {
@@ -708,6 +758,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   display: flex;
   align-items: baseline;
   gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .status-label {
@@ -725,11 +777,13 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   font-size: 14px;
   color: var(--lw-color);
   opacity: 0.9;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .msg-info {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--lw-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -737,15 +791,16 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .msg-bubble {
   background: var(--lw-bubble);
   padding: 16px;
-  border-radius: 8px;
+  border-radius: 18px;
   border: 1px solid var(--lw-border);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow: var(--lw-shadow);
   font-size: var(--lw-size);
   font-family: var(--lw-font);
   font-weight: var(--lw-font-weight, 400);
   line-height: var(--lw-line-height);
   color: var(--lw-color);
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -754,11 +809,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .streaming-bubble {
-  border-color: var(--lw-primary);
-  border-style: dashed;
+  border-color: var(--lw-border-active);
+  border-style: solid;
   position: relative;
   min-height: 24px;
-  /* 核心修复：增加平滑过渡，减缓布局跳动感 */
   transition: min-height 0.1s ease-out;
 }
 
@@ -773,8 +827,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .msg-edit-wrap {
   width: 100%;
   background: var(--lw-bg);
-  border: 1px solid var(--lw-primary, var(--lw-primary));
-  border-radius: 8px;
+  border: 1px solid var(--lw-border-active);
+  border-radius: 16px;
   padding: 12px;
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
   margin-top: 4px;
@@ -798,14 +852,14 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 .msg-edit-textarea {
   width: 100%;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  background: var(--lw-bg-elevated);
+  border: 1px solid var(--lw-border-base);
+  border-radius: 12px;
   padding: 10px;
   font-family: var(--lw-font);
   font-size: var(--lw-size);
   line-height: var(--lw-line-height);
-  color: #1e293b;
+  color: var(--lw-text-main);
   resize: vertical;
   min-height: 100px;
   outline: none;
@@ -824,7 +878,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 .edit-tip {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--lw-text-muted);
 }
 
 .edit-btns {
@@ -833,8 +887,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .edit-confirm-btn {
-  background: var(--lw-primary, var(--lw-primary));
-  color: white;
+  background: var(--lw-black);
+  color: var(--lw-text-inverse);
   border: none;
   padding: 6px 14px;
   border-radius: 6px;
@@ -842,17 +896,17 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   font-weight: 500;
   cursor: pointer;
   transition: 0.2s;
-  box-shadow: 0 2px 4px rgba(139, 92, 246, 0.2);
+  box-shadow: var(--lw-shadow);
 }
 
 .edit-confirm-btn:hover {
-  background: var(--lw-primary-hover);
+  background: color-mix(in srgb, var(--lw-black) 92%, white);
   transform: translateY(-1px);
 }
 
 .edit-cancel-btn {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-secondary);
   border: none;
   padding: 6px 14px;
   border-radius: 6px;
@@ -862,8 +916,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .edit-cancel-btn:hover {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: var(--lw-bg-hover);
+  color: var(--lw-text-main);
 }
 
 /* 段落间距控制 */
@@ -877,6 +931,28 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 .msg-text :deep(.empty-line) {
   height: var(--lw-p-spacing);
+}
+
+.msg-bubble :deep(*) {
+  max-width: 100%;
+}
+
+.msg-bubble :deep(pre),
+.msg-bubble :deep(code),
+.msg-bubble :deep(table) {
+  max-width: 100%;
+}
+
+.msg-bubble :deep(pre),
+.msg-bubble :deep(code) {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.msg-bubble :deep(table) {
+  display: block;
+  overflow-x: auto;
 }
 
 /* 气泡平实卡片化 */
@@ -894,17 +970,17 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .stream-error {
   margin-top: 8px;
   font-size: 12px;
-  color: #dc2626;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
+  color: var(--lw-danger);
+  background: color-mix(in srgb, var(--lw-danger) 10%, white);
+  border: 1px solid color-mix(in srgb, var(--lw-danger) 20%, white);
   border-radius: 6px;
   padding: 8px 10px;
 }
 
 .filtered-tag {
   font-size: 11px;
-  color: #94a3b8;
-  background: rgba(148, 163, 184, 0.1);
+  color: var(--lw-text-muted);
+  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
   padding: 2px 8px;
   border-radius: 4px;
   border: 1px dashed #cbd5e1;
@@ -967,8 +1043,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .msg-actions button:hover {
-  background: #f1f5f9;
-  color: var(--lw-primary);
+  background: var(--lw-bg-hover);
+  color: var(--lw-text-main);
 }
 
 /* 状态反馈标签 */
@@ -1079,8 +1155,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 /* === 停止按钮 === */
 .stop-btn {
-  background: #ef4444;
-  color: white;
+  background: var(--lw-danger);
+  color: var(--lw-text-inverse);
   border: none;
   width: 38px;
   height: 38px;
@@ -1095,7 +1171,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .stop-btn:hover {
-  background: #dc2626;
+  background: color-mix(in srgb, var(--lw-danger) 90%, black);
   transform: scale(1.05);
 }
 
@@ -1122,6 +1198,90 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   align-items: center;
   gap: 12px;
   padding: 8px 16px 8px;
+  min-width: 0;
+}
+
+.lw-chat-stream.is-compact {
+  border-right: none;
+}
+
+.lw-chat-stream.is-compact .chat-scroll-area {
+  padding: 16px 14px;
+}
+
+.lw-chat-stream.is-compact .chat-content-wrapper {
+  gap: 18px;
+}
+
+.lw-chat-stream.is-compact .chat-msg {
+  gap: 12px;
+}
+
+.lw-chat-stream.is-compact .msg-meta {
+  gap: 8px;
+}
+
+.lw-chat-stream.is-compact .msg-bubble {
+  padding: 14px;
+  border-radius: 16px;
+}
+
+.lw-chat-stream.is-compact .chat-input-area {
+  padding: 2px 14px 14px !important;
+}
+
+.lw-chat-stream.is-compact .input-toolbar {
+  gap: 8px;
+  padding: 8px 12px 6px;
+  flex-wrap: wrap;
+}
+
+.lw-chat-stream.is-compact .input-actions {
+  gap: 10px;
+  padding-right: 0;
+}
+
+@container chat-stream (max-width: 768px) {
+  .lw-chat-stream {
+    border-right: none;
+  }
+
+  .chat-scroll-area {
+    padding: 16px 12px;
+    padding-left: 18px;
+  }
+
+  .chat-content-wrapper {
+    gap: 18px;
+  }
+
+  .chat-msg {
+    gap: 12px;
+  }
+
+  .msg-meta {
+    gap: 8px;
+  }
+
+  .msg-bubble {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .chat-input-area {
+    padding: 1px 18px 14px !important;
+  }
+
+  .input-toolbar {
+    gap: 8px;
+    padding: 8px 12px 6px;
+    flex-wrap: wrap;
+  }
+
+  .input-actions {
+    gap: 10px;
+    padding-right: 0;
+  }
 }
 
 /* === Prompt Inspector 面板 === */
@@ -1151,20 +1311,21 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 /* === 流式输入气泡 === */
 .streaming-msg .msg-bubble.streaming-bubble {
   background: var(--lw-bubble, #ffffff);
-  border-left: 3px solid var(--lw-primary, var(--lw-primary));
+  border-color: var(--lw-border-active);
   opacity: 0.95;
 }
 
 .streaming-avatar {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  border-radius: 14px;
+  background: var(--lw-bg-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--lw-primary, var(--lw-primary));
+  color: var(--lw-text-main);
   animation: streaming-pulse 1.8s ease-in-out infinite;
+  border: 1px solid var(--lw-border-subtle);
 }
 
 @keyframes streaming-pulse {
@@ -1190,7 +1351,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .typing-indicator span {
   width: 7px;
   height: 7px;
-  background: var(--lw-primary, var(--lw-primary));
+  background: var(--lw-text-main);
   border-radius: 50%;
   opacity: 0.4;
   animation: typing-bounce 1.2s ease-in-out infinite;
@@ -1235,8 +1396,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .msg-edit-textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 2px solid var(--lw-primary, var(--lw-primary));
-  border-radius: 8px;
+  border: 1px solid var(--lw-border-active);
+  border-radius: 12px;
   padding: 10px 12px;
   font-size: var(--lw-size, 16px);
   font-family: var(--lw-font, sans-serif);
@@ -1246,7 +1407,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   resize: vertical;
   outline: none;
   min-height: 80px;
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--lw-primary-rgb), 0.08);
   transition: border-color 0.15s;
 }
 
@@ -1259,8 +1420,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   padding: 5px 14px;
   border-radius: 6px;
   border: none;
-  background: var(--lw-primary, var(--lw-primary));
-  color: white;
+  background: var(--lw-black);
+  color: var(--lw-text-inverse);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -1268,23 +1429,23 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .edit-confirm-btn:hover {
-  background: var(--lw-primary-hover);
+  background: color-mix(in srgb, var(--lw-black) 92%, white);
 }
 
 .edit-cancel-btn {
   padding: 5px 14px;
   border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  background: white;
-  color: #64748b;
+  border: 1px solid var(--lw-border-base);
+  background: var(--lw-bg-elevated);
+  color: var(--lw-text-secondary);
   font-size: 12px;
   cursor: pointer;
   transition: 0.15s;
 }
 
 .edit-cancel-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--lw-bg-hover);
+  border-color: var(--lw-border-hover);
 }
 
 /* === 收起状态下的输入区高度收缩 === */
@@ -1323,7 +1484,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .typing-cursor {
   display: inline;
   animation: lw-blink 0.8s step-end infinite;
-  color: var(--lw-primary, #8b5cf6);
+  color: var(--lw-text-main);
   font-weight: 300;
   user-select: none;
 }
@@ -1338,7 +1499,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   padding: 4px 8px;
   background: var(--lw-bg);
   border-radius: 6px;
-  color: var(--lw-text-light);
+  color: var(--lw-text-muted);
   font-size: 0.9em;
   font-style: italic;
   animation: status-fade-in 0.3s ease-out;
@@ -1352,7 +1513,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .status-pulse {
   width: 8px;
   height: 8px;
-  background: var(--lw-primary);
+  background: var(--lw-text-main);
   border-radius: 50%;
   animation: pulse-ring 1.5s infinite;
 }
@@ -1370,7 +1531,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   padding-top: 8px;
   border-top: 1px dashed var(--lw-border);
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--lw-text-muted);
 }
 
 .meta-item.status {
@@ -1389,4 +1550,26 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   background: currentColor;
   margin-right: 6px;
 }
+.streaming-bubble.syncing {
+  border-style: solid;
+  border-color: var(--lw-border-hover);
+  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.status-spin {
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  color: var(--lw-text-muted);
+}
+
 </style>

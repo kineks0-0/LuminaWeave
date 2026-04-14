@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncUtils, MessageTextResolver, MessageComparator } from '../SyncUtils';
-import { LuminaChatMessage } from '../ChatManager';
+import { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
 import { STClient } from '../st-adapter/STClient';
 import { STProtocol } from '../st-adapter/STProtocol';
 

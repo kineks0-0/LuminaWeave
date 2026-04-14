@@ -1,5 +1,6 @@
 import { LuminaPlugin } from '../../types/plugin';
 import LorebookRoot from './LorebookRoot.vue';
+import LorebookWorkspace from './components/LorebookWorkspace.vue';
 
 const plugin: LuminaPlugin = {
     id: 'lumina-lorebook',
@@ -30,3 +31,4 @@ const plugin: LuminaPlugin = {
 };
 
 export default plugin;
+export { LorebookWorkspace };

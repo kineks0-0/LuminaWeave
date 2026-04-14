@@ -3,6 +3,12 @@
  * 专门用于在复杂的嵌套环境（如 iframe 隔离）和不同的上下文（Shadow DOM等）中探测宿主环境对象。
  */
 export class EnvDetector {
+    /** 
+     * 初始化静默模式标志：设置为 true 时，探测失败不会向控制台打印 Warn/Error。
+     * 用于解决冷启动时环境尚未就绪导致的日志爆炸。
+     */
+    public static isSilenceMode: boolean = true;
+
     /** 获取运行宿主的全局变量空间 (用于读取 ST 注入在 window/globalThis 的零散变量) */
     static get stGlobal(): any {
         if (typeof window !== 'undefined') {
@@ -50,12 +56,12 @@ export class EnvDetector {
             const waitGlobalInit = (glob.TavernHelper as typeof TavernHelper)?.waitGlobalInitialized;
 
             if (typeof waitGlobalInit === 'function') {
-                console.log(`[EnvDetector] 使用 TavernHelper 提供的 waitGlobalInitialized API 等待 ${key}`);
+                if (!this.isSilenceMode) console.log(`[EnvDetector] 使用 TavernHelper 提供的 waitGlobalInitialized API 等待 ${key}`);
                 waitGlobalInit(key).then(() => finish(true)).catch(() => finish(false));
             } else {
                 // 降级：原生 JavaScript 的 window 对象没有提供监听特定全局变量创建的 Hook 机制。
                 // 除非强行劫持 window.defineProperty，否则 100ms 一次的轻量轮询 (setInterval) 是业界最安全、跨浏览器且非侵入式的一致性解决方案。
-                console.log(`[EnvDetector] 使用标准轮询等待 ${key}`);
+                if (!this.isSilenceMode) console.log(`[EnvDetector] 使用标准轮询等待 ${key}`);
                 const intervalId = setInterval(() => {
                     if (glob[key] !== undefined && glob[key] !== null) {
                         clearInterval(intervalId);

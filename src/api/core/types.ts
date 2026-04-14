@@ -10,8 +10,10 @@ export interface StoredChatMessage {
     is_user?: boolean;
     mesRaw: string;
     mesSummary?: string;       // 剧情概况字段 (由 Story_Summary 标签或 AI 填充)
+    thinkingText?: string | null; // 独立思维链字段
     mesST?: string;            // ST 侧实际呈现文本，包含上下文压缩和处理结果
     is_hidden?: boolean;
+    isPinned?: boolean;        // 是否钉固（豁免隐藏区）
     pluginRaw?: string | null;
     fingerprint: string;
     characterId?: string | number;
@@ -20,14 +22,6 @@ export interface StoredChatMessage {
 
 
 
-
-/**
- * Swipe 详细信息接口补充
- */
-export interface STSwipeInfo {
-    extra?: Record<string, unknown>;
-    mes?: string;
-}
 
 /**
  * 上下文控制设置 (DCC)
@@ -45,4 +39,3 @@ export interface ContextControlSettings {
     tokenMaxFloat: number;
     enableFallbackSummary: boolean; // 新增：是否启用无标签摘要兜底（截断前100字）
 }
-

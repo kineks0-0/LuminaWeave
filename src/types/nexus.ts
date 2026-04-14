@@ -26,6 +26,7 @@ export interface NexusPreset {
 export interface NexusAPI {
     id: string;
     name: string;
+    type?: 'openai' | 'openai_compatible' | 'anthropic' | 'google';
     url: string;
     key: string;
 }
@@ -35,10 +36,13 @@ export interface NexusAPI {
  */
 export interface NexusStatusResponse {
     isGenerating: boolean;
+    generationId?: string | null;
     buffer: string;
     rawBuffer?: string;
-    status?: 'success' | 'error' | 'aborted';
+    status?: 'idle' | 'running' | 'success' | 'error' | 'aborted';
     errorMessage?: string;
+    lastTransactionId?: string;
+    activeLeafId?: string | null;
 }
 
 /**
@@ -50,9 +54,11 @@ export interface GenerateOptions {
     parentId?: string | null;
     settings?: Record<string, unknown>;
     signal?: AbortSignal;
-    onChunk?: (chunk: string) => void;
+    onChunk?: (chunk: string, fullText: string) => void;
     onDone?: (fullText: string) => Promise<void> | void;
     onError?: (error: Error, state?: NexusStatusResponse) => void;
+    onBackendCommitted?: (info: { lastTransactionId: string; activeLeafId?: string | null; generationId?: string | null }) => Promise<void> | void;
+    onActivity?: () => void;
 }
 
 /**

@@ -1,11 +1,12 @@
 import { lwStorage } from '../storage.js';
 import { STProtocol } from './st-adapter/STProtocol.js';
-import { LuminaChatMessage as LuminaChatMessage } from './ChatManager.js';
+import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
 import { WorldlineStore } from './WorldlineStore.js';
 import { SyncUtils } from './SyncUtils.js';
-import { STClient } from './st-adapter/STClient.js';
 import { pluginManager } from '../../core/PluginManager.js';
 import { TransactionContextPayload, TransactionErrorPayload, TransactionMutationResponse, TransactionQueryResponse, TransactionScope } from './TransactionProtocol.js';
+import { API_BASE, API_ROUTES } from '../../../../shared/ApiEndpoints.js';
+import { pluginFetch } from './PluginHttpClient.js';
 
 /**
  * PersistenceService
@@ -55,8 +56,15 @@ export class PersistenceService {
         return this._integratedTxIdByChat.get(chatId);
     }
 
-    private _setIntegratedTxId(chatId: string, txId: string): void {
+    public setIntegratedTxId(chatId: string, txId: string): void {
         this._integratedTxIdByChat.set(chatId, txId);
+    }
+
+    public async persistLastCommittedSeq(chatId: string, seq: number): Promise<void> {
+        this._setLastCommittedSeq(chatId, seq);
+        const context = lwStorage._getContextIds();
+        if (context.chatId !== chatId) return;
+        await lwStorage.set('lumina-chat.lastCommittedTxnSeq', seq, 'Chat');
     }
 
     private _buildTransactionContext(chatId: string, scope: TransactionScope, payloadDigest: string): TransactionContextPayload {
@@ -85,10 +93,7 @@ export class PersistenceService {
     }
 
     private async _persistLastCommittedSeq(chatId: string, seq: number): Promise<void> {
-        this._setLastCommittedSeq(chatId, seq);
-        const context = lwStorage._getContextIds();
-        if (context.chatId !== chatId) return;
-        await lwStorage.set('lumina-chat.lastCommittedTxnSeq', seq, 'Chat');
+        await this.persistLastCommittedSeq(chatId, seq);
     }
 
     private async _handleTransactionResponse(chatId: string, res: Response): Promise<void> {
@@ -110,7 +115,7 @@ export class PersistenceService {
             await this._persistLastCommittedSeq(chatId, committedSeq);
         }
         if (payload.transaction?.id) {
-            this._setIntegratedTxId(chatId, payload.transaction.id);
+            this.setIntegratedTxId(chatId, payload.transaction.id);
         }
         const txError = payload.error as TransactionErrorPayload | undefined;
         if (txError && txError.code === 'TXN_SEQUENCE_CONFLICT') {
@@ -119,35 +124,31 @@ export class PersistenceService {
         }
     }
 
-    private async _queryLatestTransaction(chatId: string, scope: TransactionScope, idempotencyKey: string, csrfToken: string): Promise<TransactionQueryResponse | null> {
+    private async _queryLatestTransaction(chatId: string, scope: TransactionScope, idempotencyKey: string): Promise<TransactionQueryResponse | null> {
         const query = new URLSearchParams({
             scope,
             idempotencyKey
         }).toString();
-        const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}/transactions?${query}`, {
-            headers: { 'X-CSRF-Token': csrfToken }
-        });
+        const res = await pluginFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.TRANSACTIONS(chatId)}?${query}`);
         if (!res.ok) return null;
         return await res.json() as TransactionQueryResponse;
     }
 
-    private async _queryTransactionsAfterSeq(chatId: string, afterSeq: number, scope: TransactionScope, csrfToken: string): Promise<TransactionQueryResponse | null> {
+    private async _queryTransactionsAfterSeq(chatId: string, afterSeq: number, scope: TransactionScope): Promise<TransactionQueryResponse | null> {
         const query = new URLSearchParams({
             afterSeq: String(afterSeq),
             scope
         }).toString();
-        const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}/transactions?${query}`, {
-            headers: { 'X-CSRF-Token': csrfToken }
-        });
+        const res = await pluginFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.TRANSACTIONS(chatId)}?${query}`);
         if (!res.ok) return null;
         return await res.json() as TransactionQueryResponse;
     }
 
-    private async _runReconciliationCompensation(chatId: string, scope: TransactionScope, idempotencyKey: string, csrfToken: string): Promise<void> {
+    private async _runReconciliationCompensation(chatId: string, scope: TransactionScope, idempotencyKey: string): Promise<void> {
         const knownSeq = this._getLastCommittedSeq(chatId);
-        let queryPayload = await this._queryTransactionsAfterSeq(chatId, knownSeq, scope, csrfToken);
+        let queryPayload = await this._queryTransactionsAfterSeq(chatId, knownSeq, scope);
         if (!queryPayload) {
-            queryPayload = await this._queryLatestTransaction(chatId, scope, idempotencyKey, csrfToken);
+            queryPayload = await this._queryLatestTransaction(chatId, scope, idempotencyKey);
         }
         if (!queryPayload) return;
         const transactions = Array.isArray(queryPayload.transactions)
@@ -174,10 +175,8 @@ export class PersistenceService {
             }
         }
         if (!tx) return;
-        const rollbackRes = await fetch(`/api/plugins/luminaweave/chat/${chatId}/transactions/${tx.id}/rollback`, {
-            method: 'POST',
-            headers: { 'X-CSRF-Token': csrfToken }
-        });
+        const resUrl = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.ROLLBACK_TRANSACTION(chatId, tx.id)}`;
+        const rollbackRes = await pluginFetch(resUrl, { method: 'POST' });
         if (!rollbackRes.ok) return;
         const rollbackPayload = await rollbackRes.json() as TransactionMutationResponse;
         const rollbackSeq = typeof rollbackPayload.lastCommittedSeq === 'number'
@@ -192,7 +191,6 @@ export class PersistenceService {
         chatId: string,
         scope: TransactionScope,
         payloadDigest: string,
-        csrfToken: string,
         sender: (ctx: TransactionContextPayload) => Promise<Response>
     ): Promise<void> {
         const transactionContext = this._buildTransactionContext(chatId, scope, payloadDigest);
@@ -204,7 +202,7 @@ export class PersistenceService {
             const isConflict = error instanceof Error && error.message.startsWith('TXN_SEQUENCE_CONFLICT:');
             if (!isConflict) throw error;
         }
-        await this._runReconciliationCompensation(chatId, scope, transactionContext.idempotencyKey, csrfToken);
+        await this._runReconciliationCompensation(chatId, scope, transactionContext.idempotencyKey);
         const retryContext = this._buildTransactionContext(chatId, scope, payloadDigest);
         const retryRes = await sender(retryContext);
         await this._handleTransactionResponse(chatId, retryRes);
@@ -217,10 +215,8 @@ export class PersistenceService {
         const start = Date.now();
         while (Date.now() - start < maxWaitMs) {
             try {
-                const csrfToken = await STClient.getCsrfToken();
-                const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}/sync-status`, {
-                    headers: { 'X-CSRF-Token': csrfToken }
-                });
+                const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.SYNC_STATUS(chatId)}`;
+                const res = await pluginFetch(endpoint);
                 if (res.ok) {
                     const data = await res.json();
                     if (data.success && data.isTransactionsCompleted) {
@@ -245,11 +241,9 @@ export class PersistenceService {
             await this._waitForTransactions(chatId);
 
             try {
-                const csrfToken = await STClient.getCsrfToken();
                 // 2. 请求当前最新的事务状态
-                const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}/sync-status`, {
-                    headers: { 'X-CSRF-Token': csrfToken }
-                });
+                const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.SYNC_STATUS(chatId)}`;
+                const res = await pluginFetch(endpoint);
                 
                 if (res.ok) {
                     const data = await res.json();
@@ -261,7 +255,7 @@ export class PersistenceService {
                         console.log(`[PersistenceService] 执行事务对齐: LocalSeq=${this._getLastCommittedSeq(chatId)}, RemoteSeq=${remoteSeq}, RemoteTxId=${remoteTxId}`);
                         await this._persistLastCommittedSeq(chatId, remoteSeq);
                         if (remoteTxId) {
-                            this._setIntegratedTxId(chatId, remoteTxId);
+                            this.setIntegratedTxId(chatId, remoteTxId);
                         }
                     }
                 }
@@ -278,15 +272,13 @@ export class PersistenceService {
         return this._enqueue(async () => {
             const contextIds = (lwStorage as unknown as { _getContextIds: () => { chatId: string } })._getContextIds();
             const chatId = contextIds.chatId;
-            if (chatId === 'default') return false;
+            if (!chatId || chatId === 'null' || chatId === 'default') return false;
 
             await this._waitForTransactions(chatId);
 
             try {
-                const csrfToken = await STClient.getCsrfToken();
-                const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}`, {
-                    headers: { 'X-CSRF-Token': csrfToken }
-                });
+                const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.GET(chatId)}`;
+                const res = await pluginFetch(endpoint);
                 if (res.status === 200) {
                     const data = await res.json();
                     if (Array.isArray(data)) {
@@ -308,7 +300,7 @@ export class PersistenceService {
                         }
                         const remoteLastTxId = this._extractLastTransactionId(metadata);
                         if (remoteLastTxId) {
-                            this._setIntegratedTxId(chatId, remoteLastTxId);
+                            this.setIntegratedTxId(chatId, remoteLastTxId);
                         }
 
                         const normalizedNodes = SyncUtils.ensureFingerprints(messages);
@@ -365,7 +357,7 @@ export class PersistenceService {
     async syncToIndependentChat(targetChatId?: string, forceFull = false): Promise<void> {
         return this._enqueue(async () => {
             const chatId = targetChatId || lwStorage._getContextIds().chatId;
-            if (chatId === 'default') return;
+            if (!chatId || chatId === 'null' || chatId === 'default') return;
 
             if (!this.isLoadedProvider()) {
                 console.warn(`[PersistenceService] 拒绝物理写回: 当前会话 [ID: ${chatId}] 的独立存储数据尚未同步成功或初始化中。为了保护分支数据，本次保存已拦截。`);
@@ -375,12 +367,9 @@ export class PersistenceService {
             await this._waitForTransactions(chatId);
 
             try {
-                const csrfToken = await STClient.getCsrfToken();
-
                 // 1. 获取后端当前状态 (快照对比)
-                const res = await fetch(`/api/plugins/luminaweave/chat/${chatId}`, {
-                    headers: { 'X-CSRF-Token': csrfToken }
-                });
+                const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.GET(chatId)}`;
+                const res = await pluginFetch(endpoint);
                 let remoteData: any[] = [];
                 if (res.ok) {
                     remoteData = await res.json();
@@ -394,22 +383,34 @@ export class PersistenceService {
                 // 2. 预处理数据 (过滤 metadata)
                 const remoteNodes = remoteData.filter(d => d.type !== 'metadata');
                 const localNodes = this.store.nodePool;
+                const hasLocalChanges = localNodes.some(n => n.syncStatus === 'local');
 
                 // 3. 分析差异
-                const diff = SyncUtils.comparePools(localNodes, remoteNodes);
                 const metadataChanged = (remoteMetadata?.activeLeafId || null) !== (this.store.activeLeafId || null);
 
                 // 4. 执行同步策略
+                // 核心优化：如果没有本地变更且元数据未变，且非强制全量，则跳过同步
+                if (!hasLocalChanges && !metadataChanged && !forceFull && remoteNodes.length > 0) {
+                    return;
+                }
+
+                const diff = SyncUtils.comparePools(localNodes, remoteNodes);
                 if (forceFull || remoteNodes.length === 0) {
                     console.log(`[PersistenceService] 执行全量覆盖保存 [ID: ${chatId}]`);
                     const payload = this._prepareStoragePayload();
                     const payloadDigest = this._digestPayload(payload);
-                    await this._mutateWithCompensation(chatId, 'chat.save', payloadDigest, csrfToken, async (transactionContext) => {
-                        return await fetch(`/api/plugins/luminaweave/chat/save/${chatId}`, {
+                    await this._mutateWithCompensation(chatId, 'chat.save', payloadDigest, async (transactionContext) => {
+                        const saveEndpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.SAVE(chatId)}`;
+                        return await pluginFetch(saveEndpoint, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ data: payload, transactionContext })
                         });
+                    });
+                    
+                    // 全量同步后的状态清理
+                    this.store.nodePool.forEach(n => {
+                        n.syncStatus = 'synced';
                     });
                     return;
                 }
@@ -431,16 +432,25 @@ export class PersistenceService {
                         }
                     };
                     const payloadDigest = this._digestPayload(patchPayload);
-                    await this._mutateWithCompensation(chatId, 'chat.patch', payloadDigest, csrfToken, async (transactionContext) => {
+                    await this._mutateWithCompensation(chatId, 'chat.patch', payloadDigest, async (transactionContext) => {
                         const requestBody = {
                             ...patchPayload,
                             transactionContext
                         };
-                        return await fetch(`/api/plugins/luminaweave/chat/${chatId}`, {
+                        const patchEndpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.PATCH(chatId)}`;
+                        const res = await pluginFetch(patchEndpoint, {
                             method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(requestBody)
                         });
+
+                        if (res.ok) {
+                            // 标记成功同步
+                            [...diff.added, ...diff.updated].forEach(n => {
+                                n.syncStatus = 'synced';
+                            });
+                        }
+                        return res;
                     });
                 }
             } catch (e) {

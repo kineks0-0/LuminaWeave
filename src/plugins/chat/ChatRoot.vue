@@ -1,6 +1,6 @@
 <template>
   <div class="chat-root-container">
-    <ChatStream :messages="messages" />
+    <ChatStream :messages="messages" :isMobile="isMobile" :workspaceCompact="workspaceCompact" />
   </div>
 </template>
 
@@ -8,6 +8,14 @@
 import { storeToRefs } from 'pinia';
 import ChatStream from './ChatStream.vue';
 import { useChatStore } from '../../stores/useChatStore';
+
+withDefaults(defineProps<{
+  isMobile?: boolean;
+  workspaceCompact?: boolean;
+}>(), {
+  isMobile: false,
+  workspaceCompact: false
+});
 
 const chatStore = useChatStore();
 const { messages } = storeToRefs(chatStore);

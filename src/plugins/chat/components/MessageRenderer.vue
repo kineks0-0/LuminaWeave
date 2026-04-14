@@ -1,5 +1,14 @@
 <template>
   <div class="lv-message-renderer">
+    <ThinkingBlock
+      v-if="effectiveThinkingText && thinkingDisplayMode === 'collapsible'"
+      :text="effectiveThinkingText"
+      :render-fn="renderMarkdown"
+      :is-streaming="Boolean(isStreaming)"
+      :has-visible-content="hasVisibleContent"
+      :variant="thinkingVariant"
+      :auto-expand="thinkingAutoExpand"
+    />
     <template v-for="(segment, idx) in segments" :key="idx">
       <!-- 文本段：使用 TextBlock 渲染 Markdown -->
       <TextBlock v-if="segment.type === 'text'" :text="segment.raw" :renderFn="renderMarkdown" />
@@ -7,15 +16,11 @@
       <!-- 视图段：遍历组件列表并动态渲染 -->
       <div v-else-if="segment.type === 'view'" class="lv-view-segment">
         <template v-for="(comp, cIdx) in segment.components" :key="cIdx">
-          <StatBlock v-if="comp.component === 'Stat'" v-bind="comp.props as any" />
-          <ProgressBlock v-else-if="comp.component === 'Progress'" v-bind="comp.props as any" />
-          <ChoiceBlock v-else-if="comp.component === 'Choices'" v-bind="comp.props as any" />
-          <BadgeBlock v-else-if="comp.component === 'Badge'" v-bind="comp.props as any" />
-          <AlertBlock v-else-if="comp.component === 'Alert'" v-bind="comp.props as any" />
-          <QuoteBlock v-else-if="comp.component === 'Quote'" v-bind="comp.props as any" />
-          <SepBlock v-else-if="comp.component === 'Sep'" />
-
-          <!-- 降级：未识别的组件类型原样展示 -->
+          <component
+            :is="resolveRenderedComponent(comp.component)"
+            v-if="resolveRenderedComponent(comp.component)"
+            v-bind="comp.props as any"
+          />
           <div v-else class="lv-unknown-block">
             <code>{{ comp.component }}({{ JSON.stringify(comp.props) }})</code>
           </div>
@@ -29,15 +34,10 @@
 import { computed } from 'vue';
 import { splitToSegments, type MessageSegment } from '../../../api/core/LVParser';
 import TextBlock from './blocks/TextBlock.vue';
-import StatBlock from './blocks/StatBlock.vue';
-import ProgressBlock from './blocks/ProgressBlock.vue';
-import ChoiceBlock from './blocks/ChoiceBlock.vue';
-import BadgeBlock from './blocks/BadgeBlock.vue';
-import AlertBlock from './blocks/AlertBlock.vue';
-import QuoteBlock from './blocks/QuoteBlock.vue';
-import SepBlock from './blocks/SepBlock.vue';
+import ThinkingBlock from './blocks/ThinkingBlock.vue';
 import { globalXMLInterceptor, XMLInterceptor } from '../../../api/core/XMLInterceptor';
 import { lwStorage } from '../../../api/storage';
+import { viewRenderRegistry, type ViewRenderContext } from '../../../api/core/ViewRenderRegistry';
 
 const props = defineProps<{
   /** 手动处理后的显示文本（ST 渲染主要来源） */
@@ -46,11 +46,43 @@ const props = defineProps<{
   mesRaw: string;
   /** 最原始的 LLM 输出（Lumina 全量来源） */
   pluginRaw?: string | null;
+  /** 独立思维链文本 */
+  thinkingText?: string | null;
   /** Markdown 渲染函数（由父组件传入） */
   renderMarkdown: (text: string) => string;
   /** 是否处于流式生成状态 */
   isStreaming?: boolean;
+  /** 当前消息的视图渲染上下文 */
+  renderContext?: ViewRenderContext;
+  /** 思维链的展示风格 */
+  thinkingVariant?: 'default' | 'codex';
 }>();
+
+const effectiveRenderContext = computed<ViewRenderContext>(() => props.renderContext || 'chat');
+
+const resolveRenderedComponent = (componentName: string) => {
+  return viewRenderRegistry.resolve(effectiveRenderContext.value, componentName);
+};
+
+const thinkingDisplayMode = computed<'hidden' | 'collapsible'>(() => {
+  const storedMode = lwStorage.get('lumina-settings.thinkingDisplayMode', 'collapsible', 'Global');
+  return storedMode === 'hidden' ? 'hidden' : 'collapsible';
+});
+
+const thinkingAutoExpand = computed<boolean>(() => {
+  return Boolean(lwStorage.get('lumina-settings.thinkingAutoExpand', true, 'Global'));
+});
+
+const effectiveThinkingText = computed(() => {
+  if (typeof props.thinkingText === 'string' && props.thinkingText.trim()) {
+    return props.thinkingText.trim();
+  }
+
+  const rawSource = props.pluginRaw || props.mesRaw || props.mes || '';
+  if (!rawSource) return '';
+
+  return XMLInterceptor.extractTagContent(rawSource, 'thinking').join('\n\n').trim();
+});
 
 /** 将 mesRaw 分割为文本段和视图段 */
 const segments = computed<MessageSegment[]>(() => {
@@ -85,6 +117,13 @@ const segments = computed<MessageSegment[]>(() => {
   console.log(`[MessageRenderer] Calculated ${result.length} segments from text (filtered: ${filterChatReply}):`, result);
   return result;
 });
+
+const hasVisibleContent = computed(() => segments.value.some((segment) => {
+  if (segment.type === 'text') {
+    return Boolean(segment.raw.trim());
+  }
+  return (segment.components?.length || 0) > 0;
+}));
 </script>
 
 <style scoped>

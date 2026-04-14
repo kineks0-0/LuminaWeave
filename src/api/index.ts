@@ -1,12 +1,14 @@
 import { lwStorage } from './storage.js';
-import { SyncUtils, DiffVisualizer } from './core/SyncUtils.js';
+import { SyncUtils, DiffVisualizer, MessageTextResolver } from './core/SyncUtils.js';
 import { llmEngine } from './llmEngine.js';
 import { ChatManager } from './core/ChatManager.js';
 import { STAdapter } from './core/STAdapter.js';
+import { STProtocol } from './core/st-adapter/STProtocol.js';
 import { STClient } from './core/st-adapter/STClient.js';
 import { StreamHandler } from './core/StreamHandler.js';
 import { TimelineManager, TimelineNode } from './core/TimelineManager.js';
 import { LorebookManager } from './core/LorebookManager.js';
+import { MessageListManager } from './core/MessageListManager.js';
 import { PromptWorldInfoMount } from './core/PromptWorldInfoMount.js';
 import { FontManager } from './core/FontManager.js';
 import { MeasureService } from './core/MeasureService.js';
@@ -16,13 +18,17 @@ import { globalXMLInterceptor, XMLInterceptor, BuiltinXMLTags } from './core/XML
 import { globalMemoryManager } from './core/MemoryManager.js';
 import { pluginManager } from '../core/PluginManager.js';
 import { ST_EVENT } from './core/STEvent.js';
-import { LuminaChatMessage } from './core/ChatManager.js';
+import type { LuminaChatMessage } from '../../../shared/LuminaMessage.js';
 import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
 import { ChatDiffInspector, ChatDiffReport } from './debug/ChatDiffInspector.js';
 
 // 全局变量声明已移动至 src/types/sillytavern.d.ts
 
 import { EnvDetector } from './core/EnvDetector.js';
+import { GenerationSession } from './core/GenerationSession.js';
+import { LuminaGenerationTask, TaskCallbacks } from './core/LuminaGenerationTask.js';
+import { NexusClient } from './core/NexusClient.js';
+import { ForgeAgentController } from './core/ForgeAgentController.js';
 
 /**
  * LuminaWeave API 入口 (Facade)
@@ -38,18 +44,25 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     public promptWorldInfoMount: PromptWorldInfoMount;
     public fontManager: FontManager;
     public measureService: MeasureService;
+    public messageListManager: MessageListManager;
     public memoryManager: typeof globalMemoryManager;
+    public forgeAgent: ForgeAgentController;
 
     private _ready: boolean = false;
     private _readyPromise: Promise<boolean> | null = null;
 
     public lastPromptPayload: any = null;
     public generateAbortController: AbortController | null = null;
-    public lastStreamState: { processed: string; text: string; filteredCount: number; statusText?: string } | null = null;
+    public lastStreamState: { processed: string; text: string; filteredCount: number; statusText?: string; thinkingText?: string } | null = null;
     private _probing: boolean = false;
     private _probingEvents: { name: string, hasData: boolean, keys: string[] }[] = [];
     private _manualAbortPending: boolean = false;
     public registeredPanels: Map<string, { id: string, component: any, config: any }> = new Map();
+
+    /** 当前正在运行的生成会话 */
+    private _session: GenerationSession | null = null;
+    private nexus: NexusClient;
+    private _currentTask: LuminaGenerationTask | null = null;
 
     constructor() {
         super();
@@ -61,30 +74,47 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.promptWorldInfoMount = new PromptWorldInfoMount(this.lorebookManager);
         this.fontManager = new FontManager();
         this.measureService = new MeasureService();
+        this.messageListManager = new MessageListManager(
+            this.chatManager.store,
+            (msg: LuminaChatMessage) => msg.is_user ? this.getUserAvatar(msg.name) : this.getCharAvatar(msg.name),
+            (text: string, isUser: boolean, depth: number) => this.applySTRegex(text, isUser ? 'user_input' : 'ai_output', 'display', { depth })
+        );
         this.memoryManager = globalMemoryManager;
+        this.nexus = new NexusClient();
+        this.forgeAgent = new ForgeAgentController(this);
 
         // 基础元数据
         // 自动解析 SillyTavern 上下文由基类提供
 
+        this.beforeGenerationStartFlow.collect(async (payload) => {
+            if (payload.chatType !== 'st') return;
+            await this.promptWorldInfoMount.syncToWorldInfo();
+            await this.chatManager.commitToST();
+        });
+
         // 转发子组件事件至主 API 实例
-        [this.chatManager, this.streamHandler, this.timelineManager, this.lorebookManager, this.fontManager, this.measureService].forEach(mgr => {
+        [this.chatManager, this.streamHandler, this.timelineManager, this.lorebookManager, this.fontManager, this.measureService, this.messageListManager].forEach(mgr => {
             mgr.on('CHAT_UPDATED', () => this.emit('CHAT_UPDATED'));
             mgr.on('CHAT_CHANGED', () => this.emit('CHAT_CHANGED'));
             mgr.on('GENERATION_STARTED', () => this.emit('GENERATION_STARTED'));
 
             // 核心修复：转发流式更新时实时应用正则处理。
-            mgr.on('BUFFER_UPDATED', (text: string, rawText?: string, filteredCount?: number, statusText?: string, pendingText?: string) => {
+            mgr.on('BUFFER_UPDATED', (text: string, rawText?: string, filteredCount?: number, statusText?: string, thinkingText?: string, pendingText?: string) => {
                 const fullRaw = rawText || text;
                 const processed = this.applySTRegex(text, 'ai_output', 'display', 0);
                 const stableFilteredCount = typeof filteredCount === 'number'
                     ? filteredCount
                     : Math.max(0, fullRaw.length - text.length);
 
-                this.lastStreamState = { processed, text: fullRaw, filteredCount: stableFilteredCount, statusText };
-                this.emit('BUFFER_UPDATED', processed, fullRaw, stableFilteredCount, statusText, pendingText ?? '');
+                this.lastStreamState = { processed, text: fullRaw, filteredCount: stableFilteredCount, statusText, thinkingText };
+                this.emit('BUFFER_UPDATED', processed, fullRaw, stableFilteredCount, statusText, thinkingText ?? '', pendingText ?? '');
             });
 
             mgr.on('GENERATION_ENDED', (finalText: string) => {
+                if (this._session) {
+                    this._session.finalText = finalText;
+                    this.finalizeGeneration();
+                }
                 const processed = finalText ? this.applySTRegex(finalText, 'ai_output', 'display', 0) : finalText;
                 this.emit('GENERATION_ENDED', processed);
             });
@@ -92,9 +122,37 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 this.emit('GENERATION_FAILED', message, status);
             });
 
+            // 转发新版响应式消息列表更新事件
+            if (mgr === this.messageListManager as any) {
+                mgr.on('MESSAGE_LIST_UPDATED', (list: any) => this.emit('MESSAGE_LIST_UPDATED', list));
+            }
+
             mgr.on('TIMELINE_UPDATED', () => this.emit('TIMELINE_UPDATED'));
             mgr.on('LOREBOOK_SYNCED', (...args: any[]) => this.emit('LOREBOOK_SYNCED', ...args));
             mgr.on('CHAT_CONFLICT', (...args: any[]) => this.emit('CHAT_CONFLICT', ...args));
+
+            // 处理来自 StreamHandler 的补全信号（通常由 Watchdog 恢复后触发）
+            if (mgr === this.streamHandler) {
+                mgr.on('TRANSACTION_COMMITTED', async (info: { lastTransactionId: string; activeLeafId?: string | null; generationId?: string | null }) => {
+                    console.log('[LuminaWeave] 收到外部事务提交信号:', info.lastTransactionId);
+                    
+                    if (this._session) {
+                        this._session.committedInfo = info;
+                        this.finalizeGeneration();
+                    } else {
+                        // 核心增强：兜底机制。如果当前没有正在跟踪的生成任务（例如看门狗恢复或页面刚载入），
+                        // 且后端事务已提交，则我们需要检查是否需要同步 UI。
+                        const { chatId: currentChatId } = lwStorage._getContextIds();
+                        const persistence = this.chatManager.persistence;
+                        const localTxId = persistence.getIntegratedTxId(currentChatId);
+
+                        if (info.lastTransactionId && localTxId !== info.lastTransactionId) {
+                            console.log(`[LuminaWeave] [Fallback] 检测到本地事务 ID (${localTxId}) 后置于后端 (${info.lastTransactionId})，触发无状态同步...`);
+                            await this.syncFromST({ forceIndependentLoad: true });
+                        }
+                    }
+                });
+            }
         });
 
         // 取消构造函数中的自动 init，由 App.vue 在插件注册后显式调用
@@ -125,14 +183,23 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.emit('INIT_PROGRESS', '准备初始化环境...');
 
         // 1. 基础环境准备：加载独立全局存储并等待 ST/Helper 准备就绪
+        // 这里会先进入 silenceMode 以防 TavernHelper 尚未加载时报错
+        EnvDetector.isSilenceMode = true;
         const [envReady] = await Promise.all([
-            this.waitForEnvironment(15000), // 最长等待 15s 超时
+            this.waitForEnvironment(20000), // 冷启动探测容忍度提高到 20s
             lwStorage.loadIndependentGlobalData()
         ]);
+        
+        // 环境就绪后，恢复正常日志输出并激活组件
+        EnvDetector.isSilenceMode = false;
 
         if (!envReady) {
             console.warn('[LuminaWeave API] 环境未完全就绪，API 将在受限或脱离模式下继续运行');
         }
+
+        // 核心修复：激活组件。激活后，ChatManager 才会响应 lwStorage 的变动，
+        // 从而确保在 loadIndependentGlobalData 完成且环境确认就绪后才开始逻辑监听。
+        this.chatManager.activate();
 
         this.emit('INIT_PROGRESS', '初始化全局事件...');
         // 2. 初始化核心逻辑 (管理全局事件与监听))
@@ -161,7 +228,11 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
         // 6. 注册设置变更监听 (同步持久化状态与 UI 响应)
         lwStorage.on('*', (data: any) => {
-            if (data?.key === 'lumina-settings.isPromptInjectionEnabled' || data?.key === 'lumina-chat.dialogueUIFrequency') {
+            if (
+                data?.key === 'lumina-settings.isPromptInjectionEnabled'
+                || data?.key === 'lumina-chat.dialogueUIFrequency'
+                || data?.key === 'lumina-settings.luminaViewSyntaxStyle'
+            ) {
                 this.promptWorldInfoMount.syncToWorldInfo();
             }
             if (data && (data.key === 'lumina-chat.fontFamily' || data.key === 'lumina-chat.fontWeight')) {
@@ -192,9 +263,31 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 const { chatId } = lwStorage._getContextIds();
                 if (chatId) {
                     console.log(`[LuminaWeave] Tab became visible, syncing stream status for ${chatId}...`);
-                    this.streamHandler.syncWithServer(chatId);
+                    this.streamHandler.resumeToTerminal(chatId);
                 }
             }
+        });
+
+        window.addEventListener('online', () => {
+            const { chatId } = lwStorage._getContextIds();
+            if (chatId) {
+                this.streamHandler.resumeToTerminal(chatId);
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            this.streamHandler.cancelResume();
+        });
+
+        window.addEventListener('pageshow', () => {
+            const { chatId } = lwStorage._getContextIds();
+            if (chatId) {
+                this.streamHandler.resumeToTerminal(chatId);
+            }
+        });
+
+        window.addEventListener('pagehide', () => {
+            this.streamHandler.cancelResume();
         });
 
         this._globalEventsInited = true;
@@ -230,7 +323,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         // 初始同步一次后端状态
         if (chatId) {
             // 初始化时的状态同步失败
-            this.streamHandler.syncWithServer(chatId).catch(e => console.warn('[LuminaWeave] 初始化流状态同步失败:', e));
+            this.streamHandler.resumeToTerminal(chatId).catch(e => console.warn('[LuminaWeave] 初始化流状态同步失败:', e));
         }
 
         // 使用基类提供的标准探测器机制
@@ -274,7 +367,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             stEventSource.on(event_types[ST_EVENT.CHAT_LOADED], async () => {
                 await handleGeneralChatLoad();
                 const { chatId } = lwStorage._getContextIds();
-                if (chatId) this.streamHandler.syncWithServer(chatId);
+                if (chatId) this.streamHandler.resumeToTerminal(chatId);
             });
             // Removed duplicate CHAT_CHANGED listener here, as it's handled by CHAT_LOADED and the initial CHAT_CHANGED above.
             // stEventSource.on(event_types[ST_EVENT.CHAT_CHANGED], async () => {
@@ -369,7 +462,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 if (lastMessage && !lastMessage.is_user) {
                     const finalText = lastMessage.mes || '';
                     // 1. 调用全局 XML 拦截器 (解析并执行 Mutation 指令，更新本地 deltaCache)
-                    const cleanedFinalText = globalXMLInterceptor.processAndCleanText(finalText);
+                    const cleanedFinalText = globalXMLInterceptor.processAndCleanText(finalText, false);
                     
                     // 2. 核心增强：强制提交内存中的增量修改并同步至当前活跃节点
                     if (this.chatManager.activeLeafId) {
@@ -548,9 +641,9 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     }
 
     // --- LLM 预设代理 ---
-    getPresets(type: string) { return llmEngine.getPresets(type); }
-    getActivePresetName(type: string) { return llmEngine.getActivePresetName(type); }
-    selectPreset(type: string, name: string) { return llmEngine.selectPreset(type, name); }
+    getPresets(type: string) { return STClient.getPresets(type); }
+    getActivePresetName(type: string) { return STClient.getActivePresetName(type); }
+    selectPreset(type: string, name: string) { return STClient.selectPreset(type, name); }
 
     // --- 门面方法：转发至 ChatManager ---
     async syncFromST(options: { skipSave?: boolean; forceOverwrite?: boolean; skipIndependentLoad?: boolean; forceIndependentLoad?: boolean; resolveIntent?: 'st' | 'lumina' } = {}): Promise<void> {
@@ -569,11 +662,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
                 if (msg.pluginRaw) {
                     // 只要有 pluginRaw，我们就重新根据它生成最准确的展示版本
-                    const chatReplyContent = XMLInterceptor.extractTagContent(msg.pluginRaw, BuiltinXMLTags.CHAT_REPLY).join('\n\n');
-                    const cleanFullContent = globalXMLInterceptor.processAndCleanText(msg.pluginRaw);
-                    
-                    // 提取出的对话内容（包含 <V> 标签）
-                    const finalSourceText = chatReplyContent || cleanFullContent;
+                    const finalSourceText = MessageTextResolver.extractMessageText(msg);
                     
                     // 强力对齐：确保 mesRaw 包含标签，mes 紧随其后同步
                     if (msg.mesRaw !== finalSourceText) {
@@ -594,12 +683,18 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             });
         }
 
-        if (this.localChatData) {
-            await this.timelineManager.syncTimelineWithCurrentChat();
-        }
+        // 核心架构重构：TimelineManager 现在是响应式的，会自动监听 store 变动并同步视图流。
+        // 此处不再需要手动调用 syncTimelineWithCurrentChat()。
 
         // 核心修复：同步完成后显式触发 UI 刷新事件，并强制刷新提示词世界书
-        this.emit('MESSAGE_RECEIVED');
+        // 升级：使用 EventFlow 触发异步管道，确保视图模型刷新完成后再向下执行（防止流式气泡过早消失）
+        // 关键优化：如果是初始化阶段（_ready=false），非阻塞触发以打破潜在的循环依赖死锁
+        if (this._ready) {
+            await this.messageReceivedFlow.emit();
+        } else {
+            void this.messageReceivedFlow.emit();
+        }
+        this.emit('MESSAGE_RECEIVED'); // 保留旧版兼容性事件
         this.promptWorldInfoMount.syncToWorldInfo();
         console.log('[LuminaWeave] 同步管道执行完毕，已发送刷新信号并同步世界书');
     }
@@ -701,14 +796,20 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     }
 
     // --- 消息发送与生成逻辑 ---
-    async sendMessage(text: string): Promise<boolean> {
+    async sendMessage(text: string, options: { chatType?: 'st' | 'plugin' } = {}): Promise<boolean> {
         await this.waitForReady();
+        const { chatId } = lwStorage._getContextIds();
         const success = await this.crudChatRecord(-1, 'add', text, { is_user: true });
         if (!success) return false;
 
-        // 【新增】发信前同步插件提示词至世界书挂载点
-        await this.promptWorldInfoMount.syncToWorldInfo();
-
+        const chatType = options.chatType || 'st';
+        
+        // 触发发信前生命周期流并等待其装载完毕（实现如世界书等前置依赖组装）
+        await this.beforeGenerationStartFlow.emit({
+            chatId,
+            chatType,
+            text
+        });
 
         const chatPresetId = lwStorage.get('lumina-chat.nexusPreset', '', 'Global');
         const presets = lwStorage.get('nexus.presets', [], 'Global');
@@ -731,14 +832,19 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             return this.triggerGenerate();
         }
 
+        const nodes = llmEngine.resolveNodesFromPreset(chatPresetId);
+
         this.streamHandler.handleRestart();
-        this.generateAbortController = new AbortController();
-        this.lastStreamState = null; // 重置缓存
+        this._session = llmEngine.createSession({
+            chatId: lwStorage._getContextIds().chatId || '',
+            charName: this.getAssistantName(),
+            parentId: this.chatManager.activeLeafId,
+            nodes
+        });
         this.emit('GENERATION_STARTED');
 
-        // 我们不再在此阶段硬修改提示词，而是依赖于 World Info 系统的自然融合。
-        // finalPayload 取自 probePrompt 直接嗅探或原始传入，直接发信即可。
         const finalPayload = prompt.messages || prompt;
+        const finalMessages = llmEngine.cleanMessages(finalPayload);
         const generationSettings = prompt.settings || {};
 
         // 核心修复：支持流式无限输出设置
@@ -748,68 +854,191 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             delete generationSettings.max_length; // 兼容不同 API
         }
 
+        const task = new LuminaGenerationTask(this._session);
+        // 保存 Task 引用以便中止
+        this._currentTask = task;
+
         try {
-            await llmEngine.generateCustomStream(finalPayload, {
-                nexusPresetId: chatPresetId,
-                settings: generationSettings,
-                parentId: this.chatManager.activeLeafId,
-                signal: this.generateAbortController.signal,
-                onChunk: (fullText: string) => {
+            await task.run(finalMessages, {
+                onChunk: (chunk: string, fullText: string) => {
                     const lastRawLen = this.streamHandler.responseBuffer.length;
                     const rawDelta = fullText.startsWith(this.streamHandler.responseBuffer)
                         ? fullText.substring(lastRawLen)
                         : fullText;
 
                     this.streamHandler.handleChunk(rawDelta, fullText);
-                    console.debug("[LuminaWeaveApi] StreamOnChunk: fulltext: ", fullText)
-                    console.debug("[LuminaWeaveApi] StreamOnChunk: rawDelta: ", rawDelta)
                 },
                 onDone: async (finalText: string) => {
-                    console.log('[LuminaWeave] 后端生成完成信号收到，开始同步数据。');
-
-                    try {
-                        await this.syncFromST({ forceIndependentLoad: true });
-                    } finally {
-                        const cleanedFinalText = globalXMLInterceptor.processAndCleanText(finalText);
-                        
-                        // 核心增强：强制提交暂存的内存变动
-                        if (this.chatManager.activeLeafId) {
-                            const activeNode = this.chatManager.store.getNode(this.chatManager.activeLeafId);
-                            if (activeNode) {
-                                globalMemoryManager.commitDeltas(activeNode);
-                                // 核心修复：生成结束后同步至 ST，持久化记忆
-                                await this.commitToST();
-                            }
+                    if (this._session) {
+                        if (!this._session.committedInfo) {
+                            this.emitSyncingStatus('等待后端确认事务...');
                         }
-
-                        pluginManager.callHooks('onGenerationEnded', cleanedFinalText);
-                        this.streamHandler.handleEnd();
-                        this.generateAbortController = null;
                     }
+                    // 进入同步中状态，等待事务提交
+                    this.streamHandler.handleEnd({ stayActive: true });
+                    await this.finalizeGeneration();
+                },
+                onBackendCommitted: async (info) => {
+                    if (this._session) {
+                        this._session.committedInfo = info;
+                    }
+                    await this.finalizeGeneration();
+                },
+                onActivity: () => {
+                    this.streamHandler.notifyActivity();
                 },
                 onError: (err: any) => {
+                    // 如果错误是由 Abort 引起的，可能是用户取消，也可能是看门狗正在介入
+                    const isAbort = err?.name === 'AbortError' || err?.message?.includes('aborted');
+                    if (isAbort) {
+                        console.log('[LuminaWeave] 流式信道由于 Abort 断开，等待同步或看门狗恢复...');
+                        // 中止时不立即清理 session，保留给看门狗恢复或同步逻辑
+                        return;
+                    }
+
                     const errorMessage = err?.message || '后端生成失败';
                     this.streamHandler.isGenerating = false;
                     this.streamHandler.clearSmoothTimer();
                     this.emit('GENERATION_FAILED', errorMessage, 'error');
                     this.generateAbortController = null;
+                    
+                    // 核心修复：发生真实错误时清理会话，防止残留
+                    if (this._session) {
+                        this._session = null;
+                    }
                     console.error('[LuminaWeave] LLM Engine 链路异常:', err);
                 }
-            });
+            }, generationSettings);
         } catch (e) {
+            // 顶层异常，只在未能进入 Task.run 内部处理时触发
             this.streamHandler.isGenerating = false;
             this.streamHandler.clearSmoothTimer();
             this.emit('GENERATION_FAILED', (e as any)?.message || '发送失败', 'error');
-            console.error('[LuminaWeave] 发送失败:', e);
+            this._session = null;
+            console.error('[LuminaWeave] 发送异常:', e);
         }
 
         return true;
     }
 
-    async triggerGenerate(): Promise<any> {
+    private emitSyncingStatus(text: string) {
+        const last = this.lastStreamState;
+        if (!last) return;
+        this.emit('BUFFER_UPDATED', last.processed, last.text, last.filteredCount, text, last.thinkingText ?? '', '');
+    }
+
+    /**
+     * 协调完成生成后的同步：当且仅当 [文本就绪] 且 [后端事务提交就绪] 时执行。
+     */
+    private async finalizeGeneration() {
+        const session = this._session;
+        if (!session || session.isFinalizing) return;
+        
+        if (!session.canFinalize()) {
+            console.log('[LuminaWeave] 等待收口条件满足...', { 
+                hasText: !!session.finalText, 
+                hasCommit: !!session.committedInfo,
+                txId: session.committedInfo?.lastTransactionId || 'pending'
+            });
+            return;
+        }
+
+        session.isFinalizing = true;
+        const { chatId: currentChatId } = lwStorage._getContextIds();
+        this.emitSyncingStatus('同步对话中...');
+        console.log('[LuminaWeave] 收口条件满足，开始同步对话数据。事务 ID:', session.committedInfo!.lastTransactionId);
+        
+        // 核心更新：将后端分配的新消息 ID 同步给本地 ChatManager
+        if (session.committedInfo!.activeLeafId) {
+            console.log('[LuminaWeave] 更新当前活跃节点:', session.committedInfo!.activeLeafId);
+            this.chatManager.activeLeafId = session.committedInfo!.activeLeafId;
+        }
+
+        try {
+            const persistenceService = this.chatManager.persistence;
+            const info = session.committedInfo!;
+            
+            // 核心优化：增量原子同步 (Atomic Incremental Sync)
+            // 具备完整的 Node 载荷和 Seq 序号，直接静默落地并对齐事务轨道
+            if (info.node && typeof info.seq === 'number') {
+                console.log('[LuminaWeave] [AtomicSync] 接收到后端增量推送，执行静默对齐。');
+                
+                // 1. 静默吸收：标记来源为 backend，底层将自动设置 syncStatus = 'synced'
+                this.chatManager.store.upsertNode(info.node, { silent: true, source: 'backend' });
+                
+                // 2. 活跃节点指针对齐
+                if (info.activeLeafId) {
+                    this.chatManager.activeLeafId = info.activeLeafId;
+                }
+                
+                // 3. 事务状态物理落地：更新持久化 Seq 和逻辑事务 ID
+                await persistenceService.persistLastCommittedSeq(currentChatId, info.seq);
+                persistenceService.setIntegratedTxId(currentChatId, info.lastTransactionId);
+                
+                console.log('[LuminaWeave] [AtomicSync] 增量落地成功。');
+            } else {
+                // 降级：执行传统的全量状态对齐 (如 SSE 载荷缺失时)
+                const localTxId = persistenceService.getIntegratedTxId(currentChatId);
+                if (info.lastTransactionId && localTxId === info.lastTransactionId) {
+                    console.log(`[LuminaWeave] 本地事务已处于对齐状态 (${localTxId})，跳过拉取。`);
+                } else {
+                    await this.syncFromST({ forceIndependentLoad: true });
+                }
+                
+                if (info.activeLeafId) {
+                    this.chatManager.activeLeafId = info.activeLeafId;
+                }
+            }
+
+        } catch (e) {
+            console.error('[LuminaWeave] 同步对话数据失败:', e);
+        } finally {
+            // 核心修复：必须确保清理标志位，即使同步过程报错
+            session.isFinalizing = false;
+
+            const cleanedFinalText = globalXMLInterceptor.processAndCleanText(session.finalText || '', false);
+            if (this.chatManager.activeLeafId) {
+                const activeNode = this.chatManager.store.getNode(this.chatManager.activeLeafId);
+                if (activeNode) {
+                    globalMemoryManager.commitDeltas(activeNode);
+                    await this.commitToST();
+                }
+            }
+            pluginManager.callHooks('onGenerationEnded', cleanedFinalText);
+            
+            // 物理释放生成锁定
+            this.streamHandler.finishSync();
+            this.generateAbortController = null;
+            
+            // 核心修复：仅在当前活跃会话是正在结束的这个时才清理
+            if (this._session === session) {
+                this._session = null;
+            }
+            console.log('[LuminaWeave] 生成收口完成。');
+        }
+    }
+
+    async triggerGenerate(): Promise<boolean> {
         const generate = await this._getSTFunction('generate');
-        if (generate) return generate();
+        if (generate) {
+            try {
+                await generate();
+                return true;
+            } catch (e) {
+                const message = (e as any)?.message || '触发 ST 生成失败';
+                this.streamHandler.isGenerating = false;
+                this.streamHandler.clearSmoothTimer();
+                this.emit('GENERATION_FAILED', message, 'error');
+                console.error('[LuminaWeave] ST generate 调用失败:', e);
+                return false;
+            }
+        }
+
+        this.streamHandler.isGenerating = false;
+        this.streamHandler.clearSmoothTimer();
+        this.emit('GENERATION_FAILED', '未找到 ST generate 方法：请检查是否在 SillyTavern 环境中运行，或切换到 Nexus 预设生成。', 'error');
         console.warn('[LuminaWeave] 找不到有效的 ST generate 方法');
+        return false;
     }
 
     async regenerateLast(): Promise<any> {
@@ -826,6 +1055,12 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this._manualAbortPending = true;
         this.streamHandler.isGenerating = false;
 
+        if (this._currentTask) {
+            console.log('[LuminaWeave] 触发正在运行的任务中止...');
+            this._currentTask.abort();
+            this._currentTask = null;
+        }
+
         if (this.generateAbortController) {
             console.log('[LuminaWeave] 正在发出本地中断信号...');
             this.generateAbortController.abort();
@@ -834,19 +1069,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
         const { chatId } = lwStorage._getContextIds();
         if (chatId) {
-            try {
-                const csrfToken = await STClient.getCsrfToken();
-                await fetch('/api/plugins/luminaweave/nexus/abort', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-Token': csrfToken
-                    },
-                    body: JSON.stringify({ chatId })
-                });
-            } catch (e) {
-                console.warn('[LuminaWeave] 通知后端中断失败:', e);
-            }
+            this.nexus.stopGeneration(chatId);
         }
 
         const stop = (await this._getSTFunction('stopGeneration')) || (await this._getSTFunction('stopGenerating'));
@@ -950,18 +1173,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         return this.chatManager.store.getTrace(this.chatManager.activeLeafId);
     }
 
-    async getProcessedChat() {
-        await this.waitForReady();
-        const rawChat = await this.getChat();
-        const userAvatar = this.getUserAvatar();
-        const userName = this.getUserName();
-        const charName = this.getCharName();
-
-        return rawChat.map((msg) => {
-            const processedMsg: any = { ...msg };
-            processedMsg.avatarUrl = msg.is_user ? this.getUserAvatar(msg.name) : this.getCharAvatar(msg.name);
-            return processedMsg;
-        });
+    getProcessedChat() {
+        return this.messageListManager.messages;
     }
 
     async crudChatRecord(target: number | string, action: 'edit' | 'add' | 'delete', newText: string = '', meta: any = {}) {
@@ -991,7 +1204,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                     const depth = chat.length - 1 - index;
                     const now = Date.now();
 
-                    const finalMesRaw = XMLInterceptor.extractTagContent(newText, BuiltinXMLTags.CHAT_REPLY).join('\n\n') || globalXMLInterceptor.processAndCleanText(newText);
+                    const finalMesRaw = XMLInterceptor.extractTagContent(newText, BuiltinXMLTags.CHAT_REPLY).join('\n\n') || globalXMLInterceptor.processAndCleanText(newText, false);
                     msg.mesRaw = finalMesRaw;
                     msg.mes = this.applySTRegex(finalMesRaw, source, 'display', { depth });
                     msg.fingerprint = SyncUtils.getFingerprint(finalMesRaw);
@@ -1049,7 +1262,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 // 补全父节点 ID
                 const parentId = this.chatManager.activeLeafId;
 
-                const finalMesRaw = isUser ? newText : (XMLInterceptor.extractTagContent(newText, BuiltinXMLTags.CHAT_REPLY).join('\n\n') || globalXMLInterceptor.processAndCleanText(newText));
+                const finalMesRaw = isUser ? newText : (XMLInterceptor.extractTagContent(newText, BuiltinXMLTags.CHAT_REPLY).join('\n\n') || globalXMLInterceptor.processAndCleanText(newText, false));
 
                 const newMsg: any = {
                     name: meta.name || (isUser ? this.getUserName() : this.getCharName()),
@@ -1182,9 +1395,15 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
             let result = await probePromise;
             console.log('[LuminaWeave] [Probe] 探测 Promise 已解决, 有效负载:', !!result);
-
-            await this.abortGenerate();
             this._probing = false;
+            const stop = (await this._getSTFunction('stopGeneration')) || (await this._getSTFunction('stopGenerating'));
+            if (stop) {
+                try {
+                    await stop();
+                } catch (e) {
+                    console.warn('[LuminaWeave] [Probe] 停止 ST 探测生成失败:', e);
+                }
+            }
 
             // 插件的提示词已经通过世界书/宏等方式自然组装完毕，直接透传即可
             if (Array.isArray(result)) {
@@ -1210,21 +1429,14 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         let count = 0;
 
         for (const msg of nodes) {
-            // 仅处理 AI 消息且有原始数据的
-            if (msg.is_user || !msg.pluginRaw) continue;
-
-            const chatReplyBlocks = XMLInterceptor.extractTagContent(msg.pluginRaw, BuiltinXMLTags.CHAT_REPLY);
-            const newMesRaw = chatReplyBlocks.length > 0 
-                ? chatReplyBlocks.join('\n\n') 
-                : globalXMLInterceptor.processAndCleanText(msg.pluginRaw);
+            // 保存旧指纹用于统计
+            const oldFp = msg.fingerprint;
             
-            // 只要内容有变化，或者 mesRaw 包含 XML 标签（旧数据的特征），就进行更新
-            const hasTags = /<[a-zA-Z]+.*?>/.test(msg.mesRaw);
-            if (msg.mesRaw !== newMesRaw || hasTags) {
-                msg.mesRaw = newMesRaw;
-                // 注意：这里 depth 设为 0 是简化处理
-                msg.mes = this.applySTRegex(msg.mesRaw, 'ai_output', 'display', { depth: 0 });
-                msg.fingerprint = SyncUtils.getFingerprint(msg.mesRaw);
+            // 调用统一归一化管道，强制全字段重算
+            // 该方法内部会处理 pluginRaw 提取、mes 清洗、mesST 生成及 stFingerprint 计算
+            STProtocol.syncMessageCalculatedFields(msg, { force: true });
+            
+            if (oldFp !== msg.fingerprint) {
                 count++;
             }
         }
@@ -1235,11 +1447,20 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             await this.chatManager.commitToST();
             // 2. 保存独立存储
             await this.chatManager.persistence.saveToIndependentChat(chatId);
-            // 3. 通知 UI 更新
+            // 3. 通知 UI 更新 (WorldlineStore 已在 upsert/setNodes 中处理事件，
+            // 这里额外触发全局同步完成信号)
             this.emit('CHAT_UPDATED');
+            this.emit('MESSAGE_RECEIVED');
         }
 
         return { total: nodes.length, rebuilt: count };
+    }
+
+    /**
+     * 获取当前对话树中的最后一条消息 ID (叶子节点)
+     */
+    public getLastMessageId(): string | null {
+        return this.chatManager.activeLeafId;
     }
 
     getTimelineNodes() { 
@@ -1263,7 +1484,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         if (!success) return false;
 
         // 2. 数据重载与 UI 刷新
-        await this.timelineManager.syncTimelineWithCurrentChat();
+        // 核心架构重构：TimelineManager 会自动响应 WORLDLINE_SWITCHED/UPDATED 事件，无需手动同步。
         this.emit('WORLDLINE_SWITCHED', targetNodeId);
         this.emit('MESSAGE_RECEIVED');
         return true;
@@ -1333,7 +1554,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         }
 
         // 4. 重建时间轴关系 (确保一致性)
-        await this.timelineManager.syncTimelineWithCurrentChat();
+        // 核心架构重构：响应式驱动，无需手动同步。
 
          // 5. 触发 UI 刷新与通知
         this.emit('MESSAGE_RECEIVED');
@@ -1354,7 +1575,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         console.log(`[LuminaWeave API] 执行物理级回滚 -> ${targetNodeId}`);
 
         // 2. 刷新状态
-        await this.timelineManager.syncTimelineWithCurrentChat();
+        // 核心架构重构：响应式驱动，无需手动同步。
         this.emit('WORLDLINE_ROLLED_BACK', targetNodeId);
         this.emit('MESSAGE_RECEIVED');
         return true;

@@ -45,17 +45,20 @@ export class IncrementalMutationEngine {
     private registerPromptMetadata() {
         globalPromptRegistry.register({
             id: 'mutation-engine-xml-docs',
+            contexts: ['chat', 'director'],
             slot: PromptSlot.ST_MAIN,
             targetIdentifier: STIdentifier.MAIN,
             priority: 30, // 紧跟在规划指令之后
             xmlTags: [{
-                tag: 'M',
-                aliases: ['Mutation'],
+                tag: 'Mutation',
+                aliases: ['M', 'm'],
                 description: '世界线状态同步指令。当你需要修改物品、人际关系或全局状态时，必须在此标签内输出指令。',
                 statusText: '状态同步中...',
                 anchor: 'Next_Plan',
                 position: 'after',
-                priority: 10
+                priority: 10,
+                uiHidden: true,
+                promptContexts: ['chat', 'director']
             }],
             getFragment: () => null
         });

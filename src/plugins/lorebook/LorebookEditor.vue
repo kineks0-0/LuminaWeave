@@ -10,6 +10,10 @@
         </button>
         <div class="title-group">
           <span class="editor-title">{{ isNew ? '新建世界书条目' : form.comment }}</span>
+          <div v-if="versionLabel" class="version-badge">
+            <span class="version-badge-title">{{ versionLabel }}</span>
+            <span v-if="versionHint" class="version-badge-hint">{{ versionHint }}</span>
+          </div>
         </div>
       </div>
       <div class="editor-actions">
@@ -219,6 +223,8 @@ const props = defineProps<{
   mode?: 'large' | 'small',
   isMobile?: boolean
   isFullWindow?: boolean
+  versionLabel?: string
+  versionHint?: string
 }>();
 
 const emit = defineEmits<{
@@ -260,10 +266,15 @@ const uiPosition = computed({
 const isSaving = ref(false);
 const isSaveSuccess = ref(false);
 
-// 监听 entry 变更以支持直接切换条目
+// 监听 entry 变更以更新表单状态
 watch(() => props.entry, (newVal) => {
-  Object.assign(form, JSON.parse(JSON.stringify(newVal)));
-}, { deep: true });
+  if (newVal) {
+    // 使用 Object.assign 同步所有属性，确保表单对象保持引用不变但内容更新
+    Object.assign(form, JSON.parse(JSON.stringify(newVal)));
+    isSaveSuccess.value = false;
+    isSaving.value = false;
+  }
+}, { deep: true, immediate: true });
 
 const addKey = () => {
   const k = newKey.value.trim();
@@ -347,6 +358,7 @@ const save = async () => {
 .title-group {
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
 
 .editor-title {
@@ -613,6 +625,27 @@ textarea:focus {
   font-weight: 800;
   font-family: 'Manrope', sans-serif;
   color: var(--lw-text-main);
+}
+
+.version-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--lw-bg-subtle);
+  border: 1px solid var(--lw-border-base);
+}
+
+.version-badge-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lw-primary);
+}
+
+.version-badge-hint {
+  font-size: 11px;
+  color: var(--lw-text-muted);
 }
 
 .toggle-desc {

@@ -1,23 +1,15 @@
-import { LuminaChatMessage } from '../ChatManager.js';
+import { STSwipeInfo, LuminaChatMessage, MessageUtils } from '../../../../../shared/LuminaMessage.js';
 import { BuiltinXMLTags, XMLInterceptor, globalXMLInterceptor } from '../XMLInterceptor.js';
-import { STSwipeInfo, StoredChatMessage } from '../types.js';
+import { StoredChatMessage } from '../types.js';
 
 export class STProtocol {
-    /**
-     * 规范化文本，移除不可见字符并清除首尾空格
-     */
     public static normalize(text: string): string {
-        return (text || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+        const cleaned = globalXMLInterceptor.processAndCleanText(text, false);
+        return MessageUtils.normalize(cleaned);
     }
 
-    /**
-     * 指纹用规范化：去零宽 + 空白折叠 + trim
-     */
     public static normalizeForFingerprint(text: string): string {
-        return (text || '')
-            .replace(/[\u200B-\u200D\uFEFF]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
+        return MessageUtils.normalizeForFingerprint(text);
     }
 
     /**
@@ -49,14 +41,14 @@ export class STProtocol {
     /**
      * 解析指纹用 Canonical Content Text：以 mesRaw 为核心，不读取 mesST
      */
-    public static resolveForFingerprint(msg: any): string {
+    public static resolveForFingerprint(msg: LuminaChatMessage | StoredChatMessage | any): string {
         const extra = (msg?.extra || {}) as Record<string, unknown>;
         const raw =
-            (typeof (extra as any).mesRaw === 'string' ? (extra as any).mesRaw : undefined)
-            ?? (typeof msg?.mesRaw === 'string' ? msg.mesRaw : undefined)
-            ?? (typeof msg?.message === 'string' ? msg.message : undefined)
-            ?? (typeof msg?.mes === 'string' ? msg.mes : undefined)
-            ?? (typeof msg?.pluginRaw === 'string' ? msg.pluginRaw : undefined)
+            (typeof extra.mesRaw === 'string' ? extra.mesRaw : undefined)
+            ?? (typeof (msg as any)?.mesRaw === 'string' ? (msg as any).mesRaw : undefined)
+            ?? (typeof (msg as any)?.message === 'string' ? (msg as any).message : undefined)
+            ?? (typeof (msg as any)?.mes === 'string' ? (msg as any).mes : undefined)
+            ?? (typeof (msg as any)?.pluginRaw === 'string' ? (msg as any).pluginRaw : undefined)
             ?? '';
 
         const cleaned = globalXMLInterceptor.processAndCleanText(raw, false);
@@ -91,18 +83,11 @@ export class STProtocol {
     }
 
     private static _hashFingerprint(cleaned: string): string {
-        let hash = 0;
-        for (let i = 0; i < cleaned.length; i++) {
-            hash = ((hash << 5) - hash) + cleaned.charCodeAt(i);
-            hash |= 0;
-        }
-        const contentHash = Math.abs(hash);
-        return `fp_${contentHash.toString(16).substring(0, 8)}`;
+        return MessageUtils.getFingerprint(cleaned);
     }
 
     public static getFingerprint(content: string): string {
-        const cleaned = this.normalizeForFingerprint(content);
-        return this._hashFingerprint(cleaned);
+        return MessageUtils.getFingerprint(content);
     }
 
     public static getSTFingerprint(stWriteText: string): string {
@@ -111,20 +96,20 @@ export class STProtocol {
     }
 
     public static generateNodeId(): string {
-        return 'node_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36).substring(4);
+        return MessageUtils.generateNodeId();
     }
 
-    public static identifyMessage(m: any): { id: string; fingerprint: string } {
+    public static identifyMessage(m: LuminaChatMessage | StoredChatMessage | any): { id: string; fingerprint: string } {
         if (!m) return { id: this.generateNodeId(), fingerprint: 'fp_00000000' };
 
-        const extra = m.extra || {};
+        const extra = (m.extra || {}) as Record<string, any>;
         const rawContent = this.resolveForFingerprint(m);
-        const fingerprint = extra.fingerprint || m.fingerprint || this.getFingerprint(rawContent);
+        const fingerprint = extra.fingerprint || (m as any).fingerprint || this.getFingerprint(rawContent);
 
-        let id = extra.id as string | undefined || m.id as string | undefined;
+        let id = extra.id as string | undefined || (m as any).id as string | undefined;
 
-        if (!id && m.message_id !== undefined && m.message_id !== null) {
-            id = `st_msg_${m.message_id}`;
+        if (!id && (m as any).message_id !== undefined && (m as any).message_id !== null) {
+            id = `st_msg_${(m as any).message_id}`;
         }
 
         if (!id) {
@@ -150,11 +135,11 @@ export class STProtocol {
         return `snap_${Math.abs(hash).toString(16).substring(0, 8)}`;
     }
 
-    public static getCanonicalSnapshot(msg: any): string {
+    public static getCanonicalSnapshot(msg: LuminaChatMessage | StoredChatMessage | any): string {
         const text = this.resolveForFingerprint(msg);
-        const name = msg?.name || '';
-        const role = msg?.role || '';
-        const isHidden = msg?.is_hidden ? '1' : '0';
+        const name = (msg as any)?.name || '';
+        const role = (msg as any)?.role || '';
+        const isHidden = (msg as any)?.is_hidden ? '1' : '0';
 
         const rawString = `${name}|${role}|${isHidden}|${text}`;
         let hash = 0;
@@ -169,68 +154,76 @@ export class STProtocol {
         return this.getStateSnapshot(a) === this.getStateSnapshot(b);
     }
 
-    public static isCanonicalEqual(a: any, b: any): boolean {
+    public static isCanonicalEqual(a: LuminaChatMessage | StoredChatMessage | any, b: LuminaChatMessage | StoredChatMessage | any): boolean {
         return this.getCanonicalSnapshot(a) === this.getCanonicalSnapshot(b);
+    }
+
+    /**
+     * 增强版同步逻辑 (扩展侧专项)
+     * 包装了 shared 层的 syncCore，并补充 ST 特有字段。
+     * 该方法确保了节点在进入 WorldlineStore 之前，其派生字段 (mes, mesST) 与指纹是完全对齐的。
+     */
+    public static syncMessageCalculatedFields(msg: LuminaChatMessage, options: { force?: boolean; skipFingerprint?: boolean } = {}): void {
+        // 1. 调用共享层核心逻辑 (同步 mesRaw, mes, fingerprint)
+        MessageUtils.syncCore(msg, globalXMLInterceptor, options);
+
+        // 2. 同步 ST 特有内容 mesST
+        // 如果 mesST 缺失，根据 ST 优先级策略 (mesST > mesRaw > mes) 进行初始化
+        if (!msg.mesST) {
+            msg.mesST = this.resolveForSTWrite(msg);
+        }
+
+        // 3. 同步 ST 指纹 (用于外部编辑检测)
+        if (!options.skipFingerprint) {
+            const stFp = this.getSTFingerprint(msg.mesST || '');
+            msg.stFingerprint = stFp;
+            if (msg.extra) {
+                msg.extra.stFingerprint = stFp;
+                // 同时在 extra 中保留一份冗余副本以保证持久化兼容性
+                msg.extra.mesRaw = msg.mesRaw;
+                msg.extra.mesST = msg.mesST;
+            }
+        }
     }
 
     /**
      * 将 ST 的原始消息对象规范化为 Lumina 的 LuminaChatMessage
      */
-    public static fromST(m: any, defaultCharId?: string | number): LuminaChatMessage {
+    public static fromST(m: Record<string, any>, defaultCharId?: string | number): LuminaChatMessage {
         const extra: Record<string, unknown> = { ...(m.extra || {}) };
 
-        const is_user = m.role === 'user';
-        const isUser = is_user !== undefined ? is_user : (m.role === 'user');
-
-        let rawContent = '';
-        const pluginRaw = (extra.pluginRaw as string | undefined) || null;
-        
-        if (!isUser && pluginRaw) {
-            const extracted = XMLInterceptor.extractTagContent(pluginRaw, BuiltinXMLTags.CHAT_REPLY);
-            if (extracted.length > 0) {
-                rawContent = extracted.join('\n');
-            } else {
-                rawContent = globalXMLInterceptor.processAndCleanText(pluginRaw, false);
-            }
-        } else {
-            rawContent = (extra.mesRaw as string | undefined) ?? m.message ?? '';
-        }
-
-        let mesContent = m.message;
-
-        rawContent = this.normalize(rawContent);
-        mesContent = this.normalize(mesContent);
-        const stDisplayContent = this.normalize((extra.mesST as string | undefined) ?? m.message ?? '');
-
+        const isUser = m.role === 'user';
+        const role = this.normalizeRole(extra.role ?? m.role, isUser);
+        const name = m.name || (isUser ? 'You' : 'Assistant');
         const charId = (extra.characterId as string | number | undefined) || defaultCharId;
         
+        // 1. 基础物理标识识别
         const { id, fingerprint } = this.identifyMessage(m);
-        const stFingerprint = typeof extra.stFingerprint === 'string'
-            ? extra.stFingerprint
-            : this.getSTFingerprint(mesContent);
-        
-        const rawRole = (extra.role as string | undefined) ?? m.role;
-        const role = this.normalizeRole(rawRole, isUser);
 
-        const name = m.name || (isUser ? 'You' : 'Assistant');
-
-        return {
+        // 2. 构造初始对象 (仅保留原始数据字段)
+        const msg: LuminaChatMessage = {
             id,
             parentId: null, 
-            name: name,
-            role: role,
+            name,
+            role,
             is_user: isUser,
-            mes: mesContent,
-            mesRaw: rawContent,
+            mesRaw: (extra.mesRaw as string | undefined) ?? (m.message as string | undefined) ?? '',
+            mes: m.message as string,
             is_hidden: m.is_hidden || false,
-            fingerprint: fingerprint,
-            stFingerprint,
+            fingerprint,
+            stFingerprint: (extra.stFingerprint as string | undefined),
             characterId: charId,
             pluginRaw: (extra.pluginRaw as string | undefined) || null,
             mesSummary: (extra.mesSummary as string | undefined),
-            mesST: stDisplayContent,
+            thinkingText: (extra.thinkingText as string | undefined) || null,
+            mesST: (extra.mesST as string | undefined) ?? (m.message as string | undefined),
             extra: { ...extra, role } as Record<string, unknown>
         };
+
+        // 3. 运行自动对齐管道：补全清洗后的 mes, 矫正 fingerprint
+        this.syncMessageCalculatedFields(msg);
+
+        return msg;
     }
 
     /**
@@ -255,6 +248,7 @@ export class STProtocol {
                 mesRaw: m.mesRaw || m.mes,
                 mesST: m.mesST,
                 mesSummary: m.mesSummary,
+                thinkingText: m.thinkingText || null,
                 role: normalizedRole,
                 pluginRaw: m.pluginRaw || null,
                 characterId: m.characterId
@@ -276,6 +270,7 @@ export class STProtocol {
             is_user: m.is_user,
             mesRaw: m.mesRaw,
             mesSummary: m.mesSummary,
+            thinkingText: m.thinkingText || null,
             mesST: m.mesST,
             is_hidden: m.is_hidden,
             pluginRaw: m.pluginRaw,
