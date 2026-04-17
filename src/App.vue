@@ -15,20 +15,25 @@
       <div v-if="isExpanded" class="lw-fullscreen-panel">
 
         <PanelHeader
-          v-if="layoutMode === 'traditional'"
+          v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'top'"
           :activeMainTab="activeMainTab"
           :dynamicTabs="dynamicTabs"
           :isMobile="isMobile"
-          :isWorkspaceMenuOpen="showWorkspaceMenu"
+          :layoutMode="layoutMode"
+          :headerPlacement="traditionalHeaderPosition"
+          :widgetPanels="widgetPanelList"
+          :widgetGroups="widgetGroups"
+          :activeWidgetId="activeRightPanel !== 'none' ? activeRightPanel : ''"
           @switchMainView="handleSwitchMainView"
           @closeTab="closeTab"
           @close="toggleExpand"
-          @toggleSettings="toggleSettingsPanel"
-          @toggleWorkspaceMenu="showWorkspaceMenu = !showWorkspaceMenu"
+          @toggleSettings="openSettingsPanel"
+          @setLayoutMode="updateLayoutMode"
+          @openWidget="handleOpenWidget"
         />
 
         <transition name="fade">
-          <div v-if="showWorkspaceMenu" class="lw-workspace-menu" :class="{ 'is-freeform': layoutMode === 'freeform' }">
+          <div v-if="showWorkspaceMenu && isFreeformLayout" class="lw-workspace-menu" :class="{ 'is-freeform': isFreeformLayout }">
             <div class="lw-workspace-menu-copy">
               <span class="lw-workspace-menu-kicker">Workspace Mode</span>
               <strong>切换桌面模式</strong>
@@ -57,7 +62,7 @@
           </div>
         </transition>
 
-        <div class="lw-panel-body" :class="{ 'is-freeform': layoutMode === 'freeform' }">
+        <div class="lw-panel-body" :class="{ 'is-freeform': layoutMode === 'freeform' }" ref="panelBodyRef">
           <div v-if="!isApiReady" class="lw-global-loading">
             <div class="spinner"></div>
             <span>环境加载中... 若长时间无响应请检查 ST 相关扩展(例如 JS-Slash-Runner)是否正常。</span>
@@ -65,6 +70,12 @@
           </div>
 
           <template v-else-if="layoutMode === 'traditional'">
+            <ForgeSidebar
+              v-if="shouldShowForgeSidebar"
+              :isCollapsed="isForgeSidebarCollapsed"
+              @toggleCollapse="isForgeSidebarCollapsed = !isForgeSidebarCollapsed"
+              @switchMode="setSidebarMode"
+            />
             <template v-for="plugin in mainPlugins" :key="plugin.id">
               <div v-show="activeMainTab === plugin.id" class="lw-main-wrapper" :class="{ 'lw-main-timeline-wrapper': plugin.id === 'lumina-timeline' }">
                 <component
@@ -72,13 +83,20 @@
                   v-if="plugin.id !== 'lumina-timeline' || activeMainTab === 'lumina-timeline' || isTimelineLoadedOnce"
                   :mode="'large'"
                   :isMobile="isMobile"
+                  :auxSidebarMode="isForgeActiveInTraditional ? sidebarMode : undefined"
+                  :activeRightPanelId="isForgeActiveInTraditional ? activeRightPanel : undefined"
                 />
               </div>
             </template>
 
             <template v-for="tab in dynamicTabs" :key="tab.id">
               <div v-show="activeMainTab === tab.id" class="lw-main-wrapper">
-                <component :is="componentMap[tab.component] || tab.component" v-bind="tab.props" />
+                <component
+                  :is="componentMap[tab.component] || tab.component"
+                  v-bind="tab.props"
+                  :auxSidebarMode="isForgeActiveInTraditional ? sidebarMode : undefined"
+                  :activeRightPanelId="isForgeActiveInTraditional ? activeRightPanel : undefined"
+                />
               </div>
             </template>
 
@@ -109,10 +127,34 @@
                   </div>
 
                   <div class="dropdown-menu" v-if="showWidgetDropdown">
-                    <div class="dropdown-item" v-for="plugin in widgetPlugins" :key="plugin.id" @click.stop="switchRightPanel(plugin.id)">
-                      <span v-html="plugin.icon" class="tab-icon-wrapper"></span>
-                      {{ plugin.name }}
-                    </div>
+                    <template v-for="(group, gi) in widgetGroups" :key="gi">
+                      <div v-if="gi > 0" class="dropdown-divider"></div>
+                      <div v-if="group.label" class="dropdown-label">{{ group.label }}</div>
+                      <div class="dropdown-item" v-for="item in group.items" :key="item.id" @click.stop="switchRightPanel(item.id)">
+                        <span class="tab-icon-wrapper" v-html="item.icon"></span>
+                        {{ item.name }}
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <div v-else-if="activeRegisteredPanel" class="widget-dropdown" @click="showWidgetDropdown = !showWidgetDropdown">
+                  <div class="current-widget-info">
+                    <span>{{ activeRegisteredPanel.config.title }}</span>
+                    <svg class="chevron-down" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+
+                  <div class="dropdown-menu" v-if="showWidgetDropdown">
+                    <template v-for="(group, gi) in widgetGroups" :key="gi">
+                      <div v-if="gi > 0" class="dropdown-divider"></div>
+                      <div v-if="group.label" class="dropdown-label">{{ group.label }}</div>
+                      <div class="dropdown-item" v-for="item in group.items" :key="item.id" @click.stop="switchRightPanel(item.id)">
+                        <span class="tab-icon-wrapper" v-html="item.icon"></span>
+                        {{ item.name }}
+                      </div>
+                    </template>
                   </div>
                 </div>
 
@@ -120,6 +162,13 @@
                   <div v-if="activeRightPanel === 'lumina-settings'" class="header-sync-status" :class="saveStatus">
                     <span>{{ saveStatus === 'saving' ? '正在存入' : (saveStatus === 'saved' ? '已保存' : '') }}</span>
                   </div>
+
+                  <button v-if="activeForgeAuxKind && isForgeActiveInTraditional && rawSidebarMode === 'widget'" @click="setSidebarMode('left')" title="切换回左侧栏">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                      <rect x="3" y="3" width="7" height="18" rx="1"></rect>
+                      <rect x="14" y="3" width="7" height="18" rx="1"></rect>
+                    </svg>
+                  </button>
 
                   <button @click="activeRightPanel = 'none'" title="Close Panel">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
@@ -136,6 +185,13 @@
                 </div>
                 <div class="widget-main-content">
                   <component :is="activeWidgetPlugin?.component" v-if="activeWidgetPlugin" :mode="'small'" :isMobile="isMobile" />
+                  <component
+                    v-else-if="activeRegisteredPanel"
+                    :is="activeRegisteredPanel.component"
+                    :kind="activeForgeAuxKind || undefined"
+                    :mode="'small'"
+                    :isMobile="isMobile"
+                  />
                 </div>
               </div>
             </div>
@@ -282,6 +338,24 @@
           </div>
         </div>
 
+        <PanelHeader
+          v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'bottom'"
+          :activeMainTab="activeMainTab"
+          :dynamicTabs="dynamicTabs"
+          :isMobile="isMobile"
+          :layoutMode="layoutMode"
+          :headerPlacement="traditionalHeaderPosition"
+          :widgetPanels="widgetPanelList"
+          :widgetGroups="widgetGroups"
+          :activeWidgetId="activeRightPanel !== 'none' ? activeRightPanel : ''"
+          @switchMainView="handleSwitchMainView"
+          @closeTab="closeTab"
+          @close="toggleExpand"
+          @toggleSettings="openSettingsPanel"
+          @setLayoutMode="updateLayoutMode"
+          @openWidget="handleOpenWidget"
+        />
+
         </div>
     </transition>
 
@@ -291,6 +365,9 @@
 
     <!-- Global Toast Notifier for LuminaWeave -->
     <ToastNotification />
+
+    <!-- 全局确认弹窗系统 -->
+    <GlobalConfirmationModal />
   </div>
 </template>
 
@@ -303,6 +380,7 @@ import { useSettings, currentDetailedView } from './plugins/settings/useSettings
 import { lwStorage } from './api/storage';
 import { registerLuminaPlugins } from './bootstrap/registerPlugins';
 import { useWorkspaceManager } from './composables/useWorkspaceManager';
+import { useResponsiveLayout } from './composables/useResponsiveLayout';
 
 import MiniSidebar from './components/MiniSidebar.vue';
 import PanelHeader from './components/PanelHeader.vue';
@@ -310,7 +388,8 @@ import LuminaNexus from './components/LuminaNexus.vue';
 import WorkspaceWindow from './components/WorkspaceWindow.vue';
 import WorkspaceDock from './components/WorkspaceDock.vue';
 import WorkspaceStageStrip from './components/WorkspaceStageStrip.vue';
-import ToastNotification from './components/ToastNotification.vue';
+import ForgeSidebar from './components/ForgeSidebar.vue';
+import GlobalConfirmationModal from './components/common/GlobalConfirmationModal.vue';
 
 // Import dynamic components for tabs
 import ConflictDiffViewer from './plugins/chat/ConflictDiffViewer.vue';
@@ -319,6 +398,7 @@ import SettingsRoot from './plugins/settings/SettingsRoot.vue';
 import LauncherRoot from './plugins/launcher/LauncherRoot.vue';
 import CardMakerPanel from './plugins/forge/CardMakerPanel.vue';
 import ForgeWorkspaceWindowActions from './plugins/forge/ForgeWorkspaceWindowActions.vue';
+import ContextSwitcherPanel from './components/ContextSwitcherPanel.vue';
 
 const componentMap: Record<string, any> = {
   'ConflictDiffViewer': ConflictDiffViewer,
@@ -344,10 +424,20 @@ const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
 
 const isExpanded = ref(false);
 const isApiReady = ref(false);
-const isMobile = ref(window.innerWidth < 768);
+const panelBodyRef = ref<HTMLElement | null>(null);
+const {
+    isMobile: responsiveIsMobile,
+    canShowEmbeddedSidebar,
+    sidebarMode,
+    rawSidebarMode,
+    setSidebarMode,
+    containerWidth,
+} = useResponsiveLayout(panelBodyRef);
+const isMobile = responsiveIsMobile;
 const layoutMode = ref<LayoutMode>(lwStorage.get('luminaWeave.layoutMode', 'traditional', 'Global'));
 const showWorkspaceMenu = ref(false);
 const initStatusText = ref('等待系统启动...');
+const isForgeSidebarCollapsed = ref(false);
 const systemPrefersDark = ref(themeMedia.matches);
 const appearanceSetting = computed(() => activeSettings['lumina-settings.appearance'] || 'system');
 const resolvedTheme = computed(() => {
@@ -359,6 +449,17 @@ const resolvedTheme = computed(() => {
 const workspaceShowStageStripSetting = computed(() => activeSettings['lumina-settings.workspaceShowStageStrip'] !== false);
 const workspaceShowDockSetting = computed(() => activeSettings['lumina-settings.workspaceShowDock'] !== false);
 const motionPerformanceSetting = computed(() => activeSettings['lumina-settings.motionPerformance'] || 'full');
+const traditionalHeaderDesktopPosition = computed(() =>
+  activeSettings['lumina-settings.traditionalHeaderDesktopPosition'] || 'top'
+);
+const traditionalHeaderMobilePosition = computed(() =>
+  activeSettings['lumina-settings.traditionalHeaderMobilePosition'] || 'top'
+);
+const traditionalHeaderPosition = computed<'top' | 'bottom'>(() =>
+  (isMobile.value ? traditionalHeaderMobilePosition.value : traditionalHeaderDesktopPosition.value) === 'bottom'
+    ? 'bottom'
+    : 'top'
+);
 
 
 // 从存储恢复上次打开的主面板 Tab
@@ -375,6 +476,17 @@ const freeformStageRef = ref<HTMLElement | null>(null);
 // 性能优化：记录是否加载过时空图谱，避免切回主 Tab 时重新挂载（保持 LogicFlow 物理内存持久）
 const isTimelineLoadedOnce = ref(false);
 
+const isForgeActiveInTraditional = computed(() =>
+    layoutMode.value === 'traditional' && (activeMainTab.value === 'lumina-forge' || activeMainTab.value === 'card_maker')
+);
+const isFreeformLayout = computed(() => layoutMode.value === 'freeform');
+const shouldShowForgeSidebar = computed(() =>
+    isForgeActiveInTraditional.value && sidebarMode.value === 'left' && !isMobile.value
+);
+const shouldShowForgeAuxInWidget = computed(() =>
+    isForgeActiveInTraditional.value && sidebarMode.value === 'widget' && !isMobile.value
+);
+
 function getPluginName(pluginId: string | null) {
   if (!pluginId) return '';
   const p = pluginManager.getPlugin(pluginId);
@@ -382,6 +494,77 @@ function getPluginName(pluginId: string | null) {
 }
 
 const activeWidgetPlugin = computed(() => pluginManager.getPlugin(activeRightPanel.value));
+const activeRegisteredPanel = computed(() => {
+  if (activeWidgetPlugin.value) return null;
+  return lwApi.registeredPanels.get(activeRightPanel.value) || null;
+});
+const activeForgeAuxKind = computed(() => {
+  const match = activeRightPanel.value.match(/^forge_(lorebook|memory|export|post_tracks|test_chat)$/);
+  return match ? match[1] : null;
+});
+const forgeAuxPanelItems = computed(() => {
+  const items: { id: string; title: string; icon: string }[] = [];
+  const forgeAuxKinds = ['lorebook', 'memory', 'export', 'post_tracks', 'test_chat'] as const;
+  for (const kind of forgeAuxKinds) {
+    const panelId = `forge_${kind}`;
+    const registered = lwApi.registeredPanels.get(panelId);
+    if (registered) {
+      items.push({ id: panelId, title: registered.config.title, icon: registered.config.icon || '' });
+    }
+  }
+  return items;
+});
+const registeredPanelItems = computed(() => {
+  const items: { id: string; title: string; icon: string }[] = [];
+  const excludeIds = new Set(['card_maker', 'conflict', 'sync_report', ...forgeAuxPanelItems.value.map(i => i.id)]);
+  for (const [id, panel] of lwApi.registeredPanels) {
+    if (!excludeIds.has(id)) {
+      items.push({ id, title: panel.config.title, icon: panel.config.icon || '' });
+    }
+  }
+  return items;
+});
+const widgetPanelList = computed(() => {
+  const wp = widgetPlugins.value.map(p => ({ id: p.id, name: p.name, icon: p.icon }));
+  const rp = registeredPanelItems.value.map(i => ({ id: i.id, name: i.title, icon: i.icon }));
+  const fp = forgeAuxPanelItems.value.map(i => ({ id: i.id, name: i.title, icon: i.icon }));
+  const cardMakerPanel = lwApi.registeredPanels.get('card_maker');
+  const cm = cardMakerPanel ? [{ id: 'card_maker', name: cardMakerPanel.config.title, icon: cardMakerPanel.config.icon || '' }] : [];
+  const seen = new Set(wp.map(w => w.id));
+  const result = [...wp];
+  for (const r of rp) {
+    if (!seen.has(r.id)) {
+      result.push(r);
+      seen.add(r.id);
+    }
+  }
+  for (const f of fp) {
+    if (!seen.has(f.id)) {
+      result.push(f);
+      seen.add(f.id);
+    }
+  }
+  for (const c of cm) {
+    if (!seen.has(c.id)) {
+      result.push(c);
+      seen.add(c.id);
+    }
+  }
+  return result;
+});
+const widgetGroups = computed(() => {
+  const groups: { label?: string; items: { id: string; name: string; icon: string }[] }[] = [];
+  const wp = widgetPlugins.value.map(p => ({ id: p.id, name: p.name, icon: p.icon }));
+  if (wp.length > 0) groups.push({ label: '插件', items: wp });
+  const fp = forgeAuxPanelItems.value.map(i => ({ id: i.id, name: i.title, icon: i.icon }));
+  if (fp.length > 0) groups.push({ label: '制卡辅助', items: fp });
+  const rp = registeredPanelItems.value.map(i => ({ id: i.id, name: i.title, icon: i.icon }));
+  const cardMakerPanel = lwApi.registeredPanels.get('card_maker');
+  const cm = cardMakerPanel ? [{ id: 'card_maker', name: cardMakerPanel.config.title, icon: cardMakerPanel.config.icon || '' }] : [];
+  const rpAll = [...cm, ...rp];
+  if (rpAll.length > 0) groups.push({ label: '面板', items: rpAll });
+  return groups;
+});
 const showWorkspaceNavigation = ref(false);
 const workspaceNavigationPeek = ref(false);
 const workspaceNavigationVisibleRef = ref(false);
@@ -541,27 +724,42 @@ const handleWorkspaceDockOpenWithNavigation = (appId: string) => {
 
 const openTemporaryWidgetTab = (panelId: string) => {
   const plugin = widgetPlugins.value.find((item) => item.id === panelId);
-  if (!plugin) return;
-  activeRightPanel.value = panelId;
-  lwApi.openTab({
-    id: `mobile-widget:${panelId}`,
-    name: plugin.name,
-    icon: plugin.icon,
-    component: plugin.component,
-    props: { mode: 'small', isMobile: true, isTemporaryWidgetTab: true }
-  });
+  if (plugin) {
+    activeRightPanel.value = panelId;
+    lwApi.openTab({
+      id: `mobile-widget:${panelId}`,
+      name: plugin.name,
+      icon: plugin.icon,
+      component: plugin.component,
+      props: { mode: 'small', isMobile: true, isTemporaryWidgetTab: true }
+    });
+    return;
+  }
+  const registered = lwApi.registeredPanels.get(panelId);
+  if (registered) {
+    const auxKindMatch = panelId.match(/^forge_(lorebook|memory|export|post_tracks|test_chat)$/);
+    const extraProps = auxKindMatch ? { kind: auxKindMatch[1] } : {};
+    lwApi.openTab({
+      id: `mobile-widget:${panelId}`,
+      name: registered.config.title,
+      icon: registered.config.icon || '',
+      component: registered.component,
+      props: { mode: 'small', isMobile: true, isTemporaryWidgetTab: true, ...extraProps }
+    });
+    return;
+  }
 };
 
+let resizeThrottleTimer: ReturnType<typeof setTimeout> | null = null;
 const handleResizeWindow = () => {
-  const nextIsMobile = window.innerWidth < 768;
-  const becameMobile = !isMobile.value && nextIsMobile;
-  isMobile.value = nextIsMobile;
-  if (becameMobile && layoutMode.value === 'traditional' && activeRightPanel.value !== 'none') {
-    openTemporaryWidgetTab(activeRightPanel.value);
-  }
-  if (layoutMode.value === 'freeform') {
-    requestAnimationFrame(reflowWorkspaceWindows);
-  }
+  if (resizeThrottleTimer) return;
+  
+  resizeThrottleTimer = setTimeout(() => {
+    if (layoutMode.value === 'freeform') {
+      requestAnimationFrame(reflowWorkspaceWindows);
+    }
+    resizeThrottleTimer = null;
+  }, 60); // 约 16fps，确保缩放时工作台窗口重排不会阻塞主线程
 };
 
 const handleOpenTab = (tabConfig: any) => {
@@ -604,6 +802,14 @@ const switchRightPanel = (panelId: string) => {
   showWidgetDropdown.value = false;
 };
 
+const handleOpenWidget = (panelId: string) => {
+  if (isMobile.value) {
+    openTemporaryWidgetTab(panelId);
+  } else {
+    switchRightPanel(panelId);
+  }
+};
+
 const toggleAuxWindow = () => {
   if (layoutMode.value === 'freeform') {
     createStageWithLauncher();
@@ -644,6 +850,12 @@ watch(activeMainTab, (val) => {
   lwStorage.set('luminaWeave.activeMainTab', val, 'Global');
   if (val === 'lumina-timeline') isTimelineLoadedOnce.value = true;
   contextStore.syncFromTab(val);
+});
+
+watch(isMobile, (mobile, wasMobile) => {
+  if (mobile && !wasMobile && layoutMode.value === 'traditional' && activeRightPanel.value !== 'none') {
+    openTemporaryWidgetTab(activeRightPanel.value);
+  }
 });
 
 watch(activeRightPanel, (val) => {
@@ -744,17 +956,16 @@ const handleWorkspaceKeydown = (event: KeyboardEvent) => {
   closeWorkspaceLaunchpad();
 };
 
-const toggleSettingsPanel = () => {
+const openSettingsPanel = () => {
   if (layoutMode.value === 'freeform') {
     openWorkspaceSettings();
     return;
   }
-  const nextPanel = activeRightPanel.value === 'lumina-settings' ? 'lumina-stats' : 'lumina-settings';
   if (isMobile.value) {
-    openTemporaryWidgetTab(nextPanel);
+    openTemporaryWidgetTab('lumina-settings');
     return;
   }
-  activeRightPanel.value = nextPanel;
+  activeRightPanel.value = 'lumina-settings';
 };
 
 const toggleExpand = async () => {
@@ -794,6 +1005,10 @@ onMounted(async () => {
     title: '同步对比报告',
     icon: '🧾',
   });
+  lwApi.registerPanel('context-switcher', ContextSwitcherPanel, {
+    title: '会话切换',
+    icon: '🔄',
+  });
 
 
   lwApi.on('OPEN_TAB', handleOpenTab);
@@ -802,7 +1017,41 @@ onMounted(async () => {
     if (layoutMode.value === 'freeform') {
       const widgetId = `widget:${panelId}`;
       const pluginId = `plugin:${panelId}`;
-      // 优先尝试 widget 前缀（用于 dual-role 插件的小窗口形态）
+      const targetId = workspaceAppMap.value.has(widgetId) ? widgetId : pluginId;
+      openWorkspaceApp(targetId);
+      return;
+    }
+    const widgetPlugin = widgetPlugins.value.find((p) => p.id === panelId);
+    if (widgetPlugin && !isMobile.value) {
+      activeRightPanel.value = panelId;
+      return;
+    }
+    const registered = lwApi.registeredPanels.get(panelId);
+    if (registered && !isMobile.value) {
+      activeRightPanel.value = panelId;
+      return;
+    }
+    if (registered) {
+      const auxKindMatch = panelId.match(/^forge_(lorebook|memory|export|post_tracks|test_chat)$/);
+      const extraProps = auxKindMatch ? { kind: auxKindMatch[1] } : {};
+      lwApi.openTab({
+        id: `mobile-widget:${panelId}`,
+        name: registered.config.title,
+        icon: registered.config.icon || '',
+        component: registered.component,
+        props: { mode: 'small', isMobile: true, isTemporaryWidgetTab: true, ...extraProps }
+      });
+      return;
+    }
+    if (isMobile.value) {
+      openTemporaryWidgetTab(panelId);
+    }
+  });
+
+  lwApi.on('TOGGLE_WIDGET_PANEL', (panelId: string) => {
+    if (layoutMode.value === 'freeform') {
+      const widgetId = `widget:${panelId}`;
+      const pluginId = `plugin:${panelId}`;
       const targetId = workspaceAppMap.value.has(widgetId) ? widgetId : pluginId;
       openWorkspaceApp(targetId);
       return;
@@ -811,7 +1060,11 @@ onMounted(async () => {
       openTemporaryWidgetTab(panelId);
       return;
     }
-    activeRightPanel.value = panelId;
+    if (activeRightPanel.value === panelId) {
+      activeRightPanel.value = 'none';
+    } else {
+      activeRightPanel.value = panelId;
+    }
   });
 
   lwApi.on('INIT_PROGRESS', (text: string) => {
@@ -822,6 +1075,10 @@ onMounted(async () => {
 
   lwApi.on('SETTINGS_CHANGED', () => {
     settingsRevision.value++;
+  });
+
+  lwApi.on('SWITCH_AUX_SIDEBAR_MODE', (mode: 'left' | 'right' | 'widget') => {
+    setSidebarMode(mode);
   });
 
   // 核心优化：直接调用 lwApi.init()，内部已整合环境探测 (ST, Helper, EventSource)
@@ -1779,6 +2036,21 @@ textarea:not([type="search"]) {
   color: var(--lw-primary);
 }
 
+.dropdown-divider {
+  height: 1px;
+  background: var(--lw-border-base);
+  margin: 4px 0;
+}
+
+.dropdown-label {
+  padding: 6px 10px 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lw-text-muted);
+}
+
 .widget-actions {
   display: flex;
   align-items: center;
@@ -1827,6 +2099,7 @@ textarea:not([type="search"]) {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: auto;
 }
 
 .widget-back-nav {

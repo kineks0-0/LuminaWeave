@@ -39,6 +39,15 @@
             返回概览
         </button>
       </div>
+      <div v-if="mode === 'small' && currentDetailedView" class="small-back-bar">
+        <button class="small-back-btn" @click="currentDetailedView = null">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          <span>返回</span>
+        </button>
+        <span class="small-back-title">{{ getPluginName(currentDetailedView) }}</span>
+      </div>
       <div class="settings-scroll-area" @wheel.stop>
         <component :is="currentDetailedView ? SettingsDetailed : SettingsUnified" :pluginId="currentDetailedView"
           @open-detail="openDetailedView" />
@@ -222,6 +231,40 @@ const settingsBlocks = computed(() => {
   flex: 1;
   overflow-y: auto;
   position: relative;
+}
+
+.small-back-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--lw-border-base);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
+}
+
+.small-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--lw-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.small-back-btn:hover {
+  background: var(--lw-primary-soft);
+}
+
+.small-back-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--lw-text-main);
 }
 
 /* 隐藏滚动条但保留功能 */

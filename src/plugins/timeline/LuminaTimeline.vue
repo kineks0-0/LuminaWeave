@@ -232,9 +232,7 @@
     <NodePreviewModal v-if="previewingNode" :node="previewingNode" @close="previewingNode = null"
       @branch="handleBranchNode" />
 
-    <!-- Rollback Confirmation Modal -->
-    <ConfirmationModal :isOpen="!!nodeToRollback" title="物理回滚确认" :message="rollbackConfirmMessage"
-      @confirm="handleConfirmRollback" @cancel="nodeToRollback = null" />
+
   </div>
 </template>
 
@@ -253,7 +251,7 @@ import '@logicflow/extension/lib/style/index.css';
 import { Dagre } from '@logicflow/layout';
 import HistoryNode from './HistoryNode.vue';
 import NodePreviewModal from './NodePreviewModal.vue';
-import ConfirmationModal from './ConfirmationModal.vue';
+
 import gsap from 'gsap';
 import { useTimelineStore } from '../../stores/useTimelineStore';
 
@@ -1016,14 +1014,7 @@ const handleNodeClick = async (node: TimelineViewNode) => {
 
 const isSwitching = ref(false);
 const previewingNode = ref<TimelineViewNode | null>(null);
-const nodeToRollback = ref<TimelineViewNode | null>(null);
 
-const rollbackConfirmMessage = computed(() => {
-  if (!nodeToRollback.value) return '';
-  return nodeToRollback.value.role === 'user'
-    ? '确定回滚并重新编辑这条输入吗？后续分支将被物理删除。'
-    : '警告：物理回退将删除该节点之后的所有异界分支，此操作不可逆。确定执行吗？';
-});
 
 const handlePreviewNode = (node: TimelineViewNode) => {
   previewingNode.value = node;
@@ -1070,13 +1061,18 @@ const handleBranchNode = async (node: TimelineViewNode) => {
 };
 
 const handleRollbackNode = async (node: TimelineViewNode) => {
-  nodeToRollback.value = node;
-};
+  const message = node.role === 'user'
+    ? '确定回滚并重新编辑这条输入吗？后续分支将被物理删除。'
+    : '警告：物理回退将删除该节点之后的所有异界分支，此操作不可逆。确定执行吗？';
 
-const handleConfirmRollback = async () => {
-  if (!nodeToRollback.value) return;
-  const node = nodeToRollback.value;
-  nodeToRollback.value = null;
+  const isConfirmed = await lwApi.confirm({
+    title: '物理回滚确认',
+    message,
+    confirmText: '确定回退',
+    danger: true
+  });
+
+  if (!isConfirmed) return;
 
   isSwitching.value = true;
   try {

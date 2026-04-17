@@ -110,6 +110,30 @@ const plugin: LuminaPlugin = {
             min: 1,
             max: 10,
             allowedScopes: ['Global']
+        },
+        traditionalHeaderDesktopPosition: {
+            default: 'top',
+            label: '传统桌面顶栏位置（桌面）',
+            description: '控制桌面端传统桌面的主导航条固定在顶部还是底部。',
+            common: true,
+            type: 'options',
+            allowedScopes: ['Global'],
+            options: [
+                { value: 'top', label: '顶部', description: '保持传统桌面的主导航位于顶部。' },
+                { value: 'bottom', label: '底部', description: '将传统桌面的主导航移动到底部，更接近 Dock 式操作。' }
+            ]
+        },
+        traditionalHeaderMobilePosition: {
+            default: 'top',
+            label: '传统桌面顶栏位置（移动）',
+            description: '控制移动端传统桌面的主导航条固定在顶部还是底部。',
+            common: true,
+            type: 'options',
+            allowedScopes: ['Global'],
+            options: [
+                { value: 'top', label: '顶部', description: '在移动端保留顶部导航栏。' },
+                { value: 'bottom', label: '底部', description: '将移动端导航移到底部，更便于拇指操作。' }
+            ]
         }
     },
     init() {

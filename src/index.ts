@@ -4,6 +4,7 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
 import './style.css';
+import { initBridge } from './bootstrap/initBridge.js';
 
 // ======= 1. 向外部全局环境暴露 LuminaWeave API =======
 (window as any).LuminaWeave = luminaWeaveApi;
@@ -11,6 +12,12 @@ import './style.css';
     // ======= 2. 插件的入口生命周期 =======
     export async function init() {
         console.log('[LuminaWeave] 初始化开始...');
+        
+        // 0. 初始化 Bridge 适配器 (多端兼容核心)
+        await initBridge();
+        
+        // 0.1 初始化持久化存储
+        await lwStorage.initStorage();
 
     // 获取/创建挂载点容器
     const containerId = 'luminaweave-root';
@@ -32,7 +39,6 @@ import './style.css';
 
     // ======= 3. 决定是否启用 Shadow DOM 隔离 (CSS Isolation) =======
     // 强制先拉取一次全局设置 (Shadow DOM 状态)
-    await lwStorage.loadIndependentGlobalData();
     const useShadowDom = lwStorage.get('lumina-settings.useShadowDom', true, 'Global');
 
     let renderTarget: HTMLElement | ShadowRoot;
