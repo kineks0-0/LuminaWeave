@@ -2,7 +2,7 @@
   <div class="card-maker-root">
     <ForgeSessionBrowser v-if="store.workspacePage === 'session-browser'" @close="store.setWorkspacePage('workspace')" />
 
-    <div v-else class="workspace-shell" :class="{ 'is-detached-workspace': isDetachedWorkspace }">
+    <div v-else class="workspace-shell" :class="{ 'is-detached-workspace': isDetachedWorkspace, 'is-mobile-layout': isMobileLayout }">
       <header v-if="showWorkspaceHero" class="workspace-hero">
         <div v-if="!props.embeddedInWorkspaceWindow" class="hero-copy">
           <span class="hero-kicker">Forge Workspace</span>
@@ -16,6 +16,19 @@
       <div class="main-layout" :class="{ 'has-embedded-sidebar': showEmbeddedSidebar, 'is-detached-workspace': isDetachedWorkspace }">
         <section class="chat-section" :class="{ 'is-detached-workspace': isDetachedWorkspace }">
           <div v-if="showWorkspaceTopbar" class="window-handle" aria-hidden="true"></div>
+
+          <div v-if="isMobileLayout" class="mobile-aux-strip">
+            <button
+              v-for="item in auxPanelButtons"
+              :key="item.kind"
+              class="mobile-aux-btn"
+              type="button"
+              @click="handleAuxPanelClick(item.kind)"
+            >
+              <span aria-hidden="true">{{ item.icon }}</span>
+              <span>{{ item.shortLabel }}</span>
+            </button>
+          </div>
 
           <div v-if="showWorkspaceTopbar" class="topbar" :class="{ 'is-collapsed': isTopbarCollapsed }">
             <div v-if="!isTopbarCollapsed" class="topbar-content">
@@ -41,20 +54,48 @@
                 @clear-reference="handleClearChatReference"
               />
 
-              <div v-if="showAuxStripInBody" class="aux-panel-strip" :class="{ 'is-window-launcher': props.embeddedInWorkspaceWindow }">
-                <span class="aux-panel-strip-label">{{ props.embeddedInWorkspaceWindow && store.auxPresentationMode === 'detached' ? '辅助窗口' : '辅助面板' }}</span>
+              <div v-if="showAuxStripInBody || showAuxStripForHiddenMode || showAuxStripForWidgetMode" class="aux-panel-strip" :class="{ 'is-window-launcher': props.embeddedInWorkspaceWindow, 'is-hidden-mode': showAuxStripForHiddenMode, 'is-widget-mode': showAuxStripForWidgetMode }">
+                <span class="aux-panel-strip-label">{{ showAuxStripForHiddenMode ? '辅助面板（小窗）' : (showAuxStripForWidgetMode ? '辅助面板（右侧）' : (props.embeddedInWorkspaceWindow && store.auxPresentationMode === 'detached' ? '辅助窗口' : '辅助面板')) }}</span>
                 <div class="aux-panel-strip-actions">
                   <button
                     v-for="item in auxPanelButtons"
                     :key="item.kind"
                     class="aux-panel-btn"
-                    :class="{ 'is-active': store.activeAuxPanel === item.kind }"
+                    :class="{ 'is-active': isForgeAuxPanelVisibleInWidget(item.kind) }"
                     type="button"
                     @click="handleAuxPanelClick(item.kind)"
                   >
                     <span class="aux-panel-btn-icon" aria-hidden="true">{{ item.icon }}</span>
                     <span>{{ item.shortLabel }}</span>
                   </button>
+                  <template v-if="isTraditionalWithRightSidebar">
+                    <button class="aux-panel-mode-btn" type="button" title="切换到左侧" @click="handleSwitchAuxMode('left')">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                        <rect x="3" y="3" width="5" height="18" rx="1"></rect>
+                        <rect x="10" y="3" width="11" height="18" rx="1"></rect>
+                      </svg>
+                    </button>
+                    <button class="aux-panel-mode-btn" type="button" title="拆出小窗" @click="handleSwitchAuxMode('widget')">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                        <rect x="3" y="3" width="7" height="18" rx="1"></rect>
+                        <rect x="14" y="3" width="7" height="10" rx="1"></rect>
+                      </svg>
+                    </button>
+                  </template>
+                  <template v-if="isTraditionalWithWidgetSidebar">
+                    <button class="aux-panel-mode-btn" type="button" title="切换到左侧" @click="handleSwitchAuxMode('left')">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                        <rect x="3" y="3" width="5" height="18" rx="1"></rect>
+                        <rect x="10" y="3" width="11" height="18" rx="1"></rect>
+                      </svg>
+                    </button>
+                    <button class="aux-panel-mode-btn" type="button" title="切换到右侧内嵌" @click="handleSwitchAuxMode('right')">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                        <rect x="3" y="3" width="11" height="18" rx="1"></rect>
+                        <rect x="16" y="3" width="5" height="18" rx="1"></rect>
+                      </svg>
+                    </button>
+                  </template>
                 </div>
               </div>
             </div>
@@ -352,10 +393,13 @@ import SeedSnippetSelector from './SeedSnippetSelector.vue';
 import { useForgeSeedImport } from './useForgeSeedImport';
 import type { ForgeDetailMode } from '../../types/ForgeStructuredTypes';
 import type { ForgeAuxPanelKind, ForgeVisiblePhase } from '../../types/ForgeWorkflowTypes.js';
+import type { SidebarMode } from '../../composables/useResponsiveLayout';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from './forgeAuxPanels';
 
 const props = withDefaults(defineProps<{
     embeddedInWorkspaceWindow?: boolean;
+    auxSidebarMode?: SidebarMode;
+    activeRightPanelId?: string;
 }>(), {
     embeddedInWorkspaceWindow: false
 });
@@ -469,10 +513,45 @@ const auxPanelButtons = FORGE_AUX_PANEL_ORDER.map((kind) => ({
 }));
 
 const isDetachedWorkspace = computed(() => props.embeddedInWorkspaceWindow && store.auxPresentationMode === 'detached');
-const showWorkspaceHero = computed(() => !isDetachedWorkspace.value);
-const showWorkspaceTopbar = computed(() => !isDetachedWorkspace.value);
-const showEmbeddedSidebar = computed(() => !props.embeddedInWorkspaceWindow || store.auxPresentationMode === 'embedded');
-const showAuxStripInBody = computed(() => !props.embeddedInWorkspaceWindow || store.auxPresentationMode === 'embedded');
+const isMobileLayout = computed(() => props.auxSidebarMode === 'hidden');
+const showWorkspaceHero = computed(() => !isDetachedWorkspace.value && !isMobileLayout.value);
+const showWorkspaceTopbar = computed(() => !isDetachedWorkspace.value && !isMobileLayout.value);
+const isTraditionalWithLeftSidebar = computed(() =>
+    !props.embeddedInWorkspaceWindow && props.auxSidebarMode === 'left'
+);
+const isTraditionalWithRightSidebar = computed(() =>
+    !props.embeddedInWorkspaceWindow && props.auxSidebarMode === 'right'
+);
+const isTraditionalWithWidgetSidebar = computed(() =>
+    !props.embeddedInWorkspaceWindow && props.auxSidebarMode === 'widget'
+);
+const isTraditionalWithHiddenSidebar = computed(() =>
+    !props.embeddedInWorkspaceWindow && props.auxSidebarMode === 'hidden'
+);
+const showEmbeddedSidebar = computed(() =>
+    isTraditionalWithRightSidebar.value
+    || (!isTraditionalWithLeftSidebar.value
+        && !isTraditionalWithWidgetSidebar.value
+        && !isTraditionalWithHiddenSidebar.value
+        && (!props.embeddedInWorkspaceWindow || store.auxPresentationMode === 'embedded'))
+);
+const showAuxStripInBody = computed(() =>
+    isTraditionalWithRightSidebar.value
+    || (!isTraditionalWithLeftSidebar.value
+        && !isTraditionalWithHiddenSidebar.value
+        && !isTraditionalWithWidgetSidebar.value
+        && (!props.embeddedInWorkspaceWindow || store.auxPresentationMode === 'embedded'))
+);
+const showAuxStripForWidgetMode = computed(() =>
+    isTraditionalWithWidgetSidebar.value
+);
+const showAuxStripForHiddenMode = computed(() =>
+    isTraditionalWithHiddenSidebar.value
+);
+const isForgeAuxPanelVisibleInWidget = (kind: ForgeAuxPanelKind): boolean => {
+    if (props.auxSidebarMode !== 'widget') return store.activeAuxPanel === kind;
+    return props.activeRightPanelId === `forge_${kind}`;
+};
 
 const getActiveTaskLabel = () => {
     if (!store.workflowSnapshot) return '未开始';
@@ -599,15 +678,30 @@ const handleClearChatReference = () => {
 };
 
 const handleAuxPanelClick = (panel: ForgeAuxPanelKind) => {
-    store.setActiveAuxPanel(panel);
     if (props.embeddedInWorkspaceWindow && store.auxPresentationMode === 'detached') {
+        store.setActiveAuxPanel(panel);
         const meta = FORGE_AUX_PANEL_META[panel];
         if (workspaceActions?.openWorkspaceApp) {
             workspaceActions.openWorkspaceApp(`panel:${meta.id}`);
         } else {
             luminaWeaveApi.openPanel(meta.id, { kind: panel }, { mode: 'tab' });
         }
+        return;
     }
+    if (props.auxSidebarMode === 'widget') {
+        const panelId = `forge_${panel}`;
+        luminaWeaveApi.emit('TOGGLE_WIDGET_PANEL', panelId);
+        return;
+    }
+    if (props.auxSidebarMode === 'hidden') {
+        luminaWeaveApi.emit('SWITCH_WIDGET_PANEL', `forge_${panel}`);
+        return;
+    }
+    store.setActiveAuxPanel(panel);
+};
+
+const handleSwitchAuxMode = (mode: 'left' | 'right' | 'widget') => {
+    luminaWeaveApi.emit('SWITCH_AUX_SIDEBAR_MODE', mode);
 };
 
 const scrollToBottom = () => {
@@ -749,6 +843,54 @@ onUnmounted(() => {
 .workspace-shell.is-detached-workspace {
   gap: 0;
   padding: 0;
+}
+
+.workspace-shell.is-mobile-layout {
+  gap: 0;
+  padding: 0;
+}
+
+.workspace-shell.is-mobile-layout .chat-section {
+  border: none;
+  border-radius: 0;
+}
+
+.mobile-aux-strip {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--lw-border-base);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.mobile-aux-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-aux-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--lw-border-subtle);
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.mobile-aux-btn:active {
+  background: var(--lw-primary-soft);
+  color: var(--lw-primary);
+  border-color: var(--lw-primary);
 }
 
 .workspace-hero {
@@ -972,6 +1114,26 @@ onUnmounted(() => {
 
 .aux-panel-btn-icon {
   font-size: 13px;
+}
+
+.aux-panel-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--lw-border-base);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
+  color: var(--lw-text-muted);
+  cursor: pointer;
+  transition: var(--lw-transition);
+}
+
+.aux-panel-mode-btn:hover {
+  border-color: var(--lw-border-hover);
+  background: var(--lw-bg-hover);
+  color: var(--lw-text-main);
 }
 
 .section-toggle:hover {
@@ -1346,9 +1508,11 @@ onUnmounted(() => {
 
 .composer-section {
   position: relative;
-  padding: 10px 18px 14px;
+  padding: 18px 18px 14px;
   border-top: none;
   background: transparent;
+  align-content: center;
+  font-family: --lw-font-main;
 }
 
 .chat-section.is-detached-workspace .composer-section {
@@ -1430,7 +1594,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 12px 7px;
+  padding: 6px 12px 5px;
   border-radius: 24px;
   border: 1px solid color-mix(in srgb, var(--lw-border-base) 88%, transparent);
   background: transparent;
@@ -1444,13 +1608,13 @@ onUnmounted(() => {
 
 .composer-textarea {
   flex: 1;
-  min-height: 56px;
+  min-height: 44px;
   max-height: 128px;
   resize: none;
   border: none;
   outline: none;
   background: transparent;
-  padding: 11px 10px 2px;
+  padding: 8px 10px 2px;
   font-size: 13px;
   line-height: 1.45;
   color: var(--lw-text-main);
@@ -1816,11 +1980,31 @@ onUnmounted(() => {
   }
 
   .topbar-collapsed-copy,
-  .composer-collapsed-bar,
-  .composer-toolbar,
-  .composer-toolbar-left {
+  .composer-collapsed-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .composer-toolbar {
+    flex-wrap: nowrap;
+  }
+
+  .composer-toolbar-left {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    /* overflow: hidden; */
+  }
+
+  .composer-inline-meta {
+    display: none;
+  }
+
+  .composer-select-prefix {
+    display: none;
+  }
+
+  .composer-select {
+    max-width: 100px;
   }
 
   .section-toggle,
@@ -1829,16 +2013,16 @@ onUnmounted(() => {
   }
 
   .composer-toolbar-right {
-    width: 100%;
-    justify-content: flex-end;
+    flex-shrink: 0;
   }
 
-  .composer-select {
-    max-width: none;
+  .input-container {
+    padding: 4px 10px 3px;
   }
 
-  .composer-inline-text {
-    white-space: normal;
+  .composer-textarea {
+    min-height: 32px;
+    padding: 5px 8px 1px;
   }
 
   .composer-menu-panel {

@@ -85,7 +85,7 @@ export interface ForgeWorkspaceSession {
     completedLayers?: ForgeLayer[];
     publishState?: 'drafting' | 'workspace_frozen';
     activeAuxPanel?: ForgeAuxPanelKind;
-    auxPresentationMode?: 'embedded' | 'detached';
+    auxPresentationMode?: 'embedded' | 'detached' | 'widget' | 'hidden';
     /** 世界线节点快照 Map（key = nodeId）。可选，用于回滚恢复。 */
     worldlineSnapshots?: Record<string, ForgeWorldlineSnapshot>;
     workspaceMode: 'workspace';

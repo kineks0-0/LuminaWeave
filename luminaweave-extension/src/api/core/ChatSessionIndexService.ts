@@ -1,7 +1,6 @@
-import { API_BASE, API_ROUTES } from '../../../../shared/ApiEndpoints.js';
 import type { ChatSessionRef } from '../../types/SessionTypes.js';
 import { lwStorage } from '../storage.js';
-import { pluginFetch } from './PluginHttpClient.js';
+import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
 
 type ServerChatSessionItem = {
     chatId: string;
@@ -42,9 +41,7 @@ const buildTitleAndSummary = (chatId: string, previewMessage: string): { title: 
 export class ChatSessionIndexService {
     async listChatSessions(): Promise<ChatSessionRef[]> {
         try {
-            const response = await pluginFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.LIST}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json() as { chats?: ServerChatSessionItem[] };
+            const data = await BridgeDispatcher.chat.listChats() as { chats?: ServerChatSessionItem[] };
             const chats = Array.isArray(data.chats) ? data.chats : [];
 
             return chats

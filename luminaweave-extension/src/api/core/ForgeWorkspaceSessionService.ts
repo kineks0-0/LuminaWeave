@@ -51,7 +51,7 @@ export interface ForgeWorkspaceSerializableState {
     completedLayers: ForgeLayer[];
     publishState: 'drafting' | 'workspace_frozen';
     activeAuxPanel: ForgeAuxPanelKind;
-    auxPresentationMode: 'embedded' | 'detached';
+    auxPresentationMode: 'embedded' | 'detached' | 'widget' | 'hidden';
     /** 从 WorldlineManager 同步而来的快照 Map（key = nodeId）。 */
     worldlineSnapshots?: Map<string, ForgeWorldlineSnapshot>;
 }

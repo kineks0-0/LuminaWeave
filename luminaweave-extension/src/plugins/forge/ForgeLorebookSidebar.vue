@@ -95,7 +95,7 @@
               </div>
             </div>
           </div>
-          <div class="detail-actions">
+          <div class="detail-actions" style="align-self: center;text-align: end;">
             <button class="ghost-btn" @click="openEditorOverlay">展开编辑</button>
             <button class="ghost-btn" @click="clearSelection">清空选择</button>
           </div>

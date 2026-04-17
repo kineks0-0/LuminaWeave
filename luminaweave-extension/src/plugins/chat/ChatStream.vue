@@ -609,14 +609,21 @@ const handleBranch = async (index: number, msg: LuminaChatMessage) => {
     if (nodeId) {
       await lwApi.branchFromNode(nodeId);
     } else {
-      alert(`无法解析该节点的坐标信息。楼层：${index}`);
+      lwApi.showToast(`无法解析该节点的坐标信息。楼层：${index}`, 'error');
     }
   }
 };
 
 const handleDelete = async (index: number, msg: LuminaChatMessage) => {
-  if (confirm(`确定要删除此条消息吗？\n删除后无法撤销 (楼层 ${index})`)) {
-    if (lwApi) {
+  if (lwApi) {
+    const isConfirmed = await lwApi.confirm({
+      title: '删除消息',
+      message: `确定要删除此条消息吗？\n删除后无法撤销 (楼层 ${index})`,
+      confirmText: '确认删除',
+      danger: true
+    });
+
+    if (isConfirmed) {
       await lwApi.crudChatRecord(msg.id || index, 'delete');
     }
   }

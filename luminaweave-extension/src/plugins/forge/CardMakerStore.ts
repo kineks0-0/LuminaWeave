@@ -27,7 +27,7 @@ import {
     kickoffBlueprint
 } from '../../api/core/ForgeFormController.js';
 import { ForgeWorkflowGraph } from '../../api/core/ForgeWorkflowGraph.js';
-import { pluginFetch } from '../../api/core/PluginHttpClient.js';
+import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
 import type { ForgeAuxPanelKind, ForgeWorkflowSnapshot } from '../../types/ForgeWorkflowTypes.js';
 import {
     FORGE_FORM_RESULT_SUBMITTED,
@@ -176,7 +176,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const forgeMemoryTree = ref<ForgeMemoryTree>(createEmptyForgeMemoryTree());
     const publishState = ref<'drafting' | 'workspace_frozen'>('drafting');
     const activeAuxPanel = ref<ForgeAuxPanelKind>('lorebook');
-    const auxPresentationMode = ref<'embedded' | 'detached'>('detached');
+    const auxPresentationMode = ref<'embedded' | 'detached' | 'widget' | 'hidden'>('detached');
     const workspacePage = ref<'workspace' | 'session-browser'>('workspace');
     const virtualLorebookEntries = ref<ForgeVirtualLorebookEntry[]>([]);
     const importedLorebookId = ref<string | null>(null);
@@ -468,27 +468,8 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         bumpTimelineRevision();
     };
 
-    const apiGet = async <T>(url: string): Promise<T> => {
-        const res = await pluginFetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json() as T;
-    };
-
-    const apiPost = async <T>(url: string, body: Record<string, unknown>): Promise<T> => {
-        const res = await pluginFetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-        if (!res.ok) {
-            const text = await res.text().catch(() => '');
-            throw new Error(text || `HTTP ${res.status}`);
-        }
-        return await res.json() as T;
-    };
-
     const refreshPresets = async (): Promise<void> => {
-        const data = await apiGet<{ presets: BackendPresetMeta[] }>(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.PRESETS.LIST}`);
+        const data = await BridgeDispatcher.presets.listPresets() as { presets: BackendPresetMeta[] };
         presets.value = Array.isArray(data.presets) ? data.presets : [];
         if (!selectedPresetId.value) {
             const def = presets.value.find(p => p.isDefault) || presets.value[0];
@@ -499,17 +480,17 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const importPreset = async (text: string, name?: string): Promise<void> => {
         let blob: unknown = text;
         try { blob = JSON.parse(text); } catch { blob = text; }
-        await apiPost(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.PRESETS.IMPORT}`, { name, blob });
+        await BridgeDispatcher.presets.importPreset({ name, blob });
         await refreshPresets();
     };
 
     const exportPreset = async (presetId: string): Promise<string> => {
-        const data = await apiGet<{ blob: unknown }>(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.PRESETS.EXPORT(presetId)}`);
+        const data = await BridgeDispatcher.presets.exportPreset(presetId) as { blob: unknown };
         return JSON.stringify(data.blob, null, 2);
     };
 
     const restoreDefaultPresets = async (): Promise<void> => {
-        await apiPost(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.PRESETS.RESTORE_DEFAULTS}`, {});
+        await BridgeDispatcher.presets.restoreDefaults();
         await refreshPresets();
     };
 
@@ -639,7 +620,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         persistWorkspaceSession();
     };
 
-    const setAuxPresentationMode = (mode: 'embedded' | 'detached'): void => {
+    const setAuxPresentationMode = (mode: 'embedded' | 'detached' | 'widget' | 'hidden'): void => {
         auxPresentationMode.value = mode;
         persistWorkspaceSession();
     };
@@ -1074,7 +1055,11 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
 
     const fetchPresetDetail = async (presetId: string): Promise<BackendPresetDetail | null> => {
         if (!presetId) return null;
-        return apiGet<BackendPresetDetail>(`${API_BASE.LUMINA_WEAVE}/presets/${presetId}`);
+        try {
+            return await BridgeDispatcher.presets.exportPreset(presetId) as BackendPresetDetail;
+        } catch {
+            return null;
+        }
     };
 
     const buildPlannerExecutionRequest = async (context: ForgeRuntimeContext): Promise<ForgeExecutionRequest> => {
@@ -1313,7 +1298,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const abort = async (): Promise<void> => {
         if (!isGenerating.value) return;
         try {
-            await apiPost(`${API_BASE.LUMINA_WEAVE}/nexus/abort`, { chatId: sessionChatId.value });
+            await BridgeDispatcher.nexus.stop(sessionChatId.value);
         } finally {
             isGenerating.value = false;
             streamingAssistantNodeId.value = null;

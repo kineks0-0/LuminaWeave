@@ -2,14 +2,6 @@
   <div class="forge-window-header-actions" ref="rootRef" @pointerdown.stop>
     <ForgePromptPreview :open="isPromptPreviewOpen" @close="isPromptPreviewOpen = false" />
 
-    <button class="header-action-btn" type="button" @click="store.setWorkspacePage('session-browser')">
-      <span>会话列表</span>
-    </button>
-
-    <button class="header-action-btn" type="button" @click="togglePresentationMode">
-      <span>{{ store.auxPresentationMode === 'detached' ? '内嵌右栏' : '拆出小窗' }}</span>
-    </button>
-
     <div class="header-menu-wrap">
       <button
         class="header-action-btn"
@@ -17,7 +9,7 @@
         type="button"
         @click="isMoreMenuOpen = !isMoreMenuOpen"
       >
-        <span>更多</span>
+        <span>工作区</span>
       </button>
 
       <transition name="forge-header-menu">
@@ -41,6 +33,12 @@
 
           <div class="header-menu-section">
             <span class="header-menu-label">工作区操作</span>
+            <button class="header-menu-item" type="button" @click="handleOpenSessionBrowser">
+              <span>会话列表</span>
+            </button>
+            <button class="header-menu-item" type="button" @click="togglePresentationMode">
+              <span>{{ store.auxPresentationMode === 'detached' ? '内嵌右栏' : '拆出小窗' }}</span>
+            </button>
             <button class="header-menu-item" type="button" @click="handleCreateWorkspace">
               <span>新建会话</span>
             </button>
@@ -151,6 +149,11 @@ const handleGlobalPointerDown = (event: PointerEvent) => {
   if (!rootRef.value?.contains(target)) {
     closeMenus();
   }
+};
+
+const handleOpenSessionBrowser = () => {
+  store.setWorkspacePage('session-browser');
+  closeMenus();
 };
 
 const togglePresentationMode = () => {

@@ -117,8 +117,8 @@ export interface SessionControllerDeps {
     // --- Aux Panel ---
     getActiveAuxPanel(): ForgeAuxPanelKind;
     setActiveAuxPanel(panel: ForgeAuxPanelKind): void;
-    getAuxPresentationMode(): 'embedded' | 'detached';
-    setAuxPresentationMode(mode: 'embedded' | 'detached'): void;
+    getAuxPresentationMode(): 'embedded' | 'detached' | 'widget' | 'hidden';
+    setAuxPresentationMode(mode: 'embedded' | 'detached' | 'widget' | 'hidden'): void;
     setWorkspacePage(page: 'workspace' | 'session-browser'): void;
 
     // --- Workflow ---

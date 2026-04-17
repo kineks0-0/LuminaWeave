@@ -9,7 +9,7 @@ import {
     createEmptyDraftTree,
     createEmptyStructuredState
 } from './utils/forgeStateDefaults.js';
-import { pluginFetch } from './PluginHttpClient.js';
+import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
 
 const STORAGE_KEY = 'lumina-forge.workspace-sessions';
 const ACTIVE_KEY = 'lumina-forge.active-session-id';
@@ -124,12 +124,8 @@ export class ForgeSessionRepository {
 
     private async syncSessionToServer(session: ForgeWorkspaceSession): Promise<boolean> {
         try {
-            const response = await pluginFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.FORGE.UPDATE(session.id)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(session)
-            });
-            return response.ok;
+            await BridgeDispatcher.forge.updateSession(session.id, session);
+            return true;
         } catch {
             return false;
         }
@@ -167,15 +163,12 @@ export class ForgeSessionRepository {
     async loadSession(id: string): Promise<ForgeWorkspaceSession | null> {
         // 1. 优先从后端拉取完整数据
         try {
-            const response = await pluginFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.FORGE.GET(id)}`);
-            if (response.ok) {
-                const data = await response.json() as { session: ForgeWorkspaceSession };
-                if (data.session) {
-                    console.log(`[ForgeRepository] 已从后端加载会话: ${id}`);
-                    // 顺便更新下本地存根，保持元数据同步
-                    this.updateLocalMeta(data.session);
-                    return data.session;
-                }
+            const data = await BridgeDispatcher.forge.getSession(id);
+            if (data && data.session) {
+                console.log(`[ForgeRepository] 已从后端加载会话: ${id}`);
+                // 顺便更新下本地存根，保持元数据同步
+                this.updateLocalMeta(data.session);
+                return data.session;
             }
         } catch (e) {
             console.warn(`[ForgeRepository] 从后端加载会话失败，尝试回退到本地: ${id}`, e);
@@ -312,15 +305,13 @@ export class ForgeSessionRepository {
 
     async refreshFromServer(): Promise<void> {
         try {
-            const response = await pluginFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.FORGE.LIST}`);
-            if (!response.ok) return;
-            const data = await response.json() as { sessions?: ForgeWorkspaceSession[] };
+            const data = await BridgeDispatcher.forge.listSessions();
             const remote = Array.isArray(data.sessions) ? data.sessions : [];
             
             const local = this.readLocal();
             
             // 迁移逻辑：如果本地有远端没有的会话，尝试同步给远端
-            const remoteIds = new Set(remote.map(s => s.id));
+            const remoteIds = new Set(remote.map((s: any) => s.id));
             const migrationTasks = local.filter(s => !remoteIds.has(s.id));
             if (migrationTasks.length > 0) {
                 console.log(`[ForgeRepository] 发现 ${migrationTasks.length} 个未同步的本地会话，正在迁移至后端...`);

@@ -30,8 +30,9 @@ export const useChatStore = defineStore('lumina-chat-view-model', () => {
         const api = apiRef;
         if (!api) return;
         
-        // 核心优化：直接从同步快照中获取数据，不再需要 await
-        messages.value = api.getProcessedChat();
+        const list = api.getProcessedChat();
+        console.log('[useChatStore] 执行 refreshFromApi, 消息数:', list.length);
+        messages.value = list;
         isReady.value = true;
     };
 

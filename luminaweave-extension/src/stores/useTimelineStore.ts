@@ -142,7 +142,7 @@ export const useTimelineStore = defineStore('lumina-timeline-view-model', () => 
         if (activeSourceId.value === 'forge') {
             useCardMakerStore().switchToNode(targetNodeId);
         } else {
-            api.activeLeafId = targetNodeId;
+            await api.branchFromNode(targetNodeId);
         }
         await refreshFromApi();
     };
