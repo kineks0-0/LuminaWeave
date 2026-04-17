@@ -5,8 +5,7 @@
 
 import { STClient } from './core/st-adapter/STClient.js';
 import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
-import { pluginFetch } from './core/PluginHttpClient.js';
-import { API_BASE, API_ROUTES } from '../../../shared/ApiEndpoints.js';
+import { BridgeDispatcher } from '../../../shared/api/BridgeDispatcher.js';
 
 export type StorageScope = 'Global' | 'Character' | 'Chat' | 'Session';
 
@@ -14,13 +13,31 @@ export class StorageCore extends LuminaWeaveAPIBase {
     private sessionData: Map<string, any>;
     private globalIndependentData: Record<string, any> = {}; // 独立存储的全局配置
     private listeners: Map<string, Function[]> = new Map(); // 订阅设置变更
+    private _saveTimeout: any = null;
+    private _activeSavePromise: Promise<void> | null = null;
 
     constructor() {
         super();
-        this.sessionData = this._loadSessionData(); // Session 作用域实际下沉至 localStorage
+        this.sessionData = new Map();
+    }
 
-        // 初始化时加载独立 JSON
-        this.loadIndependentGlobalData();
+    /**
+     * 初始化异步存储数据
+     */
+    public async initStorage(): Promise<void> {
+        // 先尝试从 Bridge 加载 Session
+        try {
+            const data = await BridgeDispatcher.extensionStore.getJson({ namespace: 'lumina_weave', key: 'session-state' });
+            if (data) {
+                this.sessionData = new Map(Object.entries(data));
+            }
+        } catch (e) {
+            console.warn('[LuminaWeave Storage] Failed to load Session Data from extensionStore, fallback to localStorage.');
+            this.sessionData = this._loadSessionData();
+        }
+
+        // 加载独立配置
+        await this.loadIndependentGlobalData();
     }
 
     // 统一通过基类 ctx 访问
@@ -34,7 +51,11 @@ export class StorageCore extends LuminaWeaveAPIBase {
     }
 
     set useIndependentGlobalStorage(val: boolean) {
-        localStorage.setItem('luminaWeave_useIndependentStorage', val ? 'true' : 'false');
+        BridgeDispatcher.extensionStore.setJson({ 
+            namespace: 'lumina_weave', 
+            key: 'storage-mode', 
+            value: { independent: val } 
+        });
         // 切换后触发界面全面更新响应
         this.emit('*', null, 'Global');
     }
@@ -44,19 +65,34 @@ export class StorageCore extends LuminaWeaveAPIBase {
      */
     async loadIndependentGlobalData(): Promise<void> {
         try {
-            const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.SETTINGS.GET}`;
-            const res = await pluginFetch(endpoint);
-            if (res.ok) {
-                this.globalIndependentData = await res.json();
-                // 如果当前处在独立模式，拉取完毕后通知全体渲染刷新
-                if (this.useIndependentGlobalStorage) {
-                    this.emit('*', null, 'Global');
-                }
-                console.log('[LuminaWeave Storage] Independent backend loaded successfully.');
-                console.log(this.globalIndependentData);
+            this.globalIndependentData = await BridgeDispatcher.settings.getSettings();
+            
+            // 镜像备份到 extensionStore，而不是 localStorage
+            await BridgeDispatcher.extensionStore.setJson({ 
+                namespace: 'lumina_weave', 
+                key: 'global-settings-mirror', 
+                value: this.globalIndependentData 
+            });
+
+            // 如果当前处在独立模式，拉取完毕后通知全体渲染刷新
+            if (this.useIndependentGlobalStorage) {
+                this.emit('*', null, 'Global');
             }
+            console.log('[LuminaWeave Storage] Independent backend loaded successfully and mirrored to extension store.');
         } catch (e) {
-            console.log('[LuminaWeave Storage] Independent backend not reachable or not installed.');
+            console.warn('[LuminaWeave Storage] Independent backend not reachable. Attempting to recover from extension mirror...');
+            try {
+                const mirror = await BridgeDispatcher.extensionStore.getJson({ 
+                    namespace: 'lumina_weave', 
+                    key: 'global-settings-mirror' 
+                });
+                if (mirror) {
+                    this.globalIndependentData = mirror;
+                    console.info('[LuminaWeave Storage] Successfully recovered API configuration from extension mirror.');
+                }
+            } catch (recoveryErr) {
+                console.error('[LuminaWeave Storage] Failed to recover from extension mirror:', recoveryErr);
+            }
         }
     }
 
@@ -65,20 +101,58 @@ export class StorageCore extends LuminaWeaveAPIBase {
      */
     async _saveIndependentGlobalData(): Promise<void> {
         try {
-            const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.SETTINGS.SAVE}`;
-            const res = await pluginFetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(this.globalIndependentData)
+            // 同步备份到 extensionStore
+            await BridgeDispatcher.extensionStore.setJson({ 
+                namespace: 'lumina_weave', 
+                key: 'global-settings-mirror', 
+                value: this.globalIndependentData 
             });
-
-            if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+            await BridgeDispatcher.settings.saveSettings(this.globalIndependentData);
         } catch (e) {
             console.error('[LuminaWeave Storage] Failed to save independent JSON:', e);
-            throw e; // Rethrow allowing the UI to catch and display the red error state
+            throw e; 
         }
+    }
+
+    /**
+     * 防抖版的独立持久化方法
+     */
+    private _saveIndependentGlobalDataDebounced(): Promise<void> {
+        if (this._saveTimeout) {
+            clearTimeout(this._saveTimeout);
+        }
+
+        return new Promise((resolve, reject) => {
+            this._saveTimeout = setTimeout(async () => {
+                try {
+                    this._activeSavePromise = this._saveIndependentGlobalData();
+                    await this._activeSavePromise;
+                    this._saveTimeout = null;
+                    this._activeSavePromise = null;
+                    resolve();
+                } catch (e) {
+                    this._saveTimeout = null;
+                    this._activeSavePromise = null;
+                    reject(e);
+                }
+            }, 850); // 850ms 防抖，合并热点写操作
+        });
+    }
+
+    /**
+     * 立即强制持久化当前所有待定的全局改动
+     */
+    public async flush(): Promise<void> {
+        if (this._saveTimeout) {
+            clearTimeout(this._saveTimeout);
+            this._saveTimeout = null;
+        }
+        
+        if (this._activeSavePromise) {
+            return this._activeSavePromise;
+        }
+
+        return this._saveIndependentGlobalData();
     }
 
     /**
@@ -95,14 +169,18 @@ export class StorageCore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * 持久化写入 localStorage
+     * 持久化写入 extensionStore
      */
-    private _saveSessionData(): void {
+    private async _saveSessionData(): Promise<void> {
         try {
             const obj = Object.fromEntries(this.sessionData);
-            localStorage.setItem('luminaWeave_sessionConfig', JSON.stringify(obj));
+            await BridgeDispatcher.extensionStore.setJson({ 
+                namespace: 'lumina_weave', 
+                key: 'session-state', 
+                value: obj 
+            });
         } catch (e) {
-            console.error('[LuminaWeave Storage] Failed to save Session Data:', e);
+            console.error('[LuminaWeave Storage] Failed to save Session Data to extensionStore:', e);
         }
     }
 
@@ -201,7 +279,7 @@ export class StorageCore extends LuminaWeaveAPIBase {
             case 'Global':
                 if (this.useIndependentGlobalStorage) {
                     this.globalIndependentData[key] = value;
-                    promise = this._saveIndependentGlobalData();
+                    promise = this._saveIndependentGlobalDataDebounced();
                 } else {
                     if (base) base.global[key] = value;
                     this.save();

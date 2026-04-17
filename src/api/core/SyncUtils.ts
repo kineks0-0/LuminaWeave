@@ -1,6 +1,7 @@
 import { LuminaChatMessage, MessageUtils } from '../../../../shared/LuminaMessage.js';
 import { lwStorage } from '../storage.js';
 import { BuiltinXMLTags, XMLInterceptor, globalXMLInterceptor } from './XMLInterceptor.js';
+import { SyncEngine, SharedMessageTextResolver, DiffResult } from '../../../../shared/api/SyncEngine.js';
 import { ContextControlSettings } from './types.js';
 import { STClient } from './st-adapter/STClient.js';
 import { STProtocol } from './st-adapter/STProtocol.js';
@@ -128,27 +129,14 @@ export class MessageComparator {
 }
 
 /**
- * 同步工具类 (SyncUtils)
+ * 同步工具类 (SyncUtils) - 扩展层适配版
  * 职责：
- * 1. 统一生成消息指纹 (ID)
- * 2. 判定消息内容相等性
- * 3. 规范化 SillyTavern 消息列表并关联指纹
- * 4. 对比影子数据库与 ST 内存状态差异
- * 5. 计算并应用差量更新 (Delta Sync)
- * 
- * 本类为无状态工具集，仅提供静态算法支持。
+ * 1. 组合共享的 SyncEngine 提供差异比对支持。
+ * 2. 处理 ST 特有的物理同步逻辑 (applyDelta)。
  */
-export interface DiffResult {
-    onlyInIndependent: any[];
-    onlyInST: any[];
-    updated: any[];
-    independentSequence: any[];
-    stSequence: any[];
-    diffCount: number;
-    hasConflict: boolean;
-    hasDivergence: boolean;
-    divergenceIndex: number;
-}
+const engine = new SyncEngine(globalXMLInterceptor);
+
+export type { DiffResult };
 
 export class DiffVisualizer {
     public static generateDiffRows(diffResult: DiffResult): any[] {
@@ -309,37 +297,22 @@ export class SyncUtils {
     }
 
     /**
-     * 转换为可比较的消息对象
+     * 转换为可比较的消息对象 (内部重构：使用 SharedMessageTextResolver)
      */
-    private static toComparableMessage(msg: LuminaChatMessage, side: 'st' | 'lumina'): {
-        id: string;
-        name: string;
-        role: string;
-        mes: string;
-        mesRaw: string;
-        fingerprint: string;
-        stFingerprint: string;
-        stFingerprintStored: string;
-        mesSTStored: string;
-        is_hidden?: boolean;
-        mesST?: string;
-    } {
+    private static toComparableMessage(msg: LuminaChatMessage, side: 'st' | 'lumina'): any {
         const { id, fingerprint } = this.identifyMessage(msg);
         const finalMes = side === 'st'
-            ? MessageTextResolver.normalize(msg.mes ?? MessageTextResolver.resolveForSync(msg))
-            : MessageTextResolver.normalize(MessageTextResolver.resolveForSync(msg));
+            ? MessageUtils.normalize(msg.mes ?? SharedMessageTextResolver.resolveForSTWrite(msg))
+            : MessageUtils.normalize(SharedMessageTextResolver.resolveForSTWrite(msg));
 
         const stFingerprintStored =
             (typeof msg?.extra?.stFingerprint === 'string' ? msg.extra.stFingerprint : '')
             || (typeof msg.stFingerprint === 'string' ? msg.stFingerprint : '');
-        const mesSTStored =
-            (typeof msg?.extra?.mesST === 'string' ? msg.extra.mesST : '')
-            || (typeof msg.mesST === 'string' ? msg.mesST : '');
 
         const compareText = side === 'st'
-            ? (msg.mes ?? MessageTextResolver.resolveForSTWrite(msg))
-            : (msg.mesST ?? (typeof msg?.extra?.mesST === 'string' ? msg.extra.mesST : undefined) ?? MessageTextResolver.resolveForSTWrite(msg));
-        const stFingerprint = this.getSTFingerprint(compareText);
+            ? (msg.mes ?? SharedMessageTextResolver.resolveForSTWrite(msg))
+            : (msg.mesST ?? (typeof msg?.extra?.mesST === 'string' ? msg.extra.mesST : undefined) ?? SharedMessageTextResolver.resolveForSTWrite(msg));
+        const stFingerprint = MessageUtils.getFingerprint(compareText);
         const normalizedRole = STProtocol.normalizeRole(msg.role, msg.is_user === true || msg.role === 'user');
 
         return {
@@ -347,13 +320,10 @@ export class SyncUtils {
             name: msg?.name || '',
             role: normalizedRole,
             mes: finalMes,
-            mesRaw: msg.mesRaw || '',
             fingerprint,
             stFingerprint,
             stFingerprintStored,
-            mesSTStored,
-            is_hidden: msg.is_hidden,
-            mesST: msg.mesST
+            is_hidden: msg.is_hidden
         };
     }
 
@@ -377,22 +347,10 @@ export class SyncUtils {
     }
 
     /**
-     * 统一标识消息 (Identity Resolver)
+     * 统一标识消息 (委托给共享引擎)
      */
     public static identifyMessage(m: any): { id: string; fingerprint: string } {
-        if (!m) return { id: this.generateNodeId(), fingerprint: 'fp_00000000' };
-
-        const extra = m.extra || {};
-        const rawContent = MessageTextResolver.resolveForFingerprint(m);
-        const fingerprint = extra.fingerprint || m.fingerprint || this.getFingerprint(rawContent);
-
-        let id = extra.id as string | undefined || m.id as string | undefined;
-
-        if (!id) {
-            id = this.generateNodeId();
-        }
-
-        return { id, fingerprint };
+        return engine.identifyMessage(m);
     }
 
     /**
@@ -417,112 +375,21 @@ export class SyncUtils {
     }
 
     /**
-     * 对比两个节点池的差异 (Diff Engine)
+     * 对比两个节点池的差异 (委托给共享引擎)
      */
     public static comparePools(localNodes: LuminaChatMessage[], remoteNodes: LuminaChatMessage[]): {
         added: LuminaChatMessage[],
         updated: LuminaChatMessage[],
         deletedIds: string[]
     } {
-        const remoteMap = new Map(remoteNodes.map(n => [n.id, n]));
-        const localMap = new Map(localNodes.map(n => [n.id, n]));
-
-        const added: LuminaChatMessage[] = [];
-        const updated: LuminaChatMessage[] = [];
-        const deletedIds: string[] = [];
-
-        for (const local of localNodes) {
-            const remote = remoteMap.get(local.id);
-            if (!remote) {
-                added.push(local);
-            } else if (local.fingerprint !== remote.fingerprint) {
-                updated.push(local);
-            }
-        }
-
-        for (const remote of remoteNodes) {
-            if (!localMap.has(remote.id)) {
-                deletedIds.push(remote.id);
-            }
-        }
-
-        return { added, updated, deletedIds };
+        return engine.comparePools(localNodes, remoteNodes);
     }
 
     /**
-     * 计算并汇总 Lumina 与 ST 的同步分歧
+     * 计算并汇总 Lumina 与 ST 的同步分歧 (委托给共享引擎)
      */
     public static compareStates(localChat: LuminaChatMessage[], stChat: LuminaChatMessage[]): DiffResult {
-        const onlyInIndependent: any[] = [];
-        const onlyInST: any[] = [];
-        const updated: any[] = [];
-
-        const localSequence = localChat.map((m) => this.toComparableMessage(m, 'lumina'));
-        const stSequence = stChat.map((m) => this.toComparableMessage(m, 'st'));
-        
-        const stMsgMap = new Map(stSequence.map(m => [m.id, m]));
-        const localMsgMap = new Map(localSequence.map(m => [m.id, m]));
-
-        for (const local of localSequence) {
-            const stNode = stMsgMap.get(local.id!);
-            if (!stNode) {
-                onlyInIndependent.push(local);
-            } else {
-                const metaDiff =
-                    MessageTextResolver.normalize(local.name) !== MessageTextResolver.normalize(stNode.name)
-                    || MessageTextResolver.normalize(local.role) !== MessageTextResolver.normalize(stNode.role)
-                    || (!!local.is_hidden) !== (!!stNode.is_hidden);
-                const isDiff =
-                    metaDiff
-                    || local.stFingerprint !== stNode.stFingerprint;
-                
-                if (isDiff) {
-                    const baselineFp =
-                        (typeof stNode.stFingerprintStored === 'string' ? stNode.stFingerprintStored : '')
-                        || (typeof stNode.mesSTStored === 'string' && stNode.mesSTStored ? this.getSTFingerprint(stNode.mesSTStored) : '');
-                    const isSTEdit =
-                        (baselineFp !== '' && baselineFp === local.stFingerprint && stNode.stFingerprint !== baselineFp)
-                        || (local.fingerprint === stNode.fingerprint && local.stFingerprint !== stNode.stFingerprint);
-                    
-                    updated.push({
-                        ...local,
-                        _isSTEdit: isSTEdit
-                    });
-                }
-            }
-        }
-
-        for (const st of stSequence) {
-            if (!localMsgMap.has(st.id)) {
-                onlyInST.push(st);
-            }
-        }
-
-        const maxLen = Math.max(localSequence.length, stSequence.length);
-        let divergenceIndex = -1;
-
-        for (let i = 0; i < maxLen; i++) {
-            const left = localSequence[i];
-            const right = stSequence[i];
-            if (!left || !right || left.id !== right.id) {
-                divergenceIndex = i;
-                break;
-            }
-        }
-
-        const luminaOriginatedUpdates = updated.filter(u => !u._isSTEdit);
-
-        return {
-            onlyInIndependent,
-            onlyInST,
-            updated,
-            independentSequence: localSequence,
-            stSequence,
-            diffCount: onlyInIndependent.length + onlyInST.length + updated.length,
-            hasConflict: onlyInIndependent.length > 0 || onlyInST.length > 0 || updated.length > 0,
-            hasDivergence: (onlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0) && onlyInST.length > 0,
-            divergenceIndex
-        };
+        return engine.compareStates(localChat, stChat);
     }
 
     /**

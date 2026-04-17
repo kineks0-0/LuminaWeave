@@ -4,9 +4,19 @@ import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
 import { WorldlineStore } from './WorldlineStore.js';
 import { SyncUtils } from './SyncUtils.js';
 import { pluginManager } from '../../core/PluginManager.js';
-import { TransactionContextPayload, TransactionErrorPayload, TransactionMutationResponse, TransactionQueryResponse, TransactionScope } from './TransactionProtocol.js';
+import { 
+    TransactionEngine, 
+    ISequenceStorage 
+} from '../../../../shared/api/TransactionEngine.js';
+import { 
+    TransactionScope,
+    TransactionContextPayload,
+    TransactionMutationResponse,
+    TransactionQueryResponse,
+    TransactionErrorPayload
+} from '../../../../shared/api/TransactionTypes.js';
 import { API_BASE, API_ROUTES } from '../../../../shared/ApiEndpoints.js';
-import { pluginFetch } from './PluginHttpClient.js';
+import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
 
 /**
  * PersistenceService
@@ -18,12 +28,20 @@ export class PersistenceService {
     // integratedTxIdByChat 表示当前本地节点池所集成（对齐）的服务器事务 ID
     private _integratedTxIdByChat: Map<string, string> = new Map();
 
-    // private _opQueue: Promise<any> = Promise.resolve();
+    private _txEngine: TransactionEngine;
 
     constructor(
         private store: WorldlineStore,
         private isLoadedProvider: () => boolean
-    ) { }
+    ) { 
+        const sequenceStorage: ISequenceStorage = {
+            getSequence: async (chatId) => this._getLastCommittedSeq(chatId),
+            setSequence: async (chatId, seq) => this.persistLastCommittedSeq(chatId, seq),
+            getTransactionId: async (chatId) => this.getIntegratedTxId(chatId) ?? null,
+            setTransactionId: async (chatId, txId) => this.setIntegratedTxId(chatId, txId)
+        };
+        this._txEngine = new TransactionEngine(sequenceStorage);
+    }
 
     /**
      * 将操作排入队列执行，物理上消除并发 IO 导致的 Race Condition
@@ -67,14 +85,8 @@ export class PersistenceService {
         await lwStorage.set('lumina-chat.lastCommittedTxnSeq', seq, 'Chat');
     }
 
-    private _buildTransactionContext(chatId: string, scope: TransactionScope, payloadDigest: string): TransactionContextPayload {
-        const expectedSeq = this._getLastCommittedSeq(chatId);
-        const lastTransactionId = this.getIntegratedTxId(chatId);
-        return {
-            expectedSeq,
-            idempotencyKey: `${scope}:${chatId}:${payloadDigest}`,
-            lastTransactionId
-        };
+    private _buildTransactionContext(chatId: string, scope: TransactionScope, payloadDigest: string): Promise<TransactionContextPayload> {
+        return this._txEngine.buildContext(chatId, scope, payloadDigest);
     }
 
     private _extractLastCommittedSeq(metadata: unknown): number | null {
@@ -96,52 +108,26 @@ export class PersistenceService {
         await this.persistLastCommittedSeq(chatId, seq);
     }
 
-    private async _handleTransactionResponse(chatId: string, res: Response): Promise<void> {
-        if (!res.ok) {
-            if (res.status === 409) {
-                const conflict = await res.json() as TransactionMutationResponse;
-                const conflictSeq = typeof conflict.lastCommittedSeq === 'number' ? conflict.lastCommittedSeq : 0;
-                await this._persistLastCommittedSeq(chatId, conflictSeq);
-                const detail = conflict.error?.message || '事务序列冲突';
-                throw new Error(`TXN_SEQUENCE_CONFLICT:${detail}`);
-            }
-            throw new Error(`REQUEST_FAILED:${res.status}`);
-        }
-        const payload = await res.json() as TransactionMutationResponse;
-        const committedSeq = typeof payload.lastCommittedSeq === 'number'
-            ? payload.lastCommittedSeq
-            : (typeof payload.transaction?.seq === 'number' ? payload.transaction.seq : null);
-        if (typeof committedSeq === 'number') {
-            await this._persistLastCommittedSeq(chatId, committedSeq);
-        }
-        if (payload.transaction?.id) {
-            this.setIntegratedTxId(chatId, payload.transaction.id);
-        }
-        const txError = payload.error as TransactionErrorPayload | undefined;
-        if (txError && txError.code === 'TXN_SEQUENCE_CONFLICT') {
-            const detail = txError.message || '事务序列冲突';
-            throw new Error(`TXN_SEQUENCE_CONFLICT:${detail}`);
-        }
+    private async _handleTransactionResponse(chatId: string, payload: TransactionMutationResponse): Promise<void> {
+        await this._txEngine.handleResponse(chatId, payload);
     }
 
     private async _queryLatestTransaction(chatId: string, scope: TransactionScope, idempotencyKey: string): Promise<TransactionQueryResponse | null> {
-        const query = new URLSearchParams({
-            scope,
-            idempotencyKey
-        }).toString();
-        const res = await pluginFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.TRANSACTIONS(chatId)}?${query}`);
-        if (!res.ok) return null;
-        return await res.json() as TransactionQueryResponse;
+        try {
+            return await BridgeDispatcher.chat.getTransactions(chatId, { scope, idempotencyKey });
+        } catch (e) {
+            console.warn(`[PersistenceService] 查询最新事务失败`, e);
+            return null;
+        }
     }
 
     private async _queryTransactionsAfterSeq(chatId: string, afterSeq: number, scope: TransactionScope): Promise<TransactionQueryResponse | null> {
-        const query = new URLSearchParams({
-            afterSeq: String(afterSeq),
-            scope
-        }).toString();
-        const res = await pluginFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.TRANSACTIONS(chatId)}?${query}`);
-        if (!res.ok) return null;
-        return await res.json() as TransactionQueryResponse;
+        try {
+            return await BridgeDispatcher.chat.getTransactions(chatId, { afterSeq: String(afterSeq), scope });
+        } catch (e) {
+            console.warn(`[PersistenceService] 查询增量事务失败`, e);
+            return null;
+        }
     }
 
     private async _runReconciliationCompensation(chatId: string, scope: TransactionScope, idempotencyKey: string): Promise<void> {
@@ -175,15 +161,16 @@ export class PersistenceService {
             }
         }
         if (!tx) return;
-        const resUrl = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.ROLLBACK_TRANSACTION(chatId, tx.id)}`;
-        const rollbackRes = await pluginFetch(resUrl, { method: 'POST' });
-        if (!rollbackRes.ok) return;
-        const rollbackPayload = await rollbackRes.json() as TransactionMutationResponse;
-        const rollbackSeq = typeof rollbackPayload.lastCommittedSeq === 'number'
-            ? rollbackPayload.lastCommittedSeq
-            : null;
-        if (typeof rollbackSeq === 'number') {
-            await this._persistLastCommittedSeq(chatId, rollbackSeq);
+        try {
+            const rollbackPayload = await BridgeDispatcher.chat.rollbackTransaction(chatId, tx.id) as TransactionMutationResponse;
+            const rollbackSeq = typeof rollbackPayload.lastCommittedSeq === 'number'
+                ? rollbackPayload.lastCommittedSeq
+                : null;
+            if (typeof rollbackSeq === 'number') {
+                await this._persistLastCommittedSeq(chatId, rollbackSeq);
+            }
+        } catch (e) {
+            console.warn(`[PersistenceService] 回滚事务失败`, e);
         }
     }
 
@@ -191,21 +178,21 @@ export class PersistenceService {
         chatId: string,
         scope: TransactionScope,
         payloadDigest: string,
-        sender: (ctx: TransactionContextPayload) => Promise<Response>
+        sender: (ctx: TransactionContextPayload) => Promise<any>
     ): Promise<void> {
-        const transactionContext = this._buildTransactionContext(chatId, scope, payloadDigest);
+        const transactionContext = await this._buildTransactionContext(chatId, scope, payloadDigest);
         try {
-            const firstRes = await sender(transactionContext);
-            await this._handleTransactionResponse(chatId, firstRes);
+            const payload = await sender(transactionContext);
+            await this._handleTransactionResponse(chatId, payload);
             return;
         } catch (error) {
             const isConflict = error instanceof Error && error.message.startsWith('TXN_SEQUENCE_CONFLICT:');
             if (!isConflict) throw error;
         }
         await this._runReconciliationCompensation(chatId, scope, transactionContext.idempotencyKey);
-        const retryContext = this._buildTransactionContext(chatId, scope, payloadDigest);
-        const retryRes = await sender(retryContext);
-        await this._handleTransactionResponse(chatId, retryRes);
+        const retryContext = await this._buildTransactionContext(chatId, scope, payloadDigest);
+        const retryPayload = await sender(retryContext);
+        await this._handleTransactionResponse(chatId, retryPayload);
     }
 
      /**
@@ -215,13 +202,9 @@ export class PersistenceService {
         const start = Date.now();
         while (Date.now() - start < maxWaitMs) {
             try {
-                const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.SYNC_STATUS(chatId)}`;
-                const res = await pluginFetch(endpoint);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success && data.isTransactionsCompleted) {
-                        return true;
-                    }
+                const data = await BridgeDispatcher.chat.getSyncStatus(chatId);
+                if (data.success && data.isTransactionsCompleted) {
+                    return true;
                 }
             } catch (e) {
                 console.warn(`[PersistenceService] 获取事务状态失败`, e);
@@ -242,22 +225,15 @@ export class PersistenceService {
 
             try {
                 // 2. 请求当前最新的事务状态
-                const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.SYNC_STATUS(chatId)}`;
-                const res = await pluginFetch(endpoint);
+                const data = await BridgeDispatcher.chat.getSyncStatus(chatId);
                 
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success) {
-                        const remoteSeq = typeof data.lastCommittedSeq === 'number' ? data.lastCommittedSeq : 0;
-                        const remoteTxId = data.lastTransactionId || '';
-                        
-                        // 3. 同步本地 ID 到前端存储
-                        console.log(`[PersistenceService] 执行事务对齐: LocalSeq=${this._getLastCommittedSeq(chatId)}, RemoteSeq=${remoteSeq}, RemoteTxId=${remoteTxId}`);
-                        await this._persistLastCommittedSeq(chatId, remoteSeq);
-                        if (remoteTxId) {
-                            this.setIntegratedTxId(chatId, remoteTxId);
-                        }
-                    }
+                if (data.success) {
+                    const remoteSeq = typeof data.lastCommittedSeq === 'number' ? data.lastCommittedSeq : 0;
+                    const remoteTxId = data.lastTransactionId || '';
+                    
+                    // 3. 同步本地 ID 到前端存储
+                    console.log(`[PersistenceService] 执行事务对齐: LocalSeq=${this._getLastCommittedSeq(chatId)}, RemoteSeq=${remoteSeq}, RemoteTxId=${remoteTxId}`);
+                    await this._txEngine.alignState(chatId, remoteSeq, remoteTxId);
                 }
             } catch (e) {
                 console.warn(`[PersistenceService] 事务 ID 对齐失败 [ID: ${chatId}]`, e);
@@ -277,72 +253,76 @@ export class PersistenceService {
             await this._waitForTransactions(chatId);
 
             try {
-                const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.GET(chatId)}`;
-                const res = await pluginFetch(endpoint);
-                if (res.status === 200) {
-                    const data = await res.json();
-                    if (Array.isArray(data)) {
-                        let messages = data;
-                        let activeLeafId: string | null = null;
-                        let metadata: any = null;
+                const data = await BridgeDispatcher.chat.getChat(chatId);
+                
+                // 核心修复：如果数据存在且是数组，按正常流程同步节点池
+                if (data && Array.isArray(data)) {
+                    let messages = data;
+                    let activeLeafId: string | null = null;
+                    let metadata: any = null;
 
-                        if (data.length > 0 && data[0].type === 'metadata') {
-                            metadata = data[0];
-                            activeLeafId = metadata.activeLeafId || null;
-                            messages = data.slice(1);
-                        }
-                        const remoteCommittedSeq = this._extractLastCommittedSeq(metadata);
-                        if (typeof remoteCommittedSeq === 'number') {
-                            await this._persistLastCommittedSeq(chatId, remoteCommittedSeq);
-                        } else {
-                            const localSavedSeq = lwStorage.get('lumina-chat.lastCommittedTxnSeq', 0, 'Chat');
-                            if (typeof localSavedSeq === 'number') this._setLastCommittedSeq(chatId, localSavedSeq);
-                        }
-                        const remoteLastTxId = this._extractLastTransactionId(metadata);
-                        if (remoteLastTxId) {
-                            this.setIntegratedTxId(chatId, remoteLastTxId);
-                        }
-
-                        const normalizedNodes = SyncUtils.ensureFingerprints(messages);
-
-                        // 补充：确保反序列化时恢复基础角色属性，因为独立存储可能没有完整的 metadata
-                        normalizedNodes.forEach(n => {
-                            if (!n.name) {
-                                n.name = n.is_user ? 'You' : 'Assistant';
-                            }
-                        });
-
-                        this.store.setNodes(normalizedNodes);
-
-                        if (activeLeafId) {
-                            this.store.activeLeafId = activeLeafId;
-                        } else if (normalizedNodes.length > 0) {
-                            this.store.activeLeafId = normalizedNodes[normalizedNodes.length - 1].id;
-                        }
-
-                        console.log(`[PersistenceService] 已从独立存储加载 ${normalizedNodes.length} 条消息`);
-
-                        if (metadata && metadata.pluginData) {
-                            pluginManager.callHooks('onMetadataImport' as any, metadata.pluginData);
-                        } else if (this.store.activeLeafId) {
-                            const activeNode = this.store.getNode(this.store.activeLeafId);
-                            if (activeNode && activeNode.extra) {
-                                const recoveredData = {
-                                    tier1: activeNode.extra.tier1Snapshot,
-                                    tier3: activeNode.extra.tier3Snapshot,
-                                    nextPlan: activeNode.extra.nextPlan
-                                };
-                                pluginManager.callHooks('onMetadataImport' as any, recoveredData);
-                            }
-                        }
-                        return true;
+                    if (data.length > 0 && data[0].type === 'metadata') {
+                        metadata = data[0];
+                        activeLeafId = metadata.activeLeafId || null;
+                        messages = data.slice(1);
                     }
-                } else if (res.status === 404) {
+                    const remoteCommittedSeq = this._extractLastCommittedSeq(metadata);
+                    if (typeof remoteCommittedSeq === 'number') {
+                        await this._persistLastCommittedSeq(chatId, remoteCommittedSeq);
+                    } else {
+                        const localSavedSeq = lwStorage.get('lumina-chat.lastCommittedTxnSeq', 0, 'Chat');
+                        if (typeof localSavedSeq === 'number') this._setLastCommittedSeq(chatId, localSavedSeq);
+                    }
+                    const remoteLastTxId = this._extractLastTransactionId(metadata);
+                    if (remoteLastTxId) {
+                        this.setIntegratedTxId(chatId, remoteLastTxId);
+                    }
+
+                    const normalizedNodes = SyncUtils.ensureFingerprints(messages);
+
+                    // 补充：确保反序列化时恢复基础角色属性，因为独立存储可能没有完整的 metadata
+                    normalizedNodes.forEach(n => {
+                        if (!n.name) {
+                            n.name = n.is_user ? 'You' : 'Assistant';
+                        }
+                    });
+
+                    this.store.setNodes(normalizedNodes);
+
+                    if (activeLeafId) {
+                        this.store.activeLeafId = activeLeafId;
+                    } else if (normalizedNodes.length > 0) {
+                        this.store.activeLeafId = normalizedNodes[normalizedNodes.length - 1].id;
+                    }
+
+                    console.log(`[PersistenceService] 已从独立存储加载 ${normalizedNodes.length} 条消息`);
+
+                    if (metadata && metadata.pluginData) {
+                        pluginManager.callHooks('onMetadataImport' as any, metadata.pluginData);
+                    } else if (this.store.activeLeafId) {
+                        const activeNode = this.store.getNode(this.store.activeLeafId);
+                        if (activeNode && activeNode.extra) {
+                            const recoveredData = {
+                                tier1: activeNode.extra.tier1Snapshot,
+                                tier3: activeNode.extra.tier3Snapshot,
+                                nextPlan: activeNode.extra.nextPlan
+                            };
+                            pluginManager.callHooks('onMetadataImport' as any, recoveredData);
+                        }
+                    }
+                    return true;
+                } else {
+                    // 数据为空（新会话），视为加载成功并初始化插件状态
+                    console.log(`[PersistenceService] 目标会话 ${chatId} 为空，已初始化加载状态。`);
+                    pluginManager.callHooks('onMetadataImport' as any, null);
+                    return true;
+                }
+            } catch (e: any) {
+                if (e?.message?.includes('404')) {
                     // 核心修复：新建对话时，虽然没有独立存储，也应触发插件重置钩子
                     pluginManager.callHooks('onMetadataImport' as any, null);
                     return true;
                 }
-            } catch (e) {
                 console.warn('[PersistenceService] 加载失败:', e);
             }
             return false;
@@ -368,11 +348,12 @@ export class PersistenceService {
 
             try {
                 // 1. 获取后端当前状态 (快照对比)
-                const endpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.GET(chatId)}`;
-                const res = await pluginFetch(endpoint);
                 let remoteData: any[] = [];
-                if (res.ok) {
-                    remoteData = await res.json();
+                try {
+                    const data = await BridgeDispatcher.chat.getChat(chatId);
+                    remoteData = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
+                } catch (e) {
+                    // ignore error, assume empty
                 }
                 const remoteMetadata = remoteData.find(d => d.type === 'metadata') || null;
                 const remoteCommittedSeq = this._extractLastCommittedSeq(remoteMetadata);
@@ -398,14 +379,9 @@ export class PersistenceService {
                 if (forceFull || remoteNodes.length === 0) {
                     console.log(`[PersistenceService] 执行全量覆盖保存 [ID: ${chatId}]`);
                     const payload = this._prepareStoragePayload();
-                    const payloadDigest = this._digestPayload(payload);
+                    const payloadDigest = TransactionEngine.digest(payload);
                     await this._mutateWithCompensation(chatId, 'chat.save', payloadDigest, async (transactionContext) => {
-                        const saveEndpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.SAVE(chatId)}`;
-                        return await pluginFetch(saveEndpoint, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ data: payload, transactionContext })
-                        });
+                        return await BridgeDispatcher.chat.saveChat(chatId, { data: payload, transactionContext });
                     });
                     
                     // 全量同步后的状态清理
@@ -431,26 +407,19 @@ export class PersistenceService {
                             pluginData: pluginMetadata
                         }
                     };
-                    const payloadDigest = this._digestPayload(patchPayload);
+                    const payloadDigest = TransactionEngine.digest(patchPayload);
                     await this._mutateWithCompensation(chatId, 'chat.patch', payloadDigest, async (transactionContext) => {
                         const requestBody = {
                             ...patchPayload,
                             transactionContext
                         };
-                        const patchEndpoint = `${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.PATCH(chatId)}`;
-                        const res = await pluginFetch(patchEndpoint, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(requestBody)
+                        const payload = await BridgeDispatcher.chat.patchChat(chatId, requestBody);
+                        
+                        // 标记成功同步
+                        [...diff.added, ...diff.updated].forEach(n => {
+                            n.syncStatus = 'synced';
                         });
-
-                        if (res.ok) {
-                            // 标记成功同步
-                            [...diff.added, ...diff.updated].forEach(n => {
-                                n.syncStatus = 'synced';
-                            });
-                        }
-                        return res;
+                        return payload;
                     });
                 }
             } catch (e) {

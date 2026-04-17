@@ -29,6 +29,7 @@ import { GenerationSession } from './core/GenerationSession.js';
 import { LuminaGenerationTask, TaskCallbacks } from './core/LuminaGenerationTask.js';
 import { NexusClient } from './core/NexusClient.js';
 import { ForgeAgentController } from './core/ForgeAgentController.js';
+import { useModalStore, ModalOptions } from '../stores/useModalStore.js';
 
 /**
  * LuminaWeave API 入口 (Facade)
@@ -618,6 +619,11 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             stEventSource.on(event_types[ST_EVENT.STREAM_TOKEN_RECEIVED], handleStreamToken);
             stEventSource.on(event_types[ST_EVENT.SMOOTH_STREAM_TOKEN_RECEIVED], handleStreamToken);
 
+            // 核心事件：切换对话或对话加载完成 (解决启动时 ChatID 无效导致的同步跳过)
+            stEventSource.on(event_types[ST_EVENT.CHAT_LOADED], () => handleIncrementalSync('CHAT_LOADED'));
+            stEventSource.on(event_types[ST_EVENT.CHAT_CHANGED], () => handleIncrementalSync('CHAT_CHANGED'));
+            stEventSource.on(event_types[ST_EVENT.CHARACTER_PAGE_LOADED], () => handleIncrementalSync('CHARACTER_PAGE_LOADED'));
+
             // 消息编辑、删除、更新事件
             stEventSource.on(event_types[ST_EVENT.MESSAGE_EDITED], () => handleIncrementalSync('MESSAGE_EDITED'));
             stEventSource.on(event_types[ST_EVENT.MESSAGE_DELETED], () => handleIncrementalSync('MESSAGE_DELETED'));
@@ -847,11 +853,14 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         const finalMessages = llmEngine.cleanMessages(finalPayload);
         const generationSettings = prompt.settings || {};
 
-        // 核心修复：支持流式无限输出设置
+        if (typeof generationSettings.seed === 'number' && generationSettings.seed < 0) {
+            delete generationSettings.seed;
+        }
+
         if (lwStorage.get('lumina-chat.unlimitedResponse', false, 'Global')) {
             console.log('[LuminaWeave] 流式无限输出已开启，移除 max_tokens 限制');
             delete generationSettings.max_tokens;
-            delete generationSettings.max_length; // 兼容不同 API
+            delete generationSettings.max_length;
         }
 
         const task = new LuminaGenerationTask(this._session);
@@ -1778,6 +1787,15 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             // @ts-ignore
             window.toastr[type](message, title, { timeOut: duration });
         }
+    }
+
+    /**
+     * 显示全局确认弹窗 (异步)
+     * 解决 Tauri/Android 环境下 window.confirm 不可用的问题
+     */
+    async confirm(opt: string | ModalOptions): Promise<boolean> {
+        const modal = useModalStore();
+        return await modal.confirm(opt);
     }
 }
 
