@@ -12,6 +12,9 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.66",
+    "@ai-sdk/google": "^3.0.58",
+    "@ai-sdk/openai": "^3.0.50",
     "@chenglou/pretext": "^0.0.4",
     "@langchain/core": "^1.1.39",
     "@langchain/langgraph": "^1.2.8",
@@ -20,6 +23,7 @@
     "@logicflow/layout": "^2.1.0",
     "@logicflow/vue-node-registry": "^1.2.0-alpha.7",
     "@microsoft/fetch-event-source": "^2.0.1",
+    "ai": "^6.0.146",
     "gsap": "^3.14.2",
     "marked": "^17.0.6",
     "openai": "^6.33.0",

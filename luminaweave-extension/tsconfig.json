@@ -17,6 +17,8 @@
     ],
     //"baseUrl": ".",
     "paths": {
+      "ai": ["./node_modules/ai"],
+      "@ai-sdk/*": ["./node_modules/@ai-sdk/*"],
       "@/*": [
         "./src/*"
       ],

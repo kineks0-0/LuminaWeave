@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StreamHandler } from '../StreamHandler';
 import { lwStorage } from '../../storage.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 
 vi.mock('../../storage.js', () => ({
     lwStorage: {
@@ -9,44 +10,112 @@ vi.mock('../../storage.js', () => ({
     }
 }));
 
-vi.mock('../st-adapter/STClient', () => ({
-    STClient: {
-        getCsrfToken: vi.fn(async () => 'csrf-token')
-    }
-}));
+function createMockStreamingHandle() {
+    let busy = true;
+    let tokenListener: ((token: string) => void) | undefined;
+    let committedListener: ((data: any) => void) | undefined;
+    let doneListener: ((data: any) => void) | undefined;
+    let errorListener: ((error: any) => void) | undefined;
 
-vi.mock('../NexusClient.js', () => {
-    const MockNexusClient = function(this: any) {
-        this.attachStream = vi.fn(async (config: any, callbacks: any) => {
-            // 模拟一段数据传输
-            if (callbacks?.onDelta) {
-                callbacks.onDelta('def');
-            }
-            // 核心逻辑：模拟后端提交，这会触发 TRANSACTION_COMMITTED 事件
-            if (callbacks?.onBackendCommitted) {
-                await callbacks.onBackendCommitted({ 
-                    lastTransactionId: 'tx_1', 
-                    activeLeafId: 'leaf_1' 
-                });
-            }
-            // 核心逻辑：模拟完成信号，使 resumeToTerminal 这里的 Promise 能够完成
-            if (callbacks?.onDone) {
-                await callbacks.onDone({ 
-                    status: 'success',
-                    lastTransactionId: 'tx_1',
-                    activeLeafId: 'leaf_1'
-                });
-            }
-        });
+    const handle = {
+        isBusy: () => busy,
+        abort: vi.fn(() => {
+            busy = false;
+        }),
+        onToken(callback: (token: string) => void) {
+            tokenListener = callback;
+            return handle;
+        },
+        onCommitted(callback: (data: any) => void) {
+            committedListener = callback;
+            return handle;
+        },
+        onDone(callback: (data: any) => void) {
+            doneListener = callback;
+            return handle;
+        },
+        onError(callback: (error: any) => void) {
+            errorListener = callback;
+            return handle;
+        },
+        emitToken(token: string) {
+            tokenListener?.(token);
+        },
+        emitCommitted(data: any) {
+            committedListener?.(data);
+        },
+        emitDone(data: any) {
+            busy = false;
+            doneListener?.(data);
+        },
+        emitError(error: any) {
+            busy = false;
+            errorListener?.(error);
+        }
     };
-    return { NexusClient: MockNexusClient };
-});
+
+    return handle;
+}
+
+function injectMockBridge() {
+    const bridge = {
+        chat: {
+            listChats: vi.fn(),
+            getChat: vi.fn(),
+            saveChat: vi.fn(),
+            patchChat: vi.fn(),
+            saveMessage: vi.fn(),
+            deleteMessage: vi.fn(),
+            getSyncStatus: vi.fn(),
+            getTransactions: vi.fn(),
+            rollbackTransaction: vi.fn()
+        },
+        nexus: {
+            generateStream: vi.fn(),
+            attachStream: vi.fn(),
+            stop: vi.fn(),
+            fetchModels: vi.fn(),
+            getStatus: vi.fn()
+        },
+        forge: {
+            listSessions: vi.fn(),
+            getSession: vi.fn(),
+            saveSession: vi.fn(),
+            updateSession: vi.fn()
+        },
+        settings: {
+            getSettings: vi.fn(),
+            saveSettings: vi.fn()
+        },
+        presets: {
+            listPresets: vi.fn(),
+            importPreset: vi.fn(),
+            exportPreset: vi.fn(),
+            restoreDefaults: vi.fn()
+        },
+        extensionStore: {
+            getJson: vi.fn(),
+            setJson: vi.fn(),
+            updateJson: vi.fn(),
+            deleteJson: vi.fn(),
+            listKeys: vi.fn(),
+            setBlob: vi.fn(),
+            getBlob: vi.fn()
+        }
+    };
+
+    BridgeDispatcher.inject(bridge as any);
+    return bridge;
+}
 
 describe('StreamHandler reconnect buffer sync', () => {
+    let bridge: ReturnType<typeof injectMockBridge>;
+
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useRealTimers();
         vi.mocked(lwStorage.get).mockImplementation((_: string, defaultValue: unknown) => defaultValue);
+        bridge = injectMockBridge();
     });
 
     it('should resync buffer even when server buffer is shorter than local progress', async () => {
@@ -59,21 +128,17 @@ describe('StreamHandler reconnect buffer sync', () => {
             lastRaw = rawText || '';
         });
 
-        vi.stubGlobal('fetch', vi.fn(async () => ({
-            ok: true,
-            json: async () => ({
-                isGenerating: true,
-                buffer: 'abc',
-                status: 'running',
-                errorMessage: null
-            })
-        })));
+        bridge.nexus.getStatus.mockResolvedValue({
+            isGenerating: true,
+            buffer: 'abc',
+            status: 'running',
+            errorMessage: null
+        });
 
         await handler.syncWithServer('chat_1');
 
         expect(handler.responseBuffer).toBe('abc');
         expect(lastRaw).toBe('abc');
-        vi.unstubAllGlobals();
     });
     it('should emit TRANSACTION_COMMITTED and trigger sync when transaction IDs mismatch', async () => {
         vi.useFakeTimers();
@@ -98,15 +163,12 @@ describe('StreamHandler reconnect buffer sync', () => {
             committedInfo = info;
         });
 
-        vi.stubGlobal('fetch', vi.fn(async () => ({
-            ok: true,
-            json: async () => ({
-                isGenerating: false,
-                buffer: 'abc',
-                lastTransactionId: 'tx_new',
-                status: 'success'
-            })
-        })));
+        bridge.nexus.getStatus.mockResolvedValue({
+            isGenerating: false,
+            buffer: 'abc',
+            lastTransactionId: 'tx_new',
+            status: 'success'
+        });
 
         await handler.syncWithServer('chat_1');
 
@@ -120,54 +182,40 @@ describe('StreamHandler reconnect buffer sync', () => {
         await vi.runAllTimersAsync();
         expect(mockSyncFromST).toHaveBeenCalled();
 
-        vi.unstubAllGlobals();
         delete (window as any).LuminaWeave;
         vi.useRealTimers();
     });
 
     it('should resume streaming to terminal state via attach SSE', async () => {
         const handler = new StreamHandler();
+        const handle = createMockStreamingHandle();
         handler.responseBuffer = '';
         handler.isGenerating = false;
 
-        const responses = [
-            {
-                ok: true,
-                json: async () => ({
-                    isGenerating: true,
-                    buffer: '',
-                    rawBuffer: 'abc',
-                    generationId: 'gen_1',
-                    status: 'running',
-                    errorMessage: null
-                })
-            },
-            {
-                ok: true,
-                json: async () => ({
-                    isGenerating: false,
-                    buffer: '',
-                    rawBuffer: 'abcdef',
-                    generationId: 'gen_1',
+        bridge.nexus.getStatus.mockResolvedValue({
+            isGenerating: true,
+            buffer: '',
+            rawBuffer: 'abc',
+            generationId: 'gen_1',
+            status: 'running',
+            errorMessage: null
+        });
+        bridge.nexus.attachStream.mockImplementation(() => {
+            queueMicrotask(() => {
+                handle.emitToken('def');
+                handle.emitDone({
                     status: 'success',
-                    errorMessage: null,
-                    lastTransactionId: 'tx_1'
-                })
-            }
-        ];
-
-        vi.stubGlobal('fetch', vi.fn(async () => {
-            const next = responses.shift();
-            if (!next) throw new Error('no more mock responses');
-            return next;
-        }));
+                    lastTransactionId: 'tx_1',
+                    activeLeafId: 'leaf_1'
+                });
+            });
+            return handle;
+        });
 
         await handler.resumeToTerminal('chat_1');
 
         expect(handler.responseBuffer).toBe('abcdef');
         expect(handler.isGenerating).toBe(false);
-
-        vi.unstubAllGlobals();
     });
 
     it('should keep raw XML buffer and only emit Chat_Reply content when filter is enabled', () => {
@@ -354,14 +402,11 @@ describe('StreamHandler reconnect buffer sync', () => {
 
     it('resumeToTerminal falls back to pollUntilTerminal if backend lacks generationId', async () => {
         const handler = new StreamHandler();
-        vi.stubGlobal('fetch', vi.fn(async () => ({
-            ok: true,
-            json: async () => ({
-                isGenerating: true,
-                generationId: null, 
-                rawBuffer: 'Poll prefix'
-            })
-        })));
+        bridge.nexus.getStatus.mockResolvedValue({
+            isGenerating: true,
+            generationId: null,
+            rawBuffer: 'Poll prefix'
+        });
 
         // @ts-ignore - access private for test
         const pollSpy = vi.spyOn(handler, 'pollUntilTerminal').mockResolvedValue(undefined);
@@ -369,6 +414,5 @@ describe('StreamHandler reconnect buffer sync', () => {
         await handler.resumeToTerminal('chat_fallback_1');
 
         expect(pollSpy).toHaveBeenCalled();
-        vi.unstubAllGlobals();
     });
 });

@@ -7,9 +7,9 @@ describe('ViewComponentRegistry documentation', () => {
 
         expect(docs).toContain('ForgeChoiceGroup("kickoff_intent", "direction", "标题内容", "选项1|选项2|选项3")');
         expect(docs).toContain('ForgeForm("kickoff_intent", "标题内容", "补充说明内容", "concept")');
-        expect(docs).toContain('`formId`: 表单 ID');
-        expect(docs).toContain('`fieldKey`: 字段键');
-        expect(docs).toContain('`tone`: 摘要卡的语气/视觉风格标记');
+        expect(docs).toContain('表单 ID');
+        expect(docs).toContain('字段键');
+        expect(docs).toContain('摘要卡的语气/视觉风格标记');
         expect(docs).not.toContain('"示例"');
         expect(docs).not.toContain('示例", "示例"');
     });

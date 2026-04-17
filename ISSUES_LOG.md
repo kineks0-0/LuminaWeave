@@ -27,6 +27,11 @@
 
 ---
 
+## 5. 聊天区域空白修复 (2026-04-15)
+- **错误消息**: 聊天区域为空白。控制台记录 `[ChatManager] 跳过同步: 无效的 ChatID`。
+- **根本原因假设**: 系统的初始同步(`api.init()`)触发时，SillyTavern 的上下文或 ChatID 尚未就绪。由于缺乏对 `CHAT_LOADED` 或 `CHAT_CHANGED` 事件的监听，系统在环境最终准备好后没有再次触发同步，导致 UI 停留初始空状态。
+- **验证手段**: 在 `LuminaWeaveAPI` 中增加事件监听。刷新页面后通过日志确认 `handleIncrementalSync` 是否被触发并成功拉取数据。
+
 ## 2. 验证修复计划
 
 1. 研究 `BaseXMLInterceptor` 和 `XMLInterceptor` 的 `deriveStreamState` 逻辑。

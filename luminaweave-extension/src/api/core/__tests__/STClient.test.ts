@@ -1,27 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-let helper: any;
-
-vi.mock('../EnvDetector.js', () => ({
-    EnvDetector: {
-        get stHelper() {
-            return helper;
-        },
-        get stMain() {
-            return undefined;
-        },
-        get ctx() {
-            return undefined;
-        }
-    }
-}));
-
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { EnvDetector } from '../EnvDetector.js';
 import { STClient } from '../st-adapter/STClient';
 
 describe('STClient - extra normalization', () => {
+    let helper: any;
+
     beforeEach(() => {
         helper = undefined;
         vi.restoreAllMocks();
+        vi.spyOn(EnvDetector, 'stHelper', 'get').mockImplementation(() => helper);
+        vi.spyOn(EnvDetector, 'stMain', 'get').mockImplementation(() => undefined as any);
+        vi.spyOn(EnvDetector, 'ctx', 'get').mockImplementation(() => undefined as any);
     });
 
     it('updateMessages should flatten nested extra.extra into extra', async () => {

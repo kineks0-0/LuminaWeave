@@ -12,6 +12,8 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
       '@shared': resolve(__dirname, '../shared'),
+      'ai': resolve(__dirname, './node_modules/ai'),
+      '@ai-sdk': resolve(__dirname, './node_modules/@ai-sdk'),
     }
   },
   build: {
@@ -22,7 +24,8 @@ export default defineConfig({
       formats: ['es'],
       fileName: () => 'index.js'
     },
-    sourcemap: true,
+    sourcemap: 'inline',
+    //sourcemap: true,
     rollupOptions: {
       external: [
         '/scripts/slash-commands.js',

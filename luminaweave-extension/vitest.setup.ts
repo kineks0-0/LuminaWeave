@@ -39,6 +39,9 @@ g.window = {
     selected_chat: 'test_chat'
 };
 
+import { BridgeDispatcher } from '../shared/api/BridgeDispatcher.js';
+import { HttpBridgeAdapter } from './src/api/adapters/HttpBridgeAdapter.js';
+
 // Mock fetch
 g.fetch = vi.fn(() =>
   Promise.resolve({
@@ -47,3 +50,6 @@ g.fetch = vi.fn(() =>
     json: () => Promise.resolve({}),
   } as Response)
 );
+
+// 初始化 Bridge
+BridgeDispatcher.inject(new HttpBridgeAdapter());

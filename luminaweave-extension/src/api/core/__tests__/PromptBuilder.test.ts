@@ -181,9 +181,9 @@ describe('PromptBuilder', () => {
         expect(result[0].content).not.toContain('<Chat_Reply>');
         expect(result[0].content).toContain('Forge <V> DSL 结构化收集规范');
         expect(result[0].content).toContain('ForgeInput("role_core_profile", "name", "角色姓名", "例如：林雾")');
-        expect(result[0].content).toContain('`formId`: 表单 ID');
-        expect(result[0].content).toContain('`fieldKey`: 字段键');
-        expect(result[0].content).toContain('不要写成 XML 属性式伪语法');
+        expect(result[0].content).toContain('绝对禁止写成 XML 标签或属性式伪语法');
+        expect(result[0].content).toContain('参数按位置顺序传入，不得使用任何 key=value 写法。');
+        expect(result[0].content).toContain('ForgeMissingFields("power_system", "name,origin")');
     });
 
     it('当设置为管道式时，提示词文档应只暴露管道语法', () => {

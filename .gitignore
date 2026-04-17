@@ -16,6 +16,7 @@ thumbs.db
 
 # 第三方 文档
 TavernHelper@types/
+TauriTavernDocs/
 A.U.T.O制卡思路/
 
 # 插件本身数据
@@ -30,6 +31,7 @@ luminaweave-server/data/
 tmp/
 *.code-workspace
 .omm/
+.claude/
 
 # 编译脚本
 *.ps1
