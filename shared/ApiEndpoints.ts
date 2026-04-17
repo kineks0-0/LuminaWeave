@@ -37,6 +37,14 @@ export const API_ROUTES = {
         SAVE: '/forge/sessions',
         UPDATE: (sessionId: string) => `/forge/sessions/${sessionId}`
     },
+    CONVERSATION: {
+        LIST: '/conversations',
+        GET: (id: string) => `/conversations/${id}`,
+        SAVE: (id: string) => `/conversations/${id}`,
+        MUTATE: (id: string) => `/conversations/${id}`,
+        TRANSACTIONS: (id: string) => `/conversations/${id}/transactions`,
+        ROLLBACK_TRANSACTION: (id: string, txId: string) => `/conversations/${id}/transactions/${txId}/rollback`
+    },
     NEXUS: {
         MODELS: (providerId: string) => `/nexus/models/${providerId}`,
         GENERATE: '/nexus/generate',

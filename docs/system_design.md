@@ -54,6 +54,10 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
 - **影子图谱缓存**：所有修改首先发生在 `localChatData`（影子数据库）中，UI 层单向订阅。
 - **多级作用域（Scope Resolver）**：`Global`、`Character`、`Chat`、`Session` 等多级持久化。
 - **选择性同步（Selective Sync）**：用户发送消息后，`commitToST()` 将本地 `localChatData` 压回 `window.chat`，然后通过 TavernHelper 调用生成函数。
+- **统一会话文档 (ConversationDocument) [UPDATED v6.0-dev]**：
+    - 每个会话现在以单个 `ConversationDocument` 作为业务真相源，统一承载 `chat / forge` 的节点数据、插件状态、`activeLeafId`、摘要与事务游标。
+    - 新文档主版本字段固定为 `schemaVersion`；旧 `metadata.version` 仅用于识别 legacy 数据，不再对前端公开。
+    - 服务端物理结构收敛为 `data/conversations/conversation_<id>.json`，事务日志独立为 `data/transactions/conversation_<id>.tx.jsonl`。
 - **会话类型扩展 (Conversation-aware Nodes) [NEW v6.0-dev]**：节点模型开始扩展 `conversationType`、`conversationId` 与 `nodeKind` 等元数据，用于承载主聊天、Forge 及后续更多扩展会话。系统正在从“只为聊天消息服务”的节点设计，演进为“统一会话节点容器”。
 - **统一会话查看上下文 (Conversation Context) [NEW v6.0-dev]**：在节点模型之上新增前端级 `ConversationContext` 解析层，统一提供当前 `source/session/activeLeaf/messages/lorebookView/memorySnapshot`。消息型插件默认消费这个解析层，而不是各自直连主聊天状态。
 - **统一会话世界线服务 (ConversationService) [UPDATED v6.0-dev]**：
@@ -80,7 +84,7 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
 - **流式显示解耦**：流式生成期间，系统会自动跳过指纹计算等重型操作（Streaming Skip），确保 UI 的“打字机”效果不因哈希计算而卡顿，仅在生成结束（Finalize）时固化状态。
 
 - **独立对话存储架构 (v5.5 优化)**:
-    - **一条消息即一个节点**: JSONL 物理结构实现了消息与记忆（Deltas & Snapshots）的强耦合映射。
+- **一条消息即一个节点**：节点事实模型保持不变，但其物理承载容器已升级为统一 `ConversationDocument`，不再要求前端感知 `metadata-first JSONL`。
     - **双标识符机制 [NEW]**: 
         - `id`: 稳定的、不可变的随机 UUID，用于时间线定位。
         - `fingerprint`: 基于内容的哈希值，用于精确追踪内容变更与同步。
@@ -89,7 +93,7 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
     - **分歧检测 (Divergence Detection) [NEW]**: 只有当本地的分支与 ST 的线性流均包含各自唯一的节点时，系统才判定为“不可自动合并的分歧”，触发 UI 比对。
     - **分支对齐同步 (Branch Alignment Sync) [NEW]**: 冲突解决（以 ST 为准）时不再抹除物理节点池，而是通过重新绑定 parentId 将 ST 的序列强制构筑为一条新的活跃路径。
     - **活跃叶子记忆锚定**: 同步时在活跃节点注入 Tier 1/3 快照。
-    - **事务日志层 (v5.8 新增)**: 每个 chat 独立维护 `chat_<chatId>.tx.jsonl`，记录 `id/seq/status/scope/payloadDigest/idempotencyKey/error`。
+- **事务日志层 (UPDATED v6.0-dev)**: 每个会话独立维护 `conversation_<id>.tx.jsonl`，记录 `id/seq/status/scope/payloadDigest/idempotencyKey/error`；主文档仅保存 `lastCommittedSeq / lastTransactionId` 游标。
     - **事务状态机 (v5.8 新增)**: 写路径统一遵循 `pending → running → committed|aborted|rolled_back`，禁止非法跃迁。
     - **幂等与序列校验 (v5.8 新增)**: 请求需携带 `t**开放扩展机制 [v6.0 增强]:**
 - **原生语义切割 (Deterministic Parsing)**：`BaseXMLInterceptor` 引入基于 Tokenizer 的确定性切割，支持通过 `deriveStreamState` 实时探测文本分段。
@@ -399,7 +403,7 @@ graph LR
   - **增量后代跟随 (Incremental Descendant Following)**：在 `Lumina-First` 模式下，若 ST 侧新节点是当前活跃指针的直接后代（如生成追加），系统会自动跟随刷新，保障操作连贯性。
 - **忽略 ST 信息 (Force Ignore ST)**: 支持通过 `options.ignoreST=true` 或全局设置 `lumina-chat.syncIgnoreST=true` 在“本地已有权威数据”前提下强制忽略 ST 侧新增/编辑，始终选择 `commitToST` 以插件侧为准回写（不触发冲突弹窗）。
 - **主动分歧嗅探 (Proactive Sniffing)**: 当本地分支与 ST 的线性流产生**真实的不可自动合并**（hasDivergence）分歧时，强制中断同步，抛出 `CHAT_CONFLICT` 事件并交由全局弹窗解决。
-- **Swipes 规范化递归 (Swipes Parsing)**: `_normalizeSTMessage` 负责递归解包 ST 的 `swipes_info` 结构。支持将当前活跃的 Swipe 内容合并入 `mes` 字段，确保比对视图内容的完整性。
+- **Swipes 规范化递归 (Swipes Parsing)**: `_normalizeSTMessage` 负责递归解包 ST 的 `swipes_info` 结构。支持将当前活跃的 Swipe 内容合并入 `mes` 字段，确保比对视图内容的完整性；当 `swipe_id` 变化时，系统将其视为切换到同父级的另一条世界线，而不是原节点正文被编辑。
 - **双向数据映射 (Dual-Field Mapping)**: `commitToST()` 在回写时同时维护 `mes` (展示层) 与 `message` (逻辑层) 字段，实现对 SillyTavern 不同版本 API 的全量覆盖。
 - **拓扑链还原**: 利用 `parentId` 的指针递归，确保在从独立存储恢复数据时，能完整还原发散的时间线图谱。
 
@@ -465,7 +469,7 @@ st-adapter 的目标是把“**ST 环境交互** / **协议转换** / **同步�
     - **性能优化 (Optimized Traversal)**：`WorldlineStore` 维护全局的邻接表（Children Map），将 `getChildren` 和 `removeSubtree` (物理剪枝) 等依赖子节点的查询操作复杂度降至 $O(1)$ 或 $O(N)$ 遍历，确保在大规模数据下的响应稳定性。
     - **活跃路径溯源**：`TimelineManager.getTrace(activeLeafId)` 负责从池中动态计算出当前的线性对话流，供 ST 同步使用。
     - **节点合并算法**：`SyncEngine.mergeNodePool` 确保从 ST 读取新消息时，能正确识别重复节点并链入新分支。
-    - **首行元数据机制**：JSONL 存储时在数组首位注入 `{"type":"metadata", "activeLeafId": "..."}`，读取时剥离并恢复状态。
+- **读时迁移机制 [UPDATED v6.0-dev]**：legacy `chat_*.jsonl` 与 `forge_sessions.json` 在读取时被迁移为 `ConversationDocument`，首次写入后统一落新格式；前端桥接层只消费迁移后的统一 DTO。
     - **差量截断机制**: `applyDelta`时比较 Lumina(L) 与 ST(S) 的长度。若 `L.length < S.length`，则从 S 的尾部反向执行 `STClient.deleteMessages`，实现物理意义上的世界线重置。
     - **Dagre 布局引擎 (v5.3) [NEW]**：
         - **高效分层布局**：放弃 `elkjs`，改用 `@logicflow/layout` 中的 Dagre 算法，通过 `rankdir` 实现横/纵向逻辑流自动分层。

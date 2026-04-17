@@ -255,6 +255,106 @@ describe('STSyncService', () => {
         expect(afterNodeIds).toEqual(['1', '2']);
     });
 
+    it('should switch activeLeafId to an existing sibling branch when swipe_id changes', async () => {
+        store.setNodes([
+            createNode({ id: 'root', parentId: null, mesRaw: 'root', fingerprint: 'fp_root', role: 'user', extra: { message_id: 0 } }),
+            createNode({
+                id: 'branch_a',
+                parentId: 'root',
+                mesRaw: 'branch A',
+                mesST: 'branch A',
+                mes: 'branch A',
+                fingerprint: 'fp_a',
+                role: 'assistant',
+                extra: { message_id: 1, swipe_id: 0, swipeCount: 2, activeSwipeText: 'branch A' }
+            }),
+            createNode({
+                id: 'branch_b',
+                parentId: 'root',
+                mesRaw: 'branch B',
+                mesST: 'branch B',
+                mes: 'branch B',
+                fingerprint: 'fp_b',
+                role: 'assistant',
+                extra: { message_id: 1, swipe_id: 1, swipeCount: 2, activeSwipeText: 'branch B' }
+            })
+        ]);
+        store.activeLeafId = 'branch_a';
+
+        const messages = [
+            createSTNode('root', { id: 'root', fingerprint: 'fp_root', message_id: 0 }),
+            createSTNode(
+                'branch B',
+                { id: 'branch_b', fingerprint: 'fp_b', message_id: 1, swipe_id: 1, swipeCount: 2, activeSwipeText: 'branch B' },
+                {
+                    message_id: 1,
+                    swipe_id: 1,
+                    swipes: ['branch A', 'branch B'],
+                    swipes_info: [
+                        { extra: { id: 'branch_a', fingerprint: 'fp_a', message_id: 1, swipe_id: 0, swipeCount: 2, activeSwipeText: 'branch A', mesRaw: 'branch A' } },
+                        { extra: { id: 'branch_b', fingerprint: 'fp_b', message_id: 1, swipe_id: 1, swipeCount: 2, activeSwipeText: 'branch B', mesRaw: 'branch B' } }
+                    ]
+                }
+            )
+        ];
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
+
+        await service.syncFromST();
+
+        expect(store.activeLeafId).toBe('branch_b');
+        expect(store.nodePool.map(n => n.id).sort()).toEqual(['branch_a', 'branch_b', 'root']);
+    });
+
+    it('should create a new sibling branch when swipe_id switches to an unseen swipe', async () => {
+        store.setNodes([
+            createNode({ id: 'root', parentId: null, mesRaw: 'root', fingerprint: 'fp_root', role: 'user', extra: { message_id: 0 } }),
+            createNode({
+                id: 'branch_a',
+                parentId: 'root',
+                mesRaw: 'branch A',
+                mesST: 'branch A',
+                mes: 'branch A',
+                fingerprint: 'fp_a',
+                role: 'assistant',
+                extra: { message_id: 1, swipe_id: 0, swipeCount: 2, activeSwipeText: 'branch A' }
+            })
+        ]);
+        store.activeLeafId = 'branch_a';
+
+        const messages = [
+            createSTNode('root', { id: 'root', fingerprint: 'fp_root', message_id: 0 }),
+            createSTNode(
+                'branch B',
+                { fingerprint: 'fp_b', message_id: 1, swipe_id: 1, swipeCount: 2, activeSwipeText: 'branch B' },
+                {
+                    message_id: 1,
+                    swipe_id: 1,
+                    swipes: ['branch A', 'branch B'],
+                    swipes_info: [
+                        { extra: { id: 'branch_a', fingerprint: 'fp_a', message_id: 1, swipe_id: 0, swipeCount: 2, activeSwipeText: 'branch A', mesRaw: 'branch A' } },
+                        { extra: { fingerprint: 'fp_b', message_id: 1, swipe_id: 1, swipeCount: 2, activeSwipeText: 'branch B', mesRaw: 'branch B' } }
+                    ]
+                }
+            )
+        ];
+        (STAdapter.getSnapshot as any).mockReturnValue(Promise.resolve({
+            raw: [],
+            lumina: messages,
+            idToIndex: new Map()
+        }));
+
+        await service.syncFromST();
+
+        expect(store.hasNode('branch_a')).toBe(true);
+        expect(store.hasNode('st_msg_1_swipe_1')).toBe(true);
+        expect(store.getNode('st_msg_1_swipe_1')?.parentId).toBe('root');
+        expect(store.activeLeafId).toBe('st_msg_1_swipe_1');
+    });
+
     it('should keep node_rb unique and set activeLeafId to node_rb after syncing node_sfx -> st_msg_1 -> node_rb chain', async () => {
         store.setNodes([
             createNode({ id: 'node_sfx', parentId: null, mesRaw: 'SFX', fingerprint: 'fp_sfx', role: 'user' }),

@@ -81,4 +81,68 @@ describe('STClient - extra normalization', () => {
         expect(firstMsg.extra?.compressionState).toBe('summary');
         expect((firstMsg.extra as Record<string, unknown> | undefined)?.extra).toBeUndefined();
     });
+
+    it('getRawMessages should project active swipe text and regexed display text', () => {
+        const getChatMessages = vi.fn(() => [{
+            message_id: 7,
+            name: 'Assistant',
+            role: 'assistant',
+            is_hidden: false,
+            message: 'old active',
+            swipe_id: 1,
+            swipes: ['first raw', 'second raw'],
+            swipes_info: [
+                { extra: { id: 'node_swipe_0', fingerprint: 'fp_0' } },
+                { extra: { id: 'node_swipe_1', fingerprint: 'fp_1', mesRaw: 'second raw' } }
+            ],
+            extra: { id: 'st_floor_id', fingerprint: 'fp_floor' }
+        }]);
+        const formatAsTavernRegexedString = vi.fn((text: string, _source: string, _destination: string, options?: { depth?: number }) => {
+            return `display:${text}:depth=${options?.depth ?? 'none'}`;
+        });
+
+        helper = {
+            getChatMessages,
+            formatAsTavernRegexedString
+        };
+
+        const messages = STClient.getRawMessages({ includeSwipes: true });
+
+        expect(messages).toHaveLength(1);
+        expect(messages[0].message).toBe('second raw');
+        expect(messages[0].mes).toBe('display:second raw:depth=0');
+        expect(messages[0].extra.id).toBe('node_swipe_1');
+        expect(messages[0].extra.message_id).toBe(7);
+        expect(messages[0].extra.swipe_id).toBe(1);
+        expect(messages[0].extra.swipeCount).toBe(2);
+        expect(messages[0].extra.activeSwipeText).toBe('second raw');
+    });
+
+    it('updateMessages should skip body overwrite when swipe_id no longer matches', async () => {
+        const setChatMessages = vi.fn(async () => {});
+        const getChatMessages = vi.fn(() => [{
+            message_id: 5,
+            role: 'assistant',
+            message: 'current swipe text',
+            swipe_id: 1,
+            swipes: ['older', 'current swipe text'],
+            swipes_info: [{}, {}],
+            extra: { id: 'node_current' }
+        }]);
+
+        helper = {
+            setChatMessages,
+            getChatMessages
+        };
+
+        await STClient.updateMessages([{
+            index: 0,
+            content: 'rewrite old branch',
+            expectedSwipeId: 0,
+            expectedActiveSwipeText: 'older',
+            extra: { id: 'node_old_branch' }
+        }], true);
+
+        expect(setChatMessages).not.toHaveBeenCalled();
+    });
 });

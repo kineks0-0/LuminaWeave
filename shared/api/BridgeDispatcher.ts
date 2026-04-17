@@ -23,6 +23,7 @@ export class BridgeDispatcher {
     public static get chat() { return this.bridge.chat; }
     public static get nexus() { return this.bridge.nexus; }
     public static get forge() { return this.bridge.forge; }
+    public static get conversation() { return this.bridge.conversation; }
     public static get settings() { return this.bridge.settings; }
     public static get presets() { return this.bridge.presets; }
     public static get extensionStore() { return this.bridge.extensionStore; }

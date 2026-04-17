@@ -2,7 +2,8 @@ import {
     ILuminaBridge, 
     IStreamingHandle, 
     IStreamingCallbacks,
-    IStoreService
+    IStoreService,
+    IConversationService
 } from '../../../../shared/api/IBridge.js';
 import { EnvDetector } from '../core/EnvDetector.js';
 import { globalNexusOrchestrator } from '../../../../shared/api/llm/NexusOrchestrator.js';
@@ -10,6 +11,11 @@ import { lwStorage } from '../storage.js';
 import { STClient } from '../core/st-adapter/STClient.js';
 import { LocalNexusHandler } from '../core/LocalNexusHandler.js';
 import { PersistenceDelegate } from '../../../../shared/api/NexusGenerationFlow.js';
+import type { ConversationDocument, ConversationMutation } from '../../../../shared/ConversationTypes.js';
+import { createEmptyConversationDocument } from '../../../../shared/ConversationTypes.js';
+import { applyConversationMutation } from '../../../../shared/ConversationReducer.js';
+import { migrateLegacyChatArray, migrateLegacyForgeSession } from '../../../../shared/ConversationMigration.js';
+import { resolveConversationSummary } from '../../../../shared/ConversationSummaryResolver.js';
 
 /**
  * TauriBridgeAdapter
@@ -17,8 +23,113 @@ import { PersistenceDelegate } from '../../../../shared/api/NexusGenerationFlow.
  * 使用 window.__TAURITAVERN__.invoke 与原生后端通信
  */
 export class TauriBridgeAdapter implements ILuminaBridge {
+    public readonly conversation: IConversationService;
+    private static readonly CONVERSATION_NAMESPACE = 'lumina_conversations';
+
     private get bridge() {
         return EnvDetector.tauriBridge;
+    }
+
+    private async readUnifiedConversation(id: string): Promise<ConversationDocument | null> {
+        const direct = await this.extensionStore.getJson({ namespace: TauriBridgeAdapter.CONVERSATION_NAMESPACE, key: id });
+        if (direct) return direct;
+
+        const legacyChat = await this.extensionStore.getJson({ namespace: 'lumina_chats', key: id });
+        if (legacyChat?.data && Array.isArray(legacyChat.data)) {
+            const migrated = migrateLegacyChatArray(id, legacyChat.data);
+            await this.extensionStore.setJson({ namespace: TauriBridgeAdapter.CONVERSATION_NAMESPACE, key: id, value: migrated });
+            return migrated;
+        }
+
+        const legacyForge = await this.extensionStore.getJson({ namespace: 'lumina_forge', key: id });
+        if (legacyForge?.id) {
+            const migrated = migrateLegacyForgeSession(legacyForge, legacyForge?.worldlineNodes);
+            await this.extensionStore.setJson({ namespace: TauriBridgeAdapter.CONVERSATION_NAMESPACE, key: migrated.id, value: migrated });
+            return migrated;
+        }
+
+        return null;
+    }
+
+    private async listUnifiedConversationIds(): Promise<string[]> {
+        const unified = await this.extensionStore.listKeys({ namespace: TauriBridgeAdapter.CONVERSATION_NAMESPACE });
+        if (unified.length > 0) return unified;
+
+        const [legacyChats, legacyForge] = await Promise.all([
+            this.extensionStore.listKeys({ namespace: 'lumina_chats' }),
+            this.extensionStore.listKeys({ namespace: 'lumina_forge' })
+        ]);
+        return Array.from(new Set([...legacyChats, ...legacyForge]));
+    }
+
+    constructor() {
+        this.conversation = {
+            listConversations: async () => {
+                const ids = await this.listUnifiedConversationIds();
+                const documents = (await Promise.all(ids.map((id) => this.readUnifiedConversation(id))))
+                    .filter((document): document is ConversationDocument => Boolean(document));
+                return {
+                    conversations: documents.map((document) => resolveConversationSummary(document))
+                };
+            },
+            getConversation: async (id: string) => ({
+                document: await this.readUnifiedConversation(id)
+            }),
+            saveConversation: async (id: string, document: ConversationDocument) => {
+                const nextSeq = (document.transaction?.lastCommittedSeq || 0) + 1;
+                const saved: ConversationDocument = {
+                    ...document,
+                    id,
+                    transaction: {
+                        lastCommittedSeq: nextSeq,
+                        lastTransactionId: `tauri_tx_${Date.now()}`
+                    },
+                    updatedAt: Date.now(),
+                    summary: resolveConversationSummary(document)
+                };
+                await this.extensionStore.setJson({ namespace: TauriBridgeAdapter.CONVERSATION_NAMESPACE, key: id, value: saved });
+                return {
+                    success: true,
+                    document: saved,
+                    summary: resolveConversationSummary(saved),
+                    lastCommittedSeq: nextSeq
+                };
+            },
+            mutateConversation: async (id: string, mutation: ConversationMutation) => {
+                const current = await this.readUnifiedConversation(id) || createEmptyConversationDocument({
+                    id,
+                    conversationType: id.startsWith('lw_card_') ? 'forge' : 'chat'
+                });
+                const next = applyConversationMutation(current, mutation);
+                return await this.conversation.saveConversation(id, next);
+            },
+            getTransactions: async (id: string) => {
+                const document = await this.readUnifiedConversation(id);
+                if (!document?.transaction?.lastTransactionId) {
+                    return { success: true, transactions: [], lastCommittedSeq: 0 };
+                }
+                return {
+                    success: true,
+                    transactions: [{
+                        id: document.transaction.lastTransactionId,
+                        chatId: id,
+                        seq: document.transaction.lastCommittedSeq,
+                        status: 'committed',
+                        scope: 'chat.save',
+                        payloadDigest: '',
+                        idempotencyKey: document.transaction.lastTransactionId,
+                        createdAt: document.updatedAt,
+                        updatedAt: document.updatedAt,
+                        error: null
+                    }],
+                    lastCommittedSeq: document.transaction.lastCommittedSeq
+                };
+            },
+            rollbackTransaction: async (id: string) => ({
+                success: true,
+                lastCommittedSeq: (await this.readUnifiedConversation(id))?.transaction.lastCommittedSeq || 0
+            })
+        };
     }
 
 
@@ -719,4 +830,3 @@ export class TauriBridgeAdapter implements ILuminaBridge {
         return handle;
     }
 }
-

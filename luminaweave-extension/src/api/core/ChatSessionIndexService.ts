@@ -3,8 +3,10 @@ import { lwStorage } from '../storage.js';
 import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
 
 type ServerChatSessionItem = {
-    chatId: string;
+    id: string;
+    conversationType: 'chat' | 'forge';
     updatedAt: number;
+    createdAt: number;
     messageCount: number;
     activeLeafId: string | null;
     previewMessage: string;
@@ -41,20 +43,20 @@ const buildTitleAndSummary = (chatId: string, previewMessage: string): { title: 
 export class ChatSessionIndexService {
     async listChatSessions(): Promise<ChatSessionRef[]> {
         try {
-            const data = await BridgeDispatcher.chat.listChats() as { chats?: ServerChatSessionItem[] };
-            const chats = Array.isArray(data.chats) ? data.chats : [];
+            const data = await BridgeDispatcher.conversation.listConversations() as { conversations?: ServerChatSessionItem[] };
+            const chats = Array.isArray(data.conversations) ? data.conversations : [];
 
             return chats
-                .filter(chat => !chat.chatId.startsWith('lw_card_')) // 防御性过滤：确保 Forge 会话不会混入普通聊天历史
+                .filter(chat => chat.conversationType === 'chat')
                 .sort((a, b) => b.updatedAt - a.updatedAt)
                 .map((chat) => {
                     const previewMessage = chat.previewMessage || '';
-                    const derived = buildTitleAndSummary(chat.chatId, previewMessage);
+                    const derived = buildTitleAndSummary(chat.id, previewMessage);
                     return {
-                        id: chat.chatId,
+                        id: chat.id,
                         title: derived.title,
                         source: 'lumina-server',
-                        createdAt: chat.updatedAt,
+                        createdAt: chat.createdAt,
                         updatedAt: chat.updatedAt,
                         messageCount: chat.messageCount,
                         summary: derived.summary,

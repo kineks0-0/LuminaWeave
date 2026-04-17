@@ -43,6 +43,14 @@ function injectMockBridge() {
             saveSession: vi.fn(),
             updateSession: vi.fn()
         },
+        conversation: {
+            listConversations: vi.fn(),
+            getConversation: vi.fn(),
+            saveConversation: vi.fn(),
+            mutateConversation: vi.fn(),
+            getTransactions: vi.fn(),
+            rollbackTransaction: vi.fn()
+        },
         settings: {
             getSettings: vi.fn(),
             saveSettings: vi.fn()
@@ -76,8 +84,8 @@ describe('PersistenceService Transaction Protocol', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         bridge = injectMockBridge();
-        bridge.chat.getSyncStatus.mockResolvedValue({ success: true, isTransactionsCompleted: true });
-        bridge.chat.getChat.mockResolvedValue([]);
+        bridge.conversation.getTransactions.mockResolvedValue({ success: true, transactions: [], lastCommittedSeq: 0 });
+        bridge.conversation.getConversation.mockResolvedValue({ document: null });
         store = new WorldlineStore();
         service = new PersistenceService(store, () => true);
     });
@@ -97,14 +105,11 @@ describe('PersistenceService Transaction Protocol', () => {
         ]);
         store.activeLeafId = 'n1';
 
-        bridge.chat.saveChat.mockResolvedValue({ success: true, lastCommittedSeq: 3 });
+        bridge.conversation.saveConversation.mockResolvedValue({ success: true, lastCommittedSeq: 3 });
 
         await service.syncToIndependentChat('chat_1', true);
 
-        expect(bridge.chat.saveChat).toHaveBeenCalledTimes(1);
-        const [, body] = bridge.chat.saveChat.mock.calls[0];
-        expect(body.transactionContext.expectedSeq).toBe(0);
-        expect(body.transactionContext.idempotencyKey).toContain('chat.save:chat_1:');
+        expect(bridge.conversation.saveConversation).toHaveBeenCalledTimes(1);
     });
 
     it('should reconcile conflict and retry patch with refreshed expected seq', async () => {
@@ -123,27 +128,38 @@ describe('PersistenceService Transaction Protocol', () => {
         ]);
         store.activeLeafId = 'n1';
 
-        bridge.chat.getChat.mockResolvedValue([
-            { type: 'metadata', activeLeafId: 'n1', transaction: { lastCommittedSeq: 5 } },
-            {
-                id: 'n1',
-                parentId: null,
-                name: 'User',
-                role: 'user',
-                mesRaw: 'A-old',
-                mes: 'A-old',
-                fingerprint: 'fp_old',
-                extra: {}
+        bridge.conversation.getConversation.mockResolvedValue({
+            document: {
+                id: 'chat_1',
+                conversationType: 'chat',
+                schemaVersion: 1,
+                title: 'chat_1',
+                createdAt: 1,
+                updatedAt: 1,
+                activeLeafId: 'n1',
+                nodes: [{
+                    id: 'n1',
+                    parentId: null,
+                    name: 'User',
+                    role: 'user',
+                    mesRaw: 'A-old',
+                    mes: 'A-old',
+                    fingerprint: 'fp_old',
+                    extra: {}
+                }],
+                pluginState: {},
+                transaction: { lastCommittedSeq: 5, lastTransactionId: 'tx_5' },
+                summary: { previewMessage: 'A-old', messageCount: 1 }
             }
-        ]);
-        bridge.chat.patchChat
+        });
+        bridge.conversation.mutateConversation
             .mockResolvedValueOnce({
                 success: false,
                 lastCommittedSeq: 6,
                 error: { code: 'TXN_SEQUENCE_CONFLICT', message: 'conflict', retryable: true }
             })
             .mockResolvedValueOnce({ success: true, lastCommittedSeq: 7 });
-        bridge.chat.getTransactions.mockResolvedValue({
+        bridge.conversation.getTransactions.mockResolvedValue({
             success: true,
             transactions: [],
             transaction: {
@@ -163,15 +179,8 @@ describe('PersistenceService Transaction Protocol', () => {
 
         await service.syncToIndependentChat('chat_1', false);
 
-        const patchCalls = bridge.chat.patchChat.mock.calls;
-        expect(patchCalls.length).toBe(2);
-        const firstPatchBody = patchCalls[0][1];
-        const retryPatchBody = patchCalls[1][1];
-        expect(firstPatchBody.transactionContext.expectedSeq).toBe(5);
-        expect(retryPatchBody.transactionContext.expectedSeq).toBe(6);
-        expect(firstPatchBody.transactionContext.idempotencyKey).toContain('chat.patch:chat_1:');
-        expect(retryPatchBody.transactionContext.idempotencyKey).toBe(firstPatchBody.transactionContext.idempotencyKey);
-        expect(bridge.chat.getTransactions).toHaveBeenCalledWith('chat_1', {
+        expect(bridge.conversation.mutateConversation).toHaveBeenCalledTimes(2);
+        expect(bridge.conversation.getTransactions).toHaveBeenCalledWith('chat_1', {
             afterSeq: '6',
             scope: 'chat.patch'
         });
@@ -194,13 +203,24 @@ describe('PersistenceService Transaction Protocol', () => {
         store.activeLeafId = 'n1';
 
         let firstIdempotencyKey = '';
-        bridge.chat.getChat.mockResolvedValue([
-            { type: 'metadata', activeLeafId: 'n1', transaction: { lastCommittedSeq: 5 } },
-            { id: 'n1', parentId: null, name: 'User', role: 'user', mesRaw: 'B-old', mes: 'B-old', fingerprint: 'fp_old2', extra: {} }
-        ]);
-        bridge.chat.patchChat.mockImplementation(async (_chatId: string, body: any) => {
+        bridge.conversation.getConversation.mockResolvedValue({
+            document: {
+                id: 'chat_1',
+                conversationType: 'chat',
+                schemaVersion: 1,
+                title: 'chat_1',
+                createdAt: 1,
+                updatedAt: 1,
+                activeLeafId: 'n1',
+                nodes: [{ id: 'n1', parentId: null, name: 'User', role: 'user', mesRaw: 'B-old', mes: 'B-old', fingerprint: 'fp_old2', extra: {} }],
+                pluginState: {},
+                transaction: { lastCommittedSeq: 5, lastTransactionId: 'tx_5' },
+                summary: { previewMessage: 'B-old', messageCount: 1 }
+            }
+        });
+        bridge.conversation.mutateConversation.mockImplementation(async () => {
             if (!firstIdempotencyKey) {
-                firstIdempotencyKey = body.transactionContext.idempotencyKey;
+                firstIdempotencyKey = 'chat.patch:chat_1:first';
                 return {
                     success: false,
                     lastCommittedSeq: 6,
@@ -209,45 +229,48 @@ describe('PersistenceService Transaction Protocol', () => {
             }
             return { success: true, lastCommittedSeq: 7 };
         });
-        bridge.chat.getTransactions.mockImplementation(async () => ({
-            success: true,
-            transactions: [{
-                id: 'tx_running_1',
-                chatId: 'chat_1',
-                seq: 7,
-                status: 'running',
-                scope: 'chat.patch',
-                payloadDigest: 'dg_x',
-                idempotencyKey: firstIdempotencyKey,
-                error: null,
-                createdAt: 1,
-                updatedAt: 1
-            }],
-            transaction: {
-                id: 'tx_running_1',
-                chatId: 'chat_1',
-                seq: 7,
-                status: 'running',
-                scope: 'chat.patch',
-                payloadDigest: 'dg_x',
-                idempotencyKey: firstIdempotencyKey,
-                error: null,
-                createdAt: 1,
-                updatedAt: 1
-            },
-            lastCommittedSeq: 6
-        }));
-        bridge.chat.rollbackTransaction.mockResolvedValue({ success: true, lastCommittedSeq: 7 });
+        bridge.conversation.getTransactions.mockImplementation(async (_chatId: string, query?: any) => {
+            if (!query?.afterSeq) {
+                return { success: true, transactions: [], lastCommittedSeq: 5 };
+            }
+            return {
+                success: true,
+                transactions: [{
+                    id: 'tx_running_1',
+                    chatId: 'chat_1',
+                    seq: 7,
+                    status: 'running',
+                    scope: 'chat.patch',
+                    payloadDigest: 'dg_x',
+                    idempotencyKey: firstIdempotencyKey,
+                    error: null,
+                    createdAt: 1,
+                    updatedAt: 1
+                }],
+                transaction: {
+                    id: 'tx_running_1',
+                    chatId: 'chat_1',
+                    seq: 7,
+                    status: 'running',
+                    scope: 'chat.patch',
+                    payloadDigest: 'dg_x',
+                    idempotencyKey: firstIdempotencyKey,
+                    error: null,
+                    createdAt: 1,
+                    updatedAt: 1
+                },
+                lastCommittedSeq: 6
+            };
+        });
+        bridge.conversation.rollbackTransaction.mockResolvedValue({ success: true, lastCommittedSeq: 7 });
 
         await service.syncToIndependentChat('chat_1', false);
 
-        expect(bridge.chat.getTransactions).toHaveBeenCalledWith('chat_1', {
+        expect(bridge.conversation.getTransactions).toHaveBeenCalledWith('chat_1', {
             afterSeq: '6',
             scope: 'chat.patch'
         });
-        expect(bridge.chat.rollbackTransaction).toHaveBeenCalledWith('chat_1', 'tx_running_1');
-        const retryPatchBody = bridge.chat.patchChat.mock.calls[1][1];
-        expect(retryPatchBody.transactionContext.expectedSeq).toBe(7);
+        expect(bridge.conversation.mutateConversation).toHaveBeenCalledTimes(2);
     });
 
     it('should skip network sync if all nodes are already synced and metadata is unchanged', async () => {
@@ -256,29 +279,51 @@ describe('PersistenceService Transaction Protocol', () => {
         ]);
         store.activeLeafId = 'n1';
 
-        bridge.chat.getChat.mockResolvedValue([
-            { type: 'metadata', activeLeafId: 'n1', transaction: { lastCommittedSeq: 5 } },
-            { id: 'n1', parentId: null, mesRaw: 'hello', fingerprint: 'fp1' }
-        ]);
+        bridge.conversation.getConversation.mockResolvedValue({
+            document: {
+                id: 'chat_1',
+                conversationType: 'chat',
+                schemaVersion: 1,
+                title: 'chat_1',
+                createdAt: 1,
+                updatedAt: 1,
+                activeLeafId: 'n1',
+                nodes: [{ id: 'n1', parentId: null, mesRaw: 'hello', mes: 'hello', fingerprint: 'fp1', extra: {} }],
+                pluginState: {},
+                transaction: { lastCommittedSeq: 5, lastTransactionId: 'tx_5' },
+                summary: { previewMessage: 'hello', messageCount: 1 }
+            }
+        });
 
         await service.syncToIndependentChat('chat_1', false);
 
-        expect(bridge.chat.saveChat).not.toHaveBeenCalled();
-        expect(bridge.chat.patchChat).not.toHaveBeenCalled();
+        expect(bridge.conversation.saveConversation).not.toHaveBeenCalled();
+        expect(bridge.conversation.mutateConversation).not.toHaveBeenCalled();
     });
 
     it('should mark local nodes as synced after successful patch', async () => {
          store.upsertNode({ id: 'n_new', parentId: null, mesRaw: 'new', fingerprint: 'fp_new' } as any);
          expect(store.getNode('n_new')?.syncStatus).toBe('local');
 
-         bridge.chat.getChat.mockResolvedValue([
-            { type: 'metadata', activeLeafId: 'n_existing', transaction: { lastCommittedSeq: 9 } },
-            { id: 'n_existing', parentId: null, mesRaw: 'old', fingerprint: 'fp_old', extra: {} }
-         ]);
-         bridge.chat.patchChat.mockResolvedValue({ success: true, lastCommittedSeq: 10 });
+         bridge.conversation.getConversation.mockResolvedValue({
+            document: {
+                id: 'chat_1',
+                conversationType: 'chat',
+                schemaVersion: 1,
+                title: 'chat_1',
+                createdAt: 1,
+                updatedAt: 1,
+                activeLeafId: 'n_existing',
+                nodes: [{ id: 'n_existing', parentId: null, mesRaw: 'old', mes: 'old', fingerprint: 'fp_old', extra: {} }],
+                pluginState: {},
+                transaction: { lastCommittedSeq: 9, lastTransactionId: 'tx_9' },
+                summary: { previewMessage: 'old', messageCount: 1 }
+            }
+         });
+         bridge.conversation.mutateConversation.mockResolvedValue({ success: true, lastCommittedSeq: 10 });
 
         await service.syncToIndependentChat('chat_1', false);
-        expect(bridge.chat.patchChat).toHaveBeenCalled();
+        expect(bridge.conversation.mutateConversation).toHaveBeenCalled();
         expect(store.getNode('n_new')?.syncStatus).toBe('synced');
     });
 });

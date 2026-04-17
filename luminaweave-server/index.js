@@ -52180,242 +52180,574 @@ var StreamingManager = class {
 };
 
 // src/StorageService.ts
-var import_path = __toESM(require("path"));
 var import_fs = __toESM(require("fs"));
+var import_path = __toESM(require("path"));
+
+// ../shared/ConversationTypes.ts
+var CONVERSATION_SCHEMA_VERSION = 1;
+var createEmptyConversationDocument2 = (params) => {
+  const now = params.updatedAt ?? params.createdAt ?? Date.now();
+  const nodes = params.nodes ? params.nodes.map((node) => ({ ...node })) : [];
+  return {
+    schemaVersion: CONVERSATION_SCHEMA_VERSION,
+    id: params.id,
+    conversationType: params.conversationType,
+    title: params.title || `Conversation ${params.id.slice(0, 12)}`,
+    createdAt: params.createdAt ?? now,
+    updatedAt: now,
+    activeLeafId: params.activeLeafId ?? nodes[nodes.length - 1]?.id ?? null,
+    nodes,
+    pluginState: {
+      chat: params.pluginState?.chat ? { ...params.pluginState.chat } : void 0,
+      forge: params.pluginState?.forge ? { ...params.pluginState.forge } : void 0
+    },
+    transaction: {
+      lastCommittedSeq: params.transaction?.lastCommittedSeq ?? 0,
+      lastTransactionId: params.transaction?.lastTransactionId ?? null
+    },
+    summary: {
+      previewMessage: "",
+      messageCount: nodes.length
+    },
+    legacy: params.legacy ? { ...params.legacy } : void 0
+  };
+};
+
+// ../shared/ConversationSummaryResolver.ts
+var cleanPreview = (text) => text.replace(/\s+/g, " ").trim();
+var resolveConversationPreview = (document) => {
+  for (let index = document.nodes.length - 1; index >= 0; index -= 1) {
+    const node = document.nodes[index];
+    const text = cleanPreview(node.mes || node.mesRaw || "");
+    if (text) return text.slice(0, 160);
+  }
+  return "";
+};
+var resolveConversationSummary = (document) => ({
+  id: document.id,
+  schemaVersion: document.schemaVersion,
+  conversationType: document.conversationType,
+  title: document.title,
+  createdAt: document.createdAt,
+  updatedAt: document.updatedAt,
+  activeLeafId: document.activeLeafId,
+  previewMessage: resolveConversationPreview(document),
+  messageCount: document.nodes.length
+});
+
+// ../shared/ConversationValidation.ts
+var asRecord = (value) => value && typeof value === "object" ? value : {};
+var isConversationDocument = (value) => {
+  const record = asRecord(value);
+  return typeof record.id === "string" && (record.conversationType === "chat" || record.conversationType === "forge") && Array.isArray(record.nodes) && typeof record.schemaVersion === "number";
+};
+var validateConversationDocument = (value) => {
+  if (!isConversationDocument(value)) {
+    throw new Error("Invalid ConversationDocument");
+  }
+  const record = value;
+  const normalized = createEmptyConversationDocument2({
+    id: record.id,
+    conversationType: record.conversationType,
+    title: record.title,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    activeLeafId: record.activeLeafId,
+    nodes: Array.isArray(record.nodes) ? record.nodes : [],
+    pluginState: record.pluginState || {},
+    transaction: record.transaction || {},
+    legacy: record.legacy
+  });
+  normalized.schemaVersion = typeof record.schemaVersion === "number" ? record.schemaVersion : CONVERSATION_SCHEMA_VERSION;
+  normalized.summary = resolveConversationSummary(normalized);
+  normalized.summary.messageCount = normalized.nodes.length;
+  return normalized;
+};
+var assertConversationSchemaVersion = (document) => {
+  if (document.schemaVersion > CONVERSATION_SCHEMA_VERSION) {
+    throw new Error(`Unsupported conversation schema version: ${document.schemaVersion}`);
+  }
+};
+
+// ../shared/ConversationReducer.ts
+var mergePluginState = (current, patch) => {
+  if (!patch) return current;
+  return {
+    chat: patch.chat ? { ...current.chat || {}, ...patch.chat } : current.chat,
+    forge: patch.forge ? { ...current.forge || {}, ...patch.forge } : current.forge
+  };
+};
+var applyConversationMutation = (document, mutation) => {
+  const next = validateConversationDocument({
+    ...document,
+    title: mutation.title ?? document.title,
+    activeLeafId: mutation.activeLeafId ?? document.activeLeafId,
+    updatedAt: mutation.updatedAt ?? Date.now(),
+    pluginState: mergePluginState(document.pluginState, mutation.pluginState),
+    transaction: {
+      ...document.transaction,
+      ...mutation.transaction || {}
+    }
+  });
+  if (mutation.nodes?.replace) {
+    next.nodes = mutation.nodes.replace.map((node) => ({ ...node }));
+  } else {
+    const nodeMap = new Map(next.nodes.map((node) => [node.id, { ...node }]));
+    mutation.nodes?.updated?.forEach((node) => {
+      nodeMap.set(node.id, { ...nodeMap.get(node.id), ...node });
+    });
+    mutation.nodes?.added?.forEach((node) => {
+      nodeMap.set(node.id, { ...node });
+    });
+    if (mutation.nodes?.deletedIds?.length) {
+      mutation.nodes.deletedIds.forEach((id) => nodeMap.delete(id));
+    }
+    next.nodes = Array.from(nodeMap.values());
+  }
+  if (!next.activeLeafId) {
+    next.activeLeafId = next.nodes[next.nodes.length - 1]?.id || null;
+  }
+  next.summary = resolveConversationSummary(next);
+  next.summary.messageCount = next.nodes.length;
+  return next;
+};
+
+// ../shared/ConversationMigration.ts
+var cloneNodes = (nodes) => Array.isArray(nodes) ? nodes.map((node) => ({ ...node })) : [];
+var migrateLegacyChatArray = (id, payload, conversationType = id.startsWith("lw_card_") ? "forge" : "chat") => {
+  const rows = Array.isArray(payload) ? payload : [];
+  const metadata = rows[0] && rows[0]?.type === "metadata" ? rows[0] : null;
+  const nodes = metadata ? rows.slice(1) : rows;
+  const lastNode = nodes[nodes.length - 1];
+  const document = createEmptyConversationDocument2({
+    id,
+    conversationType,
+    title: `Conversation ${id.slice(0, 12)}`,
+    createdAt: Number(lastNode?.createdAt || Date.now()),
+    updatedAt: Number(metadata?.updatedAt || lastNode?.createdAt || Date.now()),
+    activeLeafId: metadata?.activeLeafId || lastNode?.id || null,
+    nodes: cloneNodes(nodes),
+    pluginState: metadata?.pluginData ? { chat: { pluginData: metadata.pluginData } } : {},
+    transaction: {
+      lastCommittedSeq: Number(metadata?.transaction?.lastCommittedSeq || 0),
+      lastTransactionId: metadata?.transaction?.lastTransactionId || null
+    },
+    legacy: { legacyChatId: id }
+  });
+  document.summary = resolveConversationSummary(document);
+  document.summary.messageCount = document.nodes.length;
+  return document;
+};
+var migrateLegacyForgeSession = (session, legacyChatPayload) => {
+  const nodes = session.worldlineNodes?.length ? session.worldlineNodes : Array.isArray(legacyChatPayload) ? migrateLegacyChatArray(session.sessionChatId || session.id, legacyChatPayload, "forge").nodes : [];
+  const forgeState = {
+    structuredState: session.structuredState,
+    draftTree: session.draftTree,
+    forgeMemoryTree: session.forgeMemoryTree,
+    stagingEntries: session.stagingEntries || [],
+    commitReadyEntries: session.commitReadyEntries || [],
+    virtualLorebookEntries: session.virtualLorebookEntries || [],
+    workflowSnapshot: session.workflowSnapshot || null,
+    activeLayer: session.activeLayer || null,
+    completedLayers: session.completedLayers || [],
+    publishState: session.publishState || "drafting",
+    activeAuxPanel: session.activeAuxPanel,
+    auxPresentationMode: session.auxPresentationMode,
+    worldlineSnapshots: session.worldlineSnapshots,
+    selectedChatSessionId: session.selectedChatSessionId || null,
+    selectedChatSnapshotId: session.selectedChatSnapshotId || null,
+    importedLorebookId: session.importedLorebookId || null,
+    detailMode: session.detailMode || null,
+    entryMode: session.entryMode || null,
+    draftInput: session.draftInput || "",
+    presetId: session.presetId || "",
+    sessionChatId: session.sessionChatId || session.id
+  };
+  const document = createEmptyConversationDocument2({
+    id: session.id,
+    conversationType: "forge",
+    title: session.title || `Forge Workspace ${session.id.slice(0, 12)}`,
+    createdAt: Number(session.createdAt || Date.now()),
+    updatedAt: Number(session.updatedAt || session.createdAt || Date.now()),
+    activeLeafId: session.activeLeafId || nodes[nodes.length - 1]?.id || null,
+    nodes: cloneNodes(nodes),
+    pluginState: { forge: forgeState },
+    legacy: {
+      legacyChatId: session.sessionChatId || void 0,
+      legacyForgeSessionId: session.id
+    }
+  });
+  document.summary = resolveConversationSummary(document);
+  document.summary.messageCount = document.nodes.length;
+  return document;
+};
+
+// src/StorageService.ts
+var CONVERSATION_FILE_PREFIX = "conversation_";
+var CONVERSATION_FILE_SUFFIX = ".json";
+var TRANSACTION_FILE_SUFFIX = ".tx.jsonl";
 var StorageService = class {
   dataDir;
-  chatCache = /* @__PURE__ */ new Map();
-  transactionCache = /* @__PURE__ */ new Map();
-  dirtyChats = /* @__PURE__ */ new Set();
-  dirtyTransactions = /* @__PURE__ */ new Set();
-  presetsFile;
-  forgeSessionsFile;
-  appendLocks = /* @__PURE__ */ new Map();
   chatsDir;
   forgeDir;
+  conversationsDir;
+  transactionsDir;
+  presetsFile;
+  forgeSessionsFile;
+  conversationCache = /* @__PURE__ */ new Map();
+  conversationAliasCache = /* @__PURE__ */ new Map();
+  transactionCache = /* @__PURE__ */ new Map();
+  dirtyConversations = /* @__PURE__ */ new Set();
+  dirtyTransactions = /* @__PURE__ */ new Set();
   constructor(dataDir) {
     this.dataDir = dataDir;
     this.chatsDir = import_path.default.join(this.dataDir, "chats");
     this.forgeDir = import_path.default.join(this.dataDir, "forge");
+    this.conversationsDir = import_path.default.join(this.dataDir, "conversations");
+    this.transactionsDir = import_path.default.join(this.dataDir, "transactions");
     this.presetsFile = import_path.default.join(this.dataDir, "presets.json");
     this.forgeSessionsFile = import_path.default.join(this.forgeDir, "forge_sessions.json");
     this.ensureDirectories();
     this.migrateLegacyData();
   }
   ensureDirectories() {
-    [this.dataDir, this.chatsDir, this.forgeDir].forEach((dir) => {
+    [this.dataDir, this.chatsDir, this.forgeDir, this.conversationsDir, this.transactionsDir].forEach((dir) => {
       if (!import_fs.default.existsSync(dir)) {
         import_fs.default.mkdirSync(dir, { recursive: true });
       }
     });
   }
-  /**
-   * 根据 chatId 自动解析存储目录
-   */
-  getStorageDir(chatId) {
-    return chatId.startsWith("lw_card_") ? this.forgeDir : this.chatsDir;
-  }
-  /**
-   * 根据 chatId 获取文件路径
-   */
-  getChatFilePath(chatId, extension = ".jsonl") {
-    if (!chatId || chatId === "null" || chatId === "undefined") {
-      throw new Error(`Invalid chatId: ${chatId}`);
-    }
-    return import_path.default.join(this.getStorageDir(chatId), `chat_${chatId}${extension}`);
-  }
-  /**
-   * 自动迁移 legacy 数据（从 data/ 移动到子目录）
-   */
   migrateLegacyData() {
     if (!import_fs.default.existsSync(this.dataDir)) return;
     const oldForgeSessions = import_path.default.join(this.dataDir, "forge_sessions.json");
-    if (import_fs.default.existsSync(oldForgeSessions)) {
+    if (import_fs.default.existsSync(oldForgeSessions) && !import_fs.default.existsSync(this.forgeSessionsFile)) {
       try {
-        if (!import_fs.default.existsSync(this.forgeSessionsFile)) {
-          import_fs.default.renameSync(oldForgeSessions, this.forgeSessionsFile);
-          Logger.info("Storage", "\u5DF2\u8FC1\u79FB\u7D22\u5F15\u6587\u4EF6 forge_sessions.json \u5230 forge \u76EE\u5F55");
-        } else if (oldForgeSessions !== this.forgeSessionsFile) {
-          import_fs.default.unlinkSync(oldForgeSessions);
-          Logger.warn("Storage", "\u6839\u76EE\u5F55\u53D1\u73B0\u5197\u4F59 forge_sessions.json\uFF0C\u5DF2\u6E05\u7406");
-        }
-      } catch (err) {
-        Logger.error("Storage", "\u8FC1\u79FB\u7D22\u5F15\u6587\u4EF6\u5931\u8D25", { error: err.message });
+        import_fs.default.renameSync(oldForgeSessions, this.forgeSessionsFile);
+        Logger.info("Storage", "\u5DF2\u8FC1\u79FB legacy forge_sessions.json \u5230 forge \u76EE\u5F55");
+      } catch (error) {
+        Logger.warn("Storage", "\u8FC1\u79FB forge_sessions.json \u5931\u8D25", { error: error.message });
       }
     }
-    const files = import_fs.default.readdirSync(this.dataDir);
-    let migratedCount = 0;
-    for (const file of files) {
+    const rootFiles = import_fs.default.readdirSync(this.dataDir);
+    for (const file of rootFiles) {
       if (!file.startsWith("chat_") || !file.endsWith(".jsonl") && !file.endsWith(".tx.jsonl")) {
         continue;
       }
-      const oldPath = import_path.default.join(this.dataDir, file);
       const chatId = file.replace(/^chat_/, "").replace(/\.(tx\.)?jsonl$/, "");
-      const targetDir = this.getStorageDir(chatId);
-      const newPath = import_path.default.join(targetDir, file);
+      const targetDir = chatId.startsWith("lw_card_") ? this.forgeDir : this.chatsDir;
+      const sourcePath = import_path.default.join(this.dataDir, file);
+      const targetPath = import_path.default.join(targetDir, file);
       try {
-        if (!import_fs.default.existsSync(newPath)) {
-          import_fs.default.renameSync(oldPath, newPath);
-          migratedCount++;
-        } else if (oldPath !== newPath) {
-          import_fs.default.unlinkSync(oldPath);
+        if (!import_fs.default.existsSync(targetPath)) {
+          import_fs.default.renameSync(sourcePath, targetPath);
+        } else {
+          import_fs.default.unlinkSync(sourcePath);
         }
-      } catch (err) {
-        Logger.error("Storage", `\u8FC1\u79FB\u6587\u4EF6\u5931\u8D25: ${file}`, { error: err.message });
+      } catch (error) {
+        Logger.warn("Storage", `\u8FC1\u79FB legacy \u6587\u4EF6\u5931\u8D25: ${file}`, { error: error.message });
       }
-    }
-    if (migratedCount > 0) {
-      Logger.info("Storage", `\u5B8C\u6210\u5B58\u91CF\u6570\u636E\u8FC1\u79FB: \u5171 ${migratedCount} \u4E2A\u6587\u4EF6\u5DF2\u5F52\u7C7B`);
     }
   }
   syncToDisk() {
-    const txCount = this.dirtyTransactions.size;
-    const chatCount = this.dirtyChats.size;
-    if (txCount > 0 || chatCount > 0) {
-      Logger.info("Storage", `\u5F00\u59CB\u540E\u53F0\u6301\u4E45\u5316: \u5F85\u5199\u5165\u4E8B\u52A1=${txCount}, \u5F85\u5199\u5165\u5BF9\u8BDD=${chatCount}`);
-    }
     try {
-      for (const chatId of this.dirtyTransactions) {
-        this.flushTransactionsToDisk(chatId);
+      for (const conversationId of this.dirtyConversations) {
+        this.flushConversationToDisk(conversationId);
+      }
+      this.dirtyConversations.clear();
+      for (const conversationId of this.dirtyTransactions) {
+        this.flushTransactionsToDisk(conversationId);
       }
       this.dirtyTransactions.clear();
-      for (const chatId of this.dirtyChats) {
-        this.flushChatToDisk(chatId);
-      }
-      this.dirtyChats.clear();
-    } catch (err) {
-      Logger.error("Storage", "\u540E\u53F0\u6301\u4E45\u5316\u5931\u8D25", { error: err.message });
+    } catch (error) {
+      Logger.error("Storage", "\u540E\u53F0\u6301\u4E45\u5316\u5931\u8D25", { error: error.message });
     }
   }
-  flushTransactionsToDisk(chatId) {
-    const records = this.transactionCache.get(chatId);
-    if (records) {
-      const txFile = this.getChatFilePath(chatId, ".tx.jsonl");
-      const jsonl = records.map((record) => JSON.stringify(record)).join("\n");
-      import_fs.default.writeFileSync(txFile, jsonl ? `${jsonl}
-` : "", "utf8");
+  getConversationFilePath(id) {
+    return import_path.default.join(this.conversationsDir, `${CONVERSATION_FILE_PREFIX}${id}${CONVERSATION_FILE_SUFFIX}`);
+  }
+  getTransactionFilePath(id) {
+    return import_path.default.join(this.transactionsDir, `${CONVERSATION_FILE_PREFIX}${id}${TRANSACTION_FILE_SUFFIX}`);
+  }
+  getLegacyChatFilePath(chatId, extension = ".jsonl") {
+    const dir = chatId.startsWith("lw_card_") ? this.forgeDir : this.chatsDir;
+    return import_path.default.join(dir, `chat_${chatId}${extension}`);
+  }
+  normalizeConversation(document) {
+    const normalized = validateConversationDocument(document);
+    assertConversationSchemaVersion(normalized);
+    normalized.summary = resolveConversationSummary(normalized);
+    normalized.summary.messageCount = normalized.nodes.length;
+    return normalized;
+  }
+  cloneConversation(document) {
+    return this.normalizeConversation(JSON.parse(JSON.stringify(document)));
+  }
+  cacheConversation(document) {
+    const normalized = this.normalizeConversation(document);
+    this.conversationCache.set(normalized.id, normalized);
+    this.cacheConversationAliases(normalized);
+    return normalized;
+  }
+  cacheConversationAliases(document) {
+    this.conversationAliasCache.set(document.id, document.id);
+    const legacyChatId = document.legacy?.legacyChatId;
+    if (legacyChatId) {
+      this.conversationAliasCache.set(legacyChatId, document.id);
+    }
+    const forgeSessionChatId = document.pluginState.forge?.sessionChatId;
+    if (forgeSessionChatId) {
+      this.conversationAliasCache.set(forgeSessionChatId, document.id);
     }
   }
-  /**
-   * 将指定对话的内存内容强制刷入磁盘 (全量覆写)。
-   */
-  flushChatToDisk(chatId) {
-    const data = this.chatCache.get(chatId);
-    if (data) {
-      const chatFile = this.getChatFilePath(chatId);
-      const jsonl = data.map((item) => JSON.stringify(item)).join("\n");
-      import_fs.default.writeFileSync(chatFile, jsonl ? `${jsonl}
-` : "", "utf8");
-      this.dirtyChats.delete(chatId);
-      Logger.info("Storage", `\u5BF9\u8BDD\u5DF2\u540C\u6B65\u5230\u78C1\u76D8: ${chatId} (\u603B\u8BA1 ${data.length} \u6761)`);
-    }
+  readJsonlFile(filePath) {
+    if (!import_fs.default.existsSync(filePath)) return [];
+    return import_fs.default.readFileSync(filePath, "utf8").split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line));
   }
-  // --- 对话读写 ---
-  readChat(chatId) {
-    if (this.chatCache.has(chatId)) return this.chatCache.get(chatId);
-    const chatFile = this.getChatFilePath(chatId);
-    let data = [];
-    if (import_fs.default.existsSync(chatFile)) {
-      const lines = import_fs.default.readFileSync(chatFile, "utf8").split("\n").filter((l) => l.trim());
-      data = lines.map((l) => JSON.parse(l));
-    }
-    this.chatCache.set(chatId, data);
-    return data;
-  }
-  writeChat(chatId, data) {
-    this.chatCache.set(chatId, data);
-    this.dirtyChats.add(chatId);
-  }
-  /**
-   * 高性能追加单个节点：内存追加 + 物理文件追加。
-   * 避免大文件全量重写。
-   */
-  appendChatRecord(chatId, item) {
-    const data = this.readChat(chatId);
-    const wasDirty = this.dirtyChats.has(chatId);
-    data.push(item);
-    const chatFile = this.getChatFilePath(chatId);
+  readLegacyForgeSessions() {
+    if (!import_fs.default.existsSync(this.forgeSessionsFile)) return [];
     try {
-      import_fs.default.appendFileSync(chatFile, JSON.stringify(item) + "\n", "utf8");
-      if (!wasDirty) {
-        this.dirtyChats.delete(chatId);
+      const raw = import_fs.default.readFileSync(this.forgeSessionsFile, "utf8");
+      const records = JSON.parse(raw);
+      return Array.isArray(records) ? records : [];
+    } catch {
+      return [];
+    }
+  }
+  getLegacyForgeSessionById(sessionId) {
+    return this.readLegacyForgeSessions().find((session) => session.id === sessionId) || null;
+  }
+  getLegacyForgeSessionByChatId(sessionChatId) {
+    return this.readLegacyForgeSessions().find((session) => session.sessionChatId === sessionChatId) || null;
+  }
+  resolveCanonicalConversationId(id) {
+    if (!id) return null;
+    const cached = this.conversationAliasCache.get(id);
+    if (cached) return cached;
+    if (import_fs.default.existsSync(this.getConversationFilePath(id))) {
+      this.conversationAliasCache.set(id, id);
+      return id;
+    }
+    const legacyForgeSession = this.getLegacyForgeSessionByChatId(id);
+    if (legacyForgeSession?.id) {
+      this.conversationAliasCache.set(id, legacyForgeSession.id);
+      return legacyForgeSession.id;
+    }
+    if (import_fs.default.existsSync(this.getLegacyChatFilePath(id))) {
+      this.conversationAliasCache.set(id, id);
+      return id;
+    }
+    const conversationFiles = this.listConversationFileIds();
+    for (const conversationId of conversationFiles) {
+      const document = this.readConversation(conversationId);
+      if (!document) continue;
+      const resolved = this.conversationAliasCache.get(id);
+      if (resolved) return resolved;
+    }
+    return null;
+  }
+  listConversationFileIds() {
+    if (!import_fs.default.existsSync(this.conversationsDir)) return [];
+    return import_fs.default.readdirSync(this.conversationsDir).filter((fileName) => fileName.startsWith(CONVERSATION_FILE_PREFIX) && fileName.endsWith(CONVERSATION_FILE_SUFFIX)).map((fileName) => fileName.slice(CONVERSATION_FILE_PREFIX.length, -CONVERSATION_FILE_SUFFIX.length));
+  }
+  hydrateLegacyConversation(id) {
+    const legacyForgeSession = this.getLegacyForgeSessionById(id) || this.getLegacyForgeSessionByChatId(id);
+    if (legacyForgeSession) {
+      const legacyChatPayload = legacyForgeSession.sessionChatId ? this.readJsonlFile(this.getLegacyChatFilePath(legacyForgeSession.sessionChatId)) : [];
+      const migrated = migrateLegacyForgeSession(legacyForgeSession, legacyChatPayload);
+      return this.applyLegacyTransactionState(migrated, legacyForgeSession.sessionChatId || id);
+    }
+    const legacyChatPath = this.getLegacyChatFilePath(id);
+    if (import_fs.default.existsSync(legacyChatPath)) {
+      const migrated = migrateLegacyChatArray(id, this.readJsonlFile(legacyChatPath));
+      return this.applyLegacyTransactionState(migrated, id);
+    }
+    return null;
+  }
+  applyLegacyTransactionState(document, transactionKey) {
+    const records = this.readLegacyTransactionLog(transactionKey);
+    const lastCommitted = [...records].filter((record) => record.status === "committed").sort((left, right) => right.seq - left.seq)[0];
+    if (lastCommitted) {
+      document.transaction.lastCommittedSeq = lastCommitted.seq;
+      document.transaction.lastTransactionId = lastCommitted.id;
+    }
+    document.summary = resolveConversationSummary(document);
+    document.summary.messageCount = document.nodes.length;
+    return document;
+  }
+  readLegacyTransactionLog(chatId) {
+    const txFile = this.getLegacyChatFilePath(chatId, ".tx.jsonl");
+    if (!import_fs.default.existsSync(txFile)) return [];
+    try {
+      return import_fs.default.readFileSync(txFile, "utf8").split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line));
+    } catch {
+      return [];
+    }
+  }
+  readConversation(id) {
+    const canonicalId = this.resolveCanonicalConversationId(id) || id;
+    const cached = this.conversationCache.get(canonicalId);
+    if (cached) return this.cloneConversation(cached);
+    const conversationFile = this.getConversationFilePath(canonicalId);
+    if (import_fs.default.existsSync(conversationFile)) {
+      try {
+        const raw = JSON.parse(import_fs.default.readFileSync(conversationFile, "utf8"));
+        const document = this.cacheConversation(raw);
+        return this.cloneConversation(document);
+      } catch (error) {
+        Logger.error("Storage", `\u8BFB\u53D6 ConversationDocument \u5931\u8D25: ${canonicalId}`, { error: error.message });
+        return null;
       }
-      Logger.info("Storage", `\u5BF9\u8BDD\u5DF2\u7269\u7406\u8FFD\u52A0\u65B0\u8282\u70B9: ${chatId} (ID: ${item.id}) [${wasDirty ? "\u7EF4\u6301\u810F\u72B6\u6001" : "\u4FDD\u6301\u540C\u6B65"}]`);
-    } catch (err) {
-      Logger.warn("Storage", `\u7269\u7406\u8FFD\u52A0\u5931\u8D25\uFF0C\u56DE\u9000\u5230\u5168\u91CF\u540C\u6B65\u6A21\u5F0F: ${chatId}`, { error: err.message });
-      this.dirtyChats.add(chatId);
     }
+    const migrated = this.hydrateLegacyConversation(canonicalId);
+    if (!migrated) return null;
+    this.cacheConversation(migrated);
+    return this.cloneConversation(migrated);
   }
-  /**
-   * 更新对话元数据 (type === 'metadata')。
-   * 并在下次 syncToDisk 时全量持久化。
-   */
-  updateChatMetadata(chatId, updates) {
-    const data = this.readChat(chatId);
-    const metaIdx = data.findIndex((item) => item.type === "metadata");
-    const now = Date.now();
-    if (metaIdx === -1) {
-      data.unshift({
-        type: "metadata",
-        ...updates,
-        updatedAt: now
-      });
-    } else {
-      data[metaIdx] = {
-        ...data[metaIdx],
-        ...updates,
-        updatedAt: now
-      };
+  writeConversation(document) {
+    const normalized = this.cacheConversation(document);
+    this.dirtyConversations.add(normalized.id);
+    return this.cloneConversation(normalized);
+  }
+  saveConversation(id, document) {
+    const normalized = this.writeConversation({
+      ...document,
+      id
+    });
+    return {
+      success: true,
+      document: normalized,
+      summary: resolveConversationSummary(normalized),
+      lastCommittedSeq: normalized.transaction.lastCommittedSeq
+    };
+  }
+  mutateConversation(id, mutation) {
+    const current = this.readConversation(id) || createEmptyConversationDocument2({
+      id,
+      conversationType: id.startsWith("lw_card_") ? "forge" : "chat"
+    });
+    const next = applyConversationMutation(current, mutation);
+    const normalized = this.writeConversation(next);
+    return {
+      success: true,
+      document: normalized,
+      summary: resolveConversationSummary(normalized),
+      lastCommittedSeq: normalized.transaction.lastCommittedSeq
+    };
+  }
+  listConversations() {
+    const conversations = /* @__PURE__ */ new Map();
+    for (const conversationId of this.listConversationFileIds()) {
+      const document = this.readConversation(conversationId);
+      if (document) conversations.set(document.id, document);
     }
-    this.dirtyChats.add(chatId);
-    Logger.info("Storage", `\u5BF9\u8BDD\u5143\u6570\u636E\u5DF2\u66F4\u65B0\u5E76\u6807\u8BB0\u810F\u72B6\u6001: ${chatId}`);
+    if (import_fs.default.existsSync(this.chatsDir)) {
+      for (const fileName of import_fs.default.readdirSync(this.chatsDir)) {
+        if (!/^chat_.+\.jsonl$/.test(fileName) || fileName.endsWith(".tx.jsonl")) continue;
+        const chatId = fileName.replace(/^chat_/, "").replace(/\.jsonl$/, "");
+        if (conversations.has(chatId)) continue;
+        const document = this.readConversation(chatId);
+        if (document) conversations.set(document.id, document);
+      }
+    }
+    for (const session of this.readLegacyForgeSessions()) {
+      if (conversations.has(session.id)) continue;
+      const document = this.readConversation(session.id);
+      if (document) conversations.set(document.id, document);
+    }
+    if (import_fs.default.existsSync(this.forgeDir)) {
+      for (const fileName of import_fs.default.readdirSync(this.forgeDir)) {
+        if (!/^chat_lw_card_.+\.jsonl$/.test(fileName) || fileName.endsWith(".tx.jsonl")) continue;
+        const chatId = fileName.replace(/^chat_/, "").replace(/\.jsonl$/, "");
+        const session = this.getLegacyForgeSessionByChatId(chatId);
+        if (session?.id) continue;
+        if (conversations.has(chatId)) continue;
+        const document = this.readConversation(chatId);
+        if (document) conversations.set(document.id, document);
+      }
+    }
+    return Array.from(conversations.values()).map((document) => resolveConversationSummary(document)).sort((left, right) => right.updatedAt - left.updatedAt);
   }
-  // --- 事务核心 ---
-  readTransactionLog(chatId) {
-    if (this.transactionCache.has(chatId)) return this.transactionCache.get(chatId);
-    const txFile = this.getChatFilePath(chatId, ".tx.jsonl");
+  flushConversationToDisk(id) {
+    const conversation = this.conversationCache.get(id);
+    if (!conversation) return;
+    const filePath = this.getConversationFilePath(id);
+    const tmpPath = `${filePath}.tmp`;
+    import_fs.default.writeFileSync(tmpPath, JSON.stringify(conversation, null, 2), "utf8");
+    import_fs.default.renameSync(tmpPath, filePath);
+    this.dirtyConversations.delete(id);
+  }
+  resolveTransactionOwnerId(id) {
+    return this.resolveCanonicalConversationId(id) || id;
+  }
+  readTransactionLog(id) {
+    const ownerId = this.resolveTransactionOwnerId(id);
+    const cached = this.transactionCache.get(ownerId);
+    if (cached) return [...cached];
+    const filePath = this.getTransactionFilePath(ownerId);
     let records = [];
-    if (import_fs.default.existsSync(txFile)) {
-      const lines = import_fs.default.readFileSync(txFile, "utf8").split("\n").filter((line) => line.trim());
-      records = lines.map((line) => JSON.parse(line));
+    if (import_fs.default.existsSync(filePath)) {
+      records = this.readJsonlFile(filePath);
+    } else {
+      const conversation = this.readConversation(ownerId);
+      const legacyCandidates = [
+        id,
+        ownerId,
+        conversation?.legacy?.legacyChatId,
+        conversation?.pluginState.forge?.sessionChatId
+      ].filter((candidate) => Boolean(candidate));
+      for (const candidate of legacyCandidates) {
+        records = this.readLegacyTransactionLog(candidate);
+        if (records.length > 0) break;
+      }
     }
-    this.transactionCache.set(chatId, records);
-    return records;
+    this.transactionCache.set(ownerId, records);
+    return [...records];
   }
-  writeTransactionLog(chatId, records) {
-    this.transactionCache.set(chatId, records);
-    this.dirtyTransactions.add(chatId);
+  writeTransactionLog(id, records) {
+    const ownerId = this.resolveTransactionOwnerId(id);
+    this.transactionCache.set(ownerId, [...records]);
+    this.dirtyTransactions.add(ownerId);
   }
-  isAllTransactionsCompleted(chatId) {
-    const records = this.readTransactionLog(chatId);
-    return !records.some((r) => r.status === "pending" || r.status === "running");
+  flushTransactionsToDisk(id) {
+    const records = this.transactionCache.get(id);
+    if (!records) return;
+    const filePath = this.getTransactionFilePath(id);
+    const jsonl = records.map((record) => JSON.stringify(record)).join("\n");
+    import_fs.default.writeFileSync(filePath, jsonl ? `${jsonl}
+` : "", "utf8");
+    this.dirtyTransactions.delete(id);
+  }
+  isAllTransactionsCompleted(id) {
+    return !this.readTransactionLog(id).some((record) => record.status === "pending" || record.status === "running");
   }
   getLastCommittedSeq(records) {
     return records.reduce((max, record) => record.status === "committed" && record.seq > max ? record.seq : max, 0);
   }
   findTransactionById(records, transactionId) {
-    return records.find((r) => r.id === transactionId) || null;
+    return records.find((record) => record.id === transactionId) || null;
   }
   findTransactionByIdempotency(records, scope, idempotencyKey, payloadDigest) {
-    return records.find((r) => r.scope === scope && r.idempotencyKey === idempotencyKey && r.payloadDigest === payloadDigest && r.status === "committed") || null;
+    return records.find((record) => record.scope === scope && record.idempotencyKey === idempotencyKey && record.payloadDigest === payloadDigest && record.status === "committed") || null;
   }
   findLatestTransaction(records, scope, idempotencyKey) {
-    for (let i = records.length - 1; i >= 0; i--) {
-      if (scope && records[i].scope !== scope) continue;
-      if (idempotencyKey && records[i].idempotencyKey !== idempotencyKey) continue;
-      return records[i];
+    for (let index = records.length - 1; index >= 0; index -= 1) {
+      const record = records[index];
+      if (scope && record.scope !== scope) continue;
+      if (idempotencyKey && record.idempotencyKey !== idempotencyKey) continue;
+      return record;
     }
     return null;
   }
   findTransactionsAfterSeq(records, afterSeq, scope, idempotencyKey, limit) {
-    const filtered = records.filter((r) => r.seq > afterSeq).filter((r) => !scope || r.scope === scope).filter((r) => !idempotencyKey || r.idempotencyKey === idempotencyKey).sort((a, b) => a.seq - b.seq);
+    const filtered = records.filter((record) => record.seq > afterSeq).filter((record) => !scope || record.scope === scope).filter((record) => !idempotencyKey || record.idempotencyKey === idempotencyKey).sort((left, right) => left.seq - right.seq);
     return limit ? filtered.slice(0, limit) : filtered;
   }
-  createTransaction(chatId, scope, payloadDigest, idempotencyKey, seq) {
+  createTransaction(id, scope, payloadDigest, idempotencyKey, seq) {
+    const ownerId = this.resolveTransactionOwnerId(id);
     const now = Date.now();
     return {
       id: `tx_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`,
-      chatId,
+      chatId: ownerId,
       seq,
       status: "pending",
       scope,
@@ -52426,20 +52758,170 @@ var StorageService = class {
       updatedAt: now
     };
   }
-  transitionTransaction(chatId, record, nextStatus, error = null) {
+  transitionTransaction(id, record, nextStatus, error = null) {
+    const ownerId = this.resolveTransactionOwnerId(id);
     const nextRecord = {
       ...record,
+      chatId: ownerId,
       status: nextStatus,
       error,
       updatedAt: Date.now()
     };
-    const records = this.readTransactionLog(chatId).filter((r) => r.id !== record.id);
+    const records = this.readTransactionLog(ownerId).filter((item) => item.id !== record.id);
     records.push(nextRecord);
-    this.writeTransactionLog(chatId, records);
-    Logger.info("Transaction", `\u72B6\u6001\u6D41\u8F6C: ${record.status} -> ${nextStatus}`, { txId: record.id, chatId });
+    this.writeTransactionLog(ownerId, records);
+    const conversation = this.readConversation(ownerId);
+    if (conversation && nextStatus === "committed") {
+      conversation.transaction.lastCommittedSeq = nextRecord.seq;
+      conversation.transaction.lastTransactionId = nextRecord.id;
+      conversation.updatedAt = Date.now();
+      this.writeConversation(conversation);
+    }
     return nextRecord;
   }
-  // --- 预设管理 ---
+  conversationToLegacyChatArray(document) {
+    const metadata = {
+      type: "metadata",
+      activeLeafId: document.activeLeafId,
+      updatedAt: document.updatedAt,
+      version: 3,
+      pluginData: document.pluginState.chat?.pluginData || null,
+      transaction: {
+        lastCommittedSeq: document.transaction.lastCommittedSeq,
+        lastTransactionId: document.transaction.lastTransactionId
+      }
+    };
+    return [metadata, ...document.nodes.map((node) => ({ ...node }))];
+  }
+  readChat(chatId) {
+    const document = this.readConversation(chatId);
+    return document ? this.conversationToLegacyChatArray(document) : [];
+  }
+  writeChat(chatId, data) {
+    const existing = this.readConversation(chatId);
+    const migrated = migrateLegacyChatArray(existing?.id || chatId, data, existing?.conversationType || (chatId.startsWith("lw_card_") ? "forge" : "chat"));
+    if (existing?.conversationType === "forge") {
+      migrated.pluginState.forge = {
+        ...existing.pluginState.forge || {},
+        ...migrated.pluginState.forge || {},
+        sessionChatId: existing.pluginState.forge?.sessionChatId || existing.legacy?.legacyChatId || chatId
+      };
+      migrated.legacy = {
+        ...existing.legacy || {},
+        ...migrated.legacy || {}
+      };
+    }
+    if (existing?.conversationType === "chat") {
+      migrated.pluginState.chat = {
+        ...existing.pluginState.chat || {},
+        ...migrated.pluginState.chat || {}
+      };
+    }
+    migrated.transaction = existing?.transaction || migrated.transaction;
+    this.writeConversation(migrated);
+  }
+  appendChatRecord(chatId, item) {
+    const current = this.readConversation(chatId) || createEmptyConversationDocument2({
+      id: chatId,
+      conversationType: chatId.startsWith("lw_card_") ? "forge" : "chat"
+    });
+    const next = applyConversationMutation(current, {
+      nodes: {
+        added: [{ ...item }]
+      },
+      updatedAt: Date.now()
+    });
+    this.writeConversation(next);
+    this.flushConversationToDisk(next.id);
+  }
+  updateChatMetadata(chatId, updates) {
+    const current = this.readConversation(chatId) || createEmptyConversationDocument2({
+      id: chatId,
+      conversationType: chatId.startsWith("lw_card_") ? "forge" : "chat"
+    });
+    const patch = {
+      activeLeafId: updates.activeLeafId ?? current.activeLeafId,
+      updatedAt: typeof updates.updatedAt === "number" ? updates.updatedAt : Date.now(),
+      transaction: updates.transaction ? {
+        lastCommittedSeq: typeof updates.transaction.lastCommittedSeq === "number" ? updates.transaction.lastCommittedSeq : current.transaction.lastCommittedSeq,
+        lastTransactionId: typeof updates.transaction.lastTransactionId === "string" ? updates.transaction.lastTransactionId : current.transaction.lastTransactionId
+      } : void 0
+    };
+    if (updates.pluginData) {
+      patch.pluginState = {
+        chat: {
+          pluginData: updates.pluginData
+        }
+      };
+    }
+    const next = applyConversationMutation(current, patch);
+    this.writeConversation(next);
+    this.flushConversationToDisk(next.id);
+  }
+  conversationToForgeSession(document) {
+    const forgeState = document.pluginState.forge || {};
+    return {
+      id: document.id,
+      sessionChatId: forgeState.sessionChatId || document.legacy?.legacyChatId || document.id,
+      title: document.title,
+      createdAt: document.createdAt,
+      updatedAt: document.updatedAt,
+      presetId: forgeState.presetId || "",
+      activeLeafId: document.activeLeafId,
+      worldlineNodes: document.nodes.map((node) => ({ ...node })),
+      selectedChatSessionId: forgeState.selectedChatSessionId || null,
+      selectedChatSnapshotId: forgeState.selectedChatSnapshotId || null,
+      draftInput: forgeState.draftInput || "",
+      stagingEntries: forgeState.stagingEntries || [],
+      commitReadyEntries: forgeState.commitReadyEntries || [],
+      virtualLorebookEntries: forgeState.virtualLorebookEntries || [],
+      importedLorebookId: forgeState.importedLorebookId || null,
+      workflowSnapshot: forgeState.workflowSnapshot,
+      structuredState: forgeState.structuredState,
+      draftTree: forgeState.draftTree,
+      forgeMemoryTree: forgeState.forgeMemoryTree,
+      completedLayers: forgeState.completedLayers || [],
+      publishState: forgeState.publishState || "drafting",
+      workspaceMode: "workspace"
+    };
+  }
+  listChats() {
+    return this.listConversations().filter((conversation) => conversation.conversationType === "chat").map((conversation) => ({
+      chatId: conversation.id,
+      updatedAt: conversation.updatedAt,
+      messageCount: conversation.messageCount,
+      activeLeafId: conversation.activeLeafId,
+      previewMessage: conversation.previewMessage
+    }));
+  }
+  readForgeSessions() {
+    return this.listForgeSessions();
+  }
+  writeForgeSessions(records) {
+    records.forEach((record) => {
+      this.saveForgeSession(record);
+    });
+  }
+  listForgeSessions() {
+    return this.listConversations().filter((conversation) => conversation.conversationType === "forge").map((conversation) => {
+      const document = this.readConversation(conversation.id);
+      return document ? this.conversationToForgeSession(document) : null;
+    }).filter((session) => Boolean(session)).sort((left, right) => right.updatedAt - left.updatedAt);
+  }
+  getForgeSession(id) {
+    const document = this.readConversation(id);
+    if (!document || document.conversationType !== "forge") return null;
+    return this.conversationToForgeSession(document);
+  }
+  saveForgeSession(session) {
+    const existing = this.readConversation(session.id);
+    const document = migrateLegacyForgeSession(session, session.worldlineNodes);
+    document.transaction = existing?.transaction || document.transaction;
+    document.updatedAt = session.updatedAt || Date.now();
+    this.writeConversation(document);
+    this.flushConversationToDisk(document.id);
+    return this.conversationToForgeSession(document);
+  }
   readPresets() {
     if (!import_fs.default.existsSync(this.presetsFile)) {
       const seeded = this.seedDefaultPresetsIfNeeded([]);
@@ -52460,7 +52942,7 @@ var StorageService = class {
     import_fs.default.renameSync(tmp, this.presetsFile);
   }
   seedDefaultPresetsIfNeeded(records) {
-    if (records.some((r) => r.isDefault)) return records;
+    if (records.some((record) => record.isDefault)) return records;
     const now = Date.now();
     const defaultPreset = {
       id: "preset_default_forge",
@@ -52477,12 +52959,11 @@ var StorageService = class {
     };
     return [defaultPreset, ...records];
   }
-  // --- 工具类 ---
   digestPayload(payload) {
     const text = JSON.stringify(payload) || "";
     let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-      hash = (hash << 5) - hash + text.charCodeAt(i);
+    for (let index = 0; index < text.length; index += 1) {
+      hash = (hash << 5) - hash + text.charCodeAt(index);
       hash |= 0;
     }
     return `dg_${Math.abs(hash).toString(16)}`;
@@ -52491,89 +52972,11 @@ var StorageService = class {
     if (!text) return "fp_0";
     const cleaned = text.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\s+/g, " ").trim();
     let hash = 0;
-    for (let i = 0; i < cleaned.length; i++) {
-      hash = (hash << 5) - hash + cleaned.charCodeAt(i);
+    for (let index = 0; index < cleaned.length; index += 1) {
+      hash = (hash << 5) - hash + cleaned.charCodeAt(index);
       hash |= 0;
     }
     return `fp_${Math.abs(hash).toString(16).substring(0, 8)}`;
-  }
-  listChats() {
-    const files = import_fs.default.existsSync(this.chatsDir) ? import_fs.default.readdirSync(this.chatsDir).filter((name) => /^chat_.+\.jsonl$/.test(name) && !name.endsWith(".tx.jsonl")) : [];
-    return files.map((fileName) => {
-      const chatId = fileName.replace(/^chat_/, "").replace(/\.jsonl$/, "");
-      const records = this.readChat(chatId);
-      const metadata = records.find((item) => item?.type === "metadata") || null;
-      const messages = records.filter((item) => item?.type !== "metadata");
-      const latestMessage = [...messages].reverse().find((item) => typeof item?.mes === "string" || typeof item?.message === "string");
-      const stat = import_fs.default.statSync(import_path.default.join(this.chatsDir, fileName));
-      return {
-        chatId,
-        updatedAt: Number(metadata?.updatedAt || stat.mtimeMs || Date.now()),
-        messageCount: messages.length,
-        activeLeafId: metadata?.activeLeafId || null,
-        previewMessage: String(latestMessage?.mes || latestMessage?.message || latestMessage?.mesRaw || "").slice(0, 160)
-      };
-    }).sort((a, b) => b.updatedAt - a.updatedAt);
-  }
-  readForgeSessions() {
-    if (!import_fs.default.existsSync(this.forgeSessionsFile)) return [];
-    try {
-      const raw = import_fs.default.readFileSync(this.forgeSessionsFile, "utf8");
-      const records = JSON.parse(raw);
-      return Array.isArray(records) ? records : [];
-    } catch {
-      return [];
-    }
-  }
-  writeForgeSessions(records) {
-    const tmp = `${this.forgeSessionsFile}.tmp`;
-    import_fs.default.writeFileSync(tmp, JSON.stringify(records, null, 2), "utf8");
-    import_fs.default.renameSync(tmp, this.forgeSessionsFile);
-  }
-  listForgeSessions() {
-    const records = this.readForgeSessions();
-    const indexedIds = new Set(records.map((r) => r.sessionChatId));
-    const files = import_fs.default.existsSync(this.forgeDir) ? import_fs.default.readdirSync(this.forgeDir).filter((name) => name.startsWith("chat_lw_card_") && name.endsWith(".jsonl") && !name.endsWith(".tx.jsonl")) : [];
-    files.forEach((file) => {
-      const chatId = file.replace(/^chat_/, "").replace(/\.jsonl$/, "");
-      if (!indexedIds.has(chatId)) {
-        try {
-          const chatPath = import_path.default.join(this.forgeDir, file);
-          const firstLine = import_fs.default.readFileSync(chatPath, "utf8").split("\n")[0];
-          const metadata = firstLine ? JSON.parse(firstLine) : {};
-          const stat = import_fs.default.statSync(chatPath);
-          records.push({
-            id: `orphan_${chatId}`,
-            sessionChatId: chatId,
-            title: `\u6062\u590D\u7684\u4F1A\u8BDD: ${chatId.slice(8, 16)}`,
-            createdAt: stat.birthtimeMs,
-            updatedAt: metadata.updatedAt || stat.mtimeMs,
-            activeLayer: "concept",
-            publishState: "drafting",
-            workspaceMode: "workspace"
-            // 其余字段留空或默认
-          });
-          Logger.info("Storage", `\u53D1\u73B0\u5E76\u81EA\u52A8\u8865\u5F55 Forge \u5B64\u513F\u4F1A\u8BDD: ${chatId}`);
-        } catch (err) {
-          Logger.warn("Storage", `\u89E3\u6790\u5B64\u513F\u4F1A\u8BDD\u5931\u8D25: ${chatId}`, { error: err.message });
-        }
-      }
-    });
-    return records.sort((a, b) => b.updatedAt - a.updatedAt);
-  }
-  getForgeSession(id) {
-    return this.readForgeSessions().find((session) => session.id === id) || null;
-  }
-  saveForgeSession(session) {
-    const sessions = this.readForgeSessions();
-    const index = sessions.findIndex((item) => item.id === session.id);
-    if (index === -1) {
-      sessions.push(session);
-    } else {
-      sessions[index] = session;
-    }
-    this.writeForgeSessions(sessions);
-    return session;
   }
 };
 
@@ -53635,6 +54038,14 @@ var API_ROUTES = {
     SAVE: "/forge/sessions",
     UPDATE: (sessionId) => `/forge/sessions/${sessionId}`
   },
+  CONVERSATION: {
+    LIST: "/conversations",
+    GET: (id) => `/conversations/${id}`,
+    SAVE: (id) => `/conversations/${id}`,
+    MUTATE: (id) => `/conversations/${id}`,
+    TRANSACTIONS: (id) => `/conversations/${id}/transactions`,
+    ROLLBACK_TRANSACTION: (id, txId) => `/conversations/${id}/transactions/${txId}/rollback`
+  },
   NEXUS: {
     MODELS: (providerId) => `/nexus/models/${providerId}`,
     GENERATE: "/nexus/generate",
@@ -53883,6 +54294,83 @@ var LuminaWeaveServer = class {
       if (!preset) return res.status(404).json({ error: "Preset not found" });
       res.json(this.nexus.compilePromptFromPreset(preset.blob, req.body.messages));
     });
+    router.get(API_ROUTES.CONVERSATION.LIST, (req, res) => {
+      res.json({ conversations: this.storage.listConversations() });
+    });
+    router.get(API_ROUTES.CONVERSATION.GET(":id").replace("/:id", "/:conversationId"), (req, res) => {
+      const conversationId = String(req.params.conversationId);
+      const document = this.storage.readConversation(conversationId);
+      res.json({ document });
+    });
+    router.put(API_ROUTES.CONVERSATION.SAVE(":id").replace("/:id", "/:conversationId"), (req, res) => {
+      const conversationId = String(req.params.conversationId);
+      const document = req.body;
+      const records = this.storage.readTransactionLog(conversationId);
+      const tx = this.storage.createTransaction(
+        conversationId,
+        "chat.save",
+        this.storage.digestPayload(document),
+        req.body?.transactionContext?.idempotencyKey || `conversation_save_${Date.now()}`,
+        this.storage.getLastCommittedSeq(records) + 1
+      );
+      this.storage.saveConversation(conversationId, document);
+      const committedTx = this.storage.transitionTransaction(conversationId, tx, "committed");
+      this.storage.syncToDisk();
+      res.json({
+        success: true,
+        document: this.storage.readConversation(conversationId),
+        summary: this.storage.listConversations().find((item) => item.id === conversationId) || null,
+        lastCommittedSeq: committedTx.seq,
+        transaction: committedTx
+      });
+    });
+    router.patch(API_ROUTES.CONVERSATION.MUTATE(":id").replace("/:id", "/:conversationId"), (req, res) => {
+      const conversationId = String(req.params.conversationId);
+      const mutation = req.body;
+      const records = this.storage.readTransactionLog(conversationId);
+      const tx = this.storage.createTransaction(
+        conversationId,
+        "chat.patch",
+        this.storage.digestPayload(mutation),
+        req.body?.transactionContext?.idempotencyKey || `conversation_patch_${Date.now()}`,
+        this.storage.getLastCommittedSeq(records) + 1
+      );
+      this.storage.mutateConversation(conversationId, mutation);
+      const committedTx = this.storage.transitionTransaction(conversationId, tx, "committed");
+      this.storage.syncToDisk();
+      res.json({
+        success: true,
+        document: this.storage.readConversation(conversationId),
+        summary: this.storage.listConversations().find((item) => item.id === conversationId) || null,
+        lastCommittedSeq: committedTx.seq,
+        transaction: committedTx
+      });
+    });
+    router.get(API_ROUTES.CONVERSATION.TRANSACTIONS(":id").replace("/:id", "/:conversationId"), (req, res) => {
+      const conversationId = String(req.params.conversationId);
+      const records = this.storage.readTransactionLog(conversationId);
+      res.json({
+        success: true,
+        transactions: records,
+        lastCommittedSeq: this.storage.getLastCommittedSeq(records)
+      });
+    });
+    router.post(API_ROUTES.CONVERSATION.ROLLBACK_TRANSACTION(":id", ":txId").replace("/:id", "/:conversationId").replace("/:txId", "/:transactionId"), (req, res) => {
+      const conversationId = String(req.params.conversationId);
+      const transactionId = String(req.params.transactionId);
+      const records = this.storage.readTransactionLog(conversationId);
+      const target = this.storage.findTransactionById(records, transactionId);
+      if (!target) {
+        return res.status(404).json({ success: false, error: "Transaction not found" });
+      }
+      const rolledBack = this.storage.transitionTransaction(conversationId, target, "rolled_back");
+      this.storage.syncToDisk();
+      res.status(200).json({
+        success: true,
+        transaction: rolledBack,
+        lastCommittedSeq: this.storage.getLastCommittedSeq(this.storage.readTransactionLog(conversationId))
+      });
+    });
     router.get(API_ROUTES.CHAT.LIST, (req, res) => {
       res.json({ chats: this.storage.listChats() });
     });
@@ -53891,50 +54379,95 @@ var LuminaWeaveServer = class {
       data.length > 0 ? res.json(data) : res.status(404).json({ error: "Chat not found" });
     });
     router.get("/chat/:chatId/sync-status", (req, res) => {
-      res.json({ success: true, isTransactionsCompleted: this.storage.isAllTransactionsCompleted(String(req.params.chatId)) });
+      const chatId = String(req.params.chatId);
+      const records = this.storage.readTransactionLog(chatId);
+      const lastCommitted = [...records].filter((record) => record.status === "committed").sort((left, right) => right.seq - left.seq)[0];
+      res.json({
+        success: true,
+        isTransactionsCompleted: this.storage.isAllTransactionsCompleted(chatId),
+        lastCommittedSeq: this.storage.getLastCommittedSeq(records),
+        lastTransactionId: lastCommitted?.id || null
+      });
     });
     router.get("/chat/:chatId/transactions", (req, res) => {
-      const records = this.storage.readTransactionLog(String(req.params.chatId));
-      res.json({ success: true, transactions: records });
+      const chatId = String(req.params.chatId);
+      const records = this.storage.readTransactionLog(chatId);
+      res.json({
+        success: true,
+        transactions: records,
+        lastCommittedSeq: this.storage.getLastCommittedSeq(records)
+      });
     });
     router.post("/chat/:chatId/transactions/:transactionId/rollback", (req, res) => {
       const chatId = String(req.params.chatId);
       const transactionId = String(req.params.transactionId);
-      try {
-        const rolledBack = this.storage.transitionTransaction(chatId, { id: transactionId }, "aborted");
-        res.status(200).json({ success: true, transaction: rolledBack });
-      } catch (error) {
-        if (error?.message === "transaction_not_found") {
-          return res.status(404).json({ success: false, error: "Transaction not found" });
-        }
-        return res.status(409).json({ success: false, error: "Rollback failed" });
+      const records = this.storage.readTransactionLog(chatId);
+      const target = this.storage.findTransactionById(records, transactionId);
+      if (!target) {
+        return res.status(404).json({ success: false, error: "Transaction not found" });
       }
+      const rolledBack = this.storage.transitionTransaction(chatId, target, "rolled_back");
+      this.storage.syncToDisk();
+      res.status(200).json({
+        success: true,
+        transaction: rolledBack,
+        lastCommittedSeq: this.storage.getLastCommittedSeq(this.storage.readTransactionLog(chatId))
+      });
     });
     router.post("/chat/save/:chatId", (req, res) => {
       const chatId = String(req.params.chatId);
       const payload = Array.isArray(req.body?.data) ? req.body.data : Array.isArray(req.body) ? req.body : [];
       const records = this.storage.readTransactionLog(chatId);
       const digest = this.storage.digestPayload(payload);
-      const tx = this.storage.createTransaction(chatId, "chat.save", digest, `save_${Date.now()}`, this.storage.getLastCommittedSeq(records) + 1);
+      const tx = this.storage.createTransaction(
+        chatId,
+        "chat.save",
+        digest,
+        req.body?.transactionContext?.idempotencyKey || `save_${Date.now()}`,
+        this.storage.getLastCommittedSeq(records) + 1
+      );
       this.storage.writeChat(chatId, payload);
       const committedTx = this.storage.transitionTransaction(chatId, tx, "committed");
+      this.storage.syncToDisk();
       res.json({ success: true, transaction: committedTx });
     });
     router.patch("/chat/:chatId", (req, res) => {
       const chatId = String(req.params.chatId);
-      let data = this.storage.readChat(chatId);
-      const { added, updated, deletedIds } = req.body;
-      if (deletedIds) {
-        const deleteSet = new Set(deletedIds);
-        data = data.filter((item) => item.type === "metadata" || !deleteSet.has(item.id));
-      }
-      if (updated) {
-        const updateMap = new Map(updated.map((u) => [u.id, u]));
-        data = data.map((item) => item.type !== "metadata" && updateMap.has(item.id) ? { ...item, ...updateMap.get(item.id) } : item);
-      }
-      if (added) data.push(...added);
-      this.storage.writeChat(chatId, data);
-      res.json({ success: true, count: data.length });
+      const conversation = this.storage.readConversation(chatId) || createEmptyConversationDocument({
+        id: chatId,
+        conversationType: chatId.startsWith("lw_card_") ? "forge" : "chat"
+      });
+      const mutation = {
+        nodes: {
+          added: Array.isArray(req.body?.added) ? req.body.added : [],
+          updated: Array.isArray(req.body?.updated) ? req.body.updated : [],
+          deletedIds: Array.isArray(req.body?.deletedIds) ? req.body.deletedIds : []
+        },
+        activeLeafId: req.body?.metadata?.activeLeafId ?? conversation.activeLeafId,
+        updatedAt: req.body?.metadata?.updatedAt ?? Date.now(),
+        pluginState: req.body?.metadata?.pluginData ? {
+          chat: {
+            pluginData: req.body.metadata.pluginData
+          }
+        } : void 0
+      };
+      const records = this.storage.readTransactionLog(chatId);
+      const tx = this.storage.createTransaction(
+        chatId,
+        "chat.patch",
+        this.storage.digestPayload(mutation),
+        req.body?.transactionContext?.idempotencyKey || `patch_${Date.now()}`,
+        this.storage.getLastCommittedSeq(records) + 1
+      );
+      this.storage.mutateConversation(chatId, mutation);
+      const committedTx = this.storage.transitionTransaction(chatId, tx, "committed");
+      this.storage.syncToDisk();
+      res.json({
+        success: true,
+        count: this.storage.readConversation(chatId)?.nodes.length || 0,
+        transaction: committedTx,
+        lastCommittedSeq: committedTx.seq
+      });
     });
     router.get(API_ROUTES.FORGE.LIST, (req, res) => {
       res.json({ sessions: this.storage.listForgeSessions() });

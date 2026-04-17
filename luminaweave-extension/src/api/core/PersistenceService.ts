@@ -15,8 +15,8 @@ import {
     TransactionQueryResponse,
     TransactionErrorPayload
 } from '../../../../shared/api/TransactionTypes.js';
-import { API_BASE, API_ROUTES } from '../../../../shared/ApiEndpoints.js';
 import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
+import { ConversationDocument, ConversationMutation, createEmptyConversationDocument } from '../../../../shared/ConversationTypes.js';
 
 /**
  * PersistenceService
@@ -114,7 +114,7 @@ export class PersistenceService {
 
     private async _queryLatestTransaction(chatId: string, scope: TransactionScope, idempotencyKey: string): Promise<TransactionQueryResponse | null> {
         try {
-            return await BridgeDispatcher.chat.getTransactions(chatId, { scope, idempotencyKey });
+            return await BridgeDispatcher.conversation.getTransactions(chatId, { scope, idempotencyKey });
         } catch (e) {
             console.warn(`[PersistenceService] 查询最新事务失败`, e);
             return null;
@@ -123,7 +123,7 @@ export class PersistenceService {
 
     private async _queryTransactionsAfterSeq(chatId: string, afterSeq: number, scope: TransactionScope): Promise<TransactionQueryResponse | null> {
         try {
-            return await BridgeDispatcher.chat.getTransactions(chatId, { afterSeq: String(afterSeq), scope });
+            return await BridgeDispatcher.conversation.getTransactions(chatId, { afterSeq: String(afterSeq), scope });
         } catch (e) {
             console.warn(`[PersistenceService] 查询增量事务失败`, e);
             return null;
@@ -162,7 +162,7 @@ export class PersistenceService {
         }
         if (!tx) return;
         try {
-            const rollbackPayload = await BridgeDispatcher.chat.rollbackTransaction(chatId, tx.id) as TransactionMutationResponse;
+            const rollbackPayload = await BridgeDispatcher.conversation.rollbackTransaction(chatId, tx.id) as TransactionMutationResponse;
             const rollbackSeq = typeof rollbackPayload.lastCommittedSeq === 'number'
                 ? rollbackPayload.lastCommittedSeq
                 : null;
@@ -202,8 +202,9 @@ export class PersistenceService {
         const start = Date.now();
         while (Date.now() - start < maxWaitMs) {
             try {
-                const data = await BridgeDispatcher.chat.getSyncStatus(chatId);
-                if (data.success && data.isTransactionsCompleted) {
+                const data = await BridgeDispatcher.conversation.getTransactions(chatId);
+                const transactions = Array.isArray(data.transactions) ? data.transactions : [];
+                if (!transactions.some((item) => item.status === 'pending' || item.status === 'running')) {
                     return true;
                 }
             } catch (e) {
@@ -225,16 +226,14 @@ export class PersistenceService {
 
             try {
                 // 2. 请求当前最新的事务状态
-                const data = await BridgeDispatcher.chat.getSyncStatus(chatId);
-                
-                if (data.success) {
-                    const remoteSeq = typeof data.lastCommittedSeq === 'number' ? data.lastCommittedSeq : 0;
-                    const remoteTxId = data.lastTransactionId || '';
-                    
-                    // 3. 同步本地 ID 到前端存储
-                    console.log(`[PersistenceService] 执行事务对齐: LocalSeq=${this._getLastCommittedSeq(chatId)}, RemoteSeq=${remoteSeq}, RemoteTxId=${remoteTxId}`);
-                    await this._txEngine.alignState(chatId, remoteSeq, remoteTxId);
-                }
+                const data = await BridgeDispatcher.conversation.getTransactions(chatId);
+                const transactions = Array.isArray(data.transactions) ? data.transactions : [];
+                const latest = [...transactions].sort((a, b) => b.seq - a.seq)[0];
+                const remoteSeq = typeof data.lastCommittedSeq === 'number' ? data.lastCommittedSeq : 0;
+                const remoteTxId = latest?.id || '';
+
+                console.log(`[PersistenceService] 执行事务对齐: LocalSeq=${this._getLastCommittedSeq(chatId)}, RemoteSeq=${remoteSeq}, RemoteTxId=${remoteTxId}`);
+                await this._txEngine.alignState(chatId, remoteSeq, remoteTxId);
             } catch (e) {
                 console.warn(`[PersistenceService] 事务 ID 对齐失败 [ID: ${chatId}]`, e);
             }
@@ -250,18 +249,14 @@ export class PersistenceService {
         await this._waitForTransactions(chatId);
 
         try {
-            const data = await BridgeDispatcher.chat.getChat(chatId);
-            if (data && Array.isArray(data)) {
-                let messages = data;
-                let activeLeafId: string | null = null;
-                let metadata: any = null;
-
-                if (data.length > 0 && data[0].type === 'metadata') {
-                    metadata = data[0];
-                    activeLeafId = metadata.activeLeafId || null;
-                    messages = data.slice(1);
-                }
-
+            const data = await BridgeDispatcher.conversation.getConversation(chatId);
+            if (data?.document) {
+                const metadata = {
+                    activeLeafId: data.document.activeLeafId,
+                    updatedAt: data.document.updatedAt,
+                    pluginData: data.document.pluginState.chat?.pluginData || null,
+                    transaction: data.document.transaction
+                };
                 const remoteCommittedSeq = this._extractLastCommittedSeq(metadata);
                 if (typeof remoteCommittedSeq === 'number') {
                     await this._persistLastCommittedSeq(chatId, remoteCommittedSeq);
@@ -275,7 +270,7 @@ export class PersistenceService {
                     this.setIntegratedTxId(chatId, remoteLastTxId);
                 }
 
-                const normalizedNodes = SyncUtils.ensureFingerprints(messages);
+                const normalizedNodes = SyncUtils.ensureFingerprints(data.document.nodes);
                 normalizedNodes.forEach(n => {
                     if (!n.name) {
                         n.name = n.is_user ? 'You' : 'Assistant';
@@ -284,7 +279,7 @@ export class PersistenceService {
 
                 return {
                     messages: normalizedNodes,
-                    activeLeafId: activeLeafId || normalizedNodes[normalizedNodes.length - 1]?.id || null,
+                    activeLeafId: data.document.activeLeafId || normalizedNodes[normalizedNodes.length - 1]?.id || null,
                     metadata,
                     exists: true
                 };
@@ -307,6 +302,49 @@ export class PersistenceService {
             }
             throw e;
         }
+    }
+
+    private async _prepareConversationDocument(chatId: string): Promise<ConversationDocument> {
+        const existing = (await BridgeDispatcher.conversation.getConversation(chatId)).document;
+        const pluginMetadata: Record<string, any> = {};
+        pluginManager.callHooks('onMetadataExport', pluginMetadata);
+
+        const base = existing || createEmptyConversationDocument({
+            id: chatId,
+            conversationType: 'chat',
+            title: `Conversation ${chatId.slice(0, 12)}`
+        });
+
+        const nodes = this.store.nodePool.map((message) => {
+            const stored = STProtocol.toStorage(message);
+            if (message.id === this.store.activeLeafId) {
+                stored.extra = stored.extra || {};
+                stored.extra.tier1Snapshot = pluginMetadata.tier1;
+                stored.extra.tier3Snapshot = pluginMetadata.tier3;
+                stored.extra.nextPlan = pluginMetadata.nextPlan;
+            }
+            return stored as unknown as LuminaChatMessage;
+        });
+
+        return {
+            ...base,
+            id: chatId,
+            activeLeafId: this.store.activeLeafId,
+            updatedAt: Date.now(),
+            nodes,
+            pluginState: {
+                ...base.pluginState,
+                chat: {
+                    ...(base.pluginState.chat || {}),
+                    pluginData: pluginMetadata
+                }
+            },
+            transaction: base.transaction,
+            summary: {
+                previewMessage: base.summary?.previewMessage || '',
+                messageCount: nodes.length
+            }
+        };
     }
 
     /**
@@ -381,21 +419,26 @@ export class PersistenceService {
 
             try {
                 // 1. 获取后端当前状态 (快照对比)
-                let remoteData: any[] = [];
+                let remoteDocument: ConversationDocument | null = null;
                 try {
-                    const data = await BridgeDispatcher.chat.getChat(chatId);
-                    remoteData = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
+                    const data = await BridgeDispatcher.conversation.getConversation(chatId);
+                    remoteDocument = data.document;
                 } catch (e) {
                     // ignore error, assume empty
                 }
-                const remoteMetadata = remoteData.find(d => d.type === 'metadata') || null;
+                const remoteMetadata = remoteDocument ? {
+                    activeLeafId: remoteDocument.activeLeafId,
+                    updatedAt: remoteDocument.updatedAt,
+                    pluginData: remoteDocument.pluginState.chat?.pluginData || null,
+                    transaction: remoteDocument.transaction
+                } : null;
                 const remoteCommittedSeq = this._extractLastCommittedSeq(remoteMetadata);
                 if (typeof remoteCommittedSeq === 'number') {
                     await this._persistLastCommittedSeq(chatId, remoteCommittedSeq);
                 }
 
                 // 2. 预处理数据 (过滤 metadata)
-                const remoteNodes = remoteData.filter(d => d.type !== 'metadata');
+                const remoteNodes = remoteDocument?.nodes || [];
                 const localNodes = this.store.nodePool;
                 const hasLocalChanges = localNodes.some(n => n.syncStatus === 'local');
 
@@ -411,10 +454,17 @@ export class PersistenceService {
                 const diff = SyncUtils.comparePools(localNodes, remoteNodes);
                 if (forceFull || remoteNodes.length === 0) {
                     console.log(`[PersistenceService] 执行全量覆盖保存 [ID: ${chatId}]`);
-                    const payload = this._prepareStoragePayload();
+                    const payload = await this._prepareConversationDocument(chatId);
                     const payloadDigest = TransactionEngine.digest(payload);
                     await this._mutateWithCompensation(chatId, 'chat.save', payloadDigest, async (transactionContext) => {
-                        return await BridgeDispatcher.chat.saveChat(chatId, { data: payload, transactionContext });
+                        return await BridgeDispatcher.conversation.saveConversation(chatId, {
+                            ...payload,
+                            transaction: {
+                                ...payload.transaction,
+                                lastCommittedSeq: transactionContext.expectedSeq,
+                                lastTransactionId: transactionContext.lastTransactionId || payload.transaction.lastTransactionId
+                            }
+                        }) as any;
                     });
                     
                     // 全量同步后的状态清理
@@ -430,23 +480,23 @@ export class PersistenceService {
                     const pluginMetadata: Record<string, any> = {};
                     pluginManager.callHooks('onMetadataExport', pluginMetadata);
 
-                    const patchPayload = {
-                        added: diff.added.map(m => STProtocol.toStorage(m)),
-                        updated: diff.updated.map(m => STProtocol.toStorage(m)),
-                        deletedIds: diff.deletedIds,
-                        metadata: {
-                            activeLeafId: this.store.activeLeafId,
-                            updatedAt: Date.now(),
-                            pluginData: pluginMetadata
+                    const patchPayload: ConversationMutation = {
+                        nodes: {
+                            added: diff.added.map(m => STProtocol.toStorage(m) as unknown as LuminaChatMessage),
+                            updated: diff.updated.map(m => STProtocol.toStorage(m) as unknown as LuminaChatMessage),
+                            deletedIds: diff.deletedIds
+                        },
+                        activeLeafId: this.store.activeLeafId,
+                        updatedAt: Date.now(),
+                        pluginState: {
+                            chat: {
+                                pluginData: pluginMetadata
+                            }
                         }
                     };
                     const payloadDigest = TransactionEngine.digest(patchPayload);
-                    await this._mutateWithCompensation(chatId, 'chat.patch', payloadDigest, async (transactionContext) => {
-                        const requestBody = {
-                            ...patchPayload,
-                            transactionContext
-                        };
-                        const payload = await BridgeDispatcher.chat.patchChat(chatId, requestBody);
+                    await this._mutateWithCompensation(chatId, 'chat.patch', payloadDigest, async (_transactionContext) => {
+                        const payload = await BridgeDispatcher.conversation.mutateConversation(chatId, patchPayload) as any;
                         
                         // 标记成功同步
                         [...diff.added, ...diff.updated].forEach(n => {
@@ -478,30 +528,4 @@ export class PersistenceService {
         return this.syncToIndependentChat(targetChatId, false);
     }
 
-    private _prepareStoragePayload(): any[] {
-        const pluginMetadata: Record<string, any> = {};
-        pluginManager.callHooks('onMetadataExport', pluginMetadata);
-
-        const messages = this.store.nodePool.map(m => {
-            const stored = STProtocol.toStorage(m);
-            // 节点注入状态快照 (仅在活跃节点或关键节点)
-            if (m.id === this.store.activeLeafId) {
-                stored.extra = stored.extra || {};
-                stored.extra.tier1Snapshot = pluginMetadata.tier1;
-                stored.extra.tier3Snapshot = pluginMetadata.tier3;
-                stored.extra.nextPlan = pluginMetadata.nextPlan;
-            }
-            return stored;
-        });
-
-        const metadata = {
-            type: 'metadata',
-            activeLeafId: this.store.activeLeafId,
-            version: 3.0, // 版本升级
-            updatedAt: Date.now(),
-            pluginData: pluginMetadata
-        };
-
-        return [metadata, ...messages];
-    }
 }

@@ -10,7 +10,7 @@ export type STMessageSnapshot = {
 
 export class MessageListGateway {
     static getSnapshotSync(): STMessageSnapshot {
-        const raw = STClient.getRawMessages({ includeSwipes: false }) as ChatMessage[];
+        const raw = STClient.getRawMessages({ includeSwipes: true }) as ChatMessage[];
         const idToIndex = new Map<string, number>();
 
         for (let i = 0; i < raw.length; i++) {
@@ -34,11 +34,11 @@ export class MessageListGateway {
     }
 
     static async getSnapshot(options: { ensureStableIds?: boolean } = {}): Promise<STMessageSnapshot> {
-        let raw = STClient.getRawMessages({ includeSwipes: false }) as ChatMessage[];
+        let raw = STClient.getRawMessages({ includeSwipes: true }) as ChatMessage[];
         if (options.ensureStableIds) {
             const changed = await this.ensureStableIds(raw);
             if (changed) {
-                raw = STClient.getRawMessages({ includeSwipes: false }) as ChatMessage[];
+                raw = STClient.getRawMessages({ includeSwipes: true }) as ChatMessage[];
             }
         }
 
@@ -108,7 +108,9 @@ export class MessageListGateway {
             updates.push({
                 index: i,
                 content: stWriteText,
-                extra: nextExtra
+                extra: nextExtra,
+                expectedSwipeId: typeof extra.swipe_id === 'number' ? extra.swipe_id : undefined,
+                expectedActiveSwipeText: typeof extra.activeSwipeText === 'string' ? extra.activeSwipeText : stWriteText
             });
         }
 

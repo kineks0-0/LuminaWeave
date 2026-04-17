@@ -9,6 +9,8 @@ export interface STMessageUpdate {
     role?: string;
     is_hidden?: boolean;
     extra?: Record<string, unknown>;
+    expectedSwipeId?: number;
+    expectedActiveSwipeText?: string;
 }
 
 export class STClient {
@@ -98,9 +100,10 @@ export class STClient {
         const helper = this.stHelper;
         if (helper && typeof helper.getChatMessages === 'function') {
             try {
-                const res = helper.getChatMessages('0-{{lastMessageId}}', { include_swipes: !!options.includeSwipes });
+                const res = helper.getChatMessages('0-{{lastMessageId}}', { include_swipes: true });
                 if (Array.isArray(res)) {
-                    return res.filter(Boolean);
+                    const filtered = res.filter(Boolean);
+                    return filtered.map((msg, index) => this._normalizeHelperMessage(msg, index, filtered.length));
                 }
             } catch (e) {
                 if (!EnvDetector.isSilenceMode) console.warn('[STClient] getChatMessages 失败，准备回退:', e);
@@ -136,9 +139,11 @@ export class STClient {
                 role: resolvedRole,
                 is_hidden: m.is_system || false,
                 message: mLike.mes || '',
+                mes: mLike.mes || '',
                 data: mLike.data || {},
                 extra: { 
                     ...extra,
+                    message_id: mLike.message_id ?? index,
                     id: extra.id
                 }
             };
@@ -157,6 +162,113 @@ export class STClient {
         return out;
     }
 
+    private static _resolveActiveSwipeIndex(msg: any): number | undefined {
+        const swipeId = typeof msg?.swipe_id === 'number' ? msg.swipe_id : undefined;
+        if (!Array.isArray(msg?.swipes) || msg.swipes.length === 0) {
+            return swipeId;
+        }
+        if (swipeId === undefined || swipeId < 0 || swipeId >= msg.swipes.length) {
+            return undefined;
+        }
+        return swipeId;
+    }
+
+    private static _resolveActiveSwipeText(msg: any): string {
+        const swipeId = this._resolveActiveSwipeIndex(msg);
+        if (swipeId !== undefined && Array.isArray(msg?.swipes)) {
+            const swipeText = msg.swipes[swipeId];
+            if (typeof swipeText === 'string') {
+                return swipeText;
+            }
+        }
+        if (typeof msg?.message === 'string') return msg.message;
+        if (typeof msg?.mes === 'string') return msg.mes;
+        return '';
+    }
+
+    private static _resolveActiveSwipeExtra(msg: any): Record<string, unknown> {
+        const swipeId = this._resolveActiveSwipeIndex(msg);
+        if (swipeId === undefined || !Array.isArray(msg?.swipes_info)) {
+            return {};
+        }
+        const swipeInfo = msg.swipes_info[swipeId];
+        if (!swipeInfo || typeof swipeInfo !== 'object') {
+            return {};
+        }
+        const rawExtra = (swipeInfo as Record<string, unknown>).extra;
+        if (!rawExtra || typeof rawExtra !== 'object' || Array.isArray(rawExtra)) {
+            return {};
+        }
+        return this._normalizeExtra(rawExtra as Record<string, unknown>);
+    }
+
+    private static _applyTavernRegex(
+        text: string,
+        source: 'user_input' | 'ai_output' | 'slash_command' | 'world_info' | 'reasoning',
+        destination: 'display' | 'prompt',
+        options: { depth?: number } = {}
+    ): string {
+        const helper = this.stHelper;
+        if (helper && typeof helper.formatAsTavernRegexedString === 'function') {
+            try {
+                return helper.formatAsTavernRegexedString(text, source, destination, options);
+            } catch (e) {
+                console.warn('[STClient] formatAsTavernRegexedString 调用失败，回退原文:', e);
+            }
+        }
+        return text;
+    }
+
+    private static _normalizeHelperMessage(msg: any, index: number, total: number): any {
+        const baseExtra = this._normalizeExtra(((msg as Record<string, unknown>).extra || {}) as Record<string, unknown>);
+        const activeSwipeIndex = this._resolveActiveSwipeIndex(msg);
+        const activeSwipeText = this._resolveActiveSwipeText(msg);
+        const activeSwipeExtra = this._resolveActiveSwipeExtra(msg);
+        const swipeCount = Array.isArray(msg?.swipes) ? msg.swipes.length : 0;
+        const hasSwipeVariants = swipeCount > 1 && activeSwipeIndex !== undefined;
+
+        const mergedExtra: Record<string, unknown> = {
+            ...baseExtra,
+            ...activeSwipeExtra
+        };
+
+        if (hasSwipeVariants) {
+            const branchScopedKeys = ['id', 'fingerprint', 'stFingerprint', 'mesRaw', 'mesST', 'pluginRaw', 'thinkingText', 'mesSummary'];
+            for (const key of branchScopedKeys) {
+                if (!(key in activeSwipeExtra)) {
+                    delete mergedExtra[key];
+                }
+            }
+        }
+
+        if (typeof msg?.message_id === 'number') {
+            mergedExtra.message_id = msg.message_id;
+        }
+        if (activeSwipeIndex !== undefined) {
+            mergedExtra.swipe_id = activeSwipeIndex;
+        }
+        if (swipeCount > 0) {
+            mergedExtra.swipeCount = swipeCount;
+        }
+        mergedExtra.activeSwipeText = activeSwipeText;
+
+        const normalizedRole = STProtocol.normalizeRole(mergedExtra.role ?? msg?.role, msg?.role === 'user');
+        const source = normalizedRole === 'user' ? 'user_input' : 'ai_output';
+        const depth = Math.max(total - 1 - index, 0);
+        const displayText = this._applyTavernRegex(activeSwipeText, source, 'display', { depth });
+
+        return {
+            ...msg,
+            role: normalizedRole,
+            message: activeSwipeText,
+            mes: displayText,
+            extra: {
+                ...mergedExtra,
+                role: normalizedRole
+            }
+        };
+    }
+
     private static _formatToSTRaw(msg: Partial<LuminaChatMessage> & { message?: string }): any {
         const isUser = msg.role === 'user';
         const isSystem = msg.role === 'system';
@@ -164,7 +276,7 @@ export class STClient {
         const payload: any = {
             name: msg.name || (isUser ? 'You' : 'Assistant'),
             role: normalizedRole || ((msg.role as ('system' | 'assistant' | 'user') | undefined) || (isUser ? 'user' : (isSystem ? 'system' : 'assistant'))),
-            message: msg.mesRaw || msg.mes || msg.message || '',
+            message: STProtocol.resolveForSTWrite(msg),
             extra: this._normalizeExtra({ ...(msg.extra || {}), role: normalizedRole })
         };
 
@@ -193,7 +305,16 @@ export class STClient {
                 }
 
                 const targetPayload: any = { message_id: existingMsg.message_id };
-                targetPayload.message = update.content;
+                const currentSwipeId = this._resolveActiveSwipeIndex(existingMsg);
+                const currentActiveSwipeText = this._resolveActiveSwipeText(existingMsg);
+                const expectSwipeMatched =
+                    update.expectedSwipeId === undefined
+                    || currentSwipeId === update.expectedSwipeId;
+                const expectTextMatched =
+                    update.expectedActiveSwipeText === undefined
+                    || currentActiveSwipeText === update.expectedActiveSwipeText;
+                const allowBodyWrite = expectSwipeMatched && expectTextMatched;
+                const isBodyChange = update.content !== currentActiveSwipeText;
 
                 if (update.name) {
                     targetPayload.name = update.name;
@@ -206,6 +327,16 @@ export class STClient {
                     targetPayload.is_system = update.is_hidden;
                 }
 
+                if (allowBodyWrite) {
+                    targetPayload.message = update.content;
+                } else if (isBodyChange) {
+                    console.warn(
+                        `[STClient] 检测到 swipe 已切换，跳过对 message_id=${existingMsg.message_id} 的正文覆写 ` +
+                        `(expectedSwipe=${String(update.expectedSwipeId)}, currentSwipe=${String(currentSwipeId)})`
+                    );
+                    continue;
+                }
+
                 if (update.extra) {
                     const existingExtra = this._normalizeExtra(((existingMsg as any).extra || {}) as Record<string, unknown>);
                     const nextExtra = this._normalizeExtra(update.extra);
@@ -216,9 +347,33 @@ export class STClient {
                     targetPayload.extra = merged;
                 }
 
-                if (Array.isArray(existingMsg.swipes) && existingMsg.swipe_id !== undefined && existingMsg.swipe_id >= 0 && existingMsg.swipe_id < existingMsg.swipes.length) {
+                if (Array.isArray(existingMsg.swipes) && currentSwipeId !== undefined && currentSwipeId >= 0 && currentSwipeId < existingMsg.swipes.length) {
                     targetPayload.swipes = [...existingMsg.swipes];
-                    targetPayload.swipes[existingMsg.swipe_id] = update.content;
+                    if (allowBodyWrite) {
+                        targetPayload.swipes[currentSwipeId] = update.content;
+                    }
+
+                    const existingSwipesInfo = Array.isArray(existingMsg.swipes_info) ? [...existingMsg.swipes_info] : [];
+                    while (existingSwipesInfo.length < targetPayload.swipes.length) {
+                        existingSwipesInfo.push({});
+                    }
+                    const currentSwipeInfo = existingSwipesInfo[currentSwipeId];
+                    const currentSwipeInfoRecord =
+                        currentSwipeInfo && typeof currentSwipeInfo === 'object' && !Array.isArray(currentSwipeInfo)
+                            ? { ...(currentSwipeInfo as Record<string, unknown>) }
+                            : {};
+                    const currentSwipeExtra = this._normalizeExtra((currentSwipeInfoRecord.extra || {}) as Record<string, unknown>);
+                    const nextSwipeExtra = {
+                        ...currentSwipeExtra,
+                        ...(targetPayload.extra || {}),
+                        message_id: existingMsg.message_id,
+                        swipe_id: currentSwipeId,
+                        swipeCount: targetPayload.swipes.length,
+                        activeSwipeText: allowBodyWrite ? update.content : currentActiveSwipeText
+                    };
+                    currentSwipeInfoRecord.extra = nextSwipeExtra;
+                    existingSwipesInfo[currentSwipeId] = currentSwipeInfoRecord;
+                    targetPayload.swipes_info = existingSwipesInfo;
                 }
 
                 targets.push(targetPayload);

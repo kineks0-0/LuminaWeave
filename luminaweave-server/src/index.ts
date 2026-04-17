@@ -11,6 +11,7 @@ import { API_ROUTES } from '../../shared/ApiEndpoints.js';
 import { TransactionRecord, TransactionScope, TransactionStatus, NexusApiConfig, PresetRecord, ForgeSessionRecord } from './types.js';
 import { LuminaChatMessage, MessageUtils } from '../../shared/LuminaMessage.js';
 import { NexusGenerationFlow, PersistenceDelegate } from '../../shared/api/NexusGenerationFlow.js';
+import { ConversationDocument, ConversationMutation } from '../../shared/ConversationTypes.js';
 
 class ServerXMLInterceptor extends BaseXMLInterceptor {}
 
@@ -114,6 +115,95 @@ export class LuminaWeaveServer {
             res.json(this.nexus.compilePromptFromPreset(preset.blob, req.body.messages));
         });
 
+        // --- Unified Conversations ---
+        router.get(API_ROUTES.CONVERSATION.LIST, (req: Request, res: Response) => {
+            res.json({ conversations: this.storage.listConversations() });
+        });
+
+        router.get(API_ROUTES.CONVERSATION.GET(':id').replace('/:id', '/:conversationId'), (req: Request, res: Response) => {
+            const conversationId = String(req.params.conversationId);
+            const document = this.storage.readConversation(conversationId);
+            res.json({ document });
+        });
+
+        router.put(API_ROUTES.CONVERSATION.SAVE(':id').replace('/:id', '/:conversationId'), (req: Request, res: Response) => {
+            const conversationId = String(req.params.conversationId);
+            const document = req.body as ConversationDocument;
+            const records = this.storage.readTransactionLog(conversationId);
+            const tx = this.storage.createTransaction(
+                conversationId,
+                'chat.save',
+                this.storage.digestPayload(document),
+                req.body?.transactionContext?.idempotencyKey || `conversation_save_${Date.now()}`,
+                this.storage.getLastCommittedSeq(records) + 1
+            );
+
+            this.storage.saveConversation(conversationId, document);
+            const committedTx = this.storage.transitionTransaction(conversationId, tx, 'committed');
+            this.storage.syncToDisk();
+
+            res.json({
+                success: true,
+                document: this.storage.readConversation(conversationId),
+                summary: this.storage.listConversations().find((item) => item.id === conversationId) || null,
+                lastCommittedSeq: committedTx.seq,
+                transaction: committedTx
+            });
+        });
+
+        router.patch(API_ROUTES.CONVERSATION.MUTATE(':id').replace('/:id', '/:conversationId'), (req: Request, res: Response) => {
+            const conversationId = String(req.params.conversationId);
+            const mutation = req.body as ConversationMutation;
+            const records = this.storage.readTransactionLog(conversationId);
+            const tx = this.storage.createTransaction(
+                conversationId,
+                'chat.patch',
+                this.storage.digestPayload(mutation),
+                req.body?.transactionContext?.idempotencyKey || `conversation_patch_${Date.now()}`,
+                this.storage.getLastCommittedSeq(records) + 1
+            );
+
+            this.storage.mutateConversation(conversationId, mutation);
+            const committedTx = this.storage.transitionTransaction(conversationId, tx, 'committed');
+            this.storage.syncToDisk();
+
+            res.json({
+                success: true,
+                document: this.storage.readConversation(conversationId),
+                summary: this.storage.listConversations().find((item) => item.id === conversationId) || null,
+                lastCommittedSeq: committedTx.seq,
+                transaction: committedTx
+            });
+        });
+
+        router.get(API_ROUTES.CONVERSATION.TRANSACTIONS(':id').replace('/:id', '/:conversationId'), (req: Request, res: Response) => {
+            const conversationId = String(req.params.conversationId);
+            const records = this.storage.readTransactionLog(conversationId);
+            res.json({
+                success: true,
+                transactions: records,
+                lastCommittedSeq: this.storage.getLastCommittedSeq(records)
+            });
+        });
+
+        router.post(API_ROUTES.CONVERSATION.ROLLBACK_TRANSACTION(':id', ':txId').replace('/:id', '/:conversationId').replace('/:txId', '/:transactionId'), (req: Request, res: Response) => {
+            const conversationId = String(req.params.conversationId);
+            const transactionId = String(req.params.transactionId);
+            const records = this.storage.readTransactionLog(conversationId);
+            const target = this.storage.findTransactionById(records, transactionId);
+            if (!target) {
+                return res.status(404).json({ success: false, error: 'Transaction not found' });
+            }
+
+            const rolledBack = this.storage.transitionTransaction(conversationId, target, 'rolled_back');
+            this.storage.syncToDisk();
+            res.status(200).json({
+                success: true,
+                transaction: rolledBack,
+                lastCommittedSeq: this.storage.getLastCommittedSeq(this.storage.readTransactionLog(conversationId))
+            });
+        });
+
         // --- 聊天与同步 (Critical Fix) ---
         router.get(API_ROUTES.CHAT.LIST, (req: Request, res: Response) => {
             res.json({ chats: this.storage.listChats() });
@@ -125,28 +215,45 @@ export class LuminaWeaveServer {
         });
 
         router.get('/chat/:chatId/sync-status', (req: Request, res: Response) => {
-            res.json({ success: true, isTransactionsCompleted: this.storage.isAllTransactionsCompleted(String(req.params.chatId)) });
+            const chatId = String(req.params.chatId);
+            const records = this.storage.readTransactionLog(chatId);
+            const lastCommitted = [...records]
+                .filter((record) => record.status === 'committed')
+                .sort((left, right) => right.seq - left.seq)[0];
+            res.json({
+                success: true,
+                isTransactionsCompleted: this.storage.isAllTransactionsCompleted(chatId),
+                lastCommittedSeq: this.storage.getLastCommittedSeq(records),
+                lastTransactionId: lastCommitted?.id || null
+            });
         });
 
         router.get('/chat/:chatId/transactions', (req: Request, res: Response) => {
-            const records = this.storage.readTransactionLog(String(req.params.chatId));
-            res.json({ success: true, transactions: records });
+            const chatId = String(req.params.chatId);
+            const records = this.storage.readTransactionLog(chatId);
+            res.json({
+                success: true,
+                transactions: records,
+                lastCommittedSeq: this.storage.getLastCommittedSeq(records)
+            });
         });
 
         router.post('/chat/:chatId/transactions/:transactionId/rollback', (req: Request, res: Response) => {
             const chatId = String(req.params.chatId);
             const transactionId = String(req.params.transactionId);
-            try {
-                // Not perfectly aligned with backend storage rollback since it requires more complex logic.
-                // Fallback to simpler error returning if rollback fails.
-                const rolledBack = this.storage.transitionTransaction(chatId, { id: transactionId } as any, 'aborted');
-                res.status(200).json({ success: true, transaction: rolledBack });
-            } catch (error: any) {
-                if (error?.message === 'transaction_not_found') {
-                    return res.status(404).json({ success: false, error: 'Transaction not found' });
-                }
-                return res.status(409).json({ success: false, error: 'Rollback failed' });
+            const records = this.storage.readTransactionLog(chatId);
+            const target = this.storage.findTransactionById(records, transactionId);
+            if (!target) {
+                return res.status(404).json({ success: false, error: 'Transaction not found' });
             }
+
+            const rolledBack = this.storage.transitionTransaction(chatId, target, 'rolled_back');
+            this.storage.syncToDisk();
+            res.status(200).json({
+                success: true,
+                transaction: rolledBack,
+                lastCommittedSeq: this.storage.getLastCommittedSeq(this.storage.readTransactionLog(chatId))
+            });
         });
 
         router.post('/chat/save/:chatId', (req: Request, res: Response) => {
@@ -154,30 +261,58 @@ export class LuminaWeaveServer {
             const payload = Array.isArray(req.body?.data) ? req.body.data : (Array.isArray(req.body) ? req.body : []);
             const records = this.storage.readTransactionLog(chatId);
             const digest = this.storage.digestPayload(payload);
-            const tx = this.storage.createTransaction(chatId, 'chat.save', digest, `save_${Date.now()}`, this.storage.getLastCommittedSeq(records) + 1);
-            
+            const tx = this.storage.createTransaction(
+                chatId,
+                'chat.save',
+                digest,
+                req.body?.transactionContext?.idempotencyKey || `save_${Date.now()}`,
+                this.storage.getLastCommittedSeq(records) + 1
+            );
+
             this.storage.writeChat(chatId, payload);
             const committedTx = this.storage.transitionTransaction(chatId, tx, 'committed');
+            this.storage.syncToDisk();
             res.json({ success: true, transaction: committedTx });
         });
 
         router.patch('/chat/:chatId', (req: Request, res: Response) => {
             const chatId = String(req.params.chatId);
-            let data = this.storage.readChat(chatId);
-            const { added, updated, deletedIds } = req.body;
-            
-            if (deletedIds) {
-                const deleteSet = new Set(deletedIds);
-                data = data.filter(item => item.type === 'metadata' || !deleteSet.has(item.id));
-            }
-            if (updated) {
-                const updateMap = new Map(updated.map((u: any) => [u.id, u]));
-                data = data.map(item => item.type !== 'metadata' && updateMap.has(item.id) ? { ...item, ...(updateMap.get(item.id)!) } : item);
-            }
-            if (added) data.push(...added);
+            const conversation = this.storage.readConversation(chatId) || createEmptyConversationDocument({
+                id: chatId,
+                conversationType: chatId.startsWith('lw_card_') ? 'forge' : 'chat'
+            });
+            const mutation: ConversationMutation = {
+                nodes: {
+                    added: Array.isArray(req.body?.added) ? req.body.added : [],
+                    updated: Array.isArray(req.body?.updated) ? req.body.updated : [],
+                    deletedIds: Array.isArray(req.body?.deletedIds) ? req.body.deletedIds : []
+                },
+                activeLeafId: req.body?.metadata?.activeLeafId ?? conversation.activeLeafId,
+                updatedAt: req.body?.metadata?.updatedAt ?? Date.now(),
+                pluginState: req.body?.metadata?.pluginData ? {
+                    chat: {
+                        pluginData: req.body.metadata.pluginData
+                    }
+                } : undefined
+            };
+            const records = this.storage.readTransactionLog(chatId);
+            const tx = this.storage.createTransaction(
+                chatId,
+                'chat.patch',
+                this.storage.digestPayload(mutation),
+                req.body?.transactionContext?.idempotencyKey || `patch_${Date.now()}`,
+                this.storage.getLastCommittedSeq(records) + 1
+            );
 
-            this.storage.writeChat(chatId, data);
-            res.json({ success: true, count: data.length });
+            this.storage.mutateConversation(chatId, mutation);
+            const committedTx = this.storage.transitionTransaction(chatId, tx, 'committed');
+            this.storage.syncToDisk();
+            res.json({
+                success: true,
+                count: this.storage.readConversation(chatId)?.nodes.length || 0,
+                transaction: committedTx,
+                lastCommittedSeq: committedTx.seq
+            });
         });
 
         // --- Forge 工作会话持久化 ---

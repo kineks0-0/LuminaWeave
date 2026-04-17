@@ -26,6 +26,7 @@ LuminaWeave 运行于独立的 Vue 3 实例中，通过 `Lumina Core` 桥接原�
 ### 2. 核心模块总览
 - **[Lumina Timeline](./timeline/PDR.md)**：Git 风格多轴穿梭图，支持物理回滚与世界线剪枝。
 - **Unified Conversation Context [UPDATED]**：Timeline、Lorebook、Memory 等消息型视图现在共享统一的会话上下文与世界线操作 API；UI 只负责展示数据与发送意图，不再各自维护 `chat / forge` 分流逻辑。旧的 `chat-only` 世界线 facade 已移除，统一会话 API 成为唯一入口。
+- **Unified Conversation Document [UPDATED]**：主聊天与 Forge 工作会话的持久化真相源已收敛为单个 `ConversationDocument`。前端通过 bridge 只消费统一 DTO，不再直接接触 `jsonl` 或 `forge_sessions` 原始结构；事务日志继续独立保存。
 - **[Lumina Director](./director/PDR.md)**：导演引擎。通过 XML 标签驱动状态机，实现 `<Next_Plan>` 引导与结构化数据更新。
 - **[Lumina Memory Engine](./PDR.md#2-lumina-memory-幻光记忆)**：五层分层记忆模型 (Tier 0-4)，确保 AI 始终掌握当前时空的精确状态。
 - **[Unified Storage](./system_design.md#4-shadow-buffer--统一存储代理-unified-storage-engine)**：多级作用域存储系统，支持影子数据库与 ST 物理同步。
@@ -141,7 +142,7 @@ d:\LuminaWeave\
 | | `settings/` | 统一设置。支持子插件动态向主面板通过 Manifest 注册表单组件。 |
 | | `lorebook/` | 世界书管理面板，实现插件端可视化条目编排。 |
 | | `stats/` | 面向 RPG 游戏的数值与状态栏。 |
-| **后端 (Server)** | `index.ts` | Node.js 事务化存储与生成代理，基于 JSONL 与 OpenAI SDK 提供高可用支撑。 |
+| **后端 (Server)** | `index.ts` | Node.js 事务化存储与生成代理，基于统一 `ConversationDocument` + 独立事务日志与 OpenAI SDK 提供高可用支撑。 |
 
 ---
 
@@ -151,7 +152,7 @@ d:\LuminaWeave\
 
 ### 技术选型
 - **Frontend**: Vue 3 (Composition API) + Pinia + Vite + TS.
-- **Backend**: Node.js (Express-like, JSONL Storage). *Note: Modify `index.ts` only; `index.js` is a build artifact.*
+- **Backend**: Node.js (Express-like, unified conversation document + transaction log storage). *Note: Modify `index.ts` only; `index.js` is a build artifact.*
 - **Communication**: Official OpenAI SDK (High-performance API interactions).
 - **Style**: Vanilla CSS (Scoped) / CSS Modules.
 

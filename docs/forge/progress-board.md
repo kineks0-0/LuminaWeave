@@ -58,9 +58,10 @@
   - `stagingArea` 跟随工作会话恢复
   - `activityLog` 切换会话时不再串会话残留
 - Forge 工作会话后端镜像持久化骨架已接通：
-  - 服务端已支持 `forge sessions` 读写
-  - 前端仓库会在本地保存后尝试镜像同步到后端
-  - 工作台启动与会话索引刷新时会尝试从后端回灌到本地
+  - Forge 工作会话已并入统一 `ConversationDocument`
+  - 服务端不再以 `forge_sessions.json` 作为唯一真相源
+  - 前端仓库现通过统一 conversation bridge 读写 Forge 会话
+  - 工作台启动与会话索引刷新会优先读取统一会话文档，再按需回填本地存根
 - 已新增最小会话视图聚合层：
   - `MemorySnapshotTypes`
   - `MemoryViewResolver`
@@ -68,6 +69,10 @@
 - Forge 工作台已开始消费统一会话视图层：
   - 顶部会话标题/副标题
   - 状态区的世界书版本标签与上下文消息数
+- 统一会话存储闭环已接通：
+  - 主聊天与 Forge 工作会话共享同一 `ConversationDocument` 契约
+  - LocalBridge / HttpBridge / TauriBridge 都已提供统一 conversation DTO
+  - 新会话文件显式带 `schemaVersion`
 - Forge Prompt 预览与生成链路已开始消费统一记忆快照：
   - `MemorySnapshot` 已纳入世界书条目摘要
   - `PromptBuilder` 可优先使用解析后的世界书视图，而不只依赖 ST 当前激活世界书
@@ -326,7 +331,7 @@
 3. ~~DCC 完善（isPinned + compressionState 明确化 + enableFallbackSummary UI）~~ (已完成 2026-04-14)
 4. 验证 Forge 时间线切换下的世界书回溯稳定性
 5. 完善世界书版本列表与来源展示
-6. 补 Forge 会话页和持久化体验细节
+6. 清理残余 `chat / forge` facade 调用并继续压缩兼容层
 
 ## 7. 当前假设与未验证前提
 

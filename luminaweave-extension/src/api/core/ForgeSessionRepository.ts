@@ -10,6 +10,8 @@ import {
     createEmptyStructuredState
 } from './utils/forgeStateDefaults.js';
 import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
+import type { ConversationDocument } from '../../../../shared/ConversationTypes.js';
+import { migrateLegacyForgeSession } from '../../../../shared/ConversationMigration.js';
 
 const STORAGE_KEY = 'lumina-forge.workspace-sessions';
 const ACTIVE_KEY = 'lumina-forge.active-session-id';
@@ -22,6 +24,45 @@ const generateSessionChatId = (): string => {
 };
 
 export class ForgeSessionRepository {
+    private conversationToSession(document: ConversationDocument): ForgeWorkspaceSession {
+        const forge = document.pluginState.forge || {};
+        return {
+            id: document.id,
+            sessionChatId: forge.sessionChatId || document.legacy?.legacyChatId || generateSessionChatId(),
+            title: document.title,
+            createdAt: document.createdAt,
+            updatedAt: document.updatedAt,
+            presetId: forge.presetId || '',
+            activeLeafId: document.activeLeafId,
+            worldlineNodes: document.nodes || [],
+            selectedChatSessionId: forge.selectedChatSessionId || null,
+            selectedChatSnapshotId: forge.selectedChatSnapshotId || null,
+            draftInput: forge.draftInput || '',
+            timelineItems: [],
+            stagingEntries: (forge.stagingEntries || []) as any[],
+            commitReadyEntries: (forge.commitReadyEntries || []) as any[],
+            virtualLorebookEntries: (forge.virtualLorebookEntries || []) as any[],
+            importedLorebookId: forge.importedLorebookId || null,
+            workflowSnapshot: (forge.workflowSnapshot || null) as any,
+            detailMode: (forge.detailMode || null) as any,
+            entryMode: (forge.entryMode || null) as any,
+            structuredState: cloneStructuredState((forge.structuredState || createEmptyStructuredState()) as any),
+            draftTree: cloneDraftTree((forge.draftTree || createEmptyDraftTree()) as any),
+            forgeMemoryTree: cloneForgeMemoryTree((forge.forgeMemoryTree || createEmptyForgeMemoryTree()) as any),
+            activeLayer: (forge.activeLayer || 'concept') as any,
+            completedLayers: (forge.completedLayers || []) as any,
+            publishState: (forge.publishState || 'drafting') as any,
+            activeAuxPanel: forge.activeAuxPanel as any,
+            auxPresentationMode: forge.auxPresentationMode as any,
+            worldlineSnapshots: forge.worldlineSnapshots as any,
+            workspaceMode: 'workspace'
+        };
+    }
+
+    private sessionToConversation(session: ForgeWorkspaceSession): ConversationDocument {
+        return migrateLegacyForgeSession(session as any, session.worldlineNodes);
+    }
+
     private pruneOldSessions(sessions: ForgeWorkspaceSession[], count: number = 3): ForgeWorkspaceSession[] {
         if (sessions.length <= count) return sessions;
         const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -124,7 +165,7 @@ export class ForgeSessionRepository {
 
     private async syncSessionToServer(session: ForgeWorkspaceSession): Promise<boolean> {
         try {
-            await BridgeDispatcher.forge.updateSession(session.id, session);
+            await BridgeDispatcher.conversation.saveConversation(session.id, this.sessionToConversation(session));
             return true;
         } catch {
             return false;
@@ -163,12 +204,13 @@ export class ForgeSessionRepository {
     async loadSession(id: string): Promise<ForgeWorkspaceSession | null> {
         // 1. 优先从后端拉取完整数据
         try {
-            const data = await BridgeDispatcher.forge.getSession(id);
-            if (data && data.session) {
+            const data = await BridgeDispatcher.conversation.getConversation(id);
+            if (data && data.document) {
                 console.log(`[ForgeRepository] 已从后端加载会话: ${id}`);
                 // 顺便更新下本地存根，保持元数据同步
-                this.updateLocalMeta(data.session);
-                return data.session;
+                const session = this.conversationToSession(data.document);
+                this.updateLocalMeta(session);
+                return session;
             }
         } catch (e) {
             console.warn(`[ForgeRepository] 从后端加载会话失败，尝试回退到本地: ${id}`, e);
@@ -305,13 +347,20 @@ export class ForgeSessionRepository {
 
     async refreshFromServer(): Promise<void> {
         try {
-            const data = await BridgeDispatcher.forge.listSessions();
-            const remote = Array.isArray(data.sessions) ? data.sessions : [];
+            const data = await BridgeDispatcher.conversation.listConversations();
+            const remote = Array.isArray(data.conversations)
+                ? data.conversations.filter((conversation) => conversation.conversationType === 'forge')
+                : [];
+            const hydratedRemote = await Promise.all(remote.map(async (conversation) => {
+                const full = await BridgeDispatcher.conversation.getConversation(conversation.id);
+                return full.document ? this.conversationToSession(full.document) : null;
+            }));
+            const remoteSessions = hydratedRemote.filter((session): session is ForgeWorkspaceSession => Boolean(session));
             
             const local = this.readLocal();
             
             // 迁移逻辑：如果本地有远端没有的会话，尝试同步给远端
-            const remoteIds = new Set(remote.map((s: any) => s.id));
+            const remoteIds = new Set(remoteSessions.map((s) => s.id));
             const migrationTasks = local.filter(s => !remoteIds.has(s.id));
             if (migrationTasks.length > 0) {
                 console.log(`[ForgeRepository] 发现 ${migrationTasks.length} 个未同步的本地会话，正在迁移至后端...`);
@@ -320,7 +369,7 @@ export class ForgeSessionRepository {
                 }
             }
 
-            const merged = this.mergeSessions(local, remote);
+            const merged = this.mergeSessions(local, remoteSessions);
             this.writeLocal(merged);
         } catch (e) {
             console.warn('[ForgeRepository] 刷新服务端会话列表失败，降级为本地模式', e);

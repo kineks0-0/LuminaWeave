@@ -1,5 +1,12 @@
 import { LuminaChatMessage } from '../LuminaMessage.js';
 import { TransactionMutationResponse, TransactionQueryResponse } from './TransactionTypes.js';
+import type {
+    ConversationDocument,
+    ConversationListResponse,
+    ConversationGetResponse,
+    ConversationMutation,
+    ConversationMutationResult
+} from '../ConversationTypes.js';
 
 /**
  * 流式处理句柄
@@ -31,7 +38,7 @@ export interface IStreamingCallbacks {
  * 对话服务接口
  */
 export interface IChatService {
-    listChats(): Promise<any[]>;
+    listChats(): Promise<any>;
     getChat(chatId: string): Promise<any>;
     saveChat(chatId: string, payload: any): Promise<TransactionMutationResponse>;
     patchChat(chatId: string, payload: any): Promise<TransactionMutationResponse>;
@@ -61,6 +68,18 @@ export interface IForgeService {
     getSession(sessionId: string): Promise<any>;
     saveSession(session: any): Promise<any>;
     updateSession(sessionId: string, session: any): Promise<any>;
+}
+
+/**
+ * 统一会话服务接口
+ */
+export interface IConversationService {
+    listConversations(): Promise<ConversationListResponse>;
+    getConversation(id: string): Promise<ConversationGetResponse>;
+    saveConversation(id: string, document: ConversationDocument): Promise<ConversationMutationResult>;
+    mutateConversation(id: string, mutation: ConversationMutation): Promise<ConversationMutationResult>;
+    getTransactions(id: string, query?: Record<string, any>): Promise<TransactionQueryResponse>;
+    rollbackTransaction(id: string, transactionId: string): Promise<TransactionMutationResponse>;
 }
 
 /**
@@ -101,6 +120,7 @@ export interface ILuminaBridge {
     readonly chat: IChatService;
     readonly nexus: INexusService;
     readonly forge: IForgeService;
+    readonly conversation: IConversationService;
     readonly settings: ISettingsService;
     readonly presets: IPresetService;
     readonly extensionStore: IStoreService;

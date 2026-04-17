@@ -60,6 +60,7 @@
 
 4. **Lumina Settings & Storage（统一设置与存储引擎）**
    - 彻底解耦的 Storage API，支持 `全局`、`随角色`、`随对话`、`临时会话` 等多级作用域。
+   - **统一会话文档 [UPDATED v6.0-dev]**：聊天与 Forge 扩展状态不再分别持久化为 `chat jsonl + forge_sessions` 两套真相源，而是统一收敛为单个 `ConversationDocument`。文档内显式包含 `schemaVersion`、消息节点、插件状态与事务游标；事务日志仍独立保存。
    - **环境隔离层开关 [NEW]**：支持在设置中动态切换 Shadow DOM 开启/关闭状态，以适配不同浏览器扩展的兼容性需求。
    - **分离式模块配置原则**：`lumina-settings` 仅负责宿主级全局设置，各子插件通过 `settingsManifest`接口向设置总线动态渲染表单。
 
@@ -235,9 +236,9 @@ LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核
     - **节点合并算法**：`SyncEngine.mergeNodePool` 确保从 ST 读取新消息时，能正确识别重复节点并链入新分支。
     - **增量追加与生成同步 (Incremental Append & Generation Sync) [v6.0 增强]**：
     - **内存先行策略 (Memory-First)**：后端读写优先操作内存缓存。所有查询接口（GET /chat）实时反映未落盘的内存变更。
-    - **立即物理追加 (Immediate Append Sync)**：LLM 生成完成后，利用 `fs.appendFileSync` 对 JSONL 记录进行 O(1) 复杂度的物理追加。不再依赖 5s 定时器，确保生成即入库。
+- **统一会话文件落盘 [UPDATED v6.0-dev]**：会话主数据改为单文件 `ConversationDocument` 落盘，主聊天与 Forge 共享同一物理契约；事务日志继续独立写入 `.tx.jsonl`，用于序列对账与回滚。
     - **事务日志同步**：生成收口时强制触发事务日志刷盘，确保 `committed` 状态的物理不可逆性。
-- **节点化存储 (Node-based Persistence) [v5.2 优化]**：JSONL 本质上实现“一条消息一个节点”。首位保留极简 `metadata` (含 `activeLeafId` 和版本 2.1)。记忆状态（Tier 1/3）完全物理跟随消息节点，时间线切换时若无数据则自动清空状态。
+- **节点化统一会话持久化 [UPDATED v6.0-dev]**：节点仍是一条消息一个事实单元，但外层容器已从 `metadata-first JSONL` 收敛为 `ConversationDocument`。`activeLeafId`、插件数据与事务游标直接进入文档字段，前端不再消费原始 JSONL 结构。
 - **强一致性同步**：分支跳转后自动触发 `SyncEngine.applyDelta`，将 ST 的线性视图物理同步至当前活跃链路，解决回滚后输入乱序的顽疾。
 - **持久化锚定机制 (v5.2)**：重构 `PersistenceService` 与 `ChatManager` 的保存链路。异步 IO 操作强制绑定到发起时的 `chatId`（ID 锚定），从架构层面消除由于 SillyTavern 会话快速切换导致的竞态覆盖风险。
 - **事务化写入协议 (v5.8) [NEW]**：`/chat/save` 与 `/chat/:chatId(PATCH)` 引入事务实体（`id/seq/status/scope/payloadDigest/error`），统一走 `pending → running → committed|aborted|rolled_back` 状态机。
