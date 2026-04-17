@@ -1,0 +1,9 @@
+{
+    "display_name": "LuminaWeave 幻光织机",
+    "version": "1.0.0",
+    "author": "LuminaWeave Dev",
+    "js": "index.js",
+    "css": "style.css",
+    "loading_order": 999,
+    "generate_interceptor": "LuminaWeaveGenerateInterceptor"
+}
