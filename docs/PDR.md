@@ -134,6 +134,15 @@
     - **双层缓存输出**：将流式输出拆分为 `Confirmed`（已确认文本）与 `Pending`（本帧新增文本），解决流式更新时的闪烁问题。
     - **多样化视觉效果**：支持 `fade-in`（淡入）、`gpt-style`（渐变显现）及 `typewriter`（带光标打字机）等多种流式动画模式。
 
+12. **多端解耦与宿主中立架构 (Host-Agnostic Infrastructure) [NEW v6.0]**
+    - **战略目标**：解决 LuminaWeave 移动端（Android）发布的通信壁垒。在移动端环境下，浏览器跨域限制与后端服务的本地暴露方式与桌面端完全不同，必须实现逻辑与传输的彻底解耦。
+    - **逻辑同构化 (Isomorphic Core) [NEW v6.0]**：将同步差异比对 (`SyncEngine`) 与事务序列管理 (`TransactionEngine`) 算法从前端扩展层下沉至 `shared/` 层。
+      - **算法一致性**：确保前端（JS）、后端（Node.js）或原生 Bridge 按照完全相同的逻辑判定消息一致性。
+      - **后端无关性 (Backend-Agnostic)**：前端 Manager 层不再感知具体的后端类型，而是通过注入不同的 Bridge 实现来完成物理写入，核心状态机始终由共享引擎维护。
+    - **Bridge 适配层**：定义一套抽象的“服务桥接器”接口。前端业务代码（同步、生成、持久化）只调用桥接器，不再感知底层是 `HTTP/SSE` 还是 `Tauri/Native Invoke`。
+    - **透明式 Android 适配**：通过 `TauriBridgeAdapter` 自动对接 Android 底层通信协议。新版适配层优先调用官方 `api.extension.store` ABI，并支持符合官方规范 `[A-Za-z0-9_.-]` 的 Key 命名空间，使插件在无需修改业务逻辑的前提下，即可在 TauriTavern 等原生容器中流畅运行并享受原生拦截带来的稳定性。
+    - **鲁棒性对冲**：即使在标准 Web 环境下，Bridge 模式也提供了更强的 CSRF 容错与流式重连能力，显著提升了生产环境下的稳定性。
+
 ## 三、用户界面体验（UI/UX）
 
 LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核心品牌色，提供两种交互形态：

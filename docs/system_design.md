@@ -16,7 +16,12 @@
 - **核心快照与记忆中心 (MemoryManager)** [NEW]：负责协调所有子插件的状态持久化。
 - **全局文本测量服务 (MeasureService) [NEW]**：集成 `@chenglou/pretext` 库，提供毫秒级、基于 LRU 缓存的文本高度预计算，服务于 Timeline 布局与虚拟列表。
 - **上下文自动解析 (Context Resolver) [Standardized]**：
-    - **统一 API 探测器 (Unified API Discovery)**：通过 `LuminaWeaveAPIBase` 基类实现。
+### 2.3 Shared 层 (共享引擎)
+
+Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大脑”：
+- **SyncEngine**: 无状态的差异比对算法，确保多端看到的消息 ID 与指纹判定逻辑完全一致。
+- **TransactionEngine**: 事务流水管理，负责序列自增、幂等校验逻辑。
+- **BaseXMLInterceptor**: 基础解析引擎。
     - **三层探测机制 (Triple-Layer Discovery)**：
         - `SillyTavern` (容器): 探测全局变量。
         - `getContext()` (数据): 获取当前活跃的会话及其属性快照。
@@ -27,7 +32,12 @@
     - `beforeGenerationStartFlow`: 用于在生成触发前收集操作（如 DCC 压缩）。
     - `messageReceivedFlow`: 允许 UI 与存储层在收到流式消息后异步协调刷新。
     从之前将挂载逻辑硬编码进 `sendMessage` 的老旧耦合中解放出来，将重型操作统一注册为流响应。在执行生成操作前按条件切片安全执行等待处理，彻底杜绝数据在流生成时的竞态不同步。
-- **同构 RPC 与双端路由规范层 [NEW v6.0]**：抽离出统一的 `shared/ApiEndpoints.ts` 文件以枚举收拢所有网络交互端点（包括但不限于 `GET/PUT/DELETE /presets`、`POST /chat/save` 等），取代前端遍布的零散硬编码调用，统一后端 `luminaweave-server/src/index.ts` 注册，大大降低接口迁移成本和 404 集成错误率。
+- **同构 Bridge 架构与多端适配层 [NEW v6.0]**：
+    LuminaWeave 不再直接在业务层构造网络请求，而是通过 `shared/api/IBridge.ts` 定义了一套平台无关的业务接口，并由 `BridgeDispatcher` 在运行时注入具体的物理实现：
+    - **HttpBridgeAdapter**：传统的 Web 环境适配器。封装了 `fetch` 与 `fetch-event-source`，内置 CSRF 自动刷新与重试逻辑，服务于标准的 SillyTavern + Lumina Server 部署环境。
+    - **TauriBridgeAdapter [NEW]**：原生环境适配器。适配 TauriTavern (Android/Native)，优先使用 `window.__TAURITAVERN__.api.extension.store` 官方 ABI，并降级支持原生 `invoke` 机制。该适配器还实现了符合官方规范的 Key 过滤逻辑（支持 `.` 与 `-`），补全了包括 `renameKey` 与 `listTables` 在内的全量存储管理能力。
+    - **流式归一化 (Streaming Normalization)**：通过 `IStreamingHandle` 接口抽象了不同环境下的流式输出（SSE / 轮询 / 原生事件），使 `NexusClient` 等消费者只需订阅统一的回调（`onToken`, `onDone` 等），无需关心具体的传输协议。
+    这一架构彻底实现了“一套核心业务逻辑，多端透明运行”的目标。
 
 ### 2. UI 渲染宿主 - 可选的 Shadow DOM 沙盒隔离层 [v5.7 优化]
 
@@ -369,10 +379,13 @@ graph LR
 
 `probePrompt()` 独立使用 ST 的 `Generate(type, {}, true)` dryRun 模式，监听 `GenerateAfterData` 事件以截获最新完整 Prompt，**不参与**正常生成流程。
 
-### 14. 混合同步与冲突路由控制 (v4.6) [NEW]
+### 4.2 事务隔离与回滚
 
-- **数据优先策略 (Data Priority Protocol)**: 确立“插件数据源优先”的同步方针。
-    1. **初始化引导 (Bootstrap)**: 插件本地数据库为空时，自动从 ST 内存全量拉取。
+采用 **Client-Managed Transactions** 模式，由 Shared 层的 `TransactionEngine` 驱动：
+1. **序列校验**: 每个物理写请求附带 `expectedSeq`。
+2. **状态对齐**: 适配层（Bridge）负责物理 I/O，而 Engine 负责在 JS 层处理冲突补偿与对齐。
+3. **回滚机制**: 发生深度冲突时，触发 `reconciliation` 流程，利用事务 ID 回滚至安全点。
+自动从 ST 内存全量拉取。
     2. **权威同步 (Authoritative Push)**: 插件本地存在数据且 ST 仅有陈旧数据时，以插件侧为主，自动向 ST 触发差量追加/更新。
     3. **安全拉取 (Safe Pull)**: 当 ST 存在新生成的游离消息且插件本地无新变动时，静默拉取并合并 ST 消息至本地树中。
 - **分歧决议策略 (Conflict Resolution Policy) [v6.0 完善]**: 
