@@ -484,7 +484,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 if (lastMessage && !lastMessage.is_user) {
                     const finalText = lastMessage.mes || '';
                     // 1. 调用全局 XML 拦截器 (解析并执行 Mutation 指令，更新本地 deltaCache)
-                    const cleanedFinalText = globalXMLInterceptor.processAndCleanText(finalText, false);
+                    const cleanedFinalText = globalXMLInterceptor.processAndCleanText(finalText, true);
                     
                     // 2. 核心增强：强制提交内存中的增量修改并同步至当前活跃节点
                     if (this.chatManager.activeLeafId) {
@@ -1026,7 +1026,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             // 核心修复：必须确保清理标志位，即使同步过程报错
             session.isFinalizing = false;
 
-            const cleanedFinalText = globalXMLInterceptor.processAndCleanText(session.finalText || '', false);
+            const cleanedFinalText = globalXMLInterceptor.processAndCleanText(session.finalText || '', true);
             if (this.chatManager.activeLeafId) {
                 const activeNode = this.chatManager.store.getNode(this.chatManager.activeLeafId);
                 if (activeNode) {
@@ -1287,7 +1287,18 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                     // 暂时保留原逻辑，因为 STClient.updateMessage 是发给 ST 前端界面的，能保持兼容
                     const stIndex = await STAdapter.getSnapshot().then(snap => snap.idToIndex.get(msg.id));
                     const finalIndex = stIndex ?? index;
-                    await STClient.updateMessage(finalIndex, msg.mes, undefined, undefined, { id: msg.id, fingerprint: msg.fingerprint, stFingerprint: msg.stFingerprint, mesRaw: finalMesRaw });
+                    await STClient.updateMessages([{
+                        index: finalIndex,
+                        content: STProtocol.resolveForSTWrite(msg),
+                        expectedSwipeId: typeof msg.extra?.swipe_id === 'number' ? msg.extra.swipe_id : undefined,
+                        expectedActiveSwipeText: typeof msg.extra?.activeSwipeText === 'string' ? msg.extra.activeSwipeText : msg.mesST,
+                        extra: {
+                            id: msg.id,
+                            fingerprint: msg.fingerprint,
+                            stFingerprint: msg.stFingerprint,
+                            mesRaw: finalMesRaw
+                        }
+                    }]);
                 }
                 const { chatId } = lwStorage._getContextIds();
                 await this.chatManager.persistence.saveToIndependentChat(chatId);

@@ -46,6 +46,36 @@ function injectMockBridge(serverStorage: Map<string, any>) {
                 return { success: true };
             })
         },
+        conversation: {
+            listConversations: vi.fn(async () => ({
+                conversations: Array.from(serverStorage.values()).map((document: any) => document.summary)
+            })),
+            getConversation: vi.fn(async (id: string) => ({
+                document: serverStorage.get(id) || null
+            })),
+            saveConversation: vi.fn(async (id: string, document: any) => {
+                const saved = {
+                    ...document,
+                    id,
+                    summary: document.summary || {
+                        id,
+                        schemaVersion: document.schemaVersion,
+                        conversationType: document.conversationType,
+                        title: document.title,
+                        createdAt: document.createdAt,
+                        updatedAt: document.updatedAt,
+                        activeLeafId: document.activeLeafId,
+                        previewMessage: '',
+                        messageCount: Array.isArray(document.nodes) ? document.nodes.length : 0
+                    }
+                };
+                serverStorage.set(id, saved);
+                return { success: true, document: saved, summary: saved.summary, lastCommittedSeq: 1 };
+            }),
+            mutateConversation: vi.fn(),
+            getTransactions: vi.fn(async () => ({ success: true, transactions: [], lastCommittedSeq: 0 })),
+            rollbackTransaction: vi.fn(async () => ({ success: true, lastCommittedSeq: 0 }))
+        },
         settings: {
             getSettings: vi.fn(),
             saveSettings: vi.fn()
@@ -195,19 +225,19 @@ describe('ForgeSessionRepository', () => {
             workspaceMode: 'workspace'
         });
 
-        bridge.forge.getSession.mockRejectedValueOnce(new Error('Not Found'));
+        bridge.conversation.getConversation.mockRejectedValueOnce(new Error('Not Found'));
 
         const loaded = await repository.loadSession('forge_ws_2');
 
         expect(loaded?.structuredState?.forms).toEqual({});
-        expect(bridge.forge.getSession).toHaveBeenCalledWith('forge_ws_2');
+        expect(bridge.conversation.getConversation).toHaveBeenCalledWith('forge_ws_2');
     });
 
     it('应始终在 localStorage 中保存脱水后的存根', async () => {
         const repository = new ForgeSessionRepository();
         
         // 模拟同步失败
-        bridge.forge.updateSession.mockRejectedValueOnce(new Error('sync failed'));
+        bridge.conversation.saveConversation.mockRejectedValueOnce(new Error('sync failed'));
 
         await repository.saveSession({
             id: 'forge_ws_3',

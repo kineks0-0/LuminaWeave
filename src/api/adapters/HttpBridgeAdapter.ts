@@ -4,6 +4,7 @@ import {
     IChatService, 
     INexusService, 
     IForgeService, 
+    IConversationService,
     ISettingsService, 
     IPresetService,
     IStoreService,
@@ -11,6 +12,8 @@ import {
 } from '../../../../shared/api/IBridge';
 import { API_BASE, API_ROUTES } from '../../../../shared/ApiEndpoints';
 import { STClient } from '../core/st-adapter/STClient';
+import type { ConversationDocument, ConversationMutation } from '../../../../shared/ConversationTypes';
+import { migrateLegacyChatArray, migrateLegacyForgeSession } from '../../../../shared/ConversationMigration';
 
 /**
  * HTTP 流式句柄实现
@@ -56,57 +59,163 @@ export class HttpBridgeAdapter implements ILuminaBridge {
     public readonly chat: IChatService;
     public readonly nexus: INexusService;
     public readonly forge: IForgeService;
+    public readonly conversation: IConversationService;
     public readonly settings: ISettingsService;
     public readonly presets: IPresetService;
     public readonly extensionStore: IStoreService;
 
+    private conversationDocumentToLegacyChat(document: ConversationDocument): any[] {
+        return [{
+            type: 'metadata',
+            activeLeafId: document.activeLeafId,
+            updatedAt: document.updatedAt,
+            version: 3.0,
+            pluginData: document.pluginState.chat?.pluginData || null,
+            transaction: {
+                lastCommittedSeq: document.transaction.lastCommittedSeq,
+                lastTransactionId: document.transaction.lastTransactionId
+            }
+        }, ...document.nodes];
+    }
+
+    private conversationDocumentToForgeSession(document: ConversationDocument): any {
+        const forge = document.pluginState.forge || {};
+        return {
+            id: document.id,
+            sessionChatId: forge.sessionChatId || document.legacy?.legacyChatId || document.id,
+            title: document.title,
+            createdAt: document.createdAt,
+            updatedAt: document.updatedAt,
+            presetId: forge.presetId || '',
+            activeLeafId: document.activeLeafId,
+            worldlineNodes: document.nodes,
+            selectedChatSessionId: forge.selectedChatSessionId || null,
+            selectedChatSnapshotId: forge.selectedChatSnapshotId || null,
+            draftInput: forge.draftInput || '',
+            stagingEntries: forge.stagingEntries || [],
+            commitReadyEntries: forge.commitReadyEntries || [],
+            virtualLorebookEntries: forge.virtualLorebookEntries || [],
+            importedLorebookId: forge.importedLorebookId || null,
+            workflowSnapshot: forge.workflowSnapshot || null,
+            detailMode: forge.detailMode || null,
+            entryMode: forge.entryMode || null,
+            structuredState: forge.structuredState,
+            draftTree: forge.draftTree,
+            forgeMemoryTree: forge.forgeMemoryTree,
+            activeLayer: forge.activeLayer || 'concept',
+            completedLayers: forge.completedLayers || [],
+            publishState: forge.publishState || 'drafting',
+            activeAuxPanel: forge.activeAuxPanel,
+            auxPresentationMode: forge.auxPresentationMode,
+            worldlineSnapshots: forge.worldlineSnapshots,
+            workspaceMode: 'workspace'
+        };
+    }
+
     constructor() {
         const self = this;
 
-        this.chat = {
-            async listChats() {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.LIST}`)).json();
+        this.conversation = {
+            async listConversations() {
+                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CONVERSATION.LIST}`)).json();
             },
-            async getChat(chatId: string) {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.GET(chatId)}`)).json();
+            async getConversation(id: string) {
+                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CONVERSATION.GET(id)}`)).json();
             },
-            async saveChat(chatId: string, payload: any) {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.SAVE(chatId)}`, {
-                    method: 'POST',
+            async saveConversation(id: string, document: ConversationDocument) {
+                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CONVERSATION.SAVE(id)}`, {
+                    method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(document)
                 })).json();
             },
-            async patchChat(chatId: string, payload: any) {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.PATCH(chatId)}`, {
+            async mutateConversation(id: string, mutation: ConversationMutation) {
+                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CONVERSATION.MUTATE(id)}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(mutation)
                 })).json();
             },
-            async saveMessage(chatId: string, nodeId: string, message: any) {
-                 return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.SAVE_MESSAGE(chatId, nodeId)}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(message)
-                })).json();
-            },
-            async deleteMessage(chatId: string, nodeId: string) {
-                 return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.DELETE_MESSAGE(chatId, nodeId)}`, {
-                    method: 'DELETE'
-                })).json();
-            },
-            async getSyncStatus(chatId: string) {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.SYNC_STATUS(chatId)}`)).json();
-            },
-            async getTransactions(chatId: string, query: any) {
+            async getTransactions(id: string, query: any) {
                 const q = query ? `?${new URLSearchParams(query as any).toString()}` : '';
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.TRANSACTIONS(chatId)}${q}`)).json();
+                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CONVERSATION.TRANSACTIONS(id)}${q}`)).json();
             },
-            async rollbackTransaction(chatId: string, transactionId: string) {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CHAT.ROLLBACK_TRANSACTION(chatId, transactionId)}`, {
+            async rollbackTransaction(id: string, transactionId: string) {
+                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CONVERSATION.ROLLBACK_TRANSACTION(id, transactionId)}`, {
                     method: 'POST'
                 })).json();
+            }
+        };
+
+        this.chat = {
+            async listChats() {
+                const data = await self.conversation.listConversations();
+                return {
+                    chats: data.conversations
+                        .filter((conversation) => conversation.conversationType === 'chat')
+                        .map((conversation) => ({
+                            chatId: conversation.id,
+                            updatedAt: conversation.updatedAt,
+                            messageCount: conversation.messageCount,
+                            activeLeafId: conversation.activeLeafId,
+                            previewMessage: conversation.previewMessage
+                        }))
+                };
+            },
+            async getChat(chatId: string) {
+                const data = await self.conversation.getConversation(chatId);
+                return data.document ? self.conversationDocumentToLegacyChat(data.document) : null;
+            },
+            async saveChat(chatId: string, payload: any) {
+                const document = migrateLegacyChatArray(chatId, payload?.data || payload);
+                return await self.conversation.saveConversation(chatId, document);
+            },
+            async patchChat(chatId: string, payload: any) {
+                return await self.conversation.mutateConversation(chatId, {
+                    nodes: {
+                        added: Array.isArray(payload?.added) ? payload.added : [],
+                        updated: Array.isArray(payload?.updated) ? payload.updated : [],
+                        deletedIds: Array.isArray(payload?.deletedIds) ? payload.deletedIds : []
+                    },
+                    activeLeafId: payload?.metadata?.activeLeafId,
+                    pluginState: payload?.metadata?.pluginData ? {
+                        chat: {
+                            pluginData: payload.metadata.pluginData
+                        }
+                    } : undefined,
+                    updatedAt: payload?.metadata?.updatedAt
+                });
+            },
+            async saveMessage(chatId: string, nodeId: string, message: any) {
+                return await self.conversation.mutateConversation(chatId, {
+                    nodes: {
+                        added: [{ ...message, id: nodeId }]
+                    }
+                });
+            },
+            async deleteMessage(chatId: string, nodeId: string) {
+                return await self.conversation.mutateConversation(chatId, {
+                    nodes: {
+                        deletedIds: [nodeId]
+                    }
+                });
+            },
+            async getSyncStatus(chatId: string) {
+                const data = await self.conversation.getTransactions(chatId);
+                const transactions = Array.isArray(data.transactions) ? data.transactions : [];
+                const lastTransaction = [...transactions].sort((a, b) => b.seq - a.seq)[0];
+                return {
+                    success: true,
+                    isTransactionsCompleted: !transactions.some((item) => item.status === 'pending' || item.status === 'running'),
+                    lastCommittedSeq: data.lastCommittedSeq ?? 0,
+                    lastTransactionId: lastTransaction?.id || null
+                };
+            },
+            async getTransactions(chatId: string, query: any) {
+                return await self.conversation.getTransactions(chatId, query);
+            },
+            async rollbackTransaction(chatId: string, transactionId: string) {
+                return await self.conversation.rollbackTransaction(chatId, transactionId);
             }
         };
 
@@ -140,24 +249,37 @@ export class HttpBridgeAdapter implements ILuminaBridge {
 
         this.forge = {
             async listSessions() {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.FORGE.LIST}`)).json();
+                const data = await self.conversation.listConversations();
+                const summaries = data.conversations.filter((conversation) => conversation.conversationType === 'forge');
+                const sessions = await Promise.all(summaries.map(async (conversation) => {
+                    const full = await self.conversation.getConversation(conversation.id);
+                    if (full.document) {
+                        return self.conversationDocumentToForgeSession(full.document);
+                    }
+                    return {
+                        id: conversation.id,
+                        title: conversation.title,
+                        createdAt: conversation.createdAt,
+                        updatedAt: conversation.updatedAt,
+                        messageCount: conversation.messageCount,
+                        selectedChatSessionId: null
+                    };
+                }));
+                return {
+                    sessions
+                };
             },
             async getSession(sessionId: string) {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.FORGE.GET(sessionId)}`)).json();
+                const data = await self.conversation.getConversation(sessionId);
+                return { session: data.document ? self.conversationDocumentToForgeSession(data.document) : null };
             },
             async saveSession(session: any) {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.FORGE.SAVE}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(session)
-                })).json();
+                const document = migrateLegacyForgeSession(session, session?.worldlineNodes);
+                return await self.conversation.saveConversation(session.id, document);
             },
             async updateSession(sessionId: string, session: any) {
-                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.FORGE.UPDATE(sessionId)}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(session)
-                })).json();
+                const document = migrateLegacyForgeSession(session, session?.worldlineNodes);
+                return await self.conversation.saveConversation(sessionId, document);
             }
         };
 

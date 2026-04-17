@@ -210,12 +210,13 @@ export class ChatManager extends LuminaWeaveAPIBase {
                         const onlyInIndependent = diffData.onlyInIndependent || [];
 
                         const stOriginatedUpdates = updated.filter((u: any) => u._isSTEdit);
-                        const luminaOriginatedUpdates = updated.filter((u: any) => !u._isSTEdit);
+                        const swipeBranchSwitchUpdates = updated.filter((u: any) => u._isSwipeBranchSwitch);
+                        const luminaOriginatedUpdates = updated.filter((u: any) => !u._isSTEdit && !u._isSwipeBranchSwitch);
 
-                        if (onlyInST.length > 0 || stOriginatedUpdates.length > 0) {
+                        if (onlyInST.length > 0 || stOriginatedUpdates.length > 0 || swipeBranchSwitchUpdates.length > 0) {
                             const syncResult = await this.sync.syncFromST();
                             totalDiff = syncResult.totalDiff;
-                            if (onlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0) {
+                            if (swipeBranchSwitchUpdates.length === 0 && (onlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0)) {
                                 await this.commitToST();
                             }
                         } else if (onlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0) {

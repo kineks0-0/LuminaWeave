@@ -109,7 +109,20 @@ export class STProtocol {
         let id = extra.id as string | undefined || (m as any).id as string | undefined;
 
         if (!id && (m as any).message_id !== undefined && (m as any).message_id !== null) {
-            id = `st_msg_${(m as any).message_id}`;
+            const swipeId =
+                typeof extra.swipe_id === 'number'
+                    ? extra.swipe_id
+                    : (typeof (m as any).swipe_id === 'number' ? (m as any).swipe_id : undefined);
+            const swipeCount =
+                typeof extra.swipeCount === 'number'
+                    ? extra.swipeCount
+                    : (Array.isArray((m as any).swipes) ? (m as any).swipes.length : 0);
+
+            if (swipeCount > 1 && swipeId !== undefined && swipeId >= 0) {
+                id = `st_msg_${(m as any).message_id}_swipe_${swipeId}`;
+            } else {
+                id = `st_msg_${(m as any).message_id}`;
+            }
         }
 
         if (!id) {
@@ -196,6 +209,28 @@ export class STProtocol {
         const role = this.normalizeRole(extra.role ?? m.role, isUser);
         const name = m.name || (isUser ? 'You' : 'Assistant');
         const charId = (extra.characterId as string | number | undefined) || defaultCharId;
+        const stWriteText = (m.message as string | undefined) ?? '';
+        const displayText = (m.mes as string | undefined) ?? stWriteText;
+        const swipeId =
+            typeof extra.swipe_id === 'number'
+                ? extra.swipe_id
+                : (typeof m.swipe_id === 'number' ? m.swipe_id : undefined);
+        const swipeCount =
+            typeof extra.swipeCount === 'number'
+                ? extra.swipeCount
+                : (Array.isArray(m.swipes) ? m.swipes.length : undefined);
+        if (m.message_id !== undefined && extra.message_id === undefined) {
+            extra.message_id = m.message_id;
+        }
+        if (swipeId !== undefined && extra.swipe_id === undefined) {
+            extra.swipe_id = swipeId;
+        }
+        if (swipeCount !== undefined && extra.swipeCount === undefined) {
+            extra.swipeCount = swipeCount;
+        }
+        if (typeof extra.activeSwipeText !== 'string') {
+            extra.activeSwipeText = stWriteText;
+        }
         
         // 1. 基础物理标识识别
         const { id, fingerprint } = this.identifyMessage(m);
@@ -207,8 +242,8 @@ export class STProtocol {
             name,
             role,
             is_user: isUser,
-            mesRaw: (extra.mesRaw as string | undefined) ?? (m.message as string | undefined) ?? '',
-            mes: m.message as string,
+            mesRaw: (extra.mesRaw as string | undefined) ?? stWriteText,
+            mes: displayText,
             is_hidden: m.is_hidden || false,
             fingerprint,
             stFingerprint: (extra.stFingerprint as string | undefined),
@@ -216,12 +251,16 @@ export class STProtocol {
             pluginRaw: (extra.pluginRaw as string | undefined) || null,
             mesSummary: (extra.mesSummary as string | undefined),
             thinkingText: (extra.thinkingText as string | undefined) || null,
-            mesST: (extra.mesST as string | undefined) ?? (m.message as string | undefined),
+            mesST: (extra.mesST as string | undefined) ?? stWriteText,
+            swipe_id: swipeId,
+            swipes: Array.isArray(m.swipes) ? [...m.swipes] : undefined,
+            swipes_info: Array.isArray(m.swipes_info) ? [...m.swipes_info] as STSwipeInfo[] : undefined,
             extra: { ...extra, role } as Record<string, unknown>
         };
 
         // 3. 运行自动对齐管道：补全清洗后的 mes, 矫正 fingerprint
         this.syncMessageCalculatedFields(msg);
+        msg.mes = displayText || msg.mes;
 
         return msg;
     }
@@ -280,7 +319,7 @@ export class STProtocol {
         };
 
         const stKeys = [
-            'swipes', 'swipe_id', 'swipes_info', 'message_id',
+            'swipes', 'swipes_info',
             'mesRaw', 'characterId', 'send_date', 'id', 'fingerprint', 'pluginRaw',
             'mesSummary'
         ];

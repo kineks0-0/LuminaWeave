@@ -44,13 +44,17 @@ export class STAdapter {
                     || local.stFingerprint !== stNode.stFingerprint;
                 
                 if (isDiff) {
+                    const isSwipeBranchSwitch = this.isSwipeBranchSwitch(local, stNode);
                     const baselineFp =
                         (typeof stNode.stFingerprintStored === 'string' ? stNode.stFingerprintStored : '')
                         || (typeof stNode.mesSTStored === 'string' && stNode.mesSTStored ? STProtocol.getSTFingerprint(stNode.mesSTStored) : '');
                     const isSTEdit =
-                        (baselineFp !== '' && baselineFp === local.stFingerprint && stNode.stFingerprint !== baselineFp)
-                        || (local.fingerprint === stNode.fingerprint && local.stFingerprint !== stNode.stFingerprint);
-                    updated.push({ ...local, _isSTEdit: isSTEdit });
+                        !isSwipeBranchSwitch
+                        && (
+                            (baselineFp !== '' && baselineFp === local.stFingerprint && stNode.stFingerprint !== baselineFp)
+                            || (local.fingerprint === stNode.fingerprint && local.stFingerprint !== stNode.stFingerprint)
+                        );
+                    updated.push({ ...local, _isSTEdit: isSTEdit, _isSwipeBranchSwitch: isSwipeBranchSwitch });
                 }
             }
         }
@@ -73,7 +77,10 @@ export class STAdapter {
             }
         }
 
-        const luminaOriginatedUpdates = updated.filter(u => !u._isSTEdit);
+        const swipeBranchSwitches = this.collectSwipeBranchSwitches(localSequence, stSequence);
+        const luminaOriginatedUpdates = updated.filter(u => !u._isSTEdit && !u._isSwipeBranchSwitch);
+        const effectiveOnlyInIndependent = onlyInIndependent.filter(item => !swipeBranchSwitches.localIds.has(item.id));
+        const effectiveOnlyInST = onlyInST.filter(item => !swipeBranchSwitches.stIds.has(item.id));
 
         return {
             onlyInIndependent,
@@ -83,7 +90,7 @@ export class STAdapter {
             stSequence,
             diffCount: onlyInIndependent.length + onlyInST.length + updated.length,
             hasConflict: onlyInIndependent.length > 0 || onlyInST.length > 0 || updated.length > 0,
-            hasDivergence: (onlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0) && onlyInST.length > 0,
+            hasDivergence: (effectiveOnlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0) && effectiveOnlyInST.length > 0,
             divergenceIndex
         };
     }
@@ -99,7 +106,16 @@ export class STAdapter {
     ): Promise<void> {
         console.log(`[STAdapter] 开始应用差量更新 (Lumina:${localTrace.length} vs ST:${stChat.length})...`);
 
-        const updates: { index: number, content: string, name?: string, role?: string, is_hidden?: boolean, extra: any }[] = [];
+        const updates: {
+            index: number;
+            content: string;
+            name?: string;
+            role?: string;
+            is_hidden?: boolean;
+            expectedSwipeId?: number;
+            expectedActiveSwipeText?: string;
+            extra: any;
+        }[] = [];
         const messagesToAppend: any[] = [];
         const indicesToDelete: number[] = [];
 
@@ -126,6 +142,11 @@ export class STAdapter {
                     name: localMsg.name,
                     role: localMsg.role,
                     is_hidden: localMsg.is_hidden || false,
+                    expectedSwipeId: typeof localMsg.extra?.swipe_id === 'number' ? localMsg.extra.swipe_id : undefined,
+                    expectedActiveSwipeText:
+                        typeof localMsg.extra?.activeSwipeText === 'string'
+                            ? localMsg.extra.activeSwipeText
+                            : localMsg.mesST,
                     extra: {
                         ...localMsg.extra,
                         ...this.createSyncSourceMeta(),
@@ -193,7 +214,7 @@ export class STAdapter {
     private static toComparableMessage(msg: LuminaChatMessage, side: 'st' | 'lumina'): any {
         const { id, fingerprint } = STProtocol.identifyMessage(msg);
         const finalMes = side === 'st'
-            ? STProtocol.normalize(msg.mes ?? STProtocol.resolveForSync(msg))
+            ? STProtocol.normalize(msg.mes ?? msg.mesST ?? STProtocol.resolveForSync(msg))
             : STProtocol.normalize(STProtocol.resolveForSync(msg));
         const normalizedRole = STProtocol.normalizeRole(msg.role, msg.is_user === true || msg.role === 'user');
         const stFingerprintStored =
@@ -203,7 +224,7 @@ export class STAdapter {
             (typeof msg?.extra?.mesST === 'string' ? msg.extra.mesST : '')
             || (typeof msg.mesST === 'string' ? msg.mesST : '');
         const compareText = side === 'st'
-            ? (msg.mes ?? STProtocol.resolveForSTWrite(msg))
+            ? (msg.mesST ?? STProtocol.resolveForSTWrite(msg))
             : (msg.mesST ?? (typeof msg?.extra?.mesST === 'string' ? msg.extra.mesST : undefined) ?? STProtocol.resolveForSTWrite(msg));
         return {
             id,
@@ -216,8 +237,52 @@ export class STAdapter {
             stFingerprintStored,
             mesSTStored,
             is_hidden: msg.is_hidden,
-            mesST: msg.mesST
+            mesST: msg.mesST,
+            message_id: msg.extra?.message_id,
+            swipe_id: msg.extra?.swipe_id,
+            swipeCount: msg.extra?.swipeCount,
+            activeSwipeText: msg.extra?.activeSwipeText,
+            parentId: msg.parentId ?? null
         };
+    }
+
+    private static isSwipeBranchSwitch(local: any, stNode: any): boolean {
+        const localMessageId = typeof local?.message_id === 'number' ? local.message_id : undefined;
+        const stMessageId = typeof stNode?.message_id === 'number' ? stNode.message_id : undefined;
+        if (localMessageId === undefined || stMessageId === undefined || localMessageId !== stMessageId) {
+            return false;
+        }
+
+        const localSwipeCount = typeof local?.swipeCount === 'number' ? local.swipeCount : 0;
+        const stSwipeCount = typeof stNode?.swipeCount === 'number' ? stNode.swipeCount : 0;
+        if (localSwipeCount <= 1 && stSwipeCount <= 1) {
+            return false;
+        }
+
+        const localSwipeId = typeof local?.swipe_id === 'number' ? local.swipe_id : undefined;
+        const stSwipeId = typeof stNode?.swipe_id === 'number' ? stNode.swipe_id : undefined;
+        if (localSwipeId !== undefined && stSwipeId !== undefined && localSwipeId !== stSwipeId) {
+            return true;
+        }
+
+        return local.id !== stNode.id && local.parentId === stNode.parentId;
+    }
+
+    private static collectSwipeBranchSwitches(localSequence: any[], stSequence: any[]): { localIds: Set<string>; stIds: Set<string> } {
+        const localIds = new Set<string>();
+        const stIds = new Set<string>();
+        const maxLen = Math.max(localSequence.length, stSequence.length);
+
+        for (let i = 0; i < maxLen; i++) {
+            const local = localSequence[i];
+            const stNode = stSequence[i];
+            if (!local || !stNode) continue;
+            if (!this.isSwipeBranchSwitch(local, stNode)) continue;
+            localIds.add(local.id);
+            stIds.add(stNode.id);
+        }
+
+        return { localIds, stIds };
     }
 
     // 暴露常用的高阶接口

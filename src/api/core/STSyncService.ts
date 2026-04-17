@@ -29,6 +29,40 @@ export class STSyncService {
     public pauseAutoSync(): void { this._autoSyncPaused = true; }
     public resumeAutoSync(): void { this._autoSyncPaused = false; }
 
+    private _isSwipeTimelineSwitch(
+        previousTraceNode: LuminaChatMessage | undefined,
+        currentNode: LuminaChatMessage,
+        targetParentId: string | null
+    ): boolean {
+        if (!previousTraceNode) return false;
+
+        const previousMessageId =
+            typeof previousTraceNode.extra?.message_id === 'number'
+                ? previousTraceNode.extra.message_id
+                : undefined;
+        const currentMessageId =
+            typeof currentNode.extra?.message_id === 'number'
+                ? currentNode.extra.message_id
+                : undefined;
+        if (previousMessageId === undefined || currentMessageId === undefined || previousMessageId !== currentMessageId) {
+            return false;
+        }
+
+        const previousSwipeCount =
+            typeof previousTraceNode.extra?.swipeCount === 'number'
+                ? previousTraceNode.extra.swipeCount
+                : 0;
+        const currentSwipeCount =
+            typeof currentNode.extra?.swipeCount === 'number'
+                ? currentNode.extra.swipeCount
+                : 0;
+        if (previousSwipeCount <= 1 && currentSwipeCount <= 1) {
+            return false;
+        }
+
+        return previousTraceNode.parentId === targetParentId && previousTraceNode.id !== currentNode.id;
+    }
+
     private _repairLinks(nodeInStore: LuminaChatMessage, targetParentId: string | null, stNode: any, ignoreST: boolean): boolean {
         let nodeChanged = false;
         
@@ -91,6 +125,7 @@ export class STSyncService {
         const snapshot = await STAdapter.getSnapshot({ ensureStableIds: true });
         const messages = snapshot.lumina;
         const previousActiveLeafId = this.store.activeLeafId;
+        const previousTrace = this.store.getTrace(previousActiveLeafId);
         const nowTs = Date.now();
         const suppressLoopbackWindowMs = Number(lwStorage.get('lumina-chat.syncLoopbackWindowMs', 1600, 'Global')) || 1600;
         const ignoreSTSetting = Boolean(lwStorage.get('lumina-chat.syncIgnoreST', false, 'Global'));
@@ -135,6 +170,7 @@ export class STSyncService {
         let changed = false;
         let externalNewNodesAdded = 0;
         let loopbackSuppressed = 0;
+        let branchSwitchTargetId: string | null = null;
         const processedIds = new Set<string>();
         const fingerprintToNode = new Map<string, LuminaChatMessage[]>();
         for (const node of this.store.nodePool) {
@@ -185,6 +221,9 @@ export class STSyncService {
                     changed = true;
                 }
                 lastNodeInStore = nodeInStore;
+                if (this._isSwipeTimelineSwitch(previousTrace[i], nodeInStore, targetParentId)) {
+                    branchSwitchTargetId = nodeInStore.id;
+                }
             } else {
                 if (ignoreST) {
                     continue;
@@ -198,6 +237,9 @@ export class STSyncService {
                 lastNodeInStore = stNode;
                 externalNewNodesAdded++;
                 changed = true;
+                if (this._isSwipeTimelineSwitch(previousTrace[i], stNode, stNode.parentId || null)) {
+                    branchSwitchTargetId = stNode.id;
+                }
                 if (stNode.fingerprint) {
                     const bucket = fingerprintToNode.get(stNode.fingerprint) || [];
                     bucket.push(stNode);
@@ -225,7 +267,9 @@ export class STSyncService {
         // 优先保留本地之前的活跃指针，防止同步过程中指针跳回 ST 的线性末尾（导致分歧点丢失）
         const isLuminaFirst = lwStorage.get('lumina-chat.syncLuminaFirst', true, 'Global');
 
-        if (previousActiveLeafId && this.store.hasNode(previousActiveLeafId)) {
+        if (branchSwitchTargetId && this.store.hasNode(branchSwitchTargetId)) {
+            this.store.activeLeafId = branchSwitchTargetId;
+        } else if (previousActiveLeafId && this.store.hasNode(previousActiveLeafId)) {
             // 核心对齐逻辑：如果是 Lumina 模式，我们通常保持当前指针。
             // 但是！如果外部 ST 侧确实追加了新节点，且该节点是当前指针的直接后裔，则应该紧跟（例如用户在 ST 侧进行了 Swipe 或生成）
             const isDescendantOfCurrent = lastNodeInStore && this.store.getTrace(lastNodeInStore.id).some(n => n.id === previousActiveLeafId);

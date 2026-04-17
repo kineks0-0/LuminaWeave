@@ -4,6 +4,7 @@ import {
     IChatService, 
     INexusService, 
     IForgeService, 
+    IConversationService,
     ISettingsService, 
     IPresetService,
     IStoreService,
@@ -16,6 +17,11 @@ import { promptBuilder } from '../core/PromptBuilder.js';
 import { OpenAIProvider } from '../../../../shared/api/llm/OpenAIProvider.js';
 import { LLMMessage } from '../../../../shared/api/llm/ILLMProvider.js';
 import { TransactionMutationResponse } from '../../../../shared/api/TransactionTypes.js';
+import type { ConversationDocument, ConversationMutation } from '../../../../shared/ConversationTypes.js';
+import { createEmptyConversationDocument } from '../../../../shared/ConversationTypes.js';
+import { applyConversationMutation } from '../../../../shared/ConversationReducer.js';
+import { migrateLegacyChatArray, migrateLegacyForgeSession } from '../../../../shared/ConversationMigration.js';
+import { resolveConversationSummary } from '../../../../shared/ConversationSummaryResolver.js';
 
 /**
  * 离线/本地桥接适配器
@@ -26,76 +32,255 @@ export class LocalBridgeAdapter implements ILuminaBridge {
     public readonly chat: IChatService;
     public readonly nexus: INexusService;
     public readonly forge: IForgeService;
+    public readonly conversation: IConversationService;
     public readonly settings: ISettingsService;
     public readonly presets: IPresetService;
     public readonly extensionStore: IStoreService;
 
-    constructor() {
-        this.chat = {
-            listChats: async () => {
-                return lwStorage.get('lumina-chats', [], 'Global');
-            },
-            getChat: async (chatId: string) => {
-                const chats = lwStorage.get('lumina-chats', [], 'Global');
-                return chats.find((c: any) => c.id === chatId) || null;
-            },
-            saveChat: async (chatId: string, payload: any): Promise<TransactionMutationResponse> => {
-                const chats = lwStorage.get('lumina-chats', [], 'Global');
-                const idx = chats.findIndex((c: any) => c.id === chatId);
-                if (idx >= 0) chats[idx] = { ...chats[idx], ...payload.data };
-                else chats.push({ id: chatId, ...payload.data });
-                lwStorage.set('lumina-chats', chats, 'Global');
+    private static readonly CONVERSATION_KEY = 'lumina_conversations';
 
-                const seq = payload.transactionContext?.expectedSeq ?? 0;
-                return { 
-                    success: true, 
-                    lastCommittedSeq: seq,
+    private readConversations(): ConversationDocument[] {
+        const unified = lwStorage.get(LocalBridgeAdapter.CONVERSATION_KEY, null, 'Global');
+        if (Array.isArray(unified)) {
+            return unified;
+        }
+
+        const migrated: ConversationDocument[] = [];
+        const legacyChats = lwStorage.get('lumina-chats', [], 'Global');
+        if (Array.isArray(legacyChats)) {
+            for (const entry of legacyChats) {
+                if (entry?.id && Array.isArray(entry?.data)) {
+                    migrated.push(migrateLegacyChatArray(entry.id, entry.data));
+                }
+            }
+        }
+
+        const legacyForgeSessions = lwStorage.get('lumina-forge.sessions', [], 'Global');
+        if (Array.isArray(legacyForgeSessions)) {
+            for (const session of legacyForgeSessions) {
+                if (session?.id) {
+                    migrated.push(migrateLegacyForgeSession(session, session?.worldlineNodes));
+                }
+            }
+        }
+
+        if (migrated.length > 0) {
+            lwStorage.set(LocalBridgeAdapter.CONVERSATION_KEY, migrated, 'Global');
+        }
+        return migrated;
+    }
+
+    private writeConversations(documents: ConversationDocument[]): void {
+        lwStorage.set(LocalBridgeAdapter.CONVERSATION_KEY, documents, 'Global');
+    }
+
+    private upsertConversation(document: ConversationDocument): ConversationDocument {
+        const documents = this.readConversations();
+        const index = documents.findIndex((item) => item.id === document.id);
+        const normalized = {
+            ...document,
+            summary: resolveConversationSummary(document)
+        };
+        if (index >= 0) {
+            documents[index] = normalized;
+        } else {
+            documents.push(normalized);
+        }
+        this.writeConversations(documents);
+        return normalized;
+    }
+
+    private getConversationDocument(id: string): ConversationDocument | null {
+        return this.readConversations().find((conversation) => conversation.id === id) || null;
+    }
+
+    private commitConversation(id: string, document: ConversationDocument, scope: 'chat.save' | 'chat.patch') {
+        const nextSeq = (document.transaction?.lastCommittedSeq || 0) + 1;
+        const committed = {
+            ...document,
+            transaction: {
+                lastCommittedSeq: nextSeq,
+                lastTransactionId: `local_tx_${Date.now()}`
+            },
+            updatedAt: Date.now(),
+            summary: resolveConversationSummary(document)
+        };
+        const saved = this.upsertConversation(committed);
+        return {
+            success: true,
+            document: saved,
+            summary: resolveConversationSummary(saved),
+            lastCommittedSeq: nextSeq,
                     transaction: {
-                        id: `local_tx_${Date.now()}`,
-                        chatId,
-                        seq,
+                        id: committed.transaction.lastTransactionId!,
+                        chatId: id,
+                        seq: nextSeq,
+                        status: 'committed' as const,
+                        scope: scope,
+                payloadDigest: '',
+                idempotencyKey: `${scope}:${id}:${nextSeq}`,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                error: null
+            }
+        };
+    }
+
+    private conversationToLegacyChat(document: ConversationDocument): any[] {
+        return [{
+            type: 'metadata',
+            activeLeafId: document.activeLeafId,
+            updatedAt: document.updatedAt,
+            version: 3.0,
+            pluginData: document.pluginState.chat?.pluginData || null,
+            transaction: document.transaction
+        }, ...document.nodes];
+    }
+
+    private conversationToForgeSession(document: ConversationDocument): any {
+        const forge = document.pluginState.forge || {};
+        return {
+            id: document.id,
+            sessionChatId: forge.sessionChatId || document.legacy?.legacyChatId || document.id,
+            title: document.title,
+            createdAt: document.createdAt,
+            updatedAt: document.updatedAt,
+            presetId: forge.presetId || '',
+            activeLeafId: document.activeLeafId,
+            worldlineNodes: document.nodes,
+            selectedChatSessionId: forge.selectedChatSessionId || null,
+            selectedChatSnapshotId: forge.selectedChatSnapshotId || null,
+            draftInput: forge.draftInput || '',
+            stagingEntries: forge.stagingEntries || [],
+            commitReadyEntries: forge.commitReadyEntries || [],
+            virtualLorebookEntries: forge.virtualLorebookEntries || [],
+            importedLorebookId: forge.importedLorebookId || null,
+            workflowSnapshot: forge.workflowSnapshot || null,
+            detailMode: forge.detailMode || null,
+            entryMode: forge.entryMode || null,
+            structuredState: forge.structuredState,
+            draftTree: forge.draftTree,
+            forgeMemoryTree: forge.forgeMemoryTree,
+            activeLayer: forge.activeLayer || 'concept',
+            completedLayers: forge.completedLayers || [],
+            publishState: forge.publishState || 'drafting',
+            activeAuxPanel: forge.activeAuxPanel,
+            auxPresentationMode: forge.auxPresentationMode,
+            worldlineSnapshots: forge.worldlineSnapshots,
+            workspaceMode: 'workspace'
+        };
+    }
+
+    constructor() {
+        this.conversation = {
+            listConversations: async () => ({
+                conversations: this.readConversations().map((document) => resolveConversationSummary(document))
+            }),
+            getConversation: async (id: string) => ({
+                document: this.getConversationDocument(id)
+            }),
+            saveConversation: async (id: string, document: ConversationDocument) => {
+                return this.commitConversation(id, { ...document, id }, 'chat.save');
+            },
+            mutateConversation: async (id: string, mutation: ConversationMutation) => {
+                const current = this.getConversationDocument(id) || createEmptyConversationDocument({
+                    id,
+                    conversationType: id.startsWith('lw_card_') ? 'forge' : 'chat'
+                });
+                const next = applyConversationMutation(current, mutation);
+                return this.commitConversation(id, next, 'chat.patch');
+            },
+            getTransactions: async (id: string) => {
+                const document = this.getConversationDocument(id);
+                if (!document?.transaction?.lastTransactionId) {
+                    return { success: true, transactions: [], lastCommittedSeq: 0 };
+                }
+                return {
+                    success: true,
+                    transactions: [{
+                        id: document.transaction.lastTransactionId,
+                        chatId: id,
+                        seq: document.transaction.lastCommittedSeq,
                         status: 'committed',
                         scope: 'chat.save',
                         payloadDigest: '',
-                        idempotencyKey: payload.transactionContext?.idempotencyKey || '',
-                        createdAt: Date.now(),
-                        updatedAt: Date.now(),
+                        idempotencyKey: document.transaction.lastTransactionId,
+                        createdAt: document.updatedAt,
+                        updatedAt: document.updatedAt,
                         error: null
-                    }
+                    }],
+                    lastCommittedSeq: document.transaction.lastCommittedSeq
                 };
+            },
+            rollbackTransaction: async (id: string) => ({
+                success: true,
+                lastCommittedSeq: this.getConversationDocument(id)?.transaction.lastCommittedSeq || 0
+            })
+        };
+
+        this.chat = {
+            listChats: async () => {
+                return {
+                    chats: this.readConversations()
+                        .filter((document) => document.conversationType === 'chat')
+                        .map((document) => ({
+                            chatId: document.id,
+                            updatedAt: document.updatedAt,
+                            messageCount: document.nodes.length,
+                            activeLeafId: document.activeLeafId,
+                            previewMessage: resolveConversationSummary(document).previewMessage
+                        }))
+                };
+            },
+            getChat: async (chatId: string) => {
+                const data = await this.conversation.getConversation(chatId);
+                return data.document ? this.conversationToLegacyChat(data.document) : null;
+            },
+            saveChat: async (chatId: string, payload: any): Promise<TransactionMutationResponse> => {
+                const document = migrateLegacyChatArray(chatId, payload?.data || payload);
+                return await this.conversation.saveConversation(chatId, document) as any;
             },
             patchChat: async (chatId: string, payload: any): Promise<TransactionMutationResponse> => {
-                // 简化的 Patch 实现
-                const seq = payload.transactionContext?.expectedSeq ?? 0;
-                return { 
-                    success: true, 
-                    lastCommittedSeq: seq,
-                    transaction: {
-                        id: `local_tx_${Date.now()}`,
-                        chatId,
-                        seq,
-                        status: 'committed',
-                        scope: 'chat.patch',
-                        payloadDigest: '',
-                        idempotencyKey: payload.transactionContext?.idempotencyKey || '',
-                        createdAt: Date.now(),
-                        updatedAt: Date.now(),
-                        error: null
-                    }
-                };
+                return await this.conversation.mutateConversation(chatId, {
+                    nodes: {
+                        added: Array.isArray(payload?.added) ? payload.added : [],
+                        updated: Array.isArray(payload?.updated) ? payload.updated : [],
+                        deletedIds: Array.isArray(payload?.deletedIds) ? payload.deletedIds : []
+                    },
+                    activeLeafId: payload?.metadata?.activeLeafId,
+                    pluginState: payload?.metadata?.pluginData ? {
+                        chat: {
+                            pluginData: payload.metadata.pluginData
+                        }
+                    } : undefined,
+                    updatedAt: payload?.metadata?.updatedAt
+                }) as any;
             },
             saveMessage: async (chatId: string, nodeId: string, message: any) => {
-                console.log(`[LocalBridge] Save message: ${nodeId}`);
-                return { success: true };
+                return await this.conversation.mutateConversation(chatId, {
+                    nodes: {
+                        added: [{ ...message, id: nodeId }]
+                    }
+                });
             },
             deleteMessage: async (chatId: string, nodeId: string) => {
-                return { success: true };
+                return await this.conversation.mutateConversation(chatId, {
+                    nodes: {
+                        deletedIds: [nodeId]
+                    }
+                });
             },
             getSyncStatus: async (chatId: string) => {
-                return { isSynced: true, lastUpdate: Date.now() };
+                const transactions = await this.conversation.getTransactions(chatId);
+                return {
+                    success: true,
+                    isTransactionsCompleted: true,
+                    lastCommittedSeq: transactions.lastCommittedSeq || 0,
+                    lastTransactionId: transactions.transactions?.[0]?.id || null
+                };
             },
-            getTransactions: async () => ({ success: true, transactions: [] }),
-            rollbackTransaction: async () => ({ success: true })
+            getTransactions: async (chatId: string) => this.conversation.getTransactions(chatId),
+            rollbackTransaction: async (chatId: string, transactionId: string) => this.conversation.rollbackTransaction(chatId, transactionId)
         };
 
         const interceptor = new BaseXMLInterceptor();
@@ -239,23 +424,22 @@ export class LocalBridgeAdapter implements ILuminaBridge {
         };
 
         this.forge = {
-            listSessions: async () => lwStorage.get('lumina-forge.sessions', [], 'Global'),
+            listSessions: async () => ({
+                sessions: this.readConversations()
+                    .filter((document) => document.conversationType === 'forge')
+                    .map((document) => this.conversationToForgeSession(document))
+            }),
             getSession: async (id: string) => {
-                const sessions = lwStorage.get('lumina-forge.sessions', [], 'Global');
-                return { session: sessions.find((s: any) => s.id === id) || null };
+                const data = await this.conversation.getConversation(id);
+                return { session: data.document ? this.conversationToForgeSession(data.document) : null };
             },
             saveSession: async (session: any) => {
-                const sessions = lwStorage.get('lumina-forge.sessions', [], 'Global');
-                sessions.push(session);
-                lwStorage.set('lumina-forge.sessions', sessions, 'Global');
-                return { success: true };
+                const document = migrateLegacyForgeSession(session, session?.worldlineNodes);
+                return await this.conversation.saveConversation(session.id, document);
             },
             updateSession: async (id: string, session: any) => {
-                const sessions = lwStorage.get('lumina-forge.sessions', [], 'Global');
-                const idx = sessions.findIndex((s: any) => s.id === id);
-                if (idx >= 0) sessions[idx] = session;
-                lwStorage.set('lumina-forge.sessions', sessions, 'Global');
-                return { success: true };
+                const document = migrateLegacyForgeSession(session, session?.worldlineNodes);
+                return await this.conversation.saveConversation(id, document);
             }
         };
 
