@@ -1,5 +1,5 @@
 <template>
-  <div class="lw-panel-header">
+  <div class="lw-panel-header" :class="{ 'is-bottom': headerPlacement === 'bottom' }">
     <div class="header-left">
       <div class="lw-brand" v-if="!isMobile">
         <span class="lw-title-main">LuminaWeave</span>
@@ -22,14 +22,12 @@
       </div>
 
       <div class="lw-tabs" ref="tabsContainerRef">
-        <!-- 可见 Tab：静态插件 -->
         <template v-for="(plugin, index) in tabOrder" :key="plugin.type === 'plugin' ? plugin.id : 'dyn-' + plugin.id">
           <template v-if="plugin.type === 'plugin'">
             <button
               v-if="plugin.id !== 'lumina-launcher'"
-              :ref="(el) => setTabRef(el as HTMLElement | null, index)"
               class="lw-tab"
-              :class="{ active: activeMainTab === plugin.id, 'lw-tab--hidden': index >= visibleCount }"
+              :class="{ active: activeMainTab === plugin.id }"
               @click="$emit('switchMainView', plugin.id)"
             >
               <span v-html="plugin.icon" class="tab-icon-wrapper"></span>
@@ -38,9 +36,8 @@
           </template>
           <template v-else>
             <button
-              :ref="(el) => setTabRef(el as HTMLElement | null, index)"
               class="lw-tab dynamic"
-              :class="{ active: activeMainTab === plugin.id, 'lw-tab--hidden': index >= visibleCount }"
+              :class="{ active: activeMainTab === plugin.id }"
               @click="$emit('switchMainView', plugin.id)"
             >
               <span v-html="plugin.icon" class="tab-icon-wrapper"></span>
@@ -55,24 +52,6 @@
           </template>
         </template>
 
-        <!-- 溢出按钮 -->
-        <div class="lw-tab-more" v-if="overflowTabs.length > 0" ref="moreButtonRef">
-          <button class="lw-tab lw-tab--more" @click="showOverflow = !showOverflow">
-            ··· {{ overflowTabs.length }}
-          </button>
-          <div class="lw-tab-dropdown" v-if="showOverflow">
-            <button
-              v-for="tab in overflowTabs"
-              :key="tab.id"
-              class="lw-tab-dropdown-item"
-              :class="{ active: activeMainTab === tab.id }"
-              @click="pickOverflow(tab.id)"
-            >
-              <span v-html="tab.icon" class="tab-icon-wrapper"></span>
-              {{ tab.name }}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -82,76 +61,206 @@
 
     <div class="header-right">
       <component v-for="plugin in headerRightPlugins" :key="plugin.id" :is="plugin.headerRightComponent" />
+
       <div class="header-floating-controls">
-        <button class="header-floating-control" :class="{ active: isWorkspaceMenuOpen }" @click="$emit('toggleWorkspaceMenu')" title="工作台菜单">
-          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-            <line x1="4" y1="7" x2="20" y2="7"></line>
-            <line x1="4" y1="12" x2="20" y2="12"></line>
-            <line x1="4" y1="17" x2="20" y2="17"></line>
+        <div v-if="isMobile" class="header-floating-control-wrapper" :class="{ 'is-bottom': headerPlacement === 'bottom' }" ref="widgetBtnWrapperRef">
+          <button class="header-floating-control" :class="{ active: showWidgetMenu }" @click="showWidgetMenu = !showWidgetMenu" title="小窗面板">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="9" y1="3" x2="9" y2="21"></line>
+            </svg>
+          </button>
+          <div class="widget-dropdown" v-if="showWidgetMenu" ref="widgetMenuRef">
+            <template v-if="widgetGroups.length > 0 && widgetMenuGroup === null">
+              <div class="widget-dropdown-label widget-dropdown-title">小窗面板</div>
+              <button
+                v-for="(group, gi) in widgetGroups"
+                :key="gi"
+                class="widget-dropdown-item widget-dropdown-group-btn"
+                @click="widgetMenuGroup = gi"
+              >
+                <span v-html="group.items[0]?.icon" class="tab-icon-wrapper"></span>
+                <span class="widget-group-label">{{ group.label || '其他' }}</span>
+                <svg class="widget-group-chevron" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none">
+                  <polyline points="9 6 15 12 9 18"></polyline>
+                </svg>
+              </button>
+            </template>
+            <template v-else-if="widgetGroups.length > 0 && widgetMenuGroup !== null">
+              <button class="widget-dropdown-back" @click="widgetMenuGroup = null">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                {{ widgetGroups[widgetMenuGroup]?.label || '返回' }}
+              </button>
+              <button
+                v-for="wp in widgetGroups[widgetMenuGroup]?.items"
+                :key="wp.id"
+                class="widget-dropdown-item"
+                :class="{ active: activeWidgetId === wp.id }"
+                @click="pickWidget(wp.id)"
+              >
+                <span v-html="wp.icon" class="tab-icon-wrapper"></span>
+                {{ wp.name }}
+              </button>
+            </template>
+            <template v-else>
+              <button
+                v-for="wp in widgetPanels"
+                :key="wp.id"
+                class="widget-dropdown-item"
+                :class="{ active: activeWidgetId === wp.id }"
+                @click="pickWidget(wp.id)"
+              >
+                <span v-html="wp.icon" class="tab-icon-wrapper"></span>
+                {{ wp.name }}
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-menu-wrap" :class="{ 'is-bottom': headerPlacement === 'bottom' }" ref="profileMenuWrapperRef">
+        <button class="profile-trigger" :class="{ active: showProfileMenu }" @click="toggleProfileMenu" :title="`${activeUserName} 菜单`">
+          <span class="profile-trigger-avatar">
+            <img
+              v-if="activeUserAvatar"
+              :src="activeUserAvatar || defaultAvatar"
+              class="avatar-sm"
+              :alt="activeUserName"
+              @error="(e) => (e.target as HTMLImageElement).src = defaultAvatar"
+            >
+            <span v-else class="avatar-sm placeholder"></span>
+          </span>
+          <span v-if="!isMobile" class="profile-trigger-copy">
+            <strong>{{ activeUserName }}</strong>
+            <small>工作区菜单</small>
+          </span>
+          <svg v-if="!isMobile" class="profile-trigger-chevron" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+            <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
         </button>
-        <button class="header-floating-control" @click="$emit('toggleSettings')" title="设置">
-          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-            </path>
-          </svg>
-        </button>
+
+        <div v-if="showProfileMenu" class="profile-menu" ref="profileMenuRef">
+          <template v-if="profileMenuView === 'root'">
+            <div class="profile-menu-copy">
+              <span class="profile-menu-kicker">Workspace Menu</span>
+              <strong>{{ activeUserName }}</strong>
+              <span>把关闭、桌面模式和设置收进头像菜单里，保持主导航更专注。</span>
+            </div>
+
+            <button class="profile-menu-item" type="button" @click="openLayoutMenu">
+              <span class="profile-menu-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                  <rect x="3" y="4" width="6" height="16" rx="2"></rect>
+                  <rect x="12" y="6" width="9" height="5" rx="2"></rect>
+                  <rect x="12" y="14" width="9" height="6" rx="2"></rect>
+                </svg>
+              </span>
+              <span class="profile-menu-label">桌面模式</span>
+              <span class="profile-menu-value">{{ layoutModeLabel }}</span>
+              <svg class="profile-menu-chevron" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                <polyline points="9 6 15 12 9 18"></polyline>
+              </svg>
+            </button>
+
+            <button class="profile-menu-item" type="button" @click="openSettings">
+              <span class="profile-menu-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </span>
+              <span class="profile-menu-label">设置</span>
+              <span class="profile-menu-value">打开设置面板</span>
+            </button>
+
+            <button class="profile-menu-item danger" type="button" @click="closeWorkspace">
+              <span class="profile-menu-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.2" fill="none">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </span>
+              <span class="profile-menu-label">关闭</span>
+              <span class="profile-menu-value">返回经典模式</span>
+            </button>
+          </template>
+
+          <template v-else>
+            <button class="profile-menu-back" type="button" @click="profileMenuView = 'root'">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+              返回
+            </button>
+
+            <div class="profile-menu-copy">
+              <span class="profile-menu-kicker">Workspace Mode</span>
+              <strong>切换桌面模式</strong>
+              <span>默认使用传统桌面。自由工作台采用 iPadOS 式窗口交互。</span>
+            </div>
+
+            <button class="profile-menu-choice" :class="{ active: layoutMode === 'traditional' }" type="button" @click="pickLayoutMode('traditional')">
+              <span class="profile-menu-choice-title">传统桌面</span>
+              <span class="profile-menu-choice-copy">顶部主导航 + 主内容区 + 辅助右栏</span>
+            </button>
+
+            <button class="profile-menu-choice" :class="{ active: layoutMode === 'freeform' }" type="button" @click="pickLayoutMode('freeform')">
+              <span class="profile-menu-choice-title">自由工作台</span>
+              <span class="profile-menu-choice-copy">iPadOS 台前调度 + 舞台组 + Dock</span>
+            </button>
+          </template>
+        </div>
       </div>
-      <div class="avatar-group" v-if="activeUserAvatar">
-        <img :src="activeUserAvatar || defaultAvatar" class="avatar-sm" :title="activeUserName" @error="(e) => (e.target as HTMLImageElement).src = defaultAvatar">
-      </div>
-      <div class="avatar-sm placeholder" v-else></div>
-      <button class="lw-btn-close" @click="$emit('close')" title="返回经典模式">
-        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { pluginManager } from '@/core/PluginManager';
 
 const props = withDefaults(defineProps<{
   activeMainTab?: string;
   dynamicTabs?: any[];
   isMobile?: boolean;
-  isWorkspaceMenuOpen?: boolean;
+  layoutMode?: 'traditional' | 'freeform';
+  headerPlacement?: 'top' | 'bottom';
+  widgetPanels?: { id: string; name: string; icon: string }[];
+  widgetGroups?: { label?: string; items: { id: string; name: string; icon: string }[] }[];
+  activeWidgetId?: string;
 }>(), {
   activeMainTab: 'lumina-chat',
   dynamicTabs: () => [],
   isMobile: false,
-  isWorkspaceMenuOpen: false
+  layoutMode: 'traditional',
+  headerPlacement: 'top',
+  widgetPanels: () => [],
+  widgetGroups: () => [],
+  activeWidgetId: ''
 });
 
 const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'toggleSettings'): void;
-  (e: 'toggleWorkspaceMenu'): void;
+  (e: 'setLayoutMode', mode: 'traditional' | 'freeform'): void;
   (e: 'switchMainView', tabId: string): void;
   (e: 'closeTab', tabId: string): void;
+  (e: 'openWidget', panelId: string): void;
 }>();
 
 const mainPlugins = computed(() => pluginManager.getPluginsInSlot('mainView'));
 const headerCenterPlugins = computed(() => pluginManager.getPluginsInSlot('headerCenter'));
 const headerRightPlugins = computed(() => pluginManager.getPluginsInSlot('headerRight'));
 
-const activeCharName = computed(() => (window as any).LuminaWeave?.getCharName() || 'Assistant');
 const activeUserName = computed(() => (window as any).LuminaWeave?.getUserName() || 'User');
-const activeCharAvatar = computed(() => (window as any).LuminaWeave?.getCharAvatar(activeCharName.value));
 const activeUserAvatar = computed(() => (window as any).LuminaWeave?.getUserAvatar());
 const defaultAvatar = computed(() => (window as any).LuminaWeave?.DEFAULT_AVATAR);
-
-// ── Priority Navigation ──────────────────────────────────────────────────────
+const layoutModeLabel = computed(() => props.layoutMode === 'freeform' ? '自由工作台' : '传统桌面');
 
 type TabEntry = { type: 'plugin' | 'dynamic'; id: string; name: string; icon: string };
 
-/** 合并静态插件 + 动态 Tab，保持原始顺序 */
 const tabOrder = computed<TabEntry[]>(() => {
   const plugins: TabEntry[] = mainPlugins.value
     .filter(p => p.id !== 'lumina-launcher')
@@ -165,81 +274,73 @@ const tabOrder = computed<TabEntry[]>(() => {
   return [...plugins, ...dynamics];
 });
 
-const tabsContainerRef = ref<HTMLElement | null>(null);
-const moreButtonRef = ref<HTMLElement | null>(null);
-const tabRefs = ref<(HTMLElement | null)[]>([]);
-const visibleCount = ref(999); // 初始显示全部
-const showOverflow = ref(false);
+const widgetMenuRef = ref<HTMLElement | null>(null);
+const widgetBtnWrapperRef = ref<HTMLElement | null>(null);
+const profileMenuWrapperRef = ref<HTMLElement | null>(null);
+const showWidgetMenu = ref(false);
+const widgetMenuGroup = ref<number | null>(null);
+const showProfileMenu = ref(false);
+const profileMenuView = ref<'root' | 'layout'>('root');
 
-function setTabRef(el: HTMLElement | null, index: number) {
-  tabRefs.value[index] = el;
+function pickWidget(panelId: string) {
+  showWidgetMenu.value = false;
+  widgetMenuGroup.value = null;
+  emit('openWidget', panelId);
 }
 
-const MORE_BTN_WIDTH = 56; // 预留溢出按钮宽度
-const GAP = 4;
-
-function recalc() {
-  const container = tabsContainerRef.value;
-  if (!container) return;
-  const containerWidth = container.offsetWidth;
-  if (containerWidth === 0) return;
-
-  const tabs = tabRefs.value.filter(Boolean) as HTMLElement[];
-  if (tabs.length === 0) return;
-
-  let used = 0;
-  let count = 0;
-  for (const tab of tabs) {
-    const w = tab.offsetWidth + GAP;
-    if (used + w + (count < tabs.length - 1 ? MORE_BTN_WIDTH : 0) > containerWidth) break;
-    used += w;
-    count++;
+function toggleProfileMenu() {
+  showProfileMenu.value = !showProfileMenu.value;
+  if (!showProfileMenu.value) {
+    profileMenuView.value = 'root';
   }
-
-  visibleCount.value = count > 0 ? count : 1;
 }
 
-const overflowTabs = computed(() => tabOrder.value.slice(visibleCount.value));
-
-function pickOverflow(tabId: string) {
-  showOverflow.value = false;
-  emit('switchMainView', tabId);
+function openLayoutMenu() {
+  profileMenuView.value = 'layout';
 }
 
-let ro: ResizeObserver | null = null;
+function openSettings() {
+  showProfileMenu.value = false;
+  profileMenuView.value = 'root';
+  emit('toggleSettings');
+}
+
+function pickLayoutMode(mode: 'traditional' | 'freeform') {
+  showProfileMenu.value = false;
+  profileMenuView.value = 'root';
+  emit('setLayoutMode', mode);
+}
+
+function closeWorkspace() {
+  showProfileMenu.value = false;
+  profileMenuView.value = 'root';
+  emit('close');
+}
 
 onMounted(() => {
-  nextTick(() => {
-    recalc();
-    if (tabsContainerRef.value) {
-      ro = new ResizeObserver(() => recalc());
-      ro.observe(tabsContainerRef.value);
-    }
-  });
-
   document.addEventListener('pointerdown', onDocPointerDown);
 });
 
 onUnmounted(() => {
-  ro?.disconnect();
   document.removeEventListener('pointerdown', onDocPointerDown);
 });
 
 function onDocPointerDown(e: PointerEvent) {
-  if (!showOverflow.value) return;
-  const target = e.target as Node;
-  if (moreButtonRef.value && moreButtonRef.value.contains(target)) return;
-  showOverflow.value = false;
+  if (!showWidgetMenu.value && !showProfileMenu.value) return;
+  const path = e.composedPath();
+  if (widgetBtnWrapperRef.value && path.includes(widgetBtnWrapperRef.value)) return;
+  if (profileMenuWrapperRef.value && path.includes(profileMenuWrapperRef.value)) return;
+  if (showWidgetMenu.value) {
+    showWidgetMenu.value = false;
+    widgetMenuGroup.value = null;
+  }
+  //showProfileMenu.value = false;
+  profileMenuView.value = 'root';
 }
 
-// 当 tab 列表或激活 tab 变化时重新计算
-watch([tabOrder, () => props.activeMainTab], () => {
-  nextTick(() => recalc());
-});
 </script>
 
 <style scoped>
-
 @import url('https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@100..900&family=ZCOOL+QingKe+HuangYou&display=swap');
 
 :deep(.tab-icon-wrapper) {
@@ -258,6 +359,11 @@ watch([tabOrder, () => props.activeMainTab], () => {
   align-items: center;
   background: #ffffff;
   z-index: 10;
+}
+
+.lw-panel-header.is-bottom {
+  border-top: 1px solid #e2e8f0;
+  border-bottom: none;
 }
 
 .header-left {
@@ -333,12 +439,6 @@ watch([tabOrder, () => props.activeMainTab], () => {
   flex-shrink: 0;
 }
 
-@media (max-width: 768px) {
-  .header-right {
-    gap: 6px;
-  }
-}
-
 .lw-tabs {
   display: flex;
   gap: 4px;
@@ -347,8 +447,14 @@ watch([tabOrder, () => props.activeMainTab], () => {
   border-radius: 16px;
   border: 1px solid #e2e8f0;
   min-width: 0;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
   position: relative;
+}
+
+.lw-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .lw-tab {
@@ -409,7 +515,6 @@ watch([tabOrder, () => props.activeMainTab], () => {
   opacity: 0.8;
 }
 
-/* 溢出按钮 */
 .lw-tab-more {
   position: relative;
   flex-shrink: 0;
@@ -462,27 +567,107 @@ watch([tabOrder, () => props.activeMainTab], () => {
   color: var(--lw-primary);
 }
 
-@media (max-width: 768px) {
-  .lw-tabs {
-    flex: 1.5;
-    margin-right: 8px;
-  }
+.widget-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  bottom: auto;
+  right: 0;
+  min-width: 180px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  padding: 4px;
+  z-index: 200;
+}
 
-  .header-center {
-    flex: 1;
-    gap: 8px;
-  }
+.widget-dropdown-item {
+  width: 100%;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: 0.15s;
+  text-align: left;
+}
 
-  .lw-tab {
-    padding: 6px 8px !important;
-    font-size: 12px !important;
-    flex-direction: row !important;
-    gap: 4px !important;
-  }
+.widget-dropdown-item:hover {
+  background: #f1f5f9;
+  color: var(--lw-primary);
+}
 
-  .lw-tabs {
-    margin-left: 0 !important;
-  }
+.widget-dropdown-item.active {
+  background: color-mix(in srgb, var(--lw-primary) 10%, white);
+  color: var(--lw-primary);
+}
+
+.widget-dropdown-divider {
+  height: 1px;
+  margin: 4px 8px;
+  background: #e2e8f0;
+}
+
+.widget-dropdown-label {
+  padding: 6px 10px 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.widget-dropdown-title {
+  padding-top: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 4px;
+}
+
+.widget-dropdown-group-btn {
+  justify-content: flex-start;
+}
+
+.widget-group-label {
+  flex: 1;
+  text-align: left;
+}
+
+.widget-group-chevron {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.widget-dropdown-back {
+  border: none;
+  background: transparent;
+  color: var(--lw-text-secondary, #64748b);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid #e2e8f0;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.widget-dropdown-back:hover {
+  color: var(--lw-text-main, #1e293b);
+}
+
+.header-floating-control-wrapper.is-bottom .widget-dropdown {
+  top: auto;
+  bottom: calc(100% + 8px);
 }
 
 .header-floating-controls {
@@ -494,13 +679,16 @@ watch([tabOrder, () => props.activeMainTab], () => {
   border: 1px solid color-mix(in srgb, var(--lw-border-base) 86%, white);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 250, 254, 0.78));
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.1);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   transition:
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.header-floating-control-wrapper {
+  position: relative;
+  display: inline-flex;
 }
 
 .header-floating-control {
@@ -523,7 +711,6 @@ watch([tabOrder, () => props.activeMainTab], () => {
 
 .header-floating-controls:hover {
   transform: translateY(-1px);
-  box-shadow: 0 20px 38px rgba(15, 23, 42, 0.12);
 }
 
 .header-floating-control:hover,
@@ -533,10 +720,221 @@ watch([tabOrder, () => props.activeMainTab], () => {
   color: var(--lw-text-main);
 }
 
-.avatar-group {
+.profile-menu-wrap {
   position: relative;
+  display: inline-flex;
+}
+
+.profile-trigger {
+  min-height: 40px;
+  padding: 4px 6px 4px 4px;
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 86%, white);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 254, 0.84));
+  color: var(--lw-text-main);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profile-trigger:hover,
+.profile-trigger.active {
+  transform: translateY(-1px);
+  border-color: rgba(var(--lw-primary-rgb), 0.22);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.11);
+}
+
+.profile-trigger-avatar {
   width: 32px;
   height: 32px;
+  flex-shrink: 0;
+}
+
+.profile-trigger-copy {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.profile-trigger-copy strong {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--lw-text-main);
+}
+
+.profile-trigger-copy small {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--lw-text-muted);
+}
+
+.profile-trigger-chevron {
+  color: var(--lw-text-muted);
+}
+
+.profile-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 220;
+  width: min(320px, calc(100vw - 28px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(244, 248, 254, 0.4));
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(24px) saturate(135%);
+}
+
+.profile-menu-wrap.is-bottom .profile-menu {
+  top: auto;
+  bottom: calc(100% + 10px);
+}
+
+.profile-menu-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 4px 8px;
+}
+
+.profile-menu-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lw-text-muted);
+}
+
+.profile-menu-copy strong {
+  font-family: 'Abhaya Libre', var(--lw-font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--lw-text-main);
+}
+
+.profile-menu-copy span:last-child {
+  font-size: 12px;
+  color: var(--lw-text-secondary);
+  line-height: 1.6;
+}
+
+.profile-menu-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.24);
+  color: var(--lw-text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profile-menu-item:hover {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(var(--lw-primary-rgb), 0.18);
+  transform: translateY(-1px);
+}
+
+.profile-menu-item.danger:hover {
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.profile-menu-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--lw-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-menu-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--lw-text-main);
+}
+
+.profile-menu-value {
+  font-size: 11px;
+  color: var(--lw-text-secondary);
+  justify-self: start;
+}
+
+.profile-menu-chevron {
+  color: var(--lw-text-muted);
+}
+
+.profile-menu-back {
+  width: fit-content;
+  border: none;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-menu-back:hover {
+  color: var(--lw-text-main);
+}
+
+.profile-menu-choice {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.24);
+  text-align: left;
+  cursor: pointer;
+  transition: 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profile-menu-choice:hover,
+.profile-menu-choice.active {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(var(--lw-primary-rgb), 0.2);
+  transform: translateY(-1px);
+}
+
+.profile-menu-choice-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--lw-text-main);
+}
+
+.profile-menu-choice-copy {
+  font-size: 11px;
+  color: var(--lw-text-secondary);
+  line-height: 1.5;
 }
 
 .avatar-sm {
@@ -550,50 +948,74 @@ watch([tabOrder, () => props.activeMainTab], () => {
 }
 
 .avatar-sm.placeholder {
+  display: block;
   background: #e2e8f0;
 }
 
-.user-avatar-badge {
-  position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1.5px solid #ffffff;
-  background: #cbd5e1;
-  overflow: hidden;
-}
-
-.user-avatar-badge img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.lw-btn-close {
-  background: #f1f5f9;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: 0.2s;
-}
-
-.lw-btn-close:hover {
-  background: #fee2e2;
-  color: #ef4444;
-}
-
 @media (max-width: 768px) {
+  .header-right {
+    gap: 6px;
+  }
+
+  .lw-tabs {
+    flex: 1;
+    min-width: 0;
+    margin-left: 0 !important;
+    margin-right: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .lw-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .header-center {
+    display: none;
+  }
+
+  .lw-tab {
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+    flex-direction: row !important;
+    gap: 4px !important;
+  }
+
+  .widget-dropdown {
+    min-width: 200px;
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .widget-dropdown-item {
+    padding: 10px 12px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+
+  .widget-dropdown-label {
+    font-size: 11px;
+    padding: 8px 12px 4px;
+  }
+
+  .widget-dropdown-divider {
+    margin: 6px 10px;
+  }
+
   .header-floating-controls {
     gap: 6px;
     padding: 7px;
+  }
+
+  .profile-trigger {
+    padding-right: 4px;
+  }
+
+  .profile-menu {
+    width: min(280px, calc(100vw - 24px));
   }
 }
 </style>

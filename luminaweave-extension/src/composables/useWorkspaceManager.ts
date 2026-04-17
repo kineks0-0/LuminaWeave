@@ -140,6 +140,7 @@ export const useWorkspaceManager = ({
   componentMap: Record<string, any>;
   getPluginName: (pluginId: string | null) => string;
 }) => {
+  let workspacePersistTimer: ReturnType<typeof setTimeout> | null = null;
   const forgeStore = useCardMakerStore();
   const workspaceStages = ref<WorkspaceStageRecord[]>(normalizeWorkspaceStages(lwStorage.get('luminaWeave.workspaceStages', [], 'Global')));
   const workspaceWindows = ref<Record<string, WorkspaceWindowRecord>>(normalizeWorkspaceWindows(lwStorage.get('luminaWeave.workspaceWindows', {}, 'Global')));
@@ -304,14 +305,20 @@ export const useWorkspaceManager = ({
   };
 
   const getWorkspaceSceneBounds = () => {
-    const stageWidth = freeformStageRef.value?.clientWidth ?? window.innerWidth;
-    const stageHeight = freeformStageRef.value?.clientHeight ?? window.innerHeight;
+    const stageWidth = (freeformStageRef.value?.clientWidth && freeformStageRef.value.clientWidth > 0)
+      ? freeformStageRef.value.clientWidth
+      : window.innerWidth;
+    const stageHeight = (freeformStageRef.value?.clientHeight && freeformStageRef.value.clientHeight > 0)
+      ? freeformStageRef.value.clientHeight
+      : window.innerHeight;
+
     const shouldReserveStageStrip = workspaceNavigationVisible.value
       && workspaceShowStageStrip.value
       && !workspaceAllowUnderStageStrip.value;
     const shouldReserveDock = workspaceNavigationVisible.value
       && workspaceShowDock.value
       && !workspaceAllowUnderDock.value;
+      
     const left = workspaceNavigationVisible.value
       ? (shouldReserveStageStrip ? (isMobile.value ? WORKSPACE_STAGE_SCENE_LEFT_MOBILE : WORKSPACE_STAGE_SCENE_LEFT) : (isMobile.value ? 12 : 18))
       : (isMobile.value ? 12 : 18);
@@ -320,13 +327,17 @@ export const useWorkspaceManager = ({
     const bottom = workspaceNavigationVisible.value
       ? (shouldReserveDock ? (isMobile.value ? WORKSPACE_STAGE_SCENE_BOTTOM_MOBILE : WORKSPACE_STAGE_SCENE_BOTTOM) : (isMobile.value ? 14 : 18))
       : (isMobile.value ? 14 : 18);
+      
     return {
       left,
       top,
-      width: Math.max(320, stageWidth - left - right),
-      height: Math.max(280, stageHeight - top - bottom)
+      width: Math.max(300, stageWidth - left - right),
+      height: Math.max(minWindowHeight, stageHeight - top - bottom)
     };
   };
+
+  const minWindowHeight = isMobile.value ? 240 : 280;
+
 
   const workspaceSceneInsets = computed(() => {
     const stageWidth = freeformStageRef.value?.clientWidth ?? window.innerWidth;
@@ -827,13 +838,17 @@ export const useWorkspaceManager = ({
       }))
   );
 
-  watch(workspaceStages, (value) => {
-    lwStorage.set('luminaWeave.workspaceStages', value, 'Global');
-  }, { deep: true });
+  const persistWorkspaceMetadata = () => {
+    if (workspacePersistTimer) clearTimeout(workspacePersistTimer);
+    workspacePersistTimer = setTimeout(() => {
+      lwStorage.set('luminaWeave.workspaceStages', workspaceStages.value, 'Global');
+      lwStorage.set('luminaWeave.workspaceWindows', workspaceWindows.value, 'Global');
+      workspacePersistTimer = null;
+    }, 600);
+  };
 
-  watch(workspaceWindows, (value) => {
-    lwStorage.set('luminaWeave.workspaceWindows', value, 'Global');
-  }, { deep: true });
+  watch(workspaceStages, persistWorkspaceMetadata, { deep: true });
+  watch(workspaceWindows, persistWorkspaceMetadata, { deep: true });
 
   watch(activeWorkspaceStageId, (value) => {
     lwStorage.set('luminaWeave.workspaceActiveStageId', value, 'Global');
