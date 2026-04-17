@@ -308,15 +308,6 @@ const toggleExpanded = () => {
 }
 
 @media (max-width: 640px) {
-  .trace-row {
-    grid-template-columns: 1fr auto;
-  }
-
-  .trace-summary {
-    grid-column: 1 / -1;
-    white-space: normal;
-  }
-
   .trace-detail-head {
     flex-direction: column;
     align-items: flex-start;

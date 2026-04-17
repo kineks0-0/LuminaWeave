@@ -19,6 +19,11 @@ withDefaults(defineProps<{
 
 const chatStore = useChatStore();
 const { messages } = storeToRefs(chatStore);
+
+import { watch } from 'vue';
+watch(messages, (newList) => {
+    console.log('[ChatRoot] messages 发生变化，新长度:', newList.length);
+}, { immediate: true });
 </script>
 
 <style scoped>

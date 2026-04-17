@@ -19,8 +19,9 @@
         <div class="ftcs-item-left">
           <span class="ftcs-item-name">{{ preset.name }}</span>
           <span class="ftcs-item-meta">
+            {{ promptModeLabel(preset.promptMode) }} ·
             {{ charCardModeLabel(preset.charCardMode) }} ·
-            {{ preset.promptEntries.filter(e => e.enabled).length }} 个槽位
+            {{ preset.promptMode === 'st_preset' ? 'ST 预设' : `${preset.promptEntries.filter(e => e.enabled).length} 个槽位` }}
           </span>
         </div>
         <div class="ftcs-item-actions" @click.stop>
@@ -56,6 +57,14 @@
       </div>
 
       <div class="ftcs-field">
+        <label class="ftcs-label">提示词合成模式</label>
+        <select v-model="editing.promptMode" class="ftcs-select">
+          <option value="custom">自定义槽位组合</option>
+          <option value="st_preset">使用 ST 当前预设</option>
+        </select>
+      </div>
+
+      <div class="ftcs-field">
         <label class="ftcs-label">角色卡来源</label>
         <select v-model="editing.charCardMode" class="ftcs-select">
           <option value="none">无（不注入角色卡）</option>
@@ -88,8 +97,8 @@
         </div>
       </template>
 
-      <!-- 提示词槽位顺序 -->
-      <div class="ftcs-field">
+      <!-- 提示词槽位顺序（仅 custom 模式） -->
+      <div v-if="editing.promptMode === 'custom'" class="ftcs-field">
         <label class="ftcs-label">提示词槽位</label>
         <div class="ftcs-slots">
           <div
@@ -135,6 +144,7 @@ import { lwStorage } from '../../api/storage.js';
 import {
     createBuiltInPresets,
     type ForgeTestChatCharCardMode,
+    type ForgeTestChatPromptMode,
     type ForgeTestChatPreset,
     type ForgeTestChatPromptEntry,
     type ForgeTestChatPromptSlot,
@@ -154,7 +164,7 @@ const userPresets = ref<ForgeTestChatPreset[]>(
 );
 
 const activePresetId = ref<string>(
-    lwStorage.get(STORAGE_KEY_ACTIVE_PRESET, '', 'Global') as string || createBuiltInPresets()[1].id
+    lwStorage.get(STORAGE_KEY_ACTIVE_PRESET, '', 'Global') as string || createBuiltInPresets()[0].id
 );
 
 // 合并内置 + 用户预设（只读计算）
@@ -177,7 +187,7 @@ function deletePreset(id: string) {
     if (!confirm('确认删除此预设？')) return;
     userPresets.value = userPresets.value.filter(p => p.id !== id);
     if (activePresetId.value === id) {
-        setActive(createBuiltInPresets()[1].id);
+        setActive(createBuiltInPresets()[0].id);
     }
     persistUserPresets();
 }
@@ -191,6 +201,7 @@ function startCreate() {
     editing.value = {
         id: '',
         name: '新预设',
+        promptMode: 'custom',
         charCardMode: 'none',
         customCharCard: { name: '', description: '', personality: '', scenario: '', systemPrompt: '' },
         promptEntries: [
@@ -265,6 +276,10 @@ function removeCustomEntry(idx: number) {
 // ── 标签工具
 function charCardModeLabel(mode: ForgeTestChatCharCardMode): string {
     return { none: '无角色卡', from_st: 'ST 角色', custom: '自定义' }[mode] ?? mode;
+}
+
+function promptModeLabel(mode: ForgeTestChatPromptMode): string {
+    return { custom: '自定义', st_preset: 'ST 预设' }[mode] ?? mode;
 }
 
 const SLOT_LABELS: Record<ForgeTestChatPromptSlot, string> = {

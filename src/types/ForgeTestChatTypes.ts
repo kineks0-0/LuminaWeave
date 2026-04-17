@@ -2,6 +2,7 @@
  * Forge 测试聊天相关类型定义
  *
  * 预设系统允许用户配置：
+ * - 提示词合成模式（custom 自定义 / st_preset 使用 ST 当前预设）
  * - 角色卡来源（from_st / custom / none）
  * - 提示词顺序与启用状态
  * - 自定义 prompt 条目
@@ -18,6 +19,17 @@ export interface ForgeTestChatCharCard {
     scenario: string;
     systemPrompt: string;
 }
+
+// ──────────────────────────────────────────────
+// 提示词合成模式
+// ──────────────────────────────────────────────
+
+/**
+ * promptMode:
+ * - 'custom'：使用 promptEntries 自定义提示词组合（默认）
+ * - 'st_preset'：使用 ST 当前预设的提示词列表合成
+ */
+export type ForgeTestChatPromptMode = 'custom' | 'st_preset';
 
 // ──────────────────────────────────────────────
 // 预设：提示词槽位与条目
@@ -72,10 +84,12 @@ export interface ForgeTestChatPreset {
     name: string;
     /** 是否为内置预设（内置预设不可删除） */
     builtIn?: boolean;
+    /** 提示词合成模式 */
+    promptMode: ForgeTestChatPromptMode;
     charCardMode: ForgeTestChatCharCardMode;
     /** charCardMode === 'custom' 时有效 */
     customCharCard?: Partial<ForgeTestChatCharCard>;
-    /** 提示词顺序与启用状态 */
+    /** promptMode === 'custom' 时有效：提示词顺序与启用状态 */
     promptEntries: ForgeTestChatPromptEntry[];
     createdAt: number;
     updatedAt: number;
@@ -89,9 +103,20 @@ export function createBuiltInPresets(): ForgeTestChatPreset[] {
     const now = Date.now();
     return [
         {
+            id: 'built-in:st-preset',
+            name: 'ST 预设',
+            builtIn: true,
+            promptMode: 'st_preset',
+            charCardMode: 'from_st',
+            promptEntries: [],
+            createdAt: now,
+            updatedAt: now
+        },
+        {
             id: 'built-in:roleplay',
             name: '角色扮演',
             builtIn: true,
+            promptMode: 'custom',
             charCardMode: 'from_st',
             promptEntries: [
                 { type: 'slot', slot: 'char_system_prompt', enabled: true },
@@ -108,6 +133,7 @@ export function createBuiltInPresets(): ForgeTestChatPreset[] {
             id: 'built-in:world-only',
             name: '纯世界书',
             builtIn: true,
+            promptMode: 'custom',
             charCardMode: 'none',
             promptEntries: [
                 { type: 'slot', slot: 'world_info', enabled: true },

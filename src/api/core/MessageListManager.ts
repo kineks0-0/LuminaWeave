@@ -71,6 +71,7 @@ export class MessageListManager extends LuminaWeaveAPIBase {
         });
 
         this._messages = processed;
+        console.log(`[MessageListManager] 重新计算消息列表完成，节点数: ${this._messages.length}, activeLeafId: ${this.store.activeLeafId}`);
         
         // 核心：发射推送负载
         this.emit('MESSAGE_LIST_UPDATED', processed);
@@ -82,9 +83,12 @@ export class MessageListManager extends LuminaWeaveAPIBase {
      * 获取当前消息列表快照
      */
     public get messages(): LuminaChatMessage[] {
-        // 如果从未计算过（冷启动），立即同步计算一次
+        // 如果从未计算过（冷启动），且已有活跃节点，立即同步计算一次以便 UI 首屏获取
         if (this._messages.length === 0 && this.store.activeLeafId) {
             this.recalculate();
+        } else if (this._messages.length === 0 && this.store.nodePool.length > 0) {
+            // 边缘情况：存在池但无活跃指针，通常 STSyncService 会处理，此处做日志防御
+            console.debug('[MessageListManager] Getter: NodePool has data but activeLeafId is null, returning empty list.');
         }
         return this._messages;
     }
