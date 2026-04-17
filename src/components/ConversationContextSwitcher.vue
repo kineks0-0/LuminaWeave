@@ -6,18 +6,18 @@
       @change="handleChange"
     >
       <option value="">当前聊天（自动）</option>
-      <optgroup label="聊天会话" v-if="sessionIndexStore.chatSessions.length">
+      <optgroup label="聊天会话" v-if="contextStore.chatSessions.length">
         <option
-          v-for="session in sessionIndexStore.chatSessions"
+          v-for="session in contextStore.chatSessions"
           :key="session.id"
           :value="session.id"
         >
           {{ session.title }}{{ session.id === contextStore.currentChatSessionId ? '（当前）' : '' }}
         </option>
       </optgroup>
-      <optgroup label="制卡会话" v-if="sessionIndexStore.forgeSessions.length">
+      <optgroup label="制卡会话" v-if="contextStore.forgeSessions.length">
         <option
-          v-for="session in sessionIndexStore.forgeSessions"
+          v-for="session in contextStore.forgeSessions"
           :key="session.id"
           :value="session.id"
         >
@@ -31,14 +31,12 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import { useConversationContextStore } from '../stores/useConversationContextStore';
-import { useSessionIndexStore } from '../stores/useSessionIndexStore';
 
 const contextStore = useConversationContextStore();
-const sessionIndexStore = useSessionIndexStore();
 
 const handleChange = (event: Event) => {
   const target = event.target as HTMLSelectElement;
-  contextStore.selectViewSession(target.value || null);
+  void contextStore.selectViewSession(target.value || null);
 };
 
 onMounted(async () => {

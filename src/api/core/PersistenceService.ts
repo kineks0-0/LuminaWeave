@@ -241,86 +241,119 @@ export class PersistenceService {
         });
     }
 
+    private async _fetchIndependentChatSnapshot(chatId: string): Promise<{
+        messages: LuminaChatMessage[];
+        activeLeafId: string | null;
+        metadata: any | null;
+        exists: boolean;
+    }> {
+        await this._waitForTransactions(chatId);
+
+        try {
+            const data = await BridgeDispatcher.chat.getChat(chatId);
+            if (data && Array.isArray(data)) {
+                let messages = data;
+                let activeLeafId: string | null = null;
+                let metadata: any = null;
+
+                if (data.length > 0 && data[0].type === 'metadata') {
+                    metadata = data[0];
+                    activeLeafId = metadata.activeLeafId || null;
+                    messages = data.slice(1);
+                }
+
+                const remoteCommittedSeq = this._extractLastCommittedSeq(metadata);
+                if (typeof remoteCommittedSeq === 'number') {
+                    await this._persistLastCommittedSeq(chatId, remoteCommittedSeq);
+                } else if (lwStorage._getContextIds().chatId === chatId) {
+                    const localSavedSeq = lwStorage.get('lumina-chat.lastCommittedTxnSeq', 0, 'Chat');
+                    if (typeof localSavedSeq === 'number') this._setLastCommittedSeq(chatId, localSavedSeq);
+                }
+
+                const remoteLastTxId = this._extractLastTransactionId(metadata);
+                if (remoteLastTxId) {
+                    this.setIntegratedTxId(chatId, remoteLastTxId);
+                }
+
+                const normalizedNodes = SyncUtils.ensureFingerprints(messages);
+                normalizedNodes.forEach(n => {
+                    if (!n.name) {
+                        n.name = n.is_user ? 'You' : 'Assistant';
+                    }
+                });
+
+                return {
+                    messages: normalizedNodes,
+                    activeLeafId: activeLeafId || normalizedNodes[normalizedNodes.length - 1]?.id || null,
+                    metadata,
+                    exists: true
+                };
+            }
+
+            return {
+                messages: [],
+                activeLeafId: null,
+                metadata: null,
+                exists: true
+            };
+        } catch (e: any) {
+            if (e?.message?.includes('404')) {
+                return {
+                    messages: [],
+                    activeLeafId: null,
+                    metadata: null,
+                    exists: false
+                };
+            }
+            throw e;
+        }
+    }
+
     /**
      * 从独立存储加载数据并灌入 Store
      */
-    async loadFromIndependentChat(): Promise<boolean> {
+    async loadFromIndependentChat(
+        targetChatId?: string,
+        options: { applyMetadataHooks?: boolean } = {}
+    ): Promise<boolean> {
         return this._enqueue(async () => {
             const contextIds = (lwStorage as unknown as { _getContextIds: () => { chatId: string } })._getContextIds();
-            const chatId = contextIds.chatId;
+            const chatId = targetChatId || contextIds.chatId;
             if (!chatId || chatId === 'null' || chatId === 'default') return false;
-
-            await this._waitForTransactions(chatId);
+            const applyMetadataHooks = options.applyMetadataHooks !== false;
 
             try {
-                const data = await BridgeDispatcher.chat.getChat(chatId);
-                
-                // 核心修复：如果数据存在且是数组，按正常流程同步节点池
-                if (data && Array.isArray(data)) {
-                    let messages = data;
-                    let activeLeafId: string | null = null;
-                    let metadata: any = null;
+                const snapshot = await this._fetchIndependentChatSnapshot(chatId);
+                this.store.setNodes(snapshot.messages);
+                this.store.activeLeafId = snapshot.activeLeafId;
 
-                    if (data.length > 0 && data[0].type === 'metadata') {
-                        metadata = data[0];
-                        activeLeafId = metadata.activeLeafId || null;
-                        messages = data.slice(1);
-                    }
-                    const remoteCommittedSeq = this._extractLastCommittedSeq(metadata);
-                    if (typeof remoteCommittedSeq === 'number') {
-                        await this._persistLastCommittedSeq(chatId, remoteCommittedSeq);
-                    } else {
-                        const localSavedSeq = lwStorage.get('lumina-chat.lastCommittedTxnSeq', 0, 'Chat');
-                        if (typeof localSavedSeq === 'number') this._setLastCommittedSeq(chatId, localSavedSeq);
-                    }
-                    const remoteLastTxId = this._extractLastTransactionId(metadata);
-                    if (remoteLastTxId) {
-                        this.setIntegratedTxId(chatId, remoteLastTxId);
-                    }
+                console.log(`[PersistenceService] 已从独立存储加载 ${snapshot.messages.length} 条消息`);
 
-                    const normalizedNodes = SyncUtils.ensureFingerprints(messages);
-
-                    // 补充：确保反序列化时恢复基础角色属性，因为独立存储可能没有完整的 metadata
-                    normalizedNodes.forEach(n => {
-                        if (!n.name) {
-                            n.name = n.is_user ? 'You' : 'Assistant';
-                        }
-                    });
-
-                    this.store.setNodes(normalizedNodes);
-
-                    if (activeLeafId) {
-                        this.store.activeLeafId = activeLeafId;
-                    } else if (normalizedNodes.length > 0) {
-                        this.store.activeLeafId = normalizedNodes[normalizedNodes.length - 1].id;
-                    }
-
-                    console.log(`[PersistenceService] 已从独立存储加载 ${normalizedNodes.length} 条消息`);
-
-                    if (metadata && metadata.pluginData) {
-                        pluginManager.callHooks('onMetadataImport' as any, metadata.pluginData);
-                    } else if (this.store.activeLeafId) {
-                        const activeNode = this.store.getNode(this.store.activeLeafId);
-                        if (activeNode && activeNode.extra) {
-                            const recoveredData = {
-                                tier1: activeNode.extra.tier1Snapshot,
-                                tier3: activeNode.extra.tier3Snapshot,
-                                nextPlan: activeNode.extra.nextPlan
-                            };
-                            pluginManager.callHooks('onMetadataImport' as any, recoveredData);
-                        }
-                    }
-                    return true;
-                } else {
-                    // 数据为空（新会话），视为加载成功并初始化插件状态
-                    console.log(`[PersistenceService] 目标会话 ${chatId} 为空，已初始化加载状态。`);
-                    pluginManager.callHooks('onMetadataImport' as any, null);
+                if (!applyMetadataHooks) {
                     return true;
                 }
+
+                if (snapshot.metadata && snapshot.metadata.pluginData) {
+                    pluginManager.callHooks('onMetadataImport' as any, snapshot.metadata.pluginData);
+                } else if (this.store.activeLeafId) {
+                    const activeNode = this.store.getNode(this.store.activeLeafId);
+                    if (activeNode && activeNode.extra) {
+                        const recoveredData = {
+                            tier1: activeNode.extra.tier1Snapshot,
+                            tier3: activeNode.extra.tier3Snapshot,
+                            nextPlan: activeNode.extra.nextPlan
+                        };
+                        pluginManager.callHooks('onMetadataImport' as any, recoveredData);
+                    }
+                } else {
+                    pluginManager.callHooks('onMetadataImport' as any, null);
+                }
+                return true;
             } catch (e: any) {
                 if (e?.message?.includes('404')) {
-                    // 核心修复：新建对话时，虽然没有独立存储，也应触发插件重置钩子
-                    pluginManager.callHooks('onMetadataImport' as any, null);
+                    if (applyMetadataHooks) {
+                        pluginManager.callHooks('onMetadataImport' as any, null);
+                    }
                     return true;
                 }
                 console.warn('[PersistenceService] 加载失败:', e);

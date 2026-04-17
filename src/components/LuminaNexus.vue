@@ -119,9 +119,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useSessionIndexStore } from '../stores/useSessionIndexStore';
 import { useConversationContextStore } from '../stores/useConversationContextStore';
-import { useCardMakerStore } from '../plugins/forge/CardMakerStore';
 
 const props = defineProps<{
   isCompact?: boolean;
@@ -131,9 +129,7 @@ defineEmits<{
   (e: 'close'): void;
 }>();
 
-const sessionIndexStore = useSessionIndexStore();
 const contextStore = useConversationContextStore();
-const forgeStore = useCardMakerStore();
 
 const searchQuery = ref('');
 
@@ -149,11 +145,13 @@ interface NexusSessionRef {
 
 const coreSessions = computed<NexusSessionRef[]>(() => {
   const result: NexusSessionRef[] = [];
+  const forgeSource = contextStore.sources.find((source) => source.id === 'forge');
+  const chatSource = contextStore.sources.find((source) => source.id === 'chat');
 
   // 1. 当前制卡工坊会话
-  const activeForgeId = forgeStore.workspaceSessionId || forgeStore.sessionChatId;
+  const activeForgeId = forgeSource?.sessionId || null;
   if (activeForgeId) {
-    const forgeSession = sessionIndexStore.forgeSessions.find(s => s.id === activeForgeId);
+    const forgeSession = contextStore.forgeSessions.find(s => s.id === activeForgeId);
     result.push({
       id: activeForgeId,
       title: '当前制卡工坊',
@@ -165,9 +163,9 @@ const coreSessions = computed<NexusSessionRef[]>(() => {
   }
 
   // 2. ST 活跃聊天 (跟随主窗口)
-  const currentChatId = contextStore.currentChatSessionId;
+  const currentChatId = chatSource?.sessionId || contextStore.currentChatSessionId;
   if (currentChatId) {
-    const chatSession = sessionIndexStore.chatSessions.find(s => s.id === currentChatId);
+    const chatSession = contextStore.chatSessions.find(s => s.id === currentChatId);
     result.push({
       id: currentChatId,
       title: 'ST 活跃聊天',
@@ -183,7 +181,7 @@ const coreSessions = computed<NexusSessionRef[]>(() => {
 
 const filteredForgeSessions = computed<NexusSessionRef[]>(() => {
   const coreIds = new Set(coreSessions.value.map(s => s.id));
-  return sessionIndexStore.forgeSessions
+  return contextStore.forgeSessions
     .filter(s => !coreIds.has(s.id))
     .filter(s => !searchQuery.value || s.title.toLowerCase().includes(searchQuery.value.toLowerCase()))
     .map(s => ({
@@ -199,7 +197,7 @@ const filteredForgeSessions = computed<NexusSessionRef[]>(() => {
 
 const filteredChatSessions = computed<NexusSessionRef[]>(() => {
   const coreIds = new Set(coreSessions.value.map(s => s.id));
-  return sessionIndexStore.chatSessions
+  return contextStore.chatSessions
     .filter(s => !coreIds.has(s.id))
     .filter(s => !searchQuery.value || s.title.toLowerCase().includes(searchQuery.value.toLowerCase()))
     .map(s => ({
@@ -218,7 +216,7 @@ const isEmpty = computed(() => {
 });
 
 const handleSelect = (session: NexusSessionRef) => {
-  contextStore.selectViewSession(session.id);
+  void contextStore.selectViewSession(session.id);
 };
 
 const formatDate = (ts?: number) => {

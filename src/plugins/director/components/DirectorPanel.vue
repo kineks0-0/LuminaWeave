@@ -222,8 +222,10 @@ const handleManualReload = async () => {
 };
 
 const handleReExecuteMutations = async () => {
-    if (lwApi && lwApi.chatManager.activeLeafId) {
-        await lwApi.reExecuteMutations(lwApi.chatManager.activeLeafId);
+    if (lwApi) {
+        const context = await lwApi.getConversationContext({ sourceId: 'chat' });
+        if (!context.activeLeafId) return;
+        await lwApi.reExecuteMutations(context.activeLeafId);
     }
 };
 
@@ -232,7 +234,7 @@ const saveTable = (tableId: string) => {
     if (lwApi) {
         console.log(`[DirectorPanel] 手动更新表格数据: ${tableId}`);
         // 确保 UI 更新能同步到 Lumina 的独立存储中
-        lwApi.chatManager.saveToIndependentChat();
+        void lwApi.saveToIndependentChat();
         // 如果正在生成，可能需要同步
         lwApi.promptWorldInfoMount.syncToWorldInfo();
     }

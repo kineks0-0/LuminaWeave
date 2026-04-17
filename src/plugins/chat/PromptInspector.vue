@@ -232,7 +232,7 @@ const sendEdited = () => {
             // @ts-ignore
             lwApi._currentTask = null;
             
-            const chat = await lwApi.getChat();
+            const chat = await lwApi.getConversationMessages({ sourceId: 'chat' });
             const chatIndex = chat.length;
             await lwApi.crudChatRecord(chatIndex, 'add', finalText, {
                 is_user: false,

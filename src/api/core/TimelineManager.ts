@@ -26,18 +26,18 @@ export class TimelineManager extends LuminaWeaveAPIBase {
         const store = this.parentApi.chatManager.store;
         store.on('WORLDLINE_UPDATED', () => {
             console.log('[TimelineManager] 检测到存储更新，自动重新同步视图流...');
-            void this.syncTimelineWithCurrentChat();
+            void this.refreshCurrentChatTimeline();
         });
         store.on('WORLDLINE_SWITCHED', () => {
             console.log('[TimelineManager] 检测到世界线切换，自动同步视图流...');
-            void this.syncTimelineWithCurrentChat();
+            void this.refreshCurrentChatTimeline();
         });
     }
 
     /**
      * 同步当前聊天分支 (触发视图重新计算信号)
      */
-    async syncTimelineWithCurrentChat(): Promise<void> {
+    async refreshCurrentChatTimeline(): Promise<void> {
         this.isSyncing = true;
         try {
             const store = this.parentApi.chatManager.store;

@@ -259,7 +259,6 @@ import { ref, computed, onMounted, onUnmounted, inject, watch } from 'vue';
 import { LuminaWeaveAPI } from '../../../api/index';
 import { lwStorage } from '../../../api/storage';
 import { useTimelineStore, type TimelineSourceId } from '../../../stores/useTimelineStore';
-import { useCardMakerStore } from '../../forge/CardMakerStore';
 import { useConversationContextStore } from '../../../stores/useConversationContextStore';
 import { LorebookTimelineResolver } from '../../../api/core/LorebookTimelineResolver';
 import type { LorebookVersionMode } from '../../../types/LorebookViewTypes';
@@ -275,7 +274,6 @@ const props = defineProps<{
 const lwApi = inject('lwApi') as LuminaWeaveAPI;
 const lorebookManager = lwApi.lorebookManager;
 const timelineStore = useTimelineStore();
-const forgeStore = useCardMakerStore();
 const contextStore = useConversationContextStore();
 const searchQuery = ref('');
 const snapshotRevision = ref(lorebookManager.snapshotRevision);
@@ -315,18 +313,21 @@ const setDisplayMode = (mode: string): void => {
 const localEntries = ref<LuminaLorebookEntry[]>([]);
 const localBooks = ref<{ name: string; id: string }[]>([...lorebookManager.books]);
 const resolvedSourceId = computed<TimelineSourceId>(() => props.timelineSourceId || contextStore.activeSourceId);
+const resolvedSource = computed(() => {
+  return contextStore.sources.find(source => source.id === resolvedSourceId.value) || null;
+});
 const resolvedLeafId = computed(() => {
-  const matchedSource = contextStore.sources.find(source => source.id === resolvedSourceId.value);
-  if (matchedSource) return matchedSource.activeLeafId;
-  return resolvedSourceId.value === 'forge' ? forgeStore.activeLeafId : contextStore.activeLeafId;
+  return resolvedSource.value?.activeLeafId || (resolvedSourceId.value === contextStore.activeSourceId
+    ? contextStore.activeLeafId
+    : null);
 });
 const activeContext = computed(() => ({
   bookId: currentSelectedBookName.value ?? lorebookManager.selectedBook,
   sourceId: resolvedSourceId.value,
   activeLeafId: resolvedLeafId.value,
-  sessionId: resolvedSourceId.value === 'forge'
-    ? (forgeStore.workspaceSessionId || forgeStore.sessionChatId || null)
-    : contextStore.currentChatSessionId
+  sessionId: resolvedSource.value?.sessionId || (resolvedSourceId.value === contextStore.activeSourceId
+    ? contextStore.activeSessionId
+    : null)
 }));
 
 const availableSnapshots = computed(() => {

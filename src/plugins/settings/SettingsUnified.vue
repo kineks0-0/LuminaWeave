@@ -478,9 +478,9 @@ const handleForceSync = async () => {
 
 const overwriteToIndependent = async () => {
   const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-  if (lw?.chatManager) {
+  if (lw?.syncFromST) {
     console.log('[Settings] 手动触发：覆盖至独立存储...');
-    await lw.chatManager.syncFromST();
+    await lw.syncFromST();
     refreshSyncState();
   }
 };
