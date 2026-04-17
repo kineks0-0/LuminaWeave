@@ -5,7 +5,7 @@
     "main": "index.js",
     "scripts": {
         "test": "vitest run",
-        "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --external:express --external:path --external:fs --outfile=index.js"
+        "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --external:express --external:path --external:fs --alias:ai=./node_modules/ai --alias:@ai-sdk/openai=./node_modules/@ai-sdk/openai --alias:@ai-sdk/anthropic=./node_modules/@ai-sdk/anthropic --alias:@ai-sdk/google=./node_modules/@ai-sdk/google --outfile=index.js"
     },
     "author": "LuminaWeave",
     "license": "ISC",

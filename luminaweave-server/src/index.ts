@@ -5,11 +5,12 @@ import { streamText } from 'ai';
 import { Logger } from './logger.js';
 import { StreamingManager } from './StreamingManager.js';
 import { StorageService } from './StorageService.js';
-import { NexusService } from './NexusService.js';
+import { NexusService, mapSTSettingsToAISdk } from './NexusService.js';
 import { BaseXMLInterceptor } from '../../shared/BaseXMLInterceptor.js';
 import { API_ROUTES } from '../../shared/ApiEndpoints.js';
 import { TransactionRecord, TransactionScope, TransactionStatus, NexusApiConfig, PresetRecord, ForgeSessionRecord } from './types.js';
 import { LuminaChatMessage, MessageUtils } from '../../shared/LuminaMessage.js';
+import { NexusGenerationFlow, PersistenceDelegate } from '../../shared/api/NexusGenerationFlow.js';
 
 class ServerXMLInterceptor extends BaseXMLInterceptor {}
 
@@ -382,16 +383,55 @@ export class LuminaWeaveServer {
             const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
             const apis = config['nexus.apis'] || [];
 
+            const rawSettings = { ...(params.settings || {}) };
+            const mappedSettings = mapSTSettingsToAISdk(rawSettings);
+            const modelMessages = this.nexus.toModelMessages(messages);
+
+            const policy = {
+                filterChatReply: config['nexus.onlyChatReply'] ?? false,
+                allowTopLevel: config['nexus.allowTopLevel'] ?? true,
+                implicitThinking: config['nexus.implicitThinking'] ?? false,
+                aggressiveThinking: config['nexus.aggressiveThinking'] ?? false
+            };
+
+            const flow = new NexusGenerationFlow(
+                {
+                    chatId,
+                    parentId: params.parentId || null,
+                    charName: params.charName || 'Assistant',
+                    characterId: params.characterId,
+                    policy
+                },
+                this.interceptor,
+                {
+                    appendChatRecord: async (cid, node) => {
+                        this.storage.appendChatRecord(cid, node);
+                    },
+                    updateChatMetadata: async (cid, metadata) => {
+                        this.storage.updateChatMetadata(cid, metadata);
+                    },
+                    commitTransaction: async (cid, scope, payload, idempotencyKey) => {
+                        const chatData = this.storage.readChat(cid);
+                        const tx = this.storage.createTransaction(cid, scope as any, this.storage.digestPayload(payload), idempotencyKey, chatData.length);
+                        this.storage.transitionTransaction(cid, tx, 'committed');
+                        return { id: tx.id, seq: tx.seq };
+                    }
+                }
+            );
+
+            Logger.info('Nexus', `[Chat: ${chatId}] 收到生成请求`);
+            
             for (const node of nodes) {
                 try {
                     const api = (apis as NexusApiConfig[]).find(a => a.id === node.provider) || null;
                     const model = this.nexus.getModelForNode(node, api);
                     Logger.info('Nexus', `[Chat: ${chatId}] 唤起模型: ${node.model} (${node.provider})`);
+                    
                     const result = await streamText({ 
                         model, 
-                        messages: this.nexus.toModelMessages(messages), 
+                        messages: modelMessages, 
                         abortSignal: controller.signal, 
-                        ...(params.settings || {}) 
+                        ...mappedSettings
                     });
 
                     Logger.info('Nexus', `[Chat: ${chatId}] 模型流已建立，等待首帧...`);
@@ -403,93 +443,46 @@ export class LuminaWeaveServer {
                             return;
                         }
                         chunkCount++;
-                        if (chunkCount === 1) {
-                            Logger.info('Nexus', `[Chat: ${chatId}] 收到首个 Delta (长度: ${delta.length})`);
-                        }
-                        
                         fullText += delta;
-                        // 后端流式过程中不再进行文本过滤，由前端通过 XMLInterceptor 实时解析
-                        // 这样前端可以接收到完整的 <thinking> 等标签用于状态追踪
-                        this.streaming.updateBuffer(chatId, fullText, true, fullText);
+                        flow.pushToken(delta);
                         
-                        // 逻辑：每收到 50 个分块记录一次进度
+                        this.streaming.updateBuffer(chatId, fullText, true, fullText);
+                        this.broadcastSse(chatId, 'delta', { delta });
+                        
                         if (chunkCount % 50 === 0) {
                             Logger.info('Nexus', `[Chat: ${chatId}] 正在流式输出... (已接收 ${chunkCount} chunks)`);
                         }
-
-                        this.broadcastSse(chatId, 'delta', { delta });
                     }
 
                     if (chunkCount === 0) {
                         Logger.warn('Nexus', `[Chat: ${chatId}] 模型流结束但未收到任何有效的 TextStream 数据`);
                     }
 
-                    const configPath = path.join(process.cwd(), 'plugins/luminaweave/data/LuminaWeave.json');
-                    const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
-                    
-                    const policy = {
-                        filterChatReply: config['nexus.onlyChatReply'] ?? false,
-                        allowTopLevel: config['nexus.allowTopLevel'] ?? true,
-                        implicitThinking: config['nexus.implicitThinking'] ?? false,
-                        aggressiveThinking: config['nexus.aggressiveThinking'] ?? false
-                    };
-
-                    const newNodeId = MessageUtils.generateNodeId();
-                    // 提取核心对话内容 (根据策略清洗)
-                    const mesRaw = this.interceptor.cleanText(fullText, policy);
-                    const fingerprint = MessageUtils.getFingerprint(mesRaw);
-                    
-                    const newNode: LuminaChatMessage = {
-                        id: newNodeId,
-                        parentId: params.parentId || null,
-                        name: params.charName || 'Assistant',
-                        role: 'assistant',
-                        is_user: false,
-                        mes: mesRaw,
-                        mesRaw: mesRaw,
-                        pluginRaw: fullText,
-                        fingerprint: fingerprint,
-                        stFingerprint: MessageUtils.getFingerprint(mesRaw), // 简易对齐
-                        characterId: params.characterId || undefined,
-                        extra: {
-                            role: 'assistant',
-                            gen_finished: Date.now()
-                        }
-                    };
-                    
-                    // 1. 内存先行 + 物理追加 (优化后的写入)
-                    this.storage.appendChatRecord(chatId, newNode);
-
-                    // 1.5 同步更新 Metadata 中的 activeLeafId
-                    this.storage.updateChatMetadata(chatId, { activeLeafId: newNodeId });
-
-                    // 2. 事务处理
-                    const chatData = this.storage.readChat(chatId);
-                    const tx = this.storage.createTransaction(chatId, 'nexus.generate', this.storage.digestPayload(fullText), `gen_${Date.now()}`, chatData.length);
-                    this.storage.transitionTransaction(chatId, tx, 'committed');
-
-                    // 3. 核心：立即同步到磁盘 (不再等待 5s 定时器)
+                    // 使用共享 Flow 完成最终构建与持久化
+                    const newNode = await flow.finalize();
                     this.storage.syncToDisk();
 
+                    const txMetadata = newNode.extra.transactionId as { id: string, seq: number };
+                    
                     this.broadcastSse(chatId, 'committed', { 
-                        lastTransactionId: tx.id, 
-                        activeLeafId: newNodeId,
+                        lastTransactionId: txMetadata.id, 
+                        activeLeafId: newNode.id,
                         node: newNode,
-                        seq: tx.seq
+                        seq: txMetadata.seq
                     });
 
-                    this.streaming.setGenerating(chatId, false, 'success', null, tx.id, undefined, newNodeId);
-                    const donePayload = { 
+                    this.streaming.setGenerating(chatId, false, 'success', null, txMetadata.id, undefined, newNode.id);
+                    this.broadcastSse(chatId, 'done', { 
                         status: 'success', 
-                        lastTransactionId: tx.id, 
-                        activeLeafId: newNodeId, 
+                        lastTransactionId: txMetadata.id, 
+                        activeLeafId: newNode.id, 
                         fullText,
                         node: newNode,
-                        seq: tx.seq,
+                        seq: txMetadata.seq,
                         generationId: this.streaming.getState(chatId).generationId
-                    };
-                    this.broadcastSse(chatId, 'done', donePayload);
-                    return;
+                    });
+                    
+                    return; // 成功后直接返回，不进入下一个 node 兜底
                 } catch (e: any) {
                     Logger.warn('Nexus', `Fallback: Node ${node.model} failed`, { error: e.message });
                 }
