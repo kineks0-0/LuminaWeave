@@ -27,7 +27,9 @@ export const API_ROUTES = {
         TRANSACTIONS: (chatId: string) => `/chat/${chatId}/transactions`,
         ROLLBACK_TRANSACTION: (chatId: string, txId: string) => `/chat/${chatId}/transactions/${txId}/rollback`,
         SAVE: (chatId: string) => `/chat/save/${chatId}`,
-        PATCH: (chatId: string) => `/chat/${chatId}`
+        PATCH: (chatId: string) => `/chat/${chatId}`,
+        SAVE_MESSAGE: (chatId: string, nodeId: string) => `/chat/${chatId}/messages/${nodeId}`,
+        DELETE_MESSAGE: (chatId: string, nodeId: string) => `/chat/${chatId}/messages/${nodeId}`
     },
     FORGE: {
         LIST: '/forge/sessions',
