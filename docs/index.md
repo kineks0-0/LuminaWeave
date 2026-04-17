@@ -25,6 +25,7 @@ LuminaWeave 运行于独立的 Vue 3 实例中，通过 `Lumina Core` 桥接原�
 
 ### 2. 核心模块总览
 - **[Lumina Timeline](./timeline/PDR.md)**：Git 风格多轴穿梭图，支持物理回滚与世界线剪枝。
+- **Unified Conversation Context [UPDATED]**：Timeline、Lorebook、Memory 等消息型视图现在共享统一的会话上下文与世界线操作 API；UI 只负责展示数据与发送意图，不再各自维护 `chat / forge` 分流逻辑。旧的 `chat-only` 世界线 facade 已移除，统一会话 API 成为唯一入口。
 - **[Lumina Director](./director/PDR.md)**：导演引擎。通过 XML 标签驱动状态机，实现 `<Next_Plan>` 引导与结构化数据更新。
 - **[Lumina Memory Engine](./PDR.md#2-lumina-memory-幻光记忆)**：五层分层记忆模型 (Tier 0-4)，确保 AI 始终掌握当前时空的精确状态。
 - **[Unified Storage](./system_design.md#4-shadow-buffer--统一存储代理-unified-storage-engine)**：多级作用域存储系统，支持影子数据库与 ST 物理同步。
@@ -120,6 +121,7 @@ d:\LuminaWeave\
 | | `XMLInterceptor.ts` | 消息解析流水线，利用栈式解析器处理 XML 标签的生命周期拦截。 |
 | | `ChatManager.ts` | 影子数据库管理器，维护本地消息节点池（Local Chat Data）。 |
 | | `TimelineManager.ts` | 时间线逻辑中心，计算活跃世界线路径及节点关联上下文。 |
+| | `ConversationService.ts` | 统一会话世界线服务。负责来源注册、全局 viewing context、上下文快照查询与世界线命令分发。 |
 | | `PersistenceService.ts`| 事务化存储协议，通过序列对账与竞态锁定保障 IO 安全性。 |
 | | `LVParser.ts` | LuminaView 结构化渲染解析器，支持极简 DSL 组件化渲染。 |
 | | `ContextCompactor.ts` | DCC 动态上下文压缩引擎，实现“全量+摘要+隐藏”的分层策略。 |

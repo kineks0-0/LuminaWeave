@@ -9,6 +9,7 @@ import { StreamHandler } from './core/StreamHandler.js';
 import { TimelineManager, TimelineNode } from './core/TimelineManager.js';
 import { LorebookManager } from './core/LorebookManager.js';
 import { MessageListManager } from './core/MessageListManager.js';
+import { ConversationService } from './core/ConversationService.js';
 import { PromptWorldInfoMount } from './core/PromptWorldInfoMount.js';
 import { FontManager } from './core/FontManager.js';
 import { MeasureService } from './core/MeasureService.js';
@@ -21,6 +22,7 @@ import { ST_EVENT } from './core/STEvent.js';
 import type { LuminaChatMessage } from '../../../shared/LuminaMessage.js';
 import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
 import { ChatDiffInspector, ChatDiffReport } from './debug/ChatDiffInspector.js';
+import { ChatDebugGateway } from './debug/ChatDebugGateway.js';
 
 // 全局变量声明已移动至 src/types/sillytavern.d.ts
 
@@ -30,6 +32,15 @@ import { LuminaGenerationTask, TaskCallbacks } from './core/LuminaGenerationTask
 import { NexusClient } from './core/NexusClient.js';
 import { ForgeAgentController } from './core/ForgeAgentController.js';
 import { useModalStore, ModalOptions } from '../stores/useModalStore.js';
+import type {
+    ConversationContextOverride,
+    ConversationContextSwitchInput,
+    ConversationNodeSwitchInput,
+    ConversationSessionRef,
+    ConversationContextOption,
+    ConversationTimelineNode,
+    ConversationViewContext
+} from '../types/ConversationContextTypes.js';
 
 /**
  * LuminaWeave API 入口 (Facade)
@@ -46,6 +57,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     public fontManager: FontManager;
     public measureService: MeasureService;
     public messageListManager: MessageListManager;
+    public conversationService: ConversationService;
+    public debugChat: ChatDebugGateway;
     public memoryManager: typeof globalMemoryManager;
     public forgeAgent: ForgeAgentController;
 
@@ -80,6 +93,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             (msg: LuminaChatMessage) => msg.is_user ? this.getUserAvatar(msg.name) : this.getCharAvatar(msg.name),
             (text: string, isUser: boolean, depth: number) => this.applySTRegex(text, isUser ? 'user_input' : 'ai_output', 'display', { depth })
         );
+        this.conversationService = new ConversationService(this as any);
+        this.debugChat = new ChatDebugGateway(this as any);
         this.memoryManager = globalMemoryManager;
         this.nexus = new NexusClient();
         this.forgeAgent = new ForgeAgentController(this);
@@ -94,7 +109,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         });
 
         // 转发子组件事件至主 API 实例
-        [this.chatManager, this.streamHandler, this.timelineManager, this.lorebookManager, this.fontManager, this.measureService, this.messageListManager].forEach(mgr => {
+        [this.chatManager, this.streamHandler, this.timelineManager, this.lorebookManager, this.fontManager, this.measureService, this.messageListManager, this.conversationService].forEach(mgr => {
             mgr.on('CHAT_UPDATED', () => this.emit('CHAT_UPDATED'));
             mgr.on('CHAT_CHANGED', () => this.emit('CHAT_CHANGED'));
             mgr.on('GENERATION_STARTED', () => this.emit('GENERATION_STARTED'));
@@ -131,6 +146,11 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             mgr.on('TIMELINE_UPDATED', () => this.emit('TIMELINE_UPDATED'));
             mgr.on('LOREBOOK_SYNCED', (...args: any[]) => this.emit('LOREBOOK_SYNCED', ...args));
             mgr.on('CHAT_CONFLICT', (...args: any[]) => this.emit('CHAT_CONFLICT', ...args));
+            mgr.on('CONVERSATION_CONTEXT_CHANGED', (...args: any[]) => this.emit('CONVERSATION_CONTEXT_CHANGED', ...args));
+            mgr.on('CONVERSATION_SESSIONS_UPDATED', (...args: any[]) => this.emit('CONVERSATION_SESSIONS_UPDATED', ...args));
+            mgr.on('CONVERSATION_WORLDLINE_UPDATED', (...args: any[]) => this.emit('CONVERSATION_WORLDLINE_UPDATED', ...args));
+            mgr.on('CONVERSATION_WORLDLINE_SWITCHED', (...args: any[]) => this.emit('CONVERSATION_WORLDLINE_SWITCHED', ...args));
+            mgr.on('CONVERSATION_WORLDLINE_ROLLED_BACK', (...args: any[]) => this.emit('CONVERSATION_WORLDLINE_ROLLED_BACK', ...args));
 
             // 处理来自 StreamHandler 的补全信号（通常由 Watchdog 恢复后触发）
             if (mgr === this.streamHandler) {
@@ -206,13 +226,14 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         // 2. 初始化核心逻辑 (管理全局事件与监听))
         this.initGlobalEvents();
         await this.initSTEvents(); // 监听
-        this.initResponseBuffer(); // 内部调用 streamHandler.init()
+        this.streamHandler.init();
 
         this.emit('INIT_PROGRESS', '加载子插件...');
         // 3. 初始化所有插件 (完全异步加载)
         // 这一步必须在 syncFromST 之前，因为同步过程中会解析现有消息中的 Mutation 标签，
         // 此时需要所有子插件已完成数据模型的注册。
         await pluginManager.initializeAllPlugins();
+        await this.conversationService.initialize();
 
         this.emit('INIT_PROGRESS', '同步对话状态...');
         // 4. 初始同步：确保数据一致并从本地加载对话缓存
@@ -690,7 +711,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         }
 
         // 核心架构重构：TimelineManager 现在是响应式的，会自动监听 store 变动并同步视图流。
-        // 此处不再需要手动调用 syncTimelineWithCurrentChat()。
+        // 此处不再需要手动触发 Timeline 刷新。
 
         // 核心修复：同步完成后显式触发 UI 刷新事件，并强制刷新提示词世界书
         // 升级：使用 EventFlow 触发异步管道，确保视图模型刷新完成后再向下执行（防止流式气泡过早消失）
@@ -1167,19 +1188,51 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         return null;
     }
 
-    // --- 兼容性补足 ---
-    async initTimelineGraph() { return this.syncFromST(); }
-    stEventOn(event: string, cb: Function) { return this.on(event, cb); }
-    initResponseBuffer() { return this.streamHandler.init(); }
-    syncTimelineWithCurrentChat() { this.timelineManager.syncTimelineWithCurrentChat(); }
-
-    async getChat(): Promise<LuminaChatMessage[]> {
+    async listConversationSources(): Promise<ConversationContextOption[]> {
         await this.waitForReady();
-        if (!this.chatManager.localChatData || !this.chatManager.activeLeafId) return [];
+        return this.conversationService.listConversationSources();
+    }
 
-        // 核心增强：从 Store 获取当前活跃节点的实时完整链路 (Trace)
-        // 不再依赖 timelineManager 的 cached graph，防止在数据变动的瞬间产生空链路
-        return this.chatManager.store.getTrace(this.chatManager.activeLeafId);
+    async listConversationSessions(sourceId?: ConversationContextOption['id']): Promise<ConversationSessionRef[]> {
+        await this.waitForReady();
+        return this.conversationService.listConversationSessions(sourceId);
+    }
+
+    async getConversationContext(override: ConversationContextOverride = {}): Promise<ConversationViewContext> {
+        await this.waitForReady();
+        return this.conversationService.getConversationContext(override);
+    }
+
+    async getConversationMessages(override: ConversationContextOverride = {}): Promise<LuminaChatMessage[]> {
+        await this.waitForReady();
+        return this.conversationService.getConversationMessages(override);
+    }
+
+    async getConversationTimelineGraph(
+        override: ConversationContextOverride = {}
+    ): Promise<Record<string, ConversationTimelineNode>> {
+        await this.waitForReady();
+        return this.conversationService.getConversationTimelineGraph(override);
+    }
+
+    async switchConversationContext(input: ConversationContextSwitchInput): Promise<ConversationViewContext> {
+        await this.waitForReady();
+        return this.conversationService.switchConversationContext(input);
+    }
+
+    async switchConversationNode(input: ConversationNodeSwitchInput): Promise<boolean> {
+        await this.waitForReady();
+        return this.conversationService.switchConversationNode(input);
+    }
+
+    async branchConversationNode(input: ConversationNodeSwitchInput): Promise<boolean> {
+        await this.waitForReady();
+        return this.conversationService.branchConversationNode(input);
+    }
+
+    async rollbackConversationNode(input: ConversationNodeSwitchInput): Promise<boolean> {
+        await this.waitForReady();
+        return this.conversationService.rollbackConversationNode(input);
     }
 
     getProcessedChat() {
@@ -1188,7 +1241,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
     async crudChatRecord(target: number | string, action: 'edit' | 'add' | 'delete', newText: string = '', meta: any = {}) {
         await this.waitForReady();
-        const chat = await this.getChat(); // 获取当前活跃链路
+        const chat = await this.getConversationMessages({ sourceId: 'chat' });
         if (!chat) return false;
 
         const runWithSyncLock = async (fn: () => Promise<any>) => {
@@ -1346,7 +1399,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             });
         }
 
-        await this.timelineManager.syncTimelineWithCurrentChat();
+        await this.timelineManager.refreshCurrentChatTimeline();
         this.emit('MESSAGE_RECEIVED');
 
 
@@ -1472,33 +1525,6 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         return this.chatManager.activeLeafId;
     }
 
-    getTimelineNodes() { 
-        // 核心修复：不再从 TimelineManager 获取缓存，而是实时从 store 获取
-        const store = this.chatManager.store;
-        return store.nodePool.reduce((acc: any, node) => {
-            acc[node.id] = {
-                ...node,
-                text: node.mes || node.mesRaw || '',
-                timestamp: node.extra?.send_date || Date.now()
-            };
-            return acc;
-        }, {});
-    }
-
-    get activeLeafId() { return this.chatManager.store.activeLeafId; }
-
-    async branchFromNode(targetNodeId: string): Promise<boolean> {
-        // 1. 委托至 ChatManager 执行原子切换 (含 Pointer 切换、ST 同步、磁盘保存)
-        const success = await this.chatManager.branchFromNode(targetNodeId);
-        if (!success) return false;
-
-        // 2. 数据重载与 UI 刷新
-        // 核心架构重构：TimelineManager 会自动响应 WORLDLINE_SWITCHED/UPDATED 事件，无需手动同步。
-        this.emit('WORLDLINE_SWITCHED', targetNodeId);
-        this.emit('MESSAGE_RECEIVED');
-        return true;
-    }
-
     /**
      * 核心增强：强制重载并重新执行指定节点的 Mutation 指导
      * 用于解决同步延迟或手动回溯后状态未及时刷新的问题
@@ -1529,7 +1555,10 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         globalMemoryManager.captureState(node, parentHistory, true);
 
         // 3. 立即触发一次分支重载 (这将导致 restoreState 被调用，从而重播刚才捕获的最新 Deltas)
-        const result = await this.branchFromNode(nodeId);
+        const result = await this.branchConversationNode({
+            sourceId: 'chat',
+            targetNodeId: nodeId
+        });
         if (result) {
             this.showToast('指令重载成功', 'success');
         }
@@ -1546,7 +1575,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         globalMemoryManager.resetAll();
 
         // 2. 获取当前活跃路径 (Trace)
-        const trace = await this.getChat();
+        const trace = await this.getConversationMessages({ sourceId: 'chat' });
         if (!trace || trace.length === 0) {
             console.warn('[LuminaWeave API] 当前路径为空，取消重放');
             return false;
@@ -1576,24 +1605,13 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     /**
      * 强制回滚并切换到目标节点，并删除所有后续或分支节点
      */
-    async rollbackFromNode(targetNodeId: string): Promise<boolean> {
-        // 1. 委托至 ChatManager 执行原子回滚
-        const success = await this.chatManager.rollbackFromNode(targetNodeId);
-        if (!success) return false;
-
-        console.log(`[LuminaWeave API] 执行物理级回滚 -> ${targetNodeId}`);
-
-        // 2. 刷新状态
-        // 核心架构重构：响应式驱动，无需手动同步。
-        this.emit('WORLDLINE_ROLLED_BACK', targetNodeId);
-        this.emit('MESSAGE_RECEIVED');
-        return true;
-    }
-
     async rollbackToIndex(index: number): Promise<boolean> {
-        const trace = await this.getChat();
+        const trace = await this.getConversationMessages({ sourceId: 'chat' });
         if (index < 0 || index >= trace.length) return false;
-        return this.rollbackFromNode(trace[index].id);
+        return this.rollbackConversationNode({
+            sourceId: 'chat',
+            targetNodeId: trace[index].id
+        });
     }
 
     /**

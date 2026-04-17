@@ -156,6 +156,7 @@ LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核
   - 传统桌面：不在全局 Shell 漂浮 Forge 小窗，只在 Forge 前台内部显示辅助面板切换条；同一时刻只显示一个同级辅助区。
   - 启动阶段提供模式选择，工作阶段以 Forge 专属 `<V>` 组件直接在消息流中承载表单、摘要卡和层导航；拆出态下主聊天区取消内部 hero/topbar 与额外外边距，原顶部操作迁移到 workspace window 顶栏，审阅、导出和后置轨转入独立辅助区承载。
 - **全局会话查看上下文 [NEW v6.0-dev]**：消息型官方子插件开始共享一个全局会话上下文切换入口，默认放在主 Shell Header。Timeline、Lorebook、Memory 视图等默认跟随当前查看上下文；Forge 的“参考聊天绑定”继续保留为工作会话自身属性，不与全局查看上下文混淆。
+- **统一会话世界线 API [UPDATED v6.0-dev]**：全局查看上下文不再主要由前端 store/UI 自行拼装，而是下沉为底层 `ConversationService + ConversationSourceAdapter`。`chat` 与 `forge` 统一暴露 `context/session/messages/timelineGraph/focusedMessage` 查询接口，以及 `switch / branch / rollback` 世界线命令。旧 `getChat / getTimelineNodes / branchFromNode / rollbackFromNode` 等 chat-only facade 已移除，主聊天专属调用必须显式传 `sourceId: 'chat'`。
 
 ## 四、开发状态与风险评估
 
@@ -222,6 +223,7 @@ LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核
       以后“需要对比什么/怎么对比”只需调整 `STProtocol`，避免业务层散落口径。
 - **Dynamic Panel API**: 重构 `LuminaWeaveAPI`，支持 `registerPanel` 机制。插件可动态注册视图组件并由系统统一调度展示模式 (Modal/Tab)。
 - **世界线多会话切换 [NEW v6.0-dev]**：`useTimelineStore` 开始支持在主聊天与 Forge 会话之间切换数据源。时间线面板不再默认只服务 ST 主对话，而是逐步演进为统一的多会话世界线浏览器。
+- **多聊天独立存储视图优先 [UPDATED v6.0-dev]**：当全局查看上下文切到非当前 ST 活跃聊天时，系统默认从 Lumina 独立存储读取并操作对应世界线；仅当前 ST 活跃聊天继续参与宿主物理同步，避免“查看其它聊天”强制驱动宿主切换。
 - **原始数据优先策略**: 确保数据回传至独立存储或写回 ST 时，始终保留最完整的原始输出流。
 - **物理回滚与图谱同步策略 (v5.0)**:
     - **数据模型演进**：`localChatData` 角色转变为“节点池”，通过 `parentId` 链接形成树图。

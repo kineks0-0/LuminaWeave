@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { luminaWeaveApi } from '../api';
-import { useCardMakerStore } from '../plugins/forge/CardMakerStore';
 import { LorebookTimelineResolver } from '../api/core/LorebookTimelineResolver';
 import { MemoryViewResolver } from '../api/core/MemoryViewResolver';
 import type { ResolveMemoryViewParams } from '../api/core/MemoryViewResolver';
@@ -11,7 +10,6 @@ let hasBoundLorebookListeners = false;
 const sharedLorebookRevision = ref(0);
 
 export const useConversationViewStore = defineStore('lumina-conversation-view', () => {
-    const forgeStore = useCardMakerStore();
     const contextStore = useConversationContextStore();
     const lorebookManager = luminaWeaveApi.lorebookManager;
 
@@ -62,9 +60,9 @@ export const useConversationViewStore = defineStore('lumina-conversation-view', 
             resolvedView: activeLorebookView.value
         },
         forge: {
-            workspaceTitle: forgeStore.workspaceTitle,
-            selectedChatSessionId: forgeStore.selectedChatSessionId,
-            selectedChatSnapshotId: forgeStore.selectedChatSnapshotId
+            workspaceTitle: contextStore.currentContext.meta?.workspaceTitle || 'Forge Workspace',
+            selectedChatSessionId: contextStore.currentContext.meta?.selectedChatSessionId || null,
+            selectedChatSnapshotId: contextStore.currentContext.meta?.selectedChatSnapshotId || null
         }
     });
 

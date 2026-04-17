@@ -210,6 +210,8 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { luminaWeaveApi } from '../../api/index.js';
 
+const debugChat = luminaWeaveApi.debugChat;
+
 const selectedNodeId = ref('');
 const selectedField = ref('mesRaw');
 const editValue = ref('');
@@ -226,10 +228,10 @@ const tabs = [
   { id: 'parentId', label: '父节点 (parentId)' },
 ];
 
-const activeLeafId = computed(() => luminaWeaveApi.chatManager.activeLeafId);
+const activeLeafId = computed(() => debugChat.getActiveLeafId());
 
 const nodeOptions = computed(() => {
-  return luminaWeaveApi.chatManager.store.nodePool || [];
+  return debugChat.listNodes();
 });
 
 const filteredNodes = computed(() => {
@@ -242,11 +244,11 @@ const filteredNodes = computed(() => {
 });
 
 const snapshotNodes = computed(() => {
-  return luminaWeaveApi.getSnapshotNodes() || [];
+  return debugChat.getSnapshotNodes() || [];
 });
 
 const currentNode = computed(() => {
-  return luminaWeaveApi.chatManager.store.getNode(selectedNodeId.value);
+  return debugChat.getNode(selectedNodeId.value);
 });
 
 const hasSnapshots = (node) => {
@@ -266,7 +268,7 @@ const validParentOptions = computed(() => {
   const toExclude = new Set([selectedNodeId.value]);
   
   const collectChildren = (id) => {
-    const children = luminaWeaveApi.chatManager.store.getChildren(id);
+    const children = debugChat.getChildren(id);
     children.forEach(c => {
       toExclude.add(c.id);
       collectChildren(c.id);
@@ -296,7 +298,7 @@ const hasChanges = computed(() => {
 });
 
 onMounted(() => {
-  selectedNodeId.value = luminaWeaveApi.chatManager.activeLeafId || '';
+  selectedNodeId.value = debugChat.getActiveLeafId() || '';
 });
 
 watch([selectedNodeId, selectedField], () => {
@@ -317,7 +319,7 @@ const resetEditor = () => {
 };
 
 const refreshCurrentNode = () => {
-  selectedNodeId.value = luminaWeaveApi.chatManager.activeLeafId || '';
+  selectedNodeId.value = debugChat.getActiveLeafId() || '';
   resetEditor();
 };
 
@@ -361,10 +363,8 @@ const handleSaveNode = async () => {
     }
     
     const updatedNode = { ...currentNode.value, [field]: finalValue };
-    luminaWeaveApi.chatManager.store.upsertNode(updatedNode);
-    
-    await luminaWeaveApi.commitToST();
-    await luminaWeaveApi.saveToIndependentChat();
+    debugChat.upsertNode(updatedNode);
+    await debugChat.persistCurrentChat();
     luminaWeaveApi.showToast('应用修改成功', 'success');
   } catch (e) {
     console.error('[DevSettings] Save failed:', e);
@@ -384,11 +384,10 @@ const handleAddNode = async () => {
     characterId: currentNode.value?.characterId || ''
   };
   
-  luminaWeaveApi.chatManager.store.upsertNode(newNode);
+  debugChat.upsertNode(newNode);
   selectedNodeId.value = newNode.id;
-  
-  await luminaWeaveApi.commitToST();
-  await luminaWeaveApi.saveToIndependentChat();
+
+  await debugChat.persistCurrentChat();
   luminaWeaveApi.showToast('已添加新节点', 'success');
 };
 
@@ -397,10 +396,9 @@ const handleDeleteNode = async () => {
   if (!confirm('确定要彻底删除该节点及其所有子分支吗？此操作不可恢复。')) return;
   
   try {
-    luminaWeaveApi.chatManager.store.removeSubtree(selectedNodeId.value);
-    selectedNodeId.value = luminaWeaveApi.chatManager.activeLeafId || '';
-    await luminaWeaveApi.commitToST();
-    await luminaWeaveApi.saveToIndependentChat();
+    debugChat.removeSubtree(selectedNodeId.value);
+    selectedNodeId.value = debugChat.getActiveLeafId() || '';
+    await debugChat.persistCurrentChat();
     luminaWeaveApi.showToast('节点物理删除成功', 'success');
   } catch (e) {
     luminaWeaveApi.showToast('删除失败: ' + e.message, 'error');

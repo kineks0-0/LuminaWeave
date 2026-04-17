@@ -1,156 +1,166 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { luminaWeaveApi } from '../api';
-import { lwStorage } from '../api/storage';
-import { useCardMakerStore } from '../plugins/forge/CardMakerStore';
-import type { LuminaChatMessage } from '../../../shared/LuminaMessage.js';
 import type {
     ConversationContext,
     ConversationContextOption,
-    ConversationContextSource
+    ConversationSessionRef,
+    ConversationSourceId
 } from '../types/ConversationContextTypes.js';
-import { useChatStore } from './useChatStore';
-import { useSessionIndexStore } from './useSessionIndexStore';
 
-const normalizeChatSessionId = (chatId: string | null | undefined): string | null => {
-    if (!chatId || chatId === 'null' || chatId === 'undefined' || chatId === 'default') {
-        return null;
+const EMPTY_CONTEXT: ConversationContext = {
+    source: 'chat',
+    sessionId: null,
+    activeLeafId: null,
+    messages: [],
+    timelineGraph: {},
+    focusedMessage: null,
+    meta: {
+        currentChatSessionId: null,
+        isLive: true
     }
-    return chatId;
 };
 
 export const useConversationContextStore = defineStore('lumina-conversation-context', () => {
-    const chatStore = useChatStore();
-    const forgeStore = useCardMakerStore();
-    const sessionIndexStore = useSessionIndexStore();
-    const activeSourceId = ref<ConversationContextSource>('chat');
+    const currentContext = ref<ConversationContext>(EMPTY_CONTEXT);
+    const sources = ref<ConversationContextOption[]>([]);
+    const chatSessions = ref<ConversationSessionRef[]>([]);
+    const forgeSessions = ref<ConversationSessionRef[]>([]);
+    const selectedViewSessionId = ref<string | null>(null);
+    const hasBound = ref(false);
+    const isRefreshing = ref(false);
 
-    const currentChatSessionId = computed(() => {
-        const contextChatId = normalizeChatSessionId(lwStorage._getContextIds().chatId);
-        return contextChatId || sessionIndexStore.selectedChatSessionId || null;
-    });
+    let refreshPromise: Promise<void> | null = null;
 
-    const chatTimelineGraph = computed<Record<string, LuminaChatMessage>>(() => {
-        return luminaWeaveApi.getTimelineNodes() as Record<string, LuminaChatMessage>;
-    });
-
-    const sources = computed<ConversationContextOption[]>(() => [
-        {
-            id: 'chat',
-            label: '剧情演播',
-            description: '当前 ST 主聊天',
-            count: Object.keys(chatTimelineGraph.value).length,
-            sessionId: currentChatSessionId.value,
-            activeLeafId: luminaWeaveApi.activeLeafId
-        },
-        {
-            id: 'forge',
-            label: '制卡工坊',
-            description: 'Forge 工作会话',
-            count: Object.keys(forgeStore.timelineGraph).length,
-            sessionId: forgeStore.workspaceSessionId || forgeStore.sessionChatId || null,
-            activeLeafId: forgeStore.activeLeafId
-        }
-    ]);
-
-    const activeSessionId = computed(() => {
-        return activeSourceId.value === 'forge'
-            ? (forgeStore.workspaceSessionId || forgeStore.sessionChatId || null)
-            : currentChatSessionId.value;
-    });
-
-    const activeLeafId = computed(() => {
-        return activeSourceId.value === 'forge'
-            ? forgeStore.activeLeafId
-            : luminaWeaveApi.activeLeafId;
-    });
-
-    const activeMessages = computed(() => {
-        return activeSourceId.value === 'forge'
-            ? forgeStore.messages
-            : chatStore.messages;
-    });
-
-    const activeTimelineGraph = computed<Record<string, LuminaChatMessage>>(() => {
-        return activeSourceId.value === 'forge'
-            ? forgeStore.timelineGraph
-            : chatTimelineGraph.value;
-    });
-
-    const focusedMessage = computed(() => {
-        const leafId = activeLeafId.value;
-        if (!leafId) return null;
-        return activeMessages.value.find((message: LuminaChatMessage) => message.id === leafId) || null;
-    });
-
-    const currentContext = computed<ConversationContext>(() => ({
-        source: activeSourceId.value,
-        sessionId: activeSessionId.value,
-        activeLeafId: activeLeafId.value,
-        messages: activeMessages.value,
-        timelineGraph: activeTimelineGraph.value,
-        focusedMessage: focusedMessage.value
-    }));
-
-    const refreshSessionOptions = async (): Promise<void> => {
-        await sessionIndexStore.refresh();
-        const currentChatId = currentChatSessionId.value;
-        if (currentChatId) {
-            sessionIndexStore.selectChatSession(currentChatId);
-        }
+    const refreshContext = async (): Promise<void> => {
+        const context = await luminaWeaveApi.getConversationContext();
+        currentContext.value = context;
     };
 
-    const switchSource = async (sourceId: ConversationContextSource): Promise<void> => {
-        activeSourceId.value = sourceId;
-        if (sourceId === 'forge') {
-            const selectedForgeId = sessionIndexStore.selectedForgeSessionId;
-            if (selectedForgeId && selectedForgeId !== forgeStore.workspaceSessionId) {
-                forgeStore.openWorkspaceSession(selectedForgeId);
-            }
-        } else {
-            const currentChatId = currentChatSessionId.value;
-            if (currentChatId) {
-                sessionIndexStore.selectChatSession(currentChatId);
-            }
-        }
+    const refreshSessionOptions = async (): Promise<void> => {
+        const [sourceOptions, allSessions] = await Promise.all([
+            luminaWeaveApi.listConversationSources(),
+            luminaWeaveApi.listConversationSessions()
+        ]);
+
+        sources.value = sourceOptions;
+        chatSessions.value = allSessions.filter((session) => session.sourceId === 'chat');
+        forgeSessions.value = allSessions.filter((session) => session.sourceId === 'forge');
+    };
+
+    const refreshFromApi = async (): Promise<void> => {
+        if (refreshPromise) return refreshPromise;
+
+        isRefreshing.value = true;
+        refreshPromise = Promise.all([
+            refreshContext(),
+            refreshSessionOptions()
+        ]).then(() => undefined).finally(() => {
+            isRefreshing.value = false;
+            refreshPromise = null;
+        });
+
+        return refreshPromise;
+    };
+
+    const bind = (): void => {
+        if (hasBound.value) return;
+        hasBound.value = true;
+
+        luminaWeaveApi.on('CONVERSATION_CONTEXT_CHANGED', ({ context }: { context: ConversationContext }) => {
+            currentContext.value = context;
+        });
+        luminaWeaveApi.on('CONVERSATION_SESSIONS_UPDATED', ({ sources: nextSources, sessions }: {
+            sources: ConversationContextOption[];
+            sessions: ConversationSessionRef[];
+        }) => {
+            sources.value = nextSources;
+            chatSessions.value = sessions.filter((session) => session.sourceId === 'chat');
+            forgeSessions.value = sessions.filter((session) => session.sourceId === 'forge');
+        });
+        luminaWeaveApi.on('CONVERSATION_WORLDLINE_UPDATED', ({ context }: { context: ConversationContext }) => {
+            currentContext.value = context;
+        });
+        luminaWeaveApi.on('CONVERSATION_WORLDLINE_SWITCHED', ({ context }: { context: ConversationContext }) => {
+            currentContext.value = context;
+        });
+        luminaWeaveApi.on('CONVERSATION_WORLDLINE_ROLLED_BACK', ({ context }: { context: ConversationContext }) => {
+            currentContext.value = context;
+        });
+
+        void luminaWeaveApi.waitForReady().then((ready) => {
+            if (!ready) return;
+            return refreshFromApi();
+        });
+    };
+
+    const activeSourceId = computed<ConversationSourceId>(() => currentContext.value.source);
+    const activeSessionId = computed(() => currentContext.value.sessionId);
+    const activeLeafId = computed(() => currentContext.value.activeLeafId);
+    const activeMessages = computed(() => currentContext.value.messages);
+    const activeTimelineGraph = computed(() => currentContext.value.timelineGraph);
+    const focusedMessage = computed(() => currentContext.value.focusedMessage);
+    const currentChatSessionId = computed(() => {
+        return currentContext.value.meta?.currentChatSessionId
+            || sources.value.find((source) => source.id === 'chat')?.sessionId
+            || null;
+    });
+
+    const switchSource = async (sourceId: ConversationSourceId): Promise<void> => {
+        selectedViewSessionId.value = null;
+        currentContext.value = await luminaWeaveApi.switchConversationContext({
+            sourceId,
+            sessionId: null
+        });
     };
 
     const selectForgeSession = async (id: string | null): Promise<void> => {
-        sessionIndexStore.selectForgeSession(id);
-        if (id && id !== forgeStore.workspaceSessionId) {
-            forgeStore.openWorkspaceSession(id);
+        selectedViewSessionId.value = id;
+        currentContext.value = await luminaWeaveApi.switchConversationContext({
+            sourceId: 'forge',
+            sessionId: id
+        });
+    };
+
+    const selectViewSession = async (id: string | null): Promise<void> => {
+        if (!id) {
+            selectedViewSessionId.value = null;
+            currentContext.value = await luminaWeaveApi.switchConversationContext({
+                sourceId: 'chat',
+                sessionId: null
+            });
+            return;
         }
-        activeSourceId.value = 'forge';
+
+        selectedViewSessionId.value = id;
+        const isForge = forgeSessions.value.some((session) => session.id === id);
+        currentContext.value = await luminaWeaveApi.switchConversationContext({
+            sourceId: isForge ? 'forge' : 'chat',
+            sessionId: id
+        });
     };
 
     const syncCurrentChatSelection = (): void => {
-        const currentChatId = currentChatSessionId.value;
-        if (currentChatId) {
-            sessionIndexStore.selectChatSession(currentChatId);
+        if (!selectedViewSessionId.value && currentContext.value.source === 'chat') {
+            void refreshContext();
         }
     };
 
-    const selectedViewSessionId = ref<string | null>(null);
-
-    const selectViewSession = (id: string | null): void => {
-        selectedViewSessionId.value = id;
-        if (!id) {
-            activeSourceId.value = 'chat';
+    const syncFromTab = (tabId: string): void => {
+        const nextSource: ConversationSourceId = tabId === 'lumina-forge' ? 'forge' : 'chat';
+        if (nextSource === currentContext.value.source && !selectedViewSessionId.value) {
             return;
         }
-        const isForge = sessionIndexStore.forgeSessions.some(s => s.id === id);
-        activeSourceId.value = isForge ? 'forge' : 'chat';
-        if (isForge) {
-            forgeStore.openWorkspaceSession(id);
-        } else {
-            sessionIndexStore.selectChatSession(id);
-        }
+        selectedViewSessionId.value = null;
+        void luminaWeaveApi.switchConversationContext({
+            sourceId: nextSource,
+            sessionId: null
+        }).then((context) => {
+            currentContext.value = context;
+        });
     };
 
-    /** 由 App.vue 在 watch(activeMainTab) 中调用，传统模式自动跟随 Tab 切换来源 */
-    const syncFromTab = (tabId: string): void => {
-        activeSourceId.value = tabId === 'lumina-forge' ? 'forge' : 'chat';
-    };
+    bind();
 
     return {
         activeSourceId,
@@ -160,9 +170,13 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
         activeTimelineGraph,
         focusedMessage,
         sources,
+        chatSessions,
+        forgeSessions,
         currentChatSessionId,
         currentContext,
         selectedViewSessionId,
+        isRefreshing,
+        refreshFromApi,
         refreshSessionOptions,
         switchSource,
         selectForgeSession,

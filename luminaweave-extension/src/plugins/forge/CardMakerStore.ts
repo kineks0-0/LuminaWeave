@@ -1455,6 +1455,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const switchToNode = (targetNodeId: string): void => getWorldlineManager().switchToNode(targetNodeId);
     const branchFromNode = (targetNodeId: string): Promise<boolean> => getWorldlineManager().branchFromNode(targetNodeId);
     const rollbackFromNode = (targetNodeId: string): Promise<boolean> => getWorldlineManager().rollbackFromNode(targetNodeId);
+    const getWorldlineStore = (): WorldlineStore => worldlineStore.value;
 
     const canGenerate = computed(() => !isGenerating.value && Boolean(entryMode.value) && Boolean(selectedPresetId.value) && input.value.trim().length > 0);
 
@@ -1556,6 +1557,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         switchToNode,
         branchFromNode,
         rollbackFromNode,
+        getWorldlineStore,
         dispatchWorkspaceCommand,
 
         // 状态代理

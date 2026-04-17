@@ -56,6 +56,12 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
 - **选择性同步（Selective Sync）**：用户发送消息后，`commitToST()` 将本地 `localChatData` 压回 `window.chat`，然后通过 TavernHelper 调用生成函数。
 - **会话类型扩展 (Conversation-aware Nodes) [NEW v6.0-dev]**：节点模型开始扩展 `conversationType`、`conversationId` 与 `nodeKind` 等元数据，用于承载主聊天、Forge 及后续更多扩展会话。系统正在从“只为聊天消息服务”的节点设计，演进为“统一会话节点容器”。
 - **统一会话查看上下文 (Conversation Context) [NEW v6.0-dev]**：在节点模型之上新增前端级 `ConversationContext` 解析层，统一提供当前 `source/session/activeLeaf/messages/lorebookView/memorySnapshot`。消息型插件默认消费这个解析层，而不是各自直连主聊天状态。
+- **统一会话世界线服务 (ConversationService) [UPDATED v6.0-dev]**：
+    - 通过 `ConversationSourceAdapter` 注册 `chat / forge` 等来源，统一向上暴露 `listSources / listSessions / getContext / switchNode / branch / rollback`。
+    - 全局 viewing context 由服务层维护并通过领域事件 `CONVERSATION_CONTEXT_CHANGED / CONVERSATION_WORLDLINE_*` 向 UI 广播。
+    - `chat` 来源对非当前 ST 活跃会话采用“独立存储视图优先”，只读取/回写 Lumina 独立存储；当前活跃聊天才继续参与宿主物理同步。
+    - `forge` 来源通过独立的 `ForgeConversationGateway` 读取/切换工作会话，`ConversationService` 不再直接依赖 Forge 的 Pinia store。
+    - 旧 `chat-only` facade 已从 `LuminaWeaveAPI` 移除；所有消费方统一改走 `getConversation* / switchConversation* / branchConversationNode / rollbackConversationNode`。
 
 ### 5. 消息归一化流水线 (Normalization Pipeline) [NEW v6.0]
 
@@ -408,8 +414,8 @@ graph LR
     - **自由工作台台前调度模型 [NEW v6.0-dev]**: `App.vue` 的自由工作台已从“主窗 + 辅助窗”二元模型升级为 `workspace stage + window instances + dock` 的统一窗口系统。窗口布局采用二维 `x/y/width/height` 状态，允许相互覆盖；系统仅做舞台边界约束，不再执行碰撞避让重排。
     - **Stage Strip / Dock 编排 [NEW v6.0-dev]**: 左侧 Stage Strip 维护最近舞台组，底部 Dock 作为启动台与核心插件入口；两者默认不常驻，而是由工作台菜单、手动开关、空舞台状态或桌面端边缘悬停触发显隐。点击已存在于其他舞台的 App 时，优先切回所属舞台，而不是无条件创建重复窗口；关闭最后一个窗口时保留空舞台。
 - **阻尼交互层 [NEW v6.0-dev]**: `WorkspaceWindow` 在拖拽与缩放收尾阶段增加轻微阻尼 / settle 动画，并为窗口进场、关闭与切换提供更明确的过渡；窗口只执行舞台边界裁剪与弹性回收，不再在靠近舞台边缘时强制磁吸。宽高在 `1/3`、`1/2`、`2/3` 等比例附近提供分段卡点，用“目标位置 + 微小残余位移衰减”的方式模拟 iPadOS 式手感，避免生硬停靠。
-    - **多会话时间线数据源 (Timeline Source Switching) [NEW v6.0-dev]**：
-    - `useTimelineStore` 开始支持多数据源切换，但来源状态由更上层的 `ConversationContextStore` 统一提供。
+- **多会话时间线数据源 (Timeline Source Switching) [NEW v6.0-dev]**：
+    - `useTimelineStore` 现已退化为纯 view-model，不再内置 `if chat / if forge` 分流；来源状态与世界线命令统一由 `ConversationService` 提供。
     - 当前至少支持 `chat` 与 `forge` 两种来源，未来可继续扩展。
     - 时间线、Lorebook 与其他消息型视图默认跟随 Header 中的全局上下文切换器，不再在各自界面常驻重复 source switcher。
 - **条件呈现设置 (Conditional Settings) [v5.8.2]**:

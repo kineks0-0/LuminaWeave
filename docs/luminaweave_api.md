@@ -19,9 +19,6 @@ import { luminaWeaveApi as lwApi } from '../api/index.ts';
 ### 1. 聊天与上下文数据访问 (Data Access)
 这类接口将 ST 原生的、易变的 `window` 状态封装为安全稳定的返回值，并通过**本地影子数据库 (Shadow Buffer)** 隔离底层刷新频发的原生数据源。
 
-- **`getChat()`**
-  - **返回**: `Array<ChatObject>`
-  - **用途**: 获取当前正在对话的完整上下文气泡记录。返回的是隔离后的 `localChatData` 快照副本。
 - **`getMessage(index: number)`**
   - **返回**: `ChatObject | null`
   - **用途**: 抓取特定楼层的详细数据。
@@ -33,14 +30,20 @@ import { luminaWeaveApi as lwApi } from '../api/index.ts';
 - **`getUserAvatar()` / `getCharAvatar(charName)`**
   - **返回**: `string` (图片 URL 路径)
   - **用途**: 稳定获取用户、角色的头像用于渲染独立UI，兼容 ST 多种获取缩略图的方式。
+- **统一会话世界线 API [UPDATED]**
+  - **查询接口**: `listConversationSources()`、`listConversationSessions(sourceId?)`、`getConversationContext(override?)`、`getConversationMessages(override?)`、`getConversationTimelineGraph(override?)`
+  - **命令接口**: `switchConversationContext(input)`、`switchConversationNode(input)`、`branchConversationNode(input)`、`rollbackConversationNode(input)`
+  - **用途**: 将 `chat / forge` 会话来源、时间线图、活跃节点与世界线切换统一收敛到同一底层服务；UI 只负责消费快照并发送意图。
+  - **说明**: 对于 `chat` 来源，非当前 ST 活跃聊天默认走 Lumina 独立存储视图与写回，不强行驱动宿主切换聊天。
+  - **迁移约束**: 旧的 `getChat()`、`getTimelineNodes()`、`branchFromNode()`、`rollbackFromNode()`、`activeLeafId` 已移除。所有主聊天专属调用都必须显式传 `sourceId: 'chat'`。
 
 ### 2. 生命周期与事件监听 (Event Bus)
 避免原生的强侵入式 Hook，统一通过事件下发机制刷新自己开发的小组件。
 
-- **`stEventOn(eventName: string, callback: Function)`**
+- **`on(eventName: string, callback: Function)`**
   - **支持事件**: `MESSAGE_RECEIVED`（新消息）, `CHARACTER_LOADED`（角色卡加载）, `chat_generated`（消息生成完毕）等。
   - **用途**: 当 ST 底层发生改变时，自动触发组件重绘（常用于 Timeline 的监听）。
-- **`stEventEmit(eventName: string, ...data)`**
+- **`emit(eventName: string, ...data)`**
   - **用途**: 触发底层广播通知（或主动向 ST 通知特定钩子执行完毕）。
 
 ### 3. 主动交互控制引擎 (Active Interaction)
@@ -62,6 +65,11 @@ import { luminaWeaveApi as lwApi } from '../api/index.ts';
   - 按类似于 `status.health` 或 `inventory[0]` 的路径安全修改当前虚拟环境的状态。
 - **`rollback(targetTransactionId)`**
   - 原地抹平所有修改，实现一键穿梭回目标存档点的快照记忆！
+
+### 4.1 调试专用入口 (Debug-only)
+- **`debugChat`**
+  - **用途**: 为开发者工具箱提供低层消息节点检视与干预能力，如 `listNodes()`、`getNode()`、`getChildren()`、`upsertNode()`、`removeSubtree()`、`persistCurrentChat()`。
+  - **边界**: 该命名空间仅供内部调试 UI 使用，不属于正式的会话/世界线公共 API。业务型插件应优先使用统一会话 API。
 
 ---
 ### 5. 插件管理器 API (PluginManager)

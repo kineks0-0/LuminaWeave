@@ -607,7 +607,10 @@ const handleBranch = async (index: number, msg: LuminaChatMessage) => {
   if (lwApi) {
     const nodeId = msg.id || (lwApi as any)._getMessageFingerprint(msg);
     if (nodeId) {
-      await lwApi.branchFromNode(nodeId);
+      await lwApi.branchConversationNode({
+        sourceId: 'chat',
+        targetNodeId: nodeId
+      });
     } else {
       lwApi.showToast(`无法解析该节点的坐标信息。楼层：${index}`, 'error');
     }
