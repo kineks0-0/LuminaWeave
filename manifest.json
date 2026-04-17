@@ -5,9 +5,9 @@
   "optional": [],
   "js": "dist/index.js",
   "css": "dist/style.css",
-  "author": "city-unit",
+  "author": "kineks0-0",
   "version": "0.1.0",
-  "homePage": "https://github.com/city-unit/luminaweave-extension",
+  "homePage": "https://github.com/kineks0-0/LuminaWeave",
   "auto_update": false,
   "minimum_client_version": "1.12.0"
 }
