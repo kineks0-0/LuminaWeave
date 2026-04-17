@@ -110,6 +110,7 @@ export class STClient {
         if (!EnvDetector.isSilenceMode) console.warn('[STClient] 尝试从 Context 回退...');
         const ctx = this.ctx;
         const messages = ctx?.chat;
+        console.log(`[STClient] 从上下文获取 chat 数组，长度: ${Array.isArray(messages) ? messages.length : 'null/undefined'}`);
         
         if (!Array.isArray(messages)) {
             if (!EnvDetector.isSilenceMode) console.warn('STClient: 无法从上下文获取 chat 数组，环境可能未就绪。返回空数组以避免异常。');

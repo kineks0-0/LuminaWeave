@@ -242,6 +242,8 @@ export class STSyncService {
             this.store.activeLeafId = null;
         }
 
+        console.log(`[STSyncService] 同步结束，当前 activeLeafId: ${this.store.activeLeafId}, 池大小: ${this.store.nodePool.length}`);
+
         const activeTrace = this.store.getTrace(this.store.activeLeafId);
         const localForCompare = activeTrace.length > 0 ? activeTrace : this.store.nodePool;
         // 确保对比前能获取到 ST 呈现的最准确的 mesST

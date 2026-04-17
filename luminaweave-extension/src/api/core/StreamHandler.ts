@@ -5,7 +5,7 @@ import { ST_EVENT } from './STEvent.js';
 import { llmEngine } from '../llmEngine.js';
 import { NexusClient } from './NexusClient.js';
 import type { NexusStatusResponse } from '../../types/nexus.js';
-import { pluginFetch } from './PluginHttpClient.js';
+import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
 
 /**
  * 流式输出的聚合状态 (MVI 模式)
@@ -288,11 +288,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
 
     private async fetchServerState(chatId: string, signal?: AbortSignal): Promise<NexusStatusResponse | null> {
         try {
-            const res = await pluginFetch(`/api/plugins/luminaweave/nexus/status/${chatId}`, {
-                signal
-            });
-            if (!res.ok) return null;
-            return (await res.json()) as NexusStatusResponse;
+            return await BridgeDispatcher.nexus.getStatus(chatId);
         } catch {
             return null;
         }
