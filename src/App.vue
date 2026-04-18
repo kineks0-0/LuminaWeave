@@ -2,8 +2,10 @@
   <div
     class="luminaweave-app-root"
     :data-theme="resolvedTheme"
+    :data-desktop-mode="activeDesktopModeId"
     :data-motion="motionPerformanceSetting"
-    :style="{ pointerEvents: isExpanded ? 'auto' : 'none' }"
+    :data-layout-mode="layoutMode"
+    :style="appRootStyle"
   >
     <!-- 未展开态：悬浮小面板 -->
     <transition name="fade">
@@ -12,14 +14,21 @@
 
     <!-- 展开态：全网页视图 -->
     <transition name="panel-slide">
-      <div v-if="isExpanded" class="lw-fullscreen-panel">
+      <div
+        v-if="isExpanded"
+        class="lw-fullscreen-panel"
+        :data-shell-variant="shellAppVariant || 'default'"
+        :style="shellPanelStyle"
+      >
 
         <PanelHeader
           v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'top'"
           :activeMainTab="activeMainTab"
           :dynamicTabs="dynamicTabs"
           :isMobile="isMobile"
-          :layoutMode="layoutMode"
+          :activeDesktopModeId="activeDesktopModeId"
+          :desktopModes="desktopModeOptions"
+          :variant="panelHeaderVariant"
           :headerPlacement="traditionalHeaderPosition"
           :widgetPanels="widgetPanelList"
           :widgetGroups="widgetGroups"
@@ -28,26 +37,33 @@
           @closeTab="closeTab"
           @close="toggleExpand"
           @toggleSettings="openSettingsPanel"
-          @setLayoutMode="updateLayoutMode"
+          @setDesktopMode="updateDesktopMode"
           @openWidget="handleOpenWidget"
         />
 
         <transition name="fade">
-          <div v-if="showWorkspaceMenu && isFreeformLayout" class="lw-workspace-menu" :class="{ 'is-freeform': isFreeformLayout }">
+          <div
+            v-if="showWorkspaceMenu && isFreeformLayout"
+            class="lw-workspace-menu"
+            :class="{ 'is-freeform': isFreeformLayout }"
+            :data-skin-variant="shellWorkspaceMenuVariant || 'default'"
+            :style="shellWorkspaceMenuStyle"
+          >
             <div class="lw-workspace-menu-copy">
-              <span class="lw-workspace-menu-kicker">Workspace Mode</span>
+              <span class="lw-workspace-menu-kicker">Desktop Mode</span>
               <strong>切换桌面模式</strong>
               <span>默认使用传统桌面。自由工作台采用 iPadOS 式窗口交互。</span>
             </div>
 
-            <button class="lw-workspace-menu-item" :class="{ active: layoutMode === 'traditional' }" @click="updateLayoutMode('traditional')">
-              <span>传统桌面</span>
-              <small>顶部主导航 + 主内容区 + 辅助右栏</small>
-            </button>
-
-            <button class="lw-workspace-menu-item" :class="{ active: layoutMode === 'freeform' }" @click="updateLayoutMode('freeform')">
-              <span>自由工作台</span>
-              <small>iPadOS 台前调度 + 舞台组 + Dock</small>
+            <button
+              v-for="desktopMode in desktopModeOptions"
+              :key="desktopMode.value"
+              class="lw-workspace-menu-item"
+              :class="{ active: activeDesktopModeId === desktopMode.value }"
+              @click="updateDesktopMode(desktopMode.value)"
+            >
+              <span>{{ desktopMode.label }}</span>
+              <small>{{ desktopMode.description }}</small>
             </button>
 
             <button class="lw-workspace-menu-item" @click="layoutMode === 'freeform' ? createStageWithLauncher() : toggleAuxWindow()">
@@ -62,7 +78,7 @@
           </div>
         </transition>
 
-        <div class="lw-panel-body" :class="{ 'is-freeform': layoutMode === 'freeform' }" ref="panelBodyRef">
+        <div class="lw-panel-body" :class="{ 'is-freeform': layoutMode === 'freeform' }" :style="shellPanelBodyStyle" ref="panelBodyRef">
           <div v-if="!isApiReady" class="lw-global-loading">
             <div class="spinner"></div>
             <span>环境加载中... 若长时间无响应请检查 ST 相关扩展(例如 JS-Slash-Runner)是否正常。</span>
@@ -70,14 +86,34 @@
           </div>
 
           <template v-else-if="layoutMode === 'traditional'">
+            <DiscordGuildRail
+              v-if="shouldShowDiscordGuildRail"
+              :items="discordGuildEntries"
+              :activeMainTab="activeMainTab"
+              @switchMainView="handleSwitchMainView"
+              @toggleSettings="openSettingsPanel"
+              @close="toggleExpand"
+            />
             <ForgeSidebar
               v-if="shouldShowForgeSidebar"
               :isCollapsed="isForgeSidebarCollapsed"
               @toggleCollapse="isForgeSidebarCollapsed = !isForgeSidebarCollapsed"
               @switchMode="setSidebarMode"
             />
+            <DiscordCharacterRail
+              v-if="shouldShowDiscordCharacterRail"
+              :fallbackCharacterName="discordFallbackCharacterName"
+              :fallbackCharacterAvatarUrl="discordFallbackCharacterAvatarUrl"
+              @openSession="openDiscordChatSession"
+            />
             <template v-for="plugin in mainPlugins" :key="plugin.id">
-              <div v-show="activeMainTab === plugin.id" class="lw-main-wrapper" :class="{ 'lw-main-timeline-wrapper': plugin.id === 'lumina-timeline' }">
+              <div
+                v-show="activeMainTab === plugin.id"
+                class="lw-main-wrapper"
+                :class="{ 'lw-main-timeline-wrapper': plugin.id === 'lumina-timeline' }"
+                :data-surface-variant="shellMainSurfaceVariant"
+                :style="shellMainSurfaceStyle"
+              >
                 <component
                   :is="plugin.component"
                   v-if="plugin.id !== 'lumina-timeline' || activeMainTab === 'lumina-timeline' || isTimelineLoadedOnce"
@@ -90,7 +126,12 @@
             </template>
 
             <template v-for="tab in dynamicTabs" :key="tab.id">
-              <div v-show="activeMainTab === tab.id" class="lw-main-wrapper">
+              <div
+                v-show="activeMainTab === tab.id"
+                class="lw-main-wrapper"
+                :data-surface-variant="shellMainSurfaceVariant"
+                :style="shellMainSurfaceStyle"
+              >
                 <component
                   :is="componentMap[tab.component] || tab.component"
                   v-bind="tab.props"
@@ -101,7 +142,9 @@
             </template>
 
             <div class="lw-widget-container" v-if="activeRightPanel !== 'none' && !isMobile" :class="{ 'is-mobile': isMobile }"
-              :style="{ width: isMobile ? '100%' : widgetWidth + 'px', minWidth: isMobile ? '100%' : widgetWidth + 'px' }">
+              :data-surface-variant="shellWidgetSurfaceVariant"
+              :style="{ ...shellWidgetStyle, width: isMobile ? '100%' : widgetWidth + 'px', minWidth: isMobile ? '100%' : widgetWidth + 'px' }"
+            >
 
               <div v-if="!isMobile" class="lw-widget-resizer" :class="{ 'is-resizing': isResizing }" @mousedown.stop.prevent="initResize"></div>
               <div class="widget-container-header">
@@ -198,7 +241,13 @@
 
           </template>
 
-          <div v-else ref="freeformStageRef" class="lw-freeform-stage">
+          <div
+            v-else
+            ref="freeformStageRef"
+            class="lw-freeform-stage"
+            :data-skin-variant="shellWorkspaceStageVariant || 'default'"
+            :style="shellWorkspaceStageStyle"
+          >
             <Transition name="workspace-nav-motion" appear>
               <WorkspaceStageStrip
                 v-if="isWorkspaceStageStripVisible"
@@ -343,7 +392,9 @@
           :activeMainTab="activeMainTab"
           :dynamicTabs="dynamicTabs"
           :isMobile="isMobile"
-          :layoutMode="layoutMode"
+          :activeDesktopModeId="activeDesktopModeId"
+          :desktopModes="desktopModeOptions"
+          :variant="panelHeaderVariant"
           :headerPlacement="traditionalHeaderPosition"
           :widgetPanels="widgetPanelList"
           :widgetGroups="widgetGroups"
@@ -352,7 +403,7 @@
           @closeTab="closeTab"
           @close="toggleExpand"
           @toggleSettings="openSettingsPanel"
-          @setLayoutMode="updateLayoutMode"
+          @setDesktopMode="updateDesktopMode"
           @openWidget="handleOpenWidget"
         />
 
@@ -372,7 +423,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, provide, nextTick, type CSSProperties } from 'vue';
 import { luminaWeaveApi as lwApi } from './api/index';
 import { pluginManager } from './core/PluginManager';
 import { useConversationContextStore } from './stores/useConversationContextStore';
@@ -381,6 +432,10 @@ import { lwStorage } from './api/storage';
 import { registerLuminaPlugins } from './bootstrap/registerPlugins';
 import { useWorkspaceManager } from './composables/useWorkspaceManager';
 import { useResponsiveLayout } from './composables/useResponsiveLayout';
+import { getDesktopModeOptions, resolveThemeValues } from './theme/themeRegistry';
+import { useComponentSkin } from './theme/useComponentSkin';
+import { useThemePack } from './theme/useThemePack';
+import type { ThemeTraditionalNavigationPreset } from './theme/types';
 
 import MiniSidebar from './components/MiniSidebar.vue';
 import PanelHeader from './components/PanelHeader.vue';
@@ -389,6 +444,8 @@ import WorkspaceWindow from './components/WorkspaceWindow.vue';
 import WorkspaceDock from './components/WorkspaceDock.vue';
 import WorkspaceStageStrip from './components/WorkspaceStageStrip.vue';
 import ForgeSidebar from './components/ForgeSidebar.vue';
+import DiscordCharacterRail from './components/DiscordCharacterRail.vue';
+import DiscordGuildRail from './components/DiscordGuildRail.vue';
 import GlobalConfirmationModal from './components/common/GlobalConfirmationModal.vue';
 
 // Import dynamic components for tabs
@@ -419,12 +476,17 @@ const widgetPlugins = computed(() => {
   return pluginManager.getPluginsInSlot('widget');
 });
 
-const { initSettings, saveStatus, activeSettings } = useSettings();
+const { initSettings, saveStatus, activeSettings, updateSetting } = useSettings();
 const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
 
 const isExpanded = ref(false);
 const isApiReady = ref(false);
 const panelBodyRef = ref<HTMLElement | null>(null);
+const viewportHeightPx = ref(window.innerHeight);
+const viewportWidthPx = ref(window.innerWidth);
+const viewportOffsetTopPx = ref(0);
+const viewportOffsetLeftPx = ref(0);
+const keyboardInsetPx = ref(0);
 const {
     isMobile: responsiveIsMobile,
     canShowEmbeddedSidebar,
@@ -434,13 +496,32 @@ const {
     containerWidth,
 } = useResponsiveLayout(panelBodyRef);
 const isMobile = responsiveIsMobile;
-const layoutMode = ref<LayoutMode>(lwStorage.get('luminaWeave.layoutMode', 'traditional', 'Global'));
 const showWorkspaceMenu = ref(false);
 const initStatusText = ref('等待系统启动...');
 const isForgeSidebarCollapsed = ref(false);
 const systemPrefersDark = ref(themeMedia.matches);
 const appearanceSetting = computed(() => activeSettings['lumina-settings.appearance'] || 'system');
+const desktopModeOptions = computed(() => getDesktopModeOptions());
+const {
+  desktopModeId: activeDesktopModeId,
+  desktopMode: activeDesktopMode,
+  desktopShell,
+  navigationPreset,
+  surfacePreset
+} = useThemePack();
+const layoutMode = computed<LayoutMode>(() => desktopShell.value.kind as LayoutMode);
+const traditionalNavigationPreset = computed<Required<ThemeTraditionalNavigationPreset>>(() => ({
+  headerVariant: navigationPreset.value.traditional?.headerVariant || 'default',
+  leftRail: navigationPreset.value.traditional?.leftRail || 'none',
+  widgetVariant: navigationPreset.value.traditional?.widgetVariant || 'default',
+  headerDesktopPosition: navigationPreset.value.traditional?.headerDesktopPosition || 'follow-setting',
+  headerMobilePosition: navigationPreset.value.traditional?.headerMobilePosition || 'follow-setting'
+}));
+const panelHeaderVariant = computed(() => traditionalNavigationPreset.value.headerVariant || 'default');
 const resolvedTheme = computed(() => {
+  if (activeDesktopMode.value.preferredAppearance === 'light' || activeDesktopMode.value.preferredAppearance === 'dark') {
+    return activeDesktopMode.value.preferredAppearance;
+  }
   if (appearanceSetting.value === 'light' || appearanceSetting.value === 'dark') {
     return appearanceSetting.value;
   }
@@ -449,16 +530,52 @@ const resolvedTheme = computed(() => {
 const workspaceShowStageStripSetting = computed(() => activeSettings['lumina-settings.workspaceShowStageStrip'] !== false);
 const workspaceShowDockSetting = computed(() => activeSettings['lumina-settings.workspaceShowDock'] !== false);
 const motionPerformanceSetting = computed(() => activeSettings['lumina-settings.motionPerformance'] || 'full');
-const traditionalHeaderDesktopPosition = computed(() =>
-  activeSettings['lumina-settings.traditionalHeaderDesktopPosition'] || 'top'
-);
-const traditionalHeaderMobilePosition = computed(() =>
-  activeSettings['lumina-settings.traditionalHeaderMobilePosition'] || 'top'
-);
+const traditionalHeaderDesktopPosition = computed(() => {
+  if (traditionalNavigationPreset.value.headerDesktopPosition === 'top' || traditionalNavigationPreset.value.headerDesktopPosition === 'bottom') {
+    return traditionalNavigationPreset.value.headerDesktopPosition;
+  }
+  return activeSettings['lumina-settings.traditionalHeaderDesktopPosition'] || 'top';
+});
+const traditionalHeaderMobilePosition = computed(() => {
+  if (traditionalNavigationPreset.value.headerMobilePosition === 'top' || traditionalNavigationPreset.value.headerMobilePosition === 'bottom') {
+    return traditionalNavigationPreset.value.headerMobilePosition;
+  }
+  return activeSettings['lumina-settings.traditionalHeaderMobilePosition'] || 'top';
+});
 const traditionalHeaderPosition = computed<'top' | 'bottom'>(() =>
   (isMobile.value ? traditionalHeaderMobilePosition.value : traditionalHeaderDesktopPosition.value) === 'bottom'
     ? 'bottom'
     : 'top'
+);
+const { cssVars: shellAppSkinVars, variant: shellAppVariant } = useComponentSkin('shell.app');
+const { cssVars: shellPanelBodySkinVars } = useComponentSkin('shell.panelBody');
+const { cssVars: shellMainSurfaceSkinVars } = useComponentSkin('shell.mainSurface');
+const { cssVars: shellWidgetSkinVars } = useComponentSkin('shell.widget');
+const { cssVars: shellWorkspaceStageSkinVars, variant: shellWorkspaceStageVariant } = useComponentSkin('shell.workspaceStage');
+const { cssVars: shellWorkspaceMenuSkinVars, variant: shellWorkspaceMenuVariant } = useComponentSkin('shell.workspaceMenu');
+const appRootStyle = computed<CSSProperties>(() => ({
+  pointerEvents: isExpanded.value ? 'auto' : 'none',
+  '--lw-app-height': `${viewportHeightPx.value}px`,
+  '--lw-app-width': `${viewportWidthPx.value}px`,
+  '--lw-viewport-offset-top': `${viewportOffsetTopPx.value}px`,
+  '--lw-viewport-offset-left': `${viewportOffsetLeftPx.value}px`,
+  '--lw-keyboard-inset': `${keyboardInsetPx.value}px`,
+  ...resolveThemeValues(activeDesktopMode.value.designTokens, {
+    activeSettings,
+    resolvedAppearance: resolvedTheme.value,
+    themePackId: activeDesktopModeId.value,
+    desktopModeId: activeDesktopModeId.value
+  })
+}));
+const shellPanelStyle = computed<CSSProperties>(() => shellAppSkinVars.value as CSSProperties);
+const shellPanelBodyStyle = computed<CSSProperties>(() => shellPanelBodySkinVars.value as CSSProperties);
+const shellMainSurfaceStyle = computed<CSSProperties>(() => shellMainSurfaceSkinVars.value as CSSProperties);
+const shellWidgetStyle = computed<CSSProperties>(() => shellWidgetSkinVars.value as CSSProperties);
+const shellWorkspaceStageStyle = computed<CSSProperties>(() => shellWorkspaceStageSkinVars.value as CSSProperties);
+const shellWorkspaceMenuStyle = computed<CSSProperties>(() => shellWorkspaceMenuSkinVars.value as CSSProperties);
+const shellMainSurfaceVariant = computed(() => surfacePreset.value.mainSurfaceVariant || 'default');
+const shellWidgetSurfaceVariant = computed(() =>
+  traditionalNavigationPreset.value.widgetVariant || surfacePreset.value.widgetSurfaceVariant || 'default'
 );
 
 
@@ -483,9 +600,40 @@ const isFreeformLayout = computed(() => layoutMode.value === 'freeform');
 const shouldShowForgeSidebar = computed(() =>
     isForgeActiveInTraditional.value && sidebarMode.value === 'left' && !isMobile.value
 );
+const shouldShowDiscordGuildRail = computed(() =>
+    layoutMode.value === 'traditional'
+    && activeDesktopModeId.value === 'discord'
+    && !isMobile.value
+);
+const shouldShowDiscordCharacterRail = computed(() =>
+    layoutMode.value === 'traditional'
+    && traditionalNavigationPreset.value.leftRail === 'character-rail'
+    && !isMobile.value
+    && !shouldShowForgeSidebar.value
+);
 const shouldShowForgeAuxInWidget = computed(() =>
     isForgeActiveInTraditional.value && sidebarMode.value === 'widget' && !isMobile.value
 );
+const discordFallbackCharacterName = computed(() => lwApi.getAssistantName?.() || 'Assistant');
+const discordFallbackCharacterAvatarUrl = computed(() => {
+  const name = discordFallbackCharacterName.value;
+  return lwApi.getCharAvatar(name) || lwApi.DEFAULT_AVATAR;
+});
+const discordGuildEntries = computed(() => {
+  const pluginEntries = mainPlugins.value
+    .filter((plugin) => plugin.id !== 'lumina-launcher')
+    .map((plugin) => ({
+      id: plugin.id,
+      name: plugin.name,
+      icon: plugin.icon
+    }));
+  const dynamicEntries = dynamicTabs.value.map((tab) => ({
+    id: tab.id,
+    name: tab.name,
+    icon: tab.icon || ''
+  }));
+  return [...pluginEntries, ...dynamicEntries];
+});
 
 function getPluginName(pluginId: string | null) {
   if (!pluginId) return '';
@@ -751,7 +899,29 @@ const openTemporaryWidgetTab = (panelId: string) => {
 };
 
 let resizeThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+const syncViewportMetrics = () => {
+  const visualViewport = window.visualViewport;
+  if (visualViewport) {
+    viewportHeightPx.value = Math.round(visualViewport.height);
+    viewportWidthPx.value = Math.round(visualViewport.width);
+    viewportOffsetTopPx.value = Math.max(0, Math.round(visualViewport.offsetTop));
+    viewportOffsetLeftPx.value = Math.max(0, Math.round(visualViewport.offsetLeft));
+    keyboardInsetPx.value = Math.max(
+      0,
+      Math.round(window.innerHeight - visualViewport.height - visualViewport.offsetTop)
+    );
+    return;
+  }
+
+  viewportHeightPx.value = window.innerHeight;
+  viewportWidthPx.value = window.innerWidth;
+  viewportOffsetTopPx.value = 0;
+  viewportOffsetLeftPx.value = 0;
+  keyboardInsetPx.value = 0;
+};
+
 const handleResizeWindow = () => {
+  syncViewportMetrics();
   if (resizeThrottleTimer) return;
   
   resizeThrottleTimer = setTimeout(() => {
@@ -780,6 +950,21 @@ const handleSwitchMainView = (tabId: string) => {
   if (layoutMode.value === 'freeform') {
     openWorkspaceApp(getWorkspaceAppIdForMainTab(tabId));
   }
+};
+
+const pendingDiscordSessionId = ref<string | null>(null);
+
+const openDiscordChatSession = async (sessionId: string) => {
+  if (!sessionId) return;
+
+  if (activeMainTab.value === 'lumina-chat') {
+    await contextStore.selectViewSession(sessionId);
+    return;
+  }
+
+  pendingDiscordSessionId.value = sessionId;
+  handleSwitchMainView('lumina-chat');
+  await nextTick();
 };
 
 const closeTab = (tabId: string) => {
@@ -829,26 +1014,26 @@ const toggleAuxWindow = () => {
   showWorkspaceMenu.value = false;
 };
 
-const updateLayoutMode = (mode: LayoutMode) => {
-  layoutMode.value = mode;
+const updateDesktopMode = async (desktopModeId: string) => {
   showWorkspaceMenu.value = false;
   closeWorkspaceLaunchpad();
-  if (mode === 'freeform') {
-    showWorkspaceNavigation.value = shouldShowWorkspaceNavigationOnEntry();
-    workspaceNavigationPeek.value = false;
-    clearWorkspaceNavigationHideTimer();
+  if (desktopModeId === activeDesktopModeId.value) {
     return;
   }
-  showWorkspaceNavigation.value = false;
-  workspaceNavigationPeek.value = false;
-  clearWorkspaceNavigationHideTimer();
+  await updateSetting('lumina-settings.activeDesktopMode', desktopModeId);
 };
 
 const contextStore = useConversationContextStore();
 
-watch(activeMainTab, (val) => {
+watch(activeMainTab, async (val) => {
   lwStorage.set('luminaWeave.activeMainTab', val, 'Global');
   if (val === 'lumina-timeline') isTimelineLoadedOnce.value = true;
+  if (val === 'lumina-chat' && pendingDiscordSessionId.value) {
+    const targetSessionId = pendingDiscordSessionId.value;
+    pendingDiscordSessionId.value = null;
+    await contextStore.selectViewSession(targetSessionId);
+    return;
+  }
   contextStore.syncFromTab(val);
 });
 
@@ -870,7 +1055,6 @@ watch(showNexus, (val) => {
 });
 
 watch(layoutMode, (val) => {
-  lwStorage.set('luminaWeave.layoutMode', val, 'Global');
   if (val === 'freeform') {
     showWorkspaceNavigation.value = shouldShowWorkspaceNavigationOnEntry();
     workspaceNavigationPeek.value = false;
@@ -994,6 +1178,9 @@ const toggleExpand = async () => {
 };
 
 onMounted(async () => {
+  syncViewportMetrics();
+  window.visualViewport?.addEventListener('resize', syncViewportMetrics);
+  window.visualViewport?.addEventListener('scroll', syncViewportMetrics);
   themeMedia.addEventListener('change', handleThemeChange);
   window.addEventListener('keydown', handleWorkspaceKeydown);
 
@@ -1103,6 +1290,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   clearWorkspaceNavigationHideTimer();
+  window.visualViewport?.removeEventListener('resize', syncViewportMetrics);
+  window.visualViewport?.removeEventListener('scroll', syncViewportMetrics);
   themeMedia.removeEventListener('change', handleThemeChange);
   window.removeEventListener('keydown', handleWorkspaceKeydown);
   window.removeEventListener('resize', handleResizeWindow);
@@ -1216,8 +1405,8 @@ onUnmounted(() => {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
+  width: var(--lw-app-width, 100vw);
+  height: var(--lw-app-height, 100vh);
   z-index: 9999;
   pointer-events: none;
   isolation: isolate;
@@ -1259,33 +1448,27 @@ textarea:not([type="search"]) {
 
 .lw-fullscreen-panel {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background:
-    radial-gradient(circle at 14% 12%, rgba(var(--lw-primary-rgb), 0.09), transparent 26%),
-    radial-gradient(circle at 82% 18%, rgba(var(--lw-primary-rgb), 0.05), transparent 22%),
-    linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-app) 90%, white), var(--lw-bg-app));
+  top: var(--lw-viewport-offset-top, 0px);
+  left: var(--lw-viewport-offset-left, 0px);
   display: flex;
   flex-direction: column;
   z-index: 10000;
   overflow: hidden;
-  width: 100vw;
-  height: 100vh;
-  background:
+  width: var(--lw-app-width, 100vw);
+  height: var(--lw-app-height, 100vh);
+  background: var(--lw-shell-panel-bg,
     radial-gradient(circle at 18% 10%, rgba(var(--lw-primary-rgb), 0.12), transparent 24%),
     radial-gradient(circle at 80% 14%, rgba(255, 255, 255, 0.72), transparent 20%),
-    linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 98%, white), color-mix(in srgb, var(--lw-bg-app) 96%, white));
+    linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 98%, white), color-mix(in srgb, var(--lw-bg-app) 96%, white)));
 }
 
 .lw-fullscreen-panel::before {
   content: '';
   position: absolute;
   inset: 0;
-  background:
+  background: var(--lw-shell-panel-overlay,
     linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 24%),
-    radial-gradient(rgba(38, 52, 76, 0.055) 0.8px, transparent 0.8px);
+    radial-gradient(rgba(38, 52, 76, 0.055) 0.8px, transparent 0.8px));
   background-size: auto, 18px 18px;
   opacity: 0.34;
   pointer-events: none;
@@ -1303,9 +1486,9 @@ textarea:not([type="search"]) {
   gap: 8px;
   padding: 12px;
   border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(244, 248, 254, 0.34));
+  border: 1px solid var(--lw-shell-workspace-menu-border, rgba(255, 255, 255, 0.42));
+  background: var(--lw-shell-workspace-menu-bg,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(244, 248, 254, 0.34)));
   box-shadow: 0 20px 44px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(24px) saturate(135%);
 }
@@ -1351,7 +1534,7 @@ textarea:not([type="search"]) {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.34);
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--lw-shell-workspace-menu-item-bg, rgba(255, 255, 255, 0.24));
   color: var(--lw-text-main);
   text-align: left;
   cursor: pointer;
@@ -1361,7 +1544,7 @@ textarea:not([type="search"]) {
 .lw-workspace-menu-item:hover,
 .lw-workspace-menu-item.active {
   border-color: rgba(var(--lw-primary-rgb), 0.2);
-  background: rgba(255, 255, 255, 0.4);
+  background: var(--lw-shell-workspace-menu-item-active-bg, rgba(255, 255, 255, 0.4));
 }
 
 .lw-workspace-menu-item span {
@@ -1390,14 +1573,18 @@ textarea:not([type="search"]) {
 }
 
 .lw-panel-body:not(.is-freeform) {
-  background:
+  background: var(--lw-shell-body-bg,
     linear-gradient(180deg, rgba(var(--lw-primary-rgb), 0.16) 0%, rgba(var(--lw-primary-rgb), 0.08) 18%, transparent 44%),
-    linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-surface) 98%, white), color-mix(in srgb, var(--lw-bg-subtle) 96%, white));
+    linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-surface) 98%, white), color-mix(in srgb, var(--lw-bg-subtle) 96%, white)));
+}
+
+.luminaweave-app-root[data-desktop-mode='discord'][data-layout-mode='traditional'] .lw-panel-body:not(.is-freeform) {
+  background: linear-gradient(180deg, #313338 0%, #2b2d31 100%);
 }
 
 .lw-panel-body.is-freeform {
-  padding: 14px;
-  gap: 14px;
+  padding: var(--lw-shell-freeform-gap, 14px);
+  gap: var(--lw-shell-freeform-gap, 14px);
 }
 
 .lw-freeform-stage {
@@ -1405,13 +1592,13 @@ textarea:not([type="search"]) {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  border-radius: 30px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 88%, white);
-  box-shadow: 0 22px 52px rgba(15, 23, 42, 0.08);
-  background:
+  border-radius: var(--lw-shell-stage-radius, 30px);
+  border: 1px solid var(--lw-shell-stage-border, color-mix(in srgb, var(--lw-border-base) 88%, white));
+  box-shadow: var(--lw-shell-stage-shadow, 0 22px 52px rgba(15, 23, 42, 0.08));
+  background: var(--lw-shell-stage-bg,
     radial-gradient(circle at 18% 20%, rgba(var(--lw-primary-rgb), 0.24), transparent 26%),
     radial-gradient(circle at 82% 14%, rgba(255, 255, 255, 0.64), transparent 24%),
-    linear-gradient(180deg, rgba(154, 184, 232, 0.96) 0%, rgba(182, 204, 241, 0.88) 24%, rgba(216, 228, 247, 0.94) 70%, rgba(236, 242, 251, 0.98) 100%);
+    linear-gradient(180deg, rgba(154, 184, 232, 0.96) 0%, rgba(182, 204, 241, 0.88) 24%, rgba(216, 228, 247, 0.94) 70%, rgba(236, 242, 251, 0.98) 100%));
 }
 
 .lw-freeform-stage::before {
@@ -1794,8 +1981,8 @@ textarea:not([type="search"]) {
 @media (max-width: 768px) {
   .lw-panel-body {
     flex-direction: column !important;
-    height: calc(100vh - 60px);
-    min-height: calc(100vh - 60px);
+    height: calc(var(--lw-app-height, 100vh) - 60px);
+    min-height: calc(var(--lw-app-height, 100vh) - 60px);
     /* 减去 header 高度 */
   }
 
@@ -1889,12 +2076,16 @@ textarea:not([type="search"]) {
   flex-direction: column;
   overflow: hidden;
   height: 100%;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 88%, white);
-  border-radius: 24px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--lw-bg-elevated) 96%, white));
-  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--lw-shell-main-border, color-mix(in srgb, var(--lw-border-base) 88%, white));
+  border-radius: var(--lw-shell-main-radius, 24px);
+  background: var(--lw-shell-main-bg,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--lw-bg-elevated) 96%, white)));
+  box-shadow: var(--lw-shell-main-shadow, 0 20px 44px rgba(15, 23, 42, 0.08));
   backdrop-filter: blur(10px);
+}
+
+.lw-main-wrapper[data-surface-variant='discord'] {
+  backdrop-filter: none;
 }
 
 .lw-panel-body:not(.is-freeform) .lw-main-wrapper {
@@ -1902,6 +2093,11 @@ textarea:not([type="search"]) {
   box-shadow: none;
   border-top: none;
   border-bottom: none;
+}
+
+.luminaweave-app-root[data-desktop-mode='discord'][data-layout-mode='traditional'] .lw-panel-body:not(.is-freeform) .lw-main-wrapper[data-surface-variant='discord'] {
+  border-left: none;
+  background: #313338;
 }
 
 @media (max-width: 768px) {
@@ -1940,11 +2136,11 @@ textarea:not([type="search"]) {
 }
 
 .lw-widget-container {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--lw-bg-elevated) 96%, white));
+  background: var(--lw-shell-widget-bg,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--lw-bg-elevated) 96%, white)));
   backdrop-filter: var(--lw-glass-blur);
-  border: 1px solid color-mix(in srgb, var(--lw-border, var(--lw-border-base)) 88%, white);
-  border-radius: 24px;
+  border: 1px solid var(--lw-shell-widget-border, color-mix(in srgb, var(--lw-border, var(--lw-border-base)) 88%, white));
+  border-radius: var(--lw-shell-widget-radius, 24px);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -1953,12 +2149,21 @@ textarea:not([type="search"]) {
   box-shadow: var(--lw-shadow-card);
 }
 
+.lw-widget-container[data-surface-variant='discord'] {
+  backdrop-filter: none;
+}
+
 .lw-panel-body:not(.is-freeform) .lw-widget-container {
   border-radius: 0;
   box-shadow: none;
   border-top: none;
   border-right: none;
   border-bottom: none;
+}
+
+.luminaweave-app-root[data-desktop-mode='discord'][data-layout-mode='traditional'] .lw-panel-body:not(.is-freeform) .lw-widget-container[data-surface-variant='discord'] {
+  background: #2b2d31;
+  border-left: 1px solid #232428;
 }
 
 @media (max-width: 768px) {
@@ -1976,6 +2181,19 @@ textarea:not([type="search"]) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: var(--lw-shell-widget-header-bg, transparent);
+}
+
+.lw-fullscreen-panel[data-shell-variant='discord']::before {
+  opacity: 0.18;
+}
+
+.lw-freeform-stage[data-skin-variant='discord']::before {
+  opacity: 0.12;
+}
+
+.lw-freeform-stage[data-skin-variant='discord']::after {
+  opacity: 0.22;
 }
 
 .widget-dropdown {

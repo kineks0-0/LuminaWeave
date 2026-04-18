@@ -1,5 +1,5 @@
 <template>
-  <div class="lw-timeline-container" :class="mode">
+  <div class="lw-timeline-container" :class="mode" :data-skin-variant="timelineVariant || 'default'" :style="timelineSkinStyle">
 
     <!-- Large Mode Background Area (Managed by LogicFlow) -->
     <div v-if="mode === 'large'" class="large-viewport-container"></div>
@@ -254,6 +254,7 @@ import NodePreviewModal from './NodePreviewModal.vue';
 
 import gsap from 'gsap';
 import { useTimelineStore } from '../../stores/useTimelineStore';
+import { useComponentSkin } from '../../theme/useComponentSkin';
 
 export interface TimelineViewNode extends TimelineNode {
   children: TimelineViewNode[];
@@ -391,6 +392,8 @@ const props = defineProps<{
   mode?: 'small' | 'large',
   isMobile?: boolean
 }>();
+const { cssVars: timelineSkinVars, variant: timelineVariant } = useComponentSkin('timeline.root');
+const timelineSkinStyle = computed(() => timelineSkinVars.value);
 
 // 内部判定移动端，增加对 navigator 的 fallback 以增强稳健性
 const isMobileDevice = computed(() => {
@@ -1186,7 +1189,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: color-mix(in srgb, var(--lw-bg-elevated) 88%, transparent);
+  background: var(--lw-timeline-header-bg, color-mix(in srgb, var(--lw-bg-elevated) 88%, transparent));
   backdrop-filter: var(--lw-glass-blur);
   border-bottom: 1px solid var(--lw-border-base);
   position: absolute;
@@ -1438,7 +1441,7 @@ onUnmounted(() => {
 }
 
 .s-card {
-  background: var(--lw-bg-surface);
+  background: var(--lw-timeline-card-bg, var(--lw-bg-surface));
   border: 1px solid var(--lw-border-base);
   border-radius: var(--lw-radius);
   padding: 12px 16px;
@@ -1504,7 +1507,7 @@ onUnmounted(() => {
 .s-avatar-mini {
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: var(--lw-timeline-mini-avatar-radius, 50%);
   background: var(--lw-bg-app);
   display: flex;
   align-items: center;
@@ -1874,5 +1877,67 @@ onUnmounted(() => {
 .modal-scale-leave-to {
   opacity: 0;
   transform: scale(0.9) translateY(20px);
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .header-source-pill,
+.lw-timeline-container[data-skin-variant='discord'] .timeline-context-pill {
+  background: color-mix(in srgb, var(--lw-primary) 18%, var(--lw-bg-surface));
+}
+
+.lw-timeline-container[data-skin-variant='discord'] {
+  background: #313338;
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .large-header,
+.lw-timeline-container[data-skin-variant='discord'] .canvas-controls {
+  background: #232428;
+  border-color: #1e1f22;
+  backdrop-filter: none;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .header-source-pill,
+.lw-timeline-container[data-skin-variant='discord'] .timeline-context-pill,
+.lw-timeline-container[data-skin-variant='discord'] .source-chip {
+  background: #383a40;
+  color: #dbdee1;
+  border-color: #4e5058;
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .source-chip.active {
+  background: color-mix(in srgb, var(--lw-primary) 34%, #383a40);
+  border-color: rgba(88, 101, 242, 0.42);
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-card,
+.lw-timeline-container[data-skin-variant='discord'] .s-actions-group,
+.lw-timeline-container[data-skin-variant='discord'] .s-action-card {
+  background: #2b2d31;
+  border-color: #3f4147;
+  box-shadow: none;
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-card.active {
+  background: #313338;
+  border-color: rgba(88, 101, 242, 0.44);
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-card:hover {
+  background: #35373c;
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-text,
+.lw-timeline-container[data-skin-variant='discord'] .loading-title {
+  color: #f2f3f5;
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-variant-info,
+.lw-timeline-container[data-skin-variant='discord'] .l-modal-header,
+.lw-timeline-container[data-skin-variant='discord'] .l-modal-footer {
+  border-color: #3f4147;
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .global-loading-overlay {
+  background: rgba(30, 31, 34, 0.72);
 }
 </style>

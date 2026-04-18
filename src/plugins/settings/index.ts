@@ -1,5 +1,6 @@
 import { LuminaPlugin } from '../../types/plugin';
 import SettingsRoot from './SettingsRoot.vue';
+import { getDesktopModeOptions } from '../../theme/themeRegistry';
 
 const plugin: LuminaPlugin = {
     id: 'lumina-settings',
@@ -11,7 +12,7 @@ const plugin: LuminaPlugin = {
         appearance: {
             default: 'system',
             label: '界面外观',
-            description: '统一 LuminaWeave 全局外观。System 会跟随系统浅深色切换。',
+            description: '统一 LuminaWeave 全局外观。若当前桌面模式强制指定浅/深色，则以桌面模式为准。',
             common: true,
             type: 'options',
             allowedScopes: ['Global'],
@@ -20,6 +21,15 @@ const plugin: LuminaPlugin = {
                 { value: 'light', label: '浅色', description: '使用明亮的 Codex 风格工作区。' },
                 { value: 'dark', label: '深色', description: '使用低眩光的 Codex 风格工作区。' }
             ]
+        },
+        activeDesktopMode: {
+            default: 'classic',
+            label: '桌面模式',
+            description: '切换整套桌面模式。它会统一控制工作模式、导航组织、界面承载方式与对应表层样式。',
+            common: true,
+            type: 'options',
+            allowedScopes: ['Global'],
+            options: getDesktopModeOptions
         },
         motionPerformance: {
             default: 'full',

@@ -1,6 +1,11 @@
 <template>
-  <div class="lw-panel-header" :class="{ 'is-bottom': headerPlacement === 'bottom' }">
+  <div
+    class="lw-panel-header"
+    :class="{ 'is-bottom': headerPlacement === 'bottom' }"
+    :data-skin-variant="variant"
+  >
     <div class="header-left">
+      <template v-if="variant !== 'discord'">
       <div class="lw-brand" v-if="!isMobile">
         <span class="lw-title-main">LuminaWeave</span>
       </div>
@@ -52,6 +57,15 @@
           </template>
         </template>
 
+      </div>
+      </template>
+
+      <div v-else class="discord-channel-bar">
+        <span class="discord-channel-mark">#</span>
+        <div class="discord-channel-copy">
+          <strong>{{ activeTabEntry?.name || '频道' }}</strong>
+          <span>当前桌面模式中的主工作区视图</span>
+        </div>
       </div>
     </div>
 
@@ -144,12 +158,17 @@
         <div v-if="showProfileMenu" class="profile-menu" ref="profileMenuRef">
           <template v-if="profileMenuView === 'root'">
             <div class="profile-menu-copy">
-              <span class="profile-menu-kicker">Workspace Menu</span>
+              <span class="profile-menu-kicker">Desktop Menu</span>
               <strong>{{ activeUserName }}</strong>
               <span>把关闭、桌面模式和设置收进头像菜单里，保持主导航更专注。</span>
             </div>
 
-            <button class="profile-menu-item" type="button" @click="openLayoutMenu">
+            <button
+              v-if="showLayoutEntry"
+              class="profile-menu-item"
+              type="button"
+              @click="openLayoutMenu"
+            >
               <span class="profile-menu-icon">
                 <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                   <rect x="3" y="4" width="6" height="16" rx="2"></rect>
@@ -158,7 +177,7 @@
                 </svg>
               </span>
               <span class="profile-menu-label">桌面模式</span>
-              <span class="profile-menu-value">{{ layoutModeLabel }}</span>
+              <span class="profile-menu-value">{{ layoutModeValue }}</span>
               <svg class="profile-menu-chevron" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
                 <polyline points="9 6 15 12 9 18"></polyline>
               </svg>
@@ -196,19 +215,21 @@
             </button>
 
             <div class="profile-menu-copy">
-              <span class="profile-menu-kicker">Workspace Mode</span>
+              <span class="profile-menu-kicker">Desktop Mode</span>
               <strong>切换桌面模式</strong>
-              <span>默认使用传统桌面。自由工作台采用 iPadOS 式窗口交互。</span>
+              <span>直接切换整套桌面模式。每个模式会自行决定采用传统桌面还是自由工作台壳层。</span>
             </div>
 
-            <button class="profile-menu-choice" :class="{ active: layoutMode === 'traditional' }" type="button" @click="pickLayoutMode('traditional')">
-              <span class="profile-menu-choice-title">传统桌面</span>
-              <span class="profile-menu-choice-copy">顶部主导航 + 主内容区 + 辅助右栏</span>
-            </button>
-
-            <button class="profile-menu-choice" :class="{ active: layoutMode === 'freeform' }" type="button" @click="pickLayoutMode('freeform')">
-              <span class="profile-menu-choice-title">自由工作台</span>
-              <span class="profile-menu-choice-copy">iPadOS 台前调度 + 舞台组 + Dock</span>
+            <button
+              v-for="desktopMode in desktopModes"
+              :key="desktopMode.value"
+              class="profile-menu-choice"
+              :class="{ active: activeDesktopModeId === desktopMode.value }"
+              type="button"
+              @click="pickDesktopMode(desktopMode.value)"
+            >
+              <span class="profile-menu-choice-title">{{ desktopMode.label }}</span>
+              <span class="profile-menu-choice-copy">{{ desktopMode.description || '切换到该桌面模式。' }}</span>
             </button>
           </template>
         </div>
@@ -225,7 +246,9 @@ const props = withDefaults(defineProps<{
   activeMainTab?: string;
   dynamicTabs?: any[];
   isMobile?: boolean;
-  layoutMode?: 'traditional' | 'freeform';
+  activeDesktopModeId?: string;
+  desktopModes?: { value: string; label: string; description?: string }[];
+  variant?: 'default' | 'discord';
   headerPlacement?: 'top' | 'bottom';
   widgetPanels?: { id: string; name: string; icon: string }[];
   widgetGroups?: { label?: string; items: { id: string; name: string; icon: string }[] }[];
@@ -234,7 +257,9 @@ const props = withDefaults(defineProps<{
   activeMainTab: 'lumina-chat',
   dynamicTabs: () => [],
   isMobile: false,
-  layoutMode: 'traditional',
+  activeDesktopModeId: 'classic',
+  desktopModes: () => [],
+  variant: 'default',
   headerPlacement: 'top',
   widgetPanels: () => [],
   widgetGroups: () => [],
@@ -244,7 +269,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'toggleSettings'): void;
-  (e: 'setLayoutMode', mode: 'traditional' | 'freeform'): void;
+  (e: 'setDesktopMode', modeId: string): void;
   (e: 'switchMainView', tabId: string): void;
   (e: 'closeTab', tabId: string): void;
   (e: 'openWidget', panelId: string): void;
@@ -257,7 +282,11 @@ const headerRightPlugins = computed(() => pluginManager.getPluginsInSlot('header
 const activeUserName = computed(() => (window as any).LuminaWeave?.getUserName() || 'User');
 const activeUserAvatar = computed(() => (window as any).LuminaWeave?.getUserAvatar());
 const defaultAvatar = computed(() => (window as any).LuminaWeave?.DEFAULT_AVATAR);
-const layoutModeLabel = computed(() => props.layoutMode === 'freeform' ? '自由工作台' : '传统桌面');
+const activeDesktopModeOption = computed(
+  () => props.desktopModes.find((mode) => mode.value === props.activeDesktopModeId) || props.desktopModes[0] || null
+);
+const layoutModeValue = computed(() => activeDesktopModeOption.value?.label || '桌面模式');
+const showLayoutEntry = computed(() => props.desktopModes.length > 0);
 
 type TabEntry = { type: 'plugin' | 'dynamic'; id: string; name: string; icon: string };
 
@@ -272,6 +301,18 @@ const tabOrder = computed<TabEntry[]>(() => {
     icon: t.icon || ''
   }));
   return [...plugins, ...dynamics];
+});
+
+const activeTabEntry = computed<TabEntry | null>(() => {
+  if (props.activeMainTab === 'lumina-launcher') {
+    return {
+      type: 'plugin',
+      id: 'lumina-launcher',
+      name: '启动台',
+      icon: ''
+    };
+  }
+  return tabOrder.value.find((entry) => entry.id === props.activeMainTab) || null;
 });
 
 const widgetMenuRef = ref<HTMLElement | null>(null);
@@ -305,10 +346,10 @@ function openSettings() {
   emit('toggleSettings');
 }
 
-function pickLayoutMode(mode: 'traditional' | 'freeform') {
+function pickDesktopMode(modeId: string) {
   showProfileMenu.value = false;
   profileMenuView.value = 'root';
-  emit('setLayoutMode', mode);
+  emit('setDesktopMode', modeId);
 }
 
 function closeWorkspace() {
@@ -353,12 +394,13 @@ function onDocPointerDown(e: PointerEvent) {
   height: 60px;
   min-height: 60px;
   padding: 0 var(--lw-panel-padding, 24px);
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--lw-border-base, #e2e8f0);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #ffffff;
+  background: var(--lw-bg-elevated, #ffffff);
   z-index: 10;
+  color: var(--lw-text-main);
 }
 
 .lw-panel-header.is-bottom {
@@ -422,6 +464,50 @@ function onDocPointerDown(e: PointerEvent) {
   color: #111827;
   line-height: 1;
   letter-spacing: -0.01em;
+}
+
+.discord-channel-bar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.discord-channel-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: #2b2d31;
+  color: #8e9297;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.discord-channel-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.discord-channel-copy strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--lw-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discord-channel-copy span {
+  font-size: 11px;
+  color: var(--lw-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-center {
@@ -925,6 +1011,10 @@ function onDocPointerDown(e: PointerEvent) {
   transform: translateY(-1px);
 }
 
+.profile-menu-choice.locked {
+  cursor: default;
+}
+
 .profile-menu-choice-title {
   font-size: 13px;
   font-weight: 700;
@@ -950,6 +1040,115 @@ function onDocPointerDown(e: PointerEvent) {
 .avatar-sm.placeholder {
   display: block;
   background: #e2e8f0;
+}
+
+.lw-panel-header[data-skin-variant='discord'] {
+  background: #313338;
+  border-bottom-color: #232428;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.lw-panel-header[data-skin-variant='discord'] .lw-brand {
+  display: none;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .launcher-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: #232428;
+  border-color: #3f4147;
+  color: #b5bac1;
+  box-shadow: none;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .launcher-btn:hover,
+.lw-panel-header[data-skin-variant='discord'] .launcher-btn.active {
+  background: color-mix(in srgb, var(--lw-primary) 18%, #232428);
+  border-color: rgba(88, 101, 242, 0.42);
+  color: #f2f3f5;
+  box-shadow: none;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .lw-tabs {
+  background: #232428;
+  border-color: #3f4147;
+  border-radius: 14px;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .lw-tab {
+  color: #b5bac1;
+  border-radius: 10px;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .lw-tab:hover {
+  color: #f2f3f5;
+  background: #383a40;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .lw-tab.active {
+  background: #404249;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .header-floating-controls,
+.lw-panel-header[data-skin-variant='discord'] .profile-trigger,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu,
+.lw-panel-header[data-skin-variant='discord'] .widget-dropdown,
+.lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown {
+  background: #232428;
+  border-color: #3f4147;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-trigger,
+.lw-panel-header[data-skin-variant='discord'] .header-floating-controls {
+  color: #f2f3f5;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-trigger-copy strong,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-copy strong,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-label,
+.lw-panel-header[data-skin-variant='discord'] .widget-dropdown-item,
+.lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown-item {
+  color: #f2f3f5;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-trigger-copy small,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-copy span:last-child,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-value,
+.lw-panel-header[data-skin-variant='discord'] .widget-dropdown-label,
+.lw-panel-header[data-skin-variant='discord'] .widget-group-chevron,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-kicker {
+  color: #949ba4;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-item,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-choice {
+  background: #2b2d31;
+  border-color: #3f4147;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-item:hover,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-choice:hover,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-choice.active,
+.lw-panel-header[data-skin-variant='discord'] .widget-dropdown-item:hover,
+.lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown-item:hover {
+  background: #383a40;
+  border-color: rgba(88, 101, 242, 0.34);
+  color: #ffffff;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-icon {
+  background: #232428;
+  color: #b5bac1;
+}
+
+.lw-panel-header[data-skin-variant='discord'] .avatar-sm,
+.lw-panel-header[data-skin-variant='discord'] .avatar-sm.placeholder {
+  background: #383a40;
+  border-color: #4e5058;
 }
 
 @media (max-width: 768px) {

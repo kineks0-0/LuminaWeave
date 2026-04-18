@@ -273,11 +273,18 @@ export class STClient {
         const isUser = msg.role === 'user';
         const isSystem = msg.role === 'system';
         const normalizedRole = STProtocol.normalizeRole(msg.role, !!msg.is_user);
+        const normalizedExtra = this._normalizeExtra({ ...(msg.extra || {}), role: normalizedRole });
+        const stWritePayload = {
+            ...msg,
+            extra: normalizedExtra,
+            mesST: msg.mesST ?? (typeof normalizedExtra.mesST === 'string' ? normalizedExtra.mesST as string : undefined),
+            mesRaw: msg.mesRaw ?? (typeof normalizedExtra.mesRaw === 'string' ? normalizedExtra.mesRaw as string : undefined)
+        };
         const payload: any = {
             name: msg.name || (isUser ? 'You' : 'Assistant'),
             role: normalizedRole || ((msg.role as ('system' | 'assistant' | 'user') | undefined) || (isUser ? 'user' : (isSystem ? 'system' : 'assistant'))),
-            message: STProtocol.resolveForSTWrite(msg),
-            extra: this._normalizeExtra({ ...(msg.extra || {}), role: normalizedRole })
+            message: msg.message ?? STProtocol.resolveForSTWrite(stWritePayload),
+            extra: normalizedExtra
         };
 
         payload.is_hidden = msg.is_hidden ?? false;

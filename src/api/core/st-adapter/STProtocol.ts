@@ -17,7 +17,8 @@ export class STProtocol {
      */
     public static resolveForSTWrite(msg: Partial<LuminaChatMessage>): string {
         const extraMesST = typeof msg.extra?.mesST === 'string' ? msg.extra.mesST : undefined;
-        return msg.mesST ?? extraMesST ?? msg.mesRaw ?? msg.mes ?? '';
+        const extraMesRaw = typeof msg.extra?.mesRaw === 'string' ? msg.extra.mesRaw : undefined;
+        return msg.mesST ?? extraMesST ?? msg.mesRaw ?? extraMesRaw ?? msg.mes ?? '';
     }
 
     public static resolveForSTFingerprint(msg: Partial<LuminaChatMessage>): string {
@@ -43,12 +44,20 @@ export class STProtocol {
      */
     public static resolveForFingerprint(msg: LuminaChatMessage | StoredChatMessage | any): string {
         const extra = (msg?.extra || {}) as Record<string, unknown>;
-        const raw =
+        const normalizedRole = typeof extra.role === 'string' ? extra.role : (msg as any)?.role;
+        const isUser = (msg as any)?.is_user === true || normalizedRole === 'user';
+        const pluginRaw =
+            (typeof extra.pluginRaw === 'string' ? extra.pluginRaw : undefined)
+            ?? (typeof (msg as any)?.pluginRaw === 'string' ? (msg as any).pluginRaw : undefined);
+        const mesRaw =
             (typeof extra.mesRaw === 'string' ? extra.mesRaw : undefined)
-            ?? (typeof (msg as any)?.mesRaw === 'string' ? (msg as any).mesRaw : undefined)
+            ?? (typeof (msg as any)?.mesRaw === 'string' ? (msg as any).mesRaw : undefined);
+        const raw =
+            (!isUser ? pluginRaw : undefined)
+            ?? mesRaw
             ?? (typeof (msg as any)?.message === 'string' ? (msg as any).message : undefined)
             ?? (typeof (msg as any)?.mes === 'string' ? (msg as any).mes : undefined)
-            ?? (typeof (msg as any)?.pluginRaw === 'string' ? (msg as any).pluginRaw : undefined)
+            ?? pluginRaw
             ?? '';
 
         const cleaned = globalXMLInterceptor.processAndCleanText(raw, false);
@@ -260,7 +269,6 @@ export class STProtocol {
 
         // 3. 运行自动对齐管道：补全清洗后的 mes, 矫正 fingerprint
         this.syncMessageCalculatedFields(msg);
-        msg.mes = displayText || msg.mes;
 
         return msg;
     }

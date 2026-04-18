@@ -1,6 +1,7 @@
 import { reactive, ref, onUnmounted } from 'vue';
 import { lwStorage } from '../../api/storage';
-import { pluginManager } from '../../core/PluginManager';
+import { getRegisteredSettingsCatalog } from './settingsRegistry';
+import { getCanonicalSettingsStorageKey, getLegacySettingsStorageKey } from '../../theme/themeRegistry';
 
 // 全局响应式状态存放配置的当前值
 export const activeSettings = reactive<Record<string, any>>({});
@@ -12,15 +13,40 @@ export const saveStatus = ref<'idle' | 'saving' | 'saved' | 'failed'>('idle');
 export const currentDetailedView = ref<string | null>(null);
 
 export function useSettings() {
+    const resolveStoredValue = (storageKey: string, scope?: string) => {
+        const primaryValue = scope !== undefined
+            ? (lwStorage as any).get(storageKey, scope)
+            : lwStorage.get(storageKey);
+        if (primaryValue !== null && primaryValue !== undefined) {
+            return primaryValue;
+        }
+        const legacyStorageKey = getLegacySettingsStorageKey(storageKey);
+        if (!legacyStorageKey) {
+            return primaryValue;
+        }
+        return scope !== undefined
+            ? (lwStorage as any).get(legacyStorageKey, scope)
+            : lwStorage.get(legacyStorageKey);
+    };
+
+    const resolveStoredScope = (storageKey: string) => {
+        const directScope = (lwStorage as any).getScopeOf(storageKey);
+        if (directScope) {
+            return directScope;
+        }
+        const legacyStorageKey = getLegacySettingsStorageKey(storageKey);
+        return legacyStorageKey ? (lwStorage as any).getScopeOf(legacyStorageKey) : null;
+    };
+
     // 初始化并拉取最新值
     const initSettings = () => {
-        const registered = (pluginManager as any).registeredSettings;
+        const registered = getRegisteredSettingsCatalog();
         Object.keys(registered).forEach(pluginId => {
             const manifest = registered[pluginId];
             Object.keys(manifest).forEach(key => {
                 const storageKey = `${pluginId}.${key}`;
                 const fallback = manifest[key].allowedScopes && manifest[key].allowedScopes.length ? manifest[key].allowedScopes[0] : 'Global';
-                const realScope = (lwStorage as any).getScopeOf(storageKey);
+                const realScope = resolveStoredScope(storageKey);
 
                 if (realScope) {
                     const allowed = manifest[key].allowedScopes || ['Global'];
@@ -30,7 +56,7 @@ export function useSettings() {
                 }
 
                 // 读取当前的有效值
-                const val = lwStorage.get(storageKey);
+                const val = resolveStoredValue(storageKey);
                 activeSettings[storageKey] = (val !== null && val !== undefined) ? val : manifest[key].default;
             });
         });
@@ -39,8 +65,10 @@ export function useSettings() {
     // 存储更新时同步到 Vue 响应式数据
     const handleStorageChange = (data: { key: string }) => {
         if (data && data.key) {
+            const canonicalKey = getCanonicalSettingsStorageKey(data.key);
+            const targetKey = Object.prototype.hasOwnProperty.call(activeSettings, canonicalKey) ? canonicalKey : data.key;
             // Re-evaluate what is the effective value (since we might have modified Character scope but fallen back to Global)
-            activeSettings[data.key] = lwStorage.get(data.key);
+            activeSettings[targetKey] = resolveStoredValue(targetKey);
         }
     };
 
@@ -58,6 +86,10 @@ export function useSettings() {
             saveStatus.value = 'saving';
             // 落盘到底层数据中
             await (lwStorage as any).set(storageKey, value, scope);
+            const legacyStorageKey = getLegacySettingsStorageKey(storageKey);
+            if (legacyStorageKey) {
+                await (lwStorage as any).set(legacyStorageKey, value, scope);
+            }
             showSaveSuccess();
         } catch (e) {
             showSaveFailed();
@@ -68,7 +100,7 @@ export function useSettings() {
         activeScopes[storageKey] = newScope;
         // 切换作用域后，我们可能需要重新拉取那个作用域下的值，或者维持现状并写入新底座
         // 此处逻辑：如果那个作用域下有独立值，拉取它；如果没有，拉取下钻的默认值
-        const explicitValue = (lwStorage as any).get(storageKey, newScope);
+        const explicitValue = resolveStoredValue(storageKey, newScope);
         if (explicitValue !== null && explicitValue !== undefined) {
             activeSettings[storageKey] = explicitValue;
         } else {
@@ -76,6 +108,10 @@ export function useSettings() {
             try {
                 saveStatus.value = 'saving';
                 await (lwStorage as any).set(storageKey, activeSettings[storageKey], newScope);
+                const legacyStorageKey = getLegacySettingsStorageKey(storageKey);
+                if (legacyStorageKey) {
+                    await (lwStorage as any).set(legacyStorageKey, activeSettings[storageKey], newScope);
+                }
                 showSaveSuccess();
             } catch (e) {
                 showSaveFailed();

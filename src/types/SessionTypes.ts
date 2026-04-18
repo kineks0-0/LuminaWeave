@@ -30,6 +30,9 @@ export interface ChatSessionRef {
     summary: string;
     previewMessage: string;
     activeLeafId: string | null;
+    characterId?: string | number | null;
+    characterName?: string;
+    characterAvatarUrl?: string | null;
 }
 
 export interface ChatSessionSnapshot {

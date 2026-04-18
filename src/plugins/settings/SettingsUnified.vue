@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-unified">
+  <div class="settings-unified" :style="unifiedSkinStyle">
     <!-- 对话同步与系统权限管理 -->
     <div class="plugin-settings-block permissions-block lw-card">
       <div class="block-header">
@@ -167,20 +167,77 @@
           <label class="radio-label active">
             <input type="radio" :checked="true" disabled />
             <div class="radio-text">
-              <span class="radio-title">独立 JSONL 剥离 (高级全栈模式)</span>
-              <span class="radio-sub">当前已强制开启。数据保存至后端 LuminaWeave 数据目录，支持 Timeline 回溯。</span>
+              <span class="radio-title">{{ storageState.title }}</span>
+              <span class="radio-sub">{{ storageState.sub }}</span>
             </div>
           </label>
         </div>
-        <div class="backup-actions" v-if="isIndependent">
-          <button class="lw-btn lw-btn-secondary" @click="downloadJson">
+      </div>
+    </div>
+
+    <!-- 备份与迁移控制台 -->
+    <div class="plugin-settings-block migration-block lw-card">
+      <div class="block-header">
+        <div class="block-title">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <span>备份与迁移</span>
+        </div>
+      </div>
+      <div class="block-content migration-content">
+        <div class="scope-selector">
+          <div class="scope-item">
+            <label class="lw-checkbox-label">
+              <input type="checkbox" v-model="migrationScope.apis" />
+              <span>API 接口配置</span>
+            </label>
+          </div>
+          <div class="scope-item">
+            <label class="lw-checkbox-label">
+              <input type="checkbox" v-model="migrationScope.presets" />
+              <span>Nexus 编排预设</span>
+            </label>
+          </div>
+          <div class="scope-item">
+            <label class="lw-checkbox-label">
+              <input type="checkbox" v-model="migrationScope.chat" />
+              <span>对话/流式过滤设置</span>
+            </label>
+          </div>
+          <div class="scope-item">
+            <label class="lw-checkbox-label">
+              <input type="checkbox" v-model="migrationScope.general" />
+              <span>系统常规偏好</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="migration-actions">
+          <button class="lw-btn lw-btn-primary lw-btn-small" @click="handleExport">
             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            备份本地 JSON
+            导出选定范围
           </button>
+          <div class="import-wrapper">
+            <button class="lw-btn lw-btn-secondary lw-btn-small" @click="triggerImport">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              导入配置
+            </button>
+            <input type="file" ref="importFileInput" style="display: none" accept=".json" @change="handleImportFile" />
+          </div>
+        </div>
+        <div class="migration-hint">
+          * 导入操作将根据选定范围覆盖当前配置，请谨慎操作。
         </div>
       </div>
     </div>
@@ -246,7 +303,7 @@
         </div>
         
         <!-- 2. 概览区设置 -->
-        <div class="dcc-section" style="margin-top: 16px; border-top: 1px dashed var(--lw-border-subtle); padding-top: 16px;">
+        <div class="dcc-section dcc-section-summary">
           <div class="dcc-section-label">概览发送范围 (Summary/Overview)</div>
           <SettingControl v-if="chatManifest['contextControl.summaryMode']"
             pluginId="lumina-chat" settingKey="contextControl.summaryMode" :config="chatManifest['contextControl.summaryMode']" />
@@ -259,16 +316,50 @@
         </div>
         
         <!-- 3. 进阶参数 -->
-        <div class="dcc-section" style="margin-top: 16px; padding-top: 8px; opacity: 0.8; background: var(--lw-bg-subtle); border-radius: var(--lw-radius-sm); padding: 10px;">
+        <div class="dcc-section dcc-section-advanced">
           <SettingControl v-if="chatManifest['contextControl.tokenMaxFloat']"
             pluginId="lumina-chat" settingKey="contextControl.tokenMaxFloat" :config="chatManifest['contextControl.tokenMaxFloat']" />
-          <div style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border-top: 1px dashed var(--lw-border-subtle); padding-top: 12px;">
+          <div class="dcc-paired-settings">
             <SettingControl v-if="directorManifest['fullSplit']"
               pluginId="lumina-director" settingKey="fullSplit" :config="directorManifest['fullSplit']" />
             <SettingControl v-if="directorManifest['fullFloating']"
               pluginId="lumina-director" settingKey="fullFloating" :config="directorManifest['fullFloating']" />
           </div>
         </div>
+      </div>
+    </div>
+
+    <div v-if="activeDesktopModeBlock" class="plugin-settings-block lw-card core-block desktop-mode-block">
+      <div class="block-header">
+        <div class="block-title">
+          <span class="plugin-icon-wrap" v-html="activeDesktopModeBlock.pluginIcon"></span>
+          <span>{{ activeDesktopModeBlock.pluginName }} - 桌面模式</span>
+        </div>
+        <button class="lw-btn lw-btn-ghost lw-btn-small" @click="$emit('open-detail', activeDesktopModeBlock.pluginId)">
+          模式详情
+          <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <div class="block-content">
+        <div class="engine-desc">
+          当前桌面模式提供的附加设置。这里的选项会直接影响当前桌面模式下的聊天流、侧栏、设置面板和时间线表现。
+        </div>
+        <div class="desktop-mode-shell-label">
+          当前壳层：{{ activeDesktopModeShellLabel }}
+        </div>
+        <div v-if="activeDesktopModeDescription" class="desktop-mode-summary">
+          {{ activeDesktopModeDescription }}
+        </div>
+        <SettingControl
+          v-for="key in activeDesktopModeBlock.commonKeys"
+          :key="key"
+          :pluginId="activeDesktopModeBlock.pluginId"
+          :settingKey="key"
+          :config="activeDesktopModeBlock.manifest[key]"
+        />
       </div>
     </div>
 
@@ -307,11 +398,17 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { pluginManager } from '../../core/PluginManager';
 import SettingControl from './SettingControl.vue';
 import NexusPresetManager from './NexusPresetManager.vue';
-import { useSettings } from './useSettings';
+import { activeSettings, useSettings } from './useSettings';
 import { lwStorage } from '../../api/storage';
 import { LuminaWeaveAPI } from '../../api/index';
+import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry';
+import { useComponentSkin } from '../../theme/useComponentSkin';
+import { getActiveDesktopModeIdFromSettings, getDesktopModeOrDefault, getDesktopModeSettingsPluginId } from '../../theme/themeRegistry';
 
 const { initSettings } = useSettings();
+const { cssVars } = useComponentSkin('settings.unified');
+const unifiedSkinStyle = computed(() => cssVars.value);
+const activeThemeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings));
 
 const openDetailedDiff = () => {
   (window as any).LuminaWeave?.openConflictViewer();
@@ -320,8 +417,113 @@ const openDetailedDiff = () => {
 defineEmits<{
   (e: 'open-detail', pluginId: string): void
 }>();
-
 const isIndependent = ref(lwStorage.useIndependentGlobalStorage);
+
+const storageState = computed(() => {
+  const isTauri = (window as any).__TAURITAVERN__;
+  if (isTauri) {
+    return {
+      title: '独立 JSON 存储 (TauriTavern 本地模式)',
+      sub: '当前由于检测到 Tauri 宿主环境已自动开启。数据持久化至应用程序目录，无需 LuminaServer 即可直接回溯与同步。'
+    };
+  }
+  return {
+    title: '独立 JSONL 剥离 (高级全栈模式)',
+    sub: '系统检测到全栈服务端模式已强制开启。数据保存至 LuminaServer 数据目录，支持高性能 Timeline 分支回溯。'
+  };
+});
+const migrationScope = ref({
+  apis: true,
+  presets: true,
+  chat: true,
+  general: true
+});
+
+const getKeysFromScope = () => {
+  const keys: string[] = [];
+  if (migrationScope.value.apis) keys.push('nexus.apis');
+  if (migrationScope.value.presets) keys.push('nexus.presets');
+  if (migrationScope.value.chat) {
+    keys.push('lumina-chat.filterChatReply', 'lumina-chat.allowTopLevelInFilter', 'lumina-chat.implicitThinkingInFilter', 'lumina-chat.aggressiveThinking', 'lumina-chat.unlimitedResponse');
+  }
+  if (migrationScope.value.general) {
+    keys.push('lumina-settings.thinkingDisplayMode', 'lumina-settings.thinkingAutoExpand', 'nexus.useSSE');
+  }
+  return keys;
+};
+
+const handleExport = () => {
+  const data: Record<string, any> = {};
+  const keys = getKeysFromScope();
+  
+  keys.forEach(key => {
+    const val = lwStorage.get(key, undefined, 'Global');
+    if (val !== undefined) data[key] = val;
+  });
+
+  if (Object.keys(data).length === 0) {
+    (window as any).LuminaWeave?.showToast('没有可导出的数据，请至少勾选一项。', 'warning');
+    return;
+  }
+
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+  const downloadAnchorNode = document.createElement('a');
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", `LuminaWeave_Backup_${new Date().toISOString().split('T')[0]}.json`);
+  document.body.appendChild(downloadAnchorNode);
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
+  (window as any).LuminaWeave?.showToast('配置导出成功！', 'success');
+};
+
+const importFileInput = ref<HTMLInputElement | null>(null);
+
+const triggerImport = () => {
+  importFileInput.value?.click();
+};
+
+const handleImportFile = (e: Event) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const content = event.target?.result as string;
+      const data = JSON.parse(content);
+      const keys = getKeysFromScope();
+      
+      const foundKeys = Object.keys(data).filter(k => keys.includes(k));
+      if (foundKeys.length === 0) {
+         (window as any).LuminaWeave?.showToast('所选文件不包含当前勾选范围内的任何有效配置。', 'warning');
+         return;
+      }
+
+      if (confirm(`检测到 ${foundKeys.length} 项有效配项，确定要导入并覆盖当前设置吗？`)) {
+        await (lwStorage as any).importData(data, foundKeys);
+        (window as any).LuminaWeave?.showToast('配置导入成功！', 'success');
+        // 刷新当前页面的响应式变量
+        refreshFromStorage();
+      }
+    } catch (err) {
+      console.error('[LuminaWeave] Import failed:', err);
+      (window as any).LuminaWeave?.showToast('导入失败：文件格式错误。', 'error');
+    } finally {
+      if (importFileInput.value) importFileInput.value.value = '';
+    }
+  };
+  reader.readAsText(file);
+};
+
+const refreshFromStorage = () => {
+  filterChatReply.value = lwStorage.get('lumina-chat.filterChatReply', false, 'Global');
+  allowTopLevelInFilter.value = lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global');
+  implicitThinkingInFilter.value = lwStorage.get('lumina-chat.implicitThinkingInFilter', false, 'Global');
+  aggressiveThinking.value = lwStorage.get('lumina-chat.aggressiveThinking', false, 'Global');
+  unlimitedResponse.value = lwStorage.get('lumina-chat.unlimitedResponse', false, 'Global');
+  thinkingDisplayMode.value = lwStorage.get('lumina-settings.thinkingDisplayMode', 'collapsible', 'Global');
+  thinkingAutoExpand.value = Boolean(lwStorage.get('lumina-settings.thinkingAutoExpand', true, 'Global'));
+};
 
 const downloadJson = () => {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify((lwStorage as any).globalIndependentData, null, 2));
@@ -528,46 +730,61 @@ const refreshLlmData = async () => {
 
 const onGenPresetChange = () => (window as any).LuminaWeave?.selectPreset(currentApi.value, activeGenPreset.value);
 
-const chatManifest = computed(() => (pluginManager as any).registeredSettings['lumina-chat'] || {});
-const directorManifest = computed(() => (pluginManager as any).registeredSettings['lumina-director'] || {});
+const chatManifest = computed(() => getSettingsEntry('lumina-chat')?.manifest || {});
+const directorManifest = computed(() => getSettingsEntry('lumina-director')?.manifest || {});
 // ==========================
 
 interface UnifiedBlock {
   pluginId: string;
   pluginName: string;
   pluginIcon: string;
+  kind: 'plugin' | 'desktop-mode';
   manifest: any;
   commonKeys: string[];
   hasMore: boolean;
   inlineComponent?: any;
 }
 
+const buildUnifiedBlock = (pluginId: string): UnifiedBlock | null => {
+  const entry = getSettingsEntry(pluginId);
+  if (!entry) return null;
+  const manifest = entry.manifest;
+  const commonKeys = Object.keys(manifest).filter(k => {
+    if (!manifest[k].common) return false;
+    if (pluginId === 'lumina-chat' && k.startsWith('contextControl.')) return false;
+    return true;
+  });
+  const hasMore = Object.keys(manifest).length > commonKeys.length;
+
+  if (commonKeys.length === 0 && !hasMore && !entry.settingsInlineComponent) {
+    return null;
+  }
+
+  return {
+    pluginId,
+    pluginName: entry.pluginName,
+    pluginIcon: entry.pluginIcon,
+    kind: entry.kind,
+    manifest,
+    commonKeys,
+    hasMore,
+    inlineComponent: entry.settingsInlineComponent
+  };
+};
+
+const activeDesktopModeBlock = computed(() => buildUnifiedBlock(getDesktopModeSettingsPluginId(activeThemeId.value)));
+const activeDesktopModeDescription = computed(() => getDesktopModeOrDefault(activeThemeId.value).description || '');
+const activeDesktopModeShellLabel = computed(() =>
+  getDesktopModeOrDefault(activeThemeId.value).shell.kind === 'freeform' ? '自由工作台' : '传统桌面'
+);
+
 const unifiedBlocks = computed(() => {
   const blocks: UnifiedBlock[] = [];
-  const registered = (pluginManager as any).registeredSettings;
-  Object.keys(registered).forEach(pluginId => {
-    const p = pluginManager.getPlugin(pluginId);
-    if (!p) return;
-
-    const manifest = registered[pluginId];
-    const commonKeys = Object.keys(manifest).filter(k => {
-      if (!manifest[k].common) return false;
-      // 过滤掉已手动提取并美化的 DCC 区块设置项
-      if (pluginId === 'lumina-chat' && k.startsWith('contextControl.')) return false;
-      return true;
-    });
-    const hasMore = Object.keys(manifest).length > commonKeys.length;
-
-    if (commonKeys.length > 0 || hasMore || p.settingsInlineComponent) {
-      blocks.push({
-        pluginId,
-        pluginName: p.name,
-        pluginIcon: p.icon,
-        manifest,
-        commonKeys,
-        hasMore,
-        inlineComponent: p.settingsInlineComponent
-      });
+  getVisibleSettingsEntries(activeThemeId.value).forEach(entry => {
+    if (entry.kind !== 'plugin') return;
+    const block = buildUnifiedBlock(entry.pluginId);
+    if (block) {
+      blocks.push(block);
     }
   });
   return blocks;
@@ -579,7 +796,7 @@ const unifiedBlocks = computed(() => {
   padding: var(--lw-panel-padding);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
-  gap: var(--lw-item-gap);
+  gap: var(--lw-settings-grid-gap, var(--lw-item-gap));
   background: transparent;
 }
 
@@ -594,10 +811,82 @@ const unifiedBlocks = computed(() => {
   padding-top: 4px;
 }
 
+.migration-content {
+  gap: 16px;
+}
+
+.scope-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  background: var(--lw-bg-subtle);
+  padding: 12px;
+  border-radius: var(--lw-radius-sm);
+  border: 1px solid var(--lw-border-subtle);
+}
+
+.lw-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--lw-text-main);
+  cursor: pointer;
+}
+
+.lw-checkbox-label input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--lw-primary);
+}
+
+.migration-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.import-wrapper {
+  position: relative;
+}
+
+.migration-hint {
+  font-size: 11px;
+  color: var(--lw-text-muted);
+  font-style: italic;
+}
+
 /* 设置项 card 不需要跟交互卡片一样的悬浮抬升 */
 .plugin-settings-block.lw-card:hover {
   box-shadow: none;
   border-color: var(--lw-border-base);
+}
+
+.desktop-mode-block {
+  background: var(--lw-settings-block-bg, color-mix(in srgb, var(--lw-bg-elevated) 96%, transparent));
+  border-color: var(--lw-settings-block-border, var(--lw-border-base));
+}
+
+.desktop-mode-shell-label {
+  width: fit-content;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--lw-border-subtle);
+  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
+  color: var(--lw-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.desktop-mode-summary {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--lw-bg-subtle) 94%, transparent);
+  border: 1px solid var(--lw-border-subtle);
+  color: var(--lw-text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .block-header {
@@ -888,11 +1177,12 @@ const unifiedBlocks = computed(() => {
 
 .setting-item {
   display: flex;
+  flex-wrap: wrap; /* 允许在空间极窄时换行 */
   justify-content: space-between;
   align-items: flex-start;
   padding: 16px 0;
   border-bottom: 1px solid var(--lw-border-subtle);
-  gap: 24px; /* 增大间距，防止文字紧贴开关 */
+  gap: 12px 24px; /* 纵向和横向间距 */
 }
 
 .setting-item:last-child {
@@ -903,7 +1193,7 @@ const unifiedBlocks = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1;
+  flex: 1 1 auto; /* 恢复自由缩放 */
   min-width: 0;
   cursor: pointer;
 }
@@ -913,6 +1203,7 @@ const unifiedBlocks = computed(() => {
   font-weight: 600;
   color: var(--lw-text-main);
   line-height: 1.5;
+  min-width: 120px; /* 防止在窄屏下被挤压导致文字垂直堆叠 */
 }
 
 .label-desc {
@@ -929,6 +1220,7 @@ const unifiedBlocks = computed(() => {
 .thinking-mode-select {
   min-width: 160px;
   margin-top: 4px;
+  flex-shrink: 0; /* 禁止下拉框被压缩 */
 }
 
 /* Radio Group styling */
@@ -940,6 +1232,36 @@ const unifiedBlocks = computed(() => {
   flex: 1;
   min-width: 0;
 }
+
+.dcc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dcc-section-summary {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--lw-border-subtle);
+}
+
+.dcc-section-advanced {
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
+  border: 1px solid var(--lw-border-subtle);
+  border-radius: 18px;
+}
+
+.dcc-paired-settings {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--lw-border-subtle);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+}
+
 .dcc-section-label {
   font-size: 11px;
   font-weight: 700;
@@ -958,5 +1280,25 @@ const unifiedBlocks = computed(() => {
   background: var(--lw-border-subtle);
   margin-left: 10px;
   opacity: 0.5;
+}
+
+@media (max-width: 920px) {
+  .sync-meta,
+  .scope-selector,
+  .dcc-paired-settings {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .migration-actions,
+  .sync-actions {
+    flex-wrap: wrap;
+  }
+
+  .block-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
 }
 </style>

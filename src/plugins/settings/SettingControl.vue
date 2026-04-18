@@ -1,10 +1,16 @@
 <template>
-  <div v-if="isVisible" class="setting-row" :class="isVerticalLayout ? 'layout-vertical' : 'layout-horizontal'">
+  <div
+    v-if="isVisible"
+    class="setting-row"
+    :class="isVerticalLayout ? 'layout-vertical' : 'layout-horizontal'"
+    :data-skin-variant="settingsControlVariant || 'default'"
+    :style="settingControlStyle"
+  >
     <div class="setting-left">
       <div class="label-row">
         <label class="setting-label">{{ config.label }}</label>
-        <div class="setting-scope" v-if="config.allowedScopes && config.allowedScopes.length > 1">
-          <select v-model="currentScope" @change="onScopeChange">
+        <div v-if="hasScopeSelector" class="setting-meta-control setting-scope">
+          <select class="scope-select compact-scope" v-model="currentScope" @change="onScopeChange" aria-label="设置作用域" title="作用域">
             <option v-for="scope in config.allowedScopes" :key="scope" :value="scope">
               {{ scopeLabels[scope] || scope }}
             </option>
@@ -15,111 +21,113 @@
     </div>
 
     <div class="setting-options" :class="controlClass">
-      <!-- Theme Color Buttons -->
-      <template v-if="config.type === 'theme'">
-        <button v-for="theme in themes" :key="theme.value" class="color-btn"
-          :class="{ active: currentValue === theme.value }" :style="{ background: theme.color }"
-          @click="updateValue(theme.value)">
-          <!-- 深色主题用白色勾，浅色主题用深色勾 -->
-          <svg v-if="currentValue === theme.value" viewBox="0 0 24 24" width="13" height="13"
-            :stroke="theme.value === 'dark' ? '#fff' : '#1e293b'" stroke-width="2.5" fill="none">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </button>
-      </template>
+      <div class="setting-control-body" :class="controlBodyClass">
+        <!-- Theme Color Buttons -->
+        <template v-if="config.type === 'theme'">
+          <button v-for="theme in themes" :key="theme.value" class="color-btn"
+            :class="{ active: currentValue === theme.value }" :style="{ background: theme.color }"
+            @click="updateValue(theme.value)">
+            <!-- 深色主题用白色勾，浅色主题用深色勾 -->
+            <svg v-if="currentValue === theme.value" viewBox="0 0 24 24" width="13" height="13"
+              :stroke="theme.value === 'dark' ? '#fff' : '#1e293b'" stroke-width="2.5" fill="none">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </button>
+        </template>
 
-      <!-- Options (Segmented Control) -->
-      <template v-else-if="config.type === 'options'">
-        <template v-if="settingKey === 'fontFamily'">
-          <div class="font-selector-wrap">
-            <select class="lw-select font-preset-select" :value="isRemoteOrCustom ? 'remote' : currentValue"
-              @change="handleFontPresetChange">
-              <option v-for="opt in config.options" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-              <option value="remote">★ 探索远端字体</option>
-            </select>
-
-            <div v-if="isRemoteOrCustom" class="remote-font-picker slide-down">
-              <select class="lw-select" :value="currentValue" @change="handleRemoteFontChange">
-                <option value="" disabled>请选择一个远端字体...</option>
-                <option v-for="font in remoteFonts" :key="font.id" :value="font.family">
-                  {{ font.label }}
-                </option>
-                <option value="__custom__">-- 手动输入其他字体 --</option>
+        <!-- Options (Segmented Control) -->
+        <template v-else-if="config.type === 'options'">
+          <template v-if="settingKey === 'fontFamily'">
+            <div class="font-selector-wrap">
+              <select class="lw-select font-preset-select" :value="isRemoteOrCustom ? 'remote' : currentValue"
+                @change="handleFontPresetChange">
+                <option v-for="opt in resolvedOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                <option value="remote">★ 探索远端字体</option>
               </select>
 
-              <div v-if="currentValue === '__custom__' || isTrulyCustom" class="font-custom-input">
-                <input type="text" class="lw-input" :value="isTrulyCustom ? currentValue : ''"
-                  placeholder="输入字体名称 (如 MiSans)..." @input="handleInput" />
-              </div>
+              <div v-if="isRemoteOrCustom" class="remote-font-picker slide-down">
+                <select class="lw-select" :value="currentValue" @change="handleRemoteFontChange">
+                  <option value="" disabled>请选择一个远端字体...</option>
+                  <option v-for="font in remoteFonts" :key="font.id" :value="font.family">
+                    {{ font.label }}
+                  </option>
+                  <option value="__custom__">-- 手动输入其他字体 --</option>
+                </select>
 
-              <div class="font-preview-card" :style="{ fontFamily: currentValue }">
-                Aa 漫步在云端 - The quick brown fox jumps over the lazy dog.
+                <div v-if="currentValue === '__custom__' || isTrulyCustom" class="font-custom-input">
+                  <input type="text" class="lw-input" :value="isTrulyCustom ? currentValue : ''"
+                    placeholder="输入字体名称 (如 MiSans)..." @input="handleInput" />
+                </div>
+
+                <div class="font-preview-card" :style="{ fontFamily: currentValue }">
+                  Aa 漫步在云端 - The quick brown fox jumps over the lazy dog.
+                </div>
               </div>
             </div>
-          </div>
-        </template>
-        <template v-else>
-          <div class="segment-control-container">
-            <div class="segment-control">
-              <button v-for="opt in config.options" :key="opt.value" :class="{ active: currentValue === opt.value }"
-                @click="updateValue(opt.value)">
-                {{ opt.label }}
-              </button>
-            </div>
-            <!-- 展现选中项的详细描述 -->
-            <transition name="fade-slide">
-              <div v-if="activeOptionDescription" class="option-description-tip">
-                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="16" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-                {{ activeOptionDescription }}
+          </template>
+          <template v-else>
+            <div class="segment-control-container">
+              <div class="segment-control">
+                <button v-for="opt in resolvedOptions" :key="opt.value" :class="{ active: currentValue === opt.value }"
+                  @click="updateValue(opt.value)">
+                  {{ opt.label }}
+                </button>
               </div>
-            </transition>
+              <!-- 展现选中项的详细描述 -->
+              <transition name="fade-slide">
+                <div v-if="activeOptionDescription" class="option-description-tip">
+                  <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                  </svg>
+                  {{ activeOptionDescription }}
+                </div>
+              </transition>
+            </div>
+          </template>
+        </template>
+
+        <!-- Boolean (Toggle Switch) -->
+        <template v-else-if="config.type === 'boolean'">
+          <label class="lw-toggle">
+            <input type="checkbox" :checked="currentValue" @change="handleCheckbox">
+            <span class="lw-toggle-slider"></span>
+          </label>
+        </template>
+
+        <!-- Stepper (LuminaStepper) 通用步进器 -->
+        <template v-else-if="config.type === 'stepper'">
+          <LuminaStepper :modelValue="currentValue" :min="config.min" :max="config.max" :step="config.step"
+            @update:modelValue="updateValue" />
+        </template>
+
+        <!-- Slider -->
+        <template v-else-if="config.type === 'slider'">
+          <div class="slider-wrapper">
+            <input type="range" :min="config.min" :max="config.max" :step="config.step" :value="currentValue"
+              @input="handleRange" class="lw-slider-input" />
+            <input type="number" :min="config.min" :max="config.max" :step="config.step" :value="currentValue"
+              @input="handleNumberInput" class="slider-number-input" />
           </div>
         </template>
-      </template>
 
-      <!-- Boolean (Toggle Switch) -->
-      <template v-else-if="config.type === 'boolean'">
-        <label class="lw-toggle">
-          <input type="checkbox" :checked="currentValue" @change="handleCheckbox">
-          <span class="lw-toggle-slider"></span>
-        </label>
-      </template>
+        <!-- Nexus Select -->
+        <template v-else-if="config.type === 'nexus-select'">
+          <select class="lw-select" :value="currentValue" @change="handleSelect">
+            <option value="">未指定 (使用 ST 全局模型)</option>
+            <option v-for="preset in availableNexusPresets" :key="preset.id" :value="preset.id">
+              ★ {{ preset.name }}
+            </option>
+          </select>
+        </template>
 
-      <!-- Stepper (LuminaStepper) 通用步进器 -->
-      <template v-else-if="config.type === 'stepper'">
-        <LuminaStepper :modelValue="currentValue" :min="config.min" :max="config.max" :step="config.step"
-          @update:modelValue="updateValue" />
-      </template>
-
-      <!-- Slider -->
-      <template v-else-if="config.type === 'slider'">
-        <div class="slider-wrapper">
-          <input type="range" :min="config.min" :max="config.max" :step="config.step" :value="currentValue"
-            @input="handleRange" class="lw-slider-input" />
-          <input type="number" :min="config.min" :max="config.max" :step="config.step" :value="currentValue"
-            @input="handleNumberInput" class="slider-number-input" />
-        </div>
-      </template>
-
-      <!-- Nexus Select -->
-      <template v-else-if="config.type === 'nexus-select'">
-        <select class="lw-select" :value="currentValue" @change="handleSelect">
-          <option value="">未指定 (使用 ST 全局模型)</option>
-          <option v-for="preset in availableNexusPresets" :key="preset.id" :value="preset.id">
-            ★ {{ preset.name }}
-          </option>
-        </select>
-      </template>
-
-      <!-- Text Input -->
-      <template v-else-if="config.type === 'text'">
-        <input type="text" class="lw-input" :value="currentValue" @input="handleInput"
-          :placeholder="config.default || '请输入...'" />
-      </template>
+        <!-- Text Input -->
+        <template v-else-if="config.type === 'text'">
+          <input type="text" class="lw-input" :value="currentValue" @input="handleInput"
+            :placeholder="config.default || '请输入...'" />
+        </template>
+      </div>
     </div>
   </div>
 </template>
@@ -129,8 +137,10 @@ import { computed } from 'vue';
 import { activeSettings, activeScopes, useSettings } from './useSettings';
 import { lwStorage } from '../../api/storage';
 import LuminaStepper from './LuminaStepper.vue';
+import { useComponentSkin } from '../../theme/useComponentSkin';
 
 const { updateSetting, updateScope } = useSettings();
+const { cssVars: settingsControlSkinVars, variant: settingsControlVariant } = useComponentSkin('settings.control');
 
 interface SettingOption {
   value: any;
@@ -138,13 +148,15 @@ interface SettingOption {
   description?: string; // 选项级详细描述
 }
 
+type SettingOptionsResolver = SettingOption[] | (() => SettingOption[]);
+
 interface SettingConfig {
   label: string;
   description?: string;
   type: 'theme' | 'options' | 'boolean' | 'stepper' | 'slider' | 'nexus-select' | 'text';
   default: any;
   allowedScopes?: string[];
-  options?: SettingOption[];
+  options?: SettingOptionsResolver;
   min?: number;
   max?: number;
   step?: number;
@@ -179,12 +191,20 @@ const isVisible = computed(() => {
   return true;
 });
 
+const resolvedOptions = computed<SettingOption[]>(() => {
+  if (!props.config.options) return [];
+  return typeof props.config.options === 'function'
+    ? props.config.options()
+    : props.config.options;
+});
+
 // 计算当前激活选项的描述文字
 const activeOptionDescription = computed(() => {
-  if (!props.config.options) return null;
-  const opt = props.config.options.find(o => o.value === currentValue.value);
+  const opt = resolvedOptions.value.find(o => o.value === currentValue.value);
   return opt?.description || null;
 });
+
+const hasScopeSelector = computed(() => Boolean(props.config.allowedScopes && props.config.allowedScopes.length > 1));
 
 const scopeLabels: Record<string, string> = {
   Global: '全局',
@@ -206,9 +226,16 @@ const isVerticalLayout = computed(() =>
 const controlClass = computed(() => {
   const classes = [];
   if (props.config.type === 'theme') classes.push('theme-options');
-  if (props.config.type === 'options') classes.push('btn-group wrap');
   if (props.config.type === 'stepper') classes.push('stepper-control');
   if (isVerticalLayout.value) classes.push('full-width');
+  return classes.join(' ');
+});
+
+const controlBodyClass = computed(() => {
+  const classes = [];
+  if (props.config.type === 'theme') classes.push('theme-options');
+  if (props.config.type === 'options') classes.push('options-control');
+  if (props.config.type === 'stepper') classes.push('stepper-body');
   return classes.join(' ');
 });
 
@@ -221,21 +248,13 @@ const themes = [
   { value: 'dark', color: '#1e293b' }
 ];
 
-// 从 config.label 中提取首个大写字母作为步进器按钮前缀（如 A- / A+）
-const stepperChar = computed(() => {
-  const label = props.config.label || '';
-  // 优先取括号内缩写，否则取第一个汉字或首字母
-  const abbr = label.match(/[A-Z]/);
-  return abbr ? abbr[0] : 'A';
-});
-
 const remoteFonts = computed(() => {
   return (window as any).LuminaWeave?.fontManager?.getFontCatalog() || [];
 });
 
 const isRemoteOrCustom = computed(() => {
   if (props.settingKey !== 'fontFamily') return false;
-  const standardValues = (props.config.options || []).map(o => o.value);
+  const standardValues = resolvedOptions.value.map(o => o.value);
   return !standardValues.includes(currentValue.value);
 });
 
@@ -309,13 +328,16 @@ const onScopeChange = (e: Event) => {
   const target = e.target as HTMLSelectElement;
   updateScope(storageKey.value, target.value);
 };
+
+const settingControlStyle = computed(() => settingsControlSkinVars.value);
 </script>
 
 
 <style scoped>
 .setting-row {
   display: flex;
-  gap: 12px 24px;
+  flex-wrap: wrap; /* 允许在窄屏时换行 */
+  gap: 8px 16px;
   padding: 14px 0;
   border-bottom: 1px solid var(--lw-border-base);
   transition: var(--lw-transition);
@@ -327,14 +349,12 @@ const onScopeChange = (e: Event) => {
 
 /* 水平排版：开关类控件（标签左，控件右） */
 .setting-row.layout-horizontal {
-  flex-direction: row;
   align-items: center;
-  justify-content: space-between;
 }
 
 /* 水平排版悬停时给予轻微背景反馈 */
 .setting-row.layout-horizontal:hover {
-  background: var(--lw-bg-hover);
+  background: var(--lw-setting-row-hover-bg, var(--lw-bg-hover));
   margin-left: -12px;
   margin-right: -12px;
   padding-left: 12px;
@@ -345,16 +365,14 @@ const onScopeChange = (e: Event) => {
 
 /* 垂直排版：复杂控件（标签上，控件下） */
 .setting-row.layout-vertical {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
+  align-items: flex-start;
 }
 
 .setting-left {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1;
+  flex: 1; /* 恢复为自由伸缩，不再强制 180px 基础宽度 */
   min-width: 0;
 }
 
@@ -368,8 +386,10 @@ const onScopeChange = (e: Event) => {
 
 .label-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 /* 水平布局：正常标签样式 */
@@ -379,6 +399,7 @@ const onScopeChange = (e: Event) => {
   font-weight: 500;
   line-height: 1.5;
   letter-spacing: -0.01em;
+  min-width: 120px; /* 防止在窄屏下被挤压导致文字垂直堆叠 */
 }
 
 /* 垂直布局：高对比度小标题样式（取消大写，提高可读性） */
@@ -396,40 +417,23 @@ const onScopeChange = (e: Event) => {
   line-height: 1.6;
 }
 
-/* 作用域选择器 */
-.setting-scope select {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: var(--lw-radius-sm);
-  border: 1px solid var(--lw-border-base) !important;
-  background-color: var(--lw-bg-subtle) !important;
-  color: var(--lw-text-secondary) !important;
-  outline: none;
-  cursor: pointer;
-  height: 20px;
-  transition: var(--lw-transition);
-}
-
-.setting-scope select:hover {
-  border-color: #94a3b8 !important;
-  color: var(--lw-text-main) !important;
-}
-
 /* 控件容器 */
 .setting-options {
   display: flex;
-  gap: 10px;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: flex-start;
   min-width: 0;
 }
 
 .layout-horizontal .setting-options {
   justify-content: flex-end;
-  flex-shrink: 0;
+  flex: 0 1 auto;
 }
 
 .layout-vertical .setting-options {
   justify-content: flex-start;
+  align-items: stretch;
   width: 100%;
 }
 
@@ -437,9 +441,85 @@ const onScopeChange = (e: Event) => {
   width: 100%;
 }
 
-.setting-options.full-width> :not(.color-btn) {
+.setting-meta-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+
+.scope-select,
+.setting-control-body .lw-select,
+.setting-control-body .lw-input {
+  min-height: 36px;
+  border-radius: 18px;
+  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
+  color: var(--lw-text-main);
+  transition: var(--lw-transition);
+}
+
+.scope-select {
+  min-height: 32px;
+  width: 88px;
+  min-width: 88px;
+  max-width: 88px;
+  padding: 0 32px 0 12px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--lw-text-secondary);
+  outline: none;
+  cursor: pointer;
+}
+
+.compact-scope {
+  min-height: 30px;
+  width: 84px;
+  min-width: 84px;
+  max-width: 84px;
+  padding-inline: 10px 28px;
+  border-radius: 15px;
+}
+
+.scope-select:hover,
+.setting-control-body .lw-select:hover,
+.setting-control-body .lw-input:hover {
+  border-color: var(--lw-setting-control-border, var(--lw-border-base));
+  background: var(--lw-bg-hover);
+}
+
+.scope-select:focus,
+.setting-control-body .lw-select:focus,
+.setting-control-body .lw-input:focus {
+  border-color: var(--lw-primary);
+  box-shadow: 0 0 0 3px rgba(92, 139, 246, 0.12);
+  background: var(--lw-setting-control-active-bg, var(--lw-bg-surface));
+}
+
+.setting-control-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.layout-horizontal .setting-control-body {
+  justify-content: flex-end;
+}
+
+.layout-vertical .setting-control-body {
+  width: 100%;
+}
+
+.setting-options.full-width > .setting-control-body {
   width: 100%;
   max-width: 100%;
+}
+
+.setting-control-body.options-control,
+.setting-control-body.theme-options {
+  width: 100%;
 }
 
 /* ---- Segment Control ---- */
@@ -451,23 +531,26 @@ const onScopeChange = (e: Event) => {
 }
 
 .segment-control {
-  background: var(--lw-bg-subtle);
-  border-radius: var(--lw-radius-sm);
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
+  border-radius: 18px;
   padding: 2px;
   display: flex;
   gap: 2px;
-  border: 1px solid var(--lw-border-base);
+  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
   flex-wrap: wrap;
+  min-height: 36px;
+  align-items: stretch;
 }
 
 .segment-control button {
   background: transparent;
   border: none;
-  padding: 5px 12px;
-  border-radius: 6px;
+  padding: 0 14px;
+  min-height: 32px;
+  border-radius: 16px;
   color: var(--lw-text-secondary);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: var(--lw-transition);
   white-space: nowrap;
@@ -475,28 +558,27 @@ const onScopeChange = (e: Event) => {
 }
 
 .segment-control button.active {
-  background: var(--lw-bg-surface);
+  background: var(--lw-setting-control-active-bg, var(--lw-bg-surface));
   color: var(--lw-text-main);
-  box-shadow: var(--lw-shadow);
-  border: 1px solid var(--lw-border-base);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .segment-control button:hover:not(.active) {
   color: var(--lw-text-main);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--lw-bg-active);
 }
 
 .option-description-tip {
   font-size: 11px;
   color: var(--lw-text-muted);
-  background: var(--lw-bg-subtle);
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
   padding: 6px 10px;
   border-radius: 6px;
   display: flex;
   align-items: center;
   gap: 6px;
   line-height: 1.4;
-  border-left: 2px solid var(--lw-accent);
+  border-left: 2px solid var(--lw-setting-tip-border, var(--lw-primary));
   animation: slide-in-top 0.2s ease-out;
 }
 
@@ -529,8 +611,8 @@ const onScopeChange = (e: Event) => {
 }
 
 .color-btn {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
@@ -548,71 +630,43 @@ const onScopeChange = (e: Event) => {
 }
 
 .color-btn.active {
-  transform: scale(1.12);
+  transform: scale(1.08);
   box-shadow: 0 0 0 2px var(--lw-bg-surface), 0 0 0 4px rgba(0, 0, 0, 0.25);
   border-color: transparent;
 }
 
-/* ---- Stepper — A- / A+ 胶弹形标签步进器 ---- */
-.stepper-wrap {
-  display: inline-flex;
+.stepper-control {
   align-items: center;
-  background: var(--lw-bg-subtle);
-  border-radius: 100px;
-  /* 胶弹形 */
-  border: 1px solid var(--lw-border-base);
-  overflow: hidden;
 }
 
-.stepper-btn {
-  padding: 8px 16px;
-  background: transparent;
-  border: none;
-  color: var(--lw-text-secondary);
-  font-size: 13px;
+.stepper-control .setting-control-body {
+  width: auto;
+}
+
+.stepper-body {
+  flex: 0 0 auto;
+}
+
+.setting-control-body :deep(.lw-stepper) {
+  flex: 0 0 auto;
+}
+
+.setting-control-body :deep(.lw-select) {
+  width: 100%;
+  padding: 0 40px 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.setting-control-body :deep(.lw-input) {
+  width: 100%;
+  padding: 0 14px;
+  font-size: 12px;
   font-weight: 500;
-  cursor: pointer;
-  transition: var(--lw-transition);
-  white-space: nowrap;
-  line-height: 1;
-  font-family: inherit;
-  width: 60px;
-  min-width: 10px;
 }
 
-.stepper-btn:hover {
-  background: var(--lw-bg-active);
-  color: var(--lw-text-main);
-}
-
-.stepper-btn:active {
-  transform: scale(0.96);
-}
-
-/* 当前数值展示 (可点击修改) */
-.stepper-val-input {
-  min-width: 52px;
-  width: 50px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-  background: transparent;
-  border: none;
-  /* border-left: 1px solid var(--lw-border-base);
-  border-right: 1px solid var(--lw-border-base); */
-  outline: none;
-  font-family: inherit;
-  padding: 8px 0;
-  margin: 0;
-  -moz-appearance: textfield;
-  appearance: none;
-}
-
-.stepper-val-input::-webkit-outer-spin-button,
-.stepper-val-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+.font-preset-select {
+  width: 100%;
 }
 
 /* ---- Slider ---- */
@@ -626,7 +680,7 @@ const onScopeChange = (e: Event) => {
 .lw-slider-input {
   flex: 1;
   height: 6px;
-  background: #f1f5f9;
+  background: var(--lw-setting-slider-track, #f1f5f9);
   border-radius: 99px;
   appearance: none;
   outline: none;
@@ -652,20 +706,20 @@ const onScopeChange = (e: Event) => {
 .slider-number-input {
   width: 58px;
   padding: 6px 8px;
-  border: 1px solid var(--lw-border-base);
+  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
   border-radius: var(--lw-radius-sm);
   font-size: 12px;
   font-weight: 600;
   color: var(--lw-text-main);
   text-align: center;
-  background: var(--lw-bg-subtle);
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
   transition: var(--lw-transition);
   outline: none;
   font-family: inherit;
 }
 
 .slider-number-input:focus {
-  background: var(--lw-bg-surface);
+  background: var(--lw-setting-control-active-bg, var(--lw-bg-surface));
   border-color: var(--lw-accent);
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
 }
@@ -683,15 +737,15 @@ const onScopeChange = (e: Event) => {
   flex-direction: column;
   gap: 12px;
   padding: 14px;
-  background: var(--lw-bg-subtle);
-  border: 1px solid var(--lw-border-base);
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
+  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
   border-radius: var(--lw-radius-sm);
 }
 
 .font-preview-card {
   padding: 16px 20px;
-  background: var(--lw-bg-surface);
-  border: 1px solid var(--lw-border-base);
+  background: var(--lw-setting-control-active-bg, var(--lw-bg-surface));
+  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
   border-radius: var(--lw-radius-sm);
   font-size: 15px;
   color: var(--lw-text-main);
@@ -701,6 +755,21 @@ const onScopeChange = (e: Event) => {
   justify-content: center;
   text-align: center;
   box-shadow: var(--lw-shadow);
+}
+
+.setting-row[data-skin-variant='discord'] .segment-control {
+  border-radius: 14px;
+}
+
+.setting-row[data-skin-variant='discord'] .segment-control button {
+  border-radius: 12px;
+}
+
+.setting-row[data-skin-variant='discord'] .scope-select,
+.setting-row[data-skin-variant='discord'] .setting-control-body .lw-select,
+.setting-row[data-skin-variant='discord'] .setting-control-body .lw-input,
+.setting-row[data-skin-variant='discord'] .slider-number-input {
+  border-radius: 12px;
 }
 
 /* ---- Animations ---- */
@@ -717,6 +786,17 @@ const onScopeChange = (e: Event) => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .layout-horizontal .setting-options {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .stepper-control .setting-control-body {
+    justify-content: flex-start;
   }
 }
 </style>

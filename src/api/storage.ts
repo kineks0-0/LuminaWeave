@@ -115,6 +115,32 @@ export class StorageCore extends LuminaWeaveAPIBase {
     }
 
     /**
+     * 导入指定的全局配置项
+     * @param data 要导入的数据对象
+     * @param selectedKeys 选中的键名列表
+     */
+    public async importData(data: Record<string, any>, selectedKeys: string[]): Promise<void> {
+        if (!data || typeof data !== 'object') {
+            throw new Error('Invalid data format');
+        }
+
+        let changed = false;
+        for (const key of selectedKeys) {
+            if (data[key] !== undefined) {
+                // 如果是对象或数组，进行深度拷贝
+                this.globalIndependentData[key] = JSON.parse(JSON.stringify(data[key]));
+                changed = true;
+                this.emit(key, this.globalIndependentData[key], 'Global');
+            }
+        }
+
+        if (changed) {
+            this.emit('*', null, 'Global');
+            await this.flush();
+        }
+    }
+
+    /**
      * 防抖版的独立持久化方法
      */
     private _saveIndependentGlobalDataDebounced(): Promise<void> {

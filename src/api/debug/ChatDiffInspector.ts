@@ -167,6 +167,10 @@ function computeDiffTypes(local: ChatMessageSnapshot, st: ChatMessageSnapshot, i
     return diffTypes;
 }
 
+function hasActionableDiff(diffTypes: ChatDiffType[]): boolean {
+    return diffTypes.some(type => type !== 'low_confidence_match');
+}
+
 export class ChatDiffInspector {
     public static analyze(localChat: LuminaChatMessage[], stChat: LuminaChatMessage[]): ChatDiffReport {
         const localSnapshots: ChatMessageSnapshot[] = localChat.map((m, i) => buildSnapshot('lumina', i, m).snapshot);
@@ -281,22 +285,22 @@ export class ChatDiffInspector {
             }
         }
 
-        const maxLen = Math.max(localSnapshots.length, stSnapshots.length);
-        let divergenceIndex = -1;
-        for (let i = 0; i < maxLen; i++) {
-            const l = localSnapshots[i];
-            const s = stSnapshots[i];
-            if (!l || !s || l.id !== s.id) {
-                divergenceIndex = i;
+        let firstMismatchIndex = -1;
+        for (let i = 0; i < items.length; i++) {
+            const d = items[i].diffTypes;
+            if (hasActionableDiff(d)) {
+                firstMismatchIndex = items[i].indexHint;
                 break;
             }
         }
 
-        let firstMismatchIndex = -1;
-        for (let i = 0; i < items.length; i++) {
-            const d = items[i].diffTypes;
-            if (d.length > 0 && !(d.length === 1 && d[0] === 'low_confidence_match')) {
-                firstMismatchIndex = items[i].indexHint;
+        let divergenceIndex = -1;
+        for (const item of items) {
+            const hasLocalOnly = item.diffTypes.includes('local_only');
+            const hasStOnly = item.diffTypes.includes('st_only');
+            const hasIdBackedMismatch = !!item.lumina && !!item.st && item.lumina.id !== item.st.id && hasActionableDiff(item.diffTypes);
+            if (hasLocalOnly || hasStOnly || hasIdBackedMismatch) {
+                divergenceIndex = item.indexHint;
                 break;
             }
         }

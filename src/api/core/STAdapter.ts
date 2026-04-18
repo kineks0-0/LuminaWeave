@@ -16,6 +16,53 @@ export interface DiffResult {
 }
 
 export class STAdapter {
+    private static isComparableStateEqual(left: any, right: any): boolean {
+        return (
+            left.fingerprint === right.fingerprint
+            && left.stFingerprint === right.stFingerprint
+            && STProtocol.normalize(left.name) === STProtocol.normalize(right.name)
+            && STProtocol.normalize(left.role) === STProtocol.normalize(right.role)
+            && (!!left.is_hidden) === (!!right.is_hidden)
+        );
+    }
+
+    private static collectSemanticNoopPairs(localOnly: any[], stOnly: any[]): { localIds: Set<string>; stIds: Set<string> } {
+        const localIds = new Set<string>();
+        const stIds = new Set<string>();
+        const stBuckets = new Map<string, any[]>();
+
+        for (const item of stOnly) {
+            const key = [
+                item.fingerprint ?? '',
+                item.stFingerprint ?? '',
+                STProtocol.normalize(item.name),
+                STProtocol.normalize(item.role),
+                item.is_hidden ? '1' : '0'
+            ].join('|');
+            const bucket = stBuckets.get(key) ?? [];
+            bucket.push(item);
+            stBuckets.set(key, bucket);
+        }
+
+        for (const item of localOnly) {
+            const key = [
+                item.fingerprint ?? '',
+                item.stFingerprint ?? '',
+                STProtocol.normalize(item.name),
+                STProtocol.normalize(item.role),
+                item.is_hidden ? '1' : '0'
+            ].join('|');
+            const bucket = stBuckets.get(key);
+            if (!bucket?.length) continue;
+            const match = bucket.shift();
+            if (!match) continue;
+            localIds.add(item.id);
+            stIds.add(match.id);
+        }
+
+        return { localIds, stIds };
+    }
+
     /**
      * 比较本地状态和 ST 状态
      */
@@ -78,20 +125,35 @@ export class STAdapter {
         }
 
         const swipeBranchSwitches = this.collectSwipeBranchSwitches(localSequence, stSequence);
-        const luminaOriginatedUpdates = updated.filter(u => !u._isSTEdit && !u._isSwipeBranchSwitch);
-        const effectiveOnlyInIndependent = onlyInIndependent.filter(item => !swipeBranchSwitches.localIds.has(item.id));
-        const effectiveOnlyInST = onlyInST.filter(item => !swipeBranchSwitches.stIds.has(item.id));
+        const semanticNoopPairs = this.collectSemanticNoopPairs(onlyInIndependent, onlyInST);
+        const effectiveUpdated = updated.filter(u => !u._isSwipeBranchSwitch);
+        const luminaOriginatedUpdates = effectiveUpdated.filter(u => !u._isSTEdit);
+        const effectiveOnlyInIndependent = onlyInIndependent.filter(
+            item => !swipeBranchSwitches.localIds.has(item.id) && !semanticNoopPairs.localIds.has(item.id)
+        );
+        const effectiveOnlyInST = onlyInST.filter(
+            item => !swipeBranchSwitches.stIds.has(item.id) && !semanticNoopPairs.stIds.has(item.id)
+        );
+        const effectiveDiffCount = effectiveOnlyInIndependent.length + effectiveOnlyInST.length + effectiveUpdated.length;
+        const hasStructuralDiff = effectiveDiffCount > 0
+            ? localSequence.some((left, index) => {
+                const right = stSequence[index];
+                if (!left || !right) return true;
+                if (left.id === right.id) return false;
+                return !this.isComparableStateEqual(left, right);
+            }) || localSequence.length !== stSequence.length
+            : false;
 
         return {
-            onlyInIndependent,
-            onlyInST,
-            updated,
+            onlyInIndependent: effectiveOnlyInIndependent,
+            onlyInST: effectiveOnlyInST,
+            updated: effectiveUpdated,
             independentSequence: localSequence,
             stSequence,
-            diffCount: onlyInIndependent.length + onlyInST.length + updated.length,
-            hasConflict: onlyInIndependent.length > 0 || onlyInST.length > 0 || updated.length > 0,
+            diffCount: effectiveDiffCount,
+            hasConflict: effectiveDiffCount > 0,
             hasDivergence: (effectiveOnlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0) && effectiveOnlyInST.length > 0,
-            divergenceIndex
+            divergenceIndex: hasStructuralDiff ? divergenceIndex : -1
         };
     }
 
@@ -176,7 +238,8 @@ export class STAdapter {
                 messagesToAppend.push({
                     role: localMsg.role,
                     name: localMsg.name,
-                    message: message,
+                    mesST: message,
+                    mesRaw: localMsg.mesRaw,
                     is_hidden: localMsg.is_hidden || false,
                     extra: {
                         ...localMsg.extra,

@@ -52,6 +52,24 @@ describe('ChatDiffInspector', () => {
         expect(first?.confidence).toBe('medium');
     });
 
+    it('should not report divergence when id differs but semantic content is identical', () => {
+        const fp = 'fp_same';
+        const local: LuminaChatMessage[] = [
+            makeMsg({ id: 'local-id', mesRaw: 'A', mes: 'A', mesST: 'A', fingerprint: fp })
+        ];
+        const st: LuminaChatMessage[] = [
+            makeMsg({ id: 'st-id', mesRaw: 'A', mes: 'A', mesST: 'A', fingerprint: fp })
+        ];
+
+        const report = ChatDiffInspector.analyze(local, st);
+
+        expect(report.divergenceIndex).toBe(-1);
+        expect(report.firstMismatchIndex).toBe(-1);
+        expect(report.summary.contentMismatchCount).toBe(0);
+        expect(report.summary.metadataMismatchCount).toBe(0);
+        expect(report.summary.writeTextMismatchCount).toBe(0);
+    });
+
     it('should fall back to index matching and mark low confidence when id/fingerprint cannot match', () => {
         const local: LuminaChatMessage[] = [
             makeMsg({ id: 'a', mesRaw: 'A', mes: 'A', fingerprint: '' })
@@ -66,4 +84,3 @@ describe('ChatDiffInspector', () => {
         expect(first?.diffTypes.includes('low_confidence_match')).toBe(true);
     });
 });
-

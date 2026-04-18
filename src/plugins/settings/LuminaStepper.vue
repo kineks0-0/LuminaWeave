@@ -90,17 +90,19 @@ const updateValue = (val: number) => {
   border-radius: 100px;
   border: 1px solid var(--lw-border-base);
   overflow: hidden;
-  height: 32px;
-  transition: all 0.2s ease;
+  min-height: 36px;
+  transition: var(--lw-transition);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .lw-stepper:focus-within {
   border-color: var(--lw-primary);
-  box-shadow: 0 0 0 2px rgba(92, 115, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(92, 139, 246, 0.12);
+  background: var(--lw-bg-surface);
 }
 
 .stepper-btn {
-  width: 32px;
+  width: 40px;
   height: 100%;
   border: none;
   background: transparent;
@@ -109,13 +111,14 @@ const updateValue = (val: number) => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--lw-transition);
   padding: 0;
+  flex: 0 0 auto;
 }
 
 .stepper-btn:hover:not(:disabled) {
   background: var(--lw-bg-active);
-  color: var(--lw-primary);
+  color: var(--lw-text-main);
 }
 
 .stepper-btn:disabled {
@@ -124,17 +127,21 @@ const updateValue = (val: number) => {
 }
 
 .stepper-input {
-  width: 50px;
+  width: 74px;
+  min-width: 74px;
+  height: 100%;
   border: none;
   background: transparent;
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--lw-text-main);
   outline: none;
-  font-family: var(--lw-font-mono, monospace);
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
   -moz-appearance: textfield;
   appearance: none;
+  padding: 0 8px;
 }
 
 .stepper-input::-webkit-outer-spin-button,
@@ -143,6 +150,16 @@ const updateValue = (val: number) => {
   margin: 0;
 }
 
-.minus { border-right: 1px solid var(--lw-border-subtle); }
-.plus { border-left: 1px solid var(--lw-border-subtle); }
+.minus,
+.plus {
+  border-color: var(--lw-border-subtle);
+}
+
+.minus {
+  border-right: 1px solid var(--lw-border-subtle);
+}
+
+.plus {
+  border-left: 1px solid var(--lw-border-subtle);
+}
 </style>
