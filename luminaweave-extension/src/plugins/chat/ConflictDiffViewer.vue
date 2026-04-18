@@ -138,7 +138,7 @@ const filteredDiffRows = computed(() => {
 });
 
 const handleConflict = (data: any) => {
-  if (!data?.hasConflict || !data?.diffCount) {
+  if (!data?.hasDivergence || !data?.diffCount) {
     diffData.value = null;
     isOpen.value = false;
     return;
@@ -178,7 +178,7 @@ const open = () => {
   // 强行通过 store 与 stBridge 比对一次最新数据，避免旧缓存误判
   try {
     const diff = lwApi?.getSyncDiff?.();
-    if (diff?.hasConflict && diff?.diffCount) {
+    if (diff?.hasDivergence && diff?.diffCount) {
         handleConflict(diff);
         return;
     }
@@ -189,7 +189,7 @@ const open = () => {
   // 如果依然没有冲突，强行关闭并提示
   diffData.value = null;
   isOpen.value = false;
-  lwApi?.showToast?.('未检测到实质性数据差异，已自动同步', 'success');
+  lwApi?.showToast?.('未检测到不可合并分歧，无需打开冲突面板', 'success');
 };
 
 // 外放至大窗口（标签页）
@@ -233,7 +233,7 @@ const resolve = async (winner: 'st' | 'lumina') => {
     // 给系统一点时间完成存储和加载
     setTimeout(() => {
       const newState = lwApi.getSyncDiff?.();
-      if (newState?.hasConflict && newState?.diffCount) {
+      if (newState?.hasDivergence && newState?.diffCount) {
         diffData.value = newState;
       } else {
         diffData.value = null;

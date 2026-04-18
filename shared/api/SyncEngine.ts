@@ -27,12 +27,20 @@ export class SharedMessageTextResolver {
 
     public static resolveForFingerprint(msg: any, interceptor: BaseXMLInterceptor): string {
         const extra = (msg?.extra || {}) as Record<string, unknown>;
-        const raw =
+        const normalizedRole = typeof extra.role === 'string' ? extra.role : msg?.role;
+        const isUser = msg?.is_user === true || normalizedRole === 'user';
+        const pluginRaw =
+            (typeof (extra as any).pluginRaw === 'string' ? (extra as any).pluginRaw : undefined)
+            ?? (typeof msg?.pluginRaw === 'string' ? msg.pluginRaw : undefined);
+        const mesRaw =
             (typeof (extra as any).mesRaw === 'string' ? (extra as any).mesRaw : undefined)
-            ?? (typeof msg?.mesRaw === 'string' ? msg.mesRaw : undefined)
+            ?? (typeof msg?.mesRaw === 'string' ? msg.mesRaw : undefined);
+        const raw =
+            (!isUser ? pluginRaw : undefined)
+            ?? mesRaw
             ?? (typeof msg?.message === 'string' ? msg.message : undefined)
             ?? (typeof msg?.mes === 'string' ? msg.mes : undefined)
-            ?? (typeof msg?.pluginRaw === 'string' ? msg.pluginRaw : undefined)
+            ?? pluginRaw
             ?? '';
 
         // 使用传入的拦截器进行清洗

@@ -63,6 +63,7 @@
    - **统一会话文档 [UPDATED v6.0-dev]**：聊天与 Forge 扩展状态不再分别持久化为 `chat jsonl + forge_sessions` 两套真相源，而是统一收敛为单个 `ConversationDocument`。文档内显式包含 `schemaVersion`、消息节点、插件状态与事务游标；事务日志仍独立保存。
    - **环境隔离层开关 [NEW]**：支持在设置中动态切换 Shadow DOM 开启/关闭状态，以适配不同浏览器扩展的兼容性需求。
    - **分离式模块配置原则**：`lumina-settings` 仅负责宿主级全局设置，各子插件通过 `settingsManifest`接口向设置总线动态渲染表单。
+- **桌面模式设置分层 [NEW]**：设置系统开始拆成 `core settings / desktop-mode settings / plugin settings` 三层。当前桌面模式可以单独声明自己的设置项，用于驱动工作模式、导航组织、界面承载方式与表层视觉参数，不再把所有外观项都塞回插件私有设置。设置持久化的正式命名已切到 `activeDesktopMode + desktop-mode-*`，旧 `activeThemePack + theme-pack-*` 只作为兼容别名。
 
 5. **Lumina Status（幻光状态栏）**
    - 面向硬核跑团的 RPG 数据展示区，含 HP、亲密度、物品栏及数值动效。
@@ -152,6 +153,7 @@ LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核
 - **全景掌控态（Full-Canvas Expanded Mode）**：完整接管主界面，左侧聊天流 + 右侧插件操作区 + Quick Chat 悬浮输入窗。
 - **传统桌面（Traditional Desktop）[UPDATED v6.0-dev]**：在桌面端保持顶部主导航 + 主内容区 + 辅助右栏；在移动端，原“小窗 / 辅助窗口”统一改为临时标签页打开，避免窄视口下的双栏挤压。
 - **自由工作台（Stage Manager Workspace）[NEW v6.0-dev]**：自由工作台不再只是横向多窗，而是向 iPadOS 台前调度收敛。当前舞台支持窗口自由拖拽、二维调整大小、窗口覆盖、前台聚焦置顶，以及更明确的窗口进场 / 关闭过渡与细微阻尼收尾动画；窗口只受舞台边界约束，不再执行边缘磁吸。左侧最近舞台组（Stage Strip）与底部 Dock 默认不常驻，改为条件触发或手动展开。移动端下窗口默认更接近全幅工作卡片，顶部拖拽区域与底部切换横条按触控手势优化。关闭全部窗口后保持空舞台而不是自动弹出启动台。
+- **桌面模式（Desktop Mode）[UPDATED v6.0-dev]**：前端主题已从“全局浅深色 + 局部聊天配色”演进为平台级桌面模式。当前用户态采用单轴模型，正式主状态为 `activeDesktopMode`；`traditional / freeform` 仅作为桌面模式内部的壳层种类。桌面模式通过 `shell.kind + navigation preset + surface preset` 决定整套工作方式、导航结构、主区与辅助区承载方式，`design tokens`、`surface skins` 与受控 `renderer variants` 仅作为表层落地层。桌面模式不得越权修改核心会话状态机、同步协议与持久化逻辑。`Discord` 与 `传统桌面`、`自由工作台` 同级，并以独立桌面模式接管频道式聊天主区、角色轨与深色侧栏结构。
 - **Forge 工作台态（Forge Workspace Mode）[UPDATED v6.0-dev]**：制卡主界面进一步向 Codex 风格工作台靠拢，但前台结构已按宿主模式分流：
   - 自由工作台：Forge 使用“主对话窗 + 辅助区双态”。同一工作会话可在 `内嵌右栏` 与 `拆出小窗` 之间切换，并记住上次选择；拆出态下 `虚拟世界书 / 记忆管理 / 审阅中心 / 导出发布 / 后置轨` 作为独立 workspace window 打开，再次点击同类入口只做聚焦，不重复建窗。
   - 传统桌面：不在全局 Shell 漂浮 Forge 小窗，只在 Forge 前台内部显示辅助面板切换条；同一时刻只显示一个同级辅助区。
@@ -256,3 +258,4 @@ LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核
 - 实现后台状态增量补丁（Incremental Patch）逻辑及 UI 高亮。
 - 补齐记忆提取网络与视图编排（Lumina Memory Engine）。
 - **Lumina Director 编排面板落地**：实现可视化连线节点，让用户自由定义双轨分流触发器（Trigger）和 XML 解析器的加载机制。
+

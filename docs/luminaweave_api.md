@@ -85,6 +85,81 @@ import { luminaWeaveApi as lwApi } from '../api/index.ts';
     - `component`: 用于占位符的主视图 Vue 组件。
     - `headerCenterComponent`, `headerRightComponent`: 额外的特殊挂载位组件。
 
+### 6. 自定义桌面模式 API (Desktop Modes)
+
+桌面模式是完整壳层模式，不是局部皮肤。`Discord 桌面`、`传统桌面`、`自由工作台` 都属于同级桌面模式。
+
+- **`registerDesktopMode(manifest: DesktopModeManifest)`**
+  - **用途**: 注册一个新的桌面模式，并让它自动进入设置中的桌面模式列表。
+  - **约束**: `id` 必须唯一；重复注册会抛出错误。
+- **`listDesktopModes()`**
+  - **返回**: 当前所有已注册桌面模式的清单。
+- **`getDesktopMode(id: string)`**
+  - **返回**: 指定桌面模式 manifest，若不存在则返回 `undefined`。
+
+`DesktopModeManifest` 最少应包含：
+
+- `id`
+- `name`
+- `shell.kind`
+- `navigation`
+- `surfaces`
+- `settingsManifest?`
+
+开放边界：
+
+- 允许自定义 shell、navigation、surface、settings 与受控 renderer variants
+- 不允许直接替换核心会话、同步、持久化与事务运行时
+
+最小注册示例：
+
+```ts
+import { luminaWeaveApi as lwApi } from '../api/index.js';
+
+lwApi.registerDesktopMode({
+  id: 'operator-deck',
+  name: 'Operator Deck',
+  description: '面向高密度信息浏览的自定义桌面。',
+  shell: {
+    kind: 'traditional',
+  },
+  navigationPreset: {
+    traditional: {
+      headerVariant: 'default',
+      leftRail: 'none',
+      widgetVariant: 'default',
+      headerDesktopPosition: 'top',
+      headerMobilePosition: 'top',
+    }
+  },
+  surfacePreset: {
+    mainSurfaceVariant: 'default',
+    widgetSurfaceVariant: 'default',
+    chatVariant: 'default',
+    settingsVariant: 'default',
+    timelineVariant: 'default',
+  },
+  settingsManifest: {
+    density: {
+      default: 'compact',
+      label: '信息密度',
+      type: 'options',
+      allowedScopes: ['Global'],
+      options: [
+        { value: 'compact', label: '紧凑' },
+        { value: 'cozy', label: '舒适' },
+      ]
+    }
+  }
+});
+```
+
+接入结果：
+
+- 新模式会自动进入“桌面模式”设置选项
+- `desktop-mode-operator-deck.*` 会成为正式设置命名空间
+- 不需要额外手写设置页接线代码
+
 ---
 > 💡 **Plugin 开发指南**
 > 任何新的功能模块只需打包为标准的 Vue SFC 组件库（例如 `plugins/your-plugin/`），对外暴露 `index.js` 导出兼容 `PluginConfig` 的对象。在 `App.vue` 或外部入口中调用 `pluginManager.register(YourPlugin)`，即可享受开箱即用的顶部导航、主题引擎与底层 ST API 共生，彻底实现业务解耦！

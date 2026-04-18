@@ -97,7 +97,7 @@ export class MessageUtils {
             : (msg.mesRaw || msg.mes || '');
         
         // 2. 检查指纹一致性以跳过冗余计算
-        if (!options.force && !options.skipFingerprint && msg.fingerprint) {
+        if (!options.force && !options.skipFingerprint && msg.fingerprint && !(isAI && msg.pluginRaw)) {
             const currentFp = this.getFingerprint(sourceForFp);
             if (msg.fingerprint === currentFp && msg.mes && msg.mesRaw) {
                 return; // 内容未变且字段完整，跳过

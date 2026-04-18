@@ -82,6 +82,53 @@ describe('STClient - extra normalization', () => {
         expect((firstMsg.extra as Record<string, unknown> | undefined)?.extra).toBeUndefined();
     });
 
+    it('appendMessages should prefer mesST over mesRaw and mes when writing ST message', async () => {
+        type MockCalls = { mock: { calls: unknown[][] } };
+
+        const createChatMessages = vi.fn(async () => {});
+        helper = {
+            createChatMessages
+        };
+
+        await STClient.appendMessages([{
+            role: 'assistant',
+            name: 'A',
+            mesST: 'st-body',
+            mesRaw: 'raw-body',
+            mes: 'display-body',
+            extra: {
+                mesST: 'extra-st',
+                mesRaw: 'extra-raw'
+            }
+        }], true);
+
+        const calls = (createChatMessages as unknown as MockCalls).mock.calls;
+        const payload = (calls[0]?.[0] as unknown[])?.[0] as { message?: string };
+        expect(payload.message).toBe('st-body');
+    });
+
+    it('appendMessages should fall back to extra.mesRaw when top-level mesST and mesRaw are absent', async () => {
+        type MockCalls = { mock: { calls: unknown[][] } };
+
+        const createChatMessages = vi.fn(async () => {});
+        helper = {
+            createChatMessages
+        };
+
+        await STClient.appendMessages([{
+            role: 'assistant',
+            name: 'A',
+            mes: 'display-body',
+            extra: {
+                mesRaw: 'raw-from-extra'
+            }
+        }], true);
+
+        const calls = (createChatMessages as unknown as MockCalls).mock.calls;
+        const payload = (calls[0]?.[0] as unknown[])?.[0] as { message?: string };
+        expect(payload.message).toBe('raw-from-extra');
+    });
+
     it('getRawMessages should project active swipe text and regexed display text', () => {
         const getChatMessages = vi.fn(() => [{
             message_id: 7,

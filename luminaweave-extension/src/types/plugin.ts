@@ -6,13 +6,15 @@ export interface SettingOption {
     description?: string;
 }
 
+export type SettingOptionsResolver = SettingOption[] | (() => SettingOption[]);
+
 export interface SettingDefinition {
     default: any;
     label: string;
     description?: string;
     common?: boolean;
     type: 'theme' | 'options' | 'stepper' | 'nexus-select' | 'slider' | 'boolean' | 'text';
-    options?: SettingOption[];
+    options?: SettingOptionsResolver;
     allowedScopes?: ('Global' | 'Character' | 'Chat' | 'Session')[];
     min?: number;
     max?: number;

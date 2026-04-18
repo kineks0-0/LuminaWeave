@@ -10,6 +10,9 @@ type ServerChatSessionItem = {
     messageCount: number;
     activeLeafId: string | null;
     previewMessage: string;
+    characterId?: string | number | null;
+    characterName?: string;
+    characterAvatarUrl?: string | null;
 };
 
 const sanitizePreviewText = (text: string): string => {
@@ -61,7 +64,10 @@ export class ChatSessionIndexService {
                         messageCount: chat.messageCount,
                         summary: derived.summary,
                         previewMessage,
-                        activeLeafId: chat.activeLeafId
+                        activeLeafId: chat.activeLeafId,
+                        characterId: chat.characterId ?? null,
+                        characterName: chat.characterName || '',
+                        characterAvatarUrl: chat.characterAvatarUrl ?? null
                     };
                 });
         } catch {
@@ -76,7 +82,10 @@ export class ChatSessionIndexService {
                 messageCount: 0,
                 summary: '当前聊天会话',
                 previewMessage: '',
-                activeLeafId: null
+                activeLeafId: null,
+                characterId: null,
+                characterName: '',
+                characterAvatarUrl: null
             }];
         }
     }

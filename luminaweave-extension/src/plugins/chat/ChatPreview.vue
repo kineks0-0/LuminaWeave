@@ -24,7 +24,12 @@
         <button :class="{ active: activeTab === 'streaming' }" @click="activeTab = 'streaming'">流式实验室</button>
       </div>
 
-      <div ref="viewportRef" class="preview-viewport" :class="[activeSettings['lumina-chat.theme'], { 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document' }]">
+      <div
+        ref="viewportRef"
+        class="preview-viewport"
+        :class="[{ 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document' }]"
+        :data-skin-variant="chatVariant || 'default'"
+      >
         <!-- 场景1: 排版预览 -->
         <div v-if="activeTab === 'typography'" class="scene-typography">
           <div class="preview-bubble ai">
@@ -86,6 +91,7 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted, reactive, watch, nextTick } from 'vue';
 import { activeSettings } from '../settings/useSettings';
+import { useComponentSkin } from '../../theme/useComponentSkin';
 
 const isCollapsed = ref(false);
 const activeTab = ref<'typography' | 'streaming'>('typography');
@@ -115,6 +121,7 @@ let chunkTimer: any = null;
 let buffer = '';
 let queue: string[] = [];
 let charIndex = 0;
+const { cssVars: previewSkinVars, variant: chatVariant } = useComponentSkin('chat.preview');
 
 const previewStyle = computed(() => {
   return {
@@ -124,6 +131,7 @@ const previewStyle = computed(() => {
     '--lw-preview-ps': (activeSettings['lumina-chat.paragraphSpacing'] || 16) + 'px',
     '--lw-preview-ls': (activeSettings['lumina-chat.letterSpacing'] || 0) + 'px',
     '--lw-preview-weight': activeSettings['lumina-chat.fontWeight'] || 400,
+    ...previewSkinVars.value
   };
 });
 
@@ -297,30 +305,28 @@ onUnmounted(stopSimulation);
   min-height: 180px;
   max-height: 320px;
   overflow-y: auto;
+  background: var(--lw-chat-preview-bg, var(--lw-bg-subtle));
+  color: var(--lw-chat-preview-text-color, var(--lw-text-main));
 }
-
-.preview-viewport.gray { background: #f8fafc; --bubble-bg: #ffffff; --text-color: #1e293b; }
-.preview-viewport.warm { background: #fffbf0; --bubble-bg: #ffffff; --text-color: #433422; --user-bg: #fef3c7; }
-.preview-viewport.dark { background: #0f172a; --bubble-bg: #1e293b; --text-color: #f8fafc; --user-bg: #334155; }
 
 .preview-bubble {
   max-width: 85%;
-  padding: 12px 16px;
-  border-radius: 12px;
+  padding: var(--lw-chat-preview-padding, 12px 16px);
+  border-radius: var(--lw-chat-preview-bubble-radius, 12px);
   margin-bottom: 12px;
   font-family: var(--lw-preview-font), sans-serif;
   font-weight: var(--lw-preview-weight, 400);
   font-size: var(--lw-preview-size);
   line-height: var(--lw-preview-lh);
   letter-spacing: var(--lw-preview-ls);
-  color: var(--text-color);
-  background: var(--bubble-bg);
+  color: var(--lw-chat-preview-text-color, var(--lw-text-main));
+  background: var(--lw-chat-preview-bubble-bg, var(--lw-bg-surface));
   border: 1px solid rgba(0,0,0,0.05);
   box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
 
 .preview-bubble.ai { align-self: flex-start; }
-.preview-bubble.user { align-self: flex-end; background: var(--user-bg, #f1f5f9); margin-left: auto; }
+.preview-bubble.user { align-self: flex-end; background: var(--lw-chat-preview-user-bubble-bg, #f1f5f9); margin-left: auto; }
 
 /* Document Mode overrides */
 .preview-viewport.doc-mode {
@@ -420,5 +426,11 @@ onUnmounted(stopSimulation);
   font-size: 13px;
   text-align: center;
   padding: 20px 0;
+}
+
+.preview-viewport[data-skin-variant='discord'] .preview-bubble {
+  max-width: 100%;
+  border-color: var(--lw-border-base);
+  box-shadow: none;
 }
 </style>

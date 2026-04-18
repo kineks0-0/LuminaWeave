@@ -1,5 +1,10 @@
 <template>
-  <div class="lw-settings-root" :class="{ 'is-large': mode === 'large' }">
+  <div
+    class="lw-settings-root"
+    :class="{ 'is-large': mode === 'large' }"
+    :data-skin-variant="settingsVariant || 'default'"
+    :style="settingsSkinStyle"
+  >
     <!-- 大窗口模式下的侧边栏导航 -->
     <div v-if="mode === 'large'" class="settings-sidebar">
       <div class="sidebar-header">
@@ -14,6 +19,12 @@
             <rect x="3" y="14" width="7" height="7"></rect>
           </svg>
           常规概览
+        </div>
+        <div v-if="activeThemeEntry" class="nav-divider">当前桌面模式</div>
+        <div v-if="activeThemeEntry" class="nav-item"
+          :class="{ active: currentDetailedView === activeThemeEntry.pluginId }" @click="currentDetailedView = activeThemeEntry.pluginId">
+          <span class="nav-icon" v-html="activeThemeEntry.pluginIcon"></span>
+          {{ activeThemeEntry.pluginName }}
         </div>
         <div class="nav-divider">插件专属设置</div>
         <div v-for="sb in settingsBlocks" :key="sb.pluginId" class="nav-item"
@@ -56,12 +67,14 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
-import { pluginManager } from '../../core/PluginManager.js';
 import SettingsUnified from './SettingsUnified.vue';
 import SettingsDetailed from './SettingsDetailed.vue';
-import { currentDetailedView } from './useSettings.js';
+import { activeSettings, currentDetailedView } from './useSettings.js';
+import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry';
+import { getActiveDesktopModeIdFromSettings } from '../../theme/themeRegistry';
+import { useComponentSkin } from '../../theme/useComponentSkin';
 
 const props = defineProps({
   mode: {
@@ -70,31 +83,23 @@ const props = defineProps({
   }
 });
 
-const openDetailedView = (pluginId) => {
+const { cssVars, variant: settingsVariant } = useComponentSkin('settings.root');
+const settingsSkinStyle = computed(() => cssVars.value);
+const activeThemeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings));
+
+const openDetailedView = (pluginId: string) => {
   currentDetailedView.value = pluginId;
 };
 
-const getPluginName = (pluginId) => {
+const getPluginName = (pluginId: string | null) => {
   if (!pluginId) return '';
-  const p = pluginManager.getPlugin(pluginId);
-  return p ? p.name : pluginId;
+  const entry = getSettingsEntry(pluginId);
+  return entry ? entry.pluginName : pluginId;
 };
 
-const settingsBlocks = computed(() => {
-  const blocks = [];
-  const registered = (pluginManager).registeredSettings;
-  Object.keys(registered).forEach(pid => {
-    const p = pluginManager.getPlugin(pid);
-    if (p) {
-      blocks.push({
-        pluginId: pid,
-        pluginName: p.name,
-        pluginIcon: p.icon
-      });
-    }
-  });
-  return blocks;
-});
+const visibleEntries = computed(() => getVisibleSettingsEntries(activeThemeId.value));
+const activeThemeEntry = computed(() => visibleEntries.value.find(entry => entry.kind === 'desktop-mode') || null);
+const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry.kind === 'plugin'));
 </script>
 
 <style scoped>
@@ -102,8 +107,8 @@ const settingsBlocks = computed(() => {
   display: flex;
   flex-direction: row;
   height: 100%;
-  background:
-    linear-gradient(180deg, rgba(var(--lw-bg-elevated-rgb), 0.48), rgba(var(--lw-bg-elevated-rgb), 0));
+  background: var(--lw-settings-shell-bg,
+    linear-gradient(180deg, rgba(var(--lw-bg-elevated-rgb), 0.48), rgba(var(--lw-bg-elevated-rgb), 0)));
   font-family: inherit;
   overflow: hidden;
 }
@@ -117,7 +122,7 @@ const settingsBlocks = computed(() => {
   border-right: 1px solid var(--lw-border-base);
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
+  background: var(--lw-settings-sidebar-bg, color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent));
   flex-shrink: 0;
 }
 
@@ -198,7 +203,7 @@ const settingsBlocks = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
+  background: var(--lw-settings-header-bg, color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent));
 }
 
 .header-breadcrumb {
@@ -239,7 +244,7 @@ const settingsBlocks = computed(() => {
   gap: 8px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--lw-border-base);
-  background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
+  background: var(--lw-settings-header-bg, color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent));
 }
 
 .small-back-btn {
@@ -279,5 +284,46 @@ const settingsBlocks = computed(() => {
 
 .settings-scroll-area::-webkit-scrollbar-thumb:hover {
   background: var(--lw-text-muted);
+}
+
+.lw-settings-root[data-skin-variant='discord'] {
+  background: #313338;
+}
+
+.lw-settings-root[data-skin-variant='discord'] .settings-sidebar {
+  background: #232428;
+  border-right-color: #1e1f22;
+}
+
+.lw-settings-root[data-skin-variant='discord'] .sidebar-header,
+.lw-settings-root[data-skin-variant='discord'] .main-content-header,
+.lw-settings-root[data-skin-variant='discord'] .small-back-bar {
+  background: #2b2d31;
+  border-bottom-color: #1e1f22;
+}
+
+.lw-settings-root[data-skin-variant='discord'] .nav-item {
+  color: #b5bac1;
+}
+
+.lw-settings-root[data-skin-variant='discord'] .nav-item:hover {
+  background: #35373c;
+  color: #f2f3f5;
+}
+
+.lw-settings-root[data-skin-variant='discord'] .nav-item.active {
+  background: #404249;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.lw-settings-root[data-skin-variant='discord'] .nav-divider,
+.lw-settings-root[data-skin-variant='discord'] .breadcrumb-link,
+.lw-settings-root[data-skin-variant='discord'] .breadcrumb-sep {
+  color: #949ba4;
+}
+
+.lw-settings-root[data-skin-variant='discord'] .breadcrumb-link:hover {
+  color: #f2f3f5;
 }
 </style>

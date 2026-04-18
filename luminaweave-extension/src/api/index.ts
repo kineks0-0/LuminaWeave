@@ -23,6 +23,12 @@ import type { LuminaChatMessage } from '../../../shared/LuminaMessage.js';
 import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
 import { ChatDiffInspector, ChatDiffReport } from './debug/ChatDiffInspector.js';
 import { ChatDebugGateway } from './debug/ChatDebugGateway.js';
+import {
+    getDesktopMode,
+    listDesktopModes,
+    registerDesktopMode
+} from '../theme/themeRegistry.js';
+import type { DesktopModeManifest } from '../theme/types.js';
 
 // 全局变量声明已移动至 src/types/sillytavern.d.ts
 
@@ -467,7 +473,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             });
 
             // 监听ST的信息更新
-            stEventSource.on(event_types[ST_EVENT.GENERATION_ENDED], (data: any) => {
+            stEventSource.on(event_types[ST_EVENT.GENERATION_ENDED], async (data: any) => {
                 console.log('[LuminaWeave] 截获信息更新 (generation_ended)');
                 console.log('[LuminaWeave] (generation_ended)data:', data);
 
@@ -483,21 +489,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 const lastMessage = ctx?.chat?.[ctx.chat.length - 1] as any;
                 if (lastMessage && !lastMessage.is_user) {
                     const finalText = lastMessage.mes || '';
-                    // 1. 调用全局 XML 拦截器 (解析并执行 Mutation 指令，更新本地 deltaCache)
-                    const cleanedFinalText = globalXMLInterceptor.processAndCleanText(finalText, true);
-                    
-                    // 2. 核心增强：强制提交内存中的增量修改并同步至当前活跃节点
-                    if (this.chatManager.activeLeafId) {
-                        const activeNode = this.chatManager.store.getNode(this.chatManager.activeLeafId);
-                        if (activeNode) {
-                            globalMemoryManager.commitDeltas(activeNode);
-                            // 核心修复：提交变动到 ST，确保记忆持久化
-                            this.commitToST();
-                        }
-                    }
-
-                    // 3. 触发插件引擎生命周期回调
-                    pluginManager.callHooks('onGenerationEnded', cleanedFinalText);
+                    await this.finalizeGeneratedOutput(finalText);
                 }
 
                 // 核心修复：延迟 100ms 触发最终同步，确保 ST 本地数据库已写入完毕，然后发送结束信号
@@ -777,6 +769,20 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.registeredPanels.set(id, { id, component, config });
     }
 
+    registerDesktopMode(manifest: DesktopModeManifest) {
+        registerDesktopMode(manifest);
+        this.emit('SETTINGS_CHANGED');
+        this.emit('DESKTOP_MODES_CHANGED', manifest.id);
+    }
+
+    listDesktopModes() {
+        return listDesktopModes();
+    }
+
+    getDesktopMode(id: string) {
+        return getDesktopMode(id);
+    }
+
     /**
      * 打开一个已注册的面板
      * @param id 面板 ID
@@ -957,6 +963,21 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.emit('BUFFER_UPDATED', last.processed, last.text, last.filteredCount, text, last.thinkingText ?? '', '');
     }
 
+    private async finalizeGeneratedOutput(rawFinalText: string): Promise<string> {
+        const cleanedFinalText = globalXMLInterceptor.processAndCleanText(rawFinalText || '', true);
+
+        if (this.chatManager.activeLeafId) {
+            const activeNode = this.chatManager.store.getNode(this.chatManager.activeLeafId);
+            if (activeNode) {
+                globalMemoryManager.commitDeltas(activeNode);
+                await this.commitToST();
+            }
+        }
+
+        pluginManager.callHooks('onGenerationEnded', cleanedFinalText);
+        return cleanedFinalText;
+    }
+
     /**
      * 协调完成生成后的同步：当且仅当 [文本就绪] 且 [后端事务提交就绪] 时执行。
      */
@@ -1026,15 +1047,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             // 核心修复：必须确保清理标志位，即使同步过程报错
             session.isFinalizing = false;
 
-            const cleanedFinalText = globalXMLInterceptor.processAndCleanText(session.finalText || '', true);
-            if (this.chatManager.activeLeafId) {
-                const activeNode = this.chatManager.store.getNode(this.chatManager.activeLeafId);
-                if (activeNode) {
-                    globalMemoryManager.commitDeltas(activeNode);
-                    await this.commitToST();
-                }
-            }
-            pluginManager.callHooks('onGenerationEnded', cleanedFinalText);
+            await this.finalizeGeneratedOutput(session.finalText || '');
             
             // 物理释放生成锁定
             this.streamHandler.finishSync();
@@ -1268,12 +1281,14 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
                     const finalMesRaw = XMLInterceptor.extractTagContent(newText, BuiltinXMLTags.CHAT_REPLY).join('\n\n') || globalXMLInterceptor.processAndCleanText(newText, false);
                     msg.mesRaw = finalMesRaw;
+                    msg.mesST = finalMesRaw;
                     msg.mes = this.applySTRegex(finalMesRaw, source, 'display', { depth });
                     msg.fingerprint = SyncUtils.getFingerprint(finalMesRaw);
-                    msg.stFingerprint = SyncUtils.getSTFingerprint(msg.mes);
+                    msg.stFingerprint = SyncUtils.getSTFingerprint(msg.mesST);
                     msg.extra = msg.extra || {};
                     msg.extra.mesRaw_ts = now;
                     msg.extra.mesRaw = finalMesRaw;
+                    msg.extra.mesST = msg.mesST;
                     msg.extra.mes_ts = now;
                     msg.extra.fingerprint = msg.fingerprint;
                     msg.extra.stFingerprint = msg.stFingerprint;
@@ -1296,7 +1311,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                             id: msg.id,
                             fingerprint: msg.fingerprint,
                             stFingerprint: msg.stFingerprint,
-                            mesRaw: finalMesRaw
+                            mesRaw: finalMesRaw,
+                            mesST: msg.mesST
                         }
                     }]);
                 }
@@ -1343,6 +1359,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                     role: isUser ? 'user' : 'assistant',
                     pluginRaw: meta.pluginRaw || null, // 1. 原始数据 (PluginRaw，包含生命周期标签)
                     mesRaw: finalMesRaw,                   // 2. 原始对话内容 (用于 ST 编辑和保存)
+                    mesST: finalMesRaw,                // 2.5 写回 ST 的权威正文
                     mes: displayText,                  // 3. 显示对话内容 (用于 UI 渲染)
                     characterId: lwStorage._getContextIds().charId,
                     parentId: parentId, // 链接至当前叶子
@@ -1389,6 +1406,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 // 委托至 STClient 追加物理消息
                 await STClient.appendMessage({
                     role: newMsg.role,
+                    mesST: newMsg.mesST,
+                    mesRaw: newMsg.mesRaw,
                     mes: newMsg.mes,
                     name: newMsg.name,
                     extra: {
@@ -1396,7 +1415,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                         id: newMsg.id,
                         fingerprint: newMsg.fingerprint,
                         stFingerprint: newMsg.stFingerprint,
-                        mesRaw: finalMesRaw
+                        mesRaw: finalMesRaw,
+                        mesST: newMsg.mesST
                     }
                 });
 

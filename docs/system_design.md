@@ -49,6 +49,17 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
 
 所有视图应用（ChatStream、Timeline、Status 等）均抽象为 `src/plugins/` 下的独立模块，由 `PluginManager` 在根组件 `App.vue` 启动时统一动态注册。
 
+### 3.1 Desktop Mode Registry（桌面模式注册层） [NEW]
+
+- **桌面模式协议分层**：前端主题不再只等于根节点浅深色变量。当前系统引入单轴 `Desktop Mode` 模型，并在用户层直接暴露桌面模式切换。协议统一描述三层主抽象：
+  - `shell.kind`：决定该桌面模式落在哪种壳层形态；当前仅允许 `traditional` 或 `freeform`。
+  - `navigation preset`：决定 Header、角色轨、Dock、Stage Strip、辅助区入口等导航组织。
+  - `surface preset`：决定主内容区、辅助区、聊天流、设置面板、时间线等表层容器的承载方式与默认 variant。
+  其中 `design tokens`、`surface skins` 与少量受控 `renderer variants` 只作为下层落地附件。
+- **壳层主导 / 表层兼容 [UPDATED]**：桌面模式优先通过 `shell / navigation / surface` 驱动 Shell 组织，并在设置中以“桌面模式”方式暴露；少量受控 `renderer variant` 仅作为表层兼容扩展。当前 `Discord` 与 `传统桌面`、`自由工作台` 同级，其数据来源仍受限于统一 `ConversationService` 暴露的会话摘要，不直接触碰会话状态机。
+- **注册方式**：`src/theme/themeRegistry.ts` 维护内置桌面模式注册表，并开放 `registerDesktopMode() / listDesktopModes() / getDesktopMode()`。设置系统把每个桌面模式的 `settingsManifest` 视为一类伪插件设置来源，以复用现有设置总线与存储作用域。用户层正式暴露 `activeDesktopMode` 与 `desktop-mode-*` 命名空间，旧 `activeThemePack` 与 `theme-pack-*` 仅作为兼容映射。
+- **兼容边界**：桌面模式可以决定壳层类型、导航组织、表层容器 variant，并向下分发 token / surface css vars / 受控 `rendererVariants`；但不得直接改变 `ConversationService / STAdapter / PersistenceService / PromptBuilder` 等核心运行时。
+
 ### 4. Shadow Buffer & 统一存储代理（Unified Storage Engine）
 
 - **影子图谱缓存**：所有修改首先发生在 `localChatData`（影子数据库）中，UI 层单向订阅。
@@ -60,6 +71,7 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
     - 服务端物理结构收敛为 `data/conversations/conversation_<id>.json`，事务日志独立为 `data/transactions/conversation_<id>.tx.jsonl`。
 - **会话类型扩展 (Conversation-aware Nodes) [NEW v6.0-dev]**：节点模型开始扩展 `conversationType`、`conversationId` 与 `nodeKind` 等元数据，用于承载主聊天、Forge 及后续更多扩展会话。系统正在从“只为聊天消息服务”的节点设计，演进为“统一会话节点容器”。
 - **统一会话查看上下文 (Conversation Context) [NEW v6.0-dev]**：在节点模型之上新增前端级 `ConversationContext` 解析层，统一提供当前 `source/session/activeLeaf/messages/lorebookView/memorySnapshot`。消息型插件默认消费这个解析层，而不是各自直连主聊天状态。
+- **会话摘要角色元数据 [NEW]**：`ConversationSummary` 现额外携带 `characterId / characterName / characterAvatarUrl`。该字段从会话节点中最近一次非用户消息推导，用于像 Discord 角色卡侧栏这类主题级导航聚合，不改变节点真相源本身。
 - **统一会话世界线服务 (ConversationService) [UPDATED v6.0-dev]**：
     - 通过 `ConversationSourceAdapter` 注册 `chat / forge` 等来源，统一向上暴露 `listSources / listSessions / getContext / switchNode / branch / rollback`。
     - 全局 viewing context 由服务层维护并通过领域事件 `CONVERSATION_CONTEXT_CHANGED / CONVERSATION_WORLDLINE_*` 向 UI 广播。
@@ -425,6 +437,10 @@ graph LR
 - **条件呈现设置 (Conditional Settings) [v5.8.2]**:
     - **showIf 协议**: 支持在 `settingsManifest` 中注册谓词函数，根据全局状态感应实时切换设置项可见性，显著简化复杂插件的配置界面。
     - **自研扩展组件**: 引入 `LuminaStepper` 等业务驱动的 UI 单元，替换原生及过时的配置控件。
+- **主题设置并入 [NEW v6.0-dev]**：
+- `Settings` 层不再只消费 `PluginManager.registeredSettings`，而是通过独立目录同时整合插件设置与当前激活桌面模式的 `settingsManifest`。
+- 桌面模式设置使用独立命名空间持久化，例如 `desktop-mode-discord.messageDensity`，从而允许不同桌面模式拥有各自的外观参数，而不会互相污染；旧 `theme-pack-discord.messageDensity` 继续作为兼容别名读取。
+    - 现阶段表层样式优先级为：`Desktop Mode shell/navigation/surface preset + surface skin > 旧局部兼容主题（如 lumina-chat.theme） > 组件默认值`。
 
 ### 16. st-adapter：ST 适配层与差量同步 (v5.9) [REFACTORED]
 
@@ -486,3 +502,4 @@ st-adapter 的目标是把“**ST 环境交互** / **协议转换** / **同步�
 - **Lumina Memory Engine 分布式存储**：切割长文并使用 RAG 设计理念反向挂载，减负 Prompt。
 - **状态增量补丁（Incremental Patch）**：提取标准化状态 Patch（如 `Modify("Health", -20)`），触发 `STATE_MUTATED` 事件广播。
 - **TavernHelper Bridge 深度整合 [已启动]**：已完成世界书（WorldInfo）同步。下一步将引入角色变量与宏动态注入。
+

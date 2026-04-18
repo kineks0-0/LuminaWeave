@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LuminaWeaveAPI } from '../index.js';
+import { globalXMLInterceptor } from '../core/XMLInterceptor.js';
+import { globalMemoryManager } from '../core/MemoryManager.js';
+import { pluginManager } from '../../core/PluginManager.js';
 
 // Mock dependecies
 vi.mock('../storage.js', () => ({
@@ -83,5 +86,24 @@ describe('LuminaWeaveAPI Streaming Cache', () => {
             statusText: '回复中...',
             thinkingText: 'abc'
         }]);
+    });
+
+    it('should execute XML handlers and commit deltas when finalizing generated output', async () => {
+        const activeNode = { id: 'node-1', extra: {} } as any;
+        api.chatManager.activeLeafId = 'node-1';
+
+        vi.spyOn(api.chatManager.store, 'getNode').mockReturnValue(activeNode);
+        vi.spyOn(globalXMLInterceptor, 'processAndCleanText').mockReturnValue('Cleaned reply');
+        vi.spyOn(globalMemoryManager, 'commitDeltas').mockImplementation(() => {});
+        vi.spyOn(pluginManager, 'callHooks').mockImplementation(() => {});
+        vi.spyOn(api, 'commitToST').mockResolvedValue();
+
+        const result = await (api as any).finalizeGeneratedOutput('<Chat_Reply>Hello</Chat_Reply><Next_Plan>Plan</Next_Plan>');
+
+        expect(globalXMLInterceptor.processAndCleanText).toHaveBeenCalledWith('<Chat_Reply>Hello</Chat_Reply><Next_Plan>Plan</Next_Plan>', true);
+        expect(globalMemoryManager.commitDeltas).toHaveBeenCalledWith(activeNode);
+        expect(api.commitToST).toHaveBeenCalledTimes(1);
+        expect(pluginManager.callHooks).toHaveBeenCalledWith('onGenerationEnded', 'Cleaned reply');
+        expect(result).toBe('Cleaned reply');
     });
 });

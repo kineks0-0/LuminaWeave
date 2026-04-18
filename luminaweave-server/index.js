@@ -52215,6 +52215,22 @@ var createEmptyConversationDocument2 = (params) => {
 
 // ../shared/ConversationSummaryResolver.ts
 var cleanPreview = (text) => text.replace(/\s+/g, " ").trim();
+var resolveCharacterMeta = (document) => {
+  for (let index = document.nodes.length - 1; index >= 0; index -= 1) {
+    const node = document.nodes[index];
+    if (node.is_user || node.role === "user") continue;
+    return {
+      characterId: node.characterId ?? null,
+      characterName: cleanPreview(node.name || ""),
+      characterAvatarUrl: typeof node.avatarUrl === "string" ? node.avatarUrl : null
+    };
+  }
+  return {
+    characterId: null,
+    characterName: "",
+    characterAvatarUrl: null
+  };
+};
 var resolveConversationPreview = (document) => {
   for (let index = document.nodes.length - 1; index >= 0; index -= 1) {
     const node = document.nodes[index];
@@ -52232,7 +52248,8 @@ var resolveConversationSummary = (document) => ({
   updatedAt: document.updatedAt,
   activeLeafId: document.activeLeafId,
   previewMessage: resolveConversationPreview(document),
-  messageCount: document.nodes.length
+  messageCount: document.nodes.length,
+  ...resolveCharacterMeta(document)
 });
 
 // ../shared/ConversationValidation.ts
@@ -54098,7 +54115,7 @@ var MessageUtils = class {
   static syncCore(msg, interceptor, options = {}) {
     const isAI = msg.is_user === false;
     const sourceForFp = isAI ? msg.pluginRaw || msg.mesRaw || "" : msg.mesRaw || msg.mes || "";
-    if (!options.force && !options.skipFingerprint && msg.fingerprint) {
+    if (!options.force && !options.skipFingerprint && msg.fingerprint && !(isAI && msg.pluginRaw)) {
       const currentFp = this.getFingerprint(sourceForFp);
       if (msg.fingerprint === currentFp && msg.mes && msg.mesRaw) {
         return;

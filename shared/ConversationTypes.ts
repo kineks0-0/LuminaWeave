@@ -53,6 +53,9 @@ export interface ConversationSummary {
     activeLeafId: string | null;
     previewMessage: string;
     messageCount: number;
+    characterId?: string | number | null;
+    characterName?: string;
+    characterAvatarUrl?: string | null;
 }
 
 export interface ConversationLegacyState {

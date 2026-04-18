@@ -13,6 +13,7 @@
 - **核心定位**：提供 Git 化的树状时间线管理、分层记忆系统、以及高自由度的请求编排能力。
 - **设计哲学**：**深度接管** (拦截 Prompt 与生成流) 与 **绝对隔离** (拥有独立的存储与渲染沙盒)。
 - **工作区策略 [UPDATED]**：前端 Shell 同时维护传统桌面与自由工作台两种模式；其中自由工作台已向 iPadOS Stage Manager 式的舞台调度、Dock 与重叠窗口模型演进。
+- **桌面模式（Desktop Mode）体系 [UPDATED]**：UI 主题不再只是一组全局颜色变量。当前前端已收敛到单轴 `Desktop Mode` 模型，用户只切换完整桌面模式；`traditional / freeform` 仅作为桌面模式内部的壳层种类。每个桌面模式通过 `shell.kind + navigation preset + surface preset` 决定整套工作方式、导航组织与界面承载方式，`design tokens / surface skins / renderer variants` 只作为表层实现附件。正式设置入口为 `activeDesktopMode + desktop-mode-*`，旧 `activeThemePack + theme-pack-*` 仅保留兼容读取。`Discord` 与 `传统桌面`、`自由工作台` 同级，而不是某个桌面的皮肤或锁定子形态。
 
 ---
 
@@ -46,6 +47,7 @@ d:\LuminaWeave\
 │   ├── timeline/               # 时间线与 Git 轨道逻辑 (PDR, System Design)
 │   ├── director/               # 导演引擎与编排逻辑
 │   ├── forge/                  # Forge 制卡文档：规划 / 实现 / 进度看板
+│   ├── desktop_modes/          # 桌面模式重构与自定义桌面扩展规划
 │   ├── stats/                  # 状态栏与游戏化数值系统
 │   ├── settings/               # 统一设置面板设计
 │   ├── storage/                # 底层存储与持久化引擎
@@ -110,7 +112,8 @@ d:\LuminaWeave\
 | **项目根目录** | `dev-start.ps1` | 一键启动开发环境，同步运行前端热更新与后端服务。 |
 | | `sync-projects.ps1` | 自动化子项目同步工具，维护多个独立仓库的一致性。 |
 | **Extension 入口** | `src/index.ts` | 插件生命周期底座，处理 Shadow DOM 容器挂载与样式沙盒隔离。 |
-| | `src/App.vue` | 视觉根组件，负责面板状态管理、侧边栏悬浮及右侧 Slot 调度。 |
+| | `src/App.vue` | 视觉根组件，负责面板状态管理、侧边栏悬浮、右侧 Slot 调度，以及当前桌面模式的壳层分支、preset 与 token 注入。 |
+| | `src/theme/` | Desktop Mode 注册中心与壳层协议，负责 `shell.kind / navigation / surface` 三层解析，并向下兼容 design token、surface skin 与受控 renderer variant。当前已额外覆盖 Discord 角色卡侧栏与频道式主界面所需的导航变量。 |
 | **微内核 (API Core)** | `src/api/index.ts` | 全局 API 单例导出，提供跨组件的统一通讯网关。 |
 | | `src/api/llmEngine.ts` | 请求与生成控制核心，桥接后端基于官方 OpenAI SDK 的生成路由。 |
 | | `src/api/storage.ts` | 统一存储引擎，实现 Global/Chat/Local 多级作用域的持久化。 |
@@ -139,7 +142,7 @@ d:\LuminaWeave\
 - **[Forge 规划文档](./forge/planning.md)**：产品目标、交互方向与协议规划。
 - **[Forge 实现与技术交接](./forge/implementation.md)**：当前实现链路、技术选型与重构判断。
 - **[Forge 进度看板](./forge/progress-board.md)**：已完成项、剩余待办与短期推进顺序。
-| | `settings/` | 统一设置。支持子插件动态向主面板通过 Manifest 注册表单组件。 |
+| | `settings/` | 统一设置。支持子插件与桌面模式通过 Manifest 注册表单组件，并按核心 / 桌面模式 / 插件分层展示。 |
 | | `lorebook/` | 世界书管理面板，实现插件端可视化条目编排。 |
 | | `stats/` | 面向 RPG 游戏的数值与状态栏。 |
 | **后端 (Server)** | `index.ts` | Node.js 事务化存储与生成代理，基于统一 `ConversationDocument` + 独立事务日志与 OpenAI SDK 提供高可用支撑。 |
@@ -210,7 +213,9 @@ Publish-LuminaServer     # 发布服务端更新
 - [产品愿景 (PDR) v6.0](./PDR.md)
 - [系统架构 (System Design) v6.0](./system_design.md)
 - [API 开发手册](./luminaweave_api.md)
+- [桌面模式重构总规划](./desktop_modes/desktop-mode-architecture-plan.md)
 
 ---
 *Last Updated: 2026-04-12*  
 *Status: Architecture v6.0-dev Active (Lifecycle & Stability)*
+

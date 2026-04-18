@@ -40,11 +40,11 @@
             </div>
             <div class="sum-item">
               <div class="sum-label">分歧点</div>
-              <div class="sum-val">{{ report.divergenceIndex }}</div>
+              <div class="sum-val">{{ formatIndex(report.divergenceIndex) }}</div>
             </div>
             <div class="sum-item">
               <div class="sum-label">首个不一致</div>
-              <div class="sum-val">{{ report.firstMismatchIndex }}</div>
+              <div class="sum-val">{{ formatIndex(report.firstMismatchIndex) }}</div>
             </div>
             <div class="sum-item">
               <div class="sum-label">内容不一致</div>
@@ -234,6 +234,10 @@ const miniText = (text?: string) => {
   const v = text ?? '';
   if (!v) return '空';
   return v.length > 60 ? v.slice(0, 60) + '…' : v;
+};
+
+const formatIndex = (value: number) => {
+  return value >= 0 ? String(value) : '无';
 };
 
 onMounted(() => {

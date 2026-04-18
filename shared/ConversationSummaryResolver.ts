@@ -2,6 +2,27 @@ import type { ConversationDocument, ConversationSummary } from './ConversationTy
 
 const cleanPreview = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
+const resolveCharacterMeta = (
+    document: ConversationDocument
+): Pick<ConversationSummary, 'characterId' | 'characterName' | 'characterAvatarUrl'> => {
+    for (let index = document.nodes.length - 1; index >= 0; index -= 1) {
+        const node = document.nodes[index];
+        if (node.is_user || node.role === 'user') continue;
+
+        return {
+            characterId: node.characterId ?? null,
+            characterName: cleanPreview(node.name || ''),
+            characterAvatarUrl: typeof node.avatarUrl === 'string' ? node.avatarUrl : null
+        };
+    }
+
+    return {
+        characterId: null,
+        characterName: '',
+        characterAvatarUrl: null
+    };
+};
+
 export const resolveConversationPreview = (document: ConversationDocument): string => {
     for (let index = document.nodes.length - 1; index >= 0; index -= 1) {
         const node = document.nodes[index];
@@ -20,5 +41,6 @@ export const resolveConversationSummary = (document: ConversationDocument): Conv
     updatedAt: document.updatedAt,
     activeLeafId: document.activeLeafId,
     previewMessage: resolveConversationPreview(document),
-    messageCount: document.nodes.length
+    messageCount: document.nodes.length,
+    ...resolveCharacterMeta(document)
 });

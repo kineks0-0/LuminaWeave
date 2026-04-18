@@ -1,6 +1,6 @@
 <template>
   <div class="lw-chat-stream" :class="{ 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document', 'is-compact': isCompact }"
-    :style="streamStyle">
+    :data-skin-variant="chatVariant || 'default'" :style="streamStyle">
     <div class="chat-scroll-area" ref="chatScrollArea" @wheel.stop @scroll="handleScroll">
       <div class="chat-content-wrapper" :style="msgMaxWidthStyle">
         <!-- 临时插标物：章节线 -->
@@ -20,7 +20,7 @@
               @error="(e) => (e.target as any).src = lwApi?.DEFAULT_AVATAR">
           </div>
           <div class="msg-content">
-            <div class="msg-meta">
+            <div v-if="showUsernames" class="msg-meta">
               <span class="msg-name">{{ msg.name }}</span>
               <span class="msg-info" v-if="!msg.is_user">分支 A-1</span>
             </div>
@@ -231,6 +231,8 @@ import PromptInspector from './PromptInspector.vue';
 import MessageRenderer from './components/MessageRenderer.vue';
 import { LuminaWeaveAPI } from '../../api/index';
 import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { useComponentSkin } from '../../theme/useComponentSkin';
+import { getThemeSettingValue } from '../../theme/themeRegistry';
 
 interface Props {
   messages: LuminaChatMessage[];
@@ -246,6 +248,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const { activeSettings } = useSettings();
+const { cssVars: chatSkinVars, variant: chatVariant, desktopModeId } = useComponentSkin('chat.stream');
 
 // === 状态 ===
 const quickInput = ref('');
@@ -282,6 +285,7 @@ const effectClass = computed(() => {
 });
 
 const isCompact = computed(() => props.isMobile || props.workspaceCompact);
+const showUsernames = computed(() => getThemeSettingValue(activeSettings, desktopModeId.value, 'showUsernames', true) !== false);
 
 // 订阅流式事件
 const onGenerationStarted = () => {
@@ -454,6 +458,8 @@ const streamStyle = computed(() => {
     'serif': '"Noto Serif CJK SC", "Songti SC", serif',
     'kaiti': '"Kaiti SC", "STKaiti", serif'
   };
+  const compactAvatarSize = isCompact.value ? '34px' : '40px';
+  const compactPadding = isCompact.value ? '16px 14px' : '24px 40px';
 
   return {
     '--lw-bg': curTheme.bg,
@@ -462,6 +468,21 @@ const streamStyle = computed(() => {
     '--lw-user-bubble': curTheme.userBg,
     '--lw-border': curTheme.border,
     '--lw-input-bg': curTheme.inputBg,
+    '--lw-chat-stream-bg': curTheme.bg,
+    '--lw-chat-color': curTheme.color,
+    '--lw-chat-bubble': curTheme.bubbleBg,
+    '--lw-chat-user-bubble': curTheme.userBg,
+    '--lw-chat-border': curTheme.border,
+    '--lw-chat-input-surface': curTheme.inputBg,
+    '--lw-chat-input-area-bg': 'var(--lw-bg-app)',
+    '--lw-chat-scroll-padding': compactPadding,
+    '--lw-chat-content-gap': isCompact.value ? '18px' : '24px',
+    '--lw-chat-avatar-size': compactAvatarSize,
+    '--lw-chat-avatar-radius': '999px',
+    '--lw-chat-bubble-radius': isCompact.value ? '16px' : '18px',
+    '--lw-chat-input-radius': 'var(--lw-radius)',
+    '--lw-chat-bubble-shadow': 'var(--lw-shadow)',
+    ...chatSkinVars.value,
     '--lw-font': (function () {
       const rawFamily = activeSettings['lumina-chat.fontFamily'] || 'sans-serif';
       const family = rawFamily.replace(/['"]/g, '').trim();
@@ -640,8 +661,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--lw-bg);
-  color: var(--lw-color);
+  background: var(--lw-chat-stream-bg, var(--lw-bg));
+  color: var(--lw-chat-color, var(--lw-color));
   width: 100%;
   min-width: 0;
   border-right: 1px solid var(--lw-border-base);
@@ -654,7 +675,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .chat-scroll-area {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 40px;
+  padding: var(--lw-chat-scroll-padding, 24px 40px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -679,7 +700,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .chat-content-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--lw-chat-content-gap, 24px);
   width: 100%;
   min-width: 0;
   transition: max-width 0.3s;
@@ -724,26 +745,26 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   display: flex !important;
   align-items: flex-start !important;
   flex-shrink: 0 !important;
-  width: 40px !important;
-  height: 40px !important;
+  width: var(--lw-chat-avatar-size, 40px) !important;
+  height: var(--lw-chat-avatar-size, 40px) !important;
 }
 
 @media (max-width: 768px) {
   .msg-avatar {
-    width: 34px !important;
-    height: 34px !important;
+    width: var(--lw-chat-avatar-size, 34px) !important;
+    height: var(--lw-chat-avatar-size, 34px) !important;
   }
 
   .msg-avatar .avatar-img {
-    width: 34px !important;
-    height: 34px !important;
+    width: var(--lw-chat-avatar-size, 34px) !important;
+    height: var(--lw-chat-avatar-size, 34px) !important;
   }
 }
 
 .msg-avatar .avatar-img {
-  width: 40px !important;
-  height: 40px !important;
-  border-radius: 50% !important;
+  width: var(--lw-chat-avatar-size, 40px) !important;
+  height: var(--lw-chat-avatar-size, 40px) !important;
+  border-radius: var(--lw-chat-avatar-radius, 50%) !important;
   object-fit: cover !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
   display: block !important;
@@ -799,16 +820,16 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .msg-bubble {
-  background: var(--lw-bubble);
+  background: var(--lw-chat-bubble, var(--lw-bubble));
   padding: 16px;
-  border-radius: 18px;
-  border: 1px solid var(--lw-border);
-  box-shadow: var(--lw-shadow);
+  border-radius: var(--lw-chat-bubble-radius, 18px);
+  border: 1px solid var(--lw-chat-border, var(--lw-border));
+  box-shadow: var(--lw-chat-bubble-shadow, var(--lw-shadow));
   font-size: var(--lw-size);
   font-family: var(--lw-font);
   font-weight: var(--lw-font-weight, 400);
   line-height: var(--lw-line-height);
-  color: var(--lw-color);
+  color: var(--lw-chat-color, var(--lw-color));
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -967,8 +988,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 /* 气泡平实卡片化 */
 .chat-msg.user .msg-bubble {
-  background: var(--lw-user-bubble);
-  border: 1px solid var(--lw-border);
+  background: var(--lw-chat-user-bubble, var(--lw-user-bubble));
+  border: 1px solid var(--lw-chat-border, var(--lw-border));
 }
 
 .filtered-text-info {
@@ -1084,15 +1105,15 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 /* --- 底栏输入区 --- */
 .chat-input-area {
   padding: 20px 24px 24px;
-  background: var(--lw-bg-app);
+  background: var(--lw-chat-input-area-bg, var(--lw-bg-app));
   border-top: 1px solid var(--lw-border-base);
   transition: var(--lw-transition);
 }
 
 .input-container {
-  background: var(--lw-bg-surface);
-  border: 1px solid var(--lw-border-base);
-  border-radius: var(--lw-radius);
+  background: var(--lw-chat-input-surface, var(--lw-bg-surface));
+  border: 1px solid var(--lw-chat-input-border, var(--lw-border-base));
+  border-radius: var(--lw-chat-input-radius, var(--lw-radius));
   padding: 4px;
   display: flex;
   gap: 8px;
@@ -1304,7 +1325,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 /* 展开到全屏模式：撑满整个聊天显示区域 */
 .prompt-inspector-wrap.inspector-expanded {
-  height: calc(100vh - 0px);
+  height: calc(var(--lw-app-height, 100vh) - 0px);
   max-height: 100%;
 }
 
@@ -1326,9 +1347,9 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .streaming-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
+  width: var(--lw-chat-avatar-size, 40px);
+  height: var(--lw-chat-avatar-size, 40px);
+  border-radius: var(--lw-chat-avatar-radius, 14px);
   background: var(--lw-bg-subtle);
   display: flex;
   align-items: center;
@@ -1580,6 +1601,136 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   display: flex;
   align-items: center;
   color: var(--lw-text-muted);
+}
+
+.lw-chat-stream[data-skin-variant='discord'] {
+  border-right-color: var(--lw-chat-border, var(--lw-border-base));
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .chat-scroll-area {
+  align-items: stretch;
+  padding: 8px 0 16px;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .chat-content-wrapper {
+  max-width: 100%;
+  gap: 2px;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-meta {
+  gap: 10px;
+  align-items: center;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-info {
+  color: var(--lw-text-secondary);
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .chat-chapter-divider {
+  display: none;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .chat-msg,
+.lw-chat-stream[data-skin-variant='discord'] .chat-msg.user {
+  align-self: stretch;
+  flex-direction: row;
+  gap: 16px;
+  padding: 2px 20px;
+  border-radius: 0;
+  transition: background 160ms ease;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .chat-msg:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-content,
+.lw-chat-stream[data-skin-variant='discord'] .chat-msg.user .msg-content {
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-avatar {
+  width: 40px !important;
+  height: 40px !important;
+  margin-top: 2px;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-avatar .avatar-img {
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-bubble,
+.lw-chat-stream[data-skin-variant='discord'] .chat-msg.user .msg-bubble {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: #dbdee1;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-bubble :deep(p) {
+  margin-bottom: 0.5em;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-actions {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: none;
+  opacity: 0.78;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-actions button {
+  color: #949ba4;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .msg-actions button:hover {
+  background: #383a40;
+  color: #f2f3f5;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .streaming-bubble,
+.lw-chat-stream[data-skin-variant='discord'] .streaming-msg .msg-bubble.streaming-bubble {
+  background: rgba(88, 101, 242, 0.08);
+  border: 1px solid rgba(88, 101, 242, 0.18);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .chat-input-area {
+  padding: 0 16px 16px;
+  background: #313338;
+  border-top-color: #232428;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .input-toolbar {
+  padding: 8px 6px 10px;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .input-container {
+  background: #383a40;
+  border-color: #4e5058;
+  box-shadow: none;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .input-container:focus-within {
+  border-color: rgba(88, 101, 242, 0.42);
+  box-shadow: 0 0 0 1px rgba(88, 101, 242, 0.24);
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .input-actions {
+  gap: 10px;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .send-btn,
+.lw-chat-stream[data-skin-variant='discord'] .stop-btn {
+  border-radius: 12px;
 }
 
 </style>

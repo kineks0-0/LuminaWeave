@@ -12,7 +12,14 @@ const plugin: LuminaPlugin = {
     component: ChatRoot,
     settingsPreviewComponent: ChatPreview,
     settingsManifest: {
-        theme: { default: 'gray', label: '阅读主题', common: true, type: 'theme', allowedScopes: ['Global', 'Character'] },
+        theme: {
+            default: 'gray',
+            label: '阅读主题（兼容覆盖）',
+            description: '旧版聊天局部主题。仅在当前桌面模式未提供聊天层表面覆盖时作为回退色板使用。',
+            common: true,
+            type: 'theme',
+            allowedScopes: ['Global', 'Character']
+        },
         fontFamily: { default: 'sans-serif', label: '正文字体', common: true, type: 'options', options: [{ value: 'sans-serif', label: '黑体' }, { value: 'serif', label: '宋体' }, { value: 'kaiti', label: '楷体' }], allowedScopes: ['Global', 'Character'] },
         fontWeight: { default: 400, label: '字体字重', common: true, type: 'stepper', min: 100, max: 900, step: 100, allowedScopes: ['Global', 'Character'] },
         fontSize: { default: 16, label: '正文字号', common: true, type: 'stepper', min: 12, max: 72, allowedScopes: ['Global', 'Character', 'Chat', 'Session'] },
