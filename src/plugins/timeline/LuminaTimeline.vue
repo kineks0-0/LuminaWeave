@@ -103,7 +103,7 @@
               <!-- Line from top to dot -->
               <line v-if="isActionNodeConnected" x1="10" y1="0" x2="10" y2="20" stroke="var(--lw-primary)"
                 stroke-width="3" />
-              <circle cx="10" cy="20" r="4" :fill="isActionNodeConnected ? 'var(--lw-primary)' : '#cbd5e1'" />
+              <circle cx="10" cy="20" r="4" :fill="isActionNodeConnected ? 'var(--lw-primary)' : 'var(--lw-timeline-line-color, var(--lw-border-strong))'" />
             </svg>
           </div>
           <div class="s-card-wrapper">
@@ -337,11 +337,11 @@ class TimelineEdgeModel extends PolylineEdgeModel {
     const style = super.getEdgeStyle();
     const { isHighlighted } = this.properties;
     if (isHighlighted) {
-      style.stroke = '#3b82f6';
+      style.stroke = 'var(--lw-timeline-line-active, var(--lw-primary))';
       style.strokeWidth = 3;
       style.opacity = 1;
     } else {
-      style.stroke = '#cbd5e1';
+      style.stroke = 'var(--lw-timeline-line-color, var(--lw-border-strong))';
       style.strokeWidth = 1.5;
       style.opacity = 0.4;
     }
@@ -457,14 +457,14 @@ const initLogicFlow = () => {
   const lfInstance = new LogicFlow({
     container: lfContainerRef.value,
     background: {
-      backgroundColor: '#fcfcfd', // 统一底色
+      backgroundColor: 'var(--lw-timeline-canvas-bg, var(--lw-bg-app))', // 统一底色
     },
     grid: {
       size: 40, // 稀疏点阵间距，与设计稿同步
       visible: true,
       type: 'dot',
       config: {
-        color: '#cbd5e1', // 点颜色
+        color: 'var(--lw-timeline-line-color, var(--lw-border-strong))', // 点颜色
         thickness: 1.5,    // 点大小
       }
     },
@@ -511,13 +511,13 @@ const initLogicFlow = () => {
   // 设置默认样式
   lfInstance.setTheme({
     polyline: {
-      stroke: '#cbd5e1',
+      stroke: 'var(--lw-timeline-line-color, var(--lw-border-strong))',
       strokeWidth: 2,
       radius: 12, // 圆角半径
     },
     // 保留 bezier 以防 small mode 或其他地方用到，虽然 large mode 主力用 polyline
     bezier: {
-      stroke: '#cbd5e1',
+      stroke: 'var(--lw-timeline-line-color, var(--lw-border-strong))',
       strokeWidth: 2,
       curviness: 0.5,
     }
@@ -1180,7 +1180,7 @@ onUnmounted(() => {
 }
 
 .lw-timeline-container.large {
-  background: var(--lw-bg-app);
+  background: var(--lw-timeline-canvas-bg, var(--lw-bg-app));
 }
 
 /* 页眉工具栏 - 极简 Modern Geek */
@@ -1218,8 +1218,9 @@ onUnmounted(() => {
 .header-source-pill {
   font-size: 11px;
   font-weight: 700;
-  color: var(--lw-text-secondary);
-  background: var(--lw-bg-subtle);
+  color: var(--lw-timeline-chip-color, var(--lw-text-secondary));
+  background: var(--lw-timeline-chip-bg, var(--lw-bg-subtle));
+  border: 1px solid var(--lw-timeline-chip-border, var(--lw-border-base));
   padding: 4px 8px;
   border-radius: 999px;
 }
@@ -1230,8 +1231,9 @@ onUnmounted(() => {
   align-self: flex-start;
   padding: 7px 10px;
   border-radius: 999px;
-  background: var(--lw-bg-subtle);
-  color: var(--lw-text-secondary);
+  background: var(--lw-timeline-chip-bg, var(--lw-bg-subtle));
+  color: var(--lw-timeline-chip-color, var(--lw-text-secondary));
+  border: 1px solid var(--lw-timeline-chip-border, var(--lw-border-base));
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -1254,8 +1256,9 @@ onUnmounted(() => {
 
 .source-chip {
   border: 1px solid var(--lw-border-base);
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--lw-text-dim);
+  background: var(--lw-timeline-chip-bg, var(--lw-surface-container-lowest));
+  color: var(--lw-timeline-chip-color, var(--lw-text-dim));
+  border-color: var(--lw-timeline-chip-border, var(--lw-border-base));
   border-radius: 999px;
   padding: 7px 12px;
   display: inline-flex;
@@ -1275,9 +1278,9 @@ onUnmounted(() => {
 }
 
 .source-chip.active {
-  background: var(--lw-black);
-  border-color: var(--lw-black);
-  color: var(--lw-text-inverse);
+  background: color-mix(in srgb, var(--lw-primary) 16%, var(--lw-timeline-chip-bg, var(--lw-surface-container-lowest)));
+  border-color: var(--lw-border-active);
+  color: var(--lw-text-main);
   box-shadow: var(--lw-shadow);
 }
 
@@ -1367,7 +1370,7 @@ onUnmounted(() => {
 
 .run-btn {
   background: var(--lw-primary);
-  color: white;
+  color: var(--lw-text-inverse);
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
@@ -1519,7 +1522,7 @@ onUnmounted(() => {
 
 .s-text {
   font-size: 13px;
-  color: #334155;
+  color: var(--lw-timeline-muted-text, var(--lw-text-secondary));
   line-height: 1.6;
   /* 增加行高 */
   margin: 0;
@@ -1533,12 +1536,12 @@ onUnmounted(() => {
 .s-variant-info {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed #f1f5f9;
+  border-top: 1px dashed var(--lw-timeline-line-color, var(--lw-border-base));
 }
 
 .s-variant-text {
   font-size: 10px;
-  color: #94a3b8;
+  color: var(--lw-timeline-subtle-text, var(--lw-text-muted));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1590,7 +1593,7 @@ onUnmounted(() => {
 }
 
 .s-action-btn.rollback {
-  background: color-mix(in srgb, var(--lw-danger) 10%, white);
+  background: color-mix(in srgb, var(--lw-danger) 10%, var(--lw-surface-container-lowest));
   color: var(--lw-danger);
 }
 
@@ -1635,7 +1638,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--lw-timeline-loading-overlay-bg, rgba(255, 255, 255, 0.72));
   backdrop-filter: blur(8px) saturate(180%);
   z-index: 2000;
   display: flex;
@@ -1664,8 +1667,8 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  border: 4px solid #f1f5f9;
-  border-top-color: #3b82f6;
+  border: 4px solid var(--lw-timeline-loading-spinner-track, var(--lw-surface-container-high));
+  border-top-color: var(--lw-timeline-line-active, var(--lw-primary));
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -1676,7 +1679,7 @@ onUnmounted(() => {
   left: -8px;
   right: -8px;
   bottom: -8px;
-  border: 2px solid rgba(59, 130, 246, 0.1);
+  border: 2px solid color-mix(in srgb, var(--lw-timeline-line-active, var(--lw-primary)) 18%, transparent);
   border-radius: 50%;
   animation: pulse 2s ease-in-out infinite;
 }
@@ -1735,7 +1738,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(15, 23, 42, 0.3);
+  background: var(--lw-timeline-modal-overlay-bg, rgba(15, 23, 42, 0.3));
   backdrop-filter: blur(4px);
   z-index: 1500;
   display: flex;
@@ -1748,18 +1751,18 @@ onUnmounted(() => {
   width: 100%;
   max-width: 800px;
   max-height: 80vh;
-  background: var(--lw-bg-elevated);
+  background: var(--lw-timeline-modal-bg, var(--lw-bg-elevated));
   border-radius: 20px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--lw-border-strong);
 }
 
 .l-modal-header {
   padding: 20px 28px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--lw-timeline-line-color, var(--lw-border-base));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1772,8 +1775,8 @@ onUnmounted(() => {
 }
 
 .l-modal-badge {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--lw-timeline-chip-bg, var(--lw-surface-container-high));
+  color: var(--lw-timeline-muted-text, var(--lw-text-secondary));
   font-size: 10px;
   font-weight: 800;
   padding: 4px 10px;
@@ -1784,13 +1787,13 @@ onUnmounted(() => {
 .l-modal-id {
   font-family: monospace;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--lw-timeline-subtle-text, var(--lw-text-muted));
 }
 
 .l-modal-close {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--lw-timeline-subtle-text, var(--lw-text-muted));
   cursor: pointer;
   padding: 6px;
   border-radius: 50%;
@@ -1798,15 +1801,15 @@ onUnmounted(() => {
 }
 
 .l-modal-close:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: var(--lw-timeline-chip-bg, var(--lw-surface-container-high));
+  color: var(--lw-text-main);
 }
 
 .l-modal-body {
   flex: 1;
   overflow-y: auto;
   padding: 32px 40px;
-  background: #fafafa;
+  background: var(--lw-timeline-modal-body-bg, var(--lw-surface-container-low));
 }
 
 .l-modal-content-wrapper {
@@ -1814,16 +1817,16 @@ onUnmounted(() => {
   margin: 0 auto;
   font-size: 16px;
   line-height: 1.8;
-  color: #334155;
+  color: var(--lw-timeline-muted-text, var(--lw-text-secondary));
 }
 
 .l-modal-footer {
   padding: 20px 40px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--lw-timeline-line-color, var(--lw-border-base));
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: white;
+  background: var(--lw-timeline-modal-footer-bg, var(--lw-surface-container-lowest));
 }
 
 .l-footer-meta {
@@ -1831,7 +1834,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--lw-timeline-subtle-text, var(--lw-text-muted));
   font-weight: 600;
 }
 
@@ -1840,8 +1843,8 @@ onUnmounted(() => {
 }
 
 .l-modal-action-btn {
-  background: #3b82f6;
-  color: white;
+  background: var(--lw-timeline-line-active, var(--lw-primary));
+  color: var(--lw-text-inverse);
   border: none;
   padding: 10px 24px;
   border-radius: 10px;
@@ -1849,11 +1852,11 @@ onUnmounted(() => {
   font-size: 13px;
   cursor: pointer;
   transition: 0.2s;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--lw-timeline-line-active, var(--lw-primary)) 26%, transparent);
 }
 
 .l-modal-action-btn:hover {
-  background: #2563eb;
+  background: color-mix(in srgb, var(--lw-timeline-line-active, var(--lw-primary)) 88%, black);
   transform: translateY(-1px);
 }
 
@@ -1885,59 +1888,59 @@ onUnmounted(() => {
 }
 
 .lw-timeline-container[data-skin-variant='discord'] {
-  background: #313338;
+  background: var(--lw-timeline-canvas-bg, var(--lw-bg-app));
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .large-header,
 .lw-timeline-container[data-skin-variant='discord'] .canvas-controls {
-  background: #232428;
-  border-color: #1e1f22;
+  background: var(--lw-timeline-header-bg, var(--lw-surface-container-high));
+  border-color: var(--lw-border-strong);
   backdrop-filter: none;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--lw-shadow-card);
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .header-source-pill,
 .lw-timeline-container[data-skin-variant='discord'] .timeline-context-pill,
 .lw-timeline-container[data-skin-variant='discord'] .source-chip {
-  background: #383a40;
-  color: #dbdee1;
-  border-color: #4e5058;
+  background: var(--lw-timeline-chip-bg, var(--lw-surface-container-high));
+  color: var(--lw-timeline-chip-color, var(--lw-text-secondary));
+  border-color: var(--lw-timeline-chip-border, var(--lw-border-strong));
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .source-chip.active {
-  background: color-mix(in srgb, var(--lw-primary) 34%, #383a40);
-  border-color: rgba(88, 101, 242, 0.42);
+  background: color-mix(in srgb, var(--lw-primary) 24%, var(--lw-timeline-chip-bg, var(--lw-surface-container-high)));
+  border-color: var(--lw-border-active);
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .s-card,
 .lw-timeline-container[data-skin-variant='discord'] .s-actions-group,
 .lw-timeline-container[data-skin-variant='discord'] .s-action-card {
-  background: #2b2d31;
-  border-color: #3f4147;
+  background: var(--lw-timeline-card-bg, var(--lw-surface-container-low));
+  border-color: var(--lw-border-strong);
   box-shadow: none;
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .s-card.active {
-  background: #313338;
-  border-color: rgba(88, 101, 242, 0.44);
+  background: var(--lw-surface-container-lowest);
+  border-color: var(--lw-border-active);
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .s-card:hover {
-  background: #35373c;
+  background: var(--lw-bg-hover);
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .s-text,
 .lw-timeline-container[data-skin-variant='discord'] .loading-title {
-  color: #f2f3f5;
+  color: var(--lw-text-main);
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .s-variant-info,
 .lw-timeline-container[data-skin-variant='discord'] .l-modal-header,
 .lw-timeline-container[data-skin-variant='discord'] .l-modal-footer {
-  border-color: #3f4147;
+  border-color: var(--lw-border-strong);
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .global-loading-overlay {
-  background: rgba(30, 31, 34, 0.72);
+  background: var(--lw-timeline-loading-overlay-bg, rgba(30, 31, 34, 0.72));
 }
 </style>

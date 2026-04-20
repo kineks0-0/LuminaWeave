@@ -107,6 +107,26 @@ export const themeComponentRegistry = new ThemeComponentRegistry();
         componentId: 'timeline.root',
         exposedCssVars: ['--lw-timeline-header-bg', '--lw-timeline-card-bg'],
         supportedVariants: ['default', 'discord']
+    },
+    {
+        componentId: 'lorebook.workspace',
+        exposedCssVars: [
+            '--lw-lorebook-workspace-bg',
+            '--lw-lorebook-header-bg',
+            '--lw-lorebook-panel-bg',
+            '--lw-lorebook-overlay-bg'
+        ],
+        supportedVariants: ['default', 'discord']
+    },
+    {
+        componentId: 'lorebook.editor',
+        exposedCssVars: [
+            '--lw-lorebook-editor-bg',
+            '--lw-lorebook-editor-header-bg',
+            '--lw-lorebook-editor-control-bg',
+            '--lw-lorebook-editor-accent-bg'
+        ],
+        supportedVariants: ['default', 'discord']
     }
 ].forEach(contract => themeComponentRegistry.register(contract));
 

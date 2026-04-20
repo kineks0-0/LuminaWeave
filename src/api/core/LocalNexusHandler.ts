@@ -1,10 +1,10 @@
 import { streamText } from 'ai';
-import { globalNexusOrchestrator, mapSTSettingsToAISdk } from '../../../../shared/api/llm/NexusOrchestrator.js';
-import { NexusGenerationFlow, PersistenceDelegate } from '../../../../shared/api/NexusGenerationFlow.js';
-import { IStreamingHandle, IStreamingCallbacks } from '../../../../shared/api/IBridge.js';
+import { globalNexusOrchestrator, mapSTSettingsToAISdk } from '@shared/api/llm/NexusOrchestrator.js';
+import { NexusGenerationFlow, PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
+import { IStreamingHandle, IStreamingCallbacks } from '@shared/api/IBridge.js';
 import { lwStorage } from '../storage.js';
 import { globalXMLInterceptor } from './XMLInterceptor.js';
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 
 /**
  * LocalNexusHandler

@@ -10,7 +10,7 @@ import type { ForgeLayer } from '../../types/ForgeStructuredTypes.js';
 import type { ForgeTimelineOperationKind } from '../../types/ForgeTimelineTypes.js';
 import { ForgeExecutionGateway } from './ForgeExecutionGateway.js';
 import { ForgeWorkflowGraph } from './ForgeWorkflowGraph.js';
-import { extractBlocks } from '../../../../shared/TagTokenizer.js';
+import { extractBlocks } from '@shared/TagTokenizer.js';
 import { parseEntryUpdates } from './utils/forgeEntryParser.js';
 import { lwStorage } from '../storage.js';
 

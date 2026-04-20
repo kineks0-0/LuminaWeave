@@ -10,6 +10,8 @@ import {
     getLegacySettingsStorageKey,
     listDesktopModes,
     registerDesktopMode,
+    resolveComponentSkin,
+    resolveThemeValues,
 } from '../themeRegistry.js';
 import type { DesktopModeManifest } from '../types.js';
 
@@ -39,6 +41,49 @@ describe('themeRegistry desktop mode model', () => {
 
     it('rejects duplicate desktop mode ids', () => {
         expect(() => registerDesktopMode(getDesktopModeOrDefault('classic'))).toThrow(/Duplicate desktop mode id: classic/);
+    });
+
+    it('resolves discord desktop mode tokens for both light and dark appearance', () => {
+        const discordMode = getDesktopModeOrDefault('discord');
+        expect(discordMode.preferredAppearance).toBe('follow-setting');
+
+        const lightTokens = resolveThemeValues(discordMode.designTokens, {
+            activeSettings: {},
+            resolvedAppearance: 'light',
+            themePackId: 'discord',
+            desktopModeId: 'discord'
+        });
+        const darkTokens = resolveThemeValues(discordMode.designTokens, {
+            activeSettings: {},
+            resolvedAppearance: 'dark',
+            themePackId: 'discord',
+            desktopModeId: 'discord'
+        });
+
+        expect(lightTokens['--lw-bg-app']).not.toBe(darkTokens['--lw-bg-app']);
+        expect(lightTokens['--lw-surface-container-lowest']).toBeDefined();
+        expect(lightTokens['--lw-surface-container-highest']).toBeDefined();
+        expect(darkTokens['--lw-surface-container-lowest']).toBeDefined();
+        expect(darkTokens['--lw-surface-container-highest']).toBeDefined();
+    });
+
+    it('resolves lorebook workspace and editor skins for discord variant', () => {
+        const context = {
+            activeSettings: {},
+            resolvedAppearance: 'light' as const,
+            themePackId: 'discord',
+            desktopModeId: 'discord'
+        };
+
+        const workspaceSkin = resolveComponentSkin('discord', 'lorebook.workspace', context);
+        const editorSkin = resolveComponentSkin('discord', 'lorebook.editor', context);
+
+        expect(workspaceSkin.variant).toBe('discord');
+        expect(editorSkin.variant).toBe('discord');
+        expect(workspaceSkin.cssVars['--lw-lorebook-panel-bg']).toBeDefined();
+        expect(workspaceSkin.cssVars['--lw-lorebook-overlay-bg']).toBeDefined();
+        expect(editorSkin.cssVars['--lw-lorebook-editor-bg']).toBeDefined();
+        expect(editorSkin.cssVars['--lw-lorebook-editor-save-bg']).toBeDefined();
     });
 
     it('registers a custom desktop mode and exposes it through settings options', async () => {

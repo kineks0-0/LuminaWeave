@@ -3,7 +3,7 @@ import {
     NexusStatusResponse, 
     CleanedMessage 
 } from '../../types/nexus.js';
-import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 
 export interface StreamCallbacks {

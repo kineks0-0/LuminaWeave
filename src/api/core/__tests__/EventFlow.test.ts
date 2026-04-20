@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { EventFlow } from '../../../../../shared/EventFlow.js';
+import { EventFlow } from '@shared/EventFlow.js';
 
 describe('EventFlow', () => {
     it('should correctly register and emit to multiple consumers', async () => {

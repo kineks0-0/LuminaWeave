@@ -1,5 +1,5 @@
-import { extractBlocks } from '../../../../shared/TagTokenizer.js';
-import { BaseXMLInterceptor } from '../../../../shared/BaseXMLInterceptor.js';
+import { extractBlocks } from '@shared/TagTokenizer.js';
+import { BaseXMLInterceptor } from '@shared/BaseXMLInterceptor.js';
 import { llmEngine } from '../llmEngine.js';
 import { lwStorage } from '../storage.js';
 import { LuminaGenerationTask } from './LuminaGenerationTask.js';

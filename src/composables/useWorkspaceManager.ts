@@ -1,4 +1,4 @@
-import { computed, onUnmounted, ref, watch, type ComputedRef, type Ref } from 'vue';
+import { computed, onUnmounted, ref, watch, type Component, type ComputedRef, type Ref } from 'vue';
 import { lwStorage } from '../api/storage';
 import LauncherRoot from '../plugins/launcher/LauncherRoot.vue';
 import CardMakerPanel from '../plugins/forge/CardMakerPanel.vue';
@@ -8,16 +8,10 @@ import { useCardMakerStore } from '../plugins/forge/CardMakerStore';
 import { useSessionIndexStore } from '../stores/useSessionIndexStore';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../plugins/forge/forgeAuxPanels';
 import { currentDetailedView } from '../plugins/settings/useSettings';
+import type { LuminaPlugin } from '../types/plugin';
+import type { DynamicTabConfig } from '../shell/types';
 
 type WorkspaceAppKind = 'launcher' | 'main' | 'widget' | 'panel';
-
-interface DynamicTabConfig {
-  id: string;
-  name: string;
-  icon: string;
-  component: any;
-  props?: Record<string, unknown>;
-}
 
 interface WorkspaceLayout {
   x: number;
@@ -47,7 +41,7 @@ interface WorkspaceAppDescriptor {
   id: string;
   title: string;
   icon: string;
-  component: any;
+  component: Component;
   props: Record<string, unknown>;
   kind: WorkspaceAppKind;
   dockable: boolean;
@@ -129,15 +123,15 @@ export const useWorkspaceManager = ({
   componentMap,
   getPluginName
 }: {
-  mainPlugins: ComputedRef<any[]>;
-  widgetPlugins: ComputedRef<any[]>;
+  mainPlugins: ComputedRef<LuminaPlugin[]>;
+  widgetPlugins: ComputedRef<LuminaPlugin[]>;
   dynamicTabs: Ref<DynamicTabConfig[]>;
   activeMainTab: Ref<string>;
   activeRightPanel: Ref<string>;
   isMobile: Ref<boolean>;
   freeformStageRef: Ref<HTMLElement | null>;
   workspaceNavigationVisible: Ref<boolean> | ComputedRef<boolean>;
-  componentMap: Record<string, any>;
+  componentMap: Record<string, Component>;
   getPluginName: (pluginId: string | null) => string;
 }) => {
   let workspacePersistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -282,7 +276,9 @@ export const useWorkspaceManager = ({
       id: `tab:${tab.id}`,
       title: tab.name,
       icon: tab.icon || '',
-      component: componentMap[tab.component] || tab.component,
+      component: typeof tab.component === 'string'
+        ? (componentMap[tab.component] || LauncherRoot)
+        : tab.component,
       props: tab.props || {},
       kind: 'panel',
       dockable: false,

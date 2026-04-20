@@ -1,4 +1,4 @@
-import type { LuminaChatMessage, LuminaConversationType } from '../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage, LuminaConversationType } from '@shared/LuminaMessage.js';
 import type { ChatSessionRef, ForgeWorkspaceSessionRef } from './SessionTypes.js';
 
 export type ConversationSourceId = Extract<LuminaConversationType, 'chat' | 'forge'>;
@@ -50,6 +50,103 @@ export interface ConversationContextOverride {
 export interface ConversationContextSwitchInput {
     sourceId: ConversationSourceId;
     sessionId?: string | null;
+}
+
+export interface CreateChatConversationInput {
+    characterId?: string | number | null;
+    characterName?: string;
+    characterAvatarUrl?: string | null;
+}
+
+export interface CreateChatConversationResult {
+    sessionId: string;
+    title: string;
+    characterId: string | null;
+    characterName: string;
+    characterAvatarUrl: string | null;
+}
+
+export interface RenameChatConversationInput {
+    sessionId: string;
+    nextTitle: string;
+    characterId?: string | number | null;
+    characterName?: string;
+    characterAvatarUrl?: string | null;
+}
+
+export interface RenameChatConversationResult {
+    previousSessionId: string;
+    sessionId: string;
+    title: string;
+    characterId: string | null;
+    characterName: string;
+    characterAvatarUrl: string | null;
+}
+
+export interface DeleteChatConversationInput {
+    sessionId: string;
+    characterId?: string | number | null;
+    characterName?: string;
+    characterAvatarUrl?: string | null;
+}
+
+export interface DeleteChatConversationResult {
+    sessionId: string;
+    characterId: string | null;
+    characterName: string;
+    characterAvatarUrl: string | null;
+}
+
+export interface CharacterChannelCapabilities {
+    supportsCharacterRoster: boolean;
+    supportsCreateSession: boolean;
+    supportsRenameSession: boolean;
+    supportsDeleteSession: boolean;
+    supportsCloseCurrentSession: boolean;
+    supportsNativeOpenSession: boolean;
+    supportsHostHistory: boolean;
+    supportsHostSearch: boolean;
+    supportsFindLastMessage: boolean;
+    supportsStableSessionId: boolean;
+    supportsCurrentWindowInfo: boolean;
+}
+
+export interface CharacterChannelSessionItem extends ChatSessionRef {
+    sourceId: 'chat';
+    characterKey: string;
+    recentHistoryPreview: string;
+    stableSessionId: string | null;
+}
+
+export interface CharacterChannelGroup {
+    key: string;
+    characterId: string | number | null;
+    characterName: string;
+    characterAvatarUrl: string | null;
+    characterInitial: string;
+    sessions: CharacterChannelSessionItem[];
+    recentSession: CharacterChannelSessionItem | null;
+    recentPreview: string;
+}
+
+export interface CharacterChannelStatus {
+    kind: 'idle' | 'loading' | 'switching' | 'error';
+    text: string;
+    sessionId: string | null;
+    characterName: string;
+    error: string | null;
+}
+
+export interface CharacterChannelState {
+    characterGroups: CharacterChannelGroup[];
+    activeSessionId: string | null;
+    selectedViewSessionId: string | null;
+    currentLiveSessionId: string | null;
+    busySessionIds: string[];
+    expandedCharacterKey: string | null;
+    expandedSessionGroups: Record<string, boolean>;
+    capabilityFlags: CharacterChannelCapabilities;
+    status: CharacterChannelStatus;
 }
 
 export interface ConversationNodeSwitchInput extends ConversationContextOverride {

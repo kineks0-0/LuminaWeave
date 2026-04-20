@@ -1,6 +1,10 @@
 <template>
   <aside
     class="lw-discord-rail"
+    :class="[
+      { 'is-mobile': isMobile },
+      isMobile ? `mobile-${mobilePlacement}` : ''
+    ]"
     :data-skin-variant="railVariant || 'default'"
     :style="railStyle"
   >
@@ -31,7 +35,8 @@
           <button
             class="lw-discord-card__avatar"
             type="button"
-            :title="`打开 ${group.characterName} 最近一次对话`"
+            :title="group.recentSession ? `打开 ${group.characterName} 最近一次对话` : `${group.characterName} 暂无对话`"
+            :disabled="!group.recentSession"
             @click.stop="openRecentSession(group)"
           >
             <img
@@ -64,16 +69,139 @@
 
         <div v-if="expandedCharacterKey === group.key" class="lw-discord-card__sessions">
           <button
-            v-for="session in group.sessions"
-            :key="session.id"
-            class="lw-discord-card__session"
-            :class="{ 'is-active': activeSessionId === session.id }"
+            class="lw-discord-card__session lw-discord-card__session-create"
             type="button"
-            @click="emit('openSession', session.id)"
+            :title="`为 ${group.characterName} 新建对话`"
+            @click="createSession(group)"
           >
-            <span class="lw-discord-card__session-title">{{ session.title }}</span>
-            <span class="lw-discord-card__session-meta">{{ formatSessionTime(session.updatedAt) }}</span>
+            <span class="lw-discord-card__session-title">+ 新建对话</span>
+            <span class="lw-discord-card__session-meta">空会话</span>
           </button>
+
+          <template v-if="group.sessions.length > 0">
+            <div
+              v-for="session in getVisibleSessions(group)"
+              :key="session.id"
+              class="lw-discord-card__session-wrap"
+            >
+              <div
+                class="lw-discord-card__session-row"
+                :class="{ 'is-menu-open': sessionMenuId === session.id }"
+              >
+                <button
+                  class="lw-discord-card__session lw-discord-card__session-main"
+                  :class="{ 'is-active': activeSessionId === session.id }"
+                  type="button"
+                  :disabled="isSessionBusy(session.id)"
+                  @click="onOpenSession?.(session.id)"
+                >
+                  <span class="lw-discord-card__session-title">{{ session.title }}</span>
+                  <span class="lw-discord-card__session-meta">{{ formatSessionTime(session.updatedAt) }}</span>
+                </button>
+
+                <button
+                  class="lw-discord-card__session-menu-trigger"
+                  type="button"
+                  :disabled="isSessionBusy(session.id)"
+                  :title="`管理 ${session.title}`"
+                  @click.stop="toggleSessionMenu(session.id)"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                    <circle cx="5" cy="12" r="1.7"></circle>
+                    <circle cx="12" cy="12" r="1.7"></circle>
+                    <circle cx="19" cy="12" r="1.7"></circle>
+                  </svg>
+                </button>
+              </div>
+
+              <div v-if="sessionMenuId === session.id" class="lw-discord-card__session-menu">
+                <button
+                  class="lw-discord-card__session-menu-item"
+                  type="button"
+                  :disabled="isSessionBusy(session.id)"
+                  @click="startRenameSession(session)"
+                >
+                  重命名
+                </button>
+                <button
+                  class="lw-discord-card__session-menu-item is-danger"
+                  type="button"
+                  :disabled="isSessionBusy(session.id)"
+                  @click="startDeleteSession(session)"
+                >
+                  删除
+                </button>
+              </div>
+
+              <form
+                v-if="renameDraftSessionId === session.id"
+                class="lw-discord-card__session-editor"
+                @submit.prevent="submitRenameSession(session)"
+              >
+                <input
+                  v-model="renameDraftTitle"
+                  class="lw-discord-card__session-input"
+                  type="text"
+                  maxlength="120"
+                  placeholder="输入新的会话标题"
+                >
+                <div class="lw-discord-card__session-editor-actions">
+                  <button
+                    class="lw-discord-card__session-editor-button"
+                    type="button"
+                    :disabled="pendingRenameSessionId === session.id"
+                    @click="cancelRenameSession()"
+                  >
+                    取消
+                  </button>
+                  <button
+                    class="lw-discord-card__session-editor-button is-primary"
+                    type="submit"
+                    :disabled="pendingRenameSessionId === session.id || !renameDraftTitle.trim()"
+                  >
+                    {{ pendingRenameSessionId === session.id ? '重命名中...' : '保存' }}
+                  </button>
+                </div>
+              </form>
+
+              <div v-if="deleteConfirmSessionId === session.id" class="lw-discord-card__session-delete-confirm">
+                <p>删除「{{ session.title }}」后将无法从角色频道恢复。</p>
+                <div class="lw-discord-card__session-editor-actions">
+                  <button
+                    class="lw-discord-card__session-editor-button"
+                    type="button"
+                    :disabled="pendingDeleteSessionId === session.id"
+                    @click="cancelDeleteSession()"
+                  >
+                    取消
+                  </button>
+                  <button
+                    class="lw-discord-card__session-editor-button is-danger"
+                    type="button"
+                    :disabled="pendingDeleteSessionId === session.id"
+                    @click="confirmDeleteSession(session)"
+                  >
+                    {{ pendingDeleteSessionId === session.id ? '删除中...' : '确认删除' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button
+              v-if="group.sessions.length > visibleSessionCount"
+              class="lw-discord-card__more"
+              type="button"
+              @click="onToggleSessionExpansion?.(group.key)"
+            >
+              {{ isGroupShowingAllSessions(group.key)
+                ? '收起'
+                : `查看更多 ${group.sessions.length - visibleSessionCount} 条` }}
+            </button>
+          </template>
+
+          <div v-else class="lw-discord-card__session-empty">
+            暂无历史对话
+          </div>
         </div>
       </article>
     </div>
@@ -82,39 +210,43 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, type CSSProperties } from 'vue';
-import { useConversationContextStore } from '../stores/useConversationContextStore';
 import { activeSettings, useSettings } from '../plugins/settings/useSettings';
 import { getThemeSettingValue } from '../theme/themeRegistry';
 import { useComponentSkin } from '../theme/useComponentSkin';
-import type { ChatSessionRef } from '../types/SessionTypes';
-import type { ConversationSessionRef } from '../types/ConversationContextTypes';
+import type {
+  CharacterChannelGroup,
+  CharacterChannelSessionItem,
+  CharacterChannelState,
+  CreateChatConversationInput,
+  DeleteChatConversationInput,
+  RenameChatConversationInput
+} from '../types/ConversationContextTypes';
 
-type CharacterGroup = {
-  key: string;
-  characterId: string | number | null;
-  characterName: string;
-  characterAvatarUrl: string | null;
-  characterInitial: string;
-  sessions: ChatSessionRef[];
-  recentSession: ChatSessionRef | null;
-  recentPreview: string;
-};
+const DEFAULT_VISIBLE_SESSION_COUNT = 5;
 
 const props = withDefaults(defineProps<{
-  fallbackCharacterName?: string;
-  fallbackCharacterAvatarUrl?: string | null;
+  state: CharacterChannelState;
+  isMobile?: boolean;
+  mobilePlacement?: 'top' | 'bottom' | 'left' | 'right';
+  onOpenSession?: (sessionId: string) => void;
+  onCreateSession?: (payload: CreateChatConversationInput) => void;
+  onRenameSession?: (payload: RenameChatConversationInput) => Promise<void> | void;
+  onDeleteSession?: (payload: DeleteChatConversationInput) => Promise<void> | void;
+  onToggleGroup?: (groupKey: string) => void;
+  onToggleSessionExpansion?: (groupKey: string) => void;
 }>(), {
-  fallbackCharacterName: 'Assistant',
-  fallbackCharacterAvatarUrl: null
+  isMobile: false,
+  mobilePlacement: 'bottom',
+  onOpenSession: undefined,
+  onCreateSession: undefined,
+  onRenameSession: undefined,
+  onDeleteSession: undefined,
+  onToggleGroup: undefined,
+  onToggleSessionExpansion: undefined
 });
-
-const emit = defineEmits<{
-  (e: 'openSession', sessionId: string): void;
-}>();
 
 useSettings();
 
-const contextStore = useConversationContextStore();
 const { cssVars: railSkinVars, variant: railVariant, desktopModeId } = useComponentSkin('shell.characterRail');
 const { cssVars: cardSkinVars } = useComponentSkin('shell.characterCard');
 
@@ -127,86 +259,170 @@ const previewLines = computed(() => {
 const cardDensity = computed(() => String(
   getThemeSettingValue(activeSettings, desktopModeId.value, 'sidebarCardDensity', 'cozy')
 ));
-const activeSessionId = computed(() => contextStore.activeSourceId === 'chat' ? contextStore.activeSessionId : null);
-const isChatSessionRef = (session: ConversationSessionRef): session is ChatSessionRef & { sourceId: 'chat' } => {
-  return session.sourceId === 'chat';
-};
-
-const normalizedSessions = computed(() => {
-  return [...contextStore.chatSessions]
-    .filter(isChatSessionRef)
-    .sort((left, right) => right.updatedAt - left.updatedAt)
-    .map((session) => {
-      const fallbackName = session.source === 'st-current' ? props.fallbackCharacterName : '';
-      const fallbackAvatar = session.source === 'st-current' ? props.fallbackCharacterAvatarUrl : null;
-      return {
-        ...session,
-        characterId: session.characterId ?? null,
-        characterName: session.characterName || fallbackName || session.title || '未命名角色',
-        characterAvatarUrl: session.characterAvatarUrl || fallbackAvatar || null
-      };
-    });
+const visibleSessionCount = computed(() => {
+  const value = Number(getThemeSettingValue(activeSettings, desktopModeId.value, 'discordCharacterRailVisibleSessions', DEFAULT_VISIBLE_SESSION_COUNT));
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : DEFAULT_VISIBLE_SESSION_COUNT;
 });
 
-const characterGroups = computed<CharacterGroup[]>(() => {
-  const grouped = new Map<string, CharacterGroup>();
+const sessionMenuId = ref<string | null>(null);
+const renameDraftSessionId = ref<string | null>(null);
+const renameDraftTitle = ref('');
+const deleteConfirmSessionId = ref<string | null>(null);
+const pendingRenameSessionId = ref<string | null>(null);
+const pendingDeleteSessionId = ref<string | null>(null);
 
-  normalizedSessions.value.forEach((session) => {
-    const key = session.characterId != null
-      ? String(session.characterId)
-      : session.characterName || session.id;
-    const existing = grouped.get(key);
-    const recentPreview = session.previewMessage || session.summary || '暂无最近对话';
-    if (existing) {
-      existing.sessions.push(session);
-      return;
-    }
-
-    grouped.set(key, {
-      key,
-      characterId: session.characterId ?? null,
-      characterName: session.characterName || '未命名角色',
-      characterAvatarUrl: session.characterAvatarUrl || null,
-      characterInitial: (session.characterName || '角').trim().slice(0, 1).toUpperCase(),
-      sessions: [session],
-      recentSession: session,
-      recentPreview,
-    });
-  });
-
-  return Array.from(grouped.values()).map((group) => ({
-    ...group,
-    sessions: [...group.sessions].sort((left, right) => right.updatedAt - left.updatedAt),
-    recentSession: [...group.sessions].sort((left, right) => right.updatedAt - left.updatedAt)[0] || null,
-    recentPreview: ([...group.sessions].sort((left, right) => right.updatedAt - left.updatedAt)[0]?.previewMessage
-      || [...group.sessions].sort((left, right) => right.updatedAt - left.updatedAt)[0]?.summary
-      || '暂无最近对话')
-  }));
-});
-
+const characterGroups = computed<CharacterChannelGroup[]>(() => props.state.characterGroups);
+const activeSessionId = computed(() => props.state.activeSessionId);
+const expandedCharacterKey = computed(() => props.state.expandedCharacterKey);
 const activeCharacterKey = computed(() => {
   const sessionId = activeSessionId.value;
   if (!sessionId) return null;
   return characterGroups.value.find((group) => group.sessions.some((session) => session.id === sessionId))?.key || null;
 });
 
-const expandedCharacterKey = ref<string | null>(null);
-
 watch(activeCharacterKey, (nextKey) => {
-  if (nextKey) {
-    expandedCharacterKey.value = nextKey;
-  } else if (!characterGroups.value.some((group) => group.key === expandedCharacterKey.value)) {
-    expandedCharacterKey.value = characterGroups.value[0]?.key || null;
+  if (!nextKey || props.state.expandedCharacterKey === nextKey) {
+    return;
   }
+  props.onToggleGroup?.(nextKey);
 }, { immediate: true });
 
+watch(
+  () => characterGroups.value.flatMap((group) => group.sessions.map((session) => session.id)).join('|'),
+  () => {
+    const sessionIds = new Set(characterGroups.value.flatMap((group) => group.sessions.map((session) => session.id)));
+    if (sessionMenuId.value && !sessionIds.has(sessionMenuId.value)) {
+      sessionMenuId.value = null;
+    }
+    if (renameDraftSessionId.value && !sessionIds.has(renameDraftSessionId.value)) {
+      renameDraftSessionId.value = null;
+      renameDraftTitle.value = '';
+      pendingRenameSessionId.value = null;
+    }
+    if (deleteConfirmSessionId.value && !sessionIds.has(deleteConfirmSessionId.value)) {
+      deleteConfirmSessionId.value = null;
+      pendingDeleteSessionId.value = null;
+    }
+    if (pendingRenameSessionId.value && !sessionIds.has(pendingRenameSessionId.value)) {
+      pendingRenameSessionId.value = null;
+    }
+    if (pendingDeleteSessionId.value && !sessionIds.has(pendingDeleteSessionId.value)) {
+      pendingDeleteSessionId.value = null;
+    }
+  },
+  { immediate: true }
+);
+
 const toggleGroup = (groupKey: string) => {
-  expandedCharacterKey.value = expandedCharacterKey.value === groupKey ? null : groupKey;
+  props.onToggleGroup?.(groupKey);
+  sessionMenuId.value = null;
 };
 
-const openRecentSession = (group: CharacterGroup) => {
+const openRecentSession = (group: CharacterChannelGroup) => {
   if (!group.recentSession) return;
-  emit('openSession', group.recentSession.id);
+  props.onOpenSession?.(group.recentSession.id);
+};
+
+const createSession = (group: CharacterChannelGroup) => {
+  props.onCreateSession?.({
+    characterId: group.characterId,
+    characterName: group.characterName,
+    characterAvatarUrl: group.characterAvatarUrl
+  });
+};
+
+const isGroupShowingAllSessions = (groupKey: string): boolean => {
+  return Boolean(props.state.expandedSessionGroups[groupKey]);
+};
+
+const getVisibleSessions = (group: CharacterChannelGroup): CharacterChannelSessionItem[] => {
+  if (group.sessions.length <= visibleSessionCount.value || isGroupShowingAllSessions(group.key)) {
+    return group.sessions;
+  }
+  return group.sessions.slice(0, visibleSessionCount.value);
+};
+
+const isSessionBusy = (sessionId: string): boolean => {
+  return props.state.busySessionIds.includes(sessionId)
+    || pendingRenameSessionId.value === sessionId
+    || pendingDeleteSessionId.value === sessionId;
+};
+
+const toggleSessionMenu = (sessionId: string) => {
+  sessionMenuId.value = sessionMenuId.value === sessionId ? null : sessionId;
+  deleteConfirmSessionId.value = null;
+  if (renameDraftSessionId.value !== sessionId) {
+    renameDraftSessionId.value = null;
+    renameDraftTitle.value = '';
+  }
+};
+
+const startRenameSession = (session: CharacterChannelSessionItem) => {
+  sessionMenuId.value = null;
+  deleteConfirmSessionId.value = null;
+  renameDraftSessionId.value = session.id;
+  renameDraftTitle.value = session.title;
+};
+
+const cancelRenameSession = () => {
+  renameDraftSessionId.value = null;
+  renameDraftTitle.value = '';
+};
+
+const startDeleteSession = (session: CharacterChannelSessionItem) => {
+  sessionMenuId.value = null;
+  renameDraftSessionId.value = null;
+  renameDraftTitle.value = '';
+  deleteConfirmSessionId.value = session.id;
+};
+
+const cancelDeleteSession = () => {
+  deleteConfirmSessionId.value = null;
+};
+
+const submitRenameSession = async (session: CharacterChannelSessionItem) => {
+  const nextTitle = renameDraftTitle.value.trim();
+  if (!nextTitle || !props.onRenameSession || pendingRenameSessionId.value === session.id) {
+    return;
+  }
+
+  pendingRenameSessionId.value = session.id;
+  try {
+    await props.onRenameSession({
+      sessionId: session.id,
+      nextTitle,
+      characterId: session.characterId ?? null,
+      characterName: session.characterName || '',
+      characterAvatarUrl: session.characterAvatarUrl ?? null
+    });
+    renameDraftSessionId.value = null;
+    renameDraftTitle.value = '';
+  } catch (error) {
+    console.error('[DiscordCharacterRail] rename session failed', error);
+  } finally {
+    pendingRenameSessionId.value = null;
+  }
+};
+
+const confirmDeleteSession = async (session: CharacterChannelSessionItem) => {
+  if (!props.onDeleteSession || pendingDeleteSessionId.value === session.id) {
+    return;
+  }
+
+  pendingDeleteSessionId.value = session.id;
+  try {
+    await props.onDeleteSession({
+      sessionId: session.id,
+      characterId: session.characterId ?? null,
+      characterName: session.characterName || '',
+      characterAvatarUrl: session.characterAvatarUrl ?? null
+    });
+    deleteConfirmSessionId.value = null;
+  } catch (error) {
+    console.error('[DiscordCharacterRail] delete session failed', error);
+  } finally {
+    pendingDeleteSessionId.value = null;
+  }
 };
 
 const formatSessionTime = (timestamp: number) => {
@@ -240,6 +456,17 @@ const formatSessionTime = (timestamp: number) => {
   flex-direction: column;
   gap: 4px;
   padding: 6px 8px 4px;
+}
+
+.lw-discord-card__avatar:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.lw-discord-card__session-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--lw-text-muted, rgba(255, 255, 255, 0.56));
 }
 
 .lw-discord-rail__eyebrow {
@@ -401,6 +628,22 @@ const formatSessionTime = (timestamp: number) => {
   padding: 0 12px 12px 68px;
 }
 
+.lw-discord-card__session-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lw-discord-card__session-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.lw-discord-card__session-row.is-menu-open .lw-discord-card__session-main {
+  border-color: rgba(var(--lw-primary-rgb), 0.24);
+}
+
 .lw-discord-card__session {
   width: 100%;
   display: flex;
@@ -416,8 +659,27 @@ const formatSessionTime = (timestamp: number) => {
   text-align: left;
 }
 
+.lw-discord-card__session:disabled,
+.lw-discord-card__session-menu-trigger:disabled,
+.lw-discord-card__session-menu-item:disabled,
+.lw-discord-card__session-editor-button:disabled {
+  opacity: 0.68;
+  cursor: default;
+}
+
 .lw-discord-card__session.is-active {
   border-color: rgba(var(--lw-primary-rgb), 0.28);
+  color: var(--lw-text-main);
+}
+
+.lw-discord-card__session-main {
+  min-width: 0;
+}
+
+.lw-discord-card__session-create {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--lw-primary) 20%, var(--lw-border-base));
+  background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
   color: var(--lw-text-main);
 }
 
@@ -425,12 +687,100 @@ const formatSessionTime = (timestamp: number) => {
   min-width: 0;
   font-size: 12px;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lw-discord-card__session-meta {
   flex-shrink: 0;
   font-size: 10px;
   color: var(--lw-text-muted);
+}
+
+.lw-discord-card__session-menu-trigger {
+  width: 36px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--lw-character-session-bg, color-mix(in srgb, var(--lw-bg-elevated) 76%, transparent));
+  color: var(--lw-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lw-discord-card__session-menu {
+  display: flex;
+  gap: 6px;
+}
+
+.lw-discord-card__session-menu-item,
+.lw-discord-card__session-editor-button,
+.lw-discord-card__more {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lw-bg-elevated) 82%, transparent);
+  color: var(--lw-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.lw-discord-card__session-menu-item {
+  padding: 8px 10px;
+}
+
+.lw-discord-card__session-menu-item.is-danger,
+.lw-discord-card__session-editor-button.is-danger {
+  color: #f87171;
+}
+
+.lw-discord-card__session-editor,
+.lw-discord-card__session-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 82%, transparent);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 88%, transparent);
+}
+
+.lw-discord-card__session-delete-confirm p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--lw-text-secondary);
+}
+
+.lw-discord-card__session-input {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 86%, transparent);
+  border-radius: 12px;
+  background: var(--lw-bg-surface, rgba(255, 255, 255, 0.04));
+  color: var(--lw-text-main);
+  font-size: 12px;
+}
+
+.lw-discord-card__session-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lw-discord-card__session-editor-button {
+  padding: 8px 10px;
+}
+
+.lw-discord-card__session-editor-button.is-primary {
+  background: color-mix(in srgb, var(--lw-primary) 18%, transparent);
+  color: var(--lw-text-main);
+}
+
+.lw-discord-card__more {
+  align-self: flex-start;
+  padding: 8px 12px;
 }
 
 .lw-discord-card.is-compact .lw-discord-card__main {
@@ -451,23 +801,99 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .lw-discord-rail[data-skin-variant='discord'] .lw-discord-card {
-  background: #2b2d31;
-  border-color: #3f4147;
+  background: var(--lw-character-card-bg, var(--lw-surface-container-lowest));
+  border-color: var(--lw-character-card-border, var(--lw-border-strong));
 }
 
 .lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__main:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--lw-primary) 6%, var(--lw-character-card-bg, var(--lw-surface-container-lowest)));
 }
 
 .lw-discord-rail[data-skin-variant='discord'] .lw-discord-card.is-active {
-  background: #313338;
+  background: color-mix(in srgb, var(--lw-primary) 9%, var(--lw-character-card-bg, var(--lw-surface-container-lowest)));
 }
 
-.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session {
-  background: #383a40;
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-menu-trigger,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-menu-item,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-editor-button,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__more {
+  background: var(--lw-character-session-bg, var(--lw-surface-container-high));
 }
 
-.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session:hover {
-  background: #404249;
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session:hover,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-menu-trigger:hover,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-menu-item:hover,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-editor-button:hover,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__more:hover {
+  background: var(--lw-surface-container-highest);
+}
+
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-create,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-editor-button.is-primary {
+  border-color: color-mix(in srgb, var(--lw-primary) 32%, var(--lw-border-strong));
+  background: color-mix(in srgb, var(--lw-primary) 16%, var(--lw-character-session-bg, var(--lw-surface-container-high)));
+}
+
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-editor,
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-delete-confirm {
+  background: var(--lw-surface-container-low);
+  border-color: var(--lw-border-strong);
+}
+
+.lw-discord-rail[data-skin-variant='discord'] .lw-discord-card__session-input {
+  background: var(--lw-surface-container);
+  border-color: var(--lw-border-strong);
+}
+
+.lw-discord-rail.is-mobile {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  max-height: min(72vh, 680px);
+  padding: 14px 12px 18px;
+  border-right: none;
+  border-top-left-radius: 26px;
+  border-top-right-radius: 26px;
+  box-shadow: 0 -22px 40px rgba(0, 0, 0, 0.28);
+}
+
+.lw-discord-rail.is-mobile .lw-discord-rail__header {
+  padding: 8px 10px 6px;
+}
+
+.lw-discord-rail.is-mobile .lw-discord-rail__list {
+  padding-right: 0;
+  padding-bottom: 4px;
+}
+
+.lw-discord-rail.is-mobile .lw-discord-card__sessions {
+  padding: 0 10px 10px 62px;
+}
+
+.lw-discord-rail.is-mobile.mobile-top {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 26px;
+  border-bottom-right-radius: 26px;
+}
+
+.lw-discord-rail.is-mobile.mobile-left,
+.lw-discord-rail.is-mobile.mobile-right {
+  width: min(360px, 100%);
+  height: 100%;
+  max-height: none;
+  padding: 16px 12px 18px;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+}
+
+.lw-discord-rail.is-mobile.mobile-left {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.lw-discord-rail.is-mobile.mobile-right {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 </style>

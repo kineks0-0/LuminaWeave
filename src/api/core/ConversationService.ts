@@ -5,17 +5,24 @@ import { chatSessionIndexService } from './ChatSessionIndexService.js';
 import { forgeSessionRepository } from './ForgeSessionRepository.js';
 import { forgeConversationGateway } from './ForgeConversationGateway.js';
 import { ChatConversationGateway } from './ChatConversationGateway.js';
-import type { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { STClient } from './st-adapter/STClient.js';
 import type {
     ConversationContextOption,
     ConversationContextOverride,
     ConversationContextSwitchInput,
+    CreateChatConversationInput,
+    CreateChatConversationResult,
+    DeleteChatConversationInput,
+    DeleteChatConversationResult,
     ConversationNodeSwitchInput,
     ConversationSessionRef,
     ConversationSourceAdapter,
     ConversationSourceId,
     ConversationTimelineNode,
-    ConversationViewContext
+    ConversationViewContext,
+    RenameChatConversationInput,
+    RenameChatConversationResult
 } from '../../types/ConversationContextTypes.js';
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 
@@ -28,6 +35,18 @@ type LuminaApiLike = LuminaWeaveAPIBase & {
         rollbackFromNode(targetNodeId: string): Promise<boolean>;
     };
     on(event: string, callback: Function): void;
+    emit(event: string, ...args: any[]): void;
+    syncFromST(options?: {
+        skipSave?: boolean;
+        forceOverwrite?: boolean;
+        skipIndependentLoad?: boolean;
+        forceIndependentLoad?: boolean;
+        resolveIntent?: 'st' | 'lumina';
+    }): Promise<void>;
+    beginControlledChatCreation(targetCharacterId: string | number | null | undefined): void;
+    markControlledChatCreationFinalChat(chatId: string | null | undefined): void;
+    flushDeferredPromptWorldInfoSync(reason?: string): Promise<void>;
+    endControlledChatCreation(success: boolean): void;
 };
 
 type ChatSessionCache = {
@@ -41,10 +60,7 @@ const DEFAULT_CONTEXT: ConversationContextSwitchInput = {
 };
 
 const normalizeSessionId = (sessionId: string | null | undefined): string | null => {
-    if (!sessionId || sessionId === 'null' || sessionId === 'undefined' || sessionId === 'default') {
-        return null;
-    }
-    return sessionId;
+    return STClient.normalizeChatId(sessionId);
 };
 
 const buildTimelineGraph = (nodes: LuminaChatMessage[]): Record<string, ConversationTimelineNode> => {
@@ -131,7 +147,7 @@ class ChatConversationSourceAdapter implements ConversationSourceAdapter {
                 sessionId: null,
                 store: this.gateway.getLiveStore(),
                 persistence: this.gateway.getLivePersistence(),
-                isLive: true
+                isLive: false
             };
         }
 
@@ -239,6 +255,18 @@ class ChatConversationSourceAdapter implements ConversationSourceAdapter {
         resolved.store.emit('WORLDLINE_UPDATED');
         await resolved.persistence.saveToIndependentChat(resolved.sessionId);
         return true;
+    }
+
+    async createSession(input: CreateChatConversationInput): Promise<CreateChatConversationResult> {
+        return this.gateway.createSession(input);
+    }
+
+    async renameSession(input: RenameChatConversationInput): Promise<RenameChatConversationResult> {
+        return this.gateway.renameSession(input);
+    }
+
+    async deleteSession(input: DeleteChatConversationInput): Promise<DeleteChatConversationResult> {
+        return this.gateway.deleteSession(input);
     }
 }
 
@@ -364,6 +392,8 @@ export class ConversationService extends LuminaWeaveAPIBase {
     private readonly contextSelection: ConversationContextSwitchInput = { ...DEFAULT_CONTEXT };
     private forgeWatcherStop: WatchStopHandle | null = null;
     private isInitialized = false;
+    private chatSessionMutationDepth = 0;
+    private pendingChatSessionEventFlush = false;
 
     constructor(private readonly api: LuminaApiLike) {
         super();
@@ -372,19 +402,63 @@ export class ConversationService extends LuminaWeaveAPIBase {
         this.bindHostEvents();
     }
 
+    private isChatSessionMutationInFlight(): boolean {
+        return this.chatSessionMutationDepth > 0;
+    }
+
+    private beginChatSessionMutation(): void {
+        this.chatSessionMutationDepth += 1;
+    }
+
+    private async endChatSessionMutation(): Promise<void> {
+        if (this.chatSessionMutationDepth > 0) {
+            this.chatSessionMutationDepth -= 1;
+        }
+
+        if (this.chatSessionMutationDepth === 0 && this.pendingChatSessionEventFlush) {
+            this.pendingChatSessionEventFlush = false;
+            await this.emitSessionsUpdated();
+            await this.emitContextChangedIfCurrent('chat');
+        }
+    }
+
+    private handleChatSessionMutationEvent(callback: () => void): void {
+        if (this.isChatSessionMutationInFlight()) {
+            this.pendingChatSessionEventFlush = true;
+            return;
+        }
+
+        callback();
+    }
+
     private bindHostEvents(): void {
         this.api.on('CHAT_CHANGED', () => {
-            void this.emitSessionsUpdated();
-            void this.emitContextChangedIfCurrent('chat');
+            this.handleChatSessionMutationEvent(() => {
+                void this.emitSessionsUpdated();
+                void this.emitContextChangedIfCurrent('chat');
+            });
         });
         this.api.on('CHAT_CREATED', () => {
-            void this.emitSessionsUpdated();
+            this.handleChatSessionMutationEvent(() => {
+                void this.emitSessionsUpdated();
+            });
         });
         this.api.on('CHAT_DELETED', () => {
-            void this.emitSessionsUpdated();
-            void this.emitContextChangedIfCurrent('chat');
+            this.handleChatSessionMutationEvent(() => {
+                void this.emitSessionsUpdated();
+                void this.emitContextChangedIfCurrent('chat');
+            });
+        });
+        this.api.on('DATA_RELOAD', () => {
+            this.handleChatSessionMutationEvent(() => {
+                void this.emitSessionsUpdated();
+                void this.emitContextChangedIfCurrent('chat');
+            });
         });
         this.api.on('MESSAGE_RECEIVED', () => {
+            if (this.isChatSessionMutationInFlight()) {
+                return;
+            }
             void this.emitSessionsUpdated();
             void this.emitWorldlineUpdatedIfCurrent('chat');
         });
@@ -567,5 +641,65 @@ export class ConversationService extends LuminaWeaveAPIBase {
             this.listConversationSessions()
         ]);
         this.emit('CONVERSATION_SESSIONS_UPDATED', { sources, sessions });
+    }
+
+    async createChatSession(input: CreateChatConversationInput): Promise<CreateChatConversationResult> {
+        const chatAdapter = this.getAdapter('chat') as ChatConversationSourceAdapter;
+        this.api.beginControlledChatCreation(input.characterId ?? null);
+        this.beginChatSessionMutation();
+        let completed = false;
+        try {
+            const result = await chatAdapter.createSession(input);
+            this.api.markControlledChatCreationFinalChat(result.sessionId);
+            await this.api.syncFromST();
+            this.api.emit('CHAT_CHANGED');
+            this.pendingChatSessionEventFlush = false;
+            await this.emitSessionsUpdated();
+            if (this.contextSelection.sourceId === 'chat' && this.contextSelection.sessionId == null) {
+                await this.emitContextChangedIfCurrent('chat');
+            }
+            await this.api.flushDeferredPromptWorldInfoSync('createChatSession');
+            completed = true;
+            return result;
+        } finally {
+            await this.endChatSessionMutation();
+            this.api.endControlledChatCreation(completed);
+        }
+    }
+
+    async renameChatSession(input: RenameChatConversationInput): Promise<RenameChatConversationResult> {
+        const chatAdapter = this.getAdapter('chat') as ChatConversationSourceAdapter;
+        this.beginChatSessionMutation();
+        try {
+            const result = await chatAdapter.renameSession(input);
+            if (this.contextSelection.sourceId === 'chat' && this.contextSelection.sessionId === input.sessionId) {
+                this.contextSelection.sessionId = result.sessionId;
+            }
+            await this.emitSessionsUpdated();
+            await this.emitContextChangedIfCurrent('chat');
+            return result;
+        } finally {
+            await this.endChatSessionMutation();
+        }
+    }
+
+    async deleteChatSession(input: DeleteChatConversationInput): Promise<DeleteChatConversationResult> {
+        const chatAdapter = this.getAdapter('chat') as ChatConversationSourceAdapter;
+        this.beginChatSessionMutation();
+        // 在物理删除之前预置空当前指针。
+        // 这确保了在删除过程（通常伴随异步等待）中，如果有任何依赖 contextSelection 的
+        // 事件通知（如 emitContextChangedIfCurrent）发出，它们都能正确反映“无选中会话”的状态。
+        if (this.contextSelection.sourceId === 'chat' && this.contextSelection.sessionId === input.sessionId) {
+            this.contextSelection.sessionId = null;
+        }
+
+        try {
+            const result = await chatAdapter.deleteSession(input);
+            await this.emitSessionsUpdated();
+            await this.emitContextChangedIfCurrent('chat');
+            return result;
+        } finally {
+            await this.endChatSessionMutation();
+        }
     }
 }

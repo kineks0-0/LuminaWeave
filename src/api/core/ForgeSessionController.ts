@@ -1,7 +1,7 @@
 import { WorldlineStore } from './WorldlineStore.js';
 import { ForgeWorkspaceSessionService } from './ForgeWorkspaceSessionService.js';
 import { forgeSessionRepository } from './ForgeSessionRepository.js';
-import type { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type {
     ForgeVirtualLorebookEntry,
     ForgeWorkspaceSession,

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { STSyncService } from '../STSyncService';
 import { WorldlineStore } from '../WorldlineStore';
-import type { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { STAdapter } from '../STAdapter';
 import { STProtocol } from '../st-adapter/STProtocol';
 import { STClient } from '../st-adapter/STClient';
@@ -19,6 +19,8 @@ vi.mock('../STAdapter', () => ({
 // Mock STClient
 vi.mock('../st-adapter/STClient', () => ({
     STClient: {
+        hasActiveLiveChat: vi.fn(() => true),
+        getResolvedCurrentChatId: vi.fn(() => 'chat_live'),
         getRawMessages: vi.fn(),
         getMessages: vi.fn(),
         updateMessages: vi.fn(),
@@ -70,6 +72,7 @@ describe('STSyncService', () => {
         store = new WorldlineStore();
         service = new STSyncService(store);
         vi.clearAllMocks();
+        (STClient.hasActiveLiveChat as any).mockReturnValue(true);
         
         (STAdapter.compareStates as any).mockReturnValue({
             diffCount: 0,
@@ -172,6 +175,20 @@ describe('STSyncService', () => {
         expect(STClient.appendMessages).toHaveBeenCalled();
         const appendArgs = (STClient.appendMessages as any).mock.calls[0][0];
         expect(appendArgs[0].extra.id).toBe('2');
+    });
+
+    it('should skip commitToST when no active live chat exists', async () => {
+        store.setNodes([
+            { id: '1', parentId: null, mesRaw: 'A', fingerprint: 'fp1', mes: 'A', role: 'user', extra: {} } as any
+        ]);
+        store.activeLeafId = '1';
+        (STClient.hasActiveLiveChat as any).mockReturnValue(false);
+
+        await service.commitToST();
+
+        expect(STAdapter.getSnapshot).not.toHaveBeenCalled();
+        expect(STAdapter.applyDelta).not.toHaveBeenCalled();
+        expect(STClient.appendMessages).not.toHaveBeenCalled();
     });
 
     it('should keep active selection when ST has no new node', async () => {

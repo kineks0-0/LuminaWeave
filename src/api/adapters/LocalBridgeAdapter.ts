@@ -9,19 +9,19 @@ import {
     IPresetService,
     IStoreService,
     IStreamingCallbacks
-} from '../../../../shared/api/IBridge.js';
+} from '@shared/api/IBridge.js';
 import { lwStorage } from '../storage.js';
-import { NexusGenerationFlow, PersistenceDelegate } from '../../../../shared/api/NexusGenerationFlow.js';
-import { BaseXMLInterceptor } from '../../../../shared/BaseXMLInterceptor.js';
+import { NexusGenerationFlow, PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
+import { BaseXMLInterceptor } from '@shared/BaseXMLInterceptor.js';
 import { promptBuilder } from '../core/PromptBuilder.js';
-import { OpenAIProvider } from '../../../../shared/api/llm/OpenAIProvider.js';
-import { LLMMessage } from '../../../../shared/api/llm/ILLMProvider.js';
-import { TransactionMutationResponse } from '../../../../shared/api/TransactionTypes.js';
-import type { ConversationDocument, ConversationMutation } from '../../../../shared/ConversationTypes.js';
-import { createEmptyConversationDocument } from '../../../../shared/ConversationTypes.js';
-import { applyConversationMutation } from '../../../../shared/ConversationReducer.js';
-import { migrateLegacyChatArray, migrateLegacyForgeSession } from '../../../../shared/ConversationMigration.js';
-import { resolveConversationSummary } from '../../../../shared/ConversationSummaryResolver.js';
+import { OpenAIProvider } from '@shared/api/llm/OpenAIProvider.js';
+import { LLMMessage } from '@shared/api/llm/ILLMProvider.js';
+import { TransactionMutationResponse } from '@shared/api/TransactionTypes.js';
+import type { ConversationDocument, ConversationMutation } from '@shared/ConversationTypes.js';
+import { createEmptyConversationDocument } from '@shared/ConversationTypes.js';
+import { applyConversationMutation } from '@shared/ConversationReducer.js';
+import { migrateLegacyChatArray, migrateLegacyForgeSession } from '@shared/ConversationMigration.js';
+import { resolveConversationSummary } from '@shared/ConversationSummaryResolver.js';
 
 /**
  * 离线/本地桥接适配器
@@ -92,6 +92,16 @@ export class LocalBridgeAdapter implements ILuminaBridge {
 
     private getConversationDocument(id: string): ConversationDocument | null {
         return this.readConversations().find((conversation) => conversation.id === id) || null;
+    }
+
+    private deleteConversationDocument(id: string): boolean {
+        const documents = this.readConversations();
+        const nextDocuments = documents.filter((conversation) => conversation.id !== id);
+        if (nextDocuments.length === documents.length) {
+            return false;
+        }
+        this.writeConversations(nextDocuments);
+        return true;
     }
 
     private commitConversation(id: string, document: ConversationDocument, scope: 'chat.save' | 'chat.patch') {
@@ -190,6 +200,10 @@ export class LocalBridgeAdapter implements ILuminaBridge {
                 const next = applyConversationMutation(current, mutation);
                 return this.commitConversation(id, next, 'chat.patch');
             },
+            deleteConversation: async (id: string) => ({
+                success: this.deleteConversationDocument(id),
+                id
+            }),
             getTransactions: async (id: string) => {
                 const document = this.getConversationDocument(id);
                 if (!document?.transaction?.lastTransactionId) {

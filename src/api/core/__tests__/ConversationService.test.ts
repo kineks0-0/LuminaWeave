@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LuminaWeaveAPIBase } from '../LuminaWeaveAPIBase';
 import { WorldlineStore } from '../WorldlineStore';
 import { ConversationService } from '../ConversationService';
-import type { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { STClient } from '../st-adapter/STClient';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 
 const mockState = vi.hoisted(() => ({
     currentChatId: 'chat_live',
     persistedChats: new Map<string, { nodes: LuminaChatMessage[]; activeLeafId: string | null }>(),
+    savedConversationDocuments: new Map<string, any>(),
     chatSessions: [] as any[],
     forgeSessions: [] as any[],
     forgeSessionMap: new Map<string, any>(),
@@ -68,6 +71,10 @@ vi.mock('../../storage.js', () => ({
 }));
 
 vi.mock('../ChatSessionIndexService.js', () => ({
+    buildTitleAndSummary: (chatId: string, previewMessage: string) => ({
+        title: previewMessage ? previewMessage.slice(0, 22) : `聊天 ${chatId.slice(0, 10)}`,
+        summary: previewMessage || '暂无预览内容'
+    }),
     chatSessionIndexService: {
         listChatSessions: vi.fn(async () => mockState.chatSessions)
     }
@@ -105,6 +112,73 @@ vi.mock('../PersistenceService', () => ({
     })
 }));
 
+vi.mock('../STAdapter.js', () => ({
+    STAdapter: {
+        getSnapshot: vi.fn(async () => ({
+            lumina: [],
+            st: [],
+            idToIndex: new Map<string, number>()
+        }))
+    }
+}));
+
+vi.mock('@shared/api/BridgeDispatcher.js', () => ({
+    BridgeDispatcher: {
+        conversation: {
+            getConversation: vi.fn(async (id: string) => ({
+                document: mockState.savedConversationDocuments.get(id) || null
+            })),
+            saveConversation: vi.fn(async (id: string, document: any) => {
+                mockState.savedConversationDocuments.set(id, document);
+                mockState.chatSessions = [
+                    {
+                        id,
+                        title: document.title,
+                        source: 'lumina-server',
+                        createdAt: document.createdAt,
+                        updatedAt: document.updatedAt,
+                        messageCount: document.summary?.messageCount ?? 0,
+                        summary: document.summary?.previewMessage || '暂无预览内容',
+                        previewMessage: document.summary?.previewMessage || '',
+                        activeLeafId: document.activeLeafId,
+                        characterId: document.pluginState?.chat?.characterId ?? null,
+                        characterName: document.pluginState?.chat?.characterName || '',
+                        characterAvatarUrl: document.pluginState?.chat?.characterAvatarUrl ?? null
+                    },
+                    ...mockState.chatSessions.filter((session) => session.id !== id)
+                ];
+                return {
+                    success: true,
+                    document,
+                    summary: {
+                        id,
+                        schemaVersion: document.schemaVersion,
+                        conversationType: document.conversationType,
+                        title: document.title,
+                        createdAt: document.createdAt,
+                        updatedAt: document.updatedAt,
+                        activeLeafId: document.activeLeafId,
+                        previewMessage: document.summary?.previewMessage || '',
+                        messageCount: document.summary?.messageCount ?? 0,
+                        characterId: document.pluginState?.chat?.characterId ?? null,
+                        characterName: document.pluginState?.chat?.characterName || '',
+                        characterAvatarUrl: document.pluginState?.chat?.characterAvatarUrl ?? null
+                    },
+                    lastCommittedSeq: 0
+                };
+            }),
+            deleteConversation: vi.fn(async (id: string) => {
+                mockState.savedConversationDocuments.delete(id);
+                mockState.chatSessions = mockState.chatSessions.filter((session) => session.id !== id);
+                return {
+                    success: true,
+                    id
+                };
+            })
+        }
+    }
+}));
+
 const createMessage = (
     id: string,
     parentId: string | null,
@@ -130,6 +204,11 @@ class MockApi extends LuminaWeaveAPIBase {
         branchFromNode: ReturnType<typeof vi.fn>;
         rollbackFromNode: ReturnType<typeof vi.fn>;
     };
+    public syncFromST = vi.fn(async () => undefined);
+    public beginControlledChatCreation = vi.fn(() => undefined);
+    public markControlledChatCreationFinalChat = vi.fn(() => undefined);
+    public flushDeferredPromptWorldInfoSync = vi.fn(async () => undefined);
+    public endControlledChatCreation = vi.fn(() => undefined);
 
     constructor(store: WorldlineStore) {
         super();
@@ -166,6 +245,7 @@ describe('ConversationService', () => {
         vi.clearAllMocks();
         mockState.currentChatId = 'chat_live';
         mockState.persistedChats.clear();
+        mockState.savedConversationDocuments.clear();
         mockState.chatSessions = [
             {
                 id: 'chat_live',
@@ -322,5 +402,237 @@ describe('ConversationService', () => {
         expect(api.chatManager.rollbackFromNode).not.toHaveBeenCalled();
         expect(mockState.persistedChats.get('chat_archive')?.nodes.map((node) => node.id)).toEqual(['chat_archive_root']);
         expect(rolledBack).toHaveBeenCalled();
+    });
+
+    it('treats default and undefined live chat ids as non-live while keeping archived sessions readable', async () => {
+        mockState.currentChatId = 'default';
+
+        const liveContext = await service.getConversationContext();
+        expect(liveContext.sessionId).toBeNull();
+        expect(liveContext.meta?.currentChatSessionId).toBeNull();
+        expect(liveContext.meta?.isLive).toBe(false);
+
+        const archivedContext = await service.getConversationContext({
+            sourceId: 'chat',
+            sessionId: 'chat_archive'
+        });
+        expect(archivedContext.sessionId).toBe('chat_archive');
+        expect(archivedContext.meta?.isLive).toBe(false);
+
+        mockState.currentChatId = undefined as unknown as string;
+        const fallbackContext = await service.getConversationContext({
+            sourceId: 'chat',
+            sessionId: 'chat_archive'
+        });
+        expect(fallbackContext.sessionId).toBe('chat_archive');
+        expect(fallbackContext.meta?.currentChatSessionId).toBeNull();
+    });
+
+    it('creates a new chat session and persists an empty conversation document immediately', async () => {
+        vi.spyOn(STClient, 'createNewCharacterChat').mockResolvedValue({
+            success: true,
+            resolvedCharacterId: '1',
+            resolvedCharacterName: 'Beta',
+            resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
+            resolvedChatFile: 'chat_beta_new'
+        });
+
+        const sessionsUpdated = vi.fn();
+        service.on('CONVERSATION_SESSIONS_UPDATED', sessionsUpdated);
+
+        const result = await service.createChatSession({
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+
+        expect(result).toEqual({
+            sessionId: 'chat_beta_new',
+            title: '聊天 chat_beta_',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+
+        const saved = mockState.savedConversationDocuments.get('chat_beta_new');
+        expect(saved).toBeTruthy();
+        expect(saved.conversationType).toBe('chat');
+        expect(saved.nodes).toEqual([]);
+        expect(saved.pluginState.chat).toEqual({
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+        expect(mockState.chatSessions[0]).toMatchObject({
+            id: 'chat_beta_new',
+            source: 'lumina-server',
+            characterId: '1',
+            characterName: 'Beta'
+        });
+        expect(api.beginControlledChatCreation).toHaveBeenCalledWith('1');
+        expect(api.markControlledChatCreationFinalChat).toHaveBeenCalledWith('chat_beta_new');
+        expect(api.syncFromST).toHaveBeenCalledTimes(1);
+        expect(api.flushDeferredPromptWorldInfoSync).toHaveBeenCalledWith('createChatSession');
+        expect(api.endControlledChatCreation).toHaveBeenCalledWith(true);
+        expect(sessionsUpdated).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not persist an empty conversation document when host chat creation fails', async () => {
+        vi.spyOn(STClient, 'createNewCharacterChat').mockResolvedValue({
+            success: false,
+            resolvedCharacterId: '1',
+            resolvedCharacterName: 'Beta',
+            resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
+            resolvedChatFile: null,
+            reason: 'character_switch_failed'
+        });
+
+        await expect(service.createChatSession({
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        })).rejects.toThrow('character_switch_failed');
+
+        expect(mockState.savedConversationDocuments.size).toBe(0);
+        expect(mockState.chatSessions.some((session) => session.id === 'chat_beta_new')).toBe(false);
+        expect(api.beginControlledChatCreation).toHaveBeenCalledWith('1');
+        expect(api.syncFromST).not.toHaveBeenCalled();
+        expect(api.endControlledChatCreation).toHaveBeenCalledWith(false);
+        expect(service['contextSelection']).toEqual({
+            sourceId: 'chat',
+            sessionId: null
+        });
+    });
+
+    it('renames a chat session and migrates the unified conversation document to the new session id', async () => {
+        mockState.savedConversationDocuments.set('chat_archive', {
+            id: 'chat_archive',
+            schemaVersion: 1,
+            conversationType: 'chat',
+            title: 'Archived Chat',
+            createdAt: 3,
+            updatedAt: 4,
+            activeLeafId: 'chat_archive_leaf',
+            nodes: [],
+            pluginState: {
+                chat: {
+                    characterId: '1',
+                    characterName: 'Beta',
+                    characterAvatarUrl: '/thumbnail/avatar/beta.png'
+                }
+            },
+            transaction: {
+                lastCommittedSeq: 0,
+                lastTransactionId: null
+            },
+            summary: {
+                previewMessage: '',
+                messageCount: 0
+            }
+        });
+        vi.spyOn(STClient, 'renameCharacterChat').mockResolvedValue({
+            success: true,
+            previousChatFile: 'chat_archive',
+            resolvedCharacterId: '1',
+            resolvedCharacterName: 'Beta',
+            resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
+            resolvedChatFile: 'Renamed Archive'
+        });
+
+        await service.switchConversationContext({
+            sourceId: 'chat',
+            sessionId: 'chat_archive'
+        });
+
+        const result = await service.renameChatSession({
+            sessionId: 'chat_archive',
+            nextTitle: 'Renamed Archive',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+
+        expect(result).toEqual({
+            previousSessionId: 'chat_archive',
+            sessionId: 'Renamed Archive',
+            title: 'Renamed Archive',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+        expect(mockState.savedConversationDocuments.has('chat_archive')).toBe(false);
+        expect(mockState.savedConversationDocuments.get('Renamed Archive')).toMatchObject({
+            id: 'Renamed Archive',
+            title: 'Renamed Archive'
+        });
+        expect(service['contextSelection']).toEqual({
+            sourceId: 'chat',
+            sessionId: 'Renamed Archive'
+        });
+    });
+
+    it('deletes the current archived chat session and falls back to the default live chat context', async () => {
+        vi.spyOn(STClient, 'deleteCharacterChat').mockResolvedValue({
+            success: true,
+            resolvedCharacterId: '1',
+            resolvedCharacterName: 'Beta',
+            resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
+            resolvedChatFile: 'chat_archive'
+        });
+
+        await service.switchConversationContext({
+            sourceId: 'chat',
+            sessionId: 'chat_archive'
+        });
+
+        const result = await service.deleteChatSession({
+            sessionId: 'chat_archive',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+
+        expect(result).toEqual({
+            sessionId: 'chat_archive',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+        expect(mockState.chatSessions.some((session) => session.id === 'chat_archive')).toBe(false);
+        expect(service['contextSelection']).toEqual({
+            sourceId: 'chat',
+            sessionId: null
+        });
+
+        const liveContext = await service.getConversationContext();
+        expect(liveContext.sessionId).toBe('chat_live');
+        expect(liveContext.meta?.isLive).toBe(true);
+    });
+
+    it('treats missing unified conversation documents as an idempotent success when deleting a chat session', async () => {
+        vi.spyOn(STClient, 'deleteCharacterChat').mockResolvedValue({
+            success: true,
+            resolvedCharacterId: '1',
+            resolvedCharacterName: 'Beta',
+            resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
+            resolvedChatFile: 'chat_archive'
+        });
+        vi.mocked(BridgeDispatcher.conversation.deleteConversation).mockRejectedValueOnce(
+            new Error('Failed to delete chat default_Seraphina/Seraphina - 2026-04-19@17h28m44s049ms: Not found: Chat not found: default_Seraphina/Seraphina - 2026-04-19@17h28m44s049ms')
+        );
+
+        const result = await service.deleteChatSession({
+            sessionId: 'chat_archive',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+
+        expect(result).toEqual({
+            sessionId: 'chat_archive',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
     });
 });

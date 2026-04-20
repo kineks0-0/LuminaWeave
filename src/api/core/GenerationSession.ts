@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { NexusNode } from '../../types/nexus.js';
 
 export interface GenerationSessionOptions {

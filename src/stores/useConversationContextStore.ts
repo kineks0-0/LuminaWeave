@@ -8,6 +8,14 @@ import type {
     ConversationSourceId
 } from '../types/ConversationContextTypes.js';
 
+type SessionSwitchState = {
+    isSwitching: boolean;
+    targetSessionId: string | null;
+    targetCharacterName: string;
+    statusText: string;
+    startedAt: number | null;
+};
+
 const EMPTY_CONTEXT: ConversationContext = {
     source: 'chat',
     sessionId: null,
@@ -17,7 +25,7 @@ const EMPTY_CONTEXT: ConversationContext = {
     focusedMessage: null,
     meta: {
         currentChatSessionId: null,
-        isLive: true
+        isLive: false
     }
 };
 
@@ -29,6 +37,13 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
     const selectedViewSessionId = ref<string | null>(null);
     const hasBound = ref(false);
     const isRefreshing = ref(false);
+    const sessionSwitchState = ref<SessionSwitchState>({
+        isSwitching: false,
+        targetSessionId: null,
+        targetCharacterName: '',
+        statusText: '',
+        startedAt: null
+    });
 
     let refreshPromise: Promise<void> | null = null;
 
@@ -160,6 +175,50 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
         });
     };
 
+    const beginSessionSwitch = (payload: {
+        sessionId?: string | null;
+        characterName?: string | null;
+        statusText?: string | null;
+    } = {}): void => {
+        const characterName = (payload.characterName || '').trim();
+        sessionSwitchState.value = {
+            isSwitching: true,
+            targetSessionId: payload.sessionId ?? null,
+            targetCharacterName: characterName,
+            statusText: payload.statusText?.trim() || (characterName
+                ? `正在切换到 ${characterName}...`
+                : '正在切换聊天...'),
+            startedAt: Date.now()
+        };
+    };
+
+    const updateSessionSwitch = (payload: {
+        statusText?: string | null;
+        sessionId?: string | null;
+        characterName?: string | null;
+    } = {}): void => {
+        if (!sessionSwitchState.value.isSwitching) {
+            return;
+        }
+
+        sessionSwitchState.value = {
+            ...sessionSwitchState.value,
+            targetSessionId: payload.sessionId ?? sessionSwitchState.value.targetSessionId,
+            targetCharacterName: payload.characterName?.trim() || sessionSwitchState.value.targetCharacterName,
+            statusText: payload.statusText?.trim() || sessionSwitchState.value.statusText
+        };
+    };
+
+    const endSessionSwitch = (): void => {
+        sessionSwitchState.value = {
+            isSwitching: false,
+            targetSessionId: null,
+            targetCharacterName: '',
+            statusText: '',
+            startedAt: null
+        };
+    };
+
     bind();
 
     return {
@@ -176,12 +235,16 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
         currentContext,
         selectedViewSessionId,
         isRefreshing,
+        sessionSwitchState,
         refreshFromApi,
         refreshSessionOptions,
         switchSource,
         selectForgeSession,
         selectViewSession,
         syncFromTab,
-        syncCurrentChatSelection
+        syncCurrentChatSelection,
+        beginSessionSwitch,
+        updateSessionSwitch,
+        endSessionSwitch
     };
 });

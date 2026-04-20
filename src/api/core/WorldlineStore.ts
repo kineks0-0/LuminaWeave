@@ -1,5 +1,5 @@
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { STProtocol } from './st-adapter/STProtocol.js';
 
 export enum WorldlineEvent {

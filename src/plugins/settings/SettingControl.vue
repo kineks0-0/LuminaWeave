@@ -2,9 +2,18 @@
   <div
     v-if="isVisible"
     class="setting-row"
-    :class="isVerticalLayout ? 'layout-vertical' : 'layout-horizontal'"
+    :class="[
+      isVerticalLayout ? 'layout-vertical' : 'layout-horizontal',
+      { 'is-row-toggle': isRowToggleEnabled }
+    ]"
     :data-skin-variant="settingsControlVariant || 'default'"
     :style="settingControlStyle"
+    :role="isRowToggleEnabled ? 'button' : undefined"
+    :tabindex="isRowToggleEnabled ? 0 : undefined"
+    :aria-pressed="isRowToggleEnabled ? Boolean(currentValue) : undefined"
+    @click="handleRowToggle"
+    @keydown.enter.prevent="handleRowToggle"
+    @keydown.space.prevent="handleRowToggle"
   >
     <div class="setting-left">
       <div class="label-row">
@@ -191,6 +200,10 @@ const isVisible = computed(() => {
   return true;
 });
 
+const isRowToggleEnabled = computed(() =>
+  props.config.type === 'boolean' && props.settingKey === 'discord-channel-mark'
+);
+
 const resolvedOptions = computed<SettingOption[]>(() => {
   if (!props.config.options) return [];
   return typeof props.config.options === 'function'
@@ -306,6 +319,19 @@ const handleCheckbox = (e: Event) => {
   updateValue(target.checked);
 };
 
+const toggleBooleanSetting = () => {
+  updateValue(!currentValue.value);
+};
+
+const handleRowToggle = (e: Event) => {
+  if (!isRowToggleEnabled.value) return;
+  const target = e.target as HTMLElement | null;
+  if (target?.closest('input, select, button, a, textarea, .lw-toggle, .setting-meta-control')) {
+    return;
+  }
+  toggleBooleanSetting();
+};
+
 const handleRange = (e: Event) => {
   const target = e.target as HTMLInputElement;
   updateValue(parseFloat(target.value));
@@ -345,6 +371,16 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
 
 .setting-row:last-child {
   border-bottom: none;
+}
+
+.setting-row.is-row-toggle {
+  cursor: pointer;
+}
+
+.setting-row.is-row-toggle:focus-visible {
+  outline: 2px solid rgba(92, 139, 246, 0.28);
+  outline-offset: 4px;
+  border-radius: var(--lw-radius-sm);
 }
 
 /* 水平排版：开关类控件（标签左，控件右） */

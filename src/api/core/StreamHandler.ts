@@ -5,7 +5,8 @@ import { ST_EVENT } from './STEvent.js';
 import { llmEngine } from '../llmEngine.js';
 import { NexusClient } from './NexusClient.js';
 import type { NexusStatusResponse } from '../../types/nexus.js';
-import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import { STClient } from './st-adapter/STClient.js';
 
 /**
  * 流式输出的聚合状态 (MVI 模式)
@@ -366,19 +367,20 @@ export class StreamHandler extends LuminaWeaveAPIBase {
     }
 
     async resumeToTerminal(chatId: string): Promise<void> {
-        if (!chatId || chatId === 'null' || chatId === 'undefined') return;
-        if (this._resuming && this._resumeChatId === chatId) return;
+        const normalizedChatId = STClient.normalizeChatId(chatId);
+        if (!normalizedChatId) return;
+        if (this._resuming && this._resumeChatId === normalizedChatId) return;
 
         if (this._resumeAbort) {
             this._resumeAbort.abort();
         }
         const controller = new AbortController();
         this._resumeAbort = controller;
-        this._resumeChatId = chatId;
+        this._resumeChatId = normalizedChatId;
         this._resuming = true;
 
         try {
-            const state = await this.fetchServerState(chatId, controller.signal);
+            const state = await this.fetchServerState(normalizedChatId, controller.signal);
             if (!state) return;
 
             const serverBuffer = typeof state.rawBuffer === 'string' ? state.rawBuffer : (typeof state.buffer === 'string' ? state.buffer : '');
@@ -400,14 +402,14 @@ export class StreamHandler extends LuminaWeaveAPIBase {
 
             const generationId = typeof state.generationId === 'string' ? state.generationId : '';
             if (!generationId) {
-                await this.pollUntilTerminal(chatId, controller.signal);
+                await this.pollUntilTerminal(normalizedChatId, controller.signal);
                 return;
             }
 
             const nexus = new NexusClient();
             try {
                 await nexus.attachStream({
-                    chatId,
+                    chatId: normalizedChatId,
                     generationId,
                     from: this.responseBuffer.length,
                     initialText: this.responseBuffer
@@ -449,7 +451,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
                 return;
             } catch {
                 if (!controller.signal.aborted) {
-                    await this.pollUntilTerminal(chatId, controller.signal);
+                    await this.pollUntilTerminal(normalizedChatId, controller.signal);
                 }
             }
         } finally {
@@ -492,7 +494,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
         this._watchdogTimer = setInterval(() => {
             const timeout = 20000;
             if (this.isGenerating && !this.isSyncing && Date.now() - this._lastActivityTime > timeout) {
-                const { chatId } = lwStorage._getContextIds();
+                const chatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
                 if (chatId) {
                     console.warn(`[StreamHandler] Watchdog 触发：自动恢复 [Chat: ${chatId}]`);
                     this._lastActivityTime = Date.now();

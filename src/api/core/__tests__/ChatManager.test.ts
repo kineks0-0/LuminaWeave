@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ChatManager } from '../ChatManager';
 import { SyncUtils } from '../SyncUtils';
-import { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { lwStorage } from '../../storage.js';
 
 vi.mock('../../storage.js', () => ({
     lwStorage: {
@@ -189,5 +190,27 @@ describe('ChatManager Data Priority Sync', () => {
         await manager.syncFromST(0, { forceOverwrite: true });
 
         expect(manager.sync.syncFromST).toHaveBeenCalledWith({ forceOverwrite: true });
+    });
+
+    it('should clear live store and skip downstream sync/write paths when current chat becomes invalid', async () => {
+        manager.store.setNodes([
+            { id: 'root', parentId: null, fingerprint: 'fp_root', mesRaw: 'A' } as any,
+            { id: 'leaf', parentId: 'root', fingerprint: 'fp_leaf', mesRaw: 'B' } as any
+        ]);
+        manager.store.activeLeafId = 'leaf';
+        (manager as any)._lastChatId = 'chat1';
+        (manager as any)._isIndependentLoaded = true;
+        vi.mocked(lwStorage._getContextIds).mockReturnValue({ charId: 'c1', chatId: 'default' });
+
+        await manager.syncFromST();
+
+        expect(manager.store.nodePool).toEqual([]);
+        expect(manager.store.activeLeafId).toBeNull();
+        expect((manager as any)._lastChatId).toBeNull();
+        expect((manager as any)._isIndependentLoaded).toBe(false);
+        expect(manager.sync.syncFromST).not.toHaveBeenCalled();
+        expect(manager.commitToST).not.toHaveBeenCalled();
+        expect(manager.persistence.saveToIndependentChat).not.toHaveBeenCalled();
+        expect(manager.persistence.loadFromIndependentChat).not.toHaveBeenCalled();
     });
 });

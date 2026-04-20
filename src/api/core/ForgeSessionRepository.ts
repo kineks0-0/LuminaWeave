@@ -1,6 +1,6 @@
 import { useForgeStore } from '../../stores/useForgeStore.js';
 import type { ForgeWorkspaceSession, ForgeWorkspaceSessionRef } from '../../types/SessionTypes.js';
-import { API_BASE, API_ROUTES } from '../../../../shared/ApiEndpoints.js';
+import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
 import {
     cloneForgeMemoryTree,
     cloneDraftTree,
@@ -9,9 +9,9 @@ import {
     createEmptyDraftTree,
     createEmptyStructuredState
 } from './utils/forgeStateDefaults.js';
-import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
-import type { ConversationDocument } from '../../../../shared/ConversationTypes.js';
-import { migrateLegacyForgeSession } from '../../../../shared/ConversationMigration.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import type { ConversationDocument } from '@shared/ConversationTypes.js';
+import { migrateLegacyForgeSession } from '@shared/ConversationMigration.js';
 
 const STORAGE_KEY = 'lumina-forge.workspace-sessions';
 const ACTIVE_KEY = 'lumina-forge.active-session-id';

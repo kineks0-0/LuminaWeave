@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { WorldlineStore, WorldlineEvent } from './WorldlineStore.js';
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 

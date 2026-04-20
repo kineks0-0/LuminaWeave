@@ -1,5 +1,5 @@
 import { STClient } from './st-adapter/STClient.js';
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 
 /**
  * 状态提供者接口

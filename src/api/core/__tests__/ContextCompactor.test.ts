@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ContextCompactor } from '../ContextCompactor';
 import { ContextControlSettings } from '../types';
-import { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { STClient } from '../st-adapter/STClient';
 
 vi.mock('../st-adapter/STClient', () => ({
     STClient: {
-        getTokenCount: vi.fn(async (text) => text.length) // 简单模拟：1 字符 = 1 Token
+        getTokenCount: vi.fn(async (text) => text.length), // 简单模拟：1 字符 = 1 Token
+        getResolvedCurrentCharacterId: vi.fn(() => '0'),
+        getResolvedCurrentChatId: vi.fn(() => 'chat_1')
     }
 }));
 

@@ -1,5 +1,10 @@
 <template>
-  <div class="lore-editor" :class="{ 'is-full-window': isFullWindow }">
+  <div
+    class="lore-editor"
+    :class="{ 'is-full-window': isFullWindow }"
+    :data-skin-variant="editorVariant || 'default'"
+    :style="editorSkinStyle"
+  >
     <div class="editor-header">
       <div class="header-left">
         <button class="action-toggle-btn" @click="$emit('close')" title="返回">
@@ -217,6 +222,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
+import { useComponentSkin } from '../../theme/useComponentSkin';
 
 const props = defineProps<{
   entry: LuminaLorebookEntry,
@@ -239,6 +245,8 @@ const isFullWindow = computed({
   get: () => props.isFullWindow || false,
   set: (val) => emit('update:isFullWindow', val)
 });
+const { cssVars: editorSkinVars, variant: editorVariant } = useComponentSkin('lorebook.editor');
+const editorSkinStyle = computed(() => editorSkinVars.value);
 
 const isNew = computed(() => !props.entry.uid);
 const form = reactive({ ...props.entry });
@@ -316,11 +324,11 @@ const save = async () => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--lw-surface-container-lowest);
+  background: var(--lw-lorebook-editor-bg, var(--lw-surface-container-lowest));
   box-shadow: var(--lw-shadow-xl);
   font-family: var(--lw-font-main);
   transition: var(--lw-transition);
-  border-radius: var(--lw-radius-3xl) 0 0 var(--lw-radius-3xl);
+  border-radius: var(--lw-radius-xl) 0 0 var(--lw-radius-xl);
   overflow: hidden;
 }
 
@@ -339,7 +347,7 @@ const save = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--lw-surface-container-lowest);
+  background: var(--lw-lorebook-editor-header-bg, var(--lw-surface-container-lowest));
 }
 
 .header-left {
@@ -403,7 +411,7 @@ const save = async () => {
 }
 
 .editor-section label {
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--lw-font-main);
   font-size: 12px;
   font-weight: 800;
   color: var(--lw-text-main);
@@ -427,7 +435,7 @@ input[type="text"],
 input[type="number"],
 textarea {
   transition: var(--lw-transition);
-  background: var(--lw-surface-container-low) !important;
+  background: var(--lw-lorebook-editor-control-bg, var(--lw-surface-container-low)) !important;
   border: none !important;
   outline: none !important;
   border-radius: var(--lw-radius-xl);
@@ -435,8 +443,8 @@ textarea {
 
 input:focus,
 textarea:focus {
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
-  background: var(--lw-bg-surface) !important;
+  box-shadow: 0 0 0 3px rgba(var(--lw-primary-rgb), 0.15);
+  background: var(--lw-lorebook-editor-control-hover-bg, var(--lw-bg-surface)) !important;
 }
 
 /* List Transitions */
@@ -479,7 +487,7 @@ textarea:focus {
 }
 
 .key-chip {
-  background: var(--lw-surface-container-low);
+  background: var(--lw-lorebook-editor-control-bg, var(--lw-surface-container-low));
   color: var(--lw-text-secondary);
   padding: 6px 14px;
   border-radius: var(--lw-radius-sm);
@@ -490,7 +498,7 @@ textarea:focus {
   gap: 8px;
   transition: var(--lw-transition);
   border: 1px solid var(--lw-border-subtle);
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--lw-font-main);
 }
 
 .key-chip:hover {
@@ -522,7 +530,7 @@ textarea:focus {
 .section-subtitle {
   font-size: 15px;
   font-weight: 800;
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--lw-font-main);
   color: var(--lw-text-main);
   margin-bottom: 24px;
   padding-bottom: 12px;
@@ -576,7 +584,7 @@ textarea:focus {
 
 .field-hint {
   font-size: 11px;
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--lw-font-main);
   color: var(--lw-text-muted);
   font-style: italic;
   opacity: 0.7;
@@ -589,7 +597,7 @@ textarea:focus {
   align-items: center;
   gap: 10px;
   padding: 0 16px;
-  background: var(--lw-surface-container-low);
+  background: var(--lw-lorebook-editor-control-bg, var(--lw-surface-container-low));
   border: 1px dashed var(--lw-border-base);
   border-radius: var(--lw-radius-xl);
   color: var(--lw-text-muted);
@@ -603,7 +611,7 @@ textarea:focus {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: var(--lw-surface-container-low);
+  background: var(--lw-lorebook-editor-control-bg, var(--lw-surface-container-low));
   border-radius: 16px;
   cursor: pointer;
   transition: var(--lw-transition);
@@ -612,7 +620,7 @@ textarea:focus {
 }
 
 .toggle-card:hover {
-  background: var(--lw-surface-container-high);
+  background: var(--lw-lorebook-editor-control-hover-bg, var(--lw-surface-container-high));
 }
 
 .toggle-info {
@@ -623,7 +631,7 @@ textarea:focus {
 .toggle-title {
   font-size: 14px;
   font-weight: 800;
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--lw-font-main);
   color: var(--lw-text-main);
 }
 
@@ -633,7 +641,7 @@ textarea:focus {
   gap: 2px;
   padding: 6px 10px;
   border-radius: 10px;
-  background: var(--lw-bg-subtle);
+  background: var(--lw-lorebook-editor-accent-bg, var(--lw-bg-subtle));
   border: 1px solid var(--lw-border-base);
 }
 
@@ -656,7 +664,7 @@ textarea:focus {
 .lw-switch {
   width: 44px;
   height: 24px;
-  background: #cbd5e1;
+  background: var(--lw-lorebook-editor-switch-bg, var(--lw-surface-container-highest));
   border-radius: 99px;
   position: relative;
   transition: var(--lw-transition);
@@ -667,7 +675,7 @@ textarea:focus {
 }
 
 .toggle-card.danger.is-active .lw-switch.checked {
-  background: var(--lw-red);
+  background: var(--lw-danger);
 }
 
 .switch-dot {
@@ -676,9 +684,9 @@ textarea:focus {
   right: 4px;
   width: 16px;
   height: 16px;
-  background: white;
+  background: var(--lw-lorebook-editor-switch-dot, var(--lw-bg-elevated));
   border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--lw-shadow);
   transition: var(--lw-transition);
   transform: translateX(-20px);
 }
@@ -706,7 +714,7 @@ textarea:focus {
 .lw-range {
   width: 100%;
   height: 6px;
-  background: #f1f5f9;
+  background: var(--lw-lorebook-editor-range-track, var(--lw-surface-container-high));
   border-radius: 99px;
   appearance: none;
   cursor: pointer;
@@ -719,7 +727,7 @@ textarea:focus {
   background: var(--lw-primary);
   border: none;
   border-radius: 50%;
-  box-shadow: 0 2px 6px rgba(0, 97, 224, 0.2);
+  box-shadow: 0 2px 6px rgba(var(--lw-primary-rgb), 0.24);
   transition: var(--lw-transition);
 }
 
@@ -774,14 +782,14 @@ textarea:focus {
 }
 
 .save-button {
-  background: #111827;
-  color: #ffffff;
+  background: var(--lw-lorebook-editor-save-bg, var(--lw-black));
+  color: var(--lw-lorebook-editor-save-color, var(--lw-text-inverse));
   border: none;
   border-radius: var(--lw-radius);
   padding: 10px 20px;
   font-size: 13px;
   font-weight: 800;
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--lw-font-main);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
@@ -813,8 +821,8 @@ textarea:focus {
 
 .save-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  background: #000000;
+  box-shadow: var(--lw-shadow-card);
+  background: var(--lw-lorebook-editor-save-hover-bg, color-mix(in srgb, var(--lw-black) 92%, white));
 }
 
 .save-button:active:not(:disabled) {
@@ -827,10 +835,10 @@ textarea:focus {
 }
 
 .save-button.is-success {
-  background: #10b981;
+  background: var(--lw-lorebook-editor-success-bg, var(--lw-success));
 }
 
 .save-button.is-saving {
-  background: #2e3132;
+  background: var(--lw-lorebook-editor-saving-bg, var(--lw-bg-active));
 }
 </style>

@@ -1,5 +1,5 @@
 import { watch, type WatchStopHandle } from 'vue';
-import type { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { ConversationTimelineNode } from '../../types/ConversationContextTypes.js';
 import { useCardMakerStore } from '../../plugins/forge/CardMakerStore.js';
 import type { WorldlineStore } from './WorldlineStore.js';

@@ -1,6 +1,6 @@
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
 import { SyncUtils } from './SyncUtils.js';
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 
 export interface TimelineNode extends LuminaChatMessage {
     text: string; // 兼容旧版 UI 字段

@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { STProtocol } from './st-adapter/STProtocol.js';
 import { STClient } from './st-adapter/STClient.js';
 import { MessageListGateway } from './MessageListGateway.js';
@@ -265,12 +265,11 @@ export class STAdapter {
     }
 
     public static createSyncSourceMeta(): Record<string, any> {
-        // 使用 window.SillyTavern.getContext().chatId 等获取，暂时简化
-        const chatId = typeof window !== 'undefined' && (window as any).SillyTavern ? (window as any).SillyTavern.getContext()?.chatId : null;
+        const chatId = STClient.getResolvedCurrentChatId();
         return {
             '_lw_sync_source': 'lumina',
             '_lw_sync_ts': Date.now(),
-            '_lw_sync_chat_id': chatId || null
+            '_lw_sync_chat_id': chatId
         };
     }
 

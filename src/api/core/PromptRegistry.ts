@@ -3,9 +3,9 @@ import {
     type LifecycleType,
     type PromptContext,
     type XMLTagDefinition
-} from '../../../../shared/XMLTagRegistry.js';
+} from '@shared/XMLTagRegistry.js';
 
-export type { PromptContext } from '../../../../shared/XMLTagRegistry.js';
+export type { PromptContext } from '@shared/XMLTagRegistry.js';
 
 /**
  * 提示词插槽位置标记

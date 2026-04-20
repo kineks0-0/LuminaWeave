@@ -1,22 +1,23 @@
 import { lwStorage } from '../storage.js';
 import { STProtocol } from './st-adapter/STProtocol.js';
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { STClient } from './st-adapter/STClient.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { WorldlineStore } from './WorldlineStore.js';
 import { SyncUtils } from './SyncUtils.js';
 import { pluginManager } from '../../core/PluginManager.js';
 import { 
     TransactionEngine, 
     ISequenceStorage 
-} from '../../../../shared/api/TransactionEngine.js';
+} from '@shared/api/TransactionEngine.js';
 import { 
     TransactionScope,
     TransactionContextPayload,
     TransactionMutationResponse,
     TransactionQueryResponse,
     TransactionErrorPayload
-} from '../../../../shared/api/TransactionTypes.js';
-import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
-import { ConversationDocument, ConversationMutation, createEmptyConversationDocument } from '../../../../shared/ConversationTypes.js';
+} from '@shared/api/TransactionTypes.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import { ConversationDocument, ConversationMutation, createEmptyConversationDocument } from '@shared/ConversationTypes.js';
 
 /**
  * PersistenceService
@@ -356,8 +357,8 @@ export class PersistenceService {
     ): Promise<boolean> {
         return this._enqueue(async () => {
             const contextIds = (lwStorage as unknown as { _getContextIds: () => { chatId: string } })._getContextIds();
-            const chatId = targetChatId || contextIds.chatId;
-            if (!chatId || chatId === 'null' || chatId === 'default') return false;
+            const chatId = STClient.normalizeChatId(targetChatId || contextIds.chatId);
+            if (!chatId) return false;
             const applyMetadataHooks = options.applyMetadataHooks !== false;
 
             try {
@@ -407,8 +408,8 @@ export class PersistenceService {
      */
     async syncToIndependentChat(targetChatId?: string, forceFull = false): Promise<void> {
         return this._enqueue(async () => {
-            const chatId = targetChatId || lwStorage._getContextIds().chatId;
-            if (!chatId || chatId === 'null' || chatId === 'default') return;
+            const chatId = STClient.normalizeChatId(targetChatId || lwStorage._getContextIds().chatId);
+            if (!chatId) return;
 
             if (!this.isLoadedProvider()) {
                 console.warn(`[PersistenceService] 拒绝物理写回: 当前会话 [ID: ${chatId}] 的独立存储数据尚未同步成功或初始化中。为了保护分支数据，本次保存已拦截。`);

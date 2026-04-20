@@ -3,9 +3,10 @@ import { SyncUtils, DiffVisualizer, MessageTextResolver } from './SyncUtils.js';
 import { PersistenceService } from './PersistenceService.js';
 import { STSyncService } from './STSyncService.js';
 import { WorldlineStore } from './WorldlineStore.js';
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { STAdapter } from './STAdapter.js';
 import { STProtocol } from './st-adapter/STProtocol.js';
+import { STClient } from './st-adapter/STClient.js';
 import { pluginManager } from '../../core/PluginManager.js';
 import { globalMemoryManager } from './MemoryManager.js';
 import { LuminaWeaveAPIBase } from './LuminaWeaveAPIBase.js';
@@ -109,6 +110,10 @@ export class ChatManager extends LuminaWeaveAPIBase {
         console.log('[ChatManager] 已激活。');
     }
 
+    private isInvalidChatId(chatId: string | null | undefined): boolean {
+        return STClient.normalizeChatId(chatId) === null;
+    }
+
     /**
      * 同步数据 (自愈增强版)
      */
@@ -120,8 +125,28 @@ export class ChatManager extends LuminaWeaveAPIBase {
         if (this.syncState.status === 'syncing') return;
 
         const { chatId } = lwStorage._getContextIds();
-        if (!chatId || chatId === 'null') {
-            console.debug('[ChatManager] 跳过同步: 无效的 ChatID');
+        if (this.isInvalidChatId(chatId)) {
+            const hadLiveContext = Boolean(this._lastChatId) || this.store.nodePool.length > 0 || this.store.activeLeafId !== null;
+            if (hadLiveContext) {
+                console.log(`[ChatManager] 检测到宿主当前聊天已关闭，清空 live store。chatId=${String(chatId)}`);
+                this.store.setNodes([]);
+                this.store.activeLeafId = null;
+                this._lastChatId = null;
+                this._isIndependentLoaded = false;
+                this.syncState.details = {
+                    messageCount: 0,
+                    stCount: 0,
+                    diffCount: 0,
+                    duration: 0,
+                    source: 'ST'
+                };
+                this.emit('DATA_RELOAD');
+                this.emit('CHAT_UPDATED');
+                pluginManager.callHooks('onChatLoaded', null, []);
+            } else {
+                this._lastChatId = null;
+            }
+
             this.syncState.status = 'idle';
             return;
         }
@@ -261,13 +286,13 @@ export class ChatManager extends LuminaWeaveAPIBase {
     }
 
     async saveToIndependentChat(): Promise<void> {
-        const { chatId } = lwStorage._getContextIds();
-        await this.persistence.saveToIndependentChat(chatId);
+        const chatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
+        await this.persistence.saveToIndependentChat(chatId ?? undefined);
     }
 
     async appendToIndependentChat(msg: LuminaChatMessage): Promise<void> {
-        const { chatId } = lwStorage._getContextIds();
-        await this.persistence.appendToIndependentChat(msg, chatId);
+        const chatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
+        await this.persistence.appendToIndependentChat(msg, chatId ?? undefined);
     }
 
     async commitToST(): Promise<void> {
@@ -279,7 +304,7 @@ export class ChatManager extends LuminaWeaveAPIBase {
      * 分支切换：切换指针并物理回写 ST 以及保存独立存储
      */
     async branchFromNode(targetNodeId: string): Promise<boolean> {
-        const { chatId } = lwStorage._getContextIds();
+        const chatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
         console.log(`[ChatManager] 切换活跃节点至: ${targetNodeId}`);
         
         if (this.store.activeLeafId === targetNodeId) return true;
@@ -288,7 +313,7 @@ export class ChatManager extends LuminaWeaveAPIBase {
         
         try {
             await this.commitToST();
-            await this.persistence.saveToIndependentChat(chatId);
+            await this.persistence.saveToIndependentChat(chatId ?? undefined);
             this.triggerPluginTimeTravel(targetNodeId, true);
             return true;
         } catch (e) {
@@ -301,7 +326,7 @@ export class ChatManager extends LuminaWeaveAPIBase {
      * 物理级回滚：删除后续所有节点并物理截断 ST 对接
      */
     async rollbackFromNode(targetNodeId: string): Promise<boolean> {
-        const { chatId } = lwStorage._getContextIds();
+        const chatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
         console.log(`[ChatManager] 物理级回滚起点: ${targetNodeId}`);
 
         try {
@@ -316,7 +341,7 @@ export class ChatManager extends LuminaWeaveAPIBase {
             this.store.activeLeafId = targetNodeId;
 
             await this.commitToST();
-            await this.persistence.saveToIndependentChat(chatId);
+            await this.persistence.saveToIndependentChat(chatId ?? undefined);
             this.triggerPluginTimeTravel(targetNodeId, true);
             return true;
         } catch (e) {

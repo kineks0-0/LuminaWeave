@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { STAdapter } from '../STAdapter';
-import type { LuminaChatMessage } from '../../../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 
 function makeMessage(partial: Partial<LuminaChatMessage>): LuminaChatMessage {
     return {
