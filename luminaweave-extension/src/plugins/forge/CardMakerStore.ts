@@ -3,10 +3,10 @@ import { computed, ref, onMounted, shallowRef } from 'vue';
 import { luminaWeaveApi } from '../../api';
 import { lwStorage } from '../../api/storage.js';
 import { useForgeStore } from '../../stores/useForgeStore';
-import { API_BASE, API_ROUTES } from '../../../../shared/ApiEndpoints.js';
+import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
 import { CleanedMessage } from '../../types/nexus';
 import { WorldlineStore } from '../../api/core/WorldlineStore.js';
-import { MessageUtils, type LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { globalXMLInterceptor } from '../../api/core/XMLInterceptor.js';
 import type { ForgeVirtualLorebookEntry, ForgeWorkspaceSession } from '../../types/SessionTypes.js';
 import { LorebookTimelineResolver } from '../../api/core/LorebookTimelineResolver.js';
@@ -27,7 +27,7 @@ import {
     kickoffBlueprint
 } from '../../api/core/ForgeFormController.js';
 import { ForgeWorkflowGraph } from '../../api/core/ForgeWorkflowGraph.js';
-import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 import type { ForgeAuxPanelKind, ForgeWorkflowSnapshot } from '../../types/ForgeWorkflowTypes.js';
 import {
     FORGE_FORM_RESULT_SUBMITTED,

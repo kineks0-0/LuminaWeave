@@ -17,9 +17,10 @@ import { promptBuilder } from './core/PromptBuilder.js';
 import { globalPromptRegistry, PromptSlot } from './core/PromptRegistry.js';
 import { globalXMLInterceptor, XMLInterceptor, BuiltinXMLTags } from './core/XMLInterceptor.js';
 import { globalMemoryManager } from './core/MemoryManager.js';
+import { ControlledChatCreationCoordinator } from './core/ControlledChatCreationCoordinator.js';
 import { pluginManager } from '../core/PluginManager.js';
 import { ST_EVENT } from './core/STEvent.js';
-import type { LuminaChatMessage } from '../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
 import { ChatDiffInspector, ChatDiffReport } from './debug/ChatDiffInspector.js';
 import { ChatDebugGateway } from './debug/ChatDebugGateway.js';
@@ -41,11 +42,17 @@ import { useModalStore, ModalOptions } from '../stores/useModalStore.js';
 import type {
     ConversationContextOverride,
     ConversationContextSwitchInput,
+    CreateChatConversationInput,
+    CreateChatConversationResult,
+    DeleteChatConversationInput,
+    DeleteChatConversationResult,
     ConversationNodeSwitchInput,
     ConversationSessionRef,
     ConversationContextOption,
     ConversationTimelineNode,
-    ConversationViewContext
+    ConversationViewContext,
+    RenameChatConversationInput,
+    RenameChatConversationResult
 } from '../types/ConversationContextTypes.js';
 
 /**
@@ -77,6 +84,9 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     private _probing: boolean = false;
     private _probingEvents: { name: string, hasData: boolean, keys: string[] }[] = [];
     private _manualAbortPending: boolean = false;
+    private _lastGeneralChatLoadChatId: string | null = null;
+    private _lastGeneralChatLoadAt: number = 0;
+    private readonly controlledChatCreation = new ControlledChatCreationCoordinator();
     public registeredPanels: Map<string, { id: string, component: any, config: any }> = new Map();
 
     /** 当前正在运行的生成会话 */
@@ -110,7 +120,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
         this.beforeGenerationStartFlow.collect(async (payload) => {
             if (payload.chatType !== 'st') return;
-            await this.promptWorldInfoMount.syncToWorldInfo();
+            await this.syncPromptWorldInfo('beforeGenerationStart');
             await this.chatManager.commitToST();
         });
 
@@ -248,7 +258,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.emit('INIT_PROGRESS', '同步世界书设置...');
         // 5. 高级业务初始化 (同步世界书、应用自定义字体等)
         try {
-            await this.promptWorldInfoMount.syncToWorldInfo();
+            await this.syncPromptWorldInfo('init', { deferDuringControlledChatCreation: false });
         } catch (e) {
             console.error('[LuminaWeave API] 初始同步提示词世界书失败:', e);
         }
@@ -261,7 +271,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 || data?.key === 'lumina-chat.dialogueUIFrequency'
                 || data?.key === 'lumina-settings.luminaViewSyntaxStyle'
             ) {
-                this.promptWorldInfoMount.syncToWorldInfo();
+                void this.syncPromptWorldInfo('settingsChanged');
             }
             if (data && (data.key === 'lumina-chat.fontFamily' || data.key === 'lumina-chat.fontWeight')) {
                 this.applyCustomFont();
@@ -272,7 +282,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         // 7. 监听时空穿越 (节点切换)
         this.chatManager.on('CHAT_UPDATED', () => {
             // 节点切换或对话更新后，异步同步最新状态至世界书
-            this.promptWorldInfoMount.syncToWorldInfo();
+            void this.syncPromptWorldInfo('chatUpdated');
         });
 
         this.emit('INIT_PROGRESS', '实时指纹捕获中...');
@@ -282,6 +292,50 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     }
 
     private _globalEventsInited = false;
+
+    private buildPromptFingerprint(prompt: unknown): string | null {
+        if (Array.isArray(prompt)) {
+            const first = prompt[0];
+            const last = prompt[prompt.length - 1];
+            return JSON.stringify({
+                length: prompt.length,
+                first: typeof first === 'object' ? first : String(first ?? ''),
+                last: typeof last === 'object' ? last : String(last ?? '')
+            });
+        }
+
+        if (prompt && typeof prompt === 'object') {
+            return JSON.stringify(prompt);
+        }
+
+        return typeof prompt === 'string' ? prompt : null;
+    }
+
+    private async syncPromptWorldInfo(
+        reason: string,
+        options: { deferDuringControlledChatCreation?: boolean } = {}
+    ): Promise<void> {
+        const shouldDefer = options.deferDuringControlledChatCreation !== false;
+        if (shouldDefer && this.controlledChatCreation.deferPromptSync()) {
+            console.debug(`[LuminaWeave] 受控新建事务期间暂缓世界书同步: ${reason}`);
+            return;
+        }
+
+        await this.promptWorldInfoMount.syncToWorldInfo();
+    }
+
+    private shouldSuppressControlledChatCreationHostSync(reason: string, chatId: string | null): boolean {
+        const shouldSuppress = this.controlledChatCreation.suppressHostSync(reason, chatId);
+        if (shouldSuppress) {
+            console.debug('[LuminaWeave] 受控新建事务期间跳过宿主同步事件', {
+                reason,
+                chatId,
+                state: this.controlledChatCreation.getState()
+            });
+        }
+        return shouldSuppress;
+    }
+
     private initGlobalEvents() {
         if (this._globalEventsInited) return;
 
@@ -376,15 +430,34 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 this.chatManager._stLoading = true;
             });
 
-            const handleGeneralChatLoad = async () => {
+            const handleGeneralChatLoad = async (reason: string) => {
                 if (this.chatManager.sync.isAutoSyncPaused) {
                     console.debug('[LuminaWeave] 自动同步已暂停，忽略 general chat load');
                     return;
                 }
                 if (this._isSyncing || !this._ready) return; // 增加 !this._ready 判定是为了防止初始化尚未完成时的外部监听同步
+
+                const currentChatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
+                if (this.shouldSuppressControlledChatCreationHostSync(reason, currentChatId)) {
+                    this.chatManager._stLoading = false;
+                    return;
+                }
+                const now = Date.now();
+                const isDuplicateLoad = Boolean(
+                    currentChatId
+                    && currentChatId === this._lastGeneralChatLoadChatId
+                    && now - this._lastGeneralChatLoadAt < 600
+                );
+                if (isDuplicateLoad) {
+                    console.debug(`[LuminaWeave] 跳过重复 general chat load: reason=${reason}, chatId=${currentChatId}`);
+                    return;
+                }
+
                 this._isSyncing = true;
                 try {
                     this.chatManager._stLoading = false;
+                    this._lastGeneralChatLoadChatId = currentChatId;
+                    this._lastGeneralChatLoadAt = now;
                     await this.syncFromST(); 
                     this.emit('CHAT_CHANGED');
                 } finally {
@@ -393,7 +466,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             };
 
             stEventSource.on(event_types[ST_EVENT.CHAT_LOADED], async () => {
-                await handleGeneralChatLoad();
+                await handleGeneralChatLoad('CHAT_LOADED');
                 const { chatId } = lwStorage._getContextIds();
                 if (chatId) this.streamHandler.resumeToTerminal(chatId);
             });
@@ -408,13 +481,13 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             stEventSource.on(event_types[ST_EVENT.CHAT_CREATED], () => {
                 console.log('[LuminaWeave] detect chat_created');
                 this.emit('CHAT_CREATED');
-                handleGeneralChatLoad();
+                handleGeneralChatLoad('CHAT_CREATED');
             });
 
             stEventSource.on(event_types[ST_EVENT.CHAT_DELETED], () => {
                 console.log('[LuminaWeave] detect chat_deleted');
                 this.emit('CHAT_DELETED');
-                handleGeneralChatLoad(); // 删除后通常会载入一个空对话或另一个对话
+                handleGeneralChatLoad('CHAT_DELETED'); // 删除后通常会载入一个空对话或另一个对话
             });
 
             stEventSource.on(event_types[ST_EVENT.MESSAGE_RECEIVED], async () => {
@@ -451,7 +524,12 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
                 console.debug(`[LuminaWeave] [EVENT_TRACE] 监听到提示词候选 [${evtName}]: exists=${!!prompt}, isDryRun=${isDryRun}, isProbing=${this._probing}`);
 
-                if (prompt && (isDryRun || this._probing)) {
+                const promptFingerprint = prompt ? this.buildPromptFingerprint(prompt) : null;
+                const shouldEmitPrompt = !isDryRun
+                    || this._probing
+                    || this.controlledChatCreation.shouldEmitDryRunPrompt(promptFingerprint);
+
+                if (prompt && (isDryRun || this._probing) && shouldEmitPrompt) {
                     console.log(`[LuminaWeave] 成功从事件 ${evtName} 截获提示词负载:`, prompt);
                     this.lastPromptPayload = prompt;
                     this.emit('ST_PROMPT_INTERCEPTED', prompt);
@@ -504,6 +582,10 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
             stEventSource.on(event_types[ST_EVENT.GENERATION_STARTED], (type: string, options: any, dryRun: boolean) => {
                 if (this._probing || dryRun) {
+                    if (!this._probing && dryRun && this.controlledChatCreation.shouldSuppressDryRunRestart()) {
+                        console.debug('[LuminaWeave] 受控新建事务期间跳过重复 DryRun 重启');
+                        return;
+                    }
                     console.log(`[LuminaWeave] 监测到 ${this._probing ? '探针' : 'DryRun'} 触发的 ST 开始生成，静默处理...`);
                     // 如果我们自己正在生成，不要去干扰 StreamHandler 的状态
                     if (!this.isGenerating) {
@@ -547,6 +629,11 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 const syncService = this.chatManager.sync;
                 if (syncService.isAutoSyncPaused) {
                     console.debug(`[LuminaWeave] 自动同步已暂停，忽略事件: ${reason}`);
+                    return;
+                }
+
+                const currentChatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
+                if (this.shouldSuppressControlledChatCreationHostSync(reason, currentChatId)) {
                     return;
                 }
 
@@ -714,7 +801,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             void this.messageReceivedFlow.emit();
         }
         this.emit('MESSAGE_RECEIVED'); // 保留旧版兼容性事件
-        this.promptWorldInfoMount.syncToWorldInfo();
+        void this.syncPromptWorldInfo('syncFromST');
         console.log('[LuminaWeave] 同步管道执行完毕，已发送刷新信号并同步世界书');
     }
 
@@ -1233,6 +1320,57 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         return this.conversationService.switchConversationContext(input);
     }
 
+    async createChatSession(input: CreateChatConversationInput): Promise<CreateChatConversationResult> {
+        await this.waitForReady();
+        return this.conversationService.createChatSession(input);
+    }
+
+    async renameChatSession(input: RenameChatConversationInput): Promise<RenameChatConversationResult> {
+        await this.waitForReady();
+        return this.conversationService.renameChatSession(input);
+    }
+
+    async deleteChatSession(input: DeleteChatConversationInput): Promise<DeleteChatConversationResult> {
+        await this.waitForReady();
+        return this.conversationService.deleteChatSession(input);
+    }
+
+    beginControlledChatCreation(targetCharacterId: string | number | null | undefined): void {
+        const state = this.controlledChatCreation.begin(targetCharacterId);
+        console.info('[LuminaWeave][ControlledChatCreation] begin', state);
+    }
+
+    markControlledChatCreationFinalChat(chatId: string | null | undefined): void {
+        const normalizedChatId = STClient.normalizeChatId(chatId);
+        const state = this.controlledChatCreation.markFinalChat(normalizedChatId);
+        console.info('[LuminaWeave][ControlledChatCreation] final-chat', state);
+    }
+
+    isControlledChatCreationActive(): boolean {
+        return this.controlledChatCreation.isActive();
+    }
+
+    getControlledChatCreationState() {
+        return this.controlledChatCreation.getState();
+    }
+
+    async flushDeferredPromptWorldInfoSync(reason = 'controlled-chat-creation'): Promise<void> {
+        if (!this.controlledChatCreation.consumeDeferredPromptSync()) {
+            return;
+        }
+
+        console.debug(`[LuminaWeave] 刷新受控新建事务期间延后的世界书同步: ${reason}`);
+        await this.syncPromptWorldInfo(reason, { deferDuringControlledChatCreation: false });
+    }
+
+    endControlledChatCreation(success: boolean): void {
+        const summary = this.controlledChatCreation.end();
+        console.info('[LuminaWeave][ControlledChatCreation] summary', {
+            success,
+            ...summary
+        });
+    }
+
     async switchConversationNode(input: ConversationNodeSwitchInput): Promise<boolean> {
         await this.waitForReady();
         return this.conversationService.switchConversationNode(input);
@@ -1444,7 +1582,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.lastPromptPayload = null;
 
         // 刺探前确保世界书已同步最新状态
-        await this.promptWorldInfoMount.syncToWorldInfo();
+        await this.syncPromptWorldInfo('probePrompt', { deferDuringControlledChatCreation: false });
 
         const generate = await this._getSTFunction('generate');
         if (generate) {
@@ -1722,6 +1860,37 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         return ctx?.name1 || (typeof window !== 'undefined' ? (window as any).name1 : 'User');
     }
 
+    getCharacterNames(): string[] {
+        return STClient.getCharacterNames();
+    }
+
+    getCharacterNameById(characterId: string | number | null | undefined): string | null {
+        return STClient.getCharacterNameById(characterId);
+    }
+
+    getCharacterRoster(): Array<{
+        characterId: string;
+        characterName: string;
+        characterAvatarUrl: string | null;
+    }> {
+        return STClient.getCharacterRoster();
+    }
+
+    async getChatSessionCharacterMeta(
+        chatFile: string | null | undefined,
+        target: {
+            characterId?: string | number | null;
+            characterName?: string;
+            characterAvatarUrl?: string | null;
+        } = {}
+    ): Promise<{
+        characterId: string | null;
+        characterName: string | null;
+        characterAvatarUrl: string | null;
+    } | null> {
+        return STClient.getChatSessionCharacterMeta(chatFile, target);
+    }
+
     getCharAvatar(name: string): string {
         if (!name) return DEFAULT_AVATAR;
 
@@ -1730,9 +1899,14 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
         // 1. 优先尝试使用 TavernHelper 或 ST 原生提供的便捷路径 API
         const helper = typeof TavernHelper !== 'undefined' ? TavernHelper : null;
-        const ctx = typeof SillyTavern !== 'undefined' ? SillyTavern : null;
-        if (ctx && typeof (ctx as any).getCharAvatarPath === 'function') {
-            const path = (ctx as any).getCharAvatarPath(targetName);
+        const ctx = this.ctx as any;
+        const stMain = typeof SillyTavern !== 'undefined' ? SillyTavern : null;
+        if (ctx && typeof ctx.getCharAvatarPath === 'function') {
+            const path = ctx.getCharAvatarPath(targetName);
+            if (path) return path;
+        }
+        if (stMain && typeof (stMain as any).getCharAvatarPath === 'function') {
+            const path = (stMain as any).getCharAvatarPath(targetName);
             if (path) return path;
         }
         if (helper && typeof (helper as any).getCharAvatarPath === 'function') {
@@ -1754,15 +1928,20 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         // 3. 多级路径解析 Fallback
 
         // A. 优先使用 ST 最新缩略图协议 (推荐)
-        if (typeof SillyTavern !== 'undefined' && typeof SillyTavern.getThumbnailUrl === 'function') {
+        if (ctx && typeof ctx.getThumbnailUrl === 'function') {
             try {
-                return SillyTavern.getThumbnailUrl('characters', ch.avatar);
+                return ctx.getThumbnailUrl('avatar', ch.avatar);
+            } catch (e) { }
+        }
+        if (stMain && typeof stMain.getThumbnailUrl === 'function') {
+            try {
+                return stMain.getThumbnailUrl('avatar', ch.avatar);
             } catch (e) { }
         }
 
         // B. 处理标准物理路径
         if (ch.avatar.includes('.')) {
-            return `/thumbnail?type=characters&file=${encodeURIComponent(ch.avatar)}`;
+            return `/thumbnail?type=avatar&file=${encodeURIComponent(ch.avatar)}`;
         }
 
         // C. 使用传统的 getCharacterAvatar API
@@ -1778,6 +1957,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
     getUserAvatar(userName?: string): string {
         const ctx = this.ctx as any;
+        const stMain = typeof SillyTavern !== 'undefined' ? SillyTavern : null;
 
         // 尝试根据传入的名称动态寻找（ST 群聊/多用户场景）
         if (userName && ctx && Array.isArray(ctx.chat)) {
@@ -1793,7 +1973,10 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         const persona = (typeof window !== 'undefined' ? (window as any).user_avatar : null) || (this.ctx as any)?.user?.avatar || 'user-default.png';
         if (persona.startsWith('http') || persona.startsWith('data:')) return persona;
 
-        const getThumbnailUrl = typeof SillyTavern !== 'undefined' ? SillyTavern.getThumbnailUrl : null;
+        const getThumbnailUrl =
+            typeof ctx?.getThumbnailUrl === 'function'
+                ? ctx.getThumbnailUrl.bind(ctx)
+                : (typeof stMain?.getThumbnailUrl === 'function' ? stMain.getThumbnailUrl.bind(stMain) : null);
         const hasThumbnailApi = typeof getThumbnailUrl === 'function';
 
         // 1. 优先使用 ST 最新缩略图协议 (推荐)

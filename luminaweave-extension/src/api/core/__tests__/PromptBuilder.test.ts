@@ -6,7 +6,9 @@ import { lwStorage } from '../../storage';
 vi.mock('../st-adapter/STClient', () => ({
     STClient: {
         substituteMacros: vi.fn(text => text.replace('{{user}}', 'UserA')),
-        getActiveWorldInfoItems: vi.fn(() => [])
+        getActiveWorldInfoItems: vi.fn(() => []),
+        getResolvedCurrentCharacterId: vi.fn(() => '0'),
+        getResolvedCurrentChatId: vi.fn(() => 'chat_1')
     }
 }));
 

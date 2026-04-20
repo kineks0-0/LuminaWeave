@@ -1,7 +1,7 @@
 # LuminaWeave 系统架构与设计文档（System Design）
 
 **版本:** v6.0-dev
-**最后更新时间:** 2026-04-12
+**最后更新时间:** 2026-04-19
 
 ## 一、系统架构理念
 
@@ -33,9 +33,16 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
     - `messageReceivedFlow`: 允许 UI 与存储层在收到流式消息后异步协调刷新。
     从之前将挂载逻辑硬编码进 `sendMessage` 的老旧耦合中解放出来，将重型操作统一注册为流响应。在执行生成操作前按条件切片安全执行等待处理，彻底杜绝数据在流生成时的竞态不同步。
 - **同构 Bridge 架构与多端适配层 [NEW v6.0]**：
-    LuminaWeave 不再直接在业务层构造网络请求，而是通过 `shared/api/IBridge.ts` 定义了一套平台无关的业务接口，并由 `BridgeDispatcher` 在运行时注入具体的物理实现：
+    LuminaWeave 不再直接在业务层构造网络请求，而是通过 `luminaweave-extension/shared/api/IBridge.ts` 定义了一套平台无关的业务接口，并由 `BridgeDispatcher` 在运行时注入具体的物理实现：
     - **HttpBridgeAdapter**：传统的 Web 环境适配器。封装了 `fetch` 与 `fetch-event-source`，内置 CSRF 自动刷新与重试逻辑，服务于标准的 SillyTavern + Lumina Server 部署环境。
     - **TauriBridgeAdapter [NEW]**：原生环境适配器。适配 TauriTavern (Android/Native)，优先使用 `window.__TAURITAVERN__.api.extension.store` 官方 ABI，并降级支持原生 `invoke` 机制。该适配器还实现了符合官方规范的 Key 过滤逻辑（支持 `.` 与 `-`），补全了包括 `renameKey` 与 `listTables` 在内的全量存储管理能力。
+    - **Host Layout Contract [UPDATED]**：UI 层在 TauriTavern 中新增对 `window.__TAURITAVERN__.api.layout` 的订阅，统一读取 `safeInsets / viewport / ime.keyboardOffset` 快照，并向内部下发 `--lw-safe-* / --lw-ime-bottom / --lw-keyboard-offset` 等 CSS 变量；当宿主 ABI 不可用时，才回退到 `visualViewport` 推断。
+    - **移动端 IME 已知问题 [NEW 2026-04-19]**：根据 `ime_filtered4.log` 的现网日志，当前 Android / TauriTavern 适配仍存在一组已确认但尚未完全收敛的时序问题：
+      - 同一次 `focusin` 后，前端经常先收到一帧 `imeActive=false, keyboardOffset=0` 的快照，随后才收到真实的 `imeActive=true, keyboardOffset>0`。这意味着首次可见性同步可能仍然基于 0 inset 执行一次，表现为“点击输入框后先被键盘挡住，输入一次或再次触发布局后才恢复正常”。
+      - 在输入框保持焦点期间，宿主快照会出现 `imeActive=true/false` 来回切换；前端因此可能提前执行 `reason=ime-hidden` 的 session 清理，随后又重新 commit IME inset，导致一次输入周期内重复进入“清除 -> 重建”。
+      - `activeSurfaceKind` 在焦点切换边缘会出现 `fixed-shell` 与 `composer` 的切换；当前前端已记录该字段，但尚未完全消化这类 surface 抖动，因此它仍是移动端适配不稳定性的观测点之一。
+      - 显式 IME 模式下，`scrollRoot` 可见性校正会在单次键盘生命周期内被重复触发；从日志看，这种重复校正既发生在 `keyboardOffset=343` 的真实键盘阶段，也发生在 `keyboardOffset=0` 的过渡帧。
+    - **问题边界说明 [NEW 2026-04-19]**：上述问题当前只被记录为“宿主 Layout 快照生命周期与前端 IME session 状态机之间仍存在时序抖动”。现有日志足以确认症状与触发链路，但还不能单凭日志断言根因完全在宿主 ABI 或完全在 Lumina 前端；后续修复需要继续对齐 `focusin/focusout`、宿主 `layout` 推送与本地 session commit/clear 的先后顺序。
     - **流式归一化 (Streaming Normalization)**：通过 `IStreamingHandle` 接口抽象了不同环境下的流式输出（SSE / 轮询 / 原生事件），使 `NexusClient` 等消费者只需订阅统一的回调（`onToken`, `onDone` 等），无需关心具体的传输协议。
     这一架构彻底实现了“一套核心业务逻辑，多端透明运行”的目标。
 
@@ -44,10 +51,13 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
 在 ST 定义的插槽位使用 Vue.js 3 开辟独立绘制区域。默认开启 Shadow DOM 以隔离原生 CSS 污染。
 - **严格样式选择性注入 (Strict Style Isolation)**：`index.ts` 中的 `injectStyles` 仅克隆包含 `data-vite-dev-id` 或内容中带有 `LuminaWeave` 特征标识的样式节点。这确保了 Shadow DOM 内部仅应用插件自身样式，彻底杜绝 SillyTavern 全局样式（如对 `input` 和 `button` 的强制覆盖）造成的 UI 异常。
 - **兼容性降级**：支持在设置中关闭 Shadow DOM 以增强特定浏览器的兼容性。
+- **Host Surface 映射 [UPDATED]**：由于 Shadow DOM 内部节点默认不暴露给宿主 overlay classifier，移动端 IME 适配不再依赖 Vue 内部 DOM 直接标记 surface；`index.ts` 维护外层 host container 的 `data-tt-mobile-surface`，折叠态映射为 `free-window`，展开态映射为 `fullscreen-window`。
+- **IME 提交保护 [UPDATED]**：聊天输入与 Forge composer 的 Enter 提交流程新增 composition guard，统一识别 `isComposing / nativeEvent.isComposing / keyCode=229 / compositionstart-end`，确保拼音、假名等候选确认不会被误判为发送或生成。
 
 ### 3. PluginManager（插件管理器解耦层）
 
 所有视图应用（ChatStream、Timeline、Status 等）均抽象为 `src/plugins/` 下的独立模块，由 `PluginManager` 在根组件 `App.vue` 启动时统一动态注册。
+- **App Shell 分层 [UPDATED]**：`App.vue` 现在作为运行时编排入口，仅负责状态组装、composable 调用与事件绑定；`shell/AppRootContainer.vue` 负责 root 级宿主容器、展开态与视口/定位边界；`shell/LuminaShellRoot.vue` 只负责内部 shell 内容编排与 traditional/freeform 分支。
 
 ### 3.1 Desktop Mode Registry（桌面模式注册层） [NEW]
 
@@ -72,12 +82,21 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
 - **会话类型扩展 (Conversation-aware Nodes) [NEW v6.0-dev]**：节点模型开始扩展 `conversationType`、`conversationId` 与 `nodeKind` 等元数据，用于承载主聊天、Forge 及后续更多扩展会话。系统正在从“只为聊天消息服务”的节点设计，演进为“统一会话节点容器”。
 - **统一会话查看上下文 (Conversation Context) [NEW v6.0-dev]**：在节点模型之上新增前端级 `ConversationContext` 解析层，统一提供当前 `source/session/activeLeaf/messages/lorebookView/memorySnapshot`。消息型插件默认消费这个解析层，而不是各自直连主聊天状态。
 - **会话摘要角色元数据 [NEW]**：`ConversationSummary` 现额外携带 `characterId / characterName / characterAvatarUrl`。该字段从会话节点中最近一次非用户消息推导，用于像 Discord 角色卡侧栏这类主题级导航聚合，不改变节点真相源本身。
+- **空会话角色归属持久化 [NEW]**：Discord 角色频道按角色新建 chat session 时，系统会在新建空 `ConversationDocument` 的 `pluginState.chat` 中立即写入角色元数据；摘要解析在无消息节点时回退到该持久化字段，从而保证 server/local/tauri 三种桥接路径下的新空会话刷新后仍能稳定归属到正确角色分组。
+- **角色频道历史会话管理 [NEW]**：Discord 角色频道对单角色历史会话采用折叠式展示，默认仅暴露最近若干条，会话过多时通过“查看更多”延迟展开；单条会话的重命名与删除仍通过 `ConversationService -> ChatConversationGateway -> STClient -> BridgeDispatcher.conversation` 串联，保证宿主 chat 文件、统一会话摘要索引与本地 `ConversationDocument` 一致迁移或删除。
+- **角色频道宿主接口分层 [UPDATED]**：
+    - 角色频道 UI 改为纯 View，只消费 `CharacterChannelState` 与意图回调，不再直接读取 `lwApi.getCharacterRoster()`、`lwApi.getChatSessionCharacterMeta()` 或上下文 store 内部会话数组。
+    - `CharacterChannelService` 作为角色频道专用的 model/service 层，负责把 `ConversationSummary + 角色 roster + 会话 character meta + 最近历史摘要` 组装成稳定读模型，并维护展开态、busy 态与切换状态。
+    - 宿主侧能力被拆为 `ChatSessionDirectoryPort`（roster / list / open / create / rename / delete / close）与 `ChatHistoryAccessPort`（current ref / window info / recent history / search / findLast / summary / stable id）。
+    - `CompositeChatHostProvider` 当前统一回退为 `Helper augment + ST` 路径；原先预留的原生宿主读取层暂时停用，但 `ChatHistoryAccessPort` 仍保留为显式能力边界，避免未来重新接入宿主 ABI 时再次把读取逻辑散落回 UI。
+    - 角色频道在组装分组时会主动屏蔽角色名为 `Assistant` 的 roster 项与会话项，避免宿主默认助手名称污染角色频道导航。
 - **统一会话世界线服务 (ConversationService) [UPDATED v6.0-dev]**：
     - 通过 `ConversationSourceAdapter` 注册 `chat / forge` 等来源，统一向上暴露 `listSources / listSessions / getContext / switchNode / branch / rollback`。
     - 全局 viewing context 由服务层维护并通过领域事件 `CONVERSATION_CONTEXT_CHANGED / CONVERSATION_WORLDLINE_*` 向 UI 广播。
     - `chat` 来源对非当前 ST 活跃会话采用“独立存储视图优先”，只读取/回写 Lumina 独立存储；当前活跃聊天才继续参与宿主物理同步。
     - `forge` 来源通过独立的 `ForgeConversationGateway` 读取/切换工作会话，`ConversationService` 不再直接依赖 Forge 的 Pinia store。
     - 旧 `chat-only` facade 已从 `LuminaWeaveAPI` 移除；所有消费方统一改走 `getConversation* / switchConversation* / branchConversationNode / rollbackConversationNode`。
+    - `ChatConversationGateway` 不再默认把 chat 会话管理直接绑死在 `STClient` 上，而是优先依赖 `ChatSessionDirectoryPort`；这样 chat CRUD 的统一收口保留不变，但宿主读取路径已可按环境插拔。
 
 ### 5. 消息归一化流水线 (Normalization Pipeline) [NEW v6.0]
 
@@ -427,7 +446,7 @@ graph LR
     - **Panel 注册**: 允许任何插件通过 `lwApi.registerPanel` 挂载 UI 单元。
     - **多模态展示**: 统一由 `openPanel` 调度，根据配置或实时参数决定以 Modal (弹窗) 或 Tab (标签页) 形态呈现。
     - **传统桌面移动端临时标签页 [NEW v6.0-dev]**: 当视口进入移动端尺寸时，原先的 widget / auxiliary panel 不再强制占据右栏，而是转换为临时 Tab 进入主内容区；顶部状态区同时隐藏 `weather-chip` 与用户头像，降低头部噪音。
-    - **自由工作台台前调度模型 [NEW v6.0-dev]**: `App.vue` 的自由工作台已从“主窗 + 辅助窗”二元模型升级为 `workspace stage + window instances + dock` 的统一窗口系统。窗口布局采用二维 `x/y/width/height` 状态，允许相互覆盖；系统仅做舞台边界约束，不再执行碰撞避让重排。
+    - **自由工作台台前调度模型 [NEW v6.0-dev]**: 当前自由工作台由 `App.vue -> LuminaShellRoot.vue` 的内部 shell 分支承载，root 级宿主 frame 则下沉到 `AppRootContainer.vue`。自由工作台本身已从“主窗 + 辅助窗”二元模型升级为 `workspace stage + window instances + dock` 的统一窗口系统。窗口布局采用二维 `x/y/width/height` 状态，允许相互覆盖；系统仅做舞台边界约束，不再执行碰撞避让重排。
     - **Stage Strip / Dock 编排 [NEW v6.0-dev]**: 左侧 Stage Strip 维护最近舞台组，底部 Dock 作为启动台与核心插件入口；两者默认不常驻，而是由工作台菜单、手动开关、空舞台状态或桌面端边缘悬停触发显隐。点击已存在于其他舞台的 App 时，优先切回所属舞台，而不是无条件创建重复窗口；关闭最后一个窗口时保留空舞台。
 - **阻尼交互层 [NEW v6.0-dev]**: `WorkspaceWindow` 在拖拽与缩放收尾阶段增加轻微阻尼 / settle 动画，并为窗口进场、关闭与切换提供更明确的过渡；窗口只执行舞台边界裁剪与弹性回收，不再在靠近舞台边缘时强制磁吸。宽高在 `1/3`、`1/2`、`2/3` 等比例附近提供分段卡点，用“目标位置 + 微小残余位移衰减”的方式模拟 iPadOS 式手感，避免生硬停靠。
 - **多会话时间线数据源 (Timeline Source Switching) [NEW v6.0-dev]**：

@@ -6,12 +6,12 @@ import { Logger } from './logger.js';
 import { StreamingManager } from './StreamingManager.js';
 import { StorageService } from './StorageService.js';
 import { NexusService, mapSTSettingsToAISdk } from './NexusService.js';
-import { BaseXMLInterceptor } from '../../shared/BaseXMLInterceptor.js';
-import { API_ROUTES } from '../../shared/ApiEndpoints.js';
+import { BaseXMLInterceptor } from '@shared/BaseXMLInterceptor.js';
+import { API_ROUTES } from '@shared/ApiEndpoints.js';
 import { TransactionRecord, TransactionScope, TransactionStatus, NexusApiConfig, PresetRecord, ForgeSessionRecord } from './types.js';
-import { LuminaChatMessage, MessageUtils } from '../../shared/LuminaMessage.js';
-import { NexusGenerationFlow, PersistenceDelegate } from '../../shared/api/NexusGenerationFlow.js';
-import { ConversationDocument, ConversationMutation } from '../../shared/ConversationTypes.js';
+import { LuminaChatMessage, MessageUtils } from '@shared/LuminaMessage.js';
+import { NexusGenerationFlow, PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
+import { ConversationDocument, ConversationMutation } from '@shared/ConversationTypes.js';
 
 class ServerXMLInterceptor extends BaseXMLInterceptor {}
 
@@ -173,6 +173,16 @@ export class LuminaWeaveServer {
                 summary: this.storage.listConversations().find((item) => item.id === conversationId) || null,
                 lastCommittedSeq: committedTx.seq,
                 transaction: committedTx
+            });
+        });
+
+        router.delete(API_ROUTES.CONVERSATION.DELETE(':id').replace('/:id', '/:conversationId'), (req: Request, res: Response) => {
+            const conversationId = String(req.params.conversationId);
+            const deleted = this.storage.deleteConversation(conversationId);
+            this.storage.syncToDisk();
+            res.json({
+                success: deleted,
+                id: conversationId
             });
         });
 

@@ -1,7 +1,7 @@
 <template>
-  <div class="lw-chat-stream" :class="{ 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document', 'is-compact': isCompact }"
+  <div class="lw-chat-stream" data-lw-ime-scope :class="{ 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document', 'is-compact': isCompact }"
     :data-skin-variant="chatVariant || 'default'" :style="streamStyle">
-    <div class="chat-scroll-area" ref="chatScrollArea" @wheel.stop @scroll="handleScroll">
+    <div class="chat-scroll-area" ref="chatScrollArea" data-lw-ime-scroll-root @wheel.stop @scroll="handleScroll">
       <div class="chat-content-wrapper" :style="msgMaxWidthStyle">
         <!-- 临时插标物：章节线 -->
         <div class="chat-chapter-divider" v-if="messages.length > 0">
@@ -14,9 +14,13 @@
           </div>
         </div>
 
+        <div v-if="showNoActiveChatEmptyState" class="chat-empty-state">
+          <p>{{ emptyStateMessage }}</p>
+        </div>
+
         <div v-for="(msg, index) in messages" :key="index" class="chat-msg" :class="{ 'user': msg.is_user }">
           <div class="msg-avatar">
-            <img :src="msg.avatarUrl" class="avatar-img" :alt="msg.name"
+            <img :src="resolveMessageAvatar(msg)" class="avatar-img" :alt="msg.name"
               @error="(e) => (e.target as any).src = lwApi?.DEFAULT_AVATAR">
           </div>
           <div class="msg-content">
@@ -28,12 +32,13 @@
             <template v-if="editingIndex === index">
               <div class="msg-edit-wrap">
                 <textarea class="msg-edit-textarea" v-model="editingText" rows="4" autofocus
-                  @keydown.ctrl.enter="confirmEdit" @keydown.esc="editingIndex = -1"></textarea>
+                  @keydown="handleEditTextareaKeydown" @compositionstart="editImeGuard.handleCompositionStart"
+                  @compositionend="editImeGuard.handleCompositionEnd"></textarea>
                 <div class="msg-edit-actions-row">
                   <div class="edit-tip">Ctrl + Enter 确认，Esc 取消</div>
                   <div class="edit-btns">
                     <button class="edit-cancel-btn" @click="editingIndex = -1">取消</button>
-                    <button class="edit-confirm-btn" @click="confirmEdit">保存修改</button>
+                    <button class="edit-confirm-btn" @click="handleConfirmEditClick">保存修改</button>
                   </div>
                 </div>
               </div>
@@ -51,20 +56,20 @@
                   <div v-else v-html="renderMarkdown(msg.mes)"></div>
                 <!-- 动作栏内置于消息框底部常驻 -->
                 <div class="msg-actions" v-if="!msg.is_user">
-                  <button title="编辑 (Edit)" @click="handleEdit(index, msg)">
+                  <button title="编辑 (Edit)" @click="handleEdit(index, msg)" :disabled="isInteractionLocked">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                  <button title="重新生成 (Regenerate)" @click="handleRegen()">
+                  <button title="重新生成 (Regenerate)" @click="handleRegen()" :disabled="isInteractionLocked">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                       <polyline points="23 4 23 10 17 10"></polyline>
                       <polyline points="1 20 1 14 7 14"></polyline>
                       <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
                     </svg>
                   </button>
-                  <button title="从此分支世界线" @click="handleBranch(index, msg)">
+                  <button title="从此分支世界线" @click="handleBranch(index, msg)" :disabled="isInteractionLocked">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                       <line x1="12" y1="19" x2="12" y2="12"></line>
                       <line x1="12" y1="12" x2="19" y2="5"></line>
@@ -73,7 +78,7 @@
                       <polyline points="9 5 5 5 5 9"></polyline>
                     </svg>
                   </button>
-                  <button title="删除 (Delete)" @click="handleDelete(index, msg)" class="delete-btn">
+                  <button title="删除 (Delete)" @click="handleDelete(index, msg)" class="delete-btn" :disabled="isInteractionLocked">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                       <polyline points="3 6 5 6 21 6"></polyline>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -82,13 +87,13 @@
                 </div>
                 <!-- 用户自己消息的动作栏 -->
                 <div class="msg-actions" v-else>
-                  <button title="编辑 (Edit)" @click="handleEdit(index, msg)">
+                  <button title="编辑 (Edit)" @click="handleEdit(index, msg)" :disabled="isInteractionLocked">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                   </button>
-                  <button title="删除 (Delete)" @click="handleDelete(index, msg)" class="delete-btn">
+                  <button title="删除 (Delete)" @click="handleDelete(index, msg)" class="delete-btn" :disabled="isInteractionLocked">
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                       <polyline points="3 6 5 6 21 6"></polyline>
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -97,6 +102,27 @@
                 </div>
               </div>
             </template>
+          </div>
+        </div>
+        <div class="chat-msg streaming-msg switching-msg" v-if="isSessionSwitching">
+          <div class="msg-avatar">
+            <div class="streaming-avatar syncing">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.5" fill="none" class="spin">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+              </svg>
+            </div>
+          </div>
+          <div class="msg-content">
+            <div class="msg-bubble streaming-bubble syncing switching-bubble">
+              <div class="streaming-status-placeholder switching-status-placeholder">
+                <div class="status-spin spin">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                  </svg>
+                </div>
+                <span class="status-label">{{ sessionSwitchStatusText }}</span>
+              </div>
+            </div>
           </div>
         </div>
         <!-- 流式 buffer 气泡：在生成过程中显示当前返回的实时文本 -->
@@ -162,7 +188,7 @@
     </transition>
 
     <!-- 输入区 -->
-    <div class="chat-input-area">
+    <div class="chat-input-area" data-lw-ime-anchor>
       <div class="input-wrapper">
         <!-- 工具栏行 -->
         <div class="input-toolbar">
@@ -196,12 +222,15 @@
 
         <!-- 输入块（可折叠）-->
         <div class="input-container" v-show="!inputCollapsed">
-          <textarea v-model="quickInput" id="lw-main-input" @keydown.enter.exact.prevent="handleSend"
-            :disabled="isGenerating" placeholder="请输入您的回复或指令... (Enter 发送，Shift+Enter 换行)"></textarea>
+          <div v-if="showReadOnlyBanner" class="chat-readonly-banner">{{ readOnlyReason }}</div>
+          <textarea v-model="quickInput" id="lw-main-input" @keydown="handleMainInputKeydown"
+            @compositionstart="mainImeGuard.handleCompositionStart" @compositionend="mainImeGuard.handleCompositionEnd"
+            :disabled="isGenerating || isInteractionLocked"
+            :placeholder="inputPlaceholder"></textarea>
           <div class="input-actions">
             <!-- 生成中：显示停止按钮 -->
             <button v-if="isGenerating" class="lw-btn stop-btn"
-              style="width: 38px; height: 38px; padding: 0;" @click="handleStop"
+              style="width: 38px; height: 38px; padding: 0;" @click="handleStop" :disabled="isInteractionLocked"
               title="停止生成">
               <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5"
                 fill="currentColor">
@@ -210,7 +239,7 @@
             </button>
             <!-- 默认：发送按钮 -->
             <button v-else class="lw-btn lw-btn-primary send-btn" style="width: 38px; height: 38px; padding: 0;"
-              @click="handleSend" :disabled="!quickInput.trim()" title="发送 (Enter)">
+              @click="handleSendClick" :disabled="!quickInput.trim() || isInteractionLocked" :title="sendButtonTitle">
               <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
                 <line x1="22" y1="2" x2="11" y2="13"></line>
                 <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -230,9 +259,12 @@ import { useSettings } from '../settings/useSettings';
 import PromptInspector from './PromptInspector.vue';
 import MessageRenderer from './components/MessageRenderer.vue';
 import { LuminaWeaveAPI } from '../../api/index';
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { useConversationContextStore } from '../../stores/useConversationContextStore';
+import { useImeSubmitGuard } from '../../composables/useImeSubmitGuard.js';
 import { useComponentSkin } from '../../theme/useComponentSkin';
 import { getThemeSettingValue } from '../../theme/themeRegistry';
+import { resolveChatSurfaceState, resolveChatViewState } from './chatViewState.js';
 
 interface Props {
   messages: LuminaChatMessage[];
@@ -248,11 +280,14 @@ const props = withDefaults(defineProps<Props>(), {
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const { activeSettings } = useSettings();
+const contextStore = useConversationContextStore();
 const { cssVars: chatSkinVars, variant: chatVariant, desktopModeId } = useComponentSkin('chat.stream');
 
 // === 状态 ===
 const quickInput = ref('');
 const chatScrollArea = ref<HTMLElement | null>(null);
+const mainImeGuard = useImeSubmitGuard({ debugLabel: 'ChatMainInput' });
+const editImeGuard = useImeSubmitGuard({ debugLabel: 'ChatEditInput' });
 const showInspector = ref(false);     // 提示词查看器开关
 const inspectorExpanded = ref(false); // 展开到全屏模式
 const inputCollapsed = ref(false);    // 输入框折叠状态
@@ -286,9 +321,78 @@ const effectClass = computed(() => {
 
 const isCompact = computed(() => props.isMobile || props.workspaceCompact);
 const showUsernames = computed(() => getThemeSettingValue(activeSettings, desktopModeId.value, 'showUsernames', true) !== false);
+const sessionSwitchState = computed(() => contextStore.sessionSwitchState);
+const isSessionSwitching = computed(() => sessionSwitchState.value.isSwitching);
+const chatViewState = computed(() => resolveChatViewState({
+  sourceId: contextStore.activeSourceId,
+  sessionId: contextStore.currentContext.sessionId,
+  currentChatSessionId: contextStore.currentContext.meta?.currentChatSessionId || null,
+  isLive: contextStore.currentContext.meta?.isLive === true,
+  isSessionSwitching: isSessionSwitching.value
+}));
+const isLiveChatView = computed(() => chatViewState.value.isLiveChatView);
+const isReadOnlyView = computed(() => chatViewState.value.isReadOnlyView);
+const isInteractionLocked = computed(() => isReadOnlyView.value || isSessionSwitching.value);
+const readOnlyReason = computed(() => chatViewState.value.readOnlyReason);
+const sessionSwitchStatusText = computed(() => sessionSwitchState.value.statusText || '正在切换聊天...');
+const inputPlaceholder = computed(() => chatViewState.value.inputPlaceholder);
+const sendButtonTitle = computed(() => chatViewState.value.sendButtonTitle);
+const emptyStateMessage = computed(() => chatViewState.value.emptyStateMessage);
+const chatSurfaceState = computed(() => resolveChatSurfaceState({
+  viewState: chatViewState.value,
+  messageCount: props.messages.length,
+  isSessionSwitching: isSessionSwitching.value,
+  isGenerating: isGenerating.value,
+  isSyncing: isSyncing.value,
+  hasStreamingBuffer: Boolean(streamingBuffer.value),
+  hasGenerationError: Boolean(generationError.value)
+}));
+const showReadOnlyBanner = computed(() => chatSurfaceState.value.showReadOnlyBanner);
+const showNoActiveChatEmptyState = computed(() => chatSurfaceState.value.showNoActiveChatEmptyState);
+
+const resolveMessageAvatar = (msg: LuminaChatMessage): string => {
+  const directAvatar = typeof (msg as { avatarUrl?: string | null }).avatarUrl === 'string'
+    ? (((msg as { avatarUrl?: string | null }).avatarUrl) || '').trim()
+    : '';
+  if (directAvatar) {
+    return directAvatar;
+  }
+
+  if (lwApi) {
+    const resolved = msg.is_user
+      ? lwApi.getUserAvatar(msg.name)
+      : lwApi.getCharAvatar(msg.name);
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  return lwApi?.DEFAULT_AVATAR || '';
+};
+
+const resetStreamingState = (forceScroll = false) => {
+  isGenerating.value = false;
+  isSyncing.value = false;
+  streamingBuffer.value = '';
+  streamingRaw.value = '';
+  streamingConfirmed.value = '';
+  streamingPending.value = '';
+  streamingFilteredLength.value = 0;
+  streamingStatusText.value = '';
+  streamingThinkingText.value = '';
+  generationError.value = '';
+
+  if (forceScroll) {
+    scrollToBottom(true);
+  }
+};
 
 // 订阅流式事件
 const onGenerationStarted = () => {
+  if (!isLiveChatView.value) {
+    resetStreamingState(false);
+    return;
+  }
   isGenerating.value = true;
   isSyncing.value = false;
   streamingBuffer.value = '';
@@ -300,6 +404,10 @@ const onGenerationStarted = () => {
   scrollToBottom(true); // 强制触底以适应新出现的消息气泡
 };
 const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number, statusText?: string, thinkingText?: string, pendingText?: string) => {
+  if (!isLiveChatView.value) {
+    return;
+  }
+
   const area = chatScrollArea.value;
   
   if (area && lwApi?.measureService) {
@@ -353,6 +461,11 @@ const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number,
   }
 };
 const onGenerationEnded = () => {
+  if (!isLiveChatView.value) {
+    resetStreamingState(false);
+    return;
+  }
+
   console.log('[ChatStream] Generation ended signal received.');
   isGenerating.value = false;
   isSyncing.value = false;
@@ -375,6 +488,11 @@ const onGenerationEnded = () => {
   // 这样用户在生成过程中向上翻阅时，不会在结束那一瞬间被强制拉回底部
 };
 const onGenerationFailed = (message?: string) => {
+  if (!isLiveChatView.value) {
+    resetStreamingState(false);
+    return;
+  }
+
   isGenerating.value = false;
   generationError.value = message || '生成失败，请检查后端节点配置或网络状态。';
   streamingStatusText.value = '';
@@ -387,14 +505,7 @@ const onGenerationFailed = (message?: string) => {
 
 const onWorldlineChanged = () => {
   console.log('[ChatStream] Worldline changed, resetting generation state.');
-  isGenerating.value = false;
-  streamingBuffer.value = '';
-  streamingRaw.value = '';
-  streamingFilteredLength.value = 0;
-  streamingStatusText.value = '';
-  streamingThinkingText.value = '';
-  generationError.value = '';
-  scrollToBottom(true);
+  resetStreamingState(true);
 };
 
 onMounted(() => {
@@ -427,7 +538,7 @@ onMounted(() => {
   lwApi?.on('WORLDLINE_ROLLED_BACK', onWorldlineChanged);
 
   // 核心修复：如果正在生成中重新挂载，立即恢复流式状态
-  if (lwApi?.isGenerating && lwApi.lastStreamState) {
+  if (isLiveChatView.value && lwApi?.isGenerating && lwApi.lastStreamState) {
     isGenerating.value = true;
     const { processed, text, filteredCount, statusText, thinkingText } = lwApi.lastStreamState;
     onBufferUpdated(processed, text, filteredCount, statusText, thinkingText);
@@ -553,6 +664,19 @@ const scrollToBottom = async (force = false) => {
   }
 };
 
+const forceScrollToBottomSettled = async () => {
+  await nextTick();
+  const area = chatScrollArea.value;
+  if (!area) {
+    return;
+  }
+
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  area.scrollTop = area.scrollHeight;
+  isAtBottom.value = true;
+};
+
 const handleScroll = (e: Event) => {
   const area = e.target as HTMLElement;
   const threshold = 100;
@@ -579,6 +703,30 @@ watch(() => props.messages, (newVal, oldVal) => {
   }
 }, { deep: true, immediate: true });
 
+watch(
+  () => [contextStore.activeSourceId, contextStore.activeSessionId] as const,
+  async (nextState, prevState) => {
+    if (!prevState || nextState[0] !== prevState[0] || nextState[1] !== prevState[1]) {
+      await forceScrollToBottomSettled();
+    }
+  },
+  { immediate: true }
+);
+
+watch(isSessionSwitching, async (switching) => {
+  if (switching) {
+    await forceScrollToBottomSettled();
+  }
+});
+
+watch(isLiveChatView, (isLive) => {
+  if (!isLive) {
+    resetStreamingState(false);
+    editingIndex.value = -1;
+    editingTargetId.value = null;
+  }
+});
+
 // -------- 交互动作对接 --------
 
 /**
@@ -586,45 +734,109 @@ watch(() => props.messages, (newVal, oldVal) => {
  * 注意: lwApi.sendMessage() 内部已经调用了 triggerGenerate()
  * 这里不需要再重复调用
  */
-const handleSend = async () => {
+const handleSend = async (trigger: 'button' | 'enter' = 'button') => {
   const text = quickInput.value.trim();
-  if (!text || isGenerating.value || !lwApi) return;
+  if (!text || isGenerating.value || !lwApi || !isLiveChatView.value) return;
+  console.debug('[LuminaWeave][ChatInput] Submitting chat message.', {
+    trigger,
+    textLength: text.length
+  });
   quickInput.value = '';
   await lwApi.sendMessage(text);
   // 发送后立即触底，确保用户内容可见并为随后的 AI 流式输出占位
   scrollToBottom(true);
 };
 
+const handleSendClick = () => {
+  void handleSend('button');
+};
+
+const handleMainInputKeydown = (event: KeyboardEvent) => {
+  if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+    return;
+  }
+
+  if (mainImeGuard.shouldIgnoreSubmit(event)) {
+    return;
+  }
+
+  event.preventDefault();
+  void handleSend('enter');
+};
+
 /**
  * 停止当前生成
  */
 const handleStop = () => {
+  if (!isLiveChatView.value) {
+    return;
+  }
   lwApi?.abortGenerate();
 };
 
 const handleEdit = (index: number, msg: LuminaChatMessage) => {
+  if (!isLiveChatView.value) {
+    return;
+  }
   // 内联编辑：使用 mesRaw（原始未经正则处理的文本），如果没有 mesRaw 则回退到 mes
   editingText.value = msg.mesRaw ?? msg.mes ?? '';
   editingIndex.value = index;
   editingTargetId.value = msg.id || null;
 };
 
-const confirmEdit = async () => {
+const confirmEdit = async (trigger: 'button' | 'ctrl-enter' = 'button') => {
+  if (!isLiveChatView.value) {
+    return;
+  }
   if (lwApi && editingText.value.trim() !== '') {
     const target = editingTargetId.value ?? editingIndex.value;
+    console.debug('[LuminaWeave][ChatInput] Confirming inline edit.', {
+      trigger,
+      target: typeof target === 'string' ? target : String(target),
+      textLength: editingText.value.trim().length
+    });
     await lwApi.crudChatRecord(target, 'edit', editingText.value);
   }
   editingIndex.value = -1;
   editingTargetId.value = null;
 };
 
+const handleConfirmEditClick = () => {
+  void confirmEdit('button');
+};
+
+const handleEditTextareaKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    editingIndex.value = -1;
+    editingTargetId.value = null;
+    return;
+  }
+
+  if (event.key !== 'Enter' || !event.ctrlKey) {
+    return;
+  }
+
+  if (editImeGuard.shouldIgnoreSubmit(event)) {
+    return;
+  }
+
+  event.preventDefault();
+  void confirmEdit('ctrl-enter');
+};
+
 const handleRegen = async () => {
+  if (!isLiveChatView.value) {
+    return;
+  }
   if (lwApi) {
     await lwApi.regenerateLast();
   }
 };
 
 const handleBranch = async (index: number, msg: LuminaChatMessage) => {
+  if (!isLiveChatView.value) {
+    return;
+  }
   if (lwApi) {
     const nodeId = msg.id || (lwApi as any)._getMessageFingerprint(msg);
     if (nodeId) {
@@ -639,6 +851,9 @@ const handleBranch = async (index: number, msg: LuminaChatMessage) => {
 };
 
 const handleDelete = async (index: number, msg: LuminaChatMessage) => {
+  if (!isLiveChatView.value) {
+    return;
+  }
   if (lwApi) {
     const isConfirmed = await lwApi.confirm({
       title: '删除消息',
@@ -659,6 +874,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 /* --- 左侧聊天流 --- */
 .lw-chat-stream {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--lw-chat-stream-bg, var(--lw-bg));
@@ -704,6 +920,17 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   width: 100%;
   min-width: 0;
   transition: max-width 0.3s;
+}
+
+.chat-readonly-banner {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--lw-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lw-chat-input-surface) 84%, transparent);
+  color: var(--lw-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 /* 章节线设计 */
@@ -852,6 +1079,23 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   word-wrap: break-word;
   overflow-wrap: break-word;
   letter-spacing: var(--lw-letter-spacing);
+}
+
+.chat-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  padding: 32px 24px;
+  color: var(--lw-text-secondary);
+  text-align: center;
+}
+
+.chat-empty-state p {
+  margin: 0;
+  max-width: 32rem;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 /* 编辑模式增强 */
@@ -1107,6 +1351,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   padding: 20px 24px 24px;
   background: var(--lw-chat-input-area-bg, var(--lw-bg-app));
   border-top: 1px solid var(--lw-border-base);
+  flex-shrink: 0;
   transition: var(--lw-transition);
 }
 
@@ -1341,9 +1586,18 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 /* === 流式输入气泡 === */
 .streaming-msg .msg-bubble.streaming-bubble {
-  background: var(--lw-bubble, #ffffff);
-  border-color: var(--lw-border-active);
+  background: var(--lw-chat-streaming-surface, var(--lw-chat-input-surface, var(--lw-bubble, var(--lw-bg-elevated))));
+  border-color: var(--lw-chat-streaming-border, var(--lw-border-active));
   opacity: 0.95;
+}
+
+.switching-msg .msg-bubble.switching-bubble {
+  border-style: dashed;
+}
+
+.switching-status-placeholder {
+  background: transparent;
+  padding: 0;
 }
 
 .streaming-avatar {
@@ -1528,9 +1782,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   align-items: center;
   gap: 10px;
   padding: 4px 8px;
-  background: var(--lw-bg);
-  border-radius: 6px;
-  color: var(--lw-text-muted);
+  background: var(--lw-chat-streaming-status-bg, var(--lw-chat-input-surface, var(--lw-bg)));
+  border: 1px solid var(--lw-chat-streaming-status-border, var(--lw-border-base));
+  border-radius: 10px;
+  color: var(--lw-chat-streaming-status-color, var(--lw-text-muted));
   font-size: 0.9em;
   font-style: italic;
   animation: status-fade-in 0.3s ease-out;
@@ -1583,8 +1838,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 .streaming-bubble.syncing {
   border-style: solid;
-  border-color: var(--lw-border-hover);
-  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
+  border-color: var(--lw-chat-streaming-border, var(--lw-border-hover));
+  background: var(--lw-chat-streaming-surface, color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent));
 }
 
 .spin {
@@ -1672,7 +1927,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   border: none;
   box-shadow: none;
   padding: 0;
-  color: #dbdee1;
+  color: var(--lw-chat-color, var(--lw-text-main));
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .msg-bubble :deep(p) {
@@ -1687,26 +1942,26 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .msg-actions button {
-  color: #949ba4;
+  color: var(--lw-text-muted);
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .msg-actions button:hover {
-  background: #383a40;
-  color: #f2f3f5;
+  background: var(--lw-chat-input-surface, var(--lw-surface-container-high));
+  color: var(--lw-text-main);
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .streaming-bubble,
 .lw-chat-stream[data-skin-variant='discord'] .streaming-msg .msg-bubble.streaming-bubble {
-  background: rgba(88, 101, 242, 0.08);
-  border: 1px solid rgba(88, 101, 242, 0.18);
+  background: var(--lw-chat-streaming-surface, rgba(88, 101, 242, 0.08));
+  border: 1px solid var(--lw-chat-streaming-border, rgba(88, 101, 242, 0.18));
   border-radius: 12px;
   padding: 12px 14px;
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .chat-input-area {
   padding: 0 16px 16px;
-  background: #313338;
-  border-top-color: #232428;
+  background: var(--lw-chat-input-area-bg, var(--lw-bg-app));
+  border-top-color: var(--lw-chat-border, var(--lw-border-base));
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .input-toolbar {
@@ -1714,8 +1969,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .input-container {
-  background: #383a40;
-  border-color: #4e5058;
+  background: var(--lw-chat-input-surface, var(--lw-bg-surface));
+  border-color: var(--lw-chat-input-border, var(--lw-border-base));
   box-shadow: none;
 }
 

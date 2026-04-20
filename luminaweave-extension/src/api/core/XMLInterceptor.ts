@@ -1,4 +1,4 @@
-import { globalXMLTagRegistry, type LifecycleType } from '../../../../shared/XMLTagRegistry.js';
+import { globalXMLTagRegistry, type LifecycleType } from '@shared/XMLTagRegistry.js';
 import {
     BaseXMLInterceptor,
     BuiltinXMLTags as SharedBuiltinXMLTags,

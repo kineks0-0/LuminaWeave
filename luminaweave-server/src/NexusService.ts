@@ -1,6 +1,6 @@
 import { ModelMessage } from 'ai';
-import { NexusOrchestrator, mapSTSettingsToAISdk } from '../../shared/api/llm/NexusOrchestrator.js';
-import { NexusApiConfig, NexusProviderType } from '../../shared/api/llm/NexusTypes.js';
+import { NexusOrchestrator, mapSTSettingsToAISdk } from '@shared/api/llm/NexusOrchestrator.js';
+import { NexusApiConfig, NexusProviderType } from '@shared/api/llm/NexusTypes.js';
 
 export { mapSTSettingsToAISdk };
 

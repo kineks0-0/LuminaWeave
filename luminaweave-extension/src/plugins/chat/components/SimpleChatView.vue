@@ -1,7 +1,7 @@
 <template>
-  <div class="scv-root">
+  <div class="scv-root" data-lw-ime-scope>
     <!-- 消息列表 -->
-    <div ref="scrollRef" class="scv-messages">
+    <div ref="scrollRef" class="scv-messages" data-lw-ime-scroll-root>
       <template v-if="messages.length > 0">
         <div
           v-for="msg in messages"
@@ -40,7 +40,7 @@
     </div>
 
     <!-- 输入区 -->
-    <div class="scv-input-area">
+    <div class="scv-input-area" data-lw-ime-anchor>
       <textarea
         ref="textareaRef"
         v-model="inputText"
@@ -48,7 +48,9 @@
         :disabled="isStreaming"
         :placeholder="placeholder ?? '输入消息，Enter 发送，Shift+Enter 换行...'"
         rows="3"
-        @keydown.enter.exact.prevent="handleSend"
+        @keydown="handleTextareaKeydown"
+        @compositionstart="imeGuard.handleCompositionStart"
+        @compositionend="imeGuard.handleCompositionEnd"
       />
       <div class="scv-input-actions">
         <button
@@ -64,7 +66,7 @@
           class="scv-send-btn"
           type="button"
           :disabled="!inputText.trim()"
-          @click="handleSend"
+          @click="handleSendClick"
         >
           发送
         </button>
@@ -76,6 +78,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue';
 import MessageRenderer from './MessageRenderer.vue';
+import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
 
 export interface SimpleChatMessage {
   id: string;
@@ -101,12 +104,34 @@ const emit = defineEmits<{
 const scrollRef = ref<HTMLElement | null>(null);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const inputText = ref('');
+const imeGuard = useImeSubmitGuard({ debugLabel: 'SimpleChatInput' });
 
-const handleSend = () => {
+const handleSend = (trigger: 'button' | 'enter' = 'button') => {
   const text = inputText.value.trim();
   if (!text || props.isStreaming) return;
+  console.debug('[LuminaWeave][SimpleChatInput] Submitting message.', {
+    trigger,
+    textLength: text.length
+  });
   inputText.value = '';
   emit('send', text);
+};
+
+const handleSendClick = () => {
+  handleSend('button');
+};
+
+const handleTextareaKeydown = (event: KeyboardEvent) => {
+  if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+    return;
+  }
+
+  if (imeGuard.shouldIgnoreSubmit(event)) {
+    return;
+  }
+
+  event.preventDefault();
+  handleSend('enter');
 };
 
 const scrollToBottom = () => {

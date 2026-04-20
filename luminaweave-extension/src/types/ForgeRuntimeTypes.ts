@@ -1,4 +1,4 @@
-import type { LuminaChatMessage } from '../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { CleanedMessage } from './nexus.js';
 import type { ForgeMemoryTree } from './ForgeMemoryTypes.js';
 import type { ForgeVirtualLorebookEntry } from './SessionTypes.js';

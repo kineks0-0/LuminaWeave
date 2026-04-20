@@ -5,7 +5,7 @@
 
 import { STClient } from './core/st-adapter/STClient.js';
 import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
-import { BridgeDispatcher } from '../../../shared/api/BridgeDispatcher.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 
 export type StorageScope = 'Global' | 'Character' | 'Chat' | 'Session';
 
@@ -261,31 +261,16 @@ export class StorageCore extends LuminaWeaveAPIBase {
      * 获取当前的上下文标识符
      */
     public _getContextIds(): { charId: string | number; chatId: string } {
-        // 优先尝试从 SillyTavern 官方 API 上下文获取
-        const ctx = this.ctx as any;
-        let charId = ctx?.characterId ?? (typeof window !== 'undefined' ? (window as any).this_chid : null);
+        const resolvedCharId = STClient.getResolvedCurrentCharacterId();
+        let charId = resolvedCharId ?? null;
 
         // 如果不存在 charId 尝试防御
         if (charId === undefined || charId === null) charId = 'Global';
 
-        // 探测 ChatID (最高优先级: 官方 API 上下文)
-        let chatId = ctx?.chatId ?? (typeof window !== 'undefined' && (window as any).chat_metadata ? (window as any).chat_metadata.chat_id : null);
+        const chatId = STClient.getResolvedCurrentChatId();
 
-        // 兜底路径: window 全局变量或 ID 探测
-        if (!chatId || chatId === 'undefined' || chatId === 'null') {
-            const messages = STClient.getRawMessages();
-            if (messages.length > 0) {
-                const lastMessage = messages[messages.length - 1];
-                if (lastMessage && lastMessage.extra && lastMessage.extra._lw_sync_chat_id) {
-                    chatId = String(lastMessage.extra._lw_sync_chat_id);
-                    console.log('[LuminaWeave] storage.ts: fallback to chat_id from ST last message:', chatId);
-                }
-            }
-        }
-
-        // 核心修复：避免强制 String() 转换导致 null 变成 "null"
         const finalCharId = charId !== null && charId !== undefined ? String(charId) : 'Global';
-        const finalChatId = (chatId !== null && chatId !== undefined && chatId !== 'null' && chatId !== 'undefined') ? String(chatId) : '';
+        const finalChatId = chatId ? String(chatId) : '';
 
         return { charId: finalCharId, chatId: finalChatId };
     }

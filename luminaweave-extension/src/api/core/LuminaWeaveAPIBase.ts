@@ -1,5 +1,5 @@
 import { EnvDetector } from './EnvDetector.js';
-import { EventFlow } from '../../../../shared/EventFlow.js';
+import { EventFlow } from '@shared/EventFlow.js';
 
 export interface BeforeGenerationPayload {
     chatId: string;

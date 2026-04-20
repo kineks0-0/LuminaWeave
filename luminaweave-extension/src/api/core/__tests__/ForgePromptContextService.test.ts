@@ -5,7 +5,9 @@ import type { MemorySnapshot } from '../../../types/MemorySnapshotTypes';
 vi.mock('../st-adapter/STClient', () => ({
     STClient: {
         substituteMacros: vi.fn((text: string) => text),
-        getActiveWorldInfoItems: vi.fn(() => [])
+        getActiveWorldInfoItems: vi.fn(() => []),
+        getResolvedCurrentCharacterId: vi.fn(() => '0'),
+        getResolvedCurrentChatId: vi.fn(() => 'chat_1')
     }
 }));
 

@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { STClient } from './st-adapter/STClient.js';
 import { BuiltinXMLTags, XMLInterceptor } from './XMLInterceptor';
 import { SyncUtils, MessageTextResolver } from './SyncUtils';

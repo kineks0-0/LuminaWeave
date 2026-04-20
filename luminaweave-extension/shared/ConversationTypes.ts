@@ -31,6 +31,9 @@ export interface ForgeConversationPluginState {
 
 export interface ChatConversationPluginState {
     pluginData?: Record<string, unknown> | null;
+    characterId?: string | number | null;
+    characterName?: string;
+    characterAvatarUrl?: string | null;
 }
 
 export interface ConversationPluginState {
@@ -100,6 +103,11 @@ export interface ConversationMutationResult {
     summary: ConversationSummary;
     lastCommittedSeq: number;
     transaction?: TransactionRecord;
+}
+
+export interface ConversationDeleteResult {
+    success: boolean;
+    id: string;
 }
 
 export interface ConversationListResponse {

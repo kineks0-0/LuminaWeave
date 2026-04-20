@@ -1,4 +1,4 @@
-import { BridgeDispatcher } from '../../../shared/api/BridgeDispatcher.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 import { HttpBridgeAdapter } from '../api/adapters/HttpBridgeAdapter.js';
 import { TauriBridgeAdapter } from '../api/adapters/TauriBridgeAdapter.js';
 import { LocalBridgeAdapter } from '../api/adapters/LocalBridgeAdapter.js';

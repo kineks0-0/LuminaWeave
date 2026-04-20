@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { chatSessionIndexService } from '../api/core/ChatSessionIndexService.js';
 import { forgeSessionRepository } from '../api/core/ForgeSessionRepository.js';
+import { STClient } from '../api/core/st-adapter/STClient.js';
 import { lwStorage } from '../api/storage.js';
 import type { ChatSessionRef, ForgeWorkspaceSessionRef } from '../types/SessionTypes.js';
 
@@ -18,12 +19,12 @@ export const useSessionIndexStore = defineStore('lumina-session-index', () => {
             await forgeSessionRepository.refreshFromServer();
             chatSessions.value = await chatSessionIndexService.listChatSessions();
             forgeSessions.value = forgeSessionRepository.listSessions();
-            const currentChatId = lwStorage._getContextIds().chatId;
+            const currentChatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
             const matchedCurrentChat = chatSessions.value.find(chat => chat.id === currentChatId);
             if (matchedCurrentChat) {
                 selectedChatSessionId.value = matchedCurrentChat.id;
-            } else if (!selectedChatSessionId.value && chatSessions.value.length > 0) {
-                selectedChatSessionId.value = chatSessions.value[0].id;
+            } else {
+                selectedChatSessionId.value = null;
             }
             if (!selectedForgeSessionId.value && forgeSessions.value.length > 0) {
                 selectedForgeSessionId.value = forgeSessions.value[0].id;

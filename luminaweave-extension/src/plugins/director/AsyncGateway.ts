@@ -5,7 +5,7 @@ import { useDirectorStore } from './DirectorStore';
 import { globalXMLInterceptor } from '../../api/core/XMLInterceptor';
 import { useTier1Store } from './Tier1Store';
 import { SyncUtils } from '../../api/core/SyncUtils';
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 
 export class AsyncGateway {
     private isProcessing: boolean = false;

@@ -36,7 +36,7 @@
     - `src/index.ts`：服务入口。
     - `src/StorageService.ts`、`src/StreamingManager.ts`、`src/NexusService.ts`：后端核心能力。
   - `data/` 为本地数据目录，禁止提交用户数据。
-- `shared/`
+- `luminaweave-extension/shared/`
   - 前后端共享类型与基础模块，当前已承载部分 XML/消息相关基础能力。
 - `.agents/`
   - 本地代理技能与工作流配置，不属于产品运行时代码。
@@ -44,6 +44,15 @@
   - 开发启动脚本：先构建 server，再启动 extension 的 watch。
 - `sync-projects.ps1`
   - 子项目同步脚本，用于本地 monorepo 与外部仓库同步。
+
+## 2.5. 参考文档/代码位置
+- `D:\Game\SillyTavern`
+  SillyTavern源码
+- `D:\Program\tauritavern\`
+  TauriTavern项目源码位于
+- `D:\Program\tauritavern\docs\`
+  TauriTavern项目文档，在本项目 `TauriTavernDocs\` 有副本
+- TavernHelper文档在项目根目录下的 `TavernHelper@types\` 里（其中 function 文件夹下是 TavernHelper 的函数定义，另一个文件夹下是环境定义）
 
 ## 3. 代码事实优先级
 
@@ -64,11 +73,11 @@
   - 插件 UI：`luminaweave-extension/src/plugins/`
   - 全局状态：`luminaweave-extension/src/stores/`
   - 服务端：`luminaweave-server/src/`
-  - 共享契约：`shared/`
+  - 共享契约：`luminaweave-extension/shared/`
 - 保持 TypeScript 严格风格：
   - 尽量避免 `any`
   - 变量命名明确
-  - 新类型优先放在靠近使用处或 `shared/` 的共享契约中
+  - 新类型优先放在靠近使用处或 `luminaweave-extension/shared/` 的共享契约中
 - 遵守单向数据流：
   - 视图层订阅 store
   - store / plugin 调用 API
@@ -139,7 +148,7 @@ cd D:\LuminaWeave
 - `luminaweave-extension/src/api/core/st-adapter/`
 - `luminaweave-server/src/StorageService.ts`
 - `luminaweave-server/src/StreamingManager.ts`
-- `shared/` 中的共享协议与基础解析器
+- `luminaweave-extension/shared/` 中的共享协议与基础解析器
 
 这些区域直接关系到：
 
@@ -171,7 +180,7 @@ cd D:\LuminaWeave
 ## 10. 面向本项目的实现偏好
 
 - 新功能尽量以“插件注册 + API 核心能力 + store/UI 接入”的方式接入，避免把所有逻辑堆进单个 Vue 组件。
-- 前后端共享的事件、消息、类型，优先抽到 `shared/`，避免重复定义。
+- 前后端共享的事件、消息、类型，优先抽到 `luminaweave-extension/shared/`，避免重复定义。
 - 与 SillyTavern 宿主交互时，优先通过现有 adapter / client 层扩展，不要绕过封装直接散落调用。
 - 涉及 XML 标签或流式输出时，先检查现有拦截器、分词器、事件流抽象是否已可复用。
 
@@ -187,7 +196,7 @@ cd D:\LuminaWeave
 
 ## 12. 当前已知现实差异
 
-- `docs/index.md` 中部分文件清单偏架构视角；实际代码已经扩展出 `shared/`、`forge`、`NexusClient`、更多测试与新的服务端 `src/` 布局。
+- `docs/index.md` 中部分文件清单偏架构视角；实际代码已经扩展出 `luminaweave-extension/shared/`、`forge`、`NexusClient`、更多测试与新的服务端 `src/` 布局。
 - 服务端 README 中“仅修改根级 `index.ts`”的说法已不再完全符合当前结构；现阶段应以 `luminaweave-server/src/` 为源码主目录。
 
 如无更具体的局部说明，默认以本文件作为仓库级协作指南执行。

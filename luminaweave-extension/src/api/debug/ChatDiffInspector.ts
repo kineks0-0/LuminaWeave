@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { globalXMLInterceptor } from '../core/XMLInterceptor.js';
 import { MessageComparator, MessageTextResolver, SyncUtils } from '../core/SyncUtils.js';
 

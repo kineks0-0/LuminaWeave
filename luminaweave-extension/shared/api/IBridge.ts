@@ -5,7 +5,8 @@ import type {
     ConversationListResponse,
     ConversationGetResponse,
     ConversationMutation,
-    ConversationMutationResult
+    ConversationMutationResult,
+    ConversationDeleteResult
 } from '../ConversationTypes.js';
 
 /**
@@ -78,6 +79,7 @@ export interface IConversationService {
     getConversation(id: string): Promise<ConversationGetResponse>;
     saveConversation(id: string, document: ConversationDocument): Promise<ConversationMutationResult>;
     mutateConversation(id: string, mutation: ConversationMutation): Promise<ConversationMutationResult>;
+    deleteConversation(id: string): Promise<ConversationDeleteResult>;
     getTransactions(id: string, query?: Record<string, any>): Promise<TransactionQueryResponse>;
     rollbackTransaction(id: string, transactionId: string): Promise<TransactionMutationResponse>;
 }

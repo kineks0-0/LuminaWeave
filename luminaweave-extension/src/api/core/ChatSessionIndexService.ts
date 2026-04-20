@@ -1,10 +1,12 @@
 import type { ChatSessionRef } from '../../types/SessionTypes.js';
 import { lwStorage } from '../storage.js';
-import { BridgeDispatcher } from '../../../../shared/api/BridgeDispatcher.js';
+import { STClient } from './st-adapter/STClient.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 
 type ServerChatSessionItem = {
     id: string;
     conversationType: 'chat' | 'forge';
+    title: string;
     updatedAt: number;
     createdAt: number;
     messageCount: number;
@@ -22,7 +24,7 @@ const sanitizePreviewText = (text: string): string => {
         .trim();
 };
 
-const buildTitleAndSummary = (chatId: string, previewMessage: string): { title: string; summary: string } => {
+export const buildTitleAndSummary = (chatId: string, previewMessage: string): { title: string; summary: string } => {
     const cleaned = sanitizePreviewText(previewMessage);
     if (!cleaned) {
         const suffix = chatId.slice(0, 10);
@@ -57,7 +59,7 @@ export class ChatSessionIndexService {
                     const derived = buildTitleAndSummary(chat.id, previewMessage);
                     return {
                         id: chat.id,
-                        title: derived.title,
+                        title: chat.title || derived.title,
                         source: 'lumina-server',
                         createdAt: chat.createdAt,
                         updatedAt: chat.updatedAt,
@@ -71,8 +73,8 @@ export class ChatSessionIndexService {
                     };
                 });
         } catch {
-            const { chatId } = lwStorage._getContextIds();
-            if (!chatId || chatId === 'null' || chatId === 'undefined') return [];
+            const chatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
+            if (!chatId) return [];
             return [{
                 id: chatId,
                 title: `当前聊天 ${chatId.slice(0, 10)}`,

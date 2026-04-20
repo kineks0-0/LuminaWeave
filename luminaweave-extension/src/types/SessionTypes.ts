@@ -1,4 +1,4 @@
-import type { LuminaChatMessage } from '../../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { ForgeMemoryTree } from './ForgeMemoryTypes.js';
 import type { StagingEntry } from './ForgeRuntimeTypes.js';
 import type { ForgeTimelineItem } from './ForgeTimelineTypes.js';

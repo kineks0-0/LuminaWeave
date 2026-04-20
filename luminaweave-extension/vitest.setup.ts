@@ -39,7 +39,7 @@ g.window = {
     selected_chat: 'test_chat'
 };
 
-import { BridgeDispatcher } from '../shared/api/BridgeDispatcher.js';
+import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 import { HttpBridgeAdapter } from './src/api/adapters/HttpBridgeAdapter.js';
 
 // Mock fetch

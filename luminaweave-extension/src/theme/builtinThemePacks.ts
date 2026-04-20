@@ -1,6 +1,12 @@
 import type { SettingDefinition } from '../types/plugin';
 import { getThemeSettingValue } from './themeRegistry';
-import type { DesktopModeManifest, ThemePack, ThemeValueMap } from './types';
+import type {
+    ComponentThemeContext,
+    DesktopModeManifest,
+    ThemePack,
+    ThemeValueMap,
+    ThemeValueResolver
+} from './types';
 
 const resolveAvatarRadius = (shape: string | undefined) => {
     if (shape === 'square') return '14px';
@@ -87,6 +93,42 @@ const discordThemeSettings: Record<string, SettingDefinition> = {
         min: 1,
         max: 4,
         allowedScopes: ['Global']
+    },
+    'discord-channel-mark': {
+        default: true,
+        label: '显示 Guild Rail',
+        description: '控制 Discord 桌面模式中的频道标记轨是否显示。',
+        common: true,
+        type: 'boolean' as const,
+        allowedScopes: ['Global']
+    },
+    mobileGuildRailPosition: {
+        default: 'top',
+        label: '移动端 Guild Rail 位置',
+        description: '控制 Discord 移动端主导航条固定在哪个边缘。',
+        common: true,
+        type: 'options' as const,
+        allowedScopes: ['Global'],
+        options: [
+            { value: 'top', label: '顶部', description: '像 Discord 移动端一样停靠在顶部。' },
+            { value: 'bottom', label: '底部', description: '把主导航条移到底部，便于拇指切换。' },
+            { value: 'left', label: '左侧', description: '将主导航条改成左侧竖向停靠。' },
+            { value: 'right', label: '右侧', description: '将主导航条改成右侧竖向停靠。' }
+        ]
+    },
+    mobileCharacterEntryPosition: {
+        default: 'top',
+        label: '移动端角色频道入口位置',
+        description: '控制 Discord 移动端 DM / 角色历史入口固定在哪个边缘。',
+        common: true,
+        type: 'options' as const,
+        allowedScopes: ['Global'],
+        options: [
+            { value: 'top', label: '顶部', description: '将角色频道入口放在顶部。' },
+            { value: 'bottom', label: '底部', description: '将角色频道入口放在底部。' },
+            { value: 'left', label: '左侧', description: '将角色频道入口停靠在左侧。' },
+            { value: 'right', label: '右侧', description: '将角色频道入口停靠在右侧。' }
+        ]
     }
 };
 
@@ -327,11 +369,511 @@ const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifes
         componentId: 'timeline.root',
         cssVars: {
             '--lw-timeline-header-bg': 'color-mix(in srgb, var(--lw-bg-elevated) 88%, transparent)',
-            '--lw-timeline-card-bg': 'var(--lw-bg-surface)',
+            '--lw-timeline-card-bg': 'var(--lw-surface-container-low)',
             '--lw-timeline-mini-avatar-radius': '50%'
+        }
+    },
+    'lorebook.workspace': {
+        componentId: 'lorebook.workspace',
+        cssVars: {
+            '--lw-lorebook-workspace-bg':
+                'linear-gradient(180deg, rgba(var(--lw-bg-elevated-rgb), 0.48), rgba(var(--lw-bg-elevated-rgb), 0))',
+            '--lw-lorebook-header-bg': 'color-mix(in srgb, var(--lw-bg-elevated) 90%, transparent)',
+            '--lw-lorebook-panel-bg': 'var(--lw-surface-container-lowest)',
+            '--lw-lorebook-panel-hover-bg': 'var(--lw-bg-hover)',
+            '--lw-lorebook-panel-border': 'var(--lw-border-base)',
+            '--lw-lorebook-panel-outline': 'rgba(0, 0, 0, 0.02)',
+            '--lw-lorebook-overlay-bg': 'rgba(var(--lw-bg-elevated-rgb), 0.5)',
+            '--lw-lorebook-overlay-backdrop': 'var(--lw-glass-blur)',
+            '--lw-lorebook-chip-bg': 'var(--lw-surface-container-high)',
+            '--lw-lorebook-chip-accent-bg': 'var(--lw-bg-subtle)',
+            '--lw-lorebook-table-header-bg': 'var(--lw-bg-app)'
+        }
+    },
+    'lorebook.editor': {
+        componentId: 'lorebook.editor',
+        cssVars: {
+            '--lw-lorebook-editor-bg': 'var(--lw-surface-container-lowest)',
+            '--lw-lorebook-editor-header-bg': 'var(--lw-surface-container-lowest)',
+            '--lw-lorebook-editor-control-bg': 'var(--lw-surface-container-low)',
+            '--lw-lorebook-editor-control-hover-bg': 'var(--lw-surface-container-high)',
+            '--lw-lorebook-editor-accent-bg': 'var(--lw-bg-selection)',
+            '--lw-lorebook-editor-switch-bg': 'var(--lw-surface-container-highest)',
+            '--lw-lorebook-editor-switch-dot': 'var(--lw-bg-elevated)',
+            '--lw-lorebook-editor-range-track': 'var(--lw-surface-container-high)',
+            '--lw-lorebook-editor-save-bg': 'var(--lw-black)',
+            '--lw-lorebook-editor-save-color': 'var(--lw-text-inverse)',
+            '--lw-lorebook-editor-save-hover-bg': 'color-mix(in srgb, var(--lw-black) 92%, white)',
+            '--lw-lorebook-editor-saving-bg': 'var(--lw-bg-active)',
+            '--lw-lorebook-editor-success-bg': 'var(--lw-success)'
         }
     }
 });
+
+const cleanThemeValueMap = (values: ThemeValueMap): ThemeValueMap => {
+    const cleaned: ThemeValueMap = {};
+    Object.entries(values).forEach(([key, value]) => {
+        if (value !== undefined) {
+            cleaned[key] = value;
+        }
+    });
+    return cleaned;
+};
+
+const resolveThemeValueMap = (
+    resolver: ThemeValueResolver | undefined,
+    context: ComponentThemeContext
+): ThemeValueMap => {
+    if (!resolver) return {};
+    const resolved = typeof resolver === 'function' ? resolver(context) : resolver;
+    return cleanThemeValueMap(resolved);
+};
+
+const mergeCssVars = (
+    base: ThemeValueResolver | undefined,
+    overrides: ThemeValueResolver
+): ThemeValueResolver => (context: ComponentThemeContext) => ({
+    ...resolveThemeValueMap(base, context),
+    ...resolveThemeValueMap(overrides, context)
+});
+
+const resolveDiscordDesignTokens = ({ resolvedAppearance }: ComponentThemeContext): ThemeValueMap => {
+    const isDark = resolvedAppearance === 'dark';
+    return isDark
+        ? {
+            '--lw-bg-app': '#1e1f22',
+            '--lw-bg-app-rgb': '30, 31, 34',
+            '--lw-bg-surface': '#2b2d31',
+            '--lw-bg-surface-rgb': '43, 45, 49',
+            '--lw-bg-elevated': '#313338',
+            '--lw-bg-elevated-rgb': '49, 51, 56',
+            '--lw-bg-subtle': '#232428',
+            '--lw-bg-muted': '#1a1b1e',
+            '--lw-bg-hover': '#35373c',
+            '--lw-bg-active': '#404249',
+            '--lw-bg-selection': 'rgba(88, 101, 242, 0.18)',
+            '--lw-surface-container-lowest': '#313338',
+            '--lw-surface-container-low': '#2b2d31',
+            '--lw-surface-container': '#232428',
+            '--lw-surface-container-high': '#383a40',
+            '--lw-surface-container-highest': '#4e5058',
+            '--lw-border-base': '#3f4147',
+            '--lw-border-subtle': '#36383d',
+            '--lw-border-strong': '#4e5058',
+            '--lw-border-hover': 'rgba(219, 222, 225, 0.18)',
+            '--lw-border-active': 'rgba(88, 101, 242, 0.42)',
+            '--lw-text-main': '#f2f3f5',
+            '--lw-text-secondary': '#b5bac1',
+            '--lw-text-muted': '#949ba4',
+            '--lw-text-dim': '#72767d',
+            '--lw-text-inverse': '#f8fafc',
+            '--lw-primary': '#5865f2',
+            '--lw-primary-rgb': '88, 101, 242',
+            '--lw-primary-soft': 'rgba(88, 101, 242, 0.14)',
+            '--lw-primary-softer': 'rgba(88, 101, 242, 0.22)',
+            '--lw-glass-bg': 'rgba(35, 36, 40, 0.88)',
+            '--lw-glass-bg-hover': 'rgba(49, 51, 56, 0.92)',
+            '--lw-glass-border': 'rgba(255, 255, 255, 0.06)',
+            '--lw-glass-shadow': 'rgba(0, 0, 0, 0.24)',
+            '--lw-shadow': '0 1px 2px rgba(0, 0, 0, 0.24)',
+            '--lw-shadow-card': '0 18px 44px rgba(0, 0, 0, 0.28)',
+            '--lw-shadow-hover': '0 22px 52px rgba(0, 0, 0, 0.28)',
+            '--lw-shadow-xl': '0 36px 78px rgba(0, 0, 0, 0.34)',
+            '--lw-font-display': '"Noto Sans SC", "Segoe UI", sans-serif',
+            '--lw-font-main': '"Noto Sans SC", "Segoe UI", sans-serif'
+        }
+        : {
+            '--lw-bg-app': '#e3e5e8',
+            '--lw-bg-app-rgb': '227, 229, 232',
+            '--lw-bg-surface': '#f2f3f5',
+            '--lw-bg-surface-rgb': '242, 243, 245',
+            '--lw-bg-elevated': '#ffffff',
+            '--lw-bg-elevated-rgb': '255, 255, 255',
+            '--lw-bg-subtle': '#ebeef2',
+            '--lw-bg-muted': '#dde2e8',
+            '--lw-bg-hover': '#e4e8ed',
+            '--lw-bg-active': '#cfd6de',
+            '--lw-bg-selection': 'rgba(88, 101, 242, 0.12)',
+            '--lw-surface-container-lowest': '#ffffff',
+            '--lw-surface-container-low': '#f4f5f7',
+            '--lw-surface-container': '#ebeef2',
+            '--lw-surface-container-high': '#dde2e8',
+            '--lw-surface-container-highest': '#cfd6de',
+            '--lw-border-base': 'rgba(78, 85, 98, 0.16)',
+            '--lw-border-subtle': 'rgba(78, 85, 98, 0.1)',
+            '--lw-border-strong': 'rgba(78, 85, 98, 0.24)',
+            '--lw-border-hover': 'rgba(78, 85, 98, 0.28)',
+            '--lw-border-active': 'rgba(88, 101, 242, 0.28)',
+            '--lw-text-main': '#1f2328',
+            '--lw-text-secondary': '#4e5562',
+            '--lw-text-muted': '#6b7280',
+            '--lw-text-dim': '#8a93a3',
+            '--lw-text-inverse': '#ffffff',
+            '--lw-primary': '#5865f2',
+            '--lw-primary-rgb': '88, 101, 242',
+            '--lw-primary-soft': 'rgba(88, 101, 242, 0.1)',
+            '--lw-primary-softer': 'rgba(88, 101, 242, 0.18)',
+            '--lw-glass-bg': 'rgba(255, 255, 255, 0.8)',
+            '--lw-glass-bg-hover': 'rgba(255, 255, 255, 0.92)',
+            '--lw-glass-border': 'rgba(255, 255, 255, 0.58)',
+            '--lw-glass-shadow': 'rgba(31, 35, 40, 0.08)',
+            '--lw-shadow': '0 1px 2px rgba(31, 35, 40, 0.06)',
+            '--lw-shadow-card': '0 18px 44px rgba(31, 35, 40, 0.08)',
+            '--lw-shadow-hover': '0 22px 52px rgba(31, 35, 40, 0.12)',
+            '--lw-shadow-xl': '0 36px 78px rgba(31, 35, 40, 0.14)',
+            '--lw-font-display': '"Noto Sans SC", "Segoe UI", sans-serif',
+            '--lw-font-main': '"Noto Sans SC", "Segoe UI", sans-serif'
+        };
+};
+
+const createDiscordSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => {
+    const base = createSurfaceSkinMap() as NonNullable<DesktopModeManifest['surfaceSkins']>;
+
+    return {
+        ...base,
+        'shell.app': {
+            ...base['shell.app'],
+            cssVars: mergeCssVars(base['shell.app']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-shell-panel-bg': resolvedAppearance === 'dark'
+                    ? 'linear-gradient(180deg, #1e1f22, #1a1b1e)'
+                    : 'linear-gradient(180deg, #e9ebee, #dfe3e8)',
+                '--lw-shell-panel-overlay': resolvedAppearance === 'dark'
+                    ? 'linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 24%), radial-gradient(rgba(255, 255, 255, 0.03) 0.8px, transparent 0.8px)'
+                    : 'linear-gradient(180deg, rgba(255, 255, 255, 0.36), transparent 26%), radial-gradient(rgba(88, 101, 242, 0.05) 0.8px, transparent 0.8px)'
+            }))
+        },
+        'shell.panelBody': {
+            ...base['shell.panelBody'],
+            cssVars: mergeCssVars(base['shell.panelBody']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-shell-body-bg': resolvedAppearance === 'dark'
+                    ? 'linear-gradient(180deg, rgba(88, 101, 242, 0.10) 0%, rgba(88, 101, 242, 0.04) 18%, transparent 44%), linear-gradient(180deg, #2b2d31, #232428)'
+                    : 'linear-gradient(180deg, rgba(88, 101, 242, 0.08) 0%, rgba(88, 101, 242, 0.03) 18%, transparent 44%), linear-gradient(180deg, #f2f3f5, #ebeef2)'
+            }))
+        },
+        'shell.mainSurface': {
+            ...base['shell.mainSurface'],
+            cssVars: mergeCssVars(base['shell.mainSurface']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-shell-main-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 96%, white), color-mix(in srgb, var(--lw-bg-surface) 96%, white))',
+                '--lw-shell-main-border': 'var(--lw-border-strong)',
+                '--lw-shell-main-radius': resolvedAppearance === 'dark' ? '18px' : '22px',
+                '--lw-shell-main-shadow': resolvedAppearance === 'dark'
+                    ? '0 18px 44px rgba(0, 0, 0, 0.24)'
+                    : '0 18px 40px rgba(31, 35, 40, 0.08)'
+            }))
+        },
+        'shell.widget': {
+            ...base['shell.widget'],
+            cssVars: mergeCssVars(base['shell.widget']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-shell-widget-bg': resolvedAppearance === 'dark'
+                    ? '#232428'
+                    : 'var(--lw-surface-container-low)',
+                '--lw-shell-widget-border': 'var(--lw-border-strong)',
+                '--lw-shell-widget-radius': resolvedAppearance === 'dark' ? '18px' : '20px',
+                '--lw-shell-widget-header-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-high)'
+            }))
+        },
+        'shell.workspaceStage': {
+            ...base['shell.workspaceStage'],
+            cssVars: mergeCssVars(base['shell.workspaceStage']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-shell-stage-bg': resolvedAppearance === 'dark'
+                    ? 'linear-gradient(180deg, #2b2d31 0%, #232428 100%)'
+                    : 'linear-gradient(180deg, var(--lw-surface-container-lowest) 0%, var(--lw-surface-container) 100%)',
+                '--lw-shell-stage-border': 'var(--lw-border-strong)',
+                '--lw-shell-stage-radius': resolvedAppearance === 'dark' ? '22px' : '24px',
+                '--lw-shell-stage-shadow': resolvedAppearance === 'dark'
+                    ? '0 24px 56px rgba(0, 0, 0, 0.28)'
+                    : '0 20px 46px rgba(31, 35, 40, 0.12)'
+            }))
+        },
+        'shell.workspaceMenu': {
+            ...base['shell.workspaceMenu'],
+            cssVars: mergeCssVars(base['shell.workspaceMenu']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-shell-workspace-menu-bg': resolvedAppearance === 'dark'
+                    ? 'linear-gradient(180deg, rgba(35, 36, 40, 0.96), rgba(30, 31, 34, 0.92))'
+                    : 'linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(242, 243, 245, 0.92))',
+                '--lw-shell-workspace-menu-border': 'var(--lw-border-strong)',
+                '--lw-shell-workspace-menu-item-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-low)',
+                '--lw-shell-workspace-menu-item-active-bg': resolvedAppearance === 'dark'
+                    ? '#383a40'
+                    : 'var(--lw-surface-container-high)'
+            }))
+        },
+        'shell.characterRail': {
+            ...base['shell.characterRail'],
+            cssVars: mergeCssVars(base['shell.characterRail']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-character-rail-bg': resolvedAppearance === 'dark'
+                    ? '#232428'
+                    : 'var(--lw-surface-container)',
+                '--lw-character-rail-border': resolvedAppearance === 'dark'
+                    ? '#3f4147'
+                    : 'var(--lw-border-strong)',
+                '--lw-character-rail-width': '312px'
+            }))
+        },
+        'shell.guildRail': {
+            ...base['shell.guildRail'],
+            cssVars: mergeCssVars(base['shell.guildRail']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-guild-rail-bg': resolvedAppearance === 'dark'
+                    ? '#1b1d21'
+                    : 'var(--lw-surface-container-high)',
+                '--lw-guild-rail-border': resolvedAppearance === 'dark'
+                    ? '#121317'
+                    : 'var(--lw-border-strong)',
+                '--lw-guild-rail-width': '74px',
+                '--lw-guild-rail-item-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-guild-rail-item-active-bg': resolvedAppearance === 'dark'
+                    ? '#5865f2'
+                    : 'rgba(88, 101, 242, 0.14)',
+                '--lw-guild-rail-item-color': resolvedAppearance === 'dark'
+                    ? '#b5bac1'
+                    : 'var(--lw-text-secondary)'
+            }))
+        },
+        'shell.characterCard': {
+            ...base['shell.characterCard'],
+            cssVars: (context: ComponentThemeContext) => ({
+                ...resolveThemeValueMap(base['shell.characterCard']?.cssVars, context),
+                '--lw-character-card-bg': context.resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-character-card-border': 'var(--lw-border-strong)',
+                '--lw-character-card-active-border': context.resolvedAppearance === 'dark'
+                    ? 'rgba(88, 101, 242, 0.42)'
+                    : 'rgba(88, 101, 242, 0.24)',
+                '--lw-character-card-shadow': context.resolvedAppearance === 'dark'
+                    ? '0 14px 30px rgba(0, 0, 0, 0.16)'
+                    : '0 10px 24px rgba(31, 35, 40, 0.08)',
+                '--lw-character-session-bg': context.resolvedAppearance === 'dark'
+                    ? '#383a40'
+                    : 'var(--lw-surface-container-high)'
+            })
+        },
+        'chat.stream': {
+            ...base['chat.stream'],
+            cssVars: (context: ComponentThemeContext) => ({
+                ...resolveThemeValueMap(base['chat.stream']?.cssVars, context),
+                '--lw-chat-stream-bg': context.resolvedAppearance === 'dark'
+                    ? '#313338'
+                    : 'var(--lw-surface-container-low)',
+                '--lw-chat-bubble': context.resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-chat-user-bubble': context.resolvedAppearance === 'dark'
+                    ? '#383a40'
+                    : 'var(--lw-surface-container-high)',
+                '--lw-chat-border': 'var(--lw-border-strong)',
+                '--lw-chat-color': 'var(--lw-text-main)',
+                '--lw-chat-input-area-bg': context.resolvedAppearance === 'dark'
+                    ? '#313338'
+                    : 'var(--lw-surface-container)',
+                '--lw-chat-input-surface': context.resolvedAppearance === 'dark'
+                    ? '#383a40'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-chat-input-border': context.resolvedAppearance === 'dark'
+                    ? '#4e5058'
+                    : 'var(--lw-border-strong)',
+                '--lw-chat-bubble-shadow': 'none',
+                '--lw-chat-streaming-surface': context.resolvedAppearance === 'dark'
+                    ? 'rgba(88, 101, 242, 0.08)'
+                    : 'rgba(88, 101, 242, 0.08)',
+                '--lw-chat-streaming-border': context.resolvedAppearance === 'dark'
+                    ? 'rgba(88, 101, 242, 0.18)'
+                    : 'rgba(88, 101, 242, 0.16)',
+                '--lw-chat-streaming-status-bg': context.resolvedAppearance === 'dark'
+                    ? 'rgba(49, 51, 56, 0.92)'
+                    : 'rgba(255, 255, 255, 0.88)',
+                '--lw-chat-streaming-status-border': 'var(--lw-border-base)',
+                '--lw-chat-streaming-status-color': 'var(--lw-text-secondary)'
+            })
+        },
+        'chat.preview': {
+            ...base['chat.preview'],
+            cssVars: mergeCssVars(base['chat.preview']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-chat-preview-bg': resolvedAppearance === 'dark'
+                    ? '#232428'
+                    : 'var(--lw-surface-container-low)',
+                '--lw-chat-preview-bubble-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-chat-preview-user-bubble-bg': resolvedAppearance === 'dark'
+                    ? '#383a40'
+                    : 'var(--lw-surface-container-high)'
+            }))
+        },
+        'settings.root': {
+            ...base['settings.root'],
+            cssVars: mergeCssVars(base['settings.root']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-settings-shell-bg': resolvedAppearance === 'dark'
+                    ? '#313338'
+                    : 'var(--lw-surface-container-low)',
+                '--lw-settings-sidebar-bg': resolvedAppearance === 'dark'
+                    ? '#232428'
+                    : 'var(--lw-surface-container)',
+                '--lw-settings-header-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-high)'
+            }))
+        },
+        'settings.unified': {
+            ...base['settings.unified'],
+            cssVars: mergeCssVars(base['settings.unified']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-settings-block-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-settings-block-border': 'var(--lw-border-strong)'
+            }))
+        },
+        'settings.detailed': {
+            ...base['settings.detailed'],
+            cssVars: mergeCssVars(base['settings.detailed']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-settings-detail-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)'
+            }))
+        },
+        'settings.control': {
+            ...base['settings.control'],
+            cssVars: (context: ComponentThemeContext) => ({
+                ...resolveThemeValueMap(base['settings.control']?.cssVars, context),
+                '--lw-setting-control-bg': context.resolvedAppearance === 'dark'
+                    ? '#383a40'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-setting-control-border': 'var(--lw-border-strong)',
+                '--lw-setting-control-active-bg': context.resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-high)',
+                '--lw-setting-slider-track': context.resolvedAppearance === 'dark'
+                    ? '#3b3d44'
+                    : 'var(--lw-surface-container-high)'
+            })
+        },
+        'timeline.root': {
+            ...base['timeline.root'],
+            cssVars: mergeCssVars(base['timeline.root']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-timeline-header-bg': resolvedAppearance === 'dark'
+                    ? '#232428'
+                    : 'var(--lw-surface-container-high)',
+                '--lw-timeline-card-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-timeline-canvas-bg': resolvedAppearance === 'dark'
+                    ? '#313338'
+                    : 'var(--lw-surface-container-low)',
+                '--lw-timeline-chip-bg': resolvedAppearance === 'dark'
+                    ? '#383a40'
+                    : 'var(--lw-surface-container-high)',
+                '--lw-timeline-chip-border': 'var(--lw-border-strong)',
+                '--lw-timeline-chip-color': resolvedAppearance === 'dark'
+                    ? '#dbdee1'
+                    : 'var(--lw-text-secondary)',
+                '--lw-timeline-line-color': 'var(--lw-border-strong)',
+                '--lw-timeline-line-active': 'var(--lw-primary)',
+                '--lw-timeline-subtle-text': 'var(--lw-text-muted)',
+                '--lw-timeline-muted-text': 'var(--lw-text-secondary)',
+                '--lw-timeline-loading-overlay-bg': resolvedAppearance === 'dark'
+                    ? 'rgba(30, 31, 34, 0.72)'
+                    : 'rgba(255, 255, 255, 0.72)',
+                '--lw-timeline-loading-spinner-track': resolvedAppearance === 'dark'
+                    ? '#3f4147'
+                    : 'var(--lw-surface-container-high)',
+                '--lw-timeline-modal-overlay-bg': resolvedAppearance === 'dark'
+                    ? 'rgba(15, 23, 42, 0.45)'
+                    : 'rgba(15, 23, 42, 0.22)',
+                '--lw-timeline-modal-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-timeline-modal-body-bg': resolvedAppearance === 'dark'
+                    ? '#232428'
+                    : 'var(--lw-surface-container-low)',
+                '--lw-timeline-modal-footer-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)'
+            }))
+        },
+        'lorebook.workspace': {
+            ...base['lorebook.workspace'],
+            cssVars: mergeCssVars(base['lorebook.workspace']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-lorebook-workspace-bg': resolvedAppearance === 'dark'
+                    ? 'linear-gradient(180deg, rgba(49, 51, 56, 0.72), rgba(49, 51, 56, 0))'
+                    : 'linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0))',
+                '--lw-lorebook-header-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-lorebook-panel-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-lorebook-panel-hover-bg': resolvedAppearance === 'dark'
+                    ? '#35373c'
+                    : 'var(--lw-bg-hover)',
+                '--lw-lorebook-panel-border': 'var(--lw-border-strong)',
+                '--lw-lorebook-panel-outline': resolvedAppearance === 'dark'
+                    ? 'rgba(255, 255, 255, 0.03)'
+                    : 'rgba(31, 35, 40, 0.04)',
+                '--lw-lorebook-overlay-bg': resolvedAppearance === 'dark'
+                    ? 'rgba(30, 31, 34, 0.68)'
+                    : 'rgba(255, 255, 255, 0.62)',
+                '--lw-lorebook-overlay-backdrop': resolvedAppearance === 'dark'
+                    ? 'blur(10px)'
+                    : 'blur(12px)',
+                '--lw-lorebook-chip-bg': resolvedAppearance === 'dark'
+                    ? '#383a40'
+                    : 'var(--lw-surface-container-high)',
+                '--lw-lorebook-chip-accent-bg': resolvedAppearance === 'dark'
+                    ? 'rgba(88, 101, 242, 0.14)'
+                    : 'rgba(88, 101, 242, 0.1)',
+                '--lw-lorebook-table-header-bg': resolvedAppearance === 'dark'
+                    ? '#232428'
+                    : 'var(--lw-surface-container)'
+            }))
+        },
+        'lorebook.editor': {
+            ...base['lorebook.editor'],
+            cssVars: mergeCssVars(base['lorebook.editor']?.cssVars, ({ resolvedAppearance }) => ({
+                '--lw-lorebook-editor-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-lorebook-editor-header-bg': resolvedAppearance === 'dark'
+                    ? '#2b2d31'
+                    : 'var(--lw-surface-container-lowest)',
+                '--lw-lorebook-editor-control-bg': resolvedAppearance === 'dark'
+                    ? '#383a40'
+                    : 'var(--lw-surface-container-low)',
+                '--lw-lorebook-editor-control-hover-bg': resolvedAppearance === 'dark'
+                    ? '#404249'
+                    : 'var(--lw-surface-container-high)',
+                '--lw-lorebook-editor-accent-bg': resolvedAppearance === 'dark'
+                    ? 'rgba(88, 101, 242, 0.14)'
+                    : 'rgba(88, 101, 242, 0.1)',
+                '--lw-lorebook-editor-switch-bg': resolvedAppearance === 'dark'
+                    ? '#4e5058'
+                    : 'var(--lw-surface-container-highest)',
+                '--lw-lorebook-editor-switch-dot': resolvedAppearance === 'dark'
+                    ? '#f2f3f5'
+                    : 'var(--lw-bg-elevated)',
+                '--lw-lorebook-editor-range-track': resolvedAppearance === 'dark'
+                    ? '#4e5058'
+                    : 'var(--lw-surface-container-high)',
+                '--lw-lorebook-editor-save-bg': 'var(--lw-primary)',
+                '--lw-lorebook-editor-save-color': '#ffffff',
+                '--lw-lorebook-editor-save-hover-bg': resolvedAppearance === 'dark'
+                    ? 'color-mix(in srgb, var(--lw-primary) 88%, black)'
+                    : 'color-mix(in srgb, var(--lw-primary) 92%, black 8%)',
+                '--lw-lorebook-editor-saving-bg': resolvedAppearance === 'dark'
+                    ? '#4e5058'
+                    : 'var(--lw-surface-container-highest)',
+                '--lw-lorebook-editor-success-bg': 'var(--lw-success)'
+            }))
+        }
+    };
+};
 
 export const builtinDesktopModes: DesktopModeManifest[] = [
     {
@@ -414,8 +956,8 @@ export const builtinDesktopModes: DesktopModeManifest[] = [
     {
         id: 'discord',
         name: 'Discord 桌面',
-        description: '频道式深色桌面模式，角色轨、聊天区和侧栏统一成更强的面板结构。',
-        preferredAppearance: 'dark',
+        description: '频道式桌面模式，角色轨、聊天区和侧栏统一成更强的面板结构，并跟随全局浅色/深色外观。',
+        preferredAppearance: 'follow-setting',
         shell: {
             kind: 'traditional'
         },
@@ -435,88 +977,8 @@ export const builtinDesktopModes: DesktopModeManifest[] = [
             settingsVariant: 'discord',
             timelineVariant: 'discord',
         },
-        designTokens: {
-            '--lw-bg-app': '#1e1f22',
-            '--lw-bg-app-rgb': '30, 31, 34',
-            '--lw-bg-surface': '#2b2d31',
-            '--lw-bg-surface-rgb': '43, 45, 49',
-            '--lw-bg-elevated': '#313338',
-            '--lw-bg-elevated-rgb': '49, 51, 56',
-            '--lw-bg-subtle': '#232428',
-            '--lw-bg-muted': '#1a1b1e',
-            '--lw-border-base': '#3f4147',
-            '--lw-border-subtle': '#36383d',
-            '--lw-text-main': '#f2f3f5',
-            '--lw-text-secondary': '#b5bac1',
-            '--lw-text-muted': '#949ba4',
-            '--lw-text-dim': '#72767d',
-            '--lw-primary': '#5865f2',
-            '--lw-primary-rgb': '88, 101, 242',
-            '--lw-glass-bg': 'rgba(35, 36, 40, 0.88)',
-            '--lw-glass-border': 'rgba(255, 255, 255, 0.06)',
-            '--lw-shadow-card': '0 18px 44px rgba(0, 0, 0, 0.28)',
-            '--lw-font-display': '"Noto Sans SC", "Segoe UI", sans-serif',
-            '--lw-font-main': '"Noto Sans SC", "Segoe UI", sans-serif'
-        },
-        surfaceSkins: createSurfaceSkinMap({
-            '--lw-shell-panel-bg':
-                'linear-gradient(180deg, #1e1f22, #1a1b1e)',
-            '--lw-shell-panel-overlay':
-                'linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 24%), radial-gradient(rgba(255, 255, 255, 0.03) 0.8px, transparent 0.8px)',
-            '--lw-shell-body-bg':
-                'linear-gradient(180deg, rgba(88, 101, 242, 0.10) 0%, rgba(88, 101, 242, 0.04) 18%, transparent 44%), linear-gradient(180deg, #2b2d31, #232428)',
-            '--lw-shell-main-bg': '#2b2d31',
-            '--lw-shell-main-border': '#3f4147',
-            '--lw-shell-main-radius': '18px',
-            '--lw-shell-main-shadow': '0 18px 44px rgba(0, 0, 0, 0.24)',
-            '--lw-shell-widget-bg': '#232428',
-            '--lw-shell-widget-border': '#3f4147',
-            '--lw-shell-widget-radius': '18px',
-            '--lw-shell-widget-header-bg': '#2b2d31',
-            '--lw-shell-stage-bg':
-                'linear-gradient(180deg, #2b2d31 0%, #232428 100%)',
-            '--lw-shell-stage-border': '#3f4147',
-            '--lw-shell-stage-radius': '22px',
-            '--lw-shell-stage-shadow': '0 24px 56px rgba(0, 0, 0, 0.28)',
-            '--lw-shell-workspace-menu-bg':
-                'linear-gradient(180deg, rgba(35, 36, 40, 0.96), rgba(30, 31, 34, 0.92))',
-            '--lw-shell-workspace-menu-border': '#3f4147',
-            '--lw-shell-workspace-menu-item-bg': '#2b2d31',
-            '--lw-shell-workspace-menu-item-active-bg': '#383a40',
-            '--lw-character-rail-bg': '#232428',
-            '--lw-character-rail-border': '#3f4147',
-            '--lw-character-rail-width': '312px',
-            '--lw-guild-rail-bg': '#1b1d21',
-            '--lw-guild-rail-border': '#121317',
-            '--lw-guild-rail-width': '74px',
-            '--lw-guild-rail-item-bg': '#2b2d31',
-            '--lw-guild-rail-item-active-bg': '#5865f2',
-            '--lw-guild-rail-item-color': '#b5bac1',
-            '--lw-character-card-bg': '#2b2d31',
-            '--lw-character-card-border': '#3f4147',
-            '--lw-character-card-active-border': 'rgba(88, 101, 242, 0.42)',
-            '--lw-character-card-shadow': '0 14px 30px rgba(0, 0, 0, 0.16)',
-            '--lw-character-session-bg': '#383a40',
-            '--lw-chat-stream-bg': '#313338',
-            '--lw-chat-scroll-padding': '20px 24px',
-            '--lw-chat-content-gap': '18px',
-            '--lw-chat-avatar-size': '40px',
-            '--lw-chat-bubble': '#2b2d31',
-            '--lw-chat-user-bubble': '#383a40',
-            '--lw-chat-border': '#3f4147',
-            '--lw-chat-color': '#f2f3f5',
-            '--lw-chat-input-area-bg': '#2b2d31',
-            '--lw-chat-input-surface': '#383a40',
-            '--lw-chat-input-border': '#4e5058',
-            '--lw-chat-bubble-shadow': 'none',
-            '--lw-settings-shell-bg': '#313338',
-            '--lw-settings-sidebar-bg': '#232428',
-            '--lw-settings-header-bg': '#2b2d31',
-            '--lw-settings-block-bg': '#2b2d31',
-            '--lw-settings-detail-bg': '#2b2d31',
-            '--lw-timeline-header-bg': '#232428',
-            '--lw-timeline-card-bg': '#2b2d31'
-        }),
+        designTokens: resolveDiscordDesignTokens,
+        surfaceSkins: createDiscordSurfaceSkinMap(),
         rendererVariants: {
             'shell.guildRail': 'discord',
             'shell.characterRail': 'discord',
@@ -524,7 +986,9 @@ export const builtinDesktopModes: DesktopModeManifest[] = [
             'chat.stream': 'discord',
             'settings.root': 'discord-panel',
             'settings.control': 'discord',
-            'timeline.root': 'discord'
+            'timeline.root': 'discord',
+            'lorebook.workspace': 'discord',
+            'lorebook.editor': 'discord'
         },
         settingsManifest: discordThemeSettings
     }

@@ -6,15 +6,15 @@ import {
     ConversationMutationResult,
     ConversationSummary,
     createEmptyConversationDocument
-} from '../../shared/ConversationTypes.js';
-import { applyConversationMutation } from '../../shared/ConversationReducer.js';
-import { migrateLegacyChatArray, migrateLegacyForgeSession } from '../../shared/ConversationMigration.js';
+} from '@shared/ConversationTypes.js';
+import { applyConversationMutation } from '@shared/ConversationReducer.js';
+import { migrateLegacyChatArray, migrateLegacyForgeSession } from '@shared/ConversationMigration.js';
 import {
     assertConversationSchemaVersion,
     validateConversationDocument
-} from '../../shared/ConversationValidation.js';
-import { resolveConversationSummary } from '../../shared/ConversationSummaryResolver.js';
-import { LuminaChatMessage } from '../../shared/LuminaMessage.js';
+} from '@shared/ConversationValidation.js';
+import { resolveConversationSummary } from '@shared/ConversationSummaryResolver.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import {
     ForgeSessionRecord,
     PresetRecord,
@@ -319,6 +319,38 @@ export class StorageService {
             summary: resolveConversationSummary(normalized),
             lastCommittedSeq: normalized.transaction.lastCommittedSeq
         };
+    }
+
+    deleteConversation(id: string): boolean {
+        const canonicalId = this.resolveCanonicalConversationId(id) || id;
+        const existed =
+            this.conversationCache.has(canonicalId)
+            || fs.existsSync(this.getConversationFilePath(canonicalId))
+            || this.transactionCache.has(canonicalId)
+            || fs.existsSync(this.getTransactionFilePath(canonicalId));
+
+        this.conversationCache.delete(canonicalId);
+        this.transactionCache.delete(canonicalId);
+        this.dirtyConversations.delete(canonicalId);
+        this.dirtyTransactions.delete(canonicalId);
+
+        const conversationFilePath = this.getConversationFilePath(canonicalId);
+        if (fs.existsSync(conversationFilePath)) {
+            fs.unlinkSync(conversationFilePath);
+        }
+
+        const transactionFilePath = this.getTransactionFilePath(canonicalId);
+        if (fs.existsSync(transactionFilePath)) {
+            fs.unlinkSync(transactionFilePath);
+        }
+
+        for (const [alias, target] of Array.from(this.conversationAliasCache.entries())) {
+            if (target === canonicalId || alias === canonicalId) {
+                this.conversationAliasCache.delete(alias);
+            }
+        }
+
+        return existed;
     }
 
     mutateConversation(id: string, mutation: ConversationMutation): ConversationMutationResult {

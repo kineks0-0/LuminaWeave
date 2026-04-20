@@ -52183,7 +52183,7 @@ var StreamingManager = class {
 var import_fs = __toESM(require("fs"));
 var import_path = __toESM(require("path"));
 
-// ../shared/ConversationTypes.ts
+// ../luminaweave-extension/shared/ConversationTypes.ts
 var CONVERSATION_SCHEMA_VERSION = 1;
 var createEmptyConversationDocument2 = (params) => {
   const now = params.updatedAt ?? params.createdAt ?? Date.now();
@@ -52213,7 +52213,7 @@ var createEmptyConversationDocument2 = (params) => {
   };
 };
 
-// ../shared/ConversationSummaryResolver.ts
+// ../luminaweave-extension/shared/ConversationSummaryResolver.ts
 var cleanPreview = (text) => text.replace(/\s+/g, " ").trim();
 var resolveCharacterMeta = (document) => {
   for (let index = document.nodes.length - 1; index >= 0; index -= 1) {
@@ -52223,6 +52223,15 @@ var resolveCharacterMeta = (document) => {
       characterId: node.characterId ?? null,
       characterName: cleanPreview(node.name || ""),
       characterAvatarUrl: typeof node.avatarUrl === "string" ? node.avatarUrl : null
+    };
+  }
+  const persistedCharacterMeta = document.pluginState.chat;
+  const persistedCharacterName = cleanPreview(persistedCharacterMeta?.characterName || "");
+  if (persistedCharacterMeta?.characterId != null || persistedCharacterName || typeof persistedCharacterMeta?.characterAvatarUrl === "string") {
+    return {
+      characterId: persistedCharacterMeta?.characterId ?? null,
+      characterName: persistedCharacterName,
+      characterAvatarUrl: typeof persistedCharacterMeta?.characterAvatarUrl === "string" ? persistedCharacterMeta.characterAvatarUrl : null
     };
   }
   return {
@@ -52252,7 +52261,7 @@ var resolveConversationSummary = (document) => ({
   ...resolveCharacterMeta(document)
 });
 
-// ../shared/ConversationValidation.ts
+// ../luminaweave-extension/shared/ConversationValidation.ts
 var asRecord = (value) => value && typeof value === "object" ? value : {};
 var isConversationDocument = (value) => {
   const record = asRecord(value);
@@ -52286,7 +52295,7 @@ var assertConversationSchemaVersion = (document) => {
   }
 };
 
-// ../shared/ConversationReducer.ts
+// ../luminaweave-extension/shared/ConversationReducer.ts
 var mergePluginState = (current, patch) => {
   if (!patch) return current;
   return {
@@ -52329,7 +52338,7 @@ var applyConversationMutation = (document, mutation) => {
   return next;
 };
 
-// ../shared/ConversationMigration.ts
+// ../luminaweave-extension/shared/ConversationMigration.ts
 var cloneNodes = (nodes) => Array.isArray(nodes) ? nodes.map((node) => ({ ...node })) : [];
 var migrateLegacyChatArray = (id, payload, conversationType = id.startsWith("lw_card_") ? "forge" : "chat") => {
   const rows = Array.isArray(payload) ? payload : [];
@@ -52636,6 +52645,28 @@ var StorageService = class {
       summary: resolveConversationSummary(normalized),
       lastCommittedSeq: normalized.transaction.lastCommittedSeq
     };
+  }
+  deleteConversation(id) {
+    const canonicalId = this.resolveCanonicalConversationId(id) || id;
+    const existed = this.conversationCache.has(canonicalId) || import_fs.default.existsSync(this.getConversationFilePath(canonicalId)) || this.transactionCache.has(canonicalId) || import_fs.default.existsSync(this.getTransactionFilePath(canonicalId));
+    this.conversationCache.delete(canonicalId);
+    this.transactionCache.delete(canonicalId);
+    this.dirtyConversations.delete(canonicalId);
+    this.dirtyTransactions.delete(canonicalId);
+    const conversationFilePath = this.getConversationFilePath(canonicalId);
+    if (import_fs.default.existsSync(conversationFilePath)) {
+      import_fs.default.unlinkSync(conversationFilePath);
+    }
+    const transactionFilePath = this.getTransactionFilePath(canonicalId);
+    if (import_fs.default.existsSync(transactionFilePath)) {
+      import_fs.default.unlinkSync(transactionFilePath);
+    }
+    for (const [alias, target] of Array.from(this.conversationAliasCache.entries())) {
+      if (target === canonicalId || alias === canonicalId) {
+        this.conversationAliasCache.delete(alias);
+      }
+    }
+    return existed;
   }
   mutateConversation(id, mutation) {
     const current = this.readConversation(id) || createEmptyConversationDocument2({
@@ -52997,10 +53028,10 @@ var StorageService = class {
   }
 };
 
-// ../shared/api/llm/NexusOrchestrator.ts
-var import_openai = __toESM(require_dist7());
-var import_anthropic = __toESM(require_dist8());
-var import_google = __toESM(require_dist9());
+// ../luminaweave-extension/shared/api/llm/NexusOrchestrator.ts
+var import_openai = __toESM(require_dist7(), 1);
+var import_anthropic = __toESM(require_dist8(), 1);
+var import_google = __toESM(require_dist9(), 1);
 var ST_TO_AI_SDK_KEY_MAP = {
   top_p: "topP",
   top_k: "topK",
@@ -53164,7 +53195,7 @@ var NexusService = class extends NexusOrchestrator {
   // 后端目前透传共享逻辑，如需增加后端特有的中间件或日志逻辑，可在此重写方法
 };
 
-// ../shared/TagTokenizer.ts
+// ../luminaweave-extension/shared/TagTokenizer.ts
 var TAG_REGEX = /<(\/?)([a-zA-Z_][a-zA-Z0-9_]*)\b([^>]*?)(\/?)>/g;
 var ATTR_REGEX = /([a-zA-Z_][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g;
 function tokenize(input) {
@@ -53317,7 +53348,7 @@ function detectTrailingPartialTag(text) {
   return partialMatch[1] || "";
 }
 
-// ../shared/XMLTagRegistry.ts
+// ../luminaweave-extension/shared/XMLTagRegistry.ts
 var DEFAULT_PROMPT_CONTEXT = "chat";
 var matchesPromptContext = (promptContexts, context2) => {
   const normalized = promptContexts && promptContexts.length > 0 ? promptContexts : [DEFAULT_PROMPT_CONTEXT];
@@ -53551,7 +53582,7 @@ for (const definition of defaultDefinitions) {
   globalXMLTagRegistry.register(definition);
 }
 
-// ../shared/BaseXMLInterceptor.ts
+// ../luminaweave-extension/shared/BaseXMLInterceptor.ts
 var BuiltinXMLTags = {
   ...CoreXMLTagNames,
   MUTATION: "Mutation"
@@ -54019,7 +54050,7 @@ var BaseXMLInterceptor = class {
   }
 };
 
-// ../shared/ApiEndpoints.ts
+// ../luminaweave-extension/shared/ApiEndpoints.ts
 var API_ROUTES = {
   SETTINGS: {
     GET: "/settings",
@@ -54060,6 +54091,7 @@ var API_ROUTES = {
     GET: (id) => `/conversations/${id}`,
     SAVE: (id) => `/conversations/${id}`,
     MUTATE: (id) => `/conversations/${id}`,
+    DELETE: (id) => `/conversations/${id}`,
     TRANSACTIONS: (id) => `/conversations/${id}/transactions`,
     ROLLBACK_TRANSACTION: (id, txId) => `/conversations/${id}/transactions/${txId}/rollback`
   },
@@ -54074,7 +54106,7 @@ var API_ROUTES = {
   }
 };
 
-// ../shared/LuminaMessage.ts
+// ../luminaweave-extension/shared/LuminaMessage.ts
 var MessageUtils = class {
   /**
    * 基础规范化
@@ -54146,7 +54178,7 @@ var MessageUtils = class {
   }
 };
 
-// ../shared/api/NexusGenerationFlow.ts
+// ../luminaweave-extension/shared/api/NexusGenerationFlow.ts
 var NexusGenerationFlow = class {
   constructor(context2, interceptor, delegate) {
     this.context = context2;
@@ -54361,6 +54393,15 @@ var LuminaWeaveServer = class {
         summary: this.storage.listConversations().find((item) => item.id === conversationId) || null,
         lastCommittedSeq: committedTx.seq,
         transaction: committedTx
+      });
+    });
+    router.delete(API_ROUTES.CONVERSATION.DELETE(":id").replace("/:id", "/:conversationId"), (req, res) => {
+      const conversationId = String(req.params.conversationId);
+      const deleted = this.storage.deleteConversation(conversationId);
+      this.storage.syncToDisk();
+      res.json({
+        success: deleted,
+        id: conversationId
       });
     });
     router.get(API_ROUTES.CONVERSATION.TRANSACTIONS(":id").replace("/:id", "/:conversationId"), (req, res) => {

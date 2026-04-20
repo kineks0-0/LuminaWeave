@@ -5,6 +5,7 @@ import { createPinia } from 'pinia';
 import App from './App.vue';
 import './style.css';
 import { initBridge } from './bootstrap/initBridge.js';
+import { loadTauriLayoutKit } from './core/TauriLayoutKit.js';
 
 // ======= 1. 向外部全局环境暴露 LuminaWeave API =======
 (window as any).LuminaWeave = luminaWeaveApi;
@@ -35,6 +36,15 @@ import { initBridge } from './bootstrap/initBridge.js';
         container.style.pointerEvents = 'none'; // 透传鼠标事件，App.vue 内部交互元素再设为 auto
         container.style.zIndex = '99999';
         document.body.appendChild(container);
+    }
+
+    const layoutKit = await loadTauriLayoutKit();
+    if (layoutKit) {
+        try {
+            layoutKit.applySurface(container, layoutKit.SURFACE.FreeWindow);
+        } catch (error) {
+            console.debug('[LuminaWeave] Failed to apply free-window surface via layout-kit.js.', error);
+        }
     }
 
     // ======= 3. 决定是否启用 Shadow DOM 隔离 (CSS Isolation) =======
@@ -135,6 +145,7 @@ import { initBridge } from './bootstrap/initBridge.js';
     // 双 key 注入：$lw (旧) 和 lwApi (新组件使用)，保持兼容
     app.provide('$lw', luminaWeaveApi);
     app.provide('lwApi', luminaWeaveApi);
+    app.provide('lwHostContainer', container);
     app.mount(appRoot);
 
     console.log(`[LuminaWeave] 挂载完成。Shadow DOM 状态: ${useShadowDom ? '开启' : '关闭'}`);

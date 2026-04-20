@@ -42,6 +42,7 @@ export const API_ROUTES = {
         GET: (id: string) => `/conversations/${id}`,
         SAVE: (id: string) => `/conversations/${id}`,
         MUTATE: (id: string) => `/conversations/${id}`,
+        DELETE: (id: string) => `/conversations/${id}`,
         TRANSACTIONS: (id: string) => `/conversations/${id}/transactions`,
         ROLLBACK_TRANSACTION: (id: string, txId: string) => `/conversations/${id}/transactions/${txId}/rollback`
     },

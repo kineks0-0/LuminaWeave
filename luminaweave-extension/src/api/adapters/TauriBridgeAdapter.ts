@@ -4,18 +4,18 @@ import {
     IStreamingCallbacks,
     IStoreService,
     IConversationService
-} from '../../../../shared/api/IBridge.js';
+} from '@shared/api/IBridge.js';
 import { EnvDetector } from '../core/EnvDetector.js';
-import { globalNexusOrchestrator } from '../../../../shared/api/llm/NexusOrchestrator.js';
+import { globalNexusOrchestrator } from '@shared/api/llm/NexusOrchestrator.js';
 import { lwStorage } from '../storage.js';
 import { STClient } from '../core/st-adapter/STClient.js';
 import { LocalNexusHandler } from '../core/LocalNexusHandler.js';
-import { PersistenceDelegate } from '../../../../shared/api/NexusGenerationFlow.js';
-import type { ConversationDocument, ConversationMutation } from '../../../../shared/ConversationTypes.js';
-import { createEmptyConversationDocument } from '../../../../shared/ConversationTypes.js';
-import { applyConversationMutation } from '../../../../shared/ConversationReducer.js';
-import { migrateLegacyChatArray, migrateLegacyForgeSession } from '../../../../shared/ConversationMigration.js';
-import { resolveConversationSummary } from '../../../../shared/ConversationSummaryResolver.js';
+import { PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
+import type { ConversationDocument, ConversationMutation } from '@shared/ConversationTypes.js';
+import { createEmptyConversationDocument } from '@shared/ConversationTypes.js';
+import { applyConversationMutation } from '@shared/ConversationReducer.js';
+import { migrateLegacyChatArray, migrateLegacyForgeSession } from '@shared/ConversationMigration.js';
+import { resolveConversationSummary } from '@shared/ConversationSummaryResolver.js';
 
 /**
  * TauriBridgeAdapter
@@ -62,6 +62,14 @@ export class TauriBridgeAdapter implements ILuminaBridge {
         return Array.from(new Set([...legacyChats, ...legacyForge]));
     }
 
+    private isMissingStoreEntryError(error: unknown): boolean {
+        const message = error instanceof Error ? error.message : String(error ?? '');
+        const normalized = message.toLowerCase();
+        return normalized.includes('not found')
+            || normalized.includes('chat not found')
+            || normalized.includes('failed to delete chat');
+    }
+
     constructor() {
         this.conversation = {
             listConversations: async () => {
@@ -102,6 +110,28 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                 });
                 const next = applyConversationMutation(current, mutation);
                 return await this.conversation.saveConversation(id, next);
+            },
+            deleteConversation: async (id: string) => {
+                const keys = await this.extensionStore.listKeys({ namespace: TauriBridgeAdapter.CONVERSATION_NAMESPACE });
+                if (!keys.includes(id)) {
+                    return {
+                        success: true,
+                        id
+                    };
+                }
+
+                try {
+                    await this.extensionStore.deleteJson({ namespace: TauriBridgeAdapter.CONVERSATION_NAMESPACE, key: id });
+                } catch (error) {
+                    if (!this.isMissingStoreEntryError(error)) {
+                        throw error;
+                    }
+                }
+
+                return {
+                    success: true,
+                    id
+                };
             },
             getTransactions: async (id: string) => {
                 const document = await this.readUnifiedConversation(id);

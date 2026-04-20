@@ -73,10 +73,10 @@
   --lw-shadow-xl: 0 32px 72px rgba(17, 18, 21, 0.14);
 
   --lw-surface-container-lowest: var(--lw-bg-elevated);
-  --lw-surface-container-low: oklch(0.978 0.004 240);
-  --lw-surface-container: oklch(0.964 0.006 240);
-  --lw-surface-container-high: oklch(0.945 0.008 240);
-  --lw-surface-container-highest: oklch(0.92 0.01 240);
+  --lw-surface-container-low: var(--lw-bg-surface);
+  --lw-surface-container: var(--lw-bg-subtle);
+  --lw-surface-container-high: var(--lw-bg-muted);
+  --lw-surface-container-highest: var(--lw-bg-active);
   color-scheme: light;
 }
 

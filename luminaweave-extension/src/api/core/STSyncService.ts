@@ -1,10 +1,11 @@
 import { WorldlineStore, WorldlineEvent } from './WorldlineStore';
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { lwStorage } from '../storage';
 import { ContextCompactor } from './ContextCompactor';
 import { ContextControlSettings } from './types';
 import { STAdapter } from './STAdapter';
 import { STProtocol } from './st-adapter/STProtocol';
+import { STClient } from './st-adapter/STClient';
 import { SyncUtils } from './SyncUtils';
 
 /**
@@ -301,6 +302,10 @@ export class STSyncService {
     async commitToST(): Promise<void> {
         if (this._committing) {
             console.log('[STSyncService] commitToST 已在运行中，跳过。');
+            return;
+        }
+        if (!STClient.hasActiveLiveChat()) {
+            console.warn('[STSyncService] 当前无有效 live chat，跳过 ST 回写。');
             return;
         }
         this._committing = true;

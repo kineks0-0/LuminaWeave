@@ -1,7 +1,7 @@
-import { LuminaChatMessage, MessageUtils } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage, MessageUtils } from '@shared/LuminaMessage.js';
 import { lwStorage } from '../storage.js';
 import { BuiltinXMLTags, XMLInterceptor, globalXMLInterceptor } from './XMLInterceptor.js';
-import { SyncEngine, SharedMessageTextResolver, DiffResult } from '../../../../shared/api/SyncEngine.js';
+import { SyncEngine, SharedMessageTextResolver, DiffResult } from '@shared/api/SyncEngine.js';
 import { ContextControlSettings } from './types.js';
 import { STClient } from './st-adapter/STClient.js';
 import { STProtocol } from './st-adapter/STProtocol.js';

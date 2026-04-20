@@ -29,7 +29,7 @@
         "../TavernHelper@types/iframe/*"
       ],
       "@shared/*": [
-        "../shared/*"
+        "./shared/*"
       ]
     },
     "sourceMap": true
@@ -39,7 +39,7 @@
     "src/**/*.d.ts",
     "src/**/*.tsx",
     "src/**/*.vue",
-    "../shared/**/*.ts",
+    "shared/**/*.ts",
     "../TavernHelper@types/function/*.d.ts",
     "../TavernHelper@types/iframe/*.d.ts"
   ],

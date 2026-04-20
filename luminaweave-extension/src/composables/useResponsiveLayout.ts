@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref, type Ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue';
 import { lwStorage } from '../api/storage';
 
 const MOBILE_BREAKPOINT = 768;
@@ -40,21 +40,33 @@ export function useResponsiveLayout(panelBodyRef: Ref<HTMLElement | null>) {
 
     let resizeObserver: ResizeObserver | null = null;
 
+    const attachResizeObserver = (element: HTMLElement | null) => {
+        resizeObserver?.disconnect();
+        resizeObserver = null;
+
+        if (!element) {
+            return;
+        }
+
+        resizeObserver = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                containerWidth.value = entry.contentRect.width;
+            }
+        });
+        resizeObserver.observe(element);
+    };
+
     const handleViewportResize = () => {
         viewportWidth.value = window.innerWidth;
     };
 
     onMounted(() => {
         window.addEventListener('resize', handleViewportResize);
+        attachResizeObserver(panelBodyRef.value);
+    });
 
-        if (panelBodyRef.value) {
-            resizeObserver = new ResizeObserver((entries) => {
-                for (const entry of entries) {
-                    containerWidth.value = entry.contentRect.width;
-                }
-            });
-            resizeObserver.observe(panelBodyRef.value);
-        }
+    watch(panelBodyRef, (element) => {
+        attachResizeObserver(element);
     });
 
     onUnmounted(() => {

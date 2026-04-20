@@ -28,9 +28,13 @@ LuminaWeave 运行于独立的 Vue 3 实例中，通过 `Lumina Core` 桥接原�
 - **[Lumina Timeline](./timeline/PDR.md)**：Git 风格多轴穿梭图，支持物理回滚与世界线剪枝。
 - **Unified Conversation Context [UPDATED]**：Timeline、Lorebook、Memory 等消息型视图现在共享统一的会话上下文与世界线操作 API；UI 只负责展示数据与发送意图，不再各自维护 `chat / forge` 分流逻辑。旧的 `chat-only` 世界线 facade 已移除，统一会话 API 成为唯一入口。
 - **Unified Conversation Document [UPDATED]**：主聊天与 Forge 工作会话的持久化真相源已收敛为单个 `ConversationDocument`。前端通过 bridge 只消费统一 DTO，不再直接接触 `jsonl` 或 `forge_sessions` 原始结构；事务日志继续独立保存。
+- **Discord 角色频道新建对话 [NEW]**：Discord 桌面模式下的角色频道现在支持按角色直接新建 chat session，桌面侧栏与移动端角色 sheet 复用同一交互；新空会话会立即写入统一 `ConversationDocument`，确保角色分组、会话索引与后续世界线操作立刻可见。
+- **Discord 角色频道历史会话管理 [NEW]**：角色频道对单个角色的历史 chat session 现按“最近 N 条 + 查看更多”折叠展示，并支持在会话项上直接重命名或删除。所有管理操作仍经由统一 `ConversationService + ConversationDocument` 收口，而不是由 UI 直接改宿主状态。
+- **Discord 角色频道宿主接口化 [UPDATED]**：角色频道现从“组件直连 `lwApi / STClient / contextStore`”下沉为 `View -> Intent -> CharacterChannelService -> Chat Host Ports`。当前读取与管理均统一走 ST/Helper 路径；`Chat Host Ports` 仍保留为宿主能力边界，便于后续再接回其他原生宿主 ABI。
 - **[Lumina Director](./director/PDR.md)**：导演引擎。通过 XML 标签驱动状态机，实现 `<Next_Plan>` 引导与结构化数据更新。
 - **[Lumina Memory Engine](./PDR.md#2-lumina-memory-幻光记忆)**：五层分层记忆模型 (Tier 0-4)，确保 AI 始终掌握当前时空的精确状态。
 - **[Unified Storage](./system_design.md#4-shadow-buffer--统一存储代理-unified-storage-engine)**：多级作用域存储系统，支持影子数据库与 ST 物理同步。
+- **移动端 Layout / IME Contract [UPDATED]**：Android / TauriTavern 环境下，前端输入层开始优先接入宿主 `api.layout` 与 `data-tt-mobile-surface` 契约，由宿主提供 safe-area、viewport 与 IME 语义；Web 环境继续保留 `visualViewport` fallback。当前已在总架构文档中补记移动端 IME 生命周期抖动的已知问题，供后续 Host Layout 修复追踪。
 
 ---
 
@@ -57,6 +61,7 @@ d:\LuminaWeave\
 │   ├── system_design.md        # 全局系统架构设计 (Master System Design)
 │   └── luminaweave_api.md      # 子插件开发 API 参考手册
 ├── luminaweave-extension/      # 🚀 核心前端插件 (Vue 3 + Vite)
+│   ├── shared/                # ♻️ 前后端共享引擎（随 extension 子仓库公开）
 │   ├── src/
 │   │   ├── api/
 │   │   │   ├── core/           # 🧩 微内核服务核心 (Services)
@@ -93,7 +98,10 @@ d:\LuminaWeave\
 │   │   │   ├── settings/       # 统一设置面板
 │   │   │   ├── stats/          # 游戏化数值系统状态栏
 │   │   │   └── timeline/       # 幻光时间线 (LogicFlow)
-│   │   ├── App.vue             # 视觉根组件 (UI Shell)
+│   │   ├── App.vue             # 运行时编排入口 (App Shell Orchestrator)
+│   │   ├── shell/
+│   │   │   ├── AppRootContainer.vue # Root 容器层：展开态、宿主视口/定位边界、全局 overlay
+│   │   │   └── LuminaShellRoot.vue  # 内部 Shell 编排层：header/body 与 traditional/freeform 分支
 │   │   └── index.ts            # Extension 挂载点与样式隔离引导
 │   └── i18n/                   # 国际化语言包 (zh-CN, en)
 ├── luminaweave-server/         # 💾 独立后端存储服务 (Node.js)
@@ -112,7 +120,9 @@ d:\LuminaWeave\
 | **项目根目录** | `dev-start.ps1` | 一键启动开发环境，同步运行前端热更新与后端服务。 |
 | | `sync-projects.ps1` | 自动化子项目同步工具，维护多个独立仓库的一致性。 |
 | **Extension 入口** | `src/index.ts` | 插件生命周期底座，处理 Shadow DOM 容器挂载与样式沙盒隔离。 |
-| | `src/App.vue` | 视觉根组件，负责面板状态管理、侧边栏悬浮、右侧 Slot 调度，以及当前桌面模式的壳层分支、preset 与 token 注入。 |
+| | `src/App.vue` | 运行时编排入口，负责状态组装、composable 调用、事件绑定，并连接 root 容器层与内部 shell 编排层。 |
+| | `src/shell/AppRootContainer.vue` | Root 容器层，负责展开/收起切换、宿主视口与 root 定位边界、fullscreen frame，以及全局 overlay 挂载。 |
+| | `src/shell/LuminaShellRoot.vue` | 内部 Shell 编排层，负责 traditional/freeform 分支、Header/Body 组织，以及冲突/同步 viewer 挂载。 |
 | | `src/theme/` | Desktop Mode 注册中心与壳层协议，负责 `shell.kind / navigation / surface` 三层解析，并向下兼容 design token、surface skin 与受控 renderer variant。当前已额外覆盖 Discord 角色卡侧栏与频道式主界面所需的导航变量。 |
 | **微内核 (API Core)** | `src/api/index.ts` | 全局 API 单例导出，提供跨组件的统一通讯网关。 |
 | | `src/api/llmEngine.ts` | 请求与生成控制核心，桥接后端基于官方 OpenAI SDK 的生成路由。 |
@@ -173,6 +183,7 @@ d:\LuminaWeave\
 本项目本地采用 **Monorepo (单体仓库)** 结构，但支持将子项目独立发布至 GitHub：
 - **本地仓库**: `D:\LuminaWeave` (根目录) 统一管理所有代码。
 - **发布策略**: 使用 `git subtree` 将子项目文件夹（如 `luminaweave-extension`）同步至独立的远程仓库。
+- **共享层位置**: `Shared` 的唯一源码位置现为 `luminaweave-extension/shared/`，以确保 extension 独立仓库中也能完整公开共享协议与基础引擎实现。
 - **同步工具**: 可在项目根目录运行 `. .\sync-projects.ps1` 进行一键推送/拉取。
 
 ### 2. 冲突预防与构建产物

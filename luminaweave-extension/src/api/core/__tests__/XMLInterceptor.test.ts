@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
 import { XMLInterceptor, BuiltinXMLTags } from '../XMLInterceptor';
 import { globalPromptRegistry, PromptSlot, STIdentifier } from '../PromptRegistry';
-import { globalXMLTagRegistry } from '../../../../../shared/XMLTagRegistry.js';
+import { globalXMLTagRegistry } from '@shared/XMLTagRegistry.js';
 
 describe('XMLInterceptor stream semantics', () => {
     it('should derive stable prelude and reply states from the same raw buffer', () => {

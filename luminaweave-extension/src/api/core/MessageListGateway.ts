@@ -1,4 +1,4 @@
-import { LuminaChatMessage } from '../../../../shared/LuminaMessage.js';
+import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { STClient, STMessageUpdate } from './st-adapter/STClient.js';
 import { STProtocol } from './st-adapter/STProtocol.js';
 
@@ -9,7 +9,19 @@ export type STMessageSnapshot = {
 };
 
 export class MessageListGateway {
+    private static createEmptySnapshot(): STMessageSnapshot {
+        return {
+            raw: [],
+            lumina: [],
+            idToIndex: new Map()
+        };
+    }
+
     static getSnapshotSync(): STMessageSnapshot {
+        if (!STClient.hasActiveLiveChat()) {
+            return this.createEmptySnapshot();
+        }
+
         const raw = STClient.getRawMessages({ includeSwipes: true }) as ChatMessage[];
         const idToIndex = new Map<string, number>();
 
@@ -34,6 +46,10 @@ export class MessageListGateway {
     }
 
     static async getSnapshot(options: { ensureStableIds?: boolean } = {}): Promise<STMessageSnapshot> {
+        if (!STClient.hasActiveLiveChat()) {
+            return this.createEmptySnapshot();
+        }
+
         let raw = STClient.getRawMessages({ includeSwipes: true }) as ChatMessage[];
         if (options.ensureStableIds) {
             const changed = await this.ensureStableIds(raw);

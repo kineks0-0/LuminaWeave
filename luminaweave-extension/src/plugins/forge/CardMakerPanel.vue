@@ -14,7 +14,7 @@
       </header>
 
       <div class="main-layout" :class="{ 'has-embedded-sidebar': showEmbeddedSidebar, 'is-detached-workspace': isDetachedWorkspace }">
-        <section class="chat-section" :class="{ 'is-detached-workspace': isDetachedWorkspace }">
+        <section class="chat-section" data-lw-ime-scope :class="{ 'is-detached-workspace': isDetachedWorkspace }">
           <div v-if="showWorkspaceTopbar" class="window-handle" aria-hidden="true"></div>
 
           <div v-if="isMobileLayout" class="mobile-aux-strip">
@@ -113,7 +113,7 @@
           </div>
 
           <div class="content-shell">
-            <div class="message-scroller scroll-container" ref="msgScroller">
+            <div class="message-scroller scroll-container" ref="msgScroller" data-lw-ime-scroll-root>
               <div v-if="!store.entryMode" class="entry-mode-stage">
                 <div class="entry-mode-card">
                   <span class="entry-mode-kicker">A.U.T.O Flow</span>
@@ -176,7 +176,7 @@
               </div>
             </div>
 
-            <div class="composer-section" :class="{ 'is-collapsed': isComposerCollapsed }">
+            <div class="composer-section" data-lw-ime-anchor :class="{ 'is-collapsed': isComposerCollapsed }">
               <template v-if="isComposerCollapsed">
                 <div class="composer-collapsed-bar">
                   <div class="composer-inline-meta">
@@ -205,7 +205,9 @@
                       v-model="store.input"
                       :disabled="store.isGenerating"
                       placeholder="Ask Forge anything about this workspace"
-                      @keydown.enter.prevent="handleEnter"
+                      @keydown="handleComposerKeydown"
+                      @compositionstart="composerImeGuard.handleCompositionStart"
+                      @compositionend="composerImeGuard.handleCompositionEnd"
                     />
 
                     <div class="composer-toolbar">
@@ -391,6 +393,7 @@ import ForgeMessageRenderer from './ForgeMessageRenderer.vue';
 import ForgeWindowActions from './ForgeWindowActions.vue';
 import SeedSnippetSelector from './SeedSnippetSelector.vue';
 import { useForgeSeedImport } from './useForgeSeedImport';
+import { useImeSubmitGuard } from '../../composables/useImeSubmitGuard.js';
 import type { ForgeDetailMode } from '../../types/ForgeStructuredTypes';
 import type { ForgeAuxPanelKind, ForgeVisiblePhase } from '../../types/ForgeWorkflowTypes.js';
 import type { SidebarMode } from '../../composables/useResponsiveLayout';
@@ -413,6 +416,7 @@ const workspaceActions = inject<{
 const msgScroller = ref<HTMLElement | null>(null);
 const composerMenuRef = ref<HTMLElement | null>(null);
 const composerTextarea = ref<HTMLTextAreaElement | null>(null);
+const composerImeGuard = useImeSubmitGuard({ debugLabel: 'ForgeComposer' });
 const isTopbarCollapsed = ref(false);
 const isComposerCollapsed = ref(false);
 const isComposerMenuOpen = ref(false);
@@ -664,8 +668,14 @@ const toggleComposerCollapsed = () => {
     void nextTick(() => composerTextarea.value?.focus());
 };
 
-const handleEnter = (e: KeyboardEvent) => {
-    if (e.shiftKey) return;
+const handleComposerKeydown = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' || event.shiftKey) return;
+    if (composerImeGuard.shouldIgnoreSubmit(event)) return;
+    event.preventDefault();
+    console.debug('[LuminaWeave][ForgeComposer] Triggering composer submit.', {
+        trigger: 'enter',
+        textLength: store.input.trim().length
+    });
     store.generate();
 };
 

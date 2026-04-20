@@ -9,11 +9,11 @@ import {
     IPresetService,
     IStoreService,
     IStreamingHandle 
-} from '../../../../shared/api/IBridge';
-import { API_BASE, API_ROUTES } from '../../../../shared/ApiEndpoints';
+} from '@shared/api/IBridge';
+import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints';
 import { STClient } from '../core/st-adapter/STClient';
-import type { ConversationDocument, ConversationMutation } from '../../../../shared/ConversationTypes';
-import { migrateLegacyChatArray, migrateLegacyForgeSession } from '../../../../shared/ConversationMigration';
+import type { ConversationDocument, ConversationMutation } from '@shared/ConversationTypes';
+import { migrateLegacyChatArray, migrateLegacyForgeSession } from '@shared/ConversationMigration';
 
 /**
  * HTTP 流式句柄实现
@@ -134,6 +134,11 @@ export class HttpBridgeAdapter implements ILuminaBridge {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(mutation)
+                })).json();
+            },
+            async deleteConversation(id: string) {
+                return (await self.safeFetch(`${API_BASE.LUMINA_WEAVE}${API_ROUTES.CONVERSATION.DELETE(id)}`, {
+                    method: 'DELETE'
                 })).json();
             },
             async getTransactions(id: string, query: any) {

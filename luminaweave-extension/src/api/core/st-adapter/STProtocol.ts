@@ -1,4 +1,4 @@
-import { STSwipeInfo, LuminaChatMessage, MessageUtils } from '../../../../../shared/LuminaMessage.js';
+import { STSwipeInfo, LuminaChatMessage, MessageUtils } from '@shared/LuminaMessage.js';
 import { BuiltinXMLTags, XMLInterceptor, globalXMLInterceptor } from '../XMLInterceptor.js';
 import { StoredChatMessage } from '../types.js';
 

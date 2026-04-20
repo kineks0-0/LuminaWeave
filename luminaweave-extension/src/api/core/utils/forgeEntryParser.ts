@@ -1,4 +1,4 @@
-import { tokenize } from '../../../../../shared/TagTokenizer.js';
+import { tokenize } from '@shared/TagTokenizer.js';
 
 export type ForgeEntryAction = 'upsert' | 'delete';
 

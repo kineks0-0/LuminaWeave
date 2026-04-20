@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { StorageService } from '../StorageService.js';
-import { createEmptyConversationDocument } from '../../../shared/ConversationTypes.js';
+import { createEmptyConversationDocument } from '@shared/ConversationTypes.js';
 
 describe('StorageService', () => {
     let storage: StorageService;

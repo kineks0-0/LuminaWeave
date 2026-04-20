@@ -2,7 +2,7 @@ import { NexusClient } from './NexusClient.js';
 import { GenerationSession } from './GenerationSession.js';
 import { CleanedMessage, NexusNode, NexusStatusResponse } from '../../types/nexus.js';
 import { lwStorage } from '../storage.js';
-import { API_BASE, API_ROUTES } from '../../../../shared/ApiEndpoints.js';
+import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
 import { STClient } from './st-adapter/STClient.js';
 
 export interface TaskCallbacks {

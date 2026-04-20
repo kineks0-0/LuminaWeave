@@ -138,7 +138,7 @@
 
 12. **多端解耦与宿主中立架构 (Host-Agnostic Infrastructure) [NEW v6.0]**
     - **战略目标**：解决 LuminaWeave 移动端（Android）发布的通信壁垒。在移动端环境下，浏览器跨域限制与后端服务的本地暴露方式与桌面端完全不同，必须实现逻辑与传输的彻底解耦。
-    - **逻辑同构化 (Isomorphic Core) [NEW v6.0]**：将同步差异比对 (`SyncEngine`) 与事务序列管理 (`TransactionEngine`) 算法从前端扩展层下沉至 `shared/` 层。
+    - **逻辑同构化 (Isomorphic Core) [NEW v6.0]**：将同步差异比对 (`SyncEngine`) 与事务序列管理 (`TransactionEngine`) 算法从前端扩展层下沉至 `luminaweave-extension/shared/` 共享层。
       - **算法一致性**：确保前端（JS）、后端（Node.js）或原生 Bridge 按照完全相同的逻辑判定消息一致性。
       - **后端无关性 (Backend-Agnostic)**：前端 Manager 层不再感知具体的后端类型，而是通过注入不同的 Bridge 实现来完成物理写入，核心状态机始终由共享引擎维护。
     - **Bridge 适配层**：定义一套抽象的“服务桥接器”接口。前端业务代码（同步、生成、持久化）只调用桥接器，不再感知底层是 `HTTP/SSE` 还是 `Tauri/Native Invoke`。
@@ -154,6 +154,9 @@ LuminaWeave 采用现代化极客风格，以 **Lumina Blue (幻光蓝)** 为核
 - **传统桌面（Traditional Desktop）[UPDATED v6.0-dev]**：在桌面端保持顶部主导航 + 主内容区 + 辅助右栏；在移动端，原“小窗 / 辅助窗口”统一改为临时标签页打开，避免窄视口下的双栏挤压。
 - **自由工作台（Stage Manager Workspace）[NEW v6.0-dev]**：自由工作台不再只是横向多窗，而是向 iPadOS 台前调度收敛。当前舞台支持窗口自由拖拽、二维调整大小、窗口覆盖、前台聚焦置顶，以及更明确的窗口进场 / 关闭过渡与细微阻尼收尾动画；窗口只受舞台边界约束，不再执行边缘磁吸。左侧最近舞台组（Stage Strip）与底部 Dock 默认不常驻，改为条件触发或手动展开。移动端下窗口默认更接近全幅工作卡片，顶部拖拽区域与底部切换横条按触控手势优化。关闭全部窗口后保持空舞台而不是自动弹出启动台。
 - **桌面模式（Desktop Mode）[UPDATED v6.0-dev]**：前端主题已从“全局浅深色 + 局部聊天配色”演进为平台级桌面模式。当前用户态采用单轴模型，正式主状态为 `activeDesktopMode`；`traditional / freeform` 仅作为桌面模式内部的壳层种类。桌面模式通过 `shell.kind + navigation preset + surface preset` 决定整套工作方式、导航结构、主区与辅助区承载方式，`design tokens`、`surface skins` 与受控 `renderer variants` 仅作为表层落地层。桌面模式不得越权修改核心会话状态机、同步协议与持久化逻辑。`Discord` 与 `传统桌面`、`自由工作台` 同级，并以独立桌面模式接管频道式聊天主区、角色轨与深色侧栏结构。
+- **Discord 角色频道直建对话 [NEW v6.0-dev]**：Discord 角色频道的每个角色分组都支持直接新建对话，而不是仅打开已有历史。桌面侧栏与移动端角色 sheet 复用同一交互；创建成功后系统立即切入该角色的新空聊天，并把空会话写入统一 `ConversationDocument`，确保角色频道、会话索引与世界线视图能马上识别这段新对话。
+- **Discord 角色频道历史会话管理 [NEW v6.0-dev]**：当角色历史会话较多时，角色频道默认只展示最近几条，并提供“查看更多 / 收起”以控制侧栏长度。每条历史会话还支持直接重命名和删除，且这些动作继续走统一 `ConversationService` 收口，同步更新宿主 chat 文件、统一会话索引与 `ConversationDocument` 持久化状态。
+- **Discord 角色频道宿主接口分层 [UPDATED v6.0-dev]**：角色频道不再把宿主数据读取、角色分组拼装与 UI 展示混在同一层；前端开始以 `CharacterChannelService` 作为角色频道的意图/状态中枢，并通过 `ChatSessionDirectoryPort + ChatHistoryAccessPort` 分离“会话管理能力”与“宿主读取能力”。当前会话读取与管理都统一回退到 ST/Helper 路径，原生宿主读取 ABI 暂时不启用，但接口边界保留不变。
 - **Forge 工作台态（Forge Workspace Mode）[UPDATED v6.0-dev]**：制卡主界面进一步向 Codex 风格工作台靠拢，但前台结构已按宿主模式分流：
   - 自由工作台：Forge 使用“主对话窗 + 辅助区双态”。同一工作会话可在 `内嵌右栏` 与 `拆出小窗` 之间切换，并记住上次选择；拆出态下 `虚拟世界书 / 记忆管理 / 审阅中心 / 导出发布 / 后置轨` 作为独立 workspace window 打开，再次点击同类入口只做聚焦，不重复建窗。
   - 传统桌面：不在全局 Shell 漂浮 Forge 小窗，只在 Forge 前台内部显示辅助面板切换条；同一时刻只显示一个同级辅助区。

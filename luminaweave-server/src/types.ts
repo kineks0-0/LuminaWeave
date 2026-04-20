@@ -1,4 +1,4 @@
-import type { LuminaChatMessage } from '../../shared/LuminaMessage.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 
 export type StreamStatus = 'idle' | 'running' | 'success' | 'error' | 'aborted';
 export type TransactionStatus = 'pending' | 'running' | 'committed' | 'aborted' | 'rolled_back';

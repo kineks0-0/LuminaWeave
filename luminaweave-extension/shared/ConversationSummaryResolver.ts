@@ -16,6 +16,22 @@ const resolveCharacterMeta = (
         };
     }
 
+    const persistedCharacterMeta = document.pluginState.chat;
+    const persistedCharacterName = cleanPreview(persistedCharacterMeta?.characterName || '');
+    if (
+        persistedCharacterMeta?.characterId != null
+        || persistedCharacterName
+        || typeof persistedCharacterMeta?.characterAvatarUrl === 'string'
+    ) {
+        return {
+            characterId: persistedCharacterMeta?.characterId ?? null,
+            characterName: persistedCharacterName,
+            characterAvatarUrl: typeof persistedCharacterMeta?.characterAvatarUrl === 'string'
+                ? persistedCharacterMeta.characterAvatarUrl
+                : null
+        };
+    }
+
     return {
         characterId: null,
         characterName: '',
