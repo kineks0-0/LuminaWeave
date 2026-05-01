@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-unified" :style="unifiedSkinStyle">
+  <div class="settings-unified" :data-skin-variant="unifiedVariant || 'default'" :style="unifiedSkinStyle">
     <!-- 对话同步与系统权限管理 -->
     <div class="plugin-settings-block permissions-block lw-card">
       <div class="block-header">
@@ -292,37 +292,37 @@
         <!-- 1. 全量区设置 -->
         <div class="dcc-section">
           <div class="dcc-section-label">全量发送范围 (Full Content)</div>
-          <SettingControl v-if="chatManifest['contextControl.fullMode']"
+          <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullMode']"
             pluginId="lumina-chat" settingKey="contextControl.fullMode" :config="chatManifest['contextControl.fullMode']" />
-          <SettingControl v-if="chatManifest['contextControl.fullValueCount']"
+          <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullValueCount']"
             pluginId="lumina-chat" settingKey="contextControl.fullValueCount" :config="chatManifest['contextControl.fullValueCount']" />
-          <SettingControl v-if="chatManifest['contextControl.fullValueToken']"
+          <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullValueToken']"
             pluginId="lumina-chat" settingKey="contextControl.fullValueToken" :config="chatManifest['contextControl.fullValueToken']" />
-          <SettingControl v-if="chatManifest['contextControl.fullValueChar']"
+          <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullValueChar']"
             pluginId="lumina-chat" settingKey="contextControl.fullValueChar" :config="chatManifest['contextControl.fullValueChar']" />
         </div>
         
         <!-- 2. 概览区设置 -->
         <div class="dcc-section dcc-section-summary">
           <div class="dcc-section-label">概览发送范围 (Summary/Overview)</div>
-          <SettingControl v-if="chatManifest['contextControl.summaryMode']"
+          <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryMode']"
             pluginId="lumina-chat" settingKey="contextControl.summaryMode" :config="chatManifest['contextControl.summaryMode']" />
-          <SettingControl v-if="chatManifest['contextControl.summaryValueCount']"
+          <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryValueCount']"
             pluginId="lumina-chat" settingKey="contextControl.summaryValueCount" :config="chatManifest['contextControl.summaryValueCount']" />
-          <SettingControl v-if="chatManifest['contextControl.summaryValueToken']"
+          <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryValueToken']"
             pluginId="lumina-chat" settingKey="contextControl.summaryValueToken" :config="chatManifest['contextControl.summaryValueToken']" />
-          <SettingControl v-if="chatManifest['contextControl.summaryValueChar']"
+          <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryValueChar']"
             pluginId="lumina-chat" settingKey="contextControl.summaryValueChar" :config="chatManifest['contextControl.summaryValueChar']" />
         </div>
         
         <!-- 3. 进阶参数 -->
         <div class="dcc-section dcc-section-advanced">
-          <SettingControl v-if="chatManifest['contextControl.tokenMaxFloat']"
+          <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.tokenMaxFloat']"
             pluginId="lumina-chat" settingKey="contextControl.tokenMaxFloat" :config="chatManifest['contextControl.tokenMaxFloat']" />
           <div class="dcc-paired-settings">
-            <SettingControl v-if="directorManifest['fullSplit']"
+            <SurfaceOutlet contract-id="settings.control" v-if="directorManifest['fullSplit']"
               pluginId="lumina-director" settingKey="fullSplit" :config="directorManifest['fullSplit']" />
-            <SettingControl v-if="directorManifest['fullFloating']"
+            <SurfaceOutlet contract-id="settings.control" v-if="directorManifest['fullFloating']"
               pluginId="lumina-director" settingKey="fullFloating" :config="directorManifest['fullFloating']" />
           </div>
         </div>
@@ -353,7 +353,7 @@
         <div v-if="activeDesktopModeDescription" class="desktop-mode-summary">
           {{ activeDesktopModeDescription }}
         </div>
-        <SettingControl
+        <SurfaceOutlet contract-id="settings.control"
           v-for="key in activeDesktopModeBlock.commonKeys"
           :key="key"
           :pluginId="activeDesktopModeBlock.pluginId"
@@ -381,7 +381,7 @@
       </div>
 
       <div class="block-content">
-        <SettingControl v-for="key in block.commonKeys" :key="key" :pluginId="block.pluginId" :settingKey="key"
+        <SurfaceOutlet contract-id="settings.control" v-for="key in block.commonKeys" :key="key" :pluginId="block.pluginId" :settingKey="key"
           :config="block.manifest[key]" />
         <component
           v-if="block.inlineComponent"
@@ -396,17 +396,17 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { pluginManager } from '../../core/PluginManager';
-import SettingControl from './SettingControl.vue';
+import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 import NexusPresetManager from './NexusPresetManager.vue';
 import { activeSettings, useSettings } from './useSettings';
-import { lwStorage } from '../../api/storage';
+import { settingsDomainService } from '../../api/services/SettingsDomainService';
 import { LuminaWeaveAPI } from '../../api/index';
 import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry';
 import { useComponentSkin } from '../../theme/useComponentSkin';
 import { getActiveDesktopModeIdFromSettings, getDesktopModeOrDefault, getDesktopModeSettingsPluginId } from '../../theme/themeRegistry';
 
 const { initSettings } = useSettings();
-const { cssVars } = useComponentSkin('settings.unified');
+const { cssVars, variant: unifiedVariant } = useComponentSkin('settings.unified');
 const unifiedSkinStyle = computed(() => cssVars.value);
 const activeThemeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings));
 
@@ -417,7 +417,7 @@ const openDetailedDiff = () => {
 defineEmits<{
   (e: 'open-detail', pluginId: string): void
 }>();
-const isIndependent = ref(lwStorage.useIndependentGlobalStorage);
+const isIndependent = ref(settingsDomainService.isIndependentGlobalStorageEnabled());
 
 const storageState = computed(() => {
   const isTauri = (window as any).__TAURITAVERN__;
@@ -457,7 +457,7 @@ const handleExport = () => {
   const keys = getKeysFromScope();
   
   keys.forEach(key => {
-    const val = lwStorage.get(key, undefined, 'Global');
+    const val = settingsDomainService.getGlobalValue(key, undefined);
     if (val !== undefined) data[key] = val;
   });
 
@@ -500,7 +500,7 @@ const handleImportFile = (e: Event) => {
       }
 
       if (confirm(`检测到 ${foundKeys.length} 项有效配项，确定要导入并覆盖当前设置吗？`)) {
-        await (lwStorage as any).importData(data, foundKeys);
+        await settingsDomainService.importData(data, foundKeys);
         (window as any).LuminaWeave?.showToast('配置导入成功！', 'success');
         // 刷新当前页面的响应式变量
         refreshFromStorage();
@@ -516,17 +516,17 @@ const handleImportFile = (e: Event) => {
 };
 
 const refreshFromStorage = () => {
-  filterChatReply.value = lwStorage.get('lumina-chat.filterChatReply', false, 'Global');
-  allowTopLevelInFilter.value = lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global');
-  implicitThinkingInFilter.value = lwStorage.get('lumina-chat.implicitThinkingInFilter', false, 'Global');
-  aggressiveThinking.value = lwStorage.get('lumina-chat.aggressiveThinking', false, 'Global');
-  unlimitedResponse.value = lwStorage.get('lumina-chat.unlimitedResponse', false, 'Global');
-  thinkingDisplayMode.value = lwStorage.get('lumina-settings.thinkingDisplayMode', 'collapsible', 'Global');
-  thinkingAutoExpand.value = Boolean(lwStorage.get('lumina-settings.thinkingAutoExpand', true, 'Global'));
+  filterChatReply.value = settingsDomainService.getGlobalValue('lumina-chat.filterChatReply', false);
+  allowTopLevelInFilter.value = settingsDomainService.getGlobalValue('lumina-chat.allowTopLevelInFilter', true);
+  implicitThinkingInFilter.value = settingsDomainService.getGlobalValue('lumina-chat.implicitThinkingInFilter', false);
+  aggressiveThinking.value = settingsDomainService.getGlobalValue('lumina-chat.aggressiveThinking', false);
+  unlimitedResponse.value = settingsDomainService.getGlobalValue('lumina-chat.unlimitedResponse', false);
+  thinkingDisplayMode.value = settingsDomainService.getGlobalValue('lumina-settings.thinkingDisplayMode', 'collapsible');
+  thinkingAutoExpand.value = Boolean(settingsDomainService.getGlobalValue('lumina-settings.thinkingAutoExpand', true));
 };
 
 const downloadJson = () => {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify((lwStorage as any).globalIndependentData, null, 2));
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settingsDomainService.getGlobalSettingsSnapshot(), null, 2));
   const downloadAnchorNode = document.createElement('a');
   downloadAnchorNode.setAttribute("href", dataStr);
   downloadAnchorNode.setAttribute("download", "LuminaWeave.json");
@@ -567,46 +567,46 @@ const currentApi = ref<string>('');
 const genPresets = ref<string[]>([]);
 const activeGenPreset = ref<string>('');
 
-const filterChatReply = ref(lwStorage.get('lumina-chat.filterChatReply', false, 'Global'));
+const filterChatReply = ref(settingsDomainService.getGlobalValue('lumina-chat.filterChatReply', false));
 
 const onFilterChatReplyChange = () => {
-  lwStorage.set('lumina-chat.filterChatReply', filterChatReply.value, 'Global');
+  void settingsDomainService.setGlobalValue('lumina-chat.filterChatReply', filterChatReply.value);
 };
 
-const allowTopLevelInFilter = ref(lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global'));
+const allowTopLevelInFilter = ref(settingsDomainService.getGlobalValue('lumina-chat.allowTopLevelInFilter', true));
 
 const onAllowTopLevelChange = () => {
-  lwStorage.set('lumina-chat.allowTopLevelInFilter', allowTopLevelInFilter.value, 'Global');
+  void settingsDomainService.setGlobalValue('lumina-chat.allowTopLevelInFilter', allowTopLevelInFilter.value);
 };
 
-const implicitThinkingInFilter = ref(lwStorage.get('lumina-chat.implicitThinkingInFilter', false, 'Global'));
+const implicitThinkingInFilter = ref(settingsDomainService.getGlobalValue('lumina-chat.implicitThinkingInFilter', false));
 
 const onImplicitThinkingChange = () => {
-  lwStorage.set('lumina-chat.implicitThinkingInFilter', implicitThinkingInFilter.value, 'Global');
+  void settingsDomainService.setGlobalValue('lumina-chat.implicitThinkingInFilter', implicitThinkingInFilter.value);
 };
 
-const aggressiveThinking = ref(lwStorage.get('lumina-chat.aggressiveThinking', false, 'Global'));
+const aggressiveThinking = ref(settingsDomainService.getGlobalValue('lumina-chat.aggressiveThinking', false));
 
 const onAggressiveThinkingChange = () => {
-  lwStorage.set('lumina-chat.aggressiveThinking', aggressiveThinking.value, 'Global');
+  void settingsDomainService.setGlobalValue('lumina-chat.aggressiveThinking', aggressiveThinking.value);
 };
 
-const unlimitedResponse = ref(lwStorage.get('lumina-chat.unlimitedResponse', false, 'Global'));
+const unlimitedResponse = ref(settingsDomainService.getGlobalValue('lumina-chat.unlimitedResponse', false));
 
 const onUnlimitedResponseChange = () => {
-  lwStorage.set('lumina-chat.unlimitedResponse', unlimitedResponse.value, 'Global');
+  void settingsDomainService.setGlobalValue('lumina-chat.unlimitedResponse', unlimitedResponse.value);
 };
 
-const thinkingDisplayMode = ref(lwStorage.get('lumina-settings.thinkingDisplayMode', 'collapsible', 'Global'));
+const thinkingDisplayMode = ref(settingsDomainService.getGlobalValue('lumina-settings.thinkingDisplayMode', 'collapsible'));
 
 const onThinkingDisplayModeChange = () => {
-  lwStorage.set('lumina-settings.thinkingDisplayMode', thinkingDisplayMode.value, 'Global');
+  void settingsDomainService.setGlobalValue('lumina-settings.thinkingDisplayMode', thinkingDisplayMode.value);
 };
 
-const thinkingAutoExpand = ref(Boolean(lwStorage.get('lumina-settings.thinkingAutoExpand', true, 'Global')));
+const thinkingAutoExpand = ref(Boolean(settingsDomainService.getGlobalValue('lumina-settings.thinkingAutoExpand', true)));
 
 const onThinkingAutoExpandChange = () => {
-  lwStorage.set('lumina-settings.thinkingAutoExpand', thinkingAutoExpand.value, 'Global');
+  void settingsDomainService.setGlobalValue('lumina-settings.thinkingAutoExpand', thinkingAutoExpand.value);
 };
 
 // ==== 子插件权限状态 ====
@@ -627,7 +627,7 @@ const refreshPermissions = () => {
 };
 
 const togglePluginPermission = (p: any) => {
-  lwStorage.set(`lumina-settings.plugins.${p.id}.promptEnabled`, p.enabled, 'Global');
+  void settingsDomainService.setGlobalValue(`lumina-settings.plugins.${p.id}.promptEnabled`, p.enabled);
 };
 
 
@@ -793,7 +793,7 @@ const unifiedBlocks = computed(() => {
 
 <style scoped>
 .settings-unified {
-  padding: var(--lw-panel-padding);
+  padding: var(--lw-settings-unified-padding, var(--lw-panel-padding));
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
   gap: var(--lw-settings-grid-gap, var(--lw-item-gap));
@@ -1280,6 +1280,47 @@ const unifiedBlocks = computed(() => {
   background: var(--lw-border-subtle);
   margin-left: 10px;
   opacity: 0.5;
+}
+
+.settings-unified[data-skin-variant='telegram'] {
+  padding: var(--lw-settings-unified-padding, clamp(18px, 3vw, 32px));
+  gap: 18px;
+}
+
+.settings-unified[data-skin-variant='telegram'] .plugin-settings-block.lw-card {
+  border-color: var(--lw-settings-block-border, var(--lw-border-subtle));
+  background: var(--lw-settings-block-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent));
+  border-radius: 18px;
+  box-shadow: var(--lw-settings-block-shadow, 0 10px 24px rgba(44, 92, 130, 0.08));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.settings-unified[data-skin-variant='telegram'] .block-header {
+  border-bottom-color: var(--lw-border-subtle);
+}
+
+.settings-unified[data-skin-variant='telegram'] .plugin-icon-wrap,
+.settings-unified[data-skin-variant='telegram'] .sync-meta,
+.settings-unified[data-skin-variant='telegram'] .scope-selector,
+.settings-unified[data-skin-variant='telegram'] .permission-item,
+.settings-unified[data-skin-variant='telegram'] .radio-label,
+.settings-unified[data-skin-variant='telegram'] .dcc-section-advanced,
+.settings-unified[data-skin-variant='telegram'] .desktop-mode-summary {
+  border-color: var(--lw-settings-inner-card-border, var(--lw-border-subtle));
+  background: var(--lw-settings-inner-card-bg, color-mix(in srgb, var(--lw-surface-container) 72%, transparent));
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.settings-unified[data-skin-variant='telegram'] .lw-btn,
+.settings-unified[data-skin-variant='telegram'] .icon-only-btn {
+  min-height: 40px;
+  border-radius: 999px;
+}
+
+.settings-unified[data-skin-variant='telegram'] .setting-item {
+  min-height: 44px;
 }
 
 @media (max-width: 920px) {

@@ -1,4 +1,5 @@
 import type {
+    ForgeCollectionMode,
     ForgeDetailMode,
     ForgeEntryMode,
     ForgeLayer,
@@ -19,7 +20,7 @@ export type ForgeVisiblePhase =
     | 'build'
     | 'finalize';
 
-export type ForgeAuxPanelKind = 'lorebook' | 'memory' | 'review' | 'export' | 'post_tracks' | 'test_chat';
+export type ForgeAuxPanelKind = 'lorebook' | 'memory' | 'review' | 'export' | 'post_tracks' | 'test_chat' | 'dev_requests';
 
 export type ForgeWorkflowAction =
     | 'choose_detail_mode'
@@ -34,6 +35,7 @@ export interface ForgeWorkflowSnapshot {
     stage: ForgeStage;
     visiblePhase: ForgeVisiblePhase;
     detailMode: ForgeDetailMode | null;
+    collectionMode: ForgeCollectionMode;
     activeLayer: ForgeLayer;
     subLayer: ForgeLayer | null;
     promptMode: ForgeWorkflowPromptMode;
@@ -65,6 +67,7 @@ export interface ForgeWorkflowTurnInput {
     hasReferenceChat: boolean;
     activeLeafId: string | null;
     detailMode?: ForgeDetailMode | null;
+    collectionMode?: ForgeCollectionMode | null;
     entryMode?: ForgeEntryMode | null;
     activeLayer?: ForgeLayer | null;
     completedLayers?: ForgeLayer[];

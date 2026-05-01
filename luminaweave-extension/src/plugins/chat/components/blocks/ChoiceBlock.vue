@@ -64,7 +64,7 @@ const handleChoice = (opt: ChoiceOption) => {
     lwApi.emit('FOCUS_MAIN_INPUT', { text });
   } else {
     // 默认/生成模式：直接发送并触发生成
-    lwApi.sendMessage(text);
+    void lwApi.services.generation.sendMessage(text);
   }
 };
 </script>

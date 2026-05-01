@@ -230,7 +230,11 @@ export class XMLInterceptor extends BaseXMLInterceptor {
                         const content = finished.contentParts.join('');
                         const fullMatch = text.slice(finished.openToken.start, token.end);
                         const lifecycle = this.getLifecycle(canonicalTag);
-                        const result = this.resolveExtensionTagOutput(canonicalTag, lifecycle!, content, fullMatch);
+
+                        const isInsideThinking = stack.some(s => ['thinking', 'think', 'thought'].includes(s.tagNameLower));
+                        const result = isInsideThinking
+                            ? fullMatch
+                            : this.resolveExtensionTagOutput(canonicalTag, lifecycle!, content, fullMatch);
 
                         if (stack.length > 0) stack[stack.length - 1].contentParts.push(result);
                         else outputParts.push(result);
@@ -243,7 +247,8 @@ export class XMLInterceptor extends BaseXMLInterceptor {
             } else if (token.type === 'self_closing_tag') {
                 const canonicalTag = this.resolveCanonicalTag(token.value);
                 const lifecycle = this.getLifecycle(canonicalTag);
-                if (lifecycle && canonicalTag) {
+                const isInsideThinking = stack.some(s => ['thinking', 'think', 'thought'].includes(s.tagNameLower));
+                if (lifecycle && canonicalTag && !isInsideThinking) {
                     const result = this.resolveExtensionTagOutput(canonicalTag, lifecycle, '', text.slice(token.start, token.end));
                     if (top) top.contentParts.push(result);
                     else outputParts.push(result);

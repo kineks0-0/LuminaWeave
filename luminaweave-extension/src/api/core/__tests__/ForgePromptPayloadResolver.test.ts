@@ -33,6 +33,7 @@ describe('ForgePromptPayloadResolver', () => {
             stage: 'rewrite_export',
             visiblePhase: 'output_delivery',
             detailMode: 'detailed',
+            collectionMode: 'conversation',
             activeLayer: 'output',
             subLayer: 'output',
             promptMode: 'planner',
@@ -55,6 +56,7 @@ describe('ForgePromptPayloadResolver', () => {
 
         expect(result.stage).toBe('rewrite_export');
         expect(result.visiblePhase).toBe('output_delivery');
+        expect(result.collectionMode).toBe('conversation');
         expect(result.commitReadyCount).toBe('2');
         expect(result.requiresUserDecision).toBe(true);
     });
@@ -63,6 +65,15 @@ describe('ForgePromptPayloadResolver', () => {
         const result = ForgePromptPayloadResolver.buildStructuredStateTemplateInput({
             activeFormId: 'role_core_profile',
             activeMessageFormId: null,
+            submitConfigs: {
+                'msg-1': {
+                    label: '提交这些偏好',
+                    updatedAt: 10
+                }
+            },
+            submittedScopes: {
+                'msg-2': 20
+            },
             lastUpdatedAt: 123456,
             forms: {
                 role_core_profile: {
@@ -84,5 +95,7 @@ describe('ForgePromptPayloadResolver', () => {
         expect(result.formsDetail).toContain('name=林雾');
         expect(result.formsDetail).toContain('identity=失忆的教会审讯官');
         expect(result.formsDetail).toContain('missing=background');
+        expect(result.submitConfigsDigest).toContain('msg-1:提交这些偏好');
+        expect(result.submittedScopesDigest).toContain('msg-2');
     });
 });

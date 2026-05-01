@@ -3,6 +3,7 @@ import { activeSettings, useSettings } from '../plugins/settings/useSettings';
 import {
     DEFAULT_THEME_PACK_ID,
     getActiveDesktopModeIdFromSettings,
+    getDesktopModeSettingStorageKey,
     getThemePackOrDefault,
     resolveComponentSkin
 } from './themeRegistry';
@@ -15,6 +16,10 @@ const mediaQuery = typeof window !== 'undefined'
 const resolveAppearance = (): ResolvedThemeAppearance => {
     const themeId = getActiveDesktopModeIdFromSettings(activeSettings) || DEFAULT_THEME_PACK_ID;
     const themePack = getThemePackOrDefault(themeId);
+    const desktopAppearance = activeSettings[getDesktopModeSettingStorageKey(themeId, 'appearanceMode')];
+    if (desktopAppearance === 'light' || desktopAppearance === 'dark') {
+        return desktopAppearance;
+    }
     if (themePack.preferredAppearance === 'light' || themePack.preferredAppearance === 'dark') {
         return themePack.preferredAppearance;
     }

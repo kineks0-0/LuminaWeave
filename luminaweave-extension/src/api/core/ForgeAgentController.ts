@@ -19,6 +19,18 @@ export {
     FORGE_PLANNER_INTENT_APPLIED
 };
 
+export type ForgeIsolatedRewriteRunner = (
+    instruction: string,
+    entryId: string,
+    originalContent: string
+) => Promise<void>;
+
+let forgeIsolatedRewriteRunner: ForgeIsolatedRewriteRunner | null = null;
+
+export const setForgeIsolatedRewriteRunner = (runner: ForgeIsolatedRewriteRunner): void => {
+    forgeIsolatedRewriteRunner = runner;
+};
+
 type ParsedEntryUpdateOld = {
     targetEntryId: string | null;
     description: string;
@@ -345,8 +357,10 @@ export class ForgeAgentController extends LuminaWeaveAPIBase {
         console.log(`[ForgeAgent] 启动隔离重写任务: ${entryId}`);
         this.forgeStore.isProcessing = true;
         try {
-            const { useCardMakerStore } = await import('../../plugins/forge/CardMakerStore.js');
-            await useCardMakerStore().runExecutorRewrite(instruction, entryId, originalContentContent);
+            if (!forgeIsolatedRewriteRunner) {
+                throw new Error('Forge isolated rewrite runner is not registered.');
+            }
+            await forgeIsolatedRewriteRunner(instruction, entryId, originalContentContent);
         } finally {
             this.forgeStore.isProcessing = false;
         }

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref, onMounted, shallowRef } from 'vue';
 import { luminaWeaveApi } from '../../api';
+import { llmEngine } from '../../api/llmEngine.js';
 import { lwStorage } from '../../api/storage.js';
 import { useForgeStore } from '../../stores/useForgeStore';
 import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
@@ -11,6 +12,7 @@ import { globalXMLInterceptor } from '../../api/core/XMLInterceptor.js';
 import type { ForgeVirtualLorebookEntry, ForgeWorkspaceSession } from '../../types/SessionTypes.js';
 import { LorebookTimelineResolver } from '../../api/core/LorebookTimelineResolver.js';
 import { MemoryViewResolver } from '../../api/core/MemoryViewResolver.js';
+import { promptPresetRegistry } from '../../api/core/PromptPresetRegistry.js';
 import type { TimelineNode } from '../../api/core/TimelineManager.js';
 import type { MemorySnapshot } from '../../types/MemorySnapshotTypes.js';
 import type { ResolvedLorebookViewState } from '../../types/LorebookViewTypes.js';
@@ -18,6 +20,7 @@ import type { ForgeMemoryTree } from '../../types/ForgeMemoryTypes.js';
 import { FORGE_PLANNER_PROMPT, FORGE_EXECUTOR_SYSTEM_PROMPT } from '../../resources/prompts/forgePrompts.js';
 import { ForgePromptContextService } from '../../api/core/ForgePromptContextService.js';
 import { ForgeRuntimeOrchestrator } from '../../api/core/ForgeRuntimeOrchestrator.js';
+import { clonePromptPresetGenerationSettings } from '../../api/core/utils/promptPresetGenerationSettings.js';
 import { applyForgeEffects, type ForgeEffectTarget } from '../../api/core/ForgeEffectReducer.js';
 import { ForgeSessionController } from '../../api/core/ForgeSessionController.js';
 import { ForgeWorldlineManager } from '../../api/core/ForgeWorldlineManager.js';
@@ -36,6 +39,10 @@ import {
 } from '../../api/core/forgeConstants.js';
 import type {
     ForgeExecutionRequest,
+    ForgeModelRequestTrace,
+    ForgeRequestContextSnapshot,
+    ForgeRequestLorebookEntrySummary,
+    ForgeRequestNodeSummaryItem,
     ForgeRuntimeContext,
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
@@ -44,6 +51,7 @@ import type {
 } from '../../types/ForgeRuntimeTypes.js';
 import type { ForgePromptPreviewBundle } from '../../types/ForgePromptTypes.js';
 import type {
+    ForgeCollectionMode,
     ForgeDraftTree,
     ForgeDetailMode,
     ForgeEntryMode,
@@ -52,6 +60,7 @@ import type {
     ForgeStructuredFormState,
     ForgeStructuredState
 } from '../../types/ForgeStructuredTypes.js';
+import type { PromptPresetProfileId } from '../../types/PromptPresetTypes.js';
 import type {
     ForgeTimelineItem,
     ForgeTimelineMessageItem,
@@ -127,6 +136,65 @@ const generateDraftNodeId = (): string => {
     return `forge_draft_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
 };
 
+const generateForgeRequestTraceId = (): string => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return `forge_req_${crypto.randomUUID()}`;
+    }
+    return `forge_req_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+};
+
+const resolveRuntimePresetId = (preferredPresetId?: string | null): string => (
+    preferredPresetId ||
+    lwStorage.get('lumina-forge.nexusPreset', '', 'Global') ||
+    lwStorage.get('lumina-chat.nexusPreset', 'Global', 'Global')
+);
+
+const summarizeRequestNodeSummary = (presetId: string): ForgeRequestNodeSummaryItem[] =>
+    llmEngine.resolveNodesFromPreset(presetId).map((node: any) => {
+        const provider = String(node?.provider || 'unknown');
+        const model = typeof node?.model === 'string' && node.model.trim() ? node.model.trim() : null;
+        return {
+            provider,
+            model,
+            label: provider === 'st_current'
+                ? '宿主当前模型'
+                : [provider, model].filter(Boolean).join(' / ')
+        };
+    });
+
+const sanitizeHistoryMessages = (input: Array<Pick<LuminaChatMessage, 'role' | 'mes' | 'mesRaw' | 'name'>>): CleanedMessage[] =>
+    input
+        .filter((message) => (message.mes || message.mesRaw || '').trim() !== '')
+        .map((message) => ({
+            role: message.role as CleanedMessage['role'],
+            content: message.mes || message.mesRaw || '',
+            name: message.name
+        }));
+
+const summarizeLorebookEntries = (entries: LuminaLorebookEntry[]): ForgeRequestLorebookEntrySummary[] =>
+    entries.map((entry: any) => {
+        const keywords = Array.isArray(entry?.key)
+            ? entry.key
+            : Array.isArray(entry?.keywords)
+                ? entry.keywords
+                : Array.isArray(entry?.keys)
+                    ? entry.keys
+                    : [];
+        return {
+            id: String(entry?.uid || entry?.comment || keywords[0] || 'forge_lorebook_entry'),
+            title: String(entry?.comment || entry?.uid || keywords[0] || '未命名条目'),
+            comment: String(entry?.comment || ''),
+            keywords: keywords.map((keyword: unknown) => String(keyword)),
+            disabled: Boolean(entry?.disable)
+        };
+    });
+
+const resolvePromptPresetGenerationSettings = (profileId: PromptPresetProfileId) => (
+    clonePromptPresetGenerationSettings(
+        promptPresetRegistry.getActivePreset(profileId).generationSettings
+    )
+);
+
 export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const forgeStore = useForgeStore();
     const sessionChatId = ref<string>(generateSessionChatId());
@@ -168,6 +236,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const workflowSnapshot = ref<ForgeWorkflowSnapshot | null>(null);
     const isCommitting = ref(false);
     const detailMode = ref<ForgeDetailMode | null>(null);
+    const collectionMode = ref<ForgeCollectionMode>('conversation');
     const entryMode = ref<ForgeEntryMode | null>(null);
     const activeLayer = ref<ForgeLayer>('concept');
     const completedLayers = ref<ForgeLayer[]>([]);
@@ -185,23 +254,96 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
      * 瞬态交互存储：用于收集非表单绑定的零散点击/输入值（即“临时表单”数据）。
      * 键为 fieldKey 或唯一标识，值为用户的选择。
      */
-    const transientSelections = ref<Map<string, string | string[]>>(new Map());
+    const transientSelections = ref<Map<string, Map<string, string | string[]>>>(new Map());
+    const LEGACY_TRANSIENT_SCOPE = '__legacy__';
+
+    const normalizeTransientScopeId = (scopeId?: string | null): string => {
+        const normalized = String(scopeId || '').trim();
+        return normalized || LEGACY_TRANSIENT_SCOPE;
+    };
+
+    const ensureTransientScope = (scopeId?: string | null): Map<string, string | string[]> => {
+        const normalizedScopeId = normalizeTransientScopeId(scopeId);
+        const existing = transientSelections.value.get(normalizedScopeId);
+        if (existing) {
+            return existing;
+        }
+        const nextScope = new Map<string, string | string[]>();
+        transientSelections.value.set(normalizedScopeId, nextScope);
+        return nextScope;
+    };
 
     /**
      * 更新瞬态选择值
      */
-    const upsertTransientSelection = (key: string, value: string | string[]) => {
-        console.log(`[Forge-Store] 记入瞬态选值 "${key}" ->`, value);
-        transientSelections.value.set(key, value);
+    const upsertTransientSelection = (key: string, value: string | string[], scopeId?: string | null) => {
+        const normalizedScopeId = normalizeTransientScopeId(scopeId);
+        console.log(`[Forge-Store] 记入瞬态选值 "${normalizedScopeId}:${key}" ->`, value);
+        ensureTransientScope(normalizedScopeId).set(key, value);
+        delete structuredState.value.submittedScopes[normalizedScopeId];
+        structuredState.value.lastUpdatedAt = Date.now();
     };
+
+    const getTransientSelections = (scopeId?: string | null): Map<string, string | string[]> => (
+        transientSelections.value.get(normalizeTransientScopeId(scopeId)) || new Map()
+    );
+
+    const getTransientFieldText = (scopeId: string | null | undefined, fieldKey: string): string => {
+        const value = getTransientSelections(scopeId).get(fieldKey);
+        if (value === undefined) return '';
+        return Array.isArray(value) ? value.join(', ') : String(value || '');
+    };
+
+    const getTransientFieldList = (scopeId: string | null | undefined, fieldKey: string): string[] => {
+        const value = getTransientSelections(scopeId).get(fieldKey);
+        if (value === undefined) return [];
+        return Array.isArray(value) ? value : (value ? [String(value)] : []);
+    };
+
+    const clearTransientSelections = (scopeId?: string | null): void => {
+        transientSelections.value.delete(normalizeTransientScopeId(scopeId));
+    };
+
+    const hasPendingTransientSelections = (scopeId?: string | null): boolean => (
+        getTransientSelections(scopeId).size > 0
+    );
+
+    const rememberSubmitConfig = (scopeId: string, label?: string | null): void => {
+        const normalizedScopeId = normalizeTransientScopeId(scopeId);
+        const normalizedLabel = String(label || '').trim();
+        if (!normalizedLabel) return;
+        const existing = structuredState.value.submitConfigs[normalizedScopeId];
+        if (existing?.label === normalizedLabel) return;
+        structuredState.value.submitConfigs[normalizedScopeId] = {
+            label: normalizedLabel,
+            updatedAt: Date.now()
+        };
+        structuredState.value.lastUpdatedAt = Date.now();
+        void persistWorkspaceSession();
+    };
+
+    const resolveSubmitLabel = (scopeId: string, fallbackLabel = '提交并继续'): string => {
+        const normalizedScopeId = normalizeTransientScopeId(scopeId);
+        return structuredState.value.submitConfigs[normalizedScopeId]?.label || fallbackLabel;
+    };
+
+    const markScopeSubmitted = (scopeId: string): void => {
+        structuredState.value.submittedScopes[normalizeTransientScopeId(scopeId)] = Date.now();
+        structuredState.value.lastUpdatedAt = Date.now();
+        void persistWorkspaceSession();
+    };
+
+    const isScopeSubmitted = (scopeId: string): boolean => Boolean(
+        structuredState.value.submittedScopes[normalizeTransientScopeId(scopeId)]
+    );
 
     let _formController: ForgeFormController | null = null;
     const getFormController = (): ForgeFormController => {
         if (_formController) return _formController;
         _formController = new ForgeFormController({
             getStructuredState: () => structuredState.value,
-            getTransientSelections: () => transientSelections.value,
-            upsertTransientSelection,
+            getTransientSelections: () => getTransientSelections(),
+            upsertTransientSelection: (key, value) => upsertTransientSelection(key, value),
             getActiveLayer: () => activeLayer.value,
             setActiveLayer: (layer) => { activeLayer.value = layer; },
             getCompletedLayers: () => completedLayers.value,
@@ -282,7 +424,10 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             setAuxPresentationMode: (mode) => { auxPresentationMode.value = mode; },
             setWorkspacePage: (page) => { workspacePage.value = page; },
             getWorkflowSnapshot: () => workflowSnapshot.value,
-            setWorkflowSnapshot: (snapshot) => { workflowSnapshot.value = snapshot; },
+            setWorkflowSnapshot: (snapshot) => {
+                workflowSnapshot.value = snapshot;
+                collectionMode.value = snapshot?.collectionMode || 'conversation';
+            },
             syncDraftTree: () => syncDraftTree(),
             bumpTimelineRevision: () => bumpTimelineRevision(),
             generateSessionChatId,
@@ -331,7 +476,15 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const testChatService = new ForgeTestChatService({
         getVirtualLorebookEntries: () => virtualLorebookEntries.value,
         getNexusPresetId: () => selectedPresetId.value,
-        getWorkspaceTitle: () => workspaceTitle.value || 'Forge Test'
+        getWorkspaceTitle: () => workspaceTitle.value || 'Forge Test',
+        getWorkspaceSessionId: () => workspaceSessionId.value || sessionChatId.value,
+        createModelRequestTrace: (trace) => forgeStore.createModelRequestTrace(trace),
+        markModelRequestFirstResponse: (requestId, firstResponseAt) => forgeStore.markModelRequestFirstResponse(requestId, firstResponseAt),
+        updateModelRequestStream: (payload) => forgeStore.updateModelRequestStream(payload),
+        completeModelRequestTrace: (payload) => forgeStore.completeModelRequestTrace(payload),
+        failModelRequestTrace: (requestId, message) => forgeStore.failModelRequestTrace(requestId, message),
+        abortModelRequestTrace: (requestId) => forgeStore.abortModelRequestTrace(requestId),
+        setActiveModelRequestTrace: (requestId) => forgeStore.setActiveModelRequestTrace(requestId)
     });
 
 
@@ -547,6 +700,61 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         });
     };
 
+    const buildRuntimeContextSnapshot = (
+        context: ForgeRuntimeContext,
+        resolvedLorebookView: ResolvedLorebookViewState,
+        memorySnapshot: MemorySnapshot,
+        selectedPresetIdOverride?: string | null
+    ): ForgeRequestContextSnapshot => ({
+        kind: 'forge-runtime',
+        workspaceTitle: context.workspaceTitle || null,
+        detailMode: context.detailMode,
+        activeLayer: context.activeLayer,
+        sourceCommand: context.latestUserCommand,
+        workflowSnapshot: context.workflowSnapshot,
+        historyMessages: sanitizeHistoryMessages(context.messages),
+        referenceChatSessionId: context.selectedChatSessionId,
+        referenceChatSnapshotId: context.selectedChatSnapshotId,
+        lorebookEntries: summarizeLorebookEntries(resolvedLorebookView.entries),
+        memorySnapshot,
+        selectedPresetId: selectedPresetIdOverride ?? context.selectedPresetId ?? null,
+        testChatPresetId: null,
+        nexusPresetId: null
+    });
+
+    const registerRuntimeRequestTrace = (payload: {
+        requestId: string;
+        source: ForgeModelRequestTrace['source'];
+        contextSnapshot: ForgeRequestContextSnapshot;
+        requestPrompt: CleanedMessage[];
+        requestParameters: ForgeModelRequestTrace['requestParameters'];
+        presetId: string | null;
+        nodeSummary: ForgeRequestNodeSummaryItem[];
+    }): void => {
+        forgeStore.createModelRequestTrace({
+            id: payload.requestId,
+            source: payload.source,
+            status: 'queued',
+            workspaceSessionId: workspaceSessionId.value || sessionChatId.value,
+            requestPrompt: payload.requestPrompt.map((message) => ({ ...message })),
+            requestParameters: clonePromptPresetGenerationSettings(payload.requestParameters),
+            contextSnapshot: {
+                ...payload.contextSnapshot,
+                historyMessages: payload.contextSnapshot.historyMessages.map((message) => ({ ...message })),
+                lorebookEntries: payload.contextSnapshot.lorebookEntries.map((entry) => ({ ...entry }))
+            },
+            responseRaw: '',
+            responseDisplay: '',
+            responseThinking: '',
+            requestedAt: Date.now(),
+            firstResponseAt: null,
+            completedAt: null,
+            errorMessage: null,
+            presetId: payload.presetId,
+            nodeSummary: payload.nodeSummary.map((item) => ({ ...item }))
+        });
+    };
+
     const upsertForgeMemory = (
         path: string,
         title: string,
@@ -589,19 +797,32 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const summarizeFormValues = (formId: string): string => getFormController().summarizeFormValues(formId);
     const buildSubmittedFormUserInput = (formId: string): string => getFormController().buildSubmittedFormUserInput(formId);
 
+    const appendReferenceMemory = (title: string, content: string): void => {
+        const referenceId = `参考内容/${Date.now().toString(36)}`;
+        upsertForgeMemory(referenceId, title, content, 'user', content.slice(0, 120));
+    };
+
     const inferUserInputMemoryWrites = (text: string): void => {
         const trimmed = text.trim();
         if (!trimmed) return;
 
-        if (/(不要|禁止|避免|不能|不希望)/.test(trimmed)) {
-            upsertForgeMemory('约束/用户禁止内容', '用户禁止内容', trimmed, 'user', trimmed);
+        if (/(必须|一定要|务必|只能|保留|不可更改|不要改动|不能改动)/.test(trimmed)) {
+            upsertForgeMemory('约束/硬性限制', '硬性限制', trimmed, 'user', trimmed);
         }
 
-        if (/(参考|像|类似|片段|风格参考|灵感)/.test(trimmed) && trimmed.length >= 16) {
-            upsertForgeMemory(`参考内容/片段-${Date.now().toString(36)}`, '参考片段', trimmed, 'user', trimmed.slice(0, 120));
+        if (/(不要|禁止|避免|不能|不希望|不许|别写|规避)/.test(trimmed)) {
+            upsertForgeMemory('约束/禁忌', '禁忌与避让项', trimmed, 'user', trimmed);
         }
 
-        if ((workflowSnapshot.value?.stage === 'kickoff' || !detailMode.value) && trimmed.length >= 12) {
+        if (/(参考|像|类似|片段|风格参考|灵感|样本|示例|文风|参照)/.test(trimmed) && trimmed.length >= 12) {
+            appendReferenceMemory('参考内容', trimmed);
+        }
+
+        if (/(偏好|喜欢|更想|倾向|希望|想要|语气|风格|协作方式|先聊|先对话)/.test(trimmed) && trimmed.length >= 8) {
+            upsertForgeMemory('启动/用户偏好', '用户偏好', trimmed, 'user', trimmed);
+        }
+
+        if (/(就按这个|就这个|确定|确认|采用|定这个|就这么定|最终版|拍板)/.test(trimmed)) {
             upsertForgeMemory('设定决议/核心想法', '核心想法', trimmed, 'user', trimmed.slice(0, 120));
         }
     };
@@ -636,6 +857,63 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         overwrite?: boolean;
         source?: ForgeStructuredFieldState['source'];
     }): void => getFormController().prefillStructuredForm(payload);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 辅助建议池 (Assist Pool)
+    // 统一承载 ForgeFormAssist 注入的候选值，各表单组件按 fieldKey 消费
+    // ─────────────────────────────────────────────────────────────────────
+
+    /** 候选值条目类型（与 forgeDslUtils.ts 中的同名接口保持同步） */
+    interface AssistPoolCandidate {
+        value: string;
+        description: string | null;
+    }
+
+    interface AssistPoolEntry {
+        candidates: AssistPoolCandidate[];
+        /** 来源 formId，主要用于调试 */
+        formId: string | null;
+        /** 注入时间戳，用于过期清理 */
+        injectedAt: number;
+    }
+
+    /** fieldKey → 辅助数据映射 */
+    const assistPool = ref<Map<string, AssistPoolEntry>>(new Map());
+
+    /**
+     * 读取指定字段的辅助候选值列表
+     * @returns 候选值数组，无则返回空数组
+     */
+    const getAssistCandidates = (fieldKey: string): AssistPoolCandidate[] => {
+        return assistPool.value.get(fieldKey)?.candidates ?? [];
+    };
+
+    /**
+     * 向辅助建议池注入一批字段候选值（由 ForgeFormAssistBlock 在 onMounted 时调用）
+     * @param fields 字段列表，每项包含 fieldKey 和 candidates
+     * @param formId 来源 formId（可选，仅用于调试）
+     */
+    const injectAssistCandidates = (
+        fields: Array<{ fieldKey: string; candidates: AssistPoolCandidate[] }>,
+        formId: string | null = null
+    ): void => {
+        const now = Date.now();
+        for (const field of fields) {
+            if (!field.fieldKey || field.candidates.length === 0) continue;
+            assistPool.value.set(field.fieldKey, {
+                candidates: field.candidates,
+                formId,
+                injectedAt: now
+            });
+        }
+    };
+
+    /** 获取当前表单辅助模式设置 */
+    const formAssistanceMode = computed((): 'prefill' | 'suggestion' | 'off' => {
+        const raw = lwStorage.get('lumina-forge.formAssistanceMode', 'prefill', 'Global');
+        if (raw === 'suggestion' || raw === 'off') return raw;
+        return 'prefill';
+    });
 
     const buildFormResultXml = (formId: string): string => getFormController().buildFormResultXml(formId);
     const buildLayerFormDsl = (layerName: ForgeLayer): string => getFormController().buildLayerFormDsl(layerName);
@@ -725,6 +1003,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         selectedChatSessionId: selectedChatSessionId.value,
         selectedChatSnapshotId: selectedChatSnapshotId.value,
         detailMode: detailMode.value,
+        collectionMode: collectionMode.value,
         entryMode: entryMode.value,
         activeLayer: activeLayer.value,
         completedLayers: [...completedLayers.value],
@@ -832,14 +1111,21 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             completeOperationByKey: (p) => forgeStore.completeOperationByKey(p),
             addOperationTimelineItem: (p) => forgeStore.addOperationTimelineItem(p),
             updateOperationPrompt: (k, p) => forgeStore.updateOperationPrompt(k, p),
+            setActiveModelRequestTrace: (requestId) => forgeStore.setActiveModelRequestTrace(requestId),
+            markModelRequestFirstResponse: (requestId, firstResponseAt) => forgeStore.markModelRequestFirstResponse(requestId, firstResponseAt),
+            updateModelRequestStream: (payload) => forgeStore.updateModelRequestStream(payload),
+            completeModelRequestTrace: (payload) => forgeStore.completeModelRequestTrace(payload),
+            failModelRequestTrace: (requestId, message) => forgeStore.failModelRequestTrace(requestId, message),
             setEntryMode(mode) {
                 entryMode.value = mode;
                 publishState.value = 'drafting';
             },
             setDetailMode(mode) { detailMode.value = mode; },
+            setCollectionMode(mode) { collectionMode.value = mode; },
             setActiveLayerAndEmitForm(layer) {
                 activeLayer.value = layer;
-                if (!(layer === 'concept' && detailMode.value && !structuredState.value.forms[kickoffBlueprint.formId]?.lastSubmittedAt)) {
+                if (collectionMode.value === 'persistent'
+                    && !(layer === 'concept' && detailMode.value && !structuredState.value.forms[kickoffBlueprint.formId]?.lastSubmittedAt)) {
                     ensureLayerForm(layer);
                     addAssistantViewMessage(buildLayerFormDsl(layer));
                 }
@@ -946,11 +1232,11 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
 
     const submitStructuredForm = async (formId: string): Promise<void> => {
         const form = structuredState.value.forms[formId];
+        const scopeId = form ? null : formId;
         lastError.value = null;
 
         try {
-            // 1. 提取所有瞬态选值（临时表单数据）
-            const transientEntries = Array.from(transientSelections.value.entries());
+            const transientEntries = scopeId ? Array.from(getTransientSelections(scopeId).entries()) : [];
             const transientSummary = transientEntries
                 .map(([key, val]) => {
                     const displayVal = Array.isArray(val) ? val.join('、') : val;
@@ -959,14 +1245,11 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 .filter(Boolean)
                 .join('\n');
 
-            // 2. 如果有瞬态数据，则将其真实地插入对话记录中（满足“出现在对话记录”的需求）
-            if (transientSummary) {
+            if (scopeId && transientSummary) {
                 console.log(`[Forge-Store] 将临时选项转化为对话记录:\n${transientSummary}`);
                 addUserViewMessage(`【用户选择与意图收集】:\n${transientSummary}`);
             }
 
-            // 3. 构造指令输入
-            // 如果有表单结果 XML，则使用 XML；否则使用瞬态汇总文本作为命令内容
             const formResultXml = form ? buildSubmittedFormUserInput(formId) : '';
             const finalUserInput = formResultXml || transientSummary;
 
@@ -981,9 +1264,11 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 userInput: finalUserInput
             });
 
-            // 提交成功后清空瞬态存储
-            console.log('[Forge-Store] 提交完成，清空会话内瞬态选值。');
-            transientSelections.value.clear();
+            if (scopeId) {
+                console.log(`[Forge-Store] 提交完成，清空消息作用域 ${scopeId} 的瞬态选值。`);
+                clearTransientSelections(scopeId);
+                markScopeSubmitted(scopeId);
+            }
 
         } catch (e: any) {
             const msg = e?.message || '提交表单失败';
@@ -1026,12 +1311,14 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             hasReferenceChat: Boolean(selectedChatSessionId.value),
             activeLeafId: worldlineStore.value.activeLeafId,
             detailMode: detailMode.value,
+            collectionMode: collectionMode.value,
             entryMode: entryMode.value,
             activeLayer: activeLayer.value,
             completedLayers: completedLayers.value,
             structuredState: structuredState.value
         });
         workflowSnapshot.value = snapshot;
+        collectionMode.value = snapshot.collectionMode;
         return snapshot;
     };
 
@@ -1066,42 +1353,107 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         const presetData = await fetchPresetDetail(context.selectedPresetId);
         const resolvedLorebookView = resolveActiveLorebookView();
         const memorySnapshot = buildMemorySnapshot();
-
-        return ForgePromptContextService.buildPlannerExecutionRequest({
+        const requestId = generateForgeRequestTraceId();
+        const resolvedPresetId = resolveRuntimePresetId(context.selectedPresetId);
+        const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
+        const generationSettings = resolvePromptPresetGenerationSettings('forge-main');
+        const request = ForgePromptContextService.buildPlannerExecutionRequest({
             context,
             presetData,
             memorySnapshot,
             resolvedLorebookEntries: resolvedLorebookView.entries,
             charName: 'Forge Assistant'
         });
+        registerRuntimeRequestTrace({
+            requestId,
+            source: 'planner',
+            contextSnapshot: buildRuntimeContextSnapshot(context, resolvedLorebookView, memorySnapshot, resolvedPresetId),
+            requestPrompt: request.messages,
+            requestParameters: generationSettings,
+            presetId: resolvedPresetId,
+            nodeSummary
+        });
+        return {
+            ...request,
+            requestId,
+            traceSource: 'planner',
+            contextSnapshot: buildRuntimeContextSnapshot(context, resolvedLorebookView, memorySnapshot, resolvedPresetId),
+            nodeSummary,
+            generationSettings,
+            presetId: resolvedPresetId
+        };
     };
 
     const buildConversationExecutionRequest = async (context: ForgeRuntimeContext): Promise<ForgeExecutionRequest> => {
         const presetData = await fetchPresetDetail(context.selectedPresetId);
         const resolvedLorebookView = resolveActiveLorebookView();
         const memorySnapshot = buildMemorySnapshot();
-
-        return ForgePromptContextService.buildConversationExecutionRequest({
+        const requestId = generateForgeRequestTraceId();
+        const resolvedPresetId = resolveRuntimePresetId(context.selectedPresetId);
+        const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
+        const contextSnapshot = buildRuntimeContextSnapshot(context, resolvedLorebookView, memorySnapshot, resolvedPresetId);
+        const generationSettings = resolvePromptPresetGenerationSettings('forge-main');
+        const request = ForgePromptContextService.buildConversationExecutionRequest({
             context,
             presetData,
             memorySnapshot,
             resolvedLorebookEntries: resolvedLorebookView.entries,
             charName: 'Forge Assistant'
         });
+        registerRuntimeRequestTrace({
+            requestId,
+            source: 'conversation',
+            contextSnapshot,
+            requestPrompt: request.messages,
+            requestParameters: generationSettings,
+            presetId: resolvedPresetId,
+            nodeSummary
+        });
+        return {
+            ...request,
+            requestId,
+            traceSource: 'conversation',
+            contextSnapshot,
+            nodeSummary,
+            generationSettings,
+            presetId: resolvedPresetId
+        };
     };
 
     const buildAnalystExecutionRequest = async (context: ForgeRuntimeContext): Promise<ForgeExecutionRequest> => {
         const presetData = await fetchPresetDetail(context.selectedPresetId);
         const resolvedLorebookView = resolveActiveLorebookView();
         const memorySnapshot = buildMemorySnapshot();
-
-        return ForgePromptContextService.buildAnalystExecutionRequest({
+        const requestId = generateForgeRequestTraceId();
+        const resolvedPresetId = resolveRuntimePresetId(context.selectedPresetId);
+        const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
+        const contextSnapshot = buildRuntimeContextSnapshot(context, resolvedLorebookView, memorySnapshot, resolvedPresetId);
+        const generationSettings = resolvePromptPresetGenerationSettings('forge-main');
+        const request = ForgePromptContextService.buildAnalystExecutionRequest({
             context,
             presetData,
             memorySnapshot,
             resolvedLorebookEntries: resolvedLorebookView.entries,
             charName: 'Forge Assistant'
         });
+        registerRuntimeRequestTrace({
+            requestId,
+            source: 'analyst',
+            contextSnapshot,
+            requestPrompt: request.messages,
+            requestParameters: generationSettings,
+            presetId: resolvedPresetId,
+            nodeSummary
+        });
+        return {
+            ...request,
+            requestId,
+            traceSource: 'analyst',
+            contextSnapshot,
+            nodeSummary,
+            generationSettings,
+            presetId: resolvedPresetId
+        };
     };
 
     const buildExecutorExecutionRequest = async (params: {
@@ -1110,15 +1462,53 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         originalContent: string;
         sourceCommand: ForgeUserCommand;
     }): Promise<ForgeExecutionRequest> => {
-        return ForgePromptContextService.buildExecutorExecutionRequest({
+        const requestId = generateForgeRequestTraceId();
+        const resolvedPresetId = resolveRuntimePresetId(selectedPresetId.value);
+        const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
+        const generationSettings = resolvePromptPresetGenerationSettings('forge-executor');
+        const contextSnapshot: ForgeRequestContextSnapshot = {
+            kind: 'forge-runtime',
+            workspaceTitle: workspaceTitle.value || null,
+            detailMode: detailMode.value,
+            activeLayer: activeLayer.value,
+            sourceCommand: params.sourceCommand,
+            workflowSnapshot: workflowSnapshot.value,
+            historyMessages: sanitizeHistoryMessages(messages.value),
+            referenceChatSessionId: selectedChatSessionId.value,
+            referenceChatSnapshotId: selectedChatSnapshotId.value,
+            lorebookEntries: summarizeLorebookEntries(resolveActiveLorebookView().entries),
+            memorySnapshot: buildMemorySnapshot(),
+            selectedPresetId: resolvedPresetId,
+            testChatPresetId: null,
+            nexusPresetId: null
+        };
+        const request = ForgePromptContextService.buildExecutorExecutionRequest({
             instruction: params.instruction,
             entryId: params.entryId,
             originalContent: params.originalContent,
             sessionChatId: sessionChatId.value,
             charName: 'Forge Assistant',
-            presetId: selectedPresetId.value,
+            presetId: resolvedPresetId,
             sourceCommand: params.sourceCommand
         });
+        registerRuntimeRequestTrace({
+            requestId,
+            source: 'executor',
+            contextSnapshot,
+            requestPrompt: request.messages,
+            requestParameters: generationSettings,
+            presetId: resolvedPresetId,
+            nodeSummary
+        });
+        return {
+            ...request,
+            requestId,
+            traceSource: 'executor',
+            contextSnapshot,
+            nodeSummary,
+            generationSettings,
+            presetId: resolvedPresetId
+        };
     };
 
     const buildPromptPreviewPayload = async (): Promise<ForgePromptPreviewBundle> => {
@@ -1298,8 +1688,13 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const abort = async (): Promise<void> => {
         if (!isGenerating.value) return;
         try {
+            ensureRuntimeOrchestrator().abortActiveGeneration();
             await BridgeDispatcher.nexus.stop(sessionChatId.value);
         } finally {
+            const activeTrace = forgeStore.modelRequestTraces.find(trace => trace.id === forgeStore.activeModelRequestTraceId);
+            if (activeTrace && activeTrace.source !== 'test_chat' && (activeTrace.status === 'queued' || activeTrace.status === 'streaming')) {
+                forgeStore.abortModelRequestTrace(activeTrace.id);
+            }
             isGenerating.value = false;
             streamingAssistantNodeId.value = null;
         }
@@ -1507,9 +1902,13 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         workspacePage,
         virtualLorebookEntries,
         importedLorebookId,
+        modelRequestTraces: computed(() => forgeStore.modelRequestTraces),
+        activeModelRequestTraceId: computed(() => forgeStore.activeModelRequestTraceId),
         canGenerate,
         getStructuredFieldText,
         getStructuredFieldList,
+        getTransientFieldText,
+        getTransientFieldList,
         hasStructuredFieldBinding,
         setStructuredFieldValue,
         setActiveAuxPanel,
@@ -1518,6 +1917,13 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         chooseDetailMode,
         chooseEntryMode,
         upsertTransientSelection,
+        getAssistCandidates,
+        injectAssistCandidates,
+        formAssistanceMode,
+        rememberSubmitConfig,
+        resolveSubmitLabel,
+        hasPendingTransientSelections,
+        isScopeSubmitted,
         submitStructuredForm,
 
         requestLayerAdvance,

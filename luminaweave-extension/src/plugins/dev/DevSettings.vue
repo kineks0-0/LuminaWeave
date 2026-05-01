@@ -328,7 +328,7 @@ const formatJSON = () => {
     const obj = JSON.parse(editValue.value);
     editValue.value = JSON.stringify(obj, null, 2);
   } catch (e) {
-    luminaWeaveApi.showToast('JSON 格式无效', 'warning');
+    luminaWeaveApi.services.host.showToast('JSON 格式无效', 'warning');
   }
 };
 
@@ -365,10 +365,10 @@ const handleSaveNode = async () => {
     const updatedNode = { ...currentNode.value, [field]: finalValue };
     debugChat.upsertNode(updatedNode);
     await debugChat.persistCurrentChat();
-    luminaWeaveApi.showToast('应用修改成功', 'success');
+    luminaWeaveApi.services.host.showToast('应用修改成功', 'success');
   } catch (e) {
     console.error('[DevSettings] Save failed:', e);
-    luminaWeaveApi.showToast('保存失败: ' + e.message, 'error');
+    luminaWeaveApi.services.host.showToast('保存失败: ' + e.message, 'error');
   }
 };
 
@@ -388,7 +388,7 @@ const handleAddNode = async () => {
   selectedNodeId.value = newNode.id;
 
   await debugChat.persistCurrentChat();
-  luminaWeaveApi.showToast('已添加新节点', 'success');
+  luminaWeaveApi.services.host.showToast('已添加新节点', 'success');
 };
 
 const handleDeleteNode = async () => {
@@ -399,9 +399,9 @@ const handleDeleteNode = async () => {
     debugChat.removeSubtree(selectedNodeId.value);
     selectedNodeId.value = debugChat.getActiveLeafId() || '';
     await debugChat.persistCurrentChat();
-    luminaWeaveApi.showToast('节点物理删除成功', 'success');
+    luminaWeaveApi.services.host.showToast('节点物理删除成功', 'success');
   } catch (e) {
-    luminaWeaveApi.showToast('删除失败: ' + e.message, 'error');
+    luminaWeaveApi.services.host.showToast('删除失败: ' + e.message, 'error');
   }
 };
 
@@ -409,9 +409,9 @@ const handleClearAllSnapshots = async () => {
   if (!confirm('确定要清空所有状态快照吗？这将导致下次对话需要从头重播指令。')) return;
   try {
     const res = await luminaWeaveApi.clearAllSnapshots();
-    luminaWeaveApi.showToast(`快照清理完毕: 回收 ${res.cleared} 个节点资源`, 'success');
+    luminaWeaveApi.services.host.showToast(`快照清理完毕: 回收 ${res.cleared} 个节点资源`, 'success');
   } catch (e) {
-    luminaWeaveApi.showToast('清理失败: ' + e.message, 'error');
+    luminaWeaveApi.services.host.showToast('清理失败: ' + e.message, 'error');
   }
 };
 
@@ -425,13 +425,13 @@ const handleRebuild = async () => {
     const res = await luminaWeaveApi.rebuildCurrentChatMessages();
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     
-    luminaWeaveApi.showToast(
+    luminaWeaveApi.services.host.showToast(
       `重构完成！\n处理节点: ${res.total}\n实质变更: ${res.rebuilt}\n耗时: ${duration}s`, 
       'success',
       '深度校准成功'
     );
   } catch (e) {
-    luminaWeaveApi.showToast('重建过程中发生错误: ' + e.message, 'error');
+    luminaWeaveApi.services.host.showToast('重建过程中发生错误: ' + e.message, 'error');
     console.error('[DevSettings] Rebuild failed:', e);
   } finally {
     isRebuilding.value = false;
@@ -439,7 +439,7 @@ const handleRebuild = async () => {
 };
 
 const openSyncReport = () => {
-  luminaWeaveApi.openPanel('sync_report');
+  luminaWeaveApi.services.desktopSurface.openPanel('sync_report');
 };
 
 const truncate = (str, len) => {

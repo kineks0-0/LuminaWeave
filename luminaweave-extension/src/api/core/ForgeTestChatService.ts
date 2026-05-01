@@ -11,22 +11,35 @@
 import { llmEngine } from '../llmEngine.js';
 import { lwStorage } from '../storage.js';
 import { LuminaGenerationTask } from './LuminaGenerationTask.js';
-import { buildTestChatMessages, buildSTPresetMessages } from './ForgeTestChatPromptBuilder.js';
+import { PromptPresetComposer } from './PromptPresetComposer.js';
+import { promptPresetRegistry } from './PromptPresetRegistry.js';
+import { buildSTPresetMessages } from './ForgeTestChatPromptBuilder.js';
+import { EnvDetector } from './EnvDetector.js';
 import { STClient } from './st-adapter/STClient.js';
+import { clonePromptPresetGenerationSettings } from './utils/promptPresetGenerationSettings.js';
 import type { CleanedMessage } from '../../types/nexus.js';
 import type { ForgeVirtualLorebookEntry } from '../../types/SessionTypes.js';
 import {
-    createBuiltInPresets,
     type ForgeTestChatMessage,
-    type ForgeTestChatPreset
 } from '../../types/ForgeTestChatTypes.js';
+import type {
+    PromptPresetCharCard,
+    PromptPresetDefinition,
+    PromptPresetGenerationSettings
+} from '../../types/PromptPresetTypes.js';
+import type {
+    ForgeModelRequestTrace,
+    ForgeRequestContextSnapshot,
+    ForgeRequestNodeSummaryItem
+} from '../../types/ForgeRuntimeTypes.js';
 
 // ──────────────────────────────────────────────
 // 存储 Key
 // ──────────────────────────────────────────────
 
-const STORAGE_KEY_PRESETS = 'lumina-forge.testChatPresets';
-const STORAGE_KEY_ACTIVE_PRESET = 'lumina-forge.testChatActivePreset';
+const STORAGE_KEY_REGISTRY = 'lumina-prompt-presets.registry';
+const STORAGE_KEY_BINDINGS = 'lumina-prompt-presets.bindings';
+const STORAGE_KEY_BUILTIN_OVERRIDES = 'lumina-prompt-presets.builtin-overrides';
 
 // ──────────────────────────────────────────────
 // 依赖注入接口
@@ -37,6 +50,25 @@ export interface ForgeTestChatDeps {
     /** Nexus 编排预设 ID（非测试聊天自身预设），用于解析 LLM 节点 */
     getNexusPresetId: () => string;
     getWorkspaceTitle?: () => string;
+    getWorkspaceSessionId?: () => string;
+    createModelRequestTrace: (trace: ForgeModelRequestTrace) => void;
+    markModelRequestFirstResponse: (requestId: string, firstResponseAt?: number) => void;
+    updateModelRequestStream: (payload: {
+        requestId: string;
+        responseRaw: string;
+        responseDisplay: string;
+        responseThinking: string;
+    }) => void;
+    completeModelRequestTrace: (payload: {
+        requestId: string;
+        responseRaw: string;
+        responseDisplay: string;
+        responseThinking: string;
+        completedAt?: number;
+    }) => void;
+    failModelRequestTrace: (requestId: string, message: string) => void;
+    abortModelRequestTrace: (requestId: string) => void;
+    setActiveModelRequestTrace: (requestId: string | null) => void;
 }
 
 // ──────────────────────────────────────────────
@@ -51,16 +83,18 @@ export class ForgeTestChatService {
     isStreaming = false;
 
     // ── 预设管理
-    readonly presets: ForgeTestChatPreset[] = [];
+    readonly presets: PromptPresetDefinition[] = [];
     activePresetId = '';
 
     private readonly deps: ForgeTestChatDeps;
     /** 持有当前正在运行的任务引用，abort() 调用真正的后端中断 */
     private currentTask: LuminaGenerationTask | null = null;
+    private currentTraceId: string | null = null;
 
     constructor(deps: ForgeTestChatDeps) {
         this.deps = deps;
-        this._loadPresets();
+        this._syncFromRegistry();
+        lwStorage.on('*', this.handleStorageChange);
     }
 
     // ──────────────────────────────────────────────
@@ -77,6 +111,9 @@ export class ForgeTestChatService {
             this.currentTask.abort();
             this.currentTask = null;
         }
+        if (this.currentTraceId) {
+            this.deps.abortModelRequestTrace(this.currentTraceId);
+        }
         this.isStreaming = false;
         // 将最后一条 assistant 消息标记为非流式
         const msgs = this.messages;
@@ -84,6 +121,7 @@ export class ForgeTestChatService {
         if (last?.role === 'assistant' && last.isStreaming) {
             msgs.splice(msgs.length - 1, 1, { ...last, isStreaming: false });
         }
+        this.currentTraceId = null;
     }
 
     async sendMessage(userText: string): Promise<void> {
@@ -91,8 +129,8 @@ export class ForgeTestChatService {
         const trimmed = userText.trim();
         if (!trimmed) return;
 
-        // 每次发送前从 storage 刷新预设（兼容设置面板修改后未重启的场景）
-        this._loadPresets();
+        // 每次发送前同步一次 registry，兼容设置面板热改。
+        this._syncFromRegistry();
 
         // 追加用户消息
         this.messages.push({
@@ -111,6 +149,8 @@ export class ForgeTestChatService {
         });
 
         this.isStreaming = true;
+        let requestTraceId: string | null = null;
+        let hasMarkedFirstResponse = false;
 
         try {
             const preset = this._getActivePreset();
@@ -122,7 +162,7 @@ export class ForgeTestChatService {
             const virtualLorebookEntries = this.deps.getVirtualLorebookEntries();
 
             let messages: CleanedMessage[];
-            if (preset.promptMode === 'st_preset') {
+            if (preset.engine === 'st_preset') {
                 const stPreset = await this._resolveSTPreset();
                 if (!stPreset) {
                     throw new Error('无法获取 ST 当前预设，请确认 SillyTavern 已加载预设。');
@@ -134,12 +174,15 @@ export class ForgeTestChatService {
                     workspaceTitle: this.deps.getWorkspaceTitle?.()
                 });
             } else {
-                messages = buildTestChatMessages({
-                    preset,
-                    virtualLorebookEntries,
-                    conversationHistory,
-                    workspaceTitle: this.deps.getWorkspaceTitle?.()
-                });
+                messages = PromptPresetComposer.compose(
+                    'forge-test-chat',
+                    preset.id,
+                    {
+                        lorebookEntries: virtualLorebookEntries.map(entry => entry.entry),
+                        charCard: this.resolveCharCard(preset),
+                        conversationHistory,
+                    }
+                ).messages;
             }
 
             // 解析 LLM 节点（使用 Nexus 编排预设）
@@ -164,23 +207,60 @@ export class ForgeTestChatService {
             });
 
             const cleanedMessages = llmEngine.cleanMessages(messages);
-            const generationSettings = await this._resolveMainChatGenerationSettings();
+            const generationSettings = await this._resolveGenerationSettings(preset.generationSettings);
+            requestTraceId = this._createRequestTrace({
+                userInput: trimmed,
+                presetId: preset.id,
+                nexusPresetId: presetId,
+                conversationHistory,
+                virtualLorebookEntries,
+                requestPrompt: cleanedMessages,
+                requestParameters: generationSettings,
+                nodeSummary: this._buildNodeSummary(nodes)
+            });
+            this.currentTraceId = requestTraceId;
             const task = new LuminaGenerationTask(session);
             this.currentTask = task;
 
             await task.run(cleanedMessages, {
                 onChunk: (_chunk, fullText) => {
                     this._updateAssistant(assistantId, fullText, true);
+                    if (requestTraceId && !hasMarkedFirstResponse) {
+                        hasMarkedFirstResponse = true;
+                        this.deps.markModelRequestFirstResponse(requestTraceId, Date.now());
+                    }
+                    if (requestTraceId) {
+                        this.deps.updateModelRequestStream({
+                            requestId: requestTraceId,
+                            responseRaw: fullText,
+                            responseDisplay: fullText,
+                            responseThinking: ''
+                        });
+                    }
                 },
                 onDone: (finalText) => {
                     this._updateAssistant(assistantId, finalText, false);
+                    if (requestTraceId) {
+                        this.deps.completeModelRequestTrace({
+                            requestId: requestTraceId,
+                            responseRaw: finalText,
+                            responseDisplay: finalText,
+                            responseThinking: '',
+                            completedAt: Date.now()
+                        });
+                    }
                     this.isStreaming = false;
                     this.currentTask = null;
+                    this.currentTraceId = null;
                 },
                 onError: (err) => {
                     this._updateAssistant(assistantId, `[错误] ${err.message}`, false);
+                    if (requestTraceId) {
+                        this.deps.failModelRequestTrace(requestTraceId, err.message);
+                    }
                     this.isStreaming = false;
                     this.currentTask = null;
+                    this.currentTraceId = null;
                 }
             }, generationSettings);
 
@@ -192,9 +272,13 @@ export class ForgeTestChatService {
         } catch (err: any) {
             const last = this.messages.find(m => m.id === assistantId);
             this._updateAssistant(assistantId, last?.content || `[错误] ${err?.message ?? '生成失败'}`, false);
+            if (requestTraceId) {
+                this.deps.failModelRequestTrace(requestTraceId, err?.message ?? '生成失败');
+            }
         } finally {
             this.isStreaming = false;
             this.currentTask = null;
+            this.currentTraceId = null;
         }
     }
 
@@ -205,53 +289,54 @@ export class ForgeTestChatService {
     setActivePreset(id: string): void {
         const preset = this.presets.find(p => p.id === id);
         if (!preset) return;
-        this.activePresetId = id;
-        lwStorage.set(STORAGE_KEY_ACTIVE_PRESET, id, 'Global');
-    }
-
-    createPreset(partial: Pick<ForgeTestChatPreset, 'name' | 'charCardMode' | 'promptMode' | 'promptEntries'> & Partial<ForgeTestChatPreset>): ForgeTestChatPreset {
-        const now = Date.now();
-        const preset: ForgeTestChatPreset = {
-            ...partial,
-            id: `user:${now}`,
-            createdAt: now,
-            updatedAt: now
-        };
-        this.presets.push(preset);
-        this._persistPresets();
-        return preset;
-    }
-
-    updatePreset(id: string, changes: Partial<Omit<ForgeTestChatPreset, 'id' | 'builtIn' | 'createdAt'>>): void {
-        const idx = this.presets.findIndex(p => p.id === id);
-        if (idx === -1) return;
-        const existing = this.presets[idx];
-        if (existing.builtIn) return; // 内置预设不可修改
-        this.presets.splice(idx, 1, { ...existing, ...changes, updatedAt: Date.now() });
-        this._persistPresets();
-    }
-
-    deletePreset(id: string): void {
-        const preset = this.presets.find(p => p.id === id);
-        if (!preset || preset.builtIn) return;
-        const idx = this.presets.findIndex(p => p.id === id);
-        if (idx !== -1) {
-            this.presets.splice(idx, 1);
-        }
-        // 若删除的是当前激活预设，回退到第一个
-        if (this.activePresetId === id) {
-            this.setActivePreset(this.presets[0]?.id ?? '');
-        }
-        this._persistPresets();
+        promptPresetRegistry.setActivePreset('forge-test-chat', id);
+        this._syncFromRegistry();
     }
 
     // ──────────────────────────────────────────────
     // 私有工具
     // ──────────────────────────────────────────────
 
-    private _getActivePreset(): ForgeTestChatPreset {
+    private readonly handleStorageChange = (data: { key?: string } | null) => {
+        const key = data?.key;
+        if (!key || key === STORAGE_KEY_REGISTRY || key === STORAGE_KEY_BINDINGS || key === STORAGE_KEY_BUILTIN_OVERRIDES) {
+            this._syncFromRegistry();
+        }
+    };
+
+    private resolveCharCard(preset: PromptPresetDefinition): PromptPresetCharCard | null {
+        if (preset.charCardMode === 'none') {
+            return null;
+        }
+        if (preset.charCardMode === 'custom') {
+            return preset.customCharCard ?? null;
+        }
+        return this.resolveCharCardFromST();
+    }
+
+    private resolveCharCardFromST(): PromptPresetCharCard | null {
+        try {
+            const ctx = EnvDetector.ctx as any;
+            if (!ctx) return null;
+            const charId = ctx.characterId;
+            const char = ctx.characters?.[charId];
+            const data = char?.data ?? char;
+            if (!data) return null;
+            return {
+                name: data.name ?? char?.name ?? '',
+                description: data.description ?? '',
+                personality: data.personality ?? '',
+                scenario: data.scenario ?? '',
+                systemPrompt: data.system_prompt ?? data.systemPrompt ?? ''
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    private _getActivePreset(): PromptPresetDefinition {
         const found = this.presets.find(p => p.id === this.activePresetId);
-        return found ?? this.presets[0] ?? createBuiltInPresets()[0];
+        return found ?? promptPresetRegistry.getActivePreset('forge-test-chat');
     }
 
     private _updateAssistant(id: string, content: string, streaming: boolean): void {
@@ -260,12 +345,96 @@ export class ForgeTestChatService {
         this.messages.splice(idx, 1, { ...this.messages[idx], content, isStreaming: streaming });
     }
 
-    private _sanitizeSettings(settings: Record<string, unknown>): Record<string, unknown> {
-        const sanitized = { ...settings };
-        if (typeof sanitized.seed === 'number' && sanitized.seed < 0) {
-            delete sanitized.seed;
+    private _sanitizeSettings(settings: PromptPresetGenerationSettings): PromptPresetGenerationSettings {
+        return clonePromptPresetGenerationSettings(settings);
+    }
+
+    private _applyUnlimitedResponseOverride(settings: PromptPresetGenerationSettings): PromptPresetGenerationSettings {
+        const adjusted = clonePromptPresetGenerationSettings(settings);
+        if (lwStorage.get('lumina-chat.unlimitedResponse', false, 'Global')) {
+            delete adjusted.max_tokens;
+            delete adjusted.max_length;
         }
-        return sanitized;
+        return adjusted;
+    }
+
+    private _createRequestTrace(input: {
+        userInput: string;
+        presetId: string;
+        nexusPresetId: string;
+        conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
+        virtualLorebookEntries: ForgeVirtualLorebookEntry[];
+        requestPrompt: CleanedMessage[];
+        requestParameters: PromptPresetGenerationSettings;
+        nodeSummary: ForgeRequestNodeSummaryItem[];
+    }): string {
+        const requestId = this._generateTraceId();
+        const contextSnapshot: ForgeRequestContextSnapshot = {
+            kind: 'forge-test-chat',
+            workspaceTitle: this.deps.getWorkspaceTitle?.() || null,
+            detailMode: null,
+            activeLayer: null,
+            sourceCommand: { type: 'send_user_input', input: input.userInput },
+            workflowSnapshot: null,
+            historyMessages: input.conversationHistory.map((message) => ({ ...message })),
+            referenceChatSessionId: null,
+            referenceChatSnapshotId: null,
+            lorebookEntries: input.virtualLorebookEntries.map((entry) => ({
+                id: entry.id,
+                title: String((entry.entry as any)?.comment || (entry.entry as any)?.uid || entry.id),
+                comment: String((entry.entry as any)?.comment || ''),
+                keywords: Array.isArray((entry.entry as any)?.key)
+                    ? (entry.entry as any).key.map((keyword: unknown) => String(keyword))
+                    : [],
+                disabled: Boolean((entry.entry as any)?.disable)
+            })),
+            memorySnapshot: null,
+            selectedPresetId: null,
+            testChatPresetId: input.presetId,
+            nexusPresetId: input.nexusPresetId
+        };
+
+        this.deps.createModelRequestTrace({
+            id: requestId,
+            source: 'test_chat',
+            status: 'queued',
+            workspaceSessionId: this.deps.getWorkspaceSessionId?.() || 'forge_test_chat',
+            requestPrompt: input.requestPrompt.map((message) => ({ ...message })),
+            requestParameters: clonePromptPresetGenerationSettings(input.requestParameters),
+            contextSnapshot,
+            responseRaw: '',
+            responseDisplay: '',
+            responseThinking: '',
+            requestedAt: Date.now(),
+            firstResponseAt: null,
+            completedAt: null,
+            errorMessage: null,
+            presetId: input.presetId,
+            nodeSummary: input.nodeSummary.map((item) => ({ ...item }))
+        });
+        this.deps.setActiveModelRequestTrace(requestId);
+        return requestId;
+    }
+
+    private _buildNodeSummary(nodes: Array<{ provider?: string; model?: string | null }>): ForgeRequestNodeSummaryItem[] {
+        return nodes.map((node) => {
+            const provider = String(node.provider || 'unknown');
+            const model = typeof node.model === 'string' && node.model.trim() ? node.model.trim() : null;
+            return {
+                provider,
+                model,
+                label: provider === 'st_current'
+                    ? '宿主当前模型'
+                    : [provider, model].filter(Boolean).join(' / ')
+            };
+        });
+    }
+
+    private _generateTraceId(): string {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return `forge_req_${crypto.randomUUID()}`;
+        }
+        return `forge_req_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
     }
 
     private async _resolveSTPreset(): Promise<Record<string, any> | null> {
@@ -280,44 +449,34 @@ export class ForgeTestChatService {
         }
     }
 
-    private async _resolveMainChatGenerationSettings(): Promise<Record<string, unknown>> {
+    private async _resolveGenerationSettings(
+        presetSettings?: PromptPresetGenerationSettings | null
+    ): Promise<PromptPresetGenerationSettings> {
+        const inheritedSettings = await this._resolveMainChatGenerationSettings();
+        return this._applyUnlimitedResponseOverride({
+            ...inheritedSettings,
+            ...clonePromptPresetGenerationSettings(presetSettings)
+        });
+    }
+
+    private async _resolveMainChatGenerationSettings(): Promise<PromptPresetGenerationSettings> {
         const preset = await STClient.getPreset('in_use');
         const presetSettings = this._cloneSettingsRecord(preset?.settings);
         const fallbackSettings = this._cloneSettingsRecord(STClient.getInstructSettings()?.settings);
-        const inheritedSettings = Object.keys(presetSettings).length > 0 ? presetSettings : fallbackSettings;
-
-        if (lwStorage.get('lumina-chat.unlimitedResponse', false, 'Global')) {
-            delete inheritedSettings.max_tokens;
-            delete inheritedSettings.max_length;
-        }
-
-        return this._sanitizeSettings(inheritedSettings);
+        return this._sanitizeSettings(Object.keys(presetSettings).length > 0 ? presetSettings : fallbackSettings);
     }
 
-    private _cloneSettingsRecord(value: unknown): Record<string, unknown> {
+    private _cloneSettingsRecord(value: unknown): PromptPresetGenerationSettings {
         if (!value || typeof value !== 'object' || Array.isArray(value)) {
             return {};
         }
-        return { ...(value as Record<string, unknown>) };
+        return clonePromptPresetGenerationSettings(value as Record<string, unknown>);
     }
 
-    private _loadPresets(): void {
-        const builtIns = createBuiltInPresets();
-        const savedRaw = lwStorage.get(STORAGE_KEY_PRESETS, [], 'Global') as ForgeTestChatPreset[];
-        const saved = Array.isArray(savedRaw) ? savedRaw : [];
-        const userPresets = saved
-            .filter(p => !p.builtIn)
-            .map(p => ({ ...p, promptMode: p.promptMode ?? 'custom' }));
-        this.presets.splice(0, this.presets.length, ...builtIns, ...userPresets);
-
-        const savedActiveId = lwStorage.get(STORAGE_KEY_ACTIVE_PRESET, '', 'Global') as string;
-        const validId = this.presets.find(p => p.id === savedActiveId)?.id;
-        this.activePresetId = validId ?? builtIns[0].id;
-    }
-
-    private _persistPresets(): void {
-        // 只持久化用户自定义预设（内置预设在运行时重建）
-        const userPresets = this.presets.filter(p => !p.builtIn);
-        lwStorage.set(STORAGE_KEY_PRESETS, userPresets, 'Global');
+    private _syncFromRegistry(): void {
+        promptPresetRegistry.reload();
+        const presets = promptPresetRegistry.listPresets('forge-test-chat');
+        this.presets.splice(0, this.presets.length, ...presets);
+        this.activePresetId = promptPresetRegistry.getActivePresetId('forge-test-chat');
     }
 }

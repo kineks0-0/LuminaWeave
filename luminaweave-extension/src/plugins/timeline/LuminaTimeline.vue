@@ -2,11 +2,11 @@
   <div class="lw-timeline-container" :class="mode" :data-skin-variant="timelineVariant || 'default'" :style="timelineSkinStyle">
 
     <!-- Large Mode Background Area (Managed by LogicFlow) -->
-    <div v-if="mode === 'large'" class="large-viewport-container"></div>
-    <TeleportContainer v-if="mode === 'large'" :flow-id="flowId" />
+    <div v-if="mode === 'large' && !isTelegramSingleColumnTimeline" class="large-viewport-container"></div>
+    <TeleportContainer v-if="mode === 'large' && !isTelegramSingleColumnTimeline" :flow-id="flowId" />
 
     <!-- Small Mode: Vertical Timeline -->
-    <div v-if="mode === 'small'" class="small-timeline-wrapper">
+    <div v-if="mode === 'small' || isTelegramSingleColumnTimeline" class="small-timeline-wrapper">
       <div class="timeline-context-pill compact">
         <span>{{ currentSourceLabel }}</span>
       </div>
@@ -122,7 +122,7 @@
     </div>
 
     <!-- Large Mode: Floating Nodes Matrix -->
-    <div v-if="mode === 'large'" class="large-timeline-wrapper" style="width: 100%; height: 100%;">
+    <div v-if="mode === 'large' && !isTelegramSingleColumnTimeline" class="large-timeline-wrapper" style="width: 100%; height: 100%;">
       <div class="large-header">
         <div class="header-left">
           <div class="header-title">
@@ -399,6 +399,7 @@ const timelineSkinStyle = computed(() => timelineSkinVars.value);
 const isMobileDevice = computed(() => {
   return props.isMobile || (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
 });
+const isTelegramSingleColumnTimeline = computed(() => timelineVariant.value === 'telegram' && isMobileDevice.value);
 
 const lf = ref<LogicFlow | null>(null);
 const lfContainerRef = ref<HTMLElement | null>(null);
@@ -1068,7 +1069,7 @@ const handleRollbackNode = async (node: TimelineViewNode) => {
     ? '确定回滚并重新编辑这条输入吗？后续分支将被物理删除。'
     : '警告：物理回退将删除该节点之后的所有异界分支，此操作不可逆。确定执行吗？';
 
-  const isConfirmed = await lwApi.confirm({
+  const isConfirmed = await lwApi.services.host.confirm({
     title: '物理回滚确认',
     message,
     confirmText: '确定回退',
@@ -1894,7 +1895,7 @@ onUnmounted(() => {
 .lw-timeline-container[data-skin-variant='discord'] .large-header,
 .lw-timeline-container[data-skin-variant='discord'] .canvas-controls {
   background: var(--lw-timeline-header-bg, var(--lw-surface-container-high));
-  border-color: var(--lw-border-strong);
+  border-color: var(--lw-timeline-header-border, var(--lw-border-strong));
   backdrop-filter: none;
   box-shadow: var(--lw-shadow-card);
 }
@@ -1908,21 +1909,21 @@ onUnmounted(() => {
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .source-chip.active {
-  background: color-mix(in srgb, var(--lw-primary) 24%, var(--lw-timeline-chip-bg, var(--lw-surface-container-high)));
-  border-color: var(--lw-border-active);
+  background: var(--lw-timeline-chip-active-bg, color-mix(in srgb, var(--lw-primary) 24%, var(--lw-timeline-chip-bg, var(--lw-surface-container-high))));
+  border-color: var(--lw-timeline-chip-active-border, var(--lw-border-active));
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .s-card,
 .lw-timeline-container[data-skin-variant='discord'] .s-actions-group,
 .lw-timeline-container[data-skin-variant='discord'] .s-action-card {
   background: var(--lw-timeline-card-bg, var(--lw-surface-container-low));
-  border-color: var(--lw-border-strong);
-  box-shadow: none;
+  border-color: var(--lw-timeline-card-border, var(--lw-border-strong));
+  box-shadow: var(--lw-timeline-card-shadow, none);
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .s-card.active {
-  background: var(--lw-surface-container-lowest);
-  border-color: var(--lw-border-active);
+  background: var(--lw-timeline-card-active-bg, var(--lw-surface-container-lowest));
+  border-color: var(--lw-timeline-card-active-border, var(--lw-border-active));
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .s-card:hover {
@@ -1937,10 +1938,81 @@ onUnmounted(() => {
 .lw-timeline-container[data-skin-variant='discord'] .s-variant-info,
 .lw-timeline-container[data-skin-variant='discord'] .l-modal-header,
 .lw-timeline-container[data-skin-variant='discord'] .l-modal-footer {
-  border-color: var(--lw-border-strong);
+  border-color: var(--lw-timeline-modal-border, var(--lw-border-strong));
 }
 
 .lw-timeline-container[data-skin-variant='discord'] .global-loading-overlay {
   background: var(--lw-timeline-loading-overlay-bg, rgba(30, 31, 34, 0.72));
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] {
+  background: var(--lw-timeline-canvas-bg, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%), rgba(232, 245, 255, 0.58));
+  color: var(--lw-text-main);
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .small-timeline-wrapper {
+  padding: 14px;
+  background: transparent;
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .timeline-context-pill,
+.lw-timeline-container[data-skin-variant='telegram'] .header-source-pill,
+.lw-timeline-container[data-skin-variant='telegram'] .source-chip {
+  min-height: 34px;
+  border-radius: 999px;
+  border-color: var(--lw-timeline-chip-border, rgba(148, 190, 219, 0.34));
+  background: var(--lw-timeline-chip-bg, rgba(255, 255, 255, 0.68));
+  color: var(--lw-text-secondary);
+  box-shadow: none;
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .source-chip.active {
+  color: var(--lw-primary);
+  background: var(--lw-timeline-chip-active-bg, rgba(227, 244, 255, 0.82));
+  border-color: var(--lw-timeline-chip-active-border, rgba(82, 171, 233, 0.46));
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .s-card,
+.lw-timeline-container[data-skin-variant='telegram'] .s-action-card,
+.lw-timeline-container[data-skin-variant='telegram'] .s-actions-group,
+.lw-timeline-container[data-skin-variant='telegram'] .large-header,
+.lw-timeline-container[data-skin-variant='telegram'] .canvas-controls,
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-container {
+  background: var(--lw-timeline-card-bg, rgba(255, 255, 255, 0.74));
+  border-color: var(--lw-timeline-card-border, rgba(148, 190, 219, 0.38));
+  border-radius: 18px;
+  box-shadow: var(--lw-timeline-card-shadow, var(--lw-telegram-panel-shadow, 0 18px 42px rgba(44, 92, 130, 0.12)));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .s-card.active {
+  border-color: var(--lw-timeline-card-active-border, rgba(82, 171, 233, 0.52));
+  background: var(--lw-timeline-card-active-bg, rgba(255, 255, 255, 0.86));
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .s-action-card,
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-action-btn {
+  min-height: 44px;
+  border-radius: 999px;
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-overlay {
+  background: var(--lw-timeline-modal-overlay-bg, rgba(212, 235, 250, 0.42));
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-body,
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-footer {
+  background: var(--lw-timeline-modal-body-bg, rgba(255, 255, 255, 0.62));
+}
+
+@media (max-width: 720px) {
+  .lw-timeline-container[data-skin-variant='telegram'] .small-timeline-wrapper {
+    padding: 12px 12px calc(92px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .lw-timeline-container[data-skin-variant='telegram'] .l-modal-overlay {
+    padding: 12px;
+  }
 }
 </style>

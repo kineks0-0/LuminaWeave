@@ -36,7 +36,7 @@ export class LorebookManager extends LuminaWeaveAPIBase {
     }
 
     private restoreSnapshots(): void {
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined' || !window.localStorage) return;
         try {
             const raw = window.localStorage.getItem(this.snapshotStorageKey);
             if (!raw) return;
@@ -53,7 +53,7 @@ export class LorebookManager extends LuminaWeaveAPIBase {
     }
 
     private persistSnapshots(): void {
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined' || !window.localStorage) return;
 
         const tryWrite = (list: LorebookEntrySnapshot[]): boolean => {
             try {

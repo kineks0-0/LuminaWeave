@@ -3,6 +3,7 @@ import type {
     ForgeDraftTree,
     ForgeStructuredFieldState,
     ForgeStructuredFormState,
+    ForgeStructuredSubmitConfig,
     ForgeStructuredState
 } from '../../../types/ForgeStructuredTypes.js';
 import type { ForgeMemoryEntry, ForgeMemoryTree } from '../../../types/ForgeMemoryTypes.js';
@@ -11,7 +12,14 @@ export const createEmptyStructuredState = (): ForgeStructuredState => ({
     activeFormId: null,
     forms: {},
     activeMessageFormId: null,
+    submitConfigs: {},
+    submittedScopes: {},
     lastUpdatedAt: Date.now()
+});
+
+const cloneStructuredSubmitConfig = (config: Partial<ForgeStructuredSubmitConfig> | undefined): ForgeStructuredSubmitConfig => ({
+    label: typeof config?.label === 'string' ? config.label : '',
+    updatedAt: typeof config?.updatedAt === 'number' ? config.updatedAt : Date.now()
 });
 
 export const createEmptyDraftTree = (): ForgeDraftTree => ({
@@ -63,6 +71,16 @@ export const cloneStructuredState = (state?: Partial<ForgeStructuredState> | nul
     return {
         activeFormId: typeof state?.activeFormId === 'string' ? state.activeFormId : null,
         activeMessageFormId: typeof state?.activeMessageFormId === 'string' ? state.activeMessageFormId : null,
+        submitConfigs: Object.entries(state?.submitConfigs || {}).reduce<Record<string, ForgeStructuredSubmitConfig>>((acc, [scopeId, config]) => {
+            acc[scopeId] = cloneStructuredSubmitConfig(config);
+            return acc;
+        }, {}),
+        submittedScopes: Object.entries(state?.submittedScopes || {}).reduce<Record<string, number>>((acc, [scopeId, submittedAt]) => {
+            if (typeof submittedAt === 'number' && Number.isFinite(submittedAt)) {
+                acc[scopeId] = submittedAt;
+            }
+            return acc;
+        }, {}),
         forms: Object.entries(state?.forms || {}).reduce<Record<string, ForgeStructuredFormState>>((acc, [formId, formState]) => {
             acc[formId] = cloneStructuredFormState(formId, formState);
             return acc;

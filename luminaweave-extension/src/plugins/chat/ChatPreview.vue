@@ -27,27 +27,44 @@
       <div
         ref="viewportRef"
         class="preview-viewport"
-        :class="[{ 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document' }]"
         :data-skin-variant="chatVariant || 'default'"
       >
-        <!-- 场景1: 排版预览 -->
-        <div v-if="activeTab === 'typography'" class="scene-typography">
-          <div class="preview-bubble ai">
-            <div class="bubble-content">
-              <p>这是一个<strong>排版预览</strong>示例。你可以观察到<u>字体</u>、<u>字号</u>、<u>行高</u>以及<u>字间距</u>的变化。</p>
-              <p>明月出天山，苍茫云海间。长风几万里，吹度玉门关。</p>
+        <div v-if="showPreviewTopbar" class="preview-topbar">
+          <div class="preview-topbar-peer">
+            <div v-if="assistantAvatarPlacement === 'topbar'" class="preview-topbar-avatar">A</div>
+            <div v-if="userAvatarPlacement === 'topbar'" class="preview-topbar-avatar preview-topbar-avatar--user">U</div>
+            <div class="preview-topbar-copy">
+              <strong>当前会话</strong>
+              <small>{{ assistantShapeLabel }} / {{ userShapeLabel }}</small>
             </div>
           </div>
-          <div class="preview-bubble user">
-            <div class="bubble-content">
-              <p>用户消息的显示效果也会同步更新。</p>
+        </div>
+        <!-- 场景1: 排版预览 -->
+        <div v-if="activeTab === 'typography'" class="scene-typography">
+          <div class="preview-message ai" :data-message-shape="assistantShape" :data-avatar-placement="assistantAvatarPlacement">
+            <div v-if="showPreviewAvatar('assistant')" class="preview-avatar" aria-hidden="true">A</div>
+            <div class="preview-bubble ai">
+              <div class="bubble-content">
+                <div v-if="showPreviewMeta('assistant')" class="preview-meta">Assistant</div>
+                <p>这是一个<strong>排版预览</strong>示例。你可以观察到<u>字体</u>、<u>字号</u>、<u>行高</u>以及<u>字间距</u>的变化。</p>
+                <p>明月出天山，苍茫云海间。长风几万里，吹度玉门关。</p>
+              </div>
+            </div>
+          </div>
+          <div class="preview-message user" :data-message-shape="userShape" :data-avatar-placement="userAvatarPlacement">
+            <div v-if="showPreviewAvatar('user')" class="preview-avatar preview-avatar--user" aria-hidden="true">U</div>
+            <div class="preview-bubble user">
+              <div class="bubble-content">
+                <div v-if="showPreviewMeta('user')" class="preview-meta">You</div>
+                <p>这是一个<strong>排版预览</strong>示例。你可以观察到<u>字体</u>、<u>字号</u>、<u>行高</u>以及<u>字间距</u>的变化。</p>
+                <p>用户消息的显示效果也会同步更新。</p>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- 场景2: 流式模拟 -->
         <div v-if="activeTab === 'streaming'" class="scene-streaming">
-          <!-- 实验性参数控制 -->
           <div class="sim-dashboard">
             <div class="sim-param">
               <label>原始流速 (字/块)</label>
@@ -69,18 +86,21 @@
             </div>
           </div>
 
-          <div class="preview-bubble ai streaming" :class="{ 'is-simulating': isSimulating }">
-            <div class="bubble-content">
-              <p v-if="simulationText" v-html="renderText(simulationText)"></p>
-              <div v-else class="placeholder-text">配置上方参数并启动模拟...</div>
-              <!-- 模拟光标 -->
-              <span v-if="isSimulating" class="sim-cursor"></span>
+          <div class="preview-message ai" :data-message-shape="assistantShape" :data-avatar-placement="assistantAvatarPlacement">
+            <div v-if="showPreviewAvatar('assistant')" class="preview-avatar" aria-hidden="true">A</div>
+            <div class="preview-bubble ai streaming" :class="{ 'is-simulating': isSimulating }">
+              <div class="bubble-content">
+                <div v-if="showPreviewMeta('assistant')" class="preview-meta">Assistant</div>
+                <div v-if="simulationText" v-html="renderText(simulationText)"></div>
+                <div v-else class="placeholder-text">配置上方参数并启动模拟...</div>
+                <span v-if="isSimulating" class="sim-cursor"></span>
+              </div>
             </div>
           </div>
-          
+
           <div class="sim-live-stats" v-if="isSimulating">
-             <span>队列积压: {{ queue.length }}</span>
-             <span>当前帧步长: {{ currentStep }}</span>
+            <span>队列积压: {{ queue.length }}</span>
+            <span>当前帧步长: {{ currentStep }}</span>
           </div>
         </div>
       </div>
@@ -125,15 +145,28 @@ const { cssVars: previewSkinVars, variant: chatVariant } = useComponentSkin('cha
 
 const previewStyle = computed(() => {
   return {
-    '--lw-preview-font': activeSettings['lumina-chat.fontFamily'] || 'sans-serif',
-    '--lw-preview-size': (activeSettings['lumina-chat.fontSize'] || 16) + 'px',
-    '--lw-preview-lh': activeSettings['lumina-chat.lineHeight'] || 1.6,
-    '--lw-preview-ps': (activeSettings['lumina-chat.paragraphSpacing'] || 16) + 'px',
-    '--lw-preview-ls': (activeSettings['lumina-chat.letterSpacing'] || 0) + 'px',
-    '--lw-preview-weight': activeSettings['lumina-chat.fontWeight'] || 400,
     ...previewSkinVars.value
   };
 });
+
+const assistantShape = computed(() => String(previewStyle.value['--lw-chat-preview-assistant-shape'] || 'bubble'));
+const userShape = computed(() => String(previewStyle.value['--lw-chat-preview-user-shape'] || 'bubble'));
+const assistantAvatarPlacement = computed(() => String(previewStyle.value['--lw-chat-preview-assistant-avatar-placement'] || 'inline'));
+const userAvatarPlacement = computed(() => String(previewStyle.value['--lw-chat-preview-user-avatar-placement'] || 'inline'));
+const showPreviewTopbar = computed(() => assistantAvatarPlacement.value === 'topbar' || userAvatarPlacement.value === 'topbar');
+const assistantShapeLabel = computed(() => assistantShape.value === 'document' ? 'AI 文档' : 'AI 气泡');
+const userShapeLabel = computed(() => userShape.value === 'document' ? '用户文档' : '用户气泡');
+
+const showPreviewAvatar = (role: 'assistant' | 'user') => {
+  const placement = role === 'assistant' ? assistantAvatarPlacement.value : userAvatarPlacement.value;
+  return placement === 'inline';
+};
+
+const showPreviewMeta = (role: 'assistant' | 'user') => {
+  const placement = role === 'assistant' ? assistantAvatarPlacement.value : userAvatarPlacement.value;
+  const shape = role === 'assistant' ? assistantShape.value : userShape.value;
+  return placement !== 'hidden' && placement !== 'topbar' && shape !== 'document';
+};
 
 const renderText = (text: string) => {
   return text.split('\n').map(p => `<p>${p}</p>`).join('');
@@ -309,16 +342,80 @@ onUnmounted(stopSimulation);
   color: var(--lw-chat-preview-text-color, var(--lw-text-main));
 }
 
+.preview-topbar {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 16px;
+}
+
+.preview-topbar-peer {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lw-chat-preview-bubble-bg, var(--lw-bg-surface)) 78%, transparent);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.preview-topbar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.preview-topbar-copy strong {
+  font-size: 12px;
+}
+
+.preview-topbar-copy small {
+  font-size: 11px;
+  color: var(--lw-text-secondary);
+}
+
+.preview-topbar-avatar,
+.preview-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--lw-chat-preview-avatar-radius, 999px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lw-primary);
+  background: color-mix(in srgb, var(--lw-primary) 14%, var(--lw-chat-preview-bubble-bg, var(--lw-bg-surface)));
+  flex-shrink: 0;
+}
+
+.preview-topbar-avatar--user,
+.preview-avatar--user {
+  color: var(--lw-text-secondary);
+  background: color-mix(in srgb, var(--lw-text-muted) 18%, var(--lw-chat-preview-user-bubble-bg, var(--lw-bg-hover)));
+}
+
+.preview-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 100%;
+  margin-bottom: 12px;
+}
+
+.preview-message.user {
+  justify-content: flex-end;
+  flex-direction: row-reverse;
+}
+
 .preview-bubble {
   max-width: 85%;
   padding: var(--lw-chat-preview-padding, 12px 16px);
   border-radius: var(--lw-chat-preview-bubble-radius, 12px);
-  margin-bottom: 12px;
-  font-family: var(--lw-preview-font), sans-serif;
-  font-weight: var(--lw-preview-weight, 400);
-  font-size: var(--lw-preview-size);
-  line-height: var(--lw-preview-lh);
-  letter-spacing: var(--lw-preview-ls);
+  font-family: var(--lw-chat-preview-font, var(--lw-font-main)), sans-serif;
+  font-weight: var(--lw-chat-preview-font-weight, 400);
+  font-size: var(--lw-chat-preview-font-size, 16px);
+  line-height: var(--lw-chat-preview-line-height, 1.6);
+  letter-spacing: var(--lw-chat-preview-letter-spacing, 0px);
   color: var(--lw-chat-preview-text-color, var(--lw-text-main));
   background: var(--lw-chat-preview-bubble-bg, var(--lw-bg-surface));
   border: 1px solid rgba(0,0,0,0.05);
@@ -326,35 +423,42 @@ onUnmounted(stopSimulation);
 }
 
 .preview-bubble.ai { align-self: flex-start; }
-.preview-bubble.user { align-self: flex-end; background: var(--lw-chat-preview-user-bubble-bg, #f1f5f9); margin-left: auto; }
+.preview-bubble.user { align-self: flex-end; background: var(--lw-chat-preview-user-bubble-bg, #f1f5f9); }
 
-/* Document Mode overrides */
-.preview-viewport.doc-mode {
-  padding: 24px 40px;
+.preview-meta {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lw-text-secondary);
 }
 
-.preview-viewport.doc-mode .scene-typography,
-.preview-viewport.doc-mode .scene-streaming {
-  display: flex;
-  flex-direction: column;
-}
-
-.preview-viewport.doc-mode .preview-bubble {
+.preview-message[data-message-shape='document'] .preview-bubble {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
   max-width: 100% !important;
-  margin-bottom: var(--lw-preview-ps) !important;
   border-radius: 0;
 }
 
-.preview-viewport.doc-mode .preview-bubble.user {
-  margin-left: 0 !important;
-  align-self: flex-start !important;
+.preview-message[data-message-shape='document'] {
+  justify-content: flex-start;
+  flex-direction: row;
 }
 
-.bubble-content p { margin: 0 0 var(--lw-preview-ps) 0; }
+.preview-message[data-message-shape='document'][data-avatar-placement='hidden'] .preview-avatar,
+.preview-message[data-message-shape='document'][data-avatar-placement='topbar'] .preview-avatar,
+.preview-message[data-message-shape='document'][data-avatar-placement='rail'] .preview-avatar {
+  display: none;
+}
+
+.preview-message[data-avatar-placement='hidden'] .preview-avatar,
+.preview-message[data-avatar-placement='topbar'] .preview-avatar,
+.preview-message[data-avatar-placement='rail'] .preview-avatar {
+  display: none;
+}
+
+.bubble-content p { margin: 0 0 var(--lw-chat-preview-paragraph-spacing, 16px) 0; }
 .bubble-content p:last-child { margin-bottom: 0; }
 
 /* Dashboard */

@@ -141,6 +141,7 @@
                       </div>
                       <div class="msg-bubble">
                         <ForgeMessageRenderer
+                          :message-id="item.message.id"
                           :mes="item.message.mes || undefined"
                           :mes-raw="item.message.mesRaw || item.message.mes || ''"
                           :plugin-raw="item.message.pluginRaw || null"
@@ -694,7 +695,7 @@ const handleAuxPanelClick = (panel: ForgeAuxPanelKind) => {
         if (workspaceActions?.openWorkspaceApp) {
             workspaceActions.openWorkspaceApp(`panel:${meta.id}`);
         } else {
-            luminaWeaveApi.openPanel(meta.id, { kind: panel }, { mode: 'tab' });
+            luminaWeaveApi.services.desktopSurface.openPanel(meta.id, { kind: panel }, { mode: 'tab' });
         }
         return;
     }
@@ -1469,14 +1470,14 @@ onUnmounted(() => {
 
 .role-assistant .msg-bubble :deep(.lv-message-renderer p) {
   margin: 0;
-  font-size: 15px;
+  font-size: 13.5px;
   line-height: 1.72;
   color: var(--lw-text-main);
 }
 
 .role-user .msg-bubble :deep(.lv-message-renderer p) {
   margin: 0;
-  font-size: 15px;
+  font-size: 13.5px;
   line-height: 1.62;
 }
 

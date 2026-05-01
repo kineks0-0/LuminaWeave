@@ -1,7 +1,7 @@
 import { computed, nextTick, ref, watch, type CSSProperties, type ComputedRef, type Ref } from 'vue';
 import { CharacterChannelService } from '../../api/core/CharacterChannelService';
 import { luminaWeaveApi as lwApi } from '../../api/index';
-import { getThemeSettingValue } from '../../theme/themeRegistry';
+import { getDesktopModeSettingStorageKey, getThemeSettingValue } from '../../theme/themeRegistry';
 import { useConversationContextStore } from '../../stores/useConversationContextStore';
 import type { DynamicTabConfig } from '../../shell/types';
 import type { LuminaPlugin } from '../../types/plugin';
@@ -33,6 +33,7 @@ export const useDiscordShell = ({
   dynamicTabs,
   activeMainTab,
   shouldShowForgeSidebar,
+  updateSetting,
   onSwitchMainView
 }: {
   activeDesktopModeId: Ref<string> | ComputedRef<string>;
@@ -44,6 +45,7 @@ export const useDiscordShell = ({
   dynamicTabs: Ref<DynamicTabConfig[]>;
   activeMainTab: Ref<string>;
   shouldShowForgeSidebar: ComputedRef<boolean>;
+  updateSetting: (key: string, value: unknown) => Promise<void> | void;
   onSwitchMainView: (tabId: string) => void;
 }) => {
   const contextStore = useConversationContextStore();
@@ -53,6 +55,10 @@ export const useDiscordShell = ({
 
   const discordChannelMarkVisible = computed(() =>
     getThemeSettingValue(activeSettings, activeDesktopModeId.value, 'discord-channel-mark', true) !== false
+  );
+
+  const isCharacterChannelDesktopMode = computed(() =>
+    activeDesktopModeId.value === 'discord' || activeDesktopModeId.value === 'telegram'
   );
 
   const isDiscordMobileMode = computed(() =>
@@ -90,6 +96,7 @@ export const useDiscordShell = ({
     layoutMode.value === 'traditional'
     && traditionalLeftRail.value === 'character-rail'
     && !isMobile.value
+    && isCharacterChannelDesktopMode.value
     && !shouldShowForgeSidebar.value
   );
 
@@ -154,6 +161,17 @@ export const useDiscordShell = ({
   const handleDiscordMobileMainViewSwitch = (tabId: string) => {
     showDiscordMobileCharacterRail.value = false;
     onSwitchMainView(tabId);
+  };
+
+  const toggleDiscordGuildRail = async () => {
+    if (activeDesktopModeId.value !== 'discord') {
+      return;
+    }
+
+    await updateSetting(
+      getDesktopModeSettingStorageKey(activeDesktopModeId.value, 'discord-channel-mark'),
+      !discordChannelMarkVisible.value
+    );
   };
 
   const logDiscordSwitch = (message: string, payload?: unknown) => {
@@ -350,6 +368,7 @@ export const useDiscordShell = ({
     discordMobileMainStyle,
     discordMobileCharacterEntryStyle,
     handleDiscordMobileMainViewSwitch,
+    toggleDiscordGuildRail,
     openDiscordChatSession,
     openDiscordMobileChatSession,
     createDiscordChatSession,

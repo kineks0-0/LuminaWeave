@@ -255,7 +255,7 @@ export class ForgeSessionRepository {
         // 2. 根据同步结果决定本地存储深度
         const sessions = this.readLocal();
         const index = sessions.findIndex(item => item.id === session.id);
-        
+
         // 本地禁止保存聊天记录与完整状态，仅保留元数据存根
         // 即使同步失败也不回退到本地完整备份，以彻底避免 LocalStorage 溢出
         const localContent = this.dehydrateSession(normalizedSession);
@@ -268,7 +268,7 @@ export class ForgeSessionRepository {
 
         this.writeLocal(sessions);
         this.setActiveSessionId(normalizedSession.id);
-        
+
         if (syncSuccess) {
             console.log(`[ForgeRepository] 会话已成功同步至后端，本地存根已更新: ${session.id}`);
         } else {
@@ -347,30 +347,54 @@ export class ForgeSessionRepository {
 
     async refreshFromServer(): Promise<void> {
         try {
+            console.log('[ForgeRepository] 正在从服务端同步会话列表...');
             const data = await BridgeDispatcher.conversation.listConversations();
             const remote = Array.isArray(data.conversations)
                 ? data.conversations.filter((conversation) => conversation.conversationType === 'forge')
                 : [];
+
+            console.debug(`[ForgeRepository] 服务端共返回 ${remote.length} 个 Forge 会话。`);
+
             const hydratedRemote = await Promise.all(remote.map(async (conversation) => {
-                const full = await BridgeDispatcher.conversation.getConversation(conversation.id);
-                return full.document ? this.conversationToSession(full.document) : null;
+                try {
+                    const full = await BridgeDispatcher.conversation.getConversation(conversation.id);
+                    if (full?.document) {
+                        console.debug(`[ForgeRepository] 会话加载成功: ${conversation.id}`);
+                        return this.conversationToSession(full.document);
+                    }
+                    return null;
+                } catch (err) {
+                    console.warn(`[ForgeRepository] 加载单个服务端会话失败: ${conversation.id}`, err);
+                    return null;
+                }
             }));
             const remoteSessions = hydratedRemote.filter((session): session is ForgeWorkspaceSession => Boolean(session));
-            
+
             const local = this.readLocal();
-            
+
             // 迁移逻辑：如果本地有远端没有的会话，尝试同步给远端
             const remoteIds = new Set(remoteSessions.map((s) => s.id));
             const migrationTasks = local.filter(s => !remoteIds.has(s.id));
             if (migrationTasks.length > 0) {
                 console.log(`[ForgeRepository] 发现 ${migrationTasks.length} 个未同步的本地会话，正在迁移至后端...`);
                 for (const session of migrationTasks) {
-                    await this.syncSessionToServer(session).catch(() => {});
+                    try {
+                        const success = await this.syncSessionToServer(session);
+                        if (success) {
+                            console.log(`[ForgeRepository] 会话自动迁移成功: ${session.id}`);
+                        } else {
+                            console.warn(`[ForgeRepository] 会话自动迁移失败 (服务器接受异常): ${session.id}`);
+                        }
+                    } catch (err) {
+                        console.error(`[ForgeRepository] 会话自动迁移崩溃: ${session.id}`, err);
+                    }
                 }
+                console.log('[ForgeRepository] 本地会话迁移流程结束。');
             }
 
             const merged = this.mergeSessions(local, remoteSessions);
             this.writeLocal(merged);
+            console.log(`[ForgeRepository] 会话同步完成，当前共 ${merged.length} 个活跃会话。`);
         } catch (e) {
             console.warn('[ForgeRepository] 刷新服务端会话列表失败，降级为本地模式', e);
         }

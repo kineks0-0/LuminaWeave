@@ -1,6 +1,6 @@
-import { 
-    ILuminaBridge, 
-    IStreamingHandle, 
+import {
+    ILuminaBridge,
+    IStreamingHandle,
     IStreamingCallbacks,
     IStoreService,
     IConversationService
@@ -17,6 +17,17 @@ import { applyConversationMutation } from '@shared/ConversationReducer.js';
 import { migrateLegacyChatArray, migrateLegacyForgeSession } from '@shared/ConversationMigration.js';
 import { resolveConversationSummary } from '@shared/ConversationSummaryResolver.js';
 
+interface CacheEntry<T> {
+    data: T;
+    at: number;
+}
+
+interface WriteBufferEntry {
+    type: 'set' | 'update' | 'delete';
+    params: any;
+    at: number;
+}
+
 /**
  * TauriBridgeAdapter
  * 适配 TauriTavern (Android/Native) 环境
@@ -25,6 +36,16 @@ import { resolveConversationSummary } from '@shared/ConversationSummaryResolver.
 export class TauriBridgeAdapter implements ILuminaBridge {
     public readonly conversation: IConversationService;
     private static readonly CONVERSATION_NAMESPACE = 'lumina_conversations';
+
+    // 缓存配置与状态
+    private _jsonCache = new Map<string, CacheEntry<any>>(); // key: namespace:key
+    private _keysCache = new Map<string, CacheEntry<string[]>>(); // key: namespace
+    private _writeBuffer = new Map<string, WriteBufferEntry>(); // key: namespace:key
+    private _syncTimer: any = null;
+
+    private static readonly LIST_TTL = 5000;
+    private static readonly JSON_TTL = 30000;
+    private static readonly SYNC_INTERVAL = 1500;
 
     private get bridge() {
         return EnvDetector.tauriBridge;
@@ -73,6 +94,8 @@ export class TauriBridgeAdapter implements ILuminaBridge {
     constructor() {
         this.conversation = {
             listConversations: async () => {
+                // 读取前强制 flush 缓冲，保证对齐
+                await this.flushBuffer();
                 const ids = await this.listUnifiedConversationIds();
                 const documents = (await Promise.all(ids.map((id) => this.readUnifiedConversation(id))))
                     .filter((document): document is ConversationDocument => Boolean(document));
@@ -80,9 +103,12 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                     conversations: documents.map((document) => resolveConversationSummary(document))
                 };
             },
-            getConversation: async (id: string) => ({
-                document: await this.readUnifiedConversation(id)
-            }),
+            getConversation: async (id: string) => {
+                await this.flushBuffer();
+                return {
+                    document: await this.readUnifiedConversation(id)
+                };
+            },
             saveConversation: async (id: string, document: ConversationDocument) => {
                 const nextSeq = (document.transaction?.lastCommittedSeq || 0) + 1;
                 const saved: ConversationDocument = {
@@ -160,6 +186,40 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                 lastCommittedSeq: (await this.readUnifiedConversation(id))?.transaction.lastCommittedSeq || 0
             })
         };
+
+        // 启动回写定时器
+        this._syncTimer = setInterval(() => this.flushBuffer(), TauriBridgeAdapter.SYNC_INTERVAL);
+    }
+
+    private getCacheKey(namespace: string, key: string): string {
+        return `${namespace}:${key}`;
+    }
+
+    private async flushBuffer(): Promise<void> {
+        if (this._writeBuffer.size === 0) return;
+
+        const tasks = Array.from(this._writeBuffer.entries());
+        this._writeBuffer.clear();
+
+        console.debug(`[Lumina Bridge] Flushing write buffer: ${tasks.length} tasks.`);
+
+        for (const [id, entry] of tasks) {
+            try {
+                const store = this.getStore();
+                if (entry.type === 'set') {
+                    if (store?.setJson) await store.setJson(entry.params);
+                    else await this.invoke('set_extension_store_json', entry.params);
+                } else if (entry.type === 'update') {
+                    if (store?.updateJson) await store.updateJson(entry.params);
+                    else await this.invoke('update_extension_store_json', entry.params);
+                } else if (entry.type === 'delete') {
+                    if (store?.deleteJson) await store.deleteJson(entry.params);
+                    else await this.invoke('delete_extension_store_json', entry.params);
+                }
+            } catch (err) {
+                console.error(`[Lumina Bridge] Flush task failed for ${id}:`, err);
+            }
+        }
     }
 
 
@@ -196,7 +256,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
         if (/^[a-z0-9_.-]+$/i.test(key) && !key.startsWith(TauriBridgeAdapter.HEX_PREFIX)) {
             return key;
         }
-        
+
         // 否则使用 hex 编码以确保 ABI 合规性 [A-Za-z0-9_.-]
         const encoder = new TextEncoder();
         const bytes = encoder.encode(key);
@@ -209,7 +269,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
 
     private decodeKey(key: string): string {
         if (!key.startsWith(TauriBridgeAdapter.HEX_PREFIX)) return key;
-        
+
         try {
             const hex = key.slice(TauriBridgeAdapter.HEX_PREFIX.length);
             const bytes = new Uint8Array(hex.length / 2);
@@ -252,12 +312,14 @@ export class TauriBridgeAdapter implements ILuminaBridge {
     private isCommandIncompatible(err: any): boolean {
         const msg = (err?.message || String(err)).toLowerCase();
         // 兼容多种形态的“未找到”消息，涵盖指令缺失、存储项缺失及物理路径缺失 (os error 3)
-        return msg.includes('not found') || 
-               msg.includes('notfound') || 
-               msg.includes('os error 3') || 
-               msg.includes('系统找不到指定的路径') || 
-               msg.includes('missing required key') || 
-               msg.includes('invalid args');
+        // 增加对 _ltx_ 的识别：如果报错信息本身就是被编码的 Key，说明后端在处理该特定 Key 时崩溃，应触发降级逻辑
+        return msg.includes('not found') ||
+               msg.includes('notfound') ||
+               msg.includes('os error 3') ||
+               msg.includes('系统找不到指定的路径') ||
+               msg.includes('missing required key') ||
+               msg.includes('invalid args') ||
+               msg.includes(TauriBridgeAdapter.HEX_PREFIX);
     }
 
     chat = {
@@ -267,11 +329,11 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                 // 策略升级：镜像先行 (Mirror-First)
                 // 优先从 Lumina 自己的扩展存储中读取备份。
                 // 理由：Lumina 的备份使用了可逆 Hex 编码，不受物理路径编码限制，且读取操作已被我们的防御性查询保护，不会弹窗。
-                const data = await this.extensionStore.getJson({ 
-                    namespace: 'lumina_chats', 
-                    key: chatId 
+                const data = await this.extensionStore.getJson({
+                    namespace: 'lumina_chats',
+                    key: chatId
                 });
-                
+
                 if (data) {
                     // 如果镜像存在，直接返回数据，完全绕过可能报错的原生 invoke 调用
                     if (typeof data === 'object' && 'data' in data && Array.isArray(data.data)) {
@@ -288,7 +350,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                     // 只有确定镜像没有且原生存在，才发起 invoke
                     return await this.invoke('get_chat', { chatId, fileName: chatId, characterName });
                 }
-                
+
                 return null;
             } catch (err: any) {
                 // 最后的保底拦截：如果 native 调用还是由于某些原因进来了并报了错
@@ -306,19 +368,19 @@ export class TauriBridgeAdapter implements ILuminaBridge {
             } catch (err: any) {
                 if (this.isCommandIncompatible(err)) {
                     console.info(`[Lumina Bridge] save_chat 降级至 extensionStore (原因: ABI 冲突)`);
-                    await this.extensionStore.setJson({ 
-                        namespace: 'lumina_chats', 
-                        key: chatId, 
-                        value: payload 
+                    await this.extensionStore.setJson({
+                        namespace: 'lumina_chats',
+                        key: chatId,
+                        value: payload
                     });
                     // 返回模拟响应，满足 PersistenceService 对事务结果的期待
                     const seq = payload.transactionContext?.expectedSeq ?? 0;
-                    return { 
-                        success: true, 
+                    return {
+                        success: true,
                         lastCommittedSeq: seq,
-                        transaction: { 
-                            id: `local_tx_${Date.now()}`, 
-                            seq, 
+                        transaction: {
+                            id: `local_tx_${Date.now()}`,
+                            seq,
                             status: 'committed',
                             chatId,
                             scope: 'chat.save',
@@ -340,18 +402,18 @@ export class TauriBridgeAdapter implements ILuminaBridge {
             } catch (err: any) {
                 if (this.isCommandIncompatible(err)) {
                     console.info(`[Lumina Bridge] patch_chat 降级至 extensionStore (原因: ABI 冲突)`);
-                    await this.extensionStore.updateJson({ 
-                        namespace: 'lumina_chats', 
-                        key: chatId, 
-                        value: payload 
+                    await this.extensionStore.updateJson({
+                        namespace: 'lumina_chats',
+                        key: chatId,
+                        value: payload
                     });
                     // 返回模拟响应
                     const seq = payload.transactionContext?.expectedSeq ?? 0;
-                    return { 
-                        success: true, 
+                    return {
+                        success: true,
                         lastCommittedSeq: seq,
-                        transaction: { 
-                            id: `local_tx_${Date.now()}`, 
+                        transaction: {
+                            id: `local_tx_${Date.now()}`,
                             seq,
                             status: 'committed',
                             chatId,
@@ -373,10 +435,10 @@ export class TauriBridgeAdapter implements ILuminaBridge {
             } catch (err: any) {
                 if (this.isCommandIncompatible(err)) {
                     console.info(`[Lumina Bridge] save_message 降级至 extensionStore (原因: ABI 冲突)`);
-                    return await this.extensionStore.setJson({ 
-                        namespace: this.safeNs(`lw_nodes_${chatId}`), 
-                        key: nodeId, 
-                        value: message 
+                    return await this.extensionStore.setJson({
+                        namespace: this.safeNs(`lw_nodes_${chatId}`),
+                        key: nodeId,
+                        value: message
                     });
                 }
                 throw err;
@@ -387,9 +449,9 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                 return await this.invoke('delete_message', { chatId, nodeId });
             } catch (err: any) {
                 if (this.isCommandIncompatible(err)) {
-                    return await this.extensionStore.deleteJson({ 
-                        namespace: this.safeNs(`lw_nodes_${chatId}`), 
-                        key: nodeId 
+                    return await this.extensionStore.deleteJson({
+                        namespace: this.safeNs(`lw_nodes_${chatId}`),
+                        key: nodeId
                     });
                 }
                 throw err;
@@ -463,7 +525,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                 const firstNode = payload.nodes[0];
                 if (String(firstNode.provider).startsWith('nx_')) {
                     console.log('[Lumina Bridge] 自定义 API 检测，进入本地流式生成模式...');
-                    
+
                     // 构造本地持久化委托，复用 Bridge 已有的 chat 接口
                     const delegate: PersistenceDelegate = {
                         appendChatRecord: async (cid, node) => {
@@ -475,8 +537,8 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                         commitTransaction: async (cid, scope, payloadText, idempotencyKey) => {
                             // 构造一个模拟事务返回，因为本地模式下事务由 Bridge 指令底层处理（如果是 Native）
                             // 或者如果是完全脱离模式，这里可以通过 patchChat 模拟事务提交
-                            const res = await this.chat.patchChat(cid, { 
-                                transaction: { scope, payloadText, idempotencyKey } 
+                            const res = await this.chat.patchChat(cid, {
+                                transaction: { scope, payloadText, idempotencyKey }
                             });
                             return res?.transaction || { id: `local_${Date.now()}` };
                         }
@@ -491,7 +553,15 @@ export class TauriBridgeAdapter implements ILuminaBridge {
             return this.createTauriStream('attach_stream', { params });
         },
         stop: async (chatId: string) => {
-            await this.invoke('stop_generation', { chatId });
+            try {
+                await this.invoke('stop_generation', { chatId });
+            } catch (err: any) {
+                if (this.isCommandIncompatible(err)) {
+                    console.info('[Lumina Bridge] Native stop_generation not supported or not found.');
+                    return;
+                }
+                throw err;
+            }
         },
         fetchModels: async (providerId: string) => {
             // 优先检查是否为 Lumina 自定义 API (nx_ 开头)
@@ -504,7 +574,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                     if (models && models.length > 0) return models;
                 }
             }
-            
+
             // 回退到 native 模式 (使用修正后的指令名)
             try {
                 return await this.invoke('fetch_provider_models', { providerId });
@@ -535,7 +605,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                     console.info('[Lumina Bridge] forge_list_sessions 降级至 extensionStore');
                     const keys = await this.extensionStore.listKeys({ namespace: 'lumina_forge' });
                     if (!keys || !Array.isArray(keys)) return [];
-                    
+
                     // 并行拉取，注意解码 Key
                     const sessions = await Promise.all(keys.map((k: string) => this.forge.getSession(this.decodeKey(k))));
                     return sessions.filter(s => !!s);
@@ -623,81 +693,138 @@ export class TauriBridgeAdapter implements ILuminaBridge {
 
     extensionStore = {
         getJson: async (params: { namespace: string; key: string; table?: string }) => {
-            const store = this.getStore();
-            const safeParams = { ...params, key: this.safeKey(params.key) };
-            
+            const cacheKey = this.getCacheKey(params.namespace, params.key);
+            const now = Date.now();
+
+            // 1. 内存层命中
+            const cached = this._jsonCache.get(cacheKey);
+            if (cached && now - cached.at < TauriBridgeAdapter.JSON_TTL) {
+                return cached.data;
+            }
+
             try {
-                // 防御性设计：在某些系统上直接 get 一个不存在的 Key 会触发后端警告日志。
-                // 我们通过先 listKeys 确认存在，来规避这一噪音。
+                // 2. 利用 listKeys 缓存进行预检
                 const keys = await this.extensionStore.listKeys({ namespace: params.namespace, table: params.table });
-                if (!keys || !keys.includes(params.key)) {
+                if (!keys.includes(params.key)) {
+                    console.debug(`[Lumina Bridge] getJson skipped (Cache confirmed missing). Key: ${params.key}`);
                     return null;
                 }
 
-                if (store?.getJson) return await store.getJson(safeParams);
-                return await this.invoke('get_extension_store_json', safeParams);
+                console.debug(`[Lumina Bridge] getJson fetching from remote. Key: ${params.key}`);
+                const store = this.getStore();
+                const safeKey = this.safeKey(params.key);
+                const safeNs = this.safeNs(params.namespace);
+                const safeParams = { ...params, key: safeKey, namespace: safeNs };
+
+                let result = null;
+                if (store?.getJson) result = await store.getJson(safeParams);
+                else result = await this.invoke('get_extension_store_json', safeParams);
+
+                // 写入缓存
+                this._jsonCache.set(cacheKey, { data: result, at: now });
+                return result;
             } catch (err: any) {
-                if (this.isCommandIncompatible(err)) return null;
+                if (this.isCommandIncompatible(err)) {
+                    const msg = err?.message || String(err);
+                    const decoded = msg.includes(TauriBridgeAdapter.HEX_PREFIX) ? ` (Decoded: ${this.decodeKey(msg)})` : '';
+                    console.info(`[Lumina Bridge] getJson fallback due to incompatibility: ${msg}${decoded}`);
+                    return null;
+                }
                 console.warn('[Lumina Bridge] get_extension_store_json unexpected error', err);
                 throw err;
             }
         },
         setJson: async (params: { namespace: string; key: string; value: any; table?: string }) => {
-            const store = this.getStore();
-            const safeParams = { ...params, key: this.safeKey(params.key) };
-            try {
-                if (store?.setJson) return await store.setJson(safeParams);
-                return await this.invoke('set_extension_store_json', safeParams);
-            } catch (err: any) {
-                if (!this.isCommandIncompatible(err)) throw err;
+            const cacheKey = this.getCacheKey(params.namespace, params.key);
+            const now = Date.now();
+
+            // 1. 即时更新内存缓存 (Source of Truth)
+            this._jsonCache.set(cacheKey, { data: params.value, at: now });
+
+            // 2. 更新 listKeys 缓存
+            const keysCache = this._keysCache.get(params.namespace);
+            if (keysCache && !keysCache.data.includes(params.key)) {
+                keysCache.data.push(params.key);
             }
+
+            // 3. 压入同步队列
+            const safeKey = this.safeKey(params.key);
+            const safeNs = this.safeNs(params.namespace);
+            this._writeBuffer.set(cacheKey, {
+                type: 'set',
+                params: { ...params, key: safeKey, namespace: safeNs },
+                at: now
+            });
         },
         updateJson: async (params: { namespace: string; key: string; value: any; table?: string }) => {
-            const store = this.getStore();
-            const safeParams = { ...params, key: this.safeKey(params.key) };
-            try {
-                if (store?.updateJson) return await store.updateJson(safeParams);
-                return await this.invoke('update_extension_store_json', safeParams);
-            } catch (err: any) {
-                if (!this.isCommandIncompatible(err)) throw err;
-            }
+            // 同 setJson 处理
+            await this.extensionStore.setJson(params);
         },
         renameKey: async (params: { namespace: string; key: string; newKey: string; table?: string }) => {
+            // 立即回写以保证重命名操作的基座数据正确
+            await this.flushBuffer();
+
             const store = this.getStore();
-            const safeParams = { 
-                ...params, 
-                key: this.safeKey(params.key), 
-                newKey: this.safeKey(params.newKey) 
-            };
+            const safeKey = this.safeKey(params.key);
+            const safeNewKey = this.safeKey(params.newKey);
+            const safeNs = this.safeNs(params.namespace);
+            const safeParams = { ...params, key: safeKey, newKey: safeNewKey, namespace: safeNs };
+
+            // 清理缓存
+            this._jsonCache.delete(this.getCacheKey(params.namespace, params.key));
+            this._jsonCache.delete(this.getCacheKey(params.namespace, params.newKey));
+            this._keysCache.delete(params.namespace);
+
             try {
                 if (store?.renameKey) return await store.renameKey(safeParams);
-                // 兼容性：renameKey 在底层可能是 rename_extension_store_key 或 update_extension_store_key
                 return await this.invoke('rename_extension_store_key', safeParams);
             } catch (err: any) {
                 if (!this.isCommandIncompatible(err)) throw err;
             }
         },
         deleteJson: async (params: { namespace: string; key: string; table?: string }) => {
-            const store = this.getStore();
-            const safeParams = { ...params, key: this.safeKey(params.key) };
-            try {
-                if (store?.deleteJson) return await store.deleteJson(safeParams);
-                return await this.invoke('delete_extension_store_json', safeParams);
-            } catch (err: any) {
-                if (!this.isCommandIncompatible(err)) throw err;
+            const cacheKey = this.getCacheKey(params.namespace, params.key);
+            this._jsonCache.delete(cacheKey);
+
+            const keysCache = this._keysCache.get(params.namespace);
+            if (keysCache) {
+                keysCache.data = keysCache.data.filter(k => k !== params.key);
             }
+
+            const safeKey = this.safeKey(params.key);
+            const safeNs = this.safeNs(params.namespace);
+            this._writeBuffer.set(cacheKey, {
+                type: 'delete',
+                params: { ...params, key: safeKey, namespace: safeNs },
+                at: Date.now()
+            });
         },
         listKeys: async (params: { namespace: string; table?: string }) => {
+            const now = Date.now();
+            const cached = this._keysCache.get(params.namespace);
+            if (cached && now - cached.at < TauriBridgeAdapter.LIST_TTL) {
+                return cached.data;
+            }
+
             const store = this.getStore();
-            const safeParams = { ...params, namespace: this.safeNs(params.namespace) };
+            const safeNs = this.safeNs(params.namespace);
+            const safeParams = { ...params, namespace: safeNs };
             try {
-                const keys = (store?.listKeys) 
+                console.debug(`[Lumina Bridge] listKeys (Refreshing). Ns: ${params.namespace}`);
+                const keys = (store?.listKeys)
                     ? await store.listKeys(safeParams)
                     : await this.invoke('list_extension_store_keys', safeParams);
-                
-                return (keys || []).map((k: string) => this.decodeKey(k));
+
+                const keysArray = Array.isArray(keys) ? keys : [];
+                const decoded = keysArray.map((k: string) => this.decodeKey(k));
+
+                // 更新缓存
+                this._keysCache.set(params.namespace, { data: decoded, at: now });
+                return decoded;
             } catch (err: any) {
-                if (this.isCommandIncompatible(err)) return [];
+                if (this.isCommandIncompatible(err)) {
+                    return [];
+                }
                 throw err;
             }
         },
@@ -733,7 +860,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
         getBlob: async (params: { namespace: string; key: string; table?: string }) => {
             const store = this.getStore();
             const safeParams = { ...params, key: this.safeKey(params.key) };
-            
+
             try {
                 // 防御性读取：Blob 存储同样适用
                 const keys = await this.extensionStore.listBlobKeys({ namespace: params.namespace, table: params.table });
@@ -777,8 +904,8 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                 const keys = (store?.listBlobKeys)
                     ? await store.listBlobKeys(safeParams)
                     : await this.invoke('list_extension_store_blob_keys', safeParams);
-                
-                return (keys || []).map((k: string) => this.decodeKey(k));
+
+                return (Array.isArray(keys) ? keys : []).map((k: string) => this.decodeKey(k));
             } catch (err: any) {
                 if (this.isCommandIncompatible(err)) return [];
                 throw err;
@@ -814,12 +941,12 @@ export class TauriBridgeAdapter implements ILuminaBridge {
         (async () => {
             try {
                 await this.waitReady();
-                
+
                 // 探测可用的监听函数 (兼容标准 Tauri 与 TauriTavern)
                 const bridge = EnvDetector.tauriBridge;
                 const w = window as any;
-                const listenFn = (bridge && typeof bridge.listen === 'function') 
-                    ? bridge.listen.bind(bridge) 
+                const listenFn = (bridge && typeof bridge.listen === 'function')
+                    ? bridge.listen.bind(bridge)
                     : (typeof w.listen === 'function' ? w.listen.bind(w) : null);
 
                 if (!listenFn) {
@@ -830,7 +957,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
 
                 // 发起请求 (注意：TauriTavern 中通常直接返回 streamId)
                 const streamId = await this.invoke(cmd, args);
-                
+
                 // 监听来自该 streamId 的事件
                 unlistenFunc = await listenFn(`stream-${streamId}`, (event: any) => {
                     if (isAborted) return;
@@ -839,12 +966,12 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                         case 'token': callbacks.onToken?.(data); break;
                         case 'delta': callbacks.onToken?.(data); break;
                         case 'committed': callbacks.onCommitted?.(data); break;
-                        case 'done': 
+                        case 'done':
                             isBusy = false;
-                            callbacks.onDone?.(data); 
+                            callbacks.onDone?.(data);
                             if (unlistenFunc) unlistenFunc();
                             break;
-                        case 'error': 
+                        case 'error':
                             isBusy = false;
                             callbacks.onError?.(new Error(data.message || 'Stream error'));
                             if (unlistenFunc) unlistenFunc();

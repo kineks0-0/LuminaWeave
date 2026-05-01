@@ -6,14 +6,15 @@ import { LuminaGenerationTask } from './LuminaGenerationTask.js';
 import type {
     ForgeExecutionRequest,
     ForgeExecutionResult,
-    ForgeRuntimeEvent
+    ForgeRuntimeEvent,
+    ForgeRuntimeEventSource
 } from '../../types/ForgeRuntimeTypes.js';
 
 interface RunExecutionOptions {
     onEvent?: (event: ForgeRuntimeEvent) => void;
 }
 
-type ForgeActionType = 'skill' | 'plan' | 'update' | 'memory' | 'context' | 'handoff' | 'prefill';
+type ForgeActionType = 'skill' | 'plan' | 'update' | 'memory' | 'context' | 'handoff';
 
 const TAG_TO_ACTION: Record<string, ForgeActionType> = {
     forge_skill: 'skill',
@@ -21,19 +22,31 @@ const TAG_TO_ACTION: Record<string, ForgeActionType> = {
     entry_update: 'update',
     memory_update: 'memory',
     context_read: 'context',
-    analysis_handoff: 'handoff',
-    form_prefill: 'prefill'
+    analysis_handoff: 'handoff'
 };
 
 export class ForgeExecutionGateway {
     private readonly interceptor = new BaseXMLInterceptor();
+    private activeTask: LuminaGenerationTask | null = null;
+
+    abortActiveTask(): void {
+        this.activeTask?.abort();
+        this.activeTask = null;
+    }
 
     private emitEvent(event: ForgeRuntimeEvent, sink: ForgeRuntimeEvent[], onEvent?: (event: ForgeRuntimeEvent) => void): void {
         sink.push(event);
         onEvent?.(event);
     }
 
-    private extractCompletedActionEvents(rawText: string): ForgeRuntimeEvent[] {
+    private mapRequestSourceToEventSource(request: ForgeExecutionRequest): ForgeRuntimeEventSource {
+        if (request.traceSource === 'analyst') return 'analyst';
+        if (request.traceSource === 'executor') return 'executor';
+        if (request.traceSource === 'conversation') return 'conversation';
+        return 'planner';
+    }
+
+    private extractCompletedActionEvents(rawText: string, source: ForgeRuntimeEventSource): ForgeRuntimeEvent[] {
         const blocks = extractBlocks(rawText, new Set(Object.keys(TAG_TO_ACTION)));
         return blocks.map((block) => {
             const normalizedTag = block.tagName.toLowerCase();
@@ -42,13 +55,16 @@ export class ForgeExecutionGateway {
                 type: 'action_completed',
                 actionType,
                 raw: rawText.slice(block.outerStart, block.outerEnd),
-                content: block.content
+                content: block.content,
+                source
             } as ForgeRuntimeEvent;
         });
     }
 
     async run(request: ForgeExecutionRequest, options?: RunExecutionOptions): Promise<ForgeExecutionResult> {
         const events: ForgeRuntimeEvent[] = [];
+        const requestId = request.requestId;
+        const eventSource = this.mapRequestSourceToEventSource(request);
 
         // 核心诊断日志
         console.log('[Nexus-Gateway] 收到生成请求:', { 
@@ -93,74 +109,104 @@ export class ForgeExecutionGateway {
             nodes
         });
 
+        this.emitEvent({
+            type: 'request_started',
+            requestId,
+            requestedAt: Date.now(),
+            nodeSummary: request.nodeSummary
+        }, events, options?.onEvent);
+
         const cleanedMessages = llmEngine.cleanMessages(request.messages);
 
         // 提示词捕获埋点：子模型启动前记录其上下文
         this.emitEvent({
             type: 'prompt_ready',
+            requestId,
             prompt: cleanedMessages,
         }, events, options?.onEvent);
 
         let finalRawText = '';
         let lastTraceSignature = '';
+        let hasEmittedFirstResponse = false;
 
         const task = new LuminaGenerationTask(session);
-        await task.run(cleanedMessages, {
-            onChunk: (_chunk: string, fullText: string) => {
-                finalRawText = fullText;
-                const streamState = this.interceptor.deriveStreamState(fullText, {
-                    filterChatReply: true,
-                    allowTopLevel: true,
-                    implicitThinking: false,
-                    aggressiveThinking: false
-                });
+        this.activeTask = task;
+        try {
+            await task.run(cleanedMessages, {
+                onChunk: (_chunk: string, fullText: string) => {
+                    finalRawText = fullText;
+                    const streamState = this.interceptor.deriveStreamState(fullText, {
+                        filterChatReply: true,
+                        allowTopLevel: true,
+                        implicitThinking: false,
+                        aggressiveThinking: false
+                    });
 
-                if (streamState.activeTag && Object.keys(TAG_TO_ACTION).includes(streamState.activeTag.toLowerCase())) {
-                    const signature = `${streamState.activeTag}:${streamState.statusText}`;
-                    if (signature !== lastTraceSignature) {
-                        lastTraceSignature = signature;
+                    if (!hasEmittedFirstResponse) {
+                        hasEmittedFirstResponse = true;
                         this.emitEvent({
-                            type: 'trace',
-                            tag: streamState.activeTag,
-                            status: streamState.statusText,
-                            timestamp: Date.now()
+                            type: 'first_response',
+                            requestId,
+                            firstResponseAt: Date.now()
                         }, events, options?.onEvent);
                     }
-                }
 
-                this.emitEvent({
-                    type: 'stream_chunk',
-                    rawText: fullText,
-                    displayText: streamState.displayText,
-                    thinkingText: streamState.thinkingText
-                }, events, options?.onEvent);
-            },
-            onDone: (fullText: string) => {
-                finalRawText = fullText;
-                const finalState = this.interceptor.deriveStreamState(fullText, {
-                    filterChatReply: true,
-                    allowTopLevel: true,
-                    implicitThinking: false,
-                    aggressiveThinking: false
-                });
-                this.emitEvent({
-                    type: 'stream_done',
-                    rawText: fullText,
-                    displayText: finalState.displayText,
-                    thinkingText: finalState.thinkingText
-                }, events, options?.onEvent);
+                    if (streamState.activeTag && Object.keys(TAG_TO_ACTION).includes(streamState.activeTag.toLowerCase())) {
+                        const signature = `${streamState.activeTag}:${streamState.statusText}`;
+                        if (signature !== lastTraceSignature) {
+                            lastTraceSignature = signature;
+                            this.emitEvent({
+                                type: 'trace',
+                                requestId,
+                                tag: streamState.activeTag,
+                                status: streamState.statusText,
+                                timestamp: Date.now()
+                            }, events, options?.onEvent);
+                        }
+                    }
 
-                for (const actionEvent of this.extractCompletedActionEvents(fullText)) {
-                    this.emitEvent(actionEvent, events, options?.onEvent);
+                    this.emitEvent({
+                        type: 'stream_chunk',
+                        requestId,
+                        rawText: fullText,
+                        displayText: streamState.displayText,
+                        thinkingText: streamState.thinkingText
+                    }, events, options?.onEvent);
+                },
+                onDone: (fullText: string) => {
+                    finalRawText = fullText;
+                    const finalState = this.interceptor.deriveStreamState(fullText, {
+                        filterChatReply: true,
+                        allowTopLevel: true,
+                        implicitThinking: false,
+                        aggressiveThinking: false
+                    });
+                    this.emitEvent({
+                        type: 'stream_done',
+                        requestId,
+                        rawText: fullText,
+                        displayText: finalState.displayText,
+                        thinkingText: finalState.thinkingText,
+                        completedAt: Date.now()
+                    }, events, options?.onEvent);
+
+                    for (const actionEvent of this.extractCompletedActionEvents(fullText, eventSource)) {
+                        this.emitEvent(actionEvent, events, options?.onEvent);
+                    }
+                },
+                onError: (error: Error) => {
+                    this.emitEvent({
+                        type: 'stream_error',
+                        requestId,
+                        message: error.message
+                    }, events, options?.onEvent);
                 }
-            },
-            onError: (error: Error) => {
-                this.emitEvent({
-                    type: 'stream_error',
-                    message: error.message
-                }, events, options?.onEvent);
+            }, request.generationSettings);
+        } finally {
+            if (this.activeTask === task) {
+                this.activeTask = null;
             }
-        });
+        }
 
         return {
             rawText: finalRawText,

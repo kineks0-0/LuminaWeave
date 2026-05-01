@@ -5,10 +5,10 @@ describe('ViewComponentRegistry documentation', () => {
     it('Forge 示例应使用可读占位词，而不是泛化的“示例”', () => {
         const docs = viewComponentRegistry.getDocumentation('functional');
 
-        expect(docs).toContain('ForgeChoiceGroup("kickoff_intent", "direction", "标题内容", "选项1|选项2|选项3")');
-        expect(docs).toContain('ForgeForm("kickoff_intent", "标题内容", "补充说明内容", "concept")');
+        expect(docs).toContain('ForgeChoiceGroup("kickoff_intent/direction", "标题内容", "正文1|按钮1", "正文2|按钮2")');
+        expect(docs).toContain('ForgeForm("role_core", "角色基元采集"');
         expect(docs).toContain('表单 ID');
-        expect(docs).toContain('字段键');
+        expect(docs).toContain('字段标识路径');
         expect(docs).toContain('摘要卡的语气/视觉风格标记');
         expect(docs).not.toContain('"示例"');
         expect(docs).not.toContain('示例", "示例"');
@@ -16,44 +16,52 @@ describe('ViewComponentRegistry documentation', () => {
 });
 
 describe('ViewComponentRegistry mapPositionalArgs (Smart Shifting)', () => {
-    it('应在 ForgeChoiceGroup 缺省 formId 时自动补位 (3 args -> 4 props)', () => {
+    it('应按复合 fieldKey 映射 ForgeChoiceGroup 三参数调用', () => {
         const schema = viewComponentRegistry.resolve('ForgeChoiceGroup')!;
-        const args = ["direction", "这次创作更想探索哪种核心冲突？", "选项A|选项B|选项C"];
+        const args = ["kickoff_intent/direction", "这次创作更想探索哪种核心冲突？", "选项A|选项B|选项C"];
         const props = viewComponentRegistry.mapPositionalArgs(schema, args);
 
-        expect(props.formId).toBeNull();
-        expect(props.fieldKey).toBe('direction');
+        expect(props.formId).toBeUndefined();
+        expect(props.fieldKey).toBe('kickoff_intent/direction');
         expect(props.label).toBe('这次创作更想探索哪种核心冲突？');
         expect(props.options).toBe('选项A|选项B|选项C');
     });
 
-    it('应在 ForgeFacetChecklist 缺省 formId 时自动补位 (3 args -> 4 props)', () => {
+    it('应按复合 fieldKey 映射 ForgeFacetChecklist 三参数调用', () => {
         const schema = viewComponentRegistry.resolve('ForgeFacetChecklist')!;
-        const args = ["facets", "聚焦维度", "维度1|维度2"];
+        const args = ["kickoff_intent/facets", "聚焦维度", "维度1|维度2"];
         const props = viewComponentRegistry.mapPositionalArgs(schema, args);
 
-        expect(props.formId).toBeNull();
-        expect(props.fieldKey).toBe('facets');
+        expect(props.formId).toBeUndefined();
+        expect(props.fieldKey).toBe('kickoff_intent/facets');
         expect(props.options).toBe('维度1|维度2');
     });
 
-    it('不应干扰正常的 4 参数调用', () => {
+    it('应在富选项 varargs 调用下保留 options 数组，而不是拼回单字符串', () => {
         const schema = viewComponentRegistry.resolve('ForgeChoiceGroup')!;
-        const args = ["my_form", "my_key", "My Label", "Opt1|Opt2"];
+        const args = ['kickoff_intent/direction', '选择方向', '正文1|按钮1', '正文2|按钮2'];
         const props = viewComponentRegistry.mapPositionalArgs(schema, args);
 
-        expect(props.formId).toBe('my_form');
-        expect(props.fieldKey).toBe('my_key');
+        expect(props.options).toEqual(['正文1|按钮1', '正文2|按钮2']);
     });
 
-    it('不应干扰不含 formId 或选项非必需的组件 (如 ForgeInput)', () => {
-        const schema = viewComponentRegistry.resolve('ForgeInput')!;
-        // ForgeInput 有 5 个 props，传入 3 个时不应触发 N-1 偏移 (4)
-        const args = ["form", "key", "label"];
+    it('不应拆分复合 path，路径拆分由组件负责', () => {
+        const schema = viewComponentRegistry.resolve('ForgeChoiceGroup')!;
+        const args = ["my_form/my_key", "My Label", "Opt1|Opt2"];
         const props = viewComponentRegistry.mapPositionalArgs(schema, args);
 
-        expect(props.formId).toBe('form');
-        expect(props.fieldKey).toBe('key');
+        expect(props.formId).toBeUndefined();
+        expect(props.fieldKey).toBe('my_form/my_key');
+    });
+
+    it('不应为 ForgeInput 注入独立 formId', () => {
+        const schema = viewComponentRegistry.resolve('ForgeInput')!;
+        const args = ["form/key", "label", "placeholder"];
+        const props = viewComponentRegistry.mapPositionalArgs(schema, args);
+
+        expect(props.formId).toBeUndefined();
+        expect(props.fieldKey).toBe('form/key');
         expect(props.label).toBe('label');
+        expect(props.placeholder).toBe('placeholder');
     });
 });

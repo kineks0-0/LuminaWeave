@@ -8,6 +8,7 @@ export type ForgeStage =
     | 'rewrite_export';
 
 export type ForgeDetailMode = 'detailed' | 'quick';
+export type ForgeCollectionMode = 'conversation' | 'temporary' | 'persistent';
 
 export type ForgeLayer =
     | 'concept'
@@ -41,7 +42,14 @@ export interface ForgeStructuredState {
     activeFormId: string | null;
     forms: Record<string, ForgeStructuredFormState>;
     activeMessageFormId: string | null;
+    submitConfigs: Record<string, ForgeStructuredSubmitConfig>;
+    submittedScopes: Record<string, number>;
     lastUpdatedAt: number;
+}
+
+export interface ForgeStructuredSubmitConfig {
+    label: string;
+    updatedAt: number;
 }
 
 export type ForgeDraftNodeStatus =

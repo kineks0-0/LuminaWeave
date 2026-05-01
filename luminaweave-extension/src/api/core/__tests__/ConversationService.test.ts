@@ -5,6 +5,7 @@ import { ConversationService } from '../ConversationService';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { STClient } from '../st-adapter/STClient';
 import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import { forgeConversationGateway } from '../ForgeConversationGateway';
 
 const mockState = vi.hoisted(() => ({
     currentChatId: 'chat_live',
@@ -78,10 +79,6 @@ vi.mock('../ChatSessionIndexService.js', () => ({
     chatSessionIndexService: {
         listChatSessions: vi.fn(async () => mockState.chatSessions)
     }
-}));
-
-vi.mock('../../../plugins/forge/CardMakerStore.js', () => ({
-    useCardMakerStore: () => mockState.forgeStore
 }));
 
 vi.mock('../ForgeSessionRepository.js', () => ({
@@ -331,6 +328,7 @@ describe('ConversationService', () => {
         }, {});
         mockState.forgeStore.messageCount = liveForgeStore.nodePool.length;
         mockState.forgeStore.getWorldlineStore.mockReturnValue(liveForgeStore);
+        forgeConversationGateway.setStoreProvider(() => mockState.forgeStore);
 
         mockState.persistedChats.set('chat_archive', {
             nodes: [

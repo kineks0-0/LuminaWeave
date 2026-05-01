@@ -1,6 +1,11 @@
 import { shallowReactive, markRaw } from 'vue';
 import { LuminaPlugin, SettingDefinition } from '../types/plugin';
 import { lwStorage } from '../api/storage';
+import { pluginDomainRegistry } from '../platform/plugin/PluginDomainRegistry';
+import { surfaceRegistry } from '../platform/surface/SurfaceRegistry';
+import type { PluginBusinessRendererDefinition, PluginManifestV2 } from '../platform/plugin/types';
+import type { SurfaceRendererDefinition } from '../platform/surface/types';
+import { getPluginNavigationSlots } from '../platform/plugin/pluginNavigationSlots';
 
 class PluginManager {
     public plugins: Record<string, LuminaPlugin> = shallowReactive({} as Record<string, LuminaPlugin>);
@@ -16,6 +21,52 @@ class PluginManager {
 
     constructor() {
         console.log('[LuminaWeave PluginManager] Initialized');
+    }
+
+    private isSurfaceRendererDefinition(
+        renderer: PluginBusinessRendererDefinition | SurfaceRendererDefinition
+    ): renderer is SurfaceRendererDefinition {
+        return 'ownerId' in renderer && 'kind' in renderer;
+    }
+
+    private registerPlatformManifest(manifest: PluginManifestV2): void {
+        const normalizedManifest: PluginManifestV2 = {
+            ...manifest,
+            businessRenderers: manifest.businessRenderers,
+            fallbackRenderers: manifest.fallbackRenderers
+        };
+
+        pluginDomainRegistry.register(normalizedManifest);
+
+        manifest.surfaces?.forEach(contract => surfaceRegistry.registerContract(contract));
+
+        Object.values(manifest.businessRenderers || {}).forEach(renderer => {
+            if (this.isSurfaceRendererDefinition(renderer)) {
+                surfaceRegistry.registerBusinessRenderer({
+                    ...renderer,
+                    component: markRaw(renderer.component)
+                });
+                return;
+            }
+
+            surfaceRegistry.registerBusinessRenderer({
+                contractId: renderer.contractId,
+                component: markRaw(renderer.component),
+                ownerId: manifest.id,
+                kind: 'plugin-business'
+            });
+        });
+
+        Object.values(manifest.fallbackRenderers || {}).forEach(renderer => {
+            surfaceRegistry.registerDefaultRenderer({
+                ...renderer,
+                component: markRaw(renderer.component)
+            });
+        });
+
+        if (manifest.settingsSchema) {
+            this.registeredSettings[manifest.id] = manifest.settingsSchema;
+        }
     }
 
     /**
@@ -54,18 +105,20 @@ class PluginManager {
         // Create a plain object for the plugin registry
         this.plugins[plugin.id] = plugin;
 
-        if (plugin.slots) {
-            plugin.slots.forEach(slot => {
-                if (this.slots[slot]) {
-                    this.slots[slot].push(plugin);
-                } else {
-                    console.warn(`[LuminaWeave PluginManager] Slot ${slot} does not exist`);
-                }
-            });
-        }
+        getPluginNavigationSlots(plugin).forEach(slot => {
+            if (this.slots[slot]) {
+                this.slots[slot].push(plugin);
+            } else {
+                console.warn(`[LuminaWeave PluginManager] Slot ${slot} does not exist`);
+            }
+        });
 
         if (plugin.settingsManifest) {
             this.registeredSettings[plugin.id] = plugin.settingsManifest;
+        }
+
+        if (plugin.platformManifest) {
+            this.registerPlatformManifest(plugin.platformManifest);
         }
 
         console.log(`[LuminaWeave PluginManager] Plugin registered: ${plugin.id}`);

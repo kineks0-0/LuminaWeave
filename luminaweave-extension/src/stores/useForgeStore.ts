@@ -5,7 +5,11 @@ import type {
     ForgeTimelineOperationKind,
     ForgeTimelineOperationStatus
 } from '../types/ForgeTimelineTypes.js';
-import type { StagingEntry } from '../types/ForgeRuntimeTypes.js';
+import type {
+    ForgeModelRequestTrace,
+    ForgeModelRequestStatus,
+    StagingEntry
+} from '../types/ForgeRuntimeTypes.js';
 
 export const useForgeStore = defineStore('forge', {
     state: () => ({
@@ -15,6 +19,9 @@ export const useForgeStore = defineStore('forge', {
         stagingArea: [] as StagingEntry[],
         // 写回准备区：已通过本轮审阅，等待最终提交
         commitReadyEntries: [] as StagingEntry[],
+        // Forge 模型请求调试 trace（瞬态，不持久化）
+        modelRequestTraces: [] as ForgeModelRequestTrace[],
+        activeModelRequestTraceId: null as string | null,
         // 当前制卡会话 ID
         currentSessionId: null as string | null,
         // 是否正在进行制卡任务
@@ -22,6 +29,14 @@ export const useForgeStore = defineStore('forge', {
     }),
 
     actions: {
+        replaceTrace(trace: ForgeModelRequestTrace) {
+            const existingIndex = this.modelRequestTraces.findIndex(item => item.id === trace.id);
+            if (existingIndex >= 0) {
+                this.modelRequestTraces.splice(existingIndex, 1);
+            }
+            this.modelRequestTraces.push(trace);
+        },
+
         replaceTimelineItems(items: ForgeTimelineItem[]) {
             this.timelineItems = [...items].sort((left, right) => {
                 if (left.createdAt === right.createdAt) {
@@ -29,6 +44,97 @@ export const useForgeStore = defineStore('forge', {
                 }
                 return left.createdAt - right.createdAt;
             });
+        },
+
+        createModelRequestTrace(payload: ForgeModelRequestTrace) {
+            this.replaceTrace(payload);
+            this.activeModelRequestTraceId = payload.id;
+            return payload;
+        },
+
+        setActiveModelRequestTrace(requestId: string | null) {
+            this.activeModelRequestTraceId = requestId;
+        },
+
+        markModelRequestFirstResponse(requestId: string, firstResponseAt = Date.now()) {
+            const index = this.modelRequestTraces.findIndex(item => item.id === requestId);
+            if (index < 0) return;
+            const existing = this.modelRequestTraces[index];
+            this.replaceTrace({
+                ...existing,
+                status: existing.status === 'completed' || existing.status === 'failed' || existing.status === 'aborted'
+                    ? existing.status
+                    : 'streaming',
+                firstResponseAt: existing.firstResponseAt ?? firstResponseAt
+            });
+        },
+
+        updateModelRequestStream(payload: {
+            requestId: string;
+            responseRaw: string;
+            responseDisplay: string;
+            responseThinking: string;
+            status?: ForgeModelRequestStatus;
+        }) {
+            const index = this.modelRequestTraces.findIndex(item => item.id === payload.requestId);
+            if (index < 0) return;
+            const existing = this.modelRequestTraces[index];
+            this.replaceTrace({
+                ...existing,
+                status: payload.status ?? 'streaming',
+                responseRaw: payload.responseRaw,
+                responseDisplay: payload.responseDisplay,
+                responseThinking: payload.responseThinking
+            });
+        },
+
+        completeModelRequestTrace(payload: {
+            requestId: string;
+            responseRaw: string;
+            responseDisplay: string;
+            responseThinking: string;
+            completedAt?: number;
+        }) {
+            const index = this.modelRequestTraces.findIndex(item => item.id === payload.requestId);
+            if (index < 0) return;
+            const existing = this.modelRequestTraces[index];
+            this.replaceTrace({
+                ...existing,
+                status: 'completed',
+                responseRaw: payload.responseRaw,
+                responseDisplay: payload.responseDisplay,
+                responseThinking: payload.responseThinking,
+                completedAt: payload.completedAt ?? Date.now(),
+                errorMessage: null
+            });
+        },
+
+        failModelRequestTrace(requestId: string, message: string) {
+            const index = this.modelRequestTraces.findIndex(item => item.id === requestId);
+            if (index < 0) return;
+            const existing = this.modelRequestTraces[index];
+            this.replaceTrace({
+                ...existing,
+                status: 'failed',
+                completedAt: existing.completedAt ?? Date.now(),
+                errorMessage: message
+            });
+        },
+
+        abortModelRequestTrace(requestId: string) {
+            const index = this.modelRequestTraces.findIndex(item => item.id === requestId);
+            if (index < 0) return;
+            const existing = this.modelRequestTraces[index];
+            this.replaceTrace({
+                ...existing,
+                status: 'aborted',
+                completedAt: existing.completedAt ?? Date.now()
+            });
+        },
+
+        clearModelRequestTraces() {
+            this.modelRequestTraces = [];
+            this.activeModelRequestTraceId = null;
         },
 
         ensureMessageTimelineItem(messageId: string, createdAt: number) {
@@ -284,6 +390,7 @@ export const useForgeStore = defineStore('forge', {
             this.timelineItems = [];
             this.stagingArea = [];
             this.commitReadyEntries = [];
+            this.clearModelRequestTraces();
             this.isProcessing = false;
         }
     }

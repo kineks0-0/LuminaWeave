@@ -8,36 +8,183 @@
     :data-skin-variant="railVariant || 'default'"
     :style="railStyle"
   >
-    <div class="lw-discord-rail__header">
+    <div v-if="isTelegramVariant" class="lw-telegram-rail__toolbar">
+      <div class="lw-telegram-rail__brand">
+        <span class="telegram-logo">↗</span>
+        <strong>LuminaWeave</strong>
+      </div>
+      <div class="lw-telegram-rail__create">
+      <button
+        type="button"
+        title="新建或打开对话"
+        :aria-expanded="isTelegramCreateMenuOpen"
+        @click="toggleTelegramCreateMenu"
+      >
+        <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
+          <path d="M12 5v14"></path>
+          <path d="M5 12h14"></path>
+        </svg>
+      </button>
+        <div v-if="isTelegramCreateMenuOpen" class="lw-telegram-create-menu">
+          <button
+            type="button"
+            :disabled="!activeOrFirstGroup || !onCreateSession"
+            @click="createFromActiveGroup"
+          >
+            <strong>新建当前角色对话</strong>
+            <span>{{ activeOrFirstGroup ? activeOrFirstGroup.characterName : '先选择一个角色' }}</span>
+          </button>
+          <button type="button" @click="selectRoleForCreate">
+            <strong>选择角色新建</strong>
+            <span>回到角色列表选择对象</span>
+          </button>
+          <button type="button" :disabled="!mostRecentSession" @click="openMostRecentSession">
+            <strong>打开最近</strong>
+            <span>{{ mostRecentSession ? mostRecentSession.title : '暂无最近会话' }}</span>
+          </button>
+          <button type="button" @click="showFavoritesFilter">
+            <strong>管理收藏</strong>
+            <span>查看已收藏的角色会话</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <label v-if="isTelegramVariant" class="lw-telegram-search">
+      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.35-4.35"></path>
+      </svg>
+      <input v-model="telegramSearchQuery" type="search" placeholder="搜索角色、会话或最近内容">
+    </label>
+
+    <div v-if="isTelegramVariant" class="lw-telegram-tabs" aria-label="Telegram chat filters">
+      <div
+        v-for="tab in telegramFilterTabs"
+        :key="tab.id"
+        class="lw-telegram-tab-wrap"
+      >
+        <button
+          type="button"
+          :class="{ active: telegramActiveFilter === tab.id }"
+          :aria-expanded="tab.id === 'filter' ? isTelegramFilterMenuOpen : undefined"
+          @click="handleTelegramFilterTabClick(tab.id)"
+        >
+          {{ tab.label }}
+          <svg
+            v-if="tab.id === 'filter'"
+            viewBox="0 0 24 24"
+            width="12"
+            height="12"
+            stroke="currentColor"
+            stroke-width="2.4"
+            fill="none"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+
+        <div v-if="tab.id === 'filter' && isTelegramFilterMenuOpen" class="lw-telegram-filter-menu">
+          <button
+            v-for="item in telegramSecondaryFilters"
+            :key="item.id"
+            type="button"
+            :class="{ active: telegramSecondaryFilter === item.id }"
+            @click="selectTelegramSecondaryFilter(item.id)"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <button
+      v-if="isTelegramVariant"
+      class="lw-telegram-saved"
+      type="button"
+      :disabled="!mostRecentSession"
+      @click="openMostRecentSession"
+    >
+      <span class="saved-icon">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+          <path d="M5 12h14"></path>
+          <path d="m12 5 7 7-7 7"></path>
+        </svg>
+      </span>
+      <span class="saved-copy">
+        <strong>{{ mostRecentGroup ? mostRecentGroup.characterName : '还没有最近对话' }}</strong>
+        <small>{{ mostRecentSession ? mostRecentSession.title : '选择角色开始第一段聊天' }}</small>
+      </span>
+      <span class="saved-meta">{{ mostRecentSession ? formatSessionTime(mostRecentSession.updatedAt) : '' }}</span>
+    </button>
+
+    <div v-else class="lw-discord-rail__header">
       <span class="lw-discord-rail__eyebrow">Direct Messages</span>
       <strong>角色频道</strong>
       <span>点击头像直达最近一次会话，点击卡片主体展开这个角色的历史分支。</span>
     </div>
 
-    <div v-if="characterGroups.length === 0" class="lw-discord-rail__empty">
+    <div v-if="characterGroups.length === 0 && displayedTelegramTools.length === 0" class="lw-discord-rail__empty">
       <strong>暂无角色会话</strong>
       <span>开始一段聊天后，这里会聚合角色卡和最近对话。</span>
     </div>
 
+    <div v-else-if="isTelegramVariant && filteredCharacterGroups.length === 0 && displayedTelegramTools.length === 0" class="lw-discord-rail__empty">
+      <strong>无匹配聊天</strong>
+      <span>换个关键词或切回全部，不会自动新建会话。</span>
+    </div>
+
     <div v-else class="lw-discord-rail__list">
       <article
-        v-for="group in characterGroups"
+        v-for="tool in displayedTelegramTools"
+        :key="tool.id"
+        class="lw-discord-card lw-telegram-tool-card"
+        :class="{
+          'is-active': activeTelegramToolId === tool.id,
+          'is-compact': cardDensity === 'compact'
+        }"
+        :style="cardStyle"
+      >
+        <button class="lw-discord-card__main" type="button" @click="openTelegramTool(tool.id)">
+          <span
+            class="lw-discord-card__avatar lw-telegram-tool-card__icon"
+            aria-hidden="true"
+            v-html="tool.icon"
+          ></span>
+
+          <span class="lw-discord-card__body">
+            <span class="lw-discord-card__title-row">
+              <strong>{{ tool.label }}</strong>
+              <span>工具</span>
+            </span>
+            <span
+              class="lw-discord-card__preview"
+              :style="{ WebkitLineClamp: String(previewLines) }"
+            >
+              {{ tool.description }}
+            </span>
+          </span>
+        </button>
+      </article>
+
+      <article
+        v-for="group in displayedCharacterGroups"
         :key="group.key"
         class="lw-discord-card"
         :class="{
-          'is-active': activeCharacterKey === group.key,
+          'is-active': isCharacterGroupActive(group),
           'is-expanded': expandedCharacterKey === group.key,
           'is-compact': cardDensity === 'compact'
         }"
         :style="cardStyle"
       >
-        <div class="lw-discord-card__main" @click="toggleGroup(group.key)">
+        <div class="lw-discord-card__main" @click="handleCardMainClick(group)">
           <button
             class="lw-discord-card__avatar"
             type="button"
-            :title="group.recentSession ? `打开 ${group.characterName} 最近一次对话` : `${group.characterName} 暂无对话`"
-            :disabled="!group.recentSession"
-            @click.stop="openRecentSession(group)"
+            :title="isTelegramVariant ? `查看 ${group.characterName} 概览` : (group.recentSession ? `打开 ${group.characterName} 最近一次对话` : `${group.characterName} 暂无对话`)"
+            :disabled="!isTelegramVariant && !group.recentSession"
+            @click.stop="handleAvatarClick(group)"
           >
             <img
               v-if="group.characterAvatarUrl"
@@ -60,7 +207,14 @@
             </p>
           </div>
 
-          <button class="lw-discord-card__chevron" type="button" tabindex="-1" aria-hidden="true">
+          <button
+            class="lw-discord-card__chevron"
+            type="button"
+            :tabindex="isTelegramVariant ? 0 : -1"
+            :aria-hidden="!isTelegramVariant"
+            :title="`展开 ${group.characterName} 的历史会话`"
+            @click.stop="toggleGroup(group.key)"
+          >
             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.4" fill="none">
               <polyline points="9 6 15 12 9 18"></polyline>
             </svg>
@@ -223,6 +377,12 @@ import type {
 } from '../types/ConversationContextTypes';
 
 const DEFAULT_VISIBLE_SESSION_COUNT = 5;
+type TelegramRailToolEntry = {
+  id: 'lumina-launcher' | 'lumina-forge';
+  label: string;
+  description: string;
+  icon: string;
+};
 
 const props = withDefaults(defineProps<{
   state: CharacterChannelState;
@@ -230,28 +390,43 @@ const props = withDefaults(defineProps<{
   mobilePlacement?: 'top' | 'bottom' | 'left' | 'right';
   onOpenSession?: (sessionId: string) => void;
   onCreateSession?: (payload: CreateChatConversationInput) => void;
+  selectedCharacterKey?: string | null;
+  onSelectCharacterOverview?: (groupKey: string | null) => void;
   onRenameSession?: (payload: RenameChatConversationInput) => Promise<void> | void;
   onDeleteSession?: (payload: DeleteChatConversationInput) => Promise<void> | void;
   onToggleGroup?: (groupKey: string) => void;
   onToggleSessionExpansion?: (groupKey: string) => void;
+  telegramToolEntries?: TelegramRailToolEntry[];
+  activeTelegramToolId?: string | null;
+  onOpenTelegramToolEntry?: (toolId: TelegramRailToolEntry['id']) => void;
 }>(), {
   isMobile: false,
   mobilePlacement: 'bottom',
   onOpenSession: undefined,
   onCreateSession: undefined,
+  selectedCharacterKey: null,
+  onSelectCharacterOverview: undefined,
   onRenameSession: undefined,
   onDeleteSession: undefined,
   onToggleGroup: undefined,
-  onToggleSessionExpansion: undefined
+  onToggleSessionExpansion: undefined,
+  telegramToolEntries: () => [],
+  activeTelegramToolId: null,
+  onOpenTelegramToolEntry: undefined
 });
 
 useSettings();
 
 const { cssVars: railSkinVars, variant: railVariant, desktopModeId } = useComponentSkin('shell.characterRail');
 const { cssVars: cardSkinVars } = useComponentSkin('shell.characterCard');
+const { cssVars: telegramChatListVars } = useComponentSkin('telegram.chatList');
 
-const railStyle = computed<CSSProperties>(() => railSkinVars.value as CSSProperties);
+const railStyle = computed<CSSProperties>(() => ({
+  ...(railSkinVars.value as CSSProperties),
+  ...(railVariant.value === 'telegram' ? (telegramChatListVars.value as CSSProperties) : {})
+}));
 const cardStyle = computed<CSSProperties>(() => cardSkinVars.value as CSSProperties);
+const isTelegramVariant = computed(() => railVariant.value === 'telegram');
 const previewLines = computed(() => {
   const value = Number(getThemeSettingValue(activeSettings, desktopModeId.value, 'sidebarPreviewLines', 2));
   return Number.isFinite(value) && value > 0 ? value : 2;
@@ -270,6 +445,14 @@ const renameDraftTitle = ref('');
 const deleteConfirmSessionId = ref<string | null>(null);
 const pendingRenameSessionId = ref<string | null>(null);
 const pendingDeleteSessionId = ref<string | null>(null);
+type TelegramFilterTabId = 'all' | 'characters' | 'tools' | 'filter';
+type TelegramSecondaryFilterId = 'all' | 'unread' | 'favorites' | 'recent';
+
+const telegramSearchQuery = ref('');
+const telegramActiveFilter = ref<TelegramFilterTabId>('all');
+const telegramSecondaryFilter = ref<TelegramSecondaryFilterId>('all');
+const isTelegramCreateMenuOpen = ref(false);
+const isTelegramFilterMenuOpen = ref(false);
 
 const characterGroups = computed<CharacterChannelGroup[]>(() => props.state.characterGroups);
 const activeSessionId = computed(() => props.state.activeSessionId);
@@ -278,6 +461,78 @@ const activeCharacterKey = computed(() => {
   const sessionId = activeSessionId.value;
   if (!sessionId) return null;
   return characterGroups.value.find((group) => group.sessions.some((session) => session.id === sessionId))?.key || null;
+});
+const activeOrFirstGroup = computed<CharacterChannelGroup | null>(() => {
+  return characterGroups.value.find((group) => group.key === activeCharacterKey.value)
+    || characterGroups.value.find((group) => group.key === props.selectedCharacterKey)
+    || characterGroups.value.find((group) => group.key === expandedCharacterKey.value)
+    || characterGroups.value[0]
+    || null;
+});
+const mostRecentGroup = computed<CharacterChannelGroup | null>(() => {
+  return [...characterGroups.value]
+    .filter((group) => Boolean(group.recentSession))
+    .sort((left, right) => (right.recentSession?.updatedAt || 0) - (left.recentSession?.updatedAt || 0))[0] || null;
+});
+const mostRecentSession = computed<CharacterChannelSessionItem | null>(() => mostRecentGroup.value?.recentSession || null);
+const recentGroups = computed<CharacterChannelGroup[]>(() => (
+  [...characterGroups.value]
+    .filter((group) => Boolean(group.recentSession))
+    .sort((left, right) => (right.recentSession?.updatedAt || 0) - (left.recentSession?.updatedAt || 0))
+));
+const telegramFilterTabs = computed<Array<{ id: TelegramFilterTabId; label: string; count: number | null }>>(() => [
+  { id: 'all', label: '所有', count: characterGroups.value.length },
+  { id: 'characters', label: '角色', count: characterGroups.value.length },
+  { id: 'tools', label: '工具', count: null },
+  { id: 'filter', label: '筛选', count: recentGroups.value.length }
+]);
+const telegramSecondaryFilters: Array<{ id: TelegramSecondaryFilterId; label: string }> = [
+  { id: 'all', label: '全部会话' },
+  { id: 'unread', label: '未读优先' },
+  { id: 'favorites', label: '收藏角色' },
+  { id: 'recent', label: '最近更新' }
+];
+const filteredCharacterGroups = computed<CharacterChannelGroup[]>(() => {
+  const baseGroups = telegramActiveFilter.value === 'tools'
+    ? []
+    : characterGroups.value;
+  const secondaryGroups = applyTelegramSecondaryFilter(baseGroups);
+  const query = telegramSearchQuery.value.trim().toLowerCase();
+  if (!query) {
+    return secondaryGroups;
+  }
+
+  return secondaryGroups.filter((group) => {
+    const searchable = [
+      group.characterName,
+      group.recentPreview,
+      group.recentSession?.title || '',
+      ...group.sessions.flatMap((session) => [
+        session.title,
+        session.summary,
+        session.previewMessage,
+        session.recentHistoryPreview
+      ])
+    ].join('\n').toLowerCase();
+    return searchable.includes(query);
+  });
+});
+const displayedCharacterGroups = computed<CharacterChannelGroup[]>(() => (
+  isTelegramVariant.value ? filteredCharacterGroups.value : characterGroups.value
+));
+const displayedTelegramTools = computed<TelegramRailToolEntry[]>(() => {
+  if (!isTelegramVariant.value || telegramActiveFilter.value === 'characters' || telegramActiveFilter.value === 'filter') {
+    return [];
+  }
+
+  const query = telegramSearchQuery.value.trim().toLowerCase();
+  if (!query) {
+    return props.telegramToolEntries;
+  }
+
+  return props.telegramToolEntries.filter((tool) => (
+    `${tool.label}\n${tool.description}`.toLowerCase().includes(query)
+  ));
 });
 
 watch(activeCharacterKey, (nextKey) => {
@@ -318,6 +573,33 @@ const toggleGroup = (groupKey: string) => {
   sessionMenuId.value = null;
 };
 
+const handleCardMainClick = (group: CharacterChannelGroup) => {
+  if (isTelegramVariant.value) {
+    props.onSelectCharacterOverview?.(group.key);
+    return;
+  }
+  toggleGroup(group.key);
+};
+
+const handleAvatarClick = (group: CharacterChannelGroup) => {
+  if (isTelegramVariant.value) {
+    props.onSelectCharacterOverview?.(group.key);
+    return;
+  }
+  openRecentSession(group);
+};
+
+const isCharacterGroupActive = (group: CharacterChannelGroup): boolean => (
+  activeCharacterKey.value === group.key
+  || (isTelegramVariant.value && !props.activeTelegramToolId && props.selectedCharacterKey === group.key)
+);
+
+const openTelegramTool = (toolId: TelegramRailToolEntry['id']) => {
+  props.onOpenTelegramToolEntry?.(toolId);
+  isTelegramCreateMenuOpen.value = false;
+  isTelegramFilterMenuOpen.value = false;
+};
+
 const openRecentSession = (group: CharacterChannelGroup) => {
   if (!group.recentSession) return;
   props.onOpenSession?.(group.recentSession.id);
@@ -329,6 +611,88 @@ const createSession = (group: CharacterChannelGroup) => {
     characterName: group.characterName,
     characterAvatarUrl: group.characterAvatarUrl
   });
+};
+
+const createFirstSession = () => {
+  const firstGroup = characterGroups.value[0];
+  if (!firstGroup) return;
+  createSession(firstGroup);
+};
+
+const toggleTelegramCreateMenu = () => {
+  isTelegramCreateMenuOpen.value = !isTelegramCreateMenuOpen.value;
+  if (isTelegramCreateMenuOpen.value) {
+    isTelegramFilterMenuOpen.value = false;
+  }
+};
+
+const createFromActiveGroup = () => {
+  const group = activeOrFirstGroup.value;
+  if (!group) return;
+  createSession(group);
+  isTelegramCreateMenuOpen.value = false;
+};
+
+const selectRoleForCreate = () => {
+  telegramActiveFilter.value = 'characters';
+  telegramSearchQuery.value = '';
+  isTelegramCreateMenuOpen.value = false;
+  const group = activeOrFirstGroup.value;
+  if (group && props.state.expandedCharacterKey !== group.key) {
+    props.onToggleGroup?.(group.key);
+  }
+};
+
+const openMostRecentSession = () => {
+  if (!mostRecentSession.value) return;
+  props.onOpenSession?.(mostRecentSession.value.id);
+  isTelegramCreateMenuOpen.value = false;
+};
+
+const showFavoritesFilter = () => {
+  telegramActiveFilter.value = 'filter';
+  telegramSecondaryFilter.value = 'favorites';
+  isTelegramCreateMenuOpen.value = false;
+  isTelegramFilterMenuOpen.value = false;
+};
+
+const handleTelegramFilterTabClick = (tabId: TelegramFilterTabId) => {
+  if (tabId === 'filter') {
+    telegramActiveFilter.value = 'filter';
+    isTelegramFilterMenuOpen.value = !isTelegramFilterMenuOpen.value;
+    isTelegramCreateMenuOpen.value = false;
+    return;
+  }
+  telegramActiveFilter.value = tabId;
+  isTelegramFilterMenuOpen.value = false;
+};
+
+const selectTelegramSecondaryFilter = (filterId: TelegramSecondaryFilterId) => {
+  telegramSecondaryFilter.value = filterId;
+  telegramActiveFilter.value = 'filter';
+  isTelegramFilterMenuOpen.value = false;
+};
+
+const applyTelegramSecondaryFilter = (groups: CharacterChannelGroup[]): CharacterChannelGroup[] => {
+  switch (telegramSecondaryFilter.value) {
+    case 'unread':
+      return [...groups].sort((left, right) => {
+        const rightUnread = right.sessions.some((session) => session.id !== activeSessionId.value && session.messageCount > 0) ? 1 : 0;
+        const leftUnread = left.sessions.some((session) => session.id !== activeSessionId.value && session.messageCount > 0) ? 1 : 0;
+        return rightUnread - leftUnread || (right.recentSession?.updatedAt || 0) - (left.recentSession?.updatedAt || 0);
+      });
+    case 'favorites':
+      return groups.filter((group) => (
+        group.characterName.includes('★')
+        || group.recentPreview.includes('★')
+        || group.sessions.some((session) => session.title.includes('★') || session.summary.includes('★'))
+      ));
+    case 'recent':
+      return [...groups].sort((left, right) => (right.recentSession?.updatedAt || 0) - (left.recentSession?.updatedAt || 0));
+    case 'all':
+    default:
+      return groups;
+  }
 };
 
 const isGroupShowingAllSessions = (groupKey: string): boolean => {
@@ -846,6 +1210,404 @@ const formatSessionTime = (timestamp: number) => {
   border-color: var(--lw-border-strong);
 }
 
+.lw-discord-rail[data-skin-variant='telegram'] {
+  gap: 8px;
+  padding: 10px;
+  border-right-color: var(--lw-character-rail-border, var(--lw-border-subtle));
+  background: var(--lw-telegram-chat-list-bg, var(--lw-character-rail-bg));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lw-telegram-rail__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 0 4px 4px;
+}
+
+.lw-telegram-rail__create {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.lw-telegram-rail__brand {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.telegram-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: var(--lw-character-rail-logo-bg, linear-gradient(135deg, #58c4ff, #168bd4));
+  font-size: 12px;
+}
+
+.lw-telegram-rail__brand strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--lw-text-main);
+}
+
+.lw-telegram-rail__toolbar button {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 62%, transparent);
+  color: var(--lw-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lw-telegram-create-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 12;
+  width: 224px;
+  padding: 6px;
+  border: 1px solid var(--lw-border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 94%, transparent);
+  box-shadow: var(--lw-character-card-menu-shadow, 0 18px 34px rgba(44, 92, 130, 0.16));
+}
+
+.lw-telegram-create-menu button {
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  text-align: left;
+  background: transparent;
+}
+
+.lw-telegram-create-menu button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
+}
+
+.lw-telegram-create-menu button:disabled {
+  opacity: 0.52;
+  cursor: default;
+}
+
+.lw-telegram-create-menu strong {
+  font-size: 12px;
+  color: var(--lw-text-main);
+}
+
+.lw-telegram-create-menu span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--lw-text-muted);
+}
+
+.lw-telegram-search {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 58%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 80%, transparent);
+  color: var(--lw-text-muted);
+  font-size: 12px;
+}
+
+.lw-telegram-search input {
+  min-width: 0;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--lw-text-main);
+  font: inherit;
+}
+
+.lw-telegram-search input::placeholder {
+  color: var(--lw-text-muted);
+}
+
+.lw-telegram-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 2px 4px 4px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.lw-telegram-tab-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.lw-telegram-tabs button {
+  width: 100%;
+  height: 34px;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  font-size: 11px;
+  font-weight: 800;
+  position: relative;
+}
+
+.lw-telegram-tab-wrap > button.active {
+  color: var(--lw-primary);
+  box-shadow: inset 0 -2px 0 var(--lw-primary);
+}
+
+.lw-telegram-tabs span {
+  min-width: 15px;
+  min-height: 15px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-primary) 18%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+}
+
+.lw-telegram-filter-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 14;
+  width: 160px;
+  padding: 10px 0;
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 74%, transparent);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 96%, transparent);
+  box-shadow: var(--lw-character-card-menu-shadow, 0 20px 42px rgba(44, 92, 130, 0.16));
+}
+
+.lw-telegram-filter-menu button {
+  height: 42px;
+  justify-content: flex-start;
+  padding: 0 18px;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--lw-text-secondary);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.lw-telegram-filter-menu button:hover,
+.lw-telegram-filter-menu button.active {
+  background: color-mix(in srgb, var(--lw-primary) 9%, transparent);
+  color: var(--lw-text-main);
+}
+
+.lw-telegram-saved {
+  width: 100%;
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--lw-text-main);
+  text-align: left;
+  cursor: pointer;
+}
+
+.lw-telegram-saved:hover {
+  background: color-mix(in srgb, var(--lw-primary) 8%, transparent);
+}
+
+.saved-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: linear-gradient(135deg, #69c9ff, #2e9fe8);
+}
+
+.saved-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.saved-copy strong {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.saved-copy small,
+.saved-meta {
+  color: var(--lw-text-muted);
+  font-size: 10px;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card {
+  border-radius: 18px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__main:hover,
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card.is-active .lw-discord-card__main {
+  background: color-mix(in srgb, var(--lw-primary) 13%, transparent);
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card.is-active {
+  border-color: color-mix(in srgb, var(--lw-primary) 20%, var(--lw-border-subtle));
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card.is-active .lw-discord-card__main {
+  border-radius: 18px;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__main {
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 18px;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] button.lw-discord-card__main {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-telegram-tool-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lw-primary);
+  font-size: 16px;
+  font-weight: 800;
+  overflow: hidden;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-telegram-tool-card__icon :deep(svg) {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-telegram-tool-card .lw-discord-card__body,
+.lw-discord-rail[data-skin-variant='telegram'] .lw-telegram-tool-card .lw-discord-card__title-row {
+  display: flex;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-telegram-tool-card .lw-discord-card__body {
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-telegram-tool-card .lw-discord-card__title-row {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-telegram-tool-card .lw-discord-card__preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--lw-character-card-avatar-radius, 999px);
+  background: color-mix(in srgb, var(--lw-primary) 18%, var(--lw-surface-container-high));
+  border: 2px solid color-mix(in srgb, var(--lw-surface-container-highest) 92%, transparent);
+  box-shadow: var(--lw-character-card-avatar-shadow, 0 8px 18px rgba(44, 92, 130, 0.10));
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__title-row strong {
+  font-size: 12px;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__title-row span {
+  font-size: 10px;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__preview {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__chevron {
+  pointer-events: auto;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__sessions {
+  padding: 2px 8px 8px 60px;
+  gap: 5px;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session,
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session-menu-trigger,
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session-menu-item,
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session-editor-button,
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__more {
+  background: color-mix(in srgb, var(--lw-character-session-bg, var(--lw-surface-container-high)) 78%, transparent);
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session:hover,
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session-main.is-active {
+  background: color-mix(in srgb, var(--lw-primary) 12%, var(--lw-character-session-bg, var(--lw-surface-container-high)));
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session-create {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--lw-primary) 24%, var(--lw-border-subtle));
+  background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session-editor,
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session-delete-confirm,
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session-input {
+  background: color-mix(in srgb, var(--lw-surface-container-high) 82%, transparent);
+  border-color: var(--lw-border-subtle);
+}
+
 .lw-discord-rail.is-mobile {
   width: 100%;
   min-width: 0;
@@ -855,7 +1617,7 @@ const formatSessionTime = (timestamp: number) => {
   border-right: none;
   border-top-left-radius: 26px;
   border-top-right-radius: 26px;
-  box-shadow: 0 -22px 40px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--lw-character-rail-mobile-shadow, 0 -22px 40px rgba(0, 0, 0, 0.28));
 }
 
 .lw-discord-rail.is-mobile .lw-discord-rail__header {

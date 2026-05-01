@@ -6,3 +6,5 @@ last_updated_at={{lastUpdatedAt}}
 forms_digest={{formsDigest}}
 forms_detail=
 {{formsDetail}}
+submit_configs={{submitConfigsDigest}}
+submitted_scopes={{submittedScopesDigest}}

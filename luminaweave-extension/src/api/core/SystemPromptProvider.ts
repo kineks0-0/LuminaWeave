@@ -159,54 +159,57 @@ export class SystemPromptProvider {
             getFragment: () => {
                 const syntaxStyle = this.getLuminaViewSyntaxStyle();
                 let output = '# [协议] Forge <V> DSL 结构化收集规范\n\n';
-                output += '## 0. Forge 中的 <V> 不是装饰，而是工作流输入协议\n';
+                output += '## 0. Forge 协议分层\n';
+                output += '- XML 操作层只允许：`<thinking>`、`<forge_skill>`、`<draft_plan>`、`<entry_update>`、`<forge_auto_list>`、`<forge_form_result>`、`<V>`。\n';
+                output += '- `<V>` 内部才是 DSL 组件层；组件必须写成真实 DSL 调用，而不是 XML 标签。\n';
+                output += '- `ForgeFacetChecklist`、`ForgeChoiceGroup`、`ForgeInput`、`ForgeSelect` 等都不是 XML 标签，也不是 `key=value` 函数。\n\n';
+
+                output += '## 1. Forge 中的 <V> 不是装饰，而是工作流输入协议\n';
                 output += '当你需要收集缺失字段、展示摘要、提示缺口或给出层导航时，优先输出 `<V> ... </V>`，而不是大段自然语言问卷。\n\n';
 
-                output += '## 1. 基础语法\n';
+                output += '## 2. 基础语法\n';
                 if (syntaxStyle === 'pipe') {
                     output += 'Forge 当前设置为管道式 DSL：`Code|参数1|参数2`。\n';
                     output += '不要输出函数式，也不要写成 XML 属性式伪语法。\n';
                     output += '例如：`FI|role_core_profile|name|角色姓名|例如：林雾`。\n\n';
                 } else {
                     output += 'Forge 当前设置为函数式 DSL：`ComponentName("参数1", "参数2")`。\n';
-                    output += '⚠️ 绝对禁止写成 XML 标签或属性式伪语法：\n';
-                    output += '  ✗ 错误: `<ForgeMissingFields formId="power_system" fields="name,origin" />`\n';
-                    output += '  ✗ 错误: `ForgeMissingFields(formId="power_system", fields="name,origin")`\n';
-                    output += '  ✓ 正确: `ForgeMissingFields("power_system", "name,origin")`\n';
-                    output += '参数按位置顺序传入，不得使用任何 key=value 写法。\n\n';
+                    output += '参数按位置顺序传入，不得使用任何 XML 标签式或 `key=value` 属性式写法。\n';
+                    output += '例如：`ForgeMissingFields("power_system", "name,origin")` 是合法写法。\n\n';
                 }
 
-                output += '## 2. Forge 组件使用原则\n';
+                output += '## 3. Forge 组件使用原则\n';
                 output += '- 以下示例只是语法示例，不是启动阶段固定模板；真实组件内容必须根据用户当前输入动态生成。\n';
-                output += '- 启动阶段优先用 `ForgeChoiceGroup` + `ForgeFacetChecklist` + `ForgeMessageSubmit` 组成单消息双区块。\n';
-                output += '- 信息不足时，优先 `ForgeForm` + 输入组件，而不是罗列待填清单。\n';
+                output += '- 启动阶段默认先对话摸清方向；需要结构化时优先用 `ForgeChoiceGroup` + `ForgeFacetChecklist` 等临时组件，持久表单后置。\n';
+                output += '- 信息不足时，先自然语言追问；只有字段缺口稳定时才切 `ForgeForm` 或输入组件。\n';
                 output += '- `ForgeMissingFields` 用于明确还缺哪些关键字段。\n';
                 output += '- `ForgeSummaryCard` 用于汇总当前已收集结果，不替代正式条目写回。\n';
                 output += '- 如需引导层推进，可输出 `ForgeLayerNavigator`。\n\n';
+                output += '- 若同时需要 XML 操作标签和组件，先输出自然语言与操作标签，再把组件放在最后的 `<V>...</V>` 中。\n';
+                output += '- 不允许把 `ForgeChoiceGroup`、`ForgeFacetChecklist`、`ForgeInput`、`ForgeSelect` 放进 `<entry_update>` 或 `<draft_plan>` 里。\n\n';
 
-                output += '## 3. Forge 推荐示例\n';
+                output += '## 4. Forge 推荐示例\n';
                 output += '<V>\n';
                 if (syntaxStyle === 'pipe') {
                     output += 'FSC|启动模式|我会先确认方向和偏好，再进入最小角色骨架。|细致共创\n';
-                    output += 'FCG|kickoff_intent|direction|这次更想从哪种旅行感切入？|["邂逅人物","沿途风景","漫游治愈","未知冒险"]\n';
-                    output += 'FFC|kickoff_intent|facets|你现在更在意哪些维度？|["人物关系","空间变化","情绪流动","节奏起伏"]\n';
+                    output += 'FCG|kickoff_intent/direction|这次更想从哪种旅行感切入？|["正文1|邂逅人物","正文2|沿途风景"]\n';
+                    output += 'FFC|kickoff_intent/facets|你现在更在意哪些维度？|["人物关系","空间变化","情绪流动","节奏起伏"]\n';
                     output += 'FMS|kickoff_intent|提交启动偏好并继续\n';
                     output += 'FF|role_core_profile|角色基元采集|先补齐角色的最小可运行骨架。|concept\n';
-                    output += 'FI|role_core_profile|name|角色姓名|例如：林雾\n';
-                    output += 'FI|role_core_profile|identity|一句话核心设定|例如：失忆的教会审讯官\n';
-                    output += 'FS|role_core_profile|faction|阵营 / 立场|["教会","帝国","雇佣兵","中立","未定"]\n';
-                    output += 'FT|role_core_profile|background|背景故事|描述成长经历、重大创伤、当前处境\n';
+                    output += 'FI|role_core_profile/name|角色姓名|例如：林雾\n';
+                    output += 'FI|role_core_profile/identity|一句话核心设定|例如：失忆的教会审讯官\n';
+                    output += 'FS|role_core_profile/faction|阵营 / 立场|["教会","帝国","雇佣兵","中立","未定"]\n';
+                    output += 'FT|role_core_profile/background|背景故事|描述成长经历、重大创伤、当前处境\n';
                     output += 'FM|role_core_profile|name,identity,background\n';
                 } else {
                     output += 'ForgeSummaryCard("启动模式", "我会先确认方向和偏好，再进入最小角色骨架。", "细致共创")\n';
-                    output += 'ForgeChoiceGroup("kickoff_intent", "direction", "这次更想从哪种旅行感切入？", "邂逅人物|沿途风景|漫游治愈|未知冒险")\n';
-                    output += 'ForgeFacetChecklist("kickoff_intent", "facets", "你现在更在意哪些维度？", "人物关系|空间变化|情绪流动|节奏起伏")\n';
-                    output += 'ForgeMessageSubmit("kickoff_intent", "提交启动偏好并继续")\n';
+                    output += 'ForgeChoiceGroup("kickoff_intent/direction", "这次更想从哪种旅行感切入？", "角色先行、以相遇带动设定|邂逅人物", "风景与旅途氛围先立住|沿途风景")\n';
+                    output += 'ForgeFacetChecklist("kickoff_intent/facets", "你现在更在意哪些维度？", "人物关系如何牵动剧情|人物关系", "空间变化如何制造旅行感|空间变化")\n';
                     output += 'ForgeForm("role_core_profile", "角色基元采集", "先补齐角色的最小可运行骨架。", "concept")\n';
-                    output += 'ForgeInput("role_core_profile", "name", "角色姓名", "例如：林雾")\n';
-                    output += 'ForgeInput("role_core_profile", "identity", "一句话核心设定", "例如：失忆的教会审讯官")\n';
-                    output += 'ForgeSelect("role_core_profile", "faction", "阵营 / 立场", "教会|帝国|雇佣兵|中立|未定")\n';
-                    output += 'ForgeTextarea("role_core_profile", "background", "背景故事", "描述成长经历、重大创伤、当前处境")\n';
+                    output += 'ForgeInput("role_core_profile/name", "角色姓名", "例如：林雾")\n';
+                    output += 'ForgeInput("role_core_profile/identity", "一句话核心设定", "例如：失忆的教会审讯官")\n';
+                    output += 'ForgeSelect("role_core_profile/faction", "阵营 / 立场", "教会|帝国|雇佣兵|中立|未定")\n';
+                    output += 'ForgeTextarea("role_core_profile/background", "背景故事", "描述成长经历、重大创伤、当前处境")\n';
                     output += 'ForgeMissingFields("role_core_profile", "name,identity,background")\n';
                 }
                 output += '</V>\n\n';

@@ -9,8 +9,18 @@
     <div
       class="lw-widget-resizer"
       :class="{ 'is-resizing': isResizing }"
-      @mousedown.stop.prevent="emit('resizeStart')"
+      @mousedown.stop.prevent="emit('resizeStart', $event)"
     ></div>
+    <SurfaceOutlet
+      v-if="surfaceVariant === 'telegram' && activeRightPanel === 'telegram-profile'"
+      contract-id="telegram.infoPanel"
+      :state="characterChannelState"
+      :isMobile="isMobile"
+      @openTool="emit('switchRightPanel', $event)"
+      @createSession="onCreateChatSession?.($event)"
+      @openSession="onOpenSession?.($event)"
+    />
+    <template v-else>
     <div class="widget-container-header">
       <div v-if="activeRightPanel === 'lumina-settings' && currentDetailedView" class="widget-back-nav">
         <button class="icon-action-btn" @click="emit('backFromDetailedSettings')" title="返回概览">
@@ -105,16 +115,29 @@
         <LuminaNexus @close="emit('updateShowNexus', false)" />
       </div>
       <div class="widget-main-content">
-        <component :is="activeWidgetPlugin?.component" v-if="activeWidgetPlugin" :mode="'small'" :isMobile="isMobile" />
+        <SurfaceOutlet
+          v-if="activeWidgetPlugin"
+          :contract-id="getPrimarySurfaceContractIdForPlugin(activeWidgetPlugin.id)"
+          :mode="'small'"
+          :isMobile="isMobile"
+        />
         <component
-          v-else-if="activeRegisteredPanel"
+          v-else-if="activeRegisteredPanel && !getSurfaceContractIdForRegisteredPanel(activeRegisteredPanel.id)"
           :is="activeRegisteredPanel.component"
+          :kind="activeForgeAuxKind || undefined"
+          :mode="'small'"
+          :isMobile="isMobile"
+        />
+        <SurfaceOutlet
+          v-else-if="activeRegisteredPanel"
+          :contract-id="getSurfaceContractIdForRegisteredPanel(activeRegisteredPanel.id) || activeRegisteredPanel.id"
           :kind="activeForgeAuxKind || undefined"
           :mode="'small'"
           :isMobile="isMobile"
         />
       </div>
     </div>
+    </template>
   </div>
 </template>
 
@@ -122,11 +145,16 @@
 import type { CSSProperties } from 'vue';
 import LuminaNexus from '../../components/LuminaNexus.vue';
 import type { LuminaPlugin } from '../../types/plugin';
+import type { CharacterChannelState, CreateChatConversationInput } from '../../types/ConversationContextTypes';
 import type { RegisteredPanelEntry, WidgetPanelGroup } from '../types';
+import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
+import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces';
+import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces';
 
 defineProps<{
   activeRightPanel: string;
   isMobile: boolean;
+  characterChannelState: CharacterChannelState;
   surfaceVariant: string;
   widgetStyle: CSSProperties;
   widgetWidth: number;
@@ -142,10 +170,12 @@ defineProps<{
   showWidgetDropdown: boolean;
   showNexus: boolean;
   getPluginName: (pluginId: string | null) => string;
+  onCreateChatSession?: (payload: CreateChatConversationInput) => void;
+  onOpenSession?: (sessionId: string) => void;
 }>();
 
 const emit = defineEmits<{
-  (e: 'resizeStart'): void;
+  (e: 'resizeStart', event: MouseEvent): void;
   (e: 'backFromDetailedSettings'): void;
   (e: 'toggleWidgetDropdown'): void;
   (e: 'switchRightPanel', panelId: string): void;
@@ -198,11 +228,44 @@ const emit = defineEmits<{
   border-top: none;
   border-right: none;
   border-bottom: none;
+  border-left: var(--lw-shell-widget-divider-border, 1px solid var(--lw-shell-widget-border, var(--lw-border-base)));
 }
 
-.luminaweave-app-root[data-desktop-mode='discord'][data-layout-mode='traditional'] .lw-panel-body:not(.is-freeform) .lw-widget-container[data-surface-variant='discord'] {
-  background: #2b2d31;
-  border-left: 1px solid #232428;
+.lw-widget-container[data-surface-variant='telegram'] {
+  background: var(--lw-telegram-info-panel-bg, var(--lw-shell-widget-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent)));
+  border-color: var(--lw-telegram-info-panel-border, var(--lw-shell-widget-border, var(--lw-border-subtle)));
+  box-shadow: var(--lw-telegram-panel-shadow, var(--lw-shadow-card));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
+}
+
+.lw-panel-body:not(.is-freeform) .lw-widget-container[data-surface-variant='telegram'] {
+  border: 1px solid var(--lw-telegram-pane-border, var(--lw-border-subtle));
+  border-radius: var(--lw-telegram-pane-radius, 0);
+  box-shadow: var(--lw-telegram-pane-shadow, none);
+  background: var(--lw-shell-widget-pane-bg, linear-gradient(180deg, color-mix(in srgb, var(--lw-surface-container-high) 86%, transparent), color-mix(in srgb, var(--lw-surface-container) 70%, transparent)));
+}
+
+.lw-widget-container[data-surface-variant='telegram'] .widget-container-header {
+  border-bottom-color: var(--lw-border-subtle);
+  background: var(--lw-shell-widget-header-bg, color-mix(in srgb, var(--lw-surface-container-high) 68%, transparent));
+}
+
+.lw-widget-container[data-surface-variant='telegram'] .current-widget-info,
+.lw-widget-container[data-surface-variant='telegram'] .widget-actions button {
+  border-radius: 999px;
+}
+
+.lw-widget-container[data-surface-variant='telegram'] .dropdown-menu {
+  background: var(--lw-shell-widget-dropdown-bg, color-mix(in srgb, var(--lw-surface-container-high) 88%, transparent));
+  border-color: var(--lw-shell-widget-dropdown-border, var(--lw-border-subtle));
+  box-shadow: var(--lw-telegram-panel-shadow, var(--lw-shadow-card));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lw-widget-container[data-surface-variant='telegram'] .widget-main-content {
+  background: var(--lw-shell-widget-content-overlay, radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--lw-primary) 12%, transparent), transparent 34%), transparent);
 }
 
 .widget-container-header {

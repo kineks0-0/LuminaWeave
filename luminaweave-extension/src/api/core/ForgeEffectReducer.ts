@@ -1,4 +1,5 @@
 import type {
+    ForgeCollectionMode,
     ForgeDetailMode,
     ForgeEntryMode,
     ForgeLayer
@@ -51,10 +52,27 @@ export interface ForgeEffectTarget {
         layer?: ForgeLayer | null;
     }): void;
     updateOperationPrompt(dedupeKey: string, prompt: unknown[]): void;
+    setActiveModelRequestTrace(requestId: string | null): void;
+    markModelRequestFirstResponse(requestId: string, firstResponseAt?: number): void;
+    updateModelRequestStream(payload: {
+        requestId: string;
+        responseRaw: string;
+        responseDisplay: string;
+        responseThinking: string;
+    }): void;
+    completeModelRequestTrace(payload: {
+        requestId: string;
+        responseRaw: string;
+        responseDisplay: string;
+        responseThinking: string;
+        completedAt?: number;
+    }): void;
+    failModelRequestTrace(requestId: string, message: string): void;
 
     // --- 模式 & 状态 ---
     setEntryMode(mode: ForgeEntryMode): void;
     setDetailMode(mode: ForgeDetailMode): void;
+    setCollectionMode(mode: ForgeCollectionMode): void;
     /**
      * 设置活跃层，并视条件生成表单 DSL 消息。
      * 内部判断是否跳过 kickoff 表单。
@@ -140,6 +158,9 @@ export async function applyForgeEffects(
             break;
         case 'set_detail_mode':
             target.setDetailMode(effect.mode);
+            break;
+        case 'set_collection_mode':
+            target.setCollectionMode(effect.mode);
             break;
         case 'set_active_layer':
             target.setActiveLayerAndEmitForm(effect.layer);
@@ -300,6 +321,21 @@ export async function applyForgeEffects(
             break;
         case 'log_operation_prompt':
             target.updateOperationPrompt(effect.dedupeKey, effect.prompt);
+            break;
+        case 'set_active_model_request':
+            target.setActiveModelRequestTrace(effect.requestId);
+            break;
+        case 'mark_model_request_first_response':
+            target.markModelRequestFirstResponse(effect.requestId, effect.firstResponseAt);
+            break;
+        case 'update_model_request_stream':
+            target.updateModelRequestStream(effect);
+            break;
+        case 'complete_model_request':
+            target.completeModelRequestTrace(effect);
+            break;
+        case 'fail_model_request':
+            target.failModelRequestTrace(effect.requestId, effect.message);
             break;
         default:
             break;

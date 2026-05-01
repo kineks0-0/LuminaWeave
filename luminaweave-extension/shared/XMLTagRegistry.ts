@@ -42,7 +42,6 @@ export const CoreXMLTagNames = {
     MEMORY_UPDATE: 'memory_update',
     CONTEXT_READ: 'context_read',
     ANALYSIS_HANDOFF: 'analysis_handoff',
-    FORM_PREFILL: 'form_prefill',
     FORGE_AUTO_LIST: 'forge_auto_list'
 } as const;
 

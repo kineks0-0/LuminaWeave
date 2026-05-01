@@ -1,0 +1,18 @@
+{
+    "id": "built-in:forge-test-chat-roleplay",
+    "name": "角色扮演",
+    "profileId": "forge-test-chat",
+    "builtIn": true,
+    "engine": "composed",
+    "charCardMode": "from_st",
+    "entries": [
+        { "id": "slot:char_system_prompt", "type": "slot", "enabled": true, "slotId": "char_system_prompt" },
+        { "id": "slot:char_description", "type": "slot", "enabled": true, "slotId": "char_description" },
+        { "id": "slot:char_personality", "type": "slot", "enabled": true, "slotId": "char_personality" },
+        { "id": "slot:scenario", "type": "slot", "enabled": true, "slotId": "scenario" },
+        { "id": "slot:world_info", "type": "slot", "enabled": true, "slotId": "world_info" },
+        { "id": "slot:chat_history", "type": "slot", "enabled": true, "slotId": "chat_history" }
+    ],
+    "specials": {},
+    "generationSettings": {}
+}

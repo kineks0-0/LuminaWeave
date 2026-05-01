@@ -6,6 +6,8 @@ import type { ForgeRuntimeContext } from '../../../types/ForgeRuntimeTypes';
 const emptyStructuredState: ForgeStructuredState = {
     activeFormId: null,
     activeMessageFormId: null,
+    submitConfigs: {},
+    submittedScopes: {},
     forms: {},
     lastUpdatedAt: 0
 };
@@ -13,6 +15,8 @@ const emptyStructuredState: ForgeStructuredState = {
 const kickoffCompletedState: ForgeStructuredState = {
     activeFormId: 'kickoff_intent',
     activeMessageFormId: null,
+    submitConfigs: {},
+    submittedScopes: {},
     lastUpdatedAt: 1,
     forms: {
         kickoff_intent: {
@@ -76,6 +80,7 @@ const createRuntimeContext = (overrides: Partial<ForgeRuntimeContext> = {}): For
     selectedChatSessionId: null,
     selectedChatSnapshotId: null,
     detailMode: null,
+    collectionMode: 'conversation',
     entryMode: null,
     activeLayer: 'concept',
     completedLayers: [],
@@ -116,6 +121,7 @@ describe('ForgeWorkflowGraph', () => {
         });
 
         expect(result.stage).toBe('kickoff');
+        expect(result.collectionMode).toBe('conversation');
         expect(result.allowedActions).toContain('choose_detail_mode');
         expect(result.missingFields).toEqual(['direction', 'facets']);
     });
@@ -139,6 +145,7 @@ describe('ForgeWorkflowGraph', () => {
         });
 
         expect(result.stage).toBe('kickoff');
+        expect(result.collectionMode).toBe('temporary');
         expect(result.allowedActions).toContain('collect_form');
         expect(result.requiresUserDecision).toBe(true);
     });
@@ -162,6 +169,7 @@ describe('ForgeWorkflowGraph', () => {
         });
 
         expect(result.stage).toBe('skeleton');
+        expect(result.collectionMode).toBe('persistent');
         expect(result.activeLayer).toBe('concept');
         expect(result.allowedActions).toContain('collect_form');
         expect(result.missingFields).toContain('name');
@@ -321,6 +329,7 @@ describe('ForgeWorkflowGraph', () => {
                 stage: 'skeleton',
                 visiblePhase: 'build',
                 detailMode: 'quick',
+                collectionMode: 'temporary',
                 activeLayer: 'concept',
                 subLayer: 'concept',
                 promptMode: 'planner',

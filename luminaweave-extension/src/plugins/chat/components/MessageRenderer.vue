@@ -9,7 +9,7 @@
       :variant="thinkingVariant"
       :auto-expand="thinkingAutoExpand"
     />
-    <template v-for="(segment, idx) in segments" :key="idx">
+    <template v-for="(segment, idx) in renderSegments" :key="idx">
       <!-- 文本段：使用 TextBlock 渲染 Markdown -->
       <TextBlock v-if="segment.type === 'text'" :text="segment.raw" :renderFn="renderMarkdown" />
 
@@ -19,7 +19,7 @@
           <component
             :is="resolveRenderedComponent(comp.component)"
             v-if="resolveRenderedComponent(comp.component)"
-            v-bind="comp.props as any"
+            v-bind="buildComponentProps(comp.props as any)"
           />
           <div v-else class="lv-unknown-block">
             <code>{{ comp.component }}({{ JSON.stringify(comp.props) }})</code>
@@ -27,17 +27,25 @@
         </template>
       </div>
     </template>
+    <ForgeMessageSubmitBlock
+      v-if="autoSubmitScopeId"
+      :message-id="autoSubmitScopeId"
+      :label="autoSubmitLabel"
+      auto-generated
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watchEffect } from 'vue';
 import { splitToSegments, type MessageSegment } from '../../../api/core/LVParser';
 import TextBlock from './blocks/TextBlock.vue';
 import ThinkingBlock from './blocks/ThinkingBlock.vue';
 import { globalXMLInterceptor, XMLInterceptor } from '../../../api/core/XMLInterceptor';
 import { lwStorage } from '../../../api/storage';
 import { viewRenderRegistry, type ViewRenderContext } from '../../../api/core/ViewRenderRegistry';
+import ForgeMessageSubmitBlock from '../../forge/blocks/ForgeMessageSubmitBlock.vue';
+import { useCardMakerStore } from '../../forge/CardMakerStore';
 
 const props = defineProps<{
   /** 手动处理后的显示文本（ST 渲染主要来源） */
@@ -54,14 +62,29 @@ const props = defineProps<{
   isStreaming?: boolean;
   /** 当前消息的视图渲染上下文 */
   renderContext?: ViewRenderContext;
+  /** Forge 上下文下的消息作用域 ID */
+  messageId?: string;
   /** 思维链的展示风格 */
   thinkingVariant?: 'default' | 'codex';
 }>();
+
+const forgeStore = useCardMakerStore();
 
 const effectiveRenderContext = computed<ViewRenderContext>(() => props.renderContext || 'chat');
 
 const resolveRenderedComponent = (componentName: string) => {
   return viewRenderRegistry.resolve(effectiveRenderContext.value, componentName);
+};
+
+const buildComponentProps = (componentProps: Record<string, unknown>) => {
+  if (effectiveRenderContext.value !== 'forge' || !props.messageId) {
+    return componentProps;
+  }
+
+  return {
+    ...componentProps,
+    messageId: props.messageId
+  };
 };
 
 const thinkingDisplayMode = computed<'hidden' | 'collapsible'>(() => {
@@ -118,7 +141,111 @@ const segments = computed<MessageSegment[]>(() => {
   return result;
 });
 
-const hasVisibleContent = computed(() => segments.value.some((segment) => {
+const renderSegments = computed<MessageSegment[]>(() => {
+  if (effectiveRenderContext.value !== 'forge') {
+    return segments.value;
+  }
+
+  return segments.value.map((segment) => {
+    if (segment.type !== 'view' || !segment.components?.length) {
+      return segment;
+    }
+
+    return {
+      ...segment,
+      components: segment.components.filter((component) => component.component !== 'ForgeMessageSubmit')
+    };
+  });
+});
+
+const explicitSubmitLabel = computed<string | null>(() => {
+  if (effectiveRenderContext.value !== 'forge') {
+    return null;
+  }
+
+  for (const segment of segments.value) {
+    if (segment.type !== 'view' || !segment.components?.length) {
+      continue;
+    }
+
+    const submitComponent = segment.components.find((component) => component.component === 'ForgeMessageSubmit');
+    if (submitComponent) {
+      return String(submitComponent.props.label || '').trim() || null;
+    }
+  }
+
+  return null;
+});
+
+watchEffect(() => {
+  if (effectiveRenderContext.value !== 'forge' || !props.messageId || !explicitSubmitLabel.value) {
+    return;
+  }
+
+  forgeStore.rememberSubmitConfig(props.messageId, explicitSubmitLabel.value);
+});
+
+const hasPersistentForgeForm = computed(() => segments.value.some((segment) => (
+  segment.type === 'view' && Boolean(segment.components?.some((component) => component.component === 'ForgeForm'))
+)));
+
+const hasTemporaryForgeCollection = computed(() => {
+  if (effectiveRenderContext.value !== 'forge') {
+    return false;
+  }
+
+  const interactiveComponents = new Set([
+    'ForgeInput',
+    'ForgeTextarea',
+    'ForgeSelect',
+    'ForgeChecklist',
+    'ForgeChoiceGroup',
+    'ForgeFacetChecklist'
+  ]);
+
+  return segments.value.some((segment) => {
+    if (segment.type !== 'view' || !segment.components?.length) {
+      return false;
+    }
+
+    return segment.components.some((component) => {
+      if (!interactiveComponents.has(component.component)) {
+        return false;
+      }
+
+      const formId = String(component.props.formId || '').trim();
+      const fieldKey = String(component.props.fieldKey || '').trim();
+      if (!formId) {
+        return true;
+      }
+
+      return !fieldKey || !forgeStore.hasStructuredFieldBinding(formId, fieldKey);
+    });
+  });
+});
+
+const autoSubmitScopeId = computed<string | null>(() => {
+  if (effectiveRenderContext.value !== 'forge' || !props.messageId) {
+    return null;
+  }
+  if (hasPersistentForgeForm.value || !hasTemporaryForgeCollection.value) {
+    return null;
+  }
+  return props.messageId;
+});
+
+const autoSubmitLabel = computed(() => {
+  if (!autoSubmitScopeId.value) {
+    return '提交并继续';
+  }
+
+  return forgeStore.resolveSubmitLabel(
+    autoSubmitScopeId.value,
+    explicitSubmitLabel.value || '提交并继续'
+  );
+});
+
+const hasVisibleContent = computed(() => renderSegments.value.some((segment) => {
   if (segment.type === 'text') {
     return Boolean(segment.raw.trim());
   }

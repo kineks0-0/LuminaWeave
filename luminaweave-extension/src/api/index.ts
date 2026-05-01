@@ -25,10 +25,23 @@ import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
 import { ChatDiffInspector, ChatDiffReport } from './debug/ChatDiffInspector.js';
 import { ChatDebugGateway } from './debug/ChatDebugGateway.js';
 import {
-    getDesktopMode,
-    listDesktopModes,
-    registerDesktopMode
-} from '../theme/themeRegistry.js';
+    DesktopSurfaceService,
+    type DynamicTabConfig,
+    type OpenPanelOptions,
+    type RegisteredPanelConfig,
+    type RegisteredPanelEntry
+} from './services/DesktopSurfaceService.js';
+import {
+    HostInteractionService,
+    type ModalOptions,
+    type ToastType
+} from './services/HostInteractionService.js';
+import { ConversationDomainService } from './services/ConversationDomainService.js';
+import {
+    GenerationDomainService,
+    type SendMessageOptions
+} from './services/GenerationDomainService.js';
+import { settingsDomainService, type SettingsDomainService } from './services/SettingsDomainService.js';
 import type { DesktopModeManifest } from '../theme/types.js';
 
 // 全局变量声明已移动至 src/types/sillytavern.d.ts
@@ -38,7 +51,6 @@ import { GenerationSession } from './core/GenerationSession.js';
 import { LuminaGenerationTask, TaskCallbacks } from './core/LuminaGenerationTask.js';
 import { NexusClient } from './core/NexusClient.js';
 import { ForgeAgentController } from './core/ForgeAgentController.js';
-import { useModalStore, ModalOptions } from '../stores/useModalStore.js';
 import type {
     ConversationContextOverride,
     ConversationContextSwitchInput,
@@ -54,6 +66,14 @@ import type {
     RenameChatConversationInput,
     RenameChatConversationResult
 } from '../types/ConversationContextTypes.js';
+
+export interface LuminaWeaveDomainServices {
+    desktopSurface: DesktopSurfaceService;
+    host: HostInteractionService;
+    conversation: ConversationDomainService;
+    generation: GenerationDomainService;
+    settings: SettingsDomainService;
+}
 
 /**
  * LuminaWeave API 入口 (Facade)
@@ -74,6 +94,12 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     public debugChat: ChatDebugGateway;
     public memoryManager: typeof globalMemoryManager;
     public forgeAgent: ForgeAgentController;
+    public desktopSurface: DesktopSurfaceService;
+    public host: HostInteractionService;
+    public conversation: ConversationDomainService;
+    public generation: GenerationDomainService;
+    public settings: SettingsDomainService;
+    public services: LuminaWeaveDomainServices;
 
     private _ready: boolean = false;
     private _readyPromise: Promise<boolean> | null = null;
@@ -87,7 +113,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     private _lastGeneralChatLoadChatId: string | null = null;
     private _lastGeneralChatLoadAt: number = 0;
     private readonly controlledChatCreation = new ControlledChatCreationCoordinator();
-    public registeredPanels: Map<string, { id: string, component: any, config: any }> = new Map();
+    public registeredPanels: Map<string, RegisteredPanelEntry>;
 
     /** 当前正在运行的生成会话 */
     private _session: GenerationSession | null = null;
@@ -114,6 +140,29 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.memoryManager = globalMemoryManager;
         this.nexus = new NexusClient();
         this.forgeAgent = new ForgeAgentController(this);
+        this.desktopSurface = new DesktopSurfaceService((event, ...args) => this.emit(event, ...args));
+        this.host = new HostInteractionService();
+        this.conversation = new ConversationDomainService(
+            this.conversationService,
+            () => this.waitForReady()
+        );
+        this.generation = new GenerationDomainService({
+            sendMessage: (text, options) => this.sendMessage(text, options),
+            regenerateLast: () => this.regenerateLast(),
+            runEditedPrompt: (text) => this.runEditedPrompt(text),
+            isGenerating: () => this.isGenerating,
+            isSyncing: () => this.streamHandler.isSyncing,
+            getLastStreamState: () => this.lastStreamState
+        });
+        this.settings = settingsDomainService;
+        this.services = {
+            desktopSurface: this.desktopSurface,
+            host: this.host,
+            conversation: this.conversation,
+            generation: this.generation,
+            settings: this.settings
+        };
+        this.registeredPanels = this.desktopSurface.registeredPanels;
 
         // 基础元数据
         // 自动解析 SillyTavern 上下文由基类提供
@@ -262,8 +311,6 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         } catch (e) {
             console.error('[LuminaWeave API] 初始同步提示词世界书失败:', e);
         }
-        this.applyCustomFont();
-
         // 6. 注册设置变更监听 (同步持久化状态与 UI 响应)
         lwStorage.on('*', (data: any) => {
             if (
@@ -272,9 +319,6 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                 || data?.key === 'lumina-settings.luminaViewSyntaxStyle'
             ) {
                 void this.syncPromptWorldInfo('settingsChanged');
-            }
-            if (data && (data.key === 'lumina-chat.fontFamily' || data.key === 'lumina-chat.fontWeight')) {
-                this.applyCustomFont();
             }
             this.emit('SETTINGS_CHANGED', data);
         });
@@ -851,23 +895,20 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     /**
      * 注册一个动态面板 (用于 Tab 或 Modal 展示)
      */
-    registerPanel(id: string, component: any, config: { title: string, icon?: string, defaultMode?: 'tab' | 'modal' } = { title: '未命名面板' }) {
-        console.log(`[LuminaWeave API] 注册面板: ${id}`);
-        this.registeredPanels.set(id, { id, component, config });
+    registerPanel(id: string, component: RegisteredPanelEntry['component'], config: RegisteredPanelConfig = { title: '未命名面板' }) {
+        this.desktopSurface.registerPanel(id, component, config);
     }
 
     registerDesktopMode(manifest: DesktopModeManifest) {
-        registerDesktopMode(manifest);
-        this.emit('SETTINGS_CHANGED');
-        this.emit('DESKTOP_MODES_CHANGED', manifest.id);
+        this.desktopSurface.registerDesktopMode(manifest);
     }
 
     listDesktopModes() {
-        return listDesktopModes();
+        return this.desktopSurface.listDesktopModes();
     }
 
     getDesktopMode(id: string) {
-        return getDesktopMode(id);
+        return this.desktopSurface.getDesktopMode(id);
     }
 
     /**
@@ -876,36 +917,16 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
      * @param props 传递给组件的属性
      * @param options 配置选项，如 { mode: 'tab' | 'modal' }
      */
-    openPanel(id: string, props: any = {}, options: { mode?: 'tab' | 'modal' } = {}) {
-        const panel = this.registeredPanels.get(id);
-        if (!panel) {
-            console.error(`[LuminaWeave API] 尝试打开未注册的面板: ${id}`);
-            return;
-        }
-
-        const mode = options.mode || panel.config.defaultMode || 'modal';
-
-        if (mode === 'tab') {
-            this.openTab({
-                id: panel.id,
-                name: panel.config.title,
-                icon: panel.config.icon || '',
-                component: panel.component,
-                props: { ...props, isTabMode: true }
-            });
-        } else {
-            // 默认触发 modal 类型的事件
-            this.emit(`OPEN_PANEL_${id.toUpperCase()}`, props);
-        }
+    openPanel(id: string, props: Record<string, unknown> = {}, options: OpenPanelOptions = {}) {
+        this.desktopSurface.openPanel(id, props, options);
     }
 
     /**
      * 动态打开一个新的 UI 标签页
-     * @param tabConfig 标签配置 { id, name, icon, component, props }
+     * @param tabConfig 标签配置 { id, name, icon, component | surfaceContractId, props }
      */
-    openTab(tabConfig: { id: string, name: string, icon: string, component: any, props?: any }) {
-        console.log(`[LuminaWeave API] 请求打开标签页: ${tabConfig.name} (${tabConfig.id})`);
-        this.emit('OPEN_TAB', tabConfig);
+    openTab(tabConfig: DynamicTabConfig) {
+        this.desktopSurface.openTab(tabConfig);
     }
 
     /**
@@ -916,7 +937,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     }
 
     // --- 消息发送与生成逻辑 ---
-    async sendMessage(text: string, options: { chatType?: 'st' | 'plugin' } = {}): Promise<boolean> {
+    async sendMessage(text: string, options: SendMessageOptions = {}): Promise<boolean> {
         await this.waitForReady();
         const { chatId } = lwStorage._getContextIds();
         const success = await this.crudChatRecord(-1, 'add', text, { is_user: true });
@@ -1181,6 +1202,50 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         console.warn('[LuminaWeave] 找不到有效的 ST regenerate 方法');
     }
 
+    async runEditedPrompt(customPayload: string): Promise<void> {
+        const chatPresetId = lwStorage.get('lumina-chat.nexusPreset', 'Global', 'Global');
+
+        this.streamHandler.handleRestart();
+        this.generateAbortController = new AbortController();
+        this.emit('GENERATION_STARTED');
+
+        const nodes = llmEngine.resolveNodesFromPreset(chatPresetId);
+        const session = llmEngine.createSession({
+            chatId: lwStorage._getContextIds().chatId || '',
+            charName: this.getCharName(),
+            parentId: this.getLastMessageId(),
+            nodes
+        });
+
+        const task = new LuminaGenerationTask(session);
+        this._currentTask = task;
+
+        await task.run(llmEngine.cleanMessages([{ role: 'user', content: customPayload }]), {
+            onChunk: (_chunk: string, fullText: string) => {
+                const lastRawLen = this.streamHandler.responseBuffer.length;
+                const rawDelta = fullText.substring(lastRawLen);
+                this.streamHandler.handleChunk(rawDelta, fullText);
+            },
+            onDone: async (finalText: string) => {
+                this.streamHandler.handleEnd();
+                this._currentTask = null;
+
+                const chat = await this.services.conversation.getMessages({ sourceId: 'chat' });
+                const chatIndex = chat.length;
+                await this.crudChatRecord(chatIndex, 'add', finalText, {
+                    is_user: false,
+                    name: this.getCharName()
+                });
+
+                await this.commitToST();
+            },
+            onError: () => {
+                this.streamHandler.handleEnd();
+                this.generateAbortController = null;
+            }
+        });
+    }
+
     async abortGenerate(): Promise<any> {
         this._manualAbortPending = true;
         this.streamHandler.isGenerating = false;
@@ -1289,50 +1354,41 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     }
 
     async listConversationSources(): Promise<ConversationContextOption[]> {
-        await this.waitForReady();
-        return this.conversationService.listConversationSources();
+        return this.conversation.listSources();
     }
 
     async listConversationSessions(sourceId?: ConversationContextOption['id']): Promise<ConversationSessionRef[]> {
-        await this.waitForReady();
-        return this.conversationService.listConversationSessions(sourceId);
+        return this.conversation.listSessions(sourceId);
     }
 
     async getConversationContext(override: ConversationContextOverride = {}): Promise<ConversationViewContext> {
-        await this.waitForReady();
-        return this.conversationService.getConversationContext(override);
+        return this.conversation.getContext(override);
     }
 
     async getConversationMessages(override: ConversationContextOverride = {}): Promise<LuminaChatMessage[]> {
-        await this.waitForReady();
-        return this.conversationService.getConversationMessages(override);
+        return this.conversation.getMessages(override);
     }
 
     async getConversationTimelineGraph(
         override: ConversationContextOverride = {}
     ): Promise<Record<string, ConversationTimelineNode>> {
-        await this.waitForReady();
-        return this.conversationService.getConversationTimelineGraph(override);
+        return this.conversation.getTimelineGraph(override);
     }
 
     async switchConversationContext(input: ConversationContextSwitchInput): Promise<ConversationViewContext> {
-        await this.waitForReady();
-        return this.conversationService.switchConversationContext(input);
+        return this.conversation.switchContext(input);
     }
 
     async createChatSession(input: CreateChatConversationInput): Promise<CreateChatConversationResult> {
-        await this.waitForReady();
-        return this.conversationService.createChatSession(input);
+        return this.conversation.createChatSession(input);
     }
 
     async renameChatSession(input: RenameChatConversationInput): Promise<RenameChatConversationResult> {
-        await this.waitForReady();
-        return this.conversationService.renameChatSession(input);
+        return this.conversation.renameChatSession(input);
     }
 
     async deleteChatSession(input: DeleteChatConversationInput): Promise<DeleteChatConversationResult> {
-        await this.waitForReady();
-        return this.conversationService.deleteChatSession(input);
+        return this.conversation.deleteChatSession(input);
     }
 
     beginControlledChatCreation(targetCharacterId: string | number | null | undefined): void {
@@ -1372,18 +1428,15 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     }
 
     async switchConversationNode(input: ConversationNodeSwitchInput): Promise<boolean> {
-        await this.waitForReady();
-        return this.conversationService.switchConversationNode(input);
+        return this.conversation.switchNode(input);
     }
 
     async branchConversationNode(input: ConversationNodeSwitchInput): Promise<boolean> {
-        await this.waitForReady();
-        return this.conversationService.branchConversationNode(input);
+        return this.conversation.branchNode(input);
     }
 
     async rollbackConversationNode(input: ConversationNodeSwitchInput): Promise<boolean> {
-        await this.waitForReady();
-        return this.conversationService.rollbackConversationNode(input);
+        return this.conversation.rollbackNode(input);
     }
 
     getProcessedChat() {
@@ -1806,34 +1859,6 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
     // 移除冗余事件方法，由基类提供
 
-    applyCustomFont(): void {
-        const rawFont = lwStorage.get('lumina-chat.fontFamily', 'sans-serif', 'Global');
-        const font = rawFont.replace(/['"]/g, '').trim();
-
-        // 1. 尝试通过 FontManager 加载远端字体资源
-        if (this.fontManager) {
-            this.fontManager.ensureFontLoaded(font);
-        }
-
-        let styleEl = document.getElementById('lw-custom-font-style');
-        if (!styleEl) {
-            styleEl = document.createElement('style');
-            styleEl.id = 'lw-custom-font-style';
-            document.head.appendChild(styleEl);
-        }
-        const presetFonts: Record<string, string> = {
-            'sans-serif': 'var(--lw-font-sans-serif)',
-            'serif': 'var(--lw-font-serif)',
-            'kaiti': 'var(--lw-font-kaiti)'
-        };
-        const fontValue = presetFonts[font] || `"${font}", sans-serif`;
-        const weight = lwStorage.get('lumina-chat.fontWeight', 400, 'Global');
-        styleEl.textContent = `:root { 
-            --lw-font: ${fontValue} !important; 
-            --lw-font-weight: ${weight} !important;
-        }`;
-    }
-
     /** 获取内置占位头像 */
     get DEFAULT_AVATAR(): string {
         return DEFAULT_AVATAR;
@@ -2012,13 +2037,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         return await this.chatManager.clearAllSnapshots();
     }
 
-    showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', title?: string, duration: number = 3000): void {
-        console.log(`[LuminaWeave Toast] ${type.toUpperCase()}: ${message}`);
-        // @ts-ignore
-        if (typeof window.toastr !== 'undefined') {
-            // @ts-ignore
-            window.toastr[type](message, title, { timeOut: duration });
-        }
+    showToast(message: string, type: ToastType = 'info', title?: string, duration: number = 3000): void {
+        this.host.showToast(message, type, title, duration);
     }
 
     /**
@@ -2026,8 +2046,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
      * 解决 Tauri/Android 环境下 window.confirm 不可用的问题
      */
     async confirm(opt: string | ModalOptions): Promise<boolean> {
-        const modal = useModalStore();
-        return await modal.confirm(opt);
+        return await this.host.confirm(opt);
     }
 }
 

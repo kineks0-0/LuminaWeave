@@ -1,6 +1,6 @@
 <template>
   <PanelHeader
-    v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'top'"
+    v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'top' && shouldRenderTraditionalHeader"
     :activeMainTab="activeMainTab"
     :dynamicTabs="dynamicTabs"
     :isMobile="isMobile"
@@ -33,115 +33,15 @@
       <span style="color: var(--lw-primary); font-weight: bold; margin-top: 8px;">当前进度: {{ initStatusText }}</span>
     </div>
 
-    <TraditionalShell
-      v-else-if="layoutMode === 'traditional'"
-      :shouldShowDiscordGuildRail="shouldShowDiscordGuildRail"
-      :discordGuildEntries="discordGuildEntries"
-      :activeMainTab="activeMainTab"
-      :shouldShowForgeSidebar="shouldShowForgeSidebar"
-      :isForgeSidebarCollapsed="isForgeSidebarCollapsed"
-      :shouldShowDiscordCharacterRail="shouldShowDiscordCharacterRail"
-      :characterChannelState="characterChannelState"
-      :isDiscordMobileMode="isDiscordMobileMode"
-      :shouldShowDiscordMobileShell="shouldShowDiscordMobileShell"
-      :discordMobileGuildRailPosition="discordMobileGuildRailPosition"
-      :discordMobileCharacterEntryPosition="discordMobileCharacterEntryPosition"
-      :showDiscordMobileCharacterRail="showDiscordMobileCharacterRail"
-      :discordMobileCharacterEntryStyle="discordMobileCharacterEntryStyle"
-      :mainPlugins="mainPlugins"
-      :dynamicTabs="dynamicTabs"
-      :tabComponentRegistry="tabComponentRegistry"
-      :shellMainSurfaceVariant="shellMainSurfaceVariant"
-      :shellMainSurfaceStyle="shellMainSurfaceStyle"
-      :discordMobileMainStyle="discordMobileMainStyle"
-      :isTimelineLoadedOnce="isTimelineLoadedOnce"
-      :isForgeActiveInTraditional="isForgeActiveInTraditional"
-      :sidebarMode="sidebarMode"
-      :activeRightPanel="activeRightPanel"
-      :isMobile="isMobile"
-      :shellWidgetSurfaceVariant="shellWidgetSurfaceVariant"
-      :shellWidgetStyle="shellWidgetStyle"
-      :widgetWidth="widgetWidth"
-      :isResizing="isResizing"
-      :currentDetailedView="currentDetailedView"
-      :saveStatus="saveStatus"
-      :activeForgeAuxKind="activeForgeAuxKind"
-      :rawSidebarMode="rawSidebarMode"
-      :activeWidgetPlugin="activeWidgetPlugin"
-      :activeRegisteredPanel="activeRegisteredPanel"
-      :widgetGroups="widgetGroups"
-      :showWidgetDropdown="showWidgetDropdown"
-      :showNexus="showNexus"
-      :getPluginName="getPluginName"
-      :onSwitchMainView="onSwitchMainView"
-      :onToggleSettings="onOpenSettingsPanel"
-      :onClose="onClose"
-      :onToggleForgeSidebarCollapse="onToggleForgeSidebarCollapse"
-      :onSetSidebarMode="onSetSidebarMode"
-      :onOpenDiscordChatSession="onOpenDiscordChatSession"
-      :onOpenDiscordMobileChatSession="onOpenDiscordMobileChatSession"
-      :onCreateDiscordChatSession="onCreateDiscordChatSession"
-      :onCreateDiscordMobileChatSession="onCreateDiscordMobileChatSession"
-      :onRenameDiscordChatSession="onRenameDiscordChatSession"
-      :onDeleteDiscordChatSession="onDeleteDiscordChatSession"
-      :onToggleDiscordCharacterGroup="onToggleDiscordCharacterGroup"
-      :onToggleDiscordCharacterSessionExpansion="onToggleDiscordCharacterSessionExpansion"
-      :onHandleDiscordMobileMainViewSwitch="onHandleDiscordMobileMainViewSwitch"
-      :onUpdateShowDiscordMobileCharacterRail="onUpdateShowDiscordMobileCharacterRail"
-      :onResizeStart="onResizeStart"
-      :onBackFromDetailedSettings="onBackFromDetailedSettings"
-      :onToggleWidgetDropdown="onToggleWidgetDropdown"
-      :onSwitchRightPanel="onSwitchRightPanel"
-      :onRestoreSidebarLeft="onRestoreSidebarLeft"
-      :onClosePanel="onClosePanel"
-      :onUpdateShowNexus="onUpdateShowNexus"
-    />
-
-    <FreeformShell
+    <component
       v-else
-      :activeDesktopModeId="activeDesktopModeId"
-      :desktopModeOptions="desktopModeOptions"
-      :showWorkspaceMenu="showWorkspaceMenu"
-      :shellWorkspaceMenuVariant="shellWorkspaceMenuVariant"
-      :shellWorkspaceMenuStyle="shellWorkspaceMenuStyle"
-      :shellWorkspaceStageVariant="shellWorkspaceStageVariant"
-      :shellWorkspaceStageStyle="shellWorkspaceStageStyle"
-      :isWorkspaceStageStripVisible="isWorkspaceStageStripVisible"
-      :workspaceStageStripItems="workspaceStageStripItems"
-      :isMobile="isMobile"
-      :isWorkspaceNavigationVisible="isWorkspaceNavigationVisible"
-      :activeStageWindowEntries="activeStageWindowEntries"
-      :activeWorkspaceWindowId="activeWorkspaceWindowId"
-      :workspaceSceneInsets="workspaceSceneInsets"
-      :currentDetailedView="currentDetailedView"
-      :showWorkspaceLaunchpad="showWorkspaceLaunchpad"
-      :activeMainTab="activeMainTab"
-      :isWorkspaceDockVisible="isWorkspaceDockVisible"
-      :workspaceDockDisplayItems="workspaceDockDisplayItems"
-      :onSetDesktopMode="onUpdateDesktopMode"
-      :onCreateStageWithLauncher="onCreateStageWithLauncher"
-      :onOpenWorkspaceSettings="onOpenWorkspaceSettings"
-      :onActivateWorkspaceStageWithNavigation="onActivateWorkspaceStageWithNavigation"
-      :onCreateWorkspaceStageFromStrip="onCreateWorkspaceStageFromStrip"
-      :onHoldWorkspaceNavigation="onHoldWorkspaceNavigation"
-      :onScheduleWorkspaceNavigationHide="onScheduleWorkspaceNavigationHide"
-      :onToggleWorkspaceNavigation="onToggleWorkspaceNavigation"
-      :onToggleWorkspaceMenu="onToggleWorkspaceMenu"
-      :onClose="onClose"
-      :onHandleFreeformScenePointerDown="onHandleFreeformScenePointerDown"
-      :onUpdateWorkspaceLayout="onUpdateWorkspaceLayout"
-      :onCloseWorkspaceWindow="onCloseWorkspaceWindow"
-      :onFocusWorkspaceWindow="onFocusWorkspaceWindow"
-      :onFocusAdjacentWorkspaceWindow="onFocusAdjacentWorkspaceWindow"
-      :onBackFromDetailedSettings="onBackFromDetailedSettings"
-      :onCloseWorkspaceLaunchpad="onCloseWorkspaceLaunchpad"
-      :onHandleWorkspaceDockOpenWithNavigation="onHandleWorkspaceDockOpenWithNavigation"
-      :onStageElementChange="onStageElementChange"
+      :is="currentShellRenderer"
+      v-bind="shellRendererProps"
     />
   </div>
 
   <PanelHeader
-    v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'bottom'"
+    v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'bottom' && shouldRenderTraditionalHeader"
     :activeMainTab="activeMainTab"
     :dynamicTabs="dynamicTabs"
     :isMobile="isMobile"
@@ -162,15 +62,13 @@
     @openWidget="onHandleOpenWidget"
   />
 
-  <ConflictDiffViewer ref="globalConflictViewer" />
-  <SyncReportViewer ref="globalSyncReportViewer" />
+  <LegacyGlobalPanels ref="legacyGlobalPanels" />
 </template>
 
 <script setup lang="ts">
-import { ref, watch, type Component, type CSSProperties } from 'vue';
+import { computed, ref, watch, type CSSProperties } from 'vue';
 import PanelHeader from '../components/PanelHeader.vue';
-import ConflictDiffViewer from '../plugins/chat/ConflictDiffViewer.vue';
-import SyncReportViewer from '../plugins/chat/SyncReportViewer.vue';
+import { desktopModeRuntimeRegistry } from '../platform/desktop/DesktopModeRuntimeRegistry';
 import type { LuminaPlugin } from '../types/plugin';
 import type {
   CharacterChannelState,
@@ -183,21 +81,25 @@ import type {
   RegisteredPanelEntry,
   WidgetPanelGroup,
   WidgetPanelItem,
+  TelegramRailToolEntry,
   WorkspaceDockItem,
+  ShellRuntimeActions,
+  ShellRuntimeContext,
+  ShellRuntimeSurfaces,
   WorkspaceSceneInsets,
   WorkspaceStageStripItem,
   WorkspaceWindowEntry
 } from './types';
 import FreeformShell from './freeform/FreeformShell.vue';
+import LegacyGlobalPanels from './LegacyGlobalPanels.vue';
 import TraditionalShell from './traditional/TraditionalShell.vue';
 
-const globalConflictViewer = ref<InstanceType<typeof ConflictDiffViewer> | null>(null);
-const globalSyncReportViewer = ref<InstanceType<typeof SyncReportViewer> | null>(null);
+const legacyGlobalPanels = ref<InstanceType<typeof LegacyGlobalPanels> | null>(null);
 const panelBodyElement = ref<HTMLElement | null>(null);
 
 const props = defineProps<{
   layoutMode: 'traditional' | 'freeform';
-  panelHeaderVariant: 'default' | 'discord';
+  panelHeaderVariant: 'default' | 'discord' | 'telegram';
   traditionalHeaderPosition: 'top' | 'bottom';
   activeMainTab: string;
   dynamicTabs: DynamicTabConfig[];
@@ -218,13 +120,16 @@ const props = defineProps<{
   shouldShowDiscordCharacterRail: boolean;
   characterChannelState: CharacterChannelState;
   isDiscordMobileMode: boolean;
+  isTelegramMobileMode: boolean;
   shouldShowDiscordMobileShell: boolean;
   discordMobileGuildRailPosition: 'top' | 'bottom' | 'left' | 'right';
   discordMobileCharacterEntryPosition: 'top' | 'bottom' | 'left' | 'right';
   showDiscordMobileCharacterRail: boolean;
   discordMobileCharacterEntryStyle: CSSProperties;
+  telegramSelectedCharacterKey: string | null;
+  telegramToolEntries: TelegramRailToolEntry[];
+  activeTelegramToolId: string | null;
   mainPlugins: LuminaPlugin[];
-  tabComponentRegistry: Record<string, Component>;
   shellMainSurfaceVariant: string;
   shellMainSurfaceStyle: CSSProperties;
   discordMobileMainStyle: CSSProperties;
@@ -235,6 +140,8 @@ const props = defineProps<{
   shellWidgetStyle: CSSProperties;
   widgetWidth: number;
   isResizing: boolean;
+  telegramLeftRailWidth: number;
+  isTelegramLeftRailResizing: boolean;
   currentDetailedView: string | null;
   saveStatus: string;
   activeForgeAuxKind: string | null;
@@ -277,13 +184,17 @@ const props = defineProps<{
   onToggleDiscordCharacterSessionExpansion: (groupKey: string) => void;
   onHandleDiscordMobileMainViewSwitch: (tabId: string) => void;
   onUpdateShowDiscordMobileCharacterRail: (value: boolean) => void;
-  onResizeStart: () => void;
+  onSelectTelegramCharacterOverview: (groupKey: string | null) => void;
+  onOpenTelegramToolEntry: (toolId: TelegramRailToolEntry['id']) => void;
+  onResizeStart: (event?: MouseEvent) => void;
+  onTelegramLeftRailResizeStart: (event?: MouseEvent) => void;
   onBackFromDetailedSettings: () => void;
   onToggleWidgetDropdown: () => void;
   onSwitchRightPanel: (panelId: string) => void;
   onRestoreSidebarLeft: () => void;
   onClosePanel: () => void;
   onUpdateShowNexus: (value: boolean) => void;
+  onSelectTelegramBottomNav: (itemId: 'chat' | 'characters' | 'settings' | 'profile') => void;
   onCreateStageWithLauncher: () => void;
   onOpenWorkspaceSettings: () => void;
   onActivateWorkspaceStageWithNavigation: (stageId: string) => void;
@@ -303,12 +214,168 @@ const props = defineProps<{
   onPanelBodyElementChange: (element: HTMLElement | null) => void;
 }>();
 
+const shouldRenderTraditionalHeader = computed(() => (
+  props.activeDesktopModeId !== 'telegram' || props.isMobile
+));
+
+const currentShellRenderer = computed(() => (
+  desktopModeRuntimeRegistry.get(props.activeDesktopModeId)?.shellRenderer
+  || (props.layoutMode === 'freeform' ? FreeformShell : TraditionalShell)
+));
+
+const shellContext = computed<ShellRuntimeContext>(() => ({
+  layoutMode: props.layoutMode,
+  activeDesktopModeId: props.activeDesktopModeId,
+  desktopModeOptions: props.desktopModeOptions,
+  activeMainTab: props.activeMainTab,
+  isMobile: props.isMobile,
+  currentDetailedView: props.currentDetailedView,
+  saveStatus: props.saveStatus,
+  widgetGroups: props.widgetGroups,
+  characterChannelState: props.characterChannelState,
+  traditional: {
+    shouldShowDiscordGuildRail: props.shouldShowDiscordGuildRail,
+    discordGuildEntries: props.discordGuildEntries,
+    shouldShowForgeSidebar: props.shouldShowForgeSidebar,
+    isForgeSidebarCollapsed: props.isForgeSidebarCollapsed,
+    shouldShowDiscordCharacterRail: props.shouldShowDiscordCharacterRail,
+    isDiscordMobileMode: props.isDiscordMobileMode,
+    isTelegramMobileMode: props.isTelegramMobileMode,
+    shouldShowDiscordMobileShell: props.shouldShowDiscordMobileShell,
+    discordMobileGuildRailPosition: props.discordMobileGuildRailPosition,
+    discordMobileCharacterEntryPosition: props.discordMobileCharacterEntryPosition,
+    showDiscordMobileCharacterRail: props.showDiscordMobileCharacterRail,
+    discordMobileCharacterEntryStyle: props.discordMobileCharacterEntryStyle,
+    telegramSelectedCharacterKey: props.telegramSelectedCharacterKey,
+    telegramToolEntries: props.telegramToolEntries,
+    activeTelegramToolId: props.activeTelegramToolId,
+    isTimelineLoadedOnce: props.isTimelineLoadedOnce,
+    isForgeActiveInTraditional: props.isForgeActiveInTraditional,
+    sidebarMode: props.sidebarMode,
+    activeRightPanel: props.activeRightPanel,
+    widgetWidth: props.widgetWidth,
+    isResizing: props.isResizing,
+    telegramLeftRailWidth: props.telegramLeftRailWidth,
+    isTelegramLeftRailResizing: props.isTelegramLeftRailResizing,
+    activeForgeAuxKind: props.activeForgeAuxKind,
+    rawSidebarMode: props.rawSidebarMode,
+    activeWidgetPlugin: props.activeWidgetPlugin,
+    activeRegisteredPanel: props.activeRegisteredPanel,
+    showWidgetDropdown: props.showWidgetDropdown,
+    showNexus: props.showNexus
+  },
+  freeform: {
+    showWorkspaceMenu: props.showWorkspaceMenu,
+    isWorkspaceStageStripVisible: props.isWorkspaceStageStripVisible,
+    isWorkspaceNavigationVisible: props.isWorkspaceNavigationVisible,
+    activeWorkspaceWindowId: props.activeWorkspaceWindowId,
+    workspaceSceneInsets: props.workspaceSceneInsets,
+    showWorkspaceLaunchpad: props.showWorkspaceLaunchpad,
+    isWorkspaceDockVisible: props.isWorkspaceDockVisible
+  }
+}));
+
+const shellSurfaces = computed<ShellRuntimeSurfaces>(() => ({
+  dynamicTabs: props.dynamicTabs,
+  traditional: {
+    mainPlugins: props.mainPlugins,
+    mainSurfaceVariant: props.shellMainSurfaceVariant,
+    mainSurfaceStyle: props.shellMainSurfaceStyle,
+    mobileMainStyle: props.discordMobileMainStyle,
+    widgetSurfaceVariant: props.shellWidgetSurfaceVariant,
+    widgetStyle: props.shellWidgetStyle
+  },
+  freeform: {
+    workspaceMenuVariant: props.shellWorkspaceMenuVariant,
+    workspaceMenuStyle: props.shellWorkspaceMenuStyle,
+    workspaceStageVariant: props.shellWorkspaceStageVariant,
+    workspaceStageStyle: props.shellWorkspaceStageStyle,
+    stageStripItems: props.workspaceStageStripItems,
+    stageWindowEntries: props.activeStageWindowEntries,
+    dockDisplayItems: props.workspaceDockDisplayItems
+  }
+}));
+
+const shellActions = computed<ShellRuntimeActions>(() => ({
+  getPluginName: props.getPluginName,
+  navigation: {
+    switchMainView: props.onSwitchMainView,
+    close: props.onClose,
+    updateDesktopMode: props.onUpdateDesktopMode,
+    openSettingsPanel: props.onOpenSettingsPanel
+  },
+  traditional: {
+    toggleDiscordGuildRail: props.onToggleDiscordGuildRail,
+    handleOpenWidget: props.onHandleOpenWidget,
+    toggleForgeSidebarCollapse: props.onToggleForgeSidebarCollapse,
+    setSidebarMode: props.onSetSidebarMode,
+    openDiscordChatSession: props.onOpenDiscordChatSession,
+    openDiscordMobileChatSession: props.onOpenDiscordMobileChatSession,
+    createDiscordChatSession: props.onCreateDiscordChatSession,
+    createDiscordMobileChatSession: props.onCreateDiscordMobileChatSession,
+    renameDiscordChatSession: props.onRenameDiscordChatSession,
+    deleteDiscordChatSession: props.onDeleteDiscordChatSession,
+    toggleDiscordCharacterGroup: props.onToggleDiscordCharacterGroup,
+    toggleDiscordCharacterSessionExpansion: props.onToggleDiscordCharacterSessionExpansion,
+    handleDiscordMobileMainViewSwitch: props.onHandleDiscordMobileMainViewSwitch,
+    updateShowDiscordMobileCharacterRail: props.onUpdateShowDiscordMobileCharacterRail,
+    selectTelegramCharacterOverview: props.onSelectTelegramCharacterOverview,
+    openTelegramToolEntry: props.onOpenTelegramToolEntry,
+    resizeStart: props.onResizeStart,
+    telegramLeftRailResizeStart: props.onTelegramLeftRailResizeStart,
+    backFromDetailedSettings: props.onBackFromDetailedSettings,
+    toggleWidgetDropdown: props.onToggleWidgetDropdown,
+    switchRightPanel: props.onSwitchRightPanel,
+    restoreSidebarLeft: props.onRestoreSidebarLeft,
+    closePanel: props.onClosePanel,
+    updateShowNexus: props.onUpdateShowNexus,
+    selectTelegramBottomNav: props.onSelectTelegramBottomNav
+  },
+  freeform: {
+    createStageWithLauncher: props.onCreateStageWithLauncher,
+    openWorkspaceSettings: props.onOpenWorkspaceSettings,
+    activateWorkspaceStageWithNavigation: props.onActivateWorkspaceStageWithNavigation,
+    createWorkspaceStageFromStrip: props.onCreateWorkspaceStageFromStrip,
+    holdWorkspaceNavigation: props.onHoldWorkspaceNavigation,
+    scheduleWorkspaceNavigationHide: props.onScheduleWorkspaceNavigationHide,
+    toggleWorkspaceNavigation: props.onToggleWorkspaceNavigation,
+    toggleWorkspaceMenu: props.onToggleWorkspaceMenu,
+    handleFreeformScenePointerDown: props.onHandleFreeformScenePointerDown,
+    updateWorkspaceLayout: props.onUpdateWorkspaceLayout,
+    closeWorkspaceWindow: props.onCloseWorkspaceWindow,
+    focusWorkspaceWindow: props.onFocusWorkspaceWindow,
+    focusAdjacentWorkspaceWindow: props.onFocusAdjacentWorkspaceWindow,
+    backFromDetailedSettings: props.onBackFromDetailedSettings,
+    closeWorkspaceLaunchpad: props.onCloseWorkspaceLaunchpad,
+    handleWorkspaceDockOpenWithNavigation: props.onHandleWorkspaceDockOpenWithNavigation,
+    stageElementChange: props.onStageElementChange
+  }
+}));
+
+const traditionalShellProps = computed(() => ({
+  runtimeContext: shellContext.value,
+  runtimeSurfaces: shellSurfaces.value,
+  runtimeActions: shellActions.value
+}));
+
+const freeformShellProps = computed(() => ({
+  runtimeContext: shellContext.value,
+  runtimeSurfaces: shellSurfaces.value,
+  runtimeActions: shellActions.value
+}));
+
+const shellRendererProps = computed(() => (
+  props.layoutMode === 'freeform'
+    ? freeformShellProps.value
+    : traditionalShellProps.value
+));
+
 const openConflictViewer = () => {
-  globalConflictViewer.value?.open();
+  legacyGlobalPanels.value?.openConflictViewer();
 };
 
 const openSyncReportViewer = () => {
-  globalSyncReportViewer.value?.open();
+  legacyGlobalPanels.value?.openSyncReportViewer();
 };
 
 defineExpose({

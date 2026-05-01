@@ -1,0 +1,16 @@
+{
+    "id": "built-in:forge-executor-default",
+    "name": "默认执行模型",
+    "profileId": "forge-executor",
+    "builtIn": true,
+    "engine": "composed",
+    "entries": [
+        { "id": "slot:base_system_prompt", "type": "slot", "enabled": true, "slotId": "base_system_prompt" },
+        { "id": "slot:executor_task", "type": "slot", "enabled": true, "slotId": "executor_task" },
+        { "id": "slot:original_entry", "type": "slot", "enabled": true, "slotId": "original_entry" }
+    ],
+    "specials": {
+        "executorSystemPrompt": "@FORGE_EXECUTOR_SYSTEM_PROMPT"
+    },
+    "generationSettings": {}
+}

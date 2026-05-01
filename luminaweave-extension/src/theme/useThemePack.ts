@@ -4,6 +4,7 @@ import {
     getActiveDesktopModeIdFromSettings,
     DEFAULT_THEME_PACK_ID,
     getDesktopModeOrDefault,
+    getDesktopModeSettingStorageKey,
     getDesktopModeShell,
     getThemeNavigationPreset,
     getThemeSurfacePreset,
@@ -17,6 +18,10 @@ const mediaQuery = typeof window !== 'undefined'
 const resolveAppearance = (): ResolvedThemeAppearance => {
     const themeId = getActiveDesktopModeIdFromSettings(activeSettings) || DEFAULT_THEME_PACK_ID;
     const themePack = getDesktopModeOrDefault(themeId);
+    const desktopAppearance = activeSettings[getDesktopModeSettingStorageKey(themeId, 'appearanceMode')];
+    if (desktopAppearance === 'light' || desktopAppearance === 'dark') {
+        return desktopAppearance;
+    }
     if (themePack.preferredAppearance === 'light' || themePack.preferredAppearance === 'dark') {
         return themePack.preferredAppearance;
     }

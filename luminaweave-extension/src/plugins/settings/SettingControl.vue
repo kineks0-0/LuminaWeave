@@ -147,110 +147,63 @@ import { activeSettings, activeScopes, useSettings } from './useSettings';
 import { lwStorage } from '../../api/storage';
 import LuminaStepper from './LuminaStepper.vue';
 import { useComponentSkin } from '../../theme/useComponentSkin';
+import {
+  clampSettingNumber,
+  getActiveSettingOptionDescription,
+  getSettingControlBodyClass,
+  getSettingControlClass,
+  getSettingScope,
+  getSettingStorageKey,
+  getSettingValue,
+  hasSettingScopeSelector,
+  isRowToggleSetting,
+  isSettingVisible,
+  resolveSettingOptions,
+  settingScopeLabels,
+  shouldUseVerticalSettingLayout,
+  type SettingControlConfig
+} from './settingControlModel';
 
 const { updateSetting, updateScope } = useSettings();
 const { cssVars: settingsControlSkinVars, variant: settingsControlVariant } = useComponentSkin('settings.control');
 
-interface SettingOption {
-  value: any;
-  label: string;
-  description?: string; // 选项级详细描述
-}
-
-type SettingOptionsResolver = SettingOption[] | (() => SettingOption[]);
-
-interface SettingConfig {
-  label: string;
-  description?: string;
-  type: 'theme' | 'options' | 'boolean' | 'stepper' | 'slider' | 'nexus-select' | 'text';
-  default: any;
-  allowedScopes?: string[];
-  options?: SettingOptionsResolver;
-  min?: number;
-  max?: number;
-  step?: number;
-  common?: boolean;
-  showIf?: (settings: Record<string, any>) => boolean;
-}
-
 const props = defineProps<{
   pluginId: string;
   settingKey: string;
-  config: SettingConfig;
+  config: SettingControlConfig;
 }>();
 
-const storageKey = computed(() => `${props.pluginId}.${props.settingKey}`);
+const storageKey = computed(() => getSettingStorageKey(props.pluginId, props.settingKey));
 
 const currentValue = computed(() => {
-  const v = activeSettings[storageKey.value];
-  return (v !== undefined && v !== null) ? v : props.config.default;
+  return getSettingValue(activeSettings, storageKey.value, props.config.default);
 });
 
 const currentScope = computed({
-  get: () => activeScopes[storageKey.value] || (props.config.allowedScopes ? props.config.allowedScopes[0] : 'Global'),
+  get: () => getSettingScope(activeScopes, storageKey.value, props.config.allowedScopes),
   set: (val: string) => {
     activeScopes[storageKey.value] = val;
   }
 });
 
-const isVisible = computed(() => {
-  if (typeof props.config.showIf === 'function') {
-    return props.config.showIf(activeSettings);
-  }
-  return true;
-});
+const isVisible = computed(() => isSettingVisible(props.config, activeSettings));
 
-const isRowToggleEnabled = computed(() =>
-  props.config.type === 'boolean' && props.settingKey === 'discord-channel-mark'
-);
+const isRowToggleEnabled = computed(() => isRowToggleSetting(props.config, props.settingKey));
 
-const resolvedOptions = computed<SettingOption[]>(() => {
-  if (!props.config.options) return [];
-  return typeof props.config.options === 'function'
-    ? props.config.options()
-    : props.config.options;
-});
+const resolvedOptions = computed(() => resolveSettingOptions(props.config));
 
 // 计算当前激活选项的描述文字
-const activeOptionDescription = computed(() => {
-  const opt = resolvedOptions.value.find(o => o.value === currentValue.value);
-  return opt?.description || null;
-});
+const activeOptionDescription = computed(() => getActiveSettingOptionDescription(resolvedOptions.value, currentValue.value));
 
-const hasScopeSelector = computed(() => Boolean(props.config.allowedScopes && props.config.allowedScopes.length > 1));
+const hasScopeSelector = computed(() => hasSettingScopeSelector(props.config));
 
-const scopeLabels: Record<string, string> = {
-  Global: '全局',
-  Character: '随角色',
-  Chat: '随对话',
-  Session: '仅本地缓存'
-};
+const scopeLabels = settingScopeLabels;
 
-const isVerticalLayout = computed(() =>
-  props.config.type === 'slider' ||
-  props.config.type === 'text' ||
-  props.config.type === 'nexus-select' ||
-  props.config.type === 'options' ||
-  props.config.type === 'theme' ||
-  props.settingKey === 'fontFamily'
-  // stepper 保持水平布局（小巧的步进器适合水平排版）
-);
+const isVerticalLayout = computed(() => shouldUseVerticalSettingLayout(props.config, props.settingKey));
 
-const controlClass = computed(() => {
-  const classes = [];
-  if (props.config.type === 'theme') classes.push('theme-options');
-  if (props.config.type === 'stepper') classes.push('stepper-control');
-  if (isVerticalLayout.value) classes.push('full-width');
-  return classes.join(' ');
-});
+const controlClass = computed(() => getSettingControlClass(props.config, isVerticalLayout.value));
 
-const controlBodyClass = computed(() => {
-  const classes = [];
-  if (props.config.type === 'theme') classes.push('theme-options');
-  if (props.config.type === 'options') classes.push('options-control');
-  if (props.config.type === 'stepper') classes.push('stepper-body');
-  return classes.join(' ');
-});
+const controlBodyClass = computed(() => getSettingControlBodyClass(props.config));
 
 // 主题色板 — 与 App.vue 中的主题实现保持同步
 const themes = [
@@ -306,10 +259,8 @@ const handleInput = (e: Event) => {
 
 const handleNumberInput = (e: Event) => {
   const target = e.target as HTMLInputElement;
-  const val = parseFloat(target.value);
-  if (!isNaN(val)) {
-    // 自动约束范围
-    const clamped = Math.max(props.config.min || 0, Math.min(props.config.max || 100, val));
+  const clamped = clampSettingNumber(target.value, props.config);
+  if (clamped !== null) {
     updateValue(clamped);
   }
 };
@@ -614,7 +565,7 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   align-items: center;
   gap: 6px;
   line-height: 1.4;
-  border-left: 2px solid var(--lw-setting-tip-border, var(--lw-primary));
+  border: 1px solid color-mix(in srgb, var(--lw-setting-tip-border, var(--lw-primary)) 22%, var(--lw-border-subtle));
   animation: slide-in-top 0.2s ease-out;
 }
 
@@ -806,6 +757,41 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
 .setting-row[data-skin-variant='discord'] .setting-control-body .lw-input,
 .setting-row[data-skin-variant='discord'] .slider-number-input {
   border-radius: 12px;
+}
+
+.setting-row[data-skin-variant='telegram'] {
+  border-bottom-color: var(--lw-border-subtle);
+  min-height: 44px;
+}
+
+.setting-row[data-skin-variant='telegram'].layout-horizontal:hover {
+  background: color-mix(in srgb, var(--lw-primary) 7%, transparent);
+}
+
+.setting-row[data-skin-variant='telegram'] .segment-control,
+.setting-row[data-skin-variant='telegram'] .scope-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-input,
+.setting-row[data-skin-variant='telegram'] .slider-number-input,
+.setting-row[data-skin-variant='telegram'] .remote-font-picker,
+.setting-row[data-skin-variant='telegram'] .font-preview-card,
+.setting-row[data-skin-variant='telegram'] .option-description-tip {
+  border-color: var(--lw-setting-control-border, var(--lw-border-subtle));
+  background: color-mix(in srgb, var(--lw-setting-control-bg, var(--lw-surface-container)) 84%, transparent);
+}
+
+.setting-row[data-skin-variant='telegram'] .segment-control,
+.setting-row[data-skin-variant='telegram'] .segment-control button,
+.setting-row[data-skin-variant='telegram'] .scope-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-input {
+  border-radius: 999px;
+  min-height: 40px;
+}
+
+.setting-row[data-skin-variant='telegram'] .segment-control button.active {
+  background: var(--lw-setting-control-active-bg, var(--lw-surface-container-high));
+  box-shadow: var(--lw-setting-control-active-shadow, 0 8px 18px rgba(44, 92, 130, 0.1));
 }
 
 /* ---- Animations ---- */

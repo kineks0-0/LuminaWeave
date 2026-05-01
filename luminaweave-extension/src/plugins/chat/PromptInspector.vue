@@ -104,9 +104,6 @@
 
 <script setup lang="ts">
 import { ref, inject, onMounted } from 'vue';
-import { llmEngine } from '../../api/llmEngine';
-import { LuminaGenerationTask } from '../../api/core/LuminaGenerationTask';
-import { lwStorage } from '../../api/storage';
 import { LuminaWeaveAPI } from '../../api/index';
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
@@ -198,56 +195,8 @@ const switchToEdit = () => {
 const sendEdited = () => {
     if (!lwApi || !editContent.value.trim()) return;
     // 将编辑后的内容直接发给自定义流引擎，不走 ST 重组管线
-    const chatPresetId = lwStorage.get('lumina-chat.nexusPreset', 'Global', 'Global');
     // 以字符串形式送入（兼容大多数 text completion 引擎）
-    const customPayload = editContent.value;
-    // 初始化流状态
-    lwApi.streamHandler.handleRestart();
-    lwApi.generateAbortController = new AbortController();
-    lwApi.emit('GENERATION_STARTED');
-
-    const nodes = llmEngine.resolveNodesFromPreset(chatPresetId);
-    // @ts-ignore
-    const session = llmEngine.createSession({
-        chatId: lwStorage._getContextIds().chatId || '',
-        charName: lwApi.getCharName(),
-        parentId: lwApi.getLastMessageId(),
-        nodes
-    });
-
-    const task = new LuminaGenerationTask(session);
-    // @ts-ignore
-    lwApi._currentTask = task;
-
-    task.run(llmEngine.cleanMessages([{ role: 'user', content: customPayload }]), {
-        onChunk: (chunk: string, fullText: string) => {
-            if (!lwApi) return;
-            const lastRawLen = lwApi.streamHandler.responseBuffer.length;
-            const rawDelta = fullText.substring(lastRawLen);
-            lwApi.streamHandler.handleChunk(rawDelta, fullText);
-        },
-        onDone: async (finalText: string) => {
-            if (!lwApi) return;
-            lwApi.streamHandler.handleEnd();
-            // @ts-ignore
-            lwApi._currentTask = null;
-            
-            const chat = await lwApi.getConversationMessages({ sourceId: 'chat' });
-            const chatIndex = chat.length;
-            await lwApi.crudChatRecord(chatIndex, 'add', finalText, {
-                is_user: false,
-                name: lwApi.getCharName()
-            });
-
-            // 确保同步写回 ST 环境与独立存储
-            await lwApi.commitToST();
-        },
-        onError: (err: any) => {
-            if (!lwApi) return;
-            lwApi.streamHandler.handleEnd();
-            lwApi.generateAbortController = null;
-        }
-    });
+    void lwApi.services.generation.runEditedPrompt(editContent.value);
 };
 </script>
 
