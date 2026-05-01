@@ -1,0 +1,1 @@
+export { legacyTabComponentRegistry } from './legacyPanelRegistry';

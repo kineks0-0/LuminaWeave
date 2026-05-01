@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ForgeRuntimeOrchestrator, type ForgeRuntimePort } from '../ForgeRuntimeOrchestrator';
 import type {
     ForgeExecutionRequest,
+    ForgeRequestContextSnapshot,
     ForgeRuntimeContext,
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
@@ -16,6 +17,7 @@ const createContext = (overrides: Partial<ForgeRuntimeContext> = {}): ForgeRunti
     selectedChatSessionId: null,
     selectedChatSnapshotId: null,
     detailMode: 'quick',
+    collectionMode: 'conversation',
     entryMode: 'freeform',
     activeLayer: 'concept',
     completedLayers: [],
@@ -28,6 +30,8 @@ const createContext = (overrides: Partial<ForgeRuntimeContext> = {}): ForgeRunti
     structuredState: {
         activeFormId: null,
         activeMessageFormId: null,
+        submitConfigs: {},
+        submittedScopes: {},
         forms: {},
         lastUpdatedAt: 0
     },
@@ -47,6 +51,23 @@ const createContext = (overrides: Partial<ForgeRuntimeContext> = {}): ForgeRunti
     ...overrides
 });
 
+const createRequestContextSnapshot = (): ForgeRequestContextSnapshot => ({
+    kind: 'forge-runtime',
+    workspaceTitle: 'Forge Workspace',
+    detailMode: 'quick',
+    activeLayer: 'concept',
+    sourceCommand: { type: 'noop' },
+    workflowSnapshot: null,
+    historyMessages: [],
+    referenceChatSessionId: null,
+    referenceChatSnapshotId: null,
+    lorebookEntries: [],
+    memorySnapshot: null,
+    selectedPresetId: 'preset_1',
+    testChatPresetId: null,
+    nexusPresetId: null
+});
+
 const createPort = (context: ForgeRuntimeContext) => {
     const appliedEffects: ForgeRuntimeEffect[] = [];
     const handledEvents: ForgeRuntimeEvent[] = [];
@@ -61,6 +82,11 @@ const createPort = (context: ForgeRuntimeContext) => {
             appliedEffects.push(...effects);
         }),
         buildPlannerExecutionRequest: vi.fn(async () => ({
+            requestId: 'req_planner',
+            traceSource: 'planner',
+            contextSnapshot: createRequestContextSnapshot(),
+            nodeSummary: [],
+            generationSettings: {},
             mode: 'planner',
             messages: [],
             sessionChatId: context.sessionChatId,
@@ -68,6 +94,11 @@ const createPort = (context: ForgeRuntimeContext) => {
             sourceCommand: { type: 'send_user_input', input: context.latestUserInput }
         }) as ForgeExecutionRequest),
         buildAnalystExecutionRequest: vi.fn(async () => ({
+            requestId: 'req_analyst',
+            traceSource: 'analyst',
+            contextSnapshot: createRequestContextSnapshot(),
+            nodeSummary: [],
+            generationSettings: {},
             mode: 'analyst',
             messages: [],
             sessionChatId: context.sessionChatId,
@@ -75,6 +106,11 @@ const createPort = (context: ForgeRuntimeContext) => {
             sourceCommand: { type: 'send_user_input', input: context.latestUserInput }
         }) as ForgeExecutionRequest),
         buildConversationExecutionRequest: vi.fn(async () => ({
+            requestId: 'req_conversation',
+            traceSource: 'conversation',
+            contextSnapshot: createRequestContextSnapshot(),
+            nodeSummary: [],
+            generationSettings: {},
             mode: 'conversation',
             messages: [],
             sessionChatId: context.sessionChatId,
@@ -82,6 +118,11 @@ const createPort = (context: ForgeRuntimeContext) => {
             sourceCommand: { type: 'send_user_input', input: context.latestUserInput }
         }) as ForgeExecutionRequest),
         buildExecutorExecutionRequest: vi.fn(async () => ({
+            requestId: 'req_executor',
+            traceSource: 'executor',
+            contextSnapshot: createRequestContextSnapshot(),
+            nodeSummary: [],
+            generationSettings: {},
             mode: 'executor',
             messages: [],
             sessionChatId: context.sessionChatId,
@@ -133,6 +174,7 @@ describe('ForgeRuntimeOrchestrator', () => {
             run: vi.fn(async (_request, options?: { onEvent?: (event: ForgeRuntimeEvent) => void }) => {
                 options?.onEvent?.({
                     type: 'trace',
+                    requestId: 'req_planner',
                     tag: 'entry_update',
                     status: '正在生成条目修改',
                     timestamp: 1
@@ -141,13 +183,16 @@ describe('ForgeRuntimeOrchestrator', () => {
                     type: 'action_completed',
                     actionType: 'update',
                     raw: '<entry_update id="entry-1" description="重写背景">新的内容</entry_update>',
-                    content: '新的内容'
+                    content: '新的内容',
+                    source: 'planner'
                 });
                 options?.onEvent?.({
                     type: 'stream_done',
+                    requestId: 'req_planner',
                     rawText: '<entry_update id="entry-1" description="重写背景">新的内容</entry_update>',
                     displayText: '新的内容',
-                    thinkingText: ''
+                    thinkingText: '',
+                    completedAt: 2
                 });
                 return {
                     rawText: '<entry_update id="entry-1" description="重写背景">新的内容</entry_update>',
@@ -182,6 +227,7 @@ describe('ForgeRuntimeOrchestrator', () => {
                 stage: 'skeleton',
                 visiblePhase: 'build',
                 detailMode: 'quick',
+                collectionMode: 'temporary',
                 activeLayer: 'concept',
                 subLayer: 'concept',
                 promptMode: 'planner',

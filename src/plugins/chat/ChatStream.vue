@@ -1,10 +1,61 @@
 <template>
-  <div class="lw-chat-stream" data-lw-ime-scope :class="{ 'doc-mode': activeSettings['lumina-chat.viewMode'] === 'document', 'is-compact': isCompact }"
+  <div class="lw-chat-stream" data-lw-ime-scope :class="{ 'is-compact': isCompact }"
     :data-skin-variant="chatVariant || 'default'" :style="streamStyle">
+    <header v-if="isTelegramVariant" class="telegram-chat-header">
+      <button type="button" class="telegram-chat-header__back" title="返回聊天列表">
+        <svg viewBox="0 0 24 24" width="17" height="17" stroke="currentColor" stroke-width="2.2" fill="none">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <div class="telegram-chat-header__peer">
+        <div v-if="showTelegramHeaderAvatar" class="telegram-chat-header__avatar">
+          <img :src="telegramPeer.avatar" :alt="telegramPeer.name" @error="(e) => (e.target as any).src = lwApi?.DEFAULT_AVATAR">
+        </div>
+        <div class="telegram-chat-header__copy">
+          <strong>{{ telegramPeer.name }} <span>★</span></strong>
+          <small>{{ isSessionSwitching ? sessionSwitchStatusText : 'online' }}</small>
+        </div>
+      </div>
+      <div class="telegram-chat-header__tools">
+        <button type="button" title="搜索消息" @click="telegramSearchActive = !telegramSearchActive">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+        </button>
+        <button type="button" title="打开右侧栏" @click="openTelegramContextTool('telegram-profile')">
+          <svg viewBox="0 0 24 24" width="17" height="17" stroke="currentColor" stroke-width="2" fill="none">
+            <rect x="4" y="4" width="10" height="16" rx="1.8"></rect>
+            <path d="M18 5v14"></path>
+            <path d="M21 7v10"></path>
+          </svg>
+        </button>
+        <div class="telegram-chat-header__menu-wrap">
+        <button type="button" title="更多" :aria-expanded="showTelegramHeaderToolsMenu" @click="showTelegramHeaderToolsMenu = !showTelegramHeaderToolsMenu">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <circle cx="5" cy="12" r="1.7"></circle>
+            <circle cx="12" cy="12" r="1.7"></circle>
+            <circle cx="19" cy="12" r="1.7"></circle>
+          </svg>
+        </button>
+          <div v-if="showTelegramHeaderToolsMenu" class="telegram-context-menu">
+            <button type="button" @click="openTelegramContextTool('lumina-timeline')">打开时间线</button>
+            <button type="button" @click="openTelegramContextTool('lumina-lorebook')">打开世界书</button>
+            <button type="button" @click="openTelegramContextTool('lumina-director')">打开导演面板</button>
+            <button type="button" @click="openTelegramContextTool('lumina-stats')">查看状态</button>
+            <button type="button" @click="togglePromptInspector">Prompt 预览</button>
+          </div>
+        </div>
+      </div>
+    </header>
+    <div v-if="isTelegramVariant && telegramSearchActive" class="telegram-chat-search-strip">
+      <input v-model="telegramMessageSearchQuery" type="search" placeholder="搜索当前消息">
+      <span>{{ telegramSearchMatchCount }} 条匹配</span>
+    </div>
     <div class="chat-scroll-area" ref="chatScrollArea" data-lw-ime-scroll-root @wheel.stop @scroll="handleScroll">
       <div class="chat-content-wrapper" :style="msgMaxWidthStyle">
         <!-- 临时插标物：章节线 -->
-        <div class="chat-chapter-divider" v-if="messages.length > 0">
+        <div class="chat-chapter-divider" v-if="messages.length > 0 && !isTelegramVariant">
           <div class="chip">
             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
@@ -14,17 +65,56 @@
           </div>
         </div>
 
-        <div v-if="showNoActiveChatEmptyState" class="chat-empty-state">
+        <div v-if="showNoActiveChatEmptyState && isTelegramVariant" class="telegram-empty-state">
+          <div class="telegram-empty-state__mark">✈</div>
+          <h2>选择角色开始聊天</h2>
+          <p>{{ emptyStateMessage }}</p>
+          <div class="telegram-empty-state__actions">
+            <button type="button" class="is-primary" @click="openTelegramContextTool('characters')">选择角色开始</button>
+            <button type="button" @click="openTelegramContextTool('lumina-settings')">打开设置</button>
+          </div>
+          <div v-if="telegramRecentSessions.length > 0" class="telegram-empty-state__section">
+            <strong>最近会话</strong>
+            <button
+              v-for="session in telegramRecentSessions"
+              :key="session.id"
+              type="button"
+              @click="contextStore.selectViewSession(session.id)"
+            >
+              <span>{{ session.characterName || session.title }}</span>
+              <small>{{ session.previewMessage || session.summary || session.title }}</small>
+            </button>
+          </div>
+          <div v-if="telegramRecentCharacters.length > 0" class="telegram-empty-state__chips" aria-label="最近角色">
+            <button
+              v-for="character in telegramRecentCharacters"
+              :key="character"
+              type="button"
+              @click="openTelegramContextTool('characters')"
+            >
+              {{ character }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="showNoActiveChatEmptyState" class="chat-empty-state">
           <p>{{ emptyStateMessage }}</p>
         </div>
 
-        <div v-for="(msg, index) in messages" :key="index" class="chat-msg" :class="{ 'user': msg.is_user }">
-          <div class="msg-avatar">
+        <div
+          v-for="(msg, index) in messages"
+          :key="index"
+          class="chat-msg"
+          :class="{ 'user': msg.is_user }"
+          :data-message-shape="getMessageShape(msg)"
+          :data-avatar-placement="getAvatarPlacement(msg)"
+        >
+          <div v-if="shouldShowInlineAvatar(msg)" class="msg-avatar">
             <img :src="resolveMessageAvatar(msg)" class="avatar-img" :alt="msg.name"
               @error="(e) => (e.target as any).src = lwApi?.DEFAULT_AVATAR">
           </div>
-          <div class="msg-content">
-            <div v-if="showUsernames" class="msg-meta">
+          <div class="msg-content" :data-message-shape="getMessageShape(msg)">
+            <div v-if="shouldShowMessageMeta(msg)" class="msg-meta">
               <span class="msg-name">{{ msg.name }}</span>
               <span class="msg-info" v-if="!msg.is_user">分支 A-1</span>
             </div>
@@ -48,12 +138,12 @@
               <div class="msg-bubble">
                   <!-- AI 消息使用 MessageRenderer 支持 <V> 块组件渲染 -->
                   <MessageRenderer v-if="!msg.is_user" 
-                    :mes="msg.mes" 
-                    :mesRaw="msg.mesRaw" 
-                    :pluginRaw="msg.pluginRaw"
+                    :mes="getDisplayMessageText(msg, 'mes')"
+                    :mesRaw="getDisplayMessageText(msg, 'mesRaw')"
+                    :pluginRaw="getDisplayMessageText(msg, 'pluginRaw')"
                     :thinkingText="msg.thinkingText || null"
                     :renderMarkdown="renderMarkdown" />
-                  <div v-else v-html="renderMarkdown(msg.mes)"></div>
+                  <div v-else v-html="renderMarkdown(getDisplayMessageText(msg, 'mes'))"></div>
                 <!-- 动作栏内置于消息框底部常驻 -->
                 <div class="msg-actions" v-if="!msg.is_user">
                   <button title="编辑 (Edit)" @click="handleEdit(index, msg)" :disabled="isInteractionLocked">
@@ -144,7 +234,7 @@
             <div class="msg-bubble streaming-bubble" :class="{ 'syncing': isSyncing }">
               <!-- 核心变更：流式显示提纯后的内容 (streamingBuffer) 而非原始流 (streamingRaw) -->
               <div class="msg-text" v-if="streamingBuffer" :class="effectClass">
-                <MessageRenderer :mesRaw="streamingBuffer" :thinkingText="streamingThinkingText" :renderMarkdown="renderMarkdown" :isStreaming="true" />
+                <MessageRenderer :mesRaw="cleanDisplayText(streamingBuffer)" :thinkingText="streamingThinkingText" :renderMarkdown="renderMarkdown" :isStreaming="true" />
                 <span class="typing-cursor" v-if="!isSyncing">|</span>
               </div>
 
@@ -222,12 +312,33 @@
 
         <!-- 输入块（可折叠）-->
         <div class="input-container" v-show="!inputCollapsed">
+          <div v-if="isTelegramVariant" class="telegram-composer-tool-wrap">
+          <button class="telegram-composer-icon" type="button" title="工具菜单" :aria-expanded="showTelegramComposerToolsMenu" @click="showTelegramComposerToolsMenu = !showTelegramComposerToolsMenu">
+            <svg viewBox="0 0 24 24" width="19" height="19" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+            </svg>
+          </button>
+            <div v-if="showTelegramComposerToolsMenu" class="telegram-composer-menu">
+              <button type="button" @click="togglePromptInspector">插入上下文</button>
+              <button type="button" @click="openTelegramContextTool('lumina-lorebook')">打开世界书</button>
+              <button type="button" @click="openTelegramContextTool('lumina-timeline')">打开时间线</button>
+              <button type="button" @click="openTelegramContextTool('lumina-director')">生成控制</button>
+            </div>
+          </div>
           <div v-if="showReadOnlyBanner" class="chat-readonly-banner">{{ readOnlyReason }}</div>
           <textarea v-model="quickInput" id="lw-main-input" @keydown="handleMainInputKeydown"
             @compositionstart="mainImeGuard.handleCompositionStart" @compositionend="mainImeGuard.handleCompositionEnd"
             :disabled="isGenerating || isInteractionLocked"
-            :placeholder="inputPlaceholder"></textarea>
+            :placeholder="effectiveInputPlaceholder"></textarea>
           <div class="input-actions">
+            <button v-if="isTelegramVariant && !isGenerating" class="telegram-composer-icon" type="button" title="Emoji">
+              <svg viewBox="0 0 24 24" width="19" height="19" stroke="currentColor" stroke-width="2" fill="none">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M8 14s1.5 2 4 2s4-2 4-2"></path>
+                <path d="M9 9h.01"></path>
+                <path d="M15 9h.01"></path>
+              </svg>
+            </button>
             <!-- 生成中：显示停止按钮 -->
             <button v-if="isGenerating" class="lw-btn stop-btn"
               style="width: 38px; height: 38px; padding: 0;" @click="handleStop" :disabled="isInteractionLocked"
@@ -265,6 +376,7 @@ import { useImeSubmitGuard } from '../../composables/useImeSubmitGuard.js';
 import { useComponentSkin } from '../../theme/useComponentSkin';
 import { getThemeSettingValue } from '../../theme/themeRegistry';
 import { resolveChatSurfaceState, resolveChatViewState } from './chatViewState.js';
+import type { ChatSessionRef } from '../../types/SessionTypes.js';
 
 interface Props {
   messages: LuminaChatMessage[];
@@ -282,6 +394,8 @@ const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const { activeSettings } = useSettings();
 const contextStore = useConversationContextStore();
 const { cssVars: chatSkinVars, variant: chatVariant, desktopModeId } = useComponentSkin('chat.stream');
+const { cssVars: telegramConversationVars } = useComponentSkin('telegram.conversation');
+const { cssVars: telegramComposerVars } = useComponentSkin('telegram.composer');
 
 // === 状态 ===
 const quickInput = ref('');
@@ -291,8 +405,12 @@ const editImeGuard = useImeSubmitGuard({ debugLabel: 'ChatEditInput' });
 const showInspector = ref(false);     // 提示词查看器开关
 const inspectorExpanded = ref(false); // 展开到全屏模式
 const inputCollapsed = ref(false);    // 输入框折叠状态
-const isGenerating = ref(lwApi?.isGenerating || false);
-const isSyncing = ref(lwApi?.streamHandler.isSyncing || false);
+const telegramSearchActive = ref(false);
+const telegramMessageSearchQuery = ref('');
+const showTelegramHeaderToolsMenu = ref(false);
+const showTelegramComposerToolsMenu = ref(false);
+const isGenerating = ref(lwApi?.services.generation.isGenerating() || false);
+const isSyncing = ref(lwApi?.services.generation.isSyncing() || false);
 const streamingBuffer = ref('');      // 实时流式文本缓冲 (正则处理后)
 const streamingRaw = ref('');         // 实时流式文本 (处理前)
 const streamingConfirmed = ref('');   // 已确认显示的文本（无动画）
@@ -320,7 +438,12 @@ const effectClass = computed(() => {
 });
 
 const isCompact = computed(() => props.isMobile || props.workspaceCompact);
+const isTelegramVariant = computed(() => chatVariant.value === 'telegram');
 const showUsernames = computed(() => getThemeSettingValue(activeSettings, desktopModeId.value, 'showUsernames', true) !== false);
+const assistantMessageShape = computed(() => String(chatSkinVars.value['--lw-chat-assistant-shape'] || 'bubble'));
+const userMessageShape = computed(() => String(chatSkinVars.value['--lw-chat-user-shape'] || 'bubble'));
+const assistantAvatarPlacement = computed(() => String(chatSkinVars.value['--lw-chat-assistant-avatar-placement'] || 'inline'));
+const userAvatarPlacement = computed(() => String(chatSkinVars.value['--lw-chat-user-avatar-placement'] || 'inline'));
 const sessionSwitchState = computed(() => contextStore.sessionSwitchState);
 const isSessionSwitching = computed(() => sessionSwitchState.value.isSwitching);
 const chatViewState = computed(() => resolveChatViewState({
@@ -336,6 +459,7 @@ const isInteractionLocked = computed(() => isReadOnlyView.value || isSessionSwit
 const readOnlyReason = computed(() => chatViewState.value.readOnlyReason);
 const sessionSwitchStatusText = computed(() => sessionSwitchState.value.statusText || '正在切换聊天...');
 const inputPlaceholder = computed(() => chatViewState.value.inputPlaceholder);
+const effectiveInputPlaceholder = computed(() => isTelegramVariant.value ? 'Message' : inputPlaceholder.value);
 const sendButtonTitle = computed(() => chatViewState.value.sendButtonTitle);
 const emptyStateMessage = computed(() => chatViewState.value.emptyStateMessage);
 const chatSurfaceState = computed(() => resolveChatSurfaceState({
@@ -349,6 +473,86 @@ const chatSurfaceState = computed(() => resolveChatSurfaceState({
 }));
 const showReadOnlyBanner = computed(() => chatSurfaceState.value.showReadOnlyBanner);
 const showNoActiveChatEmptyState = computed(() => chatSurfaceState.value.showNoActiveChatEmptyState);
+
+const telegramPeer = computed(() => {
+  const assistantMessage = [...props.messages].reverse().find((message) => !message.is_user);
+  const name = assistantMessage?.name?.trim() || 'Alice';
+  return {
+    name,
+    avatar: assistantMessage ? resolveMessageAvatar(assistantMessage) : lwApi?.DEFAULT_AVATAR
+  };
+});
+
+const showTelegramHeaderAvatar = computed(() => (
+  isTelegramVariant.value && assistantAvatarPlacement.value === 'topbar'
+));
+const telegramSearchMatchCount = computed(() => {
+  const query = telegramMessageSearchQuery.value.trim().toLowerCase();
+  if (!query) return 0;
+  return props.messages.filter((message) => (
+    getDisplayMessageText(message, 'mes').toLowerCase().includes(query)
+    || getDisplayMessageText(message, 'mesRaw').toLowerCase().includes(query)
+    || (message.name || '').toLowerCase().includes(query)
+  )).length;
+});
+const telegramRecentSessions = computed(() => (
+  contextStore.chatSessions
+    .filter((session): session is ChatSessionRef & { sourceId: 'chat' } => session.sourceId === 'chat')
+    .slice()
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .slice(0, 5)
+));
+const telegramRecentCharacters = computed(() => {
+  const names = new Set<string>();
+  for (const session of telegramRecentSessions.value) {
+    const name = session.characterName?.trim();
+    if (name) {
+      names.add(name);
+    }
+    if (names.size >= 5) {
+      break;
+    }
+  }
+  return [...names];
+});
+
+const getMessageShape = (msg: LuminaChatMessage) => (
+  msg.is_user ? userMessageShape.value : assistantMessageShape.value
+);
+
+const getAvatarPlacement = (msg: LuminaChatMessage) => (
+  msg.is_user ? userAvatarPlacement.value : assistantAvatarPlacement.value
+);
+
+const shouldShowInlineAvatar = (msg: LuminaChatMessage) => (
+  getAvatarPlacement(msg) === 'inline'
+);
+
+const shouldShowMessageMeta = (msg: LuminaChatMessage) => {
+  if (!showUsernames.value) return false;
+  return getAvatarPlacement(msg) !== 'topbar';
+};
+
+type DisplayMessageField = 'mes' | 'mesRaw' | 'pluginRaw';
+
+const cleanDisplayText = (text: string | null | undefined): string => {
+  if (!text) return '';
+  return text
+    .replace(/"?color:\s*var\(--lw-primary\);?\s*"?/gi, '')
+    .replace(/<\s*\/?\s*color:var\(--lw-primary\);?\s*>/gi, '')
+    .replace(/;\s*">\s*/g, '')
+    .replace(/\s{3,}/g, '  ')
+    .trim();
+};
+
+const getDisplayMessageText = (msg: LuminaChatMessage, field: DisplayMessageField): string => {
+  const value = field === 'pluginRaw'
+    ? (msg.pluginRaw || '')
+    : field === 'mesRaw'
+      ? (msg.mesRaw || msg.mes || '')
+      : (msg.mes || msg.mesRaw || '');
+  return isTelegramVariant.value ? cleanDisplayText(value) : value;
+};
 
 const resolveMessageAvatar = (msg: LuminaChatMessage): string => {
   const directAvatar = typeof (msg as { avatarUrl?: string | null }).avatarUrl === 'string'
@@ -368,6 +572,21 @@ const resolveMessageAvatar = (msg: LuminaChatMessage): string => {
   }
 
   return lwApi?.DEFAULT_AVATAR || '';
+};
+
+const closeTelegramMenus = () => {
+  showTelegramHeaderToolsMenu.value = false;
+  showTelegramComposerToolsMenu.value = false;
+};
+
+const openTelegramContextTool = (panelId: string) => {
+  closeTelegramMenus();
+  lwApi?.emit('TELEGRAM_CONTEXT_TOOL', panelId);
+};
+
+const togglePromptInspector = () => {
+  showInspector.value = !showInspector.value;
+  closeTelegramMenus();
 };
 
 const resetStreamingState = (forceScroll = false) => {
@@ -453,7 +672,7 @@ const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number,
   }
 
   // 同步状态追踪
-  isSyncing.value = lwApi?.streamHandler.isSyncing || false;
+  isSyncing.value = lwApi?.services.generation.isSyncing() || false;
   
   // 仅在之前就贴底的情况下跟随滚动
   if (isAtBottom.value) {
@@ -538,9 +757,10 @@ onMounted(() => {
   lwApi?.on('WORLDLINE_ROLLED_BACK', onWorldlineChanged);
 
   // 核心修复：如果正在生成中重新挂载，立即恢复流式状态
-  if (isLiveChatView.value && lwApi?.isGenerating && lwApi.lastStreamState) {
+  const lastStreamState = lwApi?.services.generation.getLastStreamState();
+  if (isLiveChatView.value && lwApi?.services.generation.isGenerating() && lastStreamState) {
     isGenerating.value = true;
-    const { processed, text, filteredCount, statusText, thinkingText } = lwApi.lastStreamState;
+    const { processed, text, filteredCount, statusText, thinkingText } = lastStreamState;
     onBufferUpdated(processed, text, filteredCount, statusText, thinkingText);
   }
 });
@@ -554,62 +774,25 @@ onUnmounted(() => {
   lwApi?.off('WORLDLINE_ROLLED_BACK', onWorldlineChanged);
 });
 
-// 阅读主题变动计算器
+// 聊天外观由当前桌面模式 skin 和 settingsManifest 统一驱动
 const streamStyle = computed(() => {
-  const themes: Record<string, any> = {
-    gray: { bg: '#f8fafc', color: '#1e293b', bubbleBg: '#ffffff', userBg: '#f8fafc', border: '#f1f5f9', inputBg: '#ffffff' },
-    warm: { bg: '#fffbf0', color: '#433422', bubbleBg: '#ffffff', userBg: '#fef3c7', border: '#fde68a', inputBg: '#ffffff' },
-    green: { bg: '#f0fdf4', color: '#14532d', bubbleBg: '#ffffff', userBg: '#dcfce7', border: '#bbf7d0', inputBg: '#ffffff' },
-    blue: { bg: '#f0f9ff', color: '#0c4a6e', bubbleBg: '#ffffff', userBg: '#e0f2fe', border: '#bae6fd', inputBg: '#ffffff' },
-    dark: { bg: '#0f172a', color: '#f8fafc', bubbleBg: '#1e293b', userBg: '#334155', border: '#334155', inputBg: '#1e293b' }
-  };
-  const curTheme = themes[activeSettings['lumina-chat.theme'] || 'gray'] || themes.gray;
-  const fonts: Record<string, string> = {
-    'sans-serif': 'Inter, sans-serif',
-    'serif': '"Noto Serif CJK SC", "Songti SC", serif',
-    'kaiti': '"Kaiti SC", "STKaiti", serif'
-  };
   const compactAvatarSize = isCompact.value ? '34px' : '40px';
   const compactPadding = isCompact.value ? '16px 14px' : '24px 40px';
 
   return {
-    '--lw-bg': curTheme.bg,
-    '--lw-color': curTheme.color,
-    '--lw-bubble': curTheme.bubbleBg,
-    '--lw-user-bubble': curTheme.userBg,
-    '--lw-border': curTheme.border,
-    '--lw-input-bg': curTheme.inputBg,
-    '--lw-chat-stream-bg': curTheme.bg,
-    '--lw-chat-color': curTheme.color,
-    '--lw-chat-bubble': curTheme.bubbleBg,
-    '--lw-chat-user-bubble': curTheme.userBg,
-    '--lw-chat-border': curTheme.border,
-    '--lw-chat-input-surface': curTheme.inputBg,
-    '--lw-chat-input-area-bg': 'var(--lw-bg-app)',
-    '--lw-chat-scroll-padding': compactPadding,
-    '--lw-chat-content-gap': isCompact.value ? '18px' : '24px',
-    '--lw-chat-avatar-size': compactAvatarSize,
-    '--lw-chat-avatar-radius': '999px',
-    '--lw-chat-bubble-radius': isCompact.value ? '16px' : '18px',
-    '--lw-chat-input-radius': 'var(--lw-radius)',
-    '--lw-chat-bubble-shadow': 'var(--lw-shadow)',
     ...chatSkinVars.value,
-    '--lw-font': (function () {
-      const rawFamily = activeSettings['lumina-chat.fontFamily'] || 'sans-serif';
-      const family = rawFamily.replace(/['"]/g, '').trim();
-      const fonts: Record<string, string> = {
-        'sans-serif': 'Inter, sans-serif',
-        'serif': '"Noto Serif CJK SC", "Songti SC", serif',
-        'kaiti': '"Kaiti SC", "STKaiti", serif'
-      };
-      return fonts[family] || `"${family}", sans-serif`;
-    })(),
-    '--lw-font-weight': activeSettings['lumina-chat.fontWeight'] || 400,
-    '--lw-size': (activeSettings['lumina-chat.fontSize'] || 16) + 'px',
-    '--lw-line-height': activeSettings['lumina-chat.lineHeight'] || 1.6,
-    '--lw-p-spacing': (activeSettings['lumina-chat.paragraphSpacing'] ?? 16) + 'px',
-    '--lw-letter-spacing': (activeSettings['lumina-chat.letterSpacing'] ?? 0) + 'px'
-  };
+    ...(chatVariant.value === 'telegram' ? telegramConversationVars.value : {}),
+    ...(chatVariant.value === 'telegram' ? telegramComposerVars.value : {}),
+    '--lw-chat-scroll-padding': compactPadding,
+    '--lw-chat-avatar-size': compactAvatarSize,
+    '--lw-chat-page-width': String(chatSkinVars.value['--lw-chat-page-width'] || 'auto'),
+    '--lw-font': 'var(--lw-chat-font, var(--lw-font-main))',
+    '--lw-font-weight': 'var(--lw-chat-font-weight, 400)',
+    '--lw-size': 'var(--lw-chat-font-size, 16px)',
+    '--lw-line-height': 'var(--lw-chat-line-height, 1.6)',
+    '--lw-p-spacing': 'var(--lw-chat-paragraph-spacing, 16px)',
+    '--lw-letter-spacing': 'var(--lw-chat-letter-spacing, 0px)'
+  } as Record<string, string>;
 });
 
 const msgMaxWidthStyle = computed(() => {
@@ -620,7 +803,7 @@ const msgMaxWidthStyle = computed(() => {
       margin: '0 auto'
     };
   }
-  const w = activeSettings['lumina-chat.pageWidth'];
+  const w = String(streamStyle.value['--lw-chat-page-width'] || 'auto');
   if (!w || w === 'auto') return { maxWidth: '100%' };
   return { width: '100%', maxWidth: w + 'px', margin: '0 auto' };
 });
@@ -731,7 +914,7 @@ watch(isLiveChatView, (isLive) => {
 
 /**
  * 发送消息
- * 注意: lwApi.sendMessage() 内部已经调用了 triggerGenerate()
+ * 注意: generation.sendMessage() 内部已经调用了 triggerGenerate()
  * 这里不需要再重复调用
  */
 const handleSend = async (trigger: 'button' | 'enter' = 'button') => {
@@ -742,7 +925,7 @@ const handleSend = async (trigger: 'button' | 'enter' = 'button') => {
     textLength: text.length
   });
   quickInput.value = '';
-  await lwApi.sendMessage(text);
+  await lwApi.services.generation.sendMessage(text);
   // 发送后立即触底，确保用户内容可见并为随后的 AI 流式输出占位
   scrollToBottom(true);
 };
@@ -829,7 +1012,7 @@ const handleRegen = async () => {
     return;
   }
   if (lwApi) {
-    await lwApi.regenerateLast();
+    await lwApi.services.generation.regenerateLast();
   }
 };
 
@@ -840,12 +1023,12 @@ const handleBranch = async (index: number, msg: LuminaChatMessage) => {
   if (lwApi) {
     const nodeId = msg.id || (lwApi as any)._getMessageFingerprint(msg);
     if (nodeId) {
-      await lwApi.branchConversationNode({
+      await lwApi.services.conversation.branchNode({
         sourceId: 'chat',
         targetNodeId: nodeId
       });
     } else {
-      lwApi.showToast(`无法解析该节点的坐标信息。楼层：${index}`, 'error');
+      lwApi.services.host.showToast(`无法解析该节点的坐标信息。楼层：${index}`, 'error');
     }
   }
 };
@@ -855,7 +1038,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
     return;
   }
   if (lwApi) {
-    const isConfirmed = await lwApi.confirm({
+    const isConfirmed = await lwApi.services.host.confirm({
       title: '删除消息',
       message: `确定要删除此条消息吗？\n删除后无法撤销 (楼层 ${index})`,
       confirmText: '确认删除',
@@ -1266,30 +1449,30 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   color: #ef4444;
 }
 
-/* --- 沉浸式文档模式 Document Mode --- */
-.lw-chat-stream.doc-mode .msg-avatar {
+.chat-msg[data-avatar-placement='hidden'] .msg-avatar,
+.chat-msg[data-avatar-placement='topbar'] .msg-avatar,
+.chat-msg[data-avatar-placement='rail'] .msg-avatar {
   display: none !important;
 }
 
-.lw-chat-stream.doc-mode .msg-meta {
-  display: none !important;
-}
-
-.lw-chat-stream.doc-mode .chat-msg {
-  align-self: flex-start !important;
-  flex-direction: row !important;
+.chat-msg[data-message-shape='document'] {
+  align-self: flex-start;
+  flex-direction: row;
   margin-bottom: var(--lw-p-spacing);
 }
 
-.lw-chat-stream.doc-mode .msg-content {
-  align-items: flex-start !important;
+.chat-msg[data-message-shape='document'] .msg-content,
+.chat-msg[data-message-shape='document'].user .msg-content {
+  align-items: flex-start;
 }
 
-.lw-chat-stream.doc-mode .msg-bubble {
+.chat-msg[data-message-shape='document'] .msg-bubble,
+.chat-msg[data-message-shape='document'].user .msg-bubble {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
+  max-width: 100%;
 }
 
 /* 悬停出现动作栏：在气泡底部常驻 */
@@ -1858,6 +2041,519 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   color: var(--lw-text-muted);
 }
 
+.lw-chat-stream[data-skin-variant='telegram'] {
+  border-right-color: var(--lw-chat-border, var(--lw-border-subtle));
+  background: var(--lw-chat-stream-bg, var(--lw-bg-app));
+}
+
+.telegram-chat-header {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--lw-border-base);
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 54%, transparent);
+  color: var(--lw-text-main);
+}
+
+.telegram-chat-header button {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.telegram-chat-header button:hover {
+  background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
+  color: var(--lw-text-main);
+}
+
+.telegram-chat-header button:disabled {
+  opacity: 0.62;
+  cursor: default;
+}
+
+.telegram-chat-header button:disabled:hover {
+  background: transparent;
+  color: var(--lw-text-secondary);
+}
+
+.telegram-chat-header__peer {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.telegram-chat-header__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--lw-chat-avatar-radius, 999px);
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, transparent);
+  box-shadow: var(--lw-chat-avatar-shadow, 0 8px 20px rgba(44, 92, 130, 0.12));
+}
+
+.telegram-chat-header__avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.telegram-chat-header__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.telegram-chat-header__copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.telegram-chat-header__copy strong span {
+  color: var(--lw-primary);
+}
+
+.telegram-chat-header__copy small {
+  font-size: 11px;
+  color: var(--lw-primary);
+}
+
+.telegram-chat-header__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.telegram-chat-header__menu-wrap,
+.telegram-composer-tool-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.telegram-context-menu,
+.telegram-composer-menu {
+  position: absolute;
+  z-index: 20;
+  min-width: 176px;
+  padding: 6px;
+  border: 1px solid var(--lw-border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 94%, transparent);
+  box-shadow: var(--lw-chat-menu-shadow, 0 18px 34px rgba(44, 92, 130, 0.16));
+}
+
+.telegram-context-menu {
+  top: calc(100% + 8px);
+  right: 0;
+}
+
+.telegram-composer-menu {
+  bottom: calc(100% + 8px);
+  left: 0;
+}
+
+.telegram-chat-header .telegram-context-menu button,
+.telegram-composer-menu button {
+  width: 100%;
+  height: auto;
+  min-height: 34px;
+  border: none;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--lw-text-main);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.telegram-chat-header .telegram-context-menu button:hover,
+.telegram-composer-menu button:hover {
+  background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
+}
+
+.telegram-chat-search-strip {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--lw-border-base);
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 46%, transparent);
+}
+
+.telegram-chat-search-strip input {
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--lw-border-subtle);
+  border-radius: 999px;
+  outline: none;
+  padding: 0 12px;
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 70%, transparent);
+  color: var(--lw-text-main);
+  font-size: 12px;
+}
+
+.telegram-chat-search-strip span {
+  font-size: 11px;
+  color: var(--lw-text-muted);
+}
+
+.telegram-empty-state {
+  width: min(520px, 100%);
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 42px auto;
+  padding: 0 12px;
+  text-align: center;
+  color: var(--lw-text-main);
+}
+
+.telegram-empty-state__mark {
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: var(--lw-chat-empty-mark-bg, linear-gradient(135deg, #58c4ff, #168bd4));
+  box-shadow: var(--lw-chat-empty-mark-shadow, 0 18px 34px rgba(44, 92, 130, 0.16));
+  font-size: 24px;
+}
+
+.telegram-empty-state h2,
+.telegram-empty-state p {
+  margin: 0;
+}
+
+.telegram-empty-state h2 {
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.telegram-empty-state p {
+  max-width: 380px;
+  color: var(--lw-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.telegram-empty-state__actions,
+.telegram-empty-state__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.telegram-empty-state__actions button,
+.telegram-empty-state__chips button,
+.telegram-empty-state__section button {
+  border: 1px solid var(--lw-border-subtle);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 70%, transparent);
+  color: var(--lw-text-main);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.telegram-empty-state__actions button {
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+.telegram-empty-state__actions button.is-primary {
+  border-color: color-mix(in srgb, var(--lw-primary) 36%, var(--lw-border-subtle));
+  background: color-mix(in srgb, var(--lw-primary) 16%, var(--lw-surface-container-highest));
+  color: var(--lw-primary);
+}
+
+.telegram-empty-state__section {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.telegram-empty-state__section > strong {
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--lw-text-muted);
+}
+
+.telegram-empty-state__section button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.telegram-empty-state__section span,
+.telegram-empty-state__section small {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.telegram-empty-state__section small {
+  color: var(--lw-text-muted);
+  font-size: 11px;
+}
+
+.telegram-empty-state__chips button {
+  min-height: 30px;
+  padding: 0 12px;
+  color: var(--lw-text-secondary);
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-scroll-area {
+  padding: 22px 24px 18px;
+  background: var(--lw-chat-scroll-bg, linear-gradient(135deg, color-mix(in srgb, var(--lw-text-main) 4%, transparent) 1px, transparent 1px), linear-gradient(45deg, color-mix(in srgb, var(--lw-text-main) 3%, transparent) 1px, transparent 1px));
+  background-size: 34px 34px, 42px 42px;
+  background-position: 0 0, 14px 10px;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-content-wrapper {
+  gap: var(--lw-chat-content-gap, 20px);
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-chapter-divider .chip {
+  border-color: var(--lw-border-subtle);
+  background: color-mix(in srgb, var(--lw-surface-container-high) 70%, transparent);
+  color: var(--lw-text-secondary);
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-msg {
+  gap: 10px;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-msg.user {
+  flex-direction: row-reverse;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .avatar-img,
+.lw-chat-stream[data-skin-variant='telegram'] .streaming-avatar {
+  border-radius: var(--lw-chat-avatar-radius, 999px) !important;
+  border: 2px solid color-mix(in srgb, var(--lw-surface-container-high) 82%, transparent);
+  box-shadow: var(--lw-chat-avatar-shadow, 0 10px 24px rgba(44, 92, 130, 0.12));
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .msg-content {
+  flex: 0 1 auto;
+  max-width: min(68%, var(--lw-chat-message-max-width, 560px));
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-msg.user .msg-content {
+  align-items: flex-end;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .msg-meta {
+  display: var(--lw-chat-user-name-display, flex);
+  padding-inline: 4px;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-msg[data-message-shape='document'] .msg-content,
+.lw-chat-stream[data-skin-variant='telegram'] .chat-msg[data-message-shape='document'].user .msg-content {
+  max-width: min(100%, var(--lw-chat-page-width, 900px));
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .msg-name {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--lw-text-secondary);
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .msg-info {
+  display: none;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .msg-bubble {
+  border-radius: 15px 15px 15px 5px;
+  background: var(--lw-chat-bubble, var(--lw-telegram-ai-bubble));
+  border: 1px solid var(--lw-chat-border, var(--lw-border-subtle));
+  color: var(--lw-chat-color, var(--lw-text-main));
+  box-shadow: var(--lw-chat-bubble-shadow, 0 10px 22px rgba(44, 92, 130, 0.10));
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-msg.user .msg-bubble {
+  border-radius: 15px 15px 5px 15px;
+  background: var(--lw-chat-user-bubble, var(--lw-telegram-user-bubble));
+  border-color: var(--lw-chat-user-bubble-border, color-mix(in srgb, #6ccf7d 26%, transparent));
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-msg[data-message-shape='document'] .msg-bubble,
+.lw-chat-stream[data-skin-variant='telegram'] .chat-msg[data-message-shape='document'].user .msg-bubble {
+  border-radius: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .msg-actions {
+  position: absolute;
+  right: 8px;
+  bottom: -30px;
+  z-index: 3;
+  margin-top: 0;
+  padding: 4px;
+  border: 1px solid var(--lw-border-base);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 82%, transparent);
+  border-top-color: color-mix(in srgb, var(--lw-text-main) 8%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .msg-bubble {
+  position: relative;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .msg-bubble:hover .msg-actions,
+.lw-chat-stream[data-skin-variant='telegram'] .msg-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .msg-actions button:hover {
+  background: color-mix(in srgb, var(--lw-primary) 12%, transparent);
+  color: var(--lw-text-main);
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .chat-input-area {
+  padding: 8px 12px 12px;
+  background: transparent;
+  border-top-color: transparent;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .input-wrapper {
+  position: relative;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .input-toolbar {
+  position: absolute;
+  right: 18px;
+  bottom: 62px;
+  z-index: 6;
+  width: max-content;
+  max-width: min(360px, 80%);
+  padding: 6px;
+  border: 1px solid var(--lw-border-base);
+  border-radius: 999px;
+  background: var(--lw-chat-input-toolbar-bg, color-mix(in srgb, var(--lw-surface-container-highest) 84%, transparent));
+  box-shadow: var(--lw-chat-input-toolbar-shadow, 0 12px 26px rgba(44, 92, 130, 0.12));
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .input-wrapper:focus-within .input-toolbar,
+.lw-chat-stream[data-skin-variant='telegram'] .input-wrapper:hover .input-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .input-container {
+  min-height: 42px;
+  border: 1px solid var(--lw-chat-input-border, var(--lw-border-subtle));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-chat-input-surface, var(--lw-surface-container-highest)) 88%, transparent);
+  box-shadow: var(--lw-chat-input-shadow, 0 12px 30px rgba(44, 92, 130, 0.10));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  padding: 0 7px;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .input-container:focus-within {
+  box-shadow: none;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .send-btn,
+.lw-chat-stream[data-skin-variant='telegram'] .stop-btn {
+  border-radius: 999px;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .input-actions {
+  gap: 4px;
+  padding-right: 0;
+}
+
+.lw-chat-stream[data-skin-variant='telegram'] .input-container textarea {
+  min-height: 28px !important;
+  max-height: 96px !important;
+  padding: 7px 8px !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+
+.telegram-composer-icon {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.telegram-composer-icon:hover {
+  background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
+  color: var(--lw-text-main);
+}
+
 .lw-chat-stream[data-skin-variant='discord'] {
   border-right-color: var(--lw-chat-border, var(--lw-border-base));
 }
@@ -1901,7 +2597,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .chat-msg:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--lw-chat-message-hover-bg, rgba(255, 255, 255, 0.02));
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .msg-content,
@@ -1921,17 +2617,13 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   box-shadow: none !important;
 }
 
-.lw-chat-stream[data-skin-variant='discord'] .msg-bubble,
-.lw-chat-stream[data-skin-variant='discord'] .chat-msg.user .msg-bubble {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  padding: 0;
-  color: var(--lw-chat-color, var(--lw-text-main));
-}
-
 .lw-chat-stream[data-skin-variant='discord'] .msg-bubble :deep(p) {
   margin-bottom: 0.5em;
+}
+
+.lw-chat-stream[data-skin-variant='discord'] .chat-msg[data-message-shape='document'] .msg-bubble,
+.lw-chat-stream[data-skin-variant='discord'] .chat-msg[data-message-shape='document'].user .msg-bubble {
+  color: var(--lw-chat-color, var(--lw-text-main));
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .msg-actions {
@@ -1952,8 +2644,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 .lw-chat-stream[data-skin-variant='discord'] .streaming-bubble,
 .lw-chat-stream[data-skin-variant='discord'] .streaming-msg .msg-bubble.streaming-bubble {
-  background: var(--lw-chat-streaming-surface, rgba(88, 101, 242, 0.08));
-  border: 1px solid var(--lw-chat-streaming-border, rgba(88, 101, 242, 0.18));
+  background: var(--lw-chat-streaming-surface, rgba(var(--lw-primary-rgb), 0.08));
+  border: 1px solid var(--lw-chat-streaming-border, rgba(var(--lw-primary-rgb), 0.18));
   border-radius: 12px;
   padding: 12px 14px;
 }
@@ -1975,8 +2667,8 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .input-container:focus-within {
-  border-color: rgba(88, 101, 242, 0.42);
-  box-shadow: 0 0 0 1px rgba(88, 101, 242, 0.24);
+  border-color: var(--lw-chat-input-focus-border, rgba(var(--lw-primary-rgb), 0.42));
+  box-shadow: var(--lw-chat-input-focus-shadow, 0 0 0 1px rgba(var(--lw-primary-rgb), 0.24));
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .input-actions {

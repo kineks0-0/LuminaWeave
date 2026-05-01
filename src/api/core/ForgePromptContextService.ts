@@ -1,7 +1,9 @@
 import { PromptBuilder } from './PromptBuilder.js';
-import { ForgePromptPayloadResolver } from './ForgePromptPayloadResolver.js';
-import { buildAnalystContext, buildMainModelContext } from './ForgeContextBroker.js';
+import { PromptPresetComposer } from './PromptPresetComposer.js';
+import { promptPresetRegistry } from './PromptPresetRegistry.js';
+import { buildAnalystContext } from './ForgeContextBroker.js';
 import { lwStorage } from '../storage.js';
+import { STClient } from './st-adapter/STClient.js';
 import type { CleanedMessage } from '../../types/nexus.js';
 import type { MemorySnapshot } from '../../types/MemorySnapshotTypes.js';
 import type { ForgeDraftTree, ForgeStructuredState } from '../../types/ForgeStructuredTypes.js';
@@ -13,8 +15,8 @@ import {
     FORGE_CONVERSATION_PROMPT,
     FORGE_ANALYST_PROMPT,
     FORGE_EXECUTOR_SYSTEM_PROMPT,
-    renderForgeExecutorUserPrompt,
 } from '../../resources/prompts/forgePrompts.js';
+import type { PromptComposeSources, PromptPresetSpecialKey } from '../../types/PromptPresetTypes.js';
 
 type BackendPresetDetail = {
     preset?: {
@@ -55,6 +57,8 @@ interface BuildPromptPreviewOptions extends BuildPlannerPromptOptions {
     mode?: 'planner' | 'conversation' | 'analyst';
 }
 
+type ForgeExecutionRequestBase = Omit<ForgeExecutionRequest, 'requestId' | 'traceSource' | 'contextSnapshot' | 'nodeSummary' | 'generationSettings'>;
+
 export class ForgePromptContextService {
     /** 读取 Forge 对话历史截断设置，0 表示不限制。 */
     private static getForgeMaxHistoryMessages(): number {
@@ -87,16 +91,10 @@ export class ForgePromptContextService {
 
     private static buildFormAssistanceSettingNote(): string {
         const mode = lwStorage.get('lumina-forge.formAssistanceMode', 'prefill', 'Global');
-        
-        switch (mode) {
-            case 'prefill':
-                return '### 当前 Forge 设置\n- form_assistance_mode=prefill：在 quick 模式且已有当前本地表单时，你可以使用 <form_prefill> 为空字段提供建议值。此模式下，你不必在组件内输出 suggestions 参数。';
-            case 'suggestion':
-                return '### 当前 Forge 设置\n- form_assistance_mode=suggestion：你不能输出 <form_prefill>。如需辅助用户填写，请务必在 ForgeInput 或 ForgeTextarea 组件中使用 `suggestions="建议1|建议2"` 参数提供 2-3 个预设选项供用户点击填入。';
-            case 'off':
-            default:
-                return '### 当前 Forge 设置\n- form_assistance_mode=off：表单辅助已关闭。不要输出 <form_prefill>，也不要在组件中使用 suggestions 字段。完全依赖用户手动输入。';
+        if (mode === 'off') {
+            return '### 当前 Forge 设置\n- form_assistance_mode=off：表单辅助已关闭。请根据用户描述直接在对话中回复建议，无需输出 FFA 辅助函数。';
         }
+        return '### 当前 Forge 设置\n- form_assistance_mode=active：你可以使用 `ForgeFormAssist`（FFA）函数为表单字段提供建议值。前端将根据用户偏好决定是直接填入还是作为建议显示。';
     }
 
     public static buildAutoChecklistNote(options: BuildPlannerPromptOptions): string {
@@ -155,38 +153,22 @@ export class ForgePromptContextService {
     }
 
     static buildPlannerPrompt(options: BuildPlannerPromptOptions): CleanedMessage[] {
-        const basePrompt = options.presetData?.preset?.blob?.prompts?.[0]?.content || FORGE_PLANNER_PROMPT;
-        const baseSystemPrompt = `${basePrompt}\n\n${this.buildFormAssistanceSettingNote()}\n\n${this.buildEntryFormatNote()}\n\n${this.buildAutoChecklistNote(options)}`;
-
-        // Planner 角色通过 buildMainModelContext 截断历史，减少无关 token 消耗。
         const maxHistory = options.maxHistoryMessages ?? this.getForgeMaxHistoryMessages();
-        return this.buildWorkspacePrompt(baseSystemPrompt, {
+        return this.composeForgeMainPrompt('plannerSystemPrompt', {
             ...options,
             messages: this.truncateHistory(options.messages, maxHistory)
         });
     }
 
     static buildConversationPrompt(options: BuildPlannerPromptOptions): CleanedMessage[] {
-        const presetSystemPrompt = options.presetData?.preset?.blob?.prompts?.[0]?.content?.trim();
-        const systemPrompt = presetSystemPrompt
-            ? `${FORGE_CONVERSATION_PROMPT}\n\n### 当前预设约束\n${presetSystemPrompt}`
-            : FORGE_CONVERSATION_PROMPT;
-        const resolvedSystemPrompt = `${systemPrompt}\n\n${this.buildFormAssistanceSettingNote()}\n\n${this.buildEntryFormatNote()}\n\n${this.buildAutoChecklistNote(options)}`;
-
-        // Conversation 角色同样受 maxHistoryMessages 约束。
         const maxHistory = options.maxHistoryMessages ?? this.getForgeMaxHistoryMessages();
-        return this.buildWorkspacePrompt(resolvedSystemPrompt, {
+        return this.composeForgeMainPrompt('conversationSystemPrompt', {
             ...options,
             messages: this.truncateHistory(options.messages, maxHistory)
         });
     }
 
     static buildAnalystPrompt(options: BuildPlannerPromptOptions): CleanedMessage[] {
-        const presetSystemPrompt = options.presetData?.preset?.blob?.prompts?.[0]?.content?.trim();
-        const systemPrompt = presetSystemPrompt
-            ? `${FORGE_ANALYST_PROMPT}\n\n### 当前预设约束\n${presetSystemPrompt}`
-            : FORGE_ANALYST_PROMPT;
-
         // 分析者角色通过 ForgeContextBroker.buildAnalystContext 截断历史，
         // 避免将完整对话传给仅需近期上下文的 analyst 模型。
         const analystCtx = buildAnalystContext({
@@ -197,29 +179,58 @@ export class ForgePromptContextService {
             maxRecentMessages: options.maxRecentMessages ?? 10
         });
 
-        return this.buildWorkspacePrompt(systemPrompt, {
+        return this.composeForgeMainPrompt('analystSystemPrompt', {
             ...options,
             messages: analystCtx.recentHistory
         });
     }
 
-    private static buildWorkspacePrompt(systemPrompt: string, options: BuildPlannerPromptOptions): CleanedMessage[] {
-        const payload = ForgePromptPayloadResolver.buildPlannerPromptPayload({
-            systemPrompt,
-            messages: options.messages,
-            resolvedLorebookEntries: options.resolvedLorebookEntries,
+    private static composeForgeMainPrompt(
+        specialKey: Extract<PromptPresetSpecialKey, 'plannerSystemPrompt' | 'conversationSystemPrompt' | 'analystSystemPrompt'>,
+        options: BuildPlannerPromptOptions
+    ): CleanedMessage[] {
+        const sources: PromptComposeSources = {
+            baseSystemPromptKey: specialKey,
+            lorebookEntries: options.resolvedLorebookEntries,
+            conversationHistory: options.messages,
             memorySnapshot: options.memorySnapshot,
             forgeMemoryTree: options.forgeMemoryTree,
             structuredState: options.structuredState,
             draftTree: options.draftTree,
-            workflowSnapshot: options.workflowSnapshot
-        });
+            workflowSnapshot: options.workflowSnapshot,
+            systemProtocolText: PromptBuilder.buildCombinedProtocolBlock('forge'),
+            macroContext: {
+                [specialKey]: this.resolveForgeMainSystemPrompt(specialKey, options)
+            }
+        };
 
-        return PromptBuilder.buildForgePrompt({
-            ...payload,
-            includeSystemProtocol: true,
-            allowSTWorldInfoFallback: false
-        });
+        return PromptPresetComposer.compose(
+            'forge-main',
+            promptPresetRegistry.getActivePresetId('forge-main'),
+            sources
+        ).messages;
+    }
+
+    private static resolveForgeMainSystemPrompt(
+        specialKey: Extract<PromptPresetSpecialKey, 'plannerSystemPrompt' | 'conversationSystemPrompt' | 'analystSystemPrompt'>,
+        options: BuildPlannerPromptOptions
+    ): string {
+        const backendPrompt = options.presetData?.preset?.blob?.prompts?.[0]?.content?.trim();
+        const basePrompt = specialKey === 'plannerSystemPrompt'
+            ? FORGE_PLANNER_PROMPT
+            : specialKey === 'conversationSystemPrompt'
+                ? FORGE_CONVERSATION_PROMPT
+                : FORGE_ANALYST_PROMPT;
+
+        const promptParts = [
+            basePrompt,
+            backendPrompt ? `### 当前预设约束\n${backendPrompt}` : null,
+            this.buildFormAssistanceSettingNote(),
+            this.buildEntryFormatNote(),
+            this.buildAutoChecklistNote(options)
+        ].filter((part): part is string => Boolean(part && part.trim()));
+
+        return STClient.substituteMacros(promptParts.join('\n\n'));
     }
 
     static buildPromptPreviewPayload(options: BuildPromptPreviewOptions): CleanedMessage[] {
@@ -240,7 +251,7 @@ export class ForgePromptContextService {
         charName?: string;
         /** 覆盖默认的历史截断窗口（默认读取 lumina-forge.maxHistoryMessages）。0 = 不限制。 */
         maxHistoryMessages?: number;
-    }): ForgeExecutionRequest {
+    }): ForgeExecutionRequestBase {
         const buildSharedOptions = {
             presetData: params.presetData,
             // 优先使用 mes（已清洗，剥离 XML 标签），减少 Forge 消息中已处理标签的 token 浪费
@@ -280,7 +291,7 @@ export class ForgePromptContextService {
         charName?: string;
         /** 覆盖默认的历史截断窗口（默认读取 lumina-forge.maxHistoryMessages）。0 = 不限制。 */
         maxHistoryMessages?: number;
-    }): ForgeExecutionRequest {
+    }): ForgeExecutionRequestBase {
         const messages = this.buildConversationPrompt({
             presetData: params.presetData,
             messages: params.context.messages
@@ -317,7 +328,7 @@ export class ForgePromptContextService {
         charName?: string;
         /** 覆盖默认的历史截断窗口（默认 10）。 */
         maxRecentMessages?: number;
-    }): ForgeExecutionRequest {
+    }): ForgeExecutionRequestBase {
         const messages = this.buildAnalystPrompt({
             presetData: params.presetData,
             messages: params.context.messages
@@ -346,21 +357,22 @@ export class ForgePromptContextService {
         };
     }
 
-    static buildExecutorExecutionRequest(options: BuildExecutorPromptOptions): ForgeExecutionRequest {
-        const messages: CleanedMessage[] = [
+    static buildExecutorExecutionRequest(options: BuildExecutorPromptOptions): ForgeExecutionRequestBase {
+        const messages = PromptPresetComposer.compose(
+            'forge-executor',
+            promptPresetRegistry.getActivePresetId('forge-executor'),
             {
-                role: 'system',
-                content: FORGE_EXECUTOR_SYSTEM_PROMPT
-            },
-            {
-                role: 'user',
-                content: renderForgeExecutorUserPrompt({
+                baseSystemPromptKey: 'executorSystemPrompt',
+                executorTask: {
                     instruction: options.instruction,
-                    originalContent: options.originalContent,
                     entryId: options.entryId,
-                })
+                    originalContent: options.originalContent
+                },
+                macroContext: {
+                    executorSystemPrompt: STClient.substituteMacros(FORGE_EXECUTOR_SYSTEM_PROMPT)
+                }
             }
-        ];
+        ).messages;
 
         return {
             mode: 'executor',

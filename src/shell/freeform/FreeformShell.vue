@@ -119,7 +119,7 @@
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-            <LauncherRoot presentation="launchpad" :activeMainTab="activeMainTab" :dismissOnSelect="true" @dismiss="onCloseWorkspaceLaunchpad" />
+            <SurfaceOutlet contract-id="launcher.root" presentation="launchpad" :activeMainTab="activeMainTab" :dismissOnSelect="true" @dismiss="onCloseWorkspaceLaunchpad" />
           </div>
         </div>
       </Transition>
@@ -138,60 +138,71 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, type CSSProperties } from 'vue';
+import { computed, ref, watch } from 'vue';
 import WorkspaceDock from '../../components/WorkspaceDock.vue';
 import WorkspaceStageStrip from '../../components/WorkspaceStageStrip.vue';
 import WorkspaceWindow from '../../components/WorkspaceWindow.vue';
-import LauncherRoot from '../../plugins/launcher/LauncherRoot.vue';
 import ForgeWorkspaceWindowActions from '../../plugins/forge/ForgeWorkspaceWindowActions.vue';
-import type { WorkspaceDockItem, WorkspaceSceneInsets, WorkspaceStageStripItem, WorkspaceWindowEntry } from '../types';
+import type { ShellRuntimeActions, ShellRuntimeContext, ShellRuntimeSurfaces } from '../types';
 import WorkspaceMenu from './WorkspaceMenu.vue';
+import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 
 const props = defineProps<{
-  activeDesktopModeId: string;
-  desktopModeOptions: Array<{ value: string; label: string; description?: string }>;
-  showWorkspaceMenu: boolean;
-  shellWorkspaceMenuVariant: string;
-  shellWorkspaceMenuStyle: CSSProperties;
-  shellWorkspaceStageVariant: string;
-  shellWorkspaceStageStyle: CSSProperties;
-  isWorkspaceStageStripVisible: boolean;
-  workspaceStageStripItems: WorkspaceStageStripItem[];
-  isMobile: boolean;
-  isWorkspaceNavigationVisible: boolean;
-  activeStageWindowEntries: WorkspaceWindowEntry[];
-  activeWorkspaceWindowId: string | null;
-  workspaceSceneInsets: WorkspaceSceneInsets;
-  currentDetailedView: string | null;
-  showWorkspaceLaunchpad: boolean;
-  activeMainTab: string;
-  isWorkspaceDockVisible: boolean;
-  workspaceDockDisplayItems: WorkspaceDockItem[];
-  onSetDesktopMode: (desktopModeId: string) => void;
-  onCreateStageWithLauncher: () => void;
-  onOpenWorkspaceSettings: () => void;
-  onActivateWorkspaceStageWithNavigation: (stageId: string) => void;
-  onCreateWorkspaceStageFromStrip: () => void;
-  onHoldWorkspaceNavigation: () => void;
-  onScheduleWorkspaceNavigationHide: () => void;
-  onToggleWorkspaceNavigation: () => void;
-  onToggleWorkspaceMenu: () => void;
-  onClose: () => void;
-  onHandleFreeformScenePointerDown: (event: PointerEvent) => void;
-  onUpdateWorkspaceLayout: (entryId: string, patch: { x?: number; y?: number; width?: number; height?: number; interaction?: 'move' | 'resize'; isFinal?: boolean }) => void;
-  onCloseWorkspaceWindow: (entryId: string) => void;
-  onFocusWorkspaceWindow: (entryId: string) => void;
-  onFocusAdjacentWorkspaceWindow: (entryId: string, direction: 'prev' | 'next') => void;
-  onBackFromDetailedSettings: () => void;
-  onCloseWorkspaceLaunchpad: () => void;
-  onHandleWorkspaceDockOpenWithNavigation: (appId: string) => void;
-  onStageElementChange: (element: HTMLElement | null) => void;
+  runtimeContext: ShellRuntimeContext;
+  runtimeSurfaces: ShellRuntimeSurfaces;
+  runtimeActions: ShellRuntimeActions;
 }>();
+
+const activeDesktopModeId = computed(() => props.runtimeContext.activeDesktopModeId);
+const desktopModeOptions = computed(() => props.runtimeContext.desktopModeOptions);
+const showWorkspaceMenu = computed(() => props.runtimeContext.freeform.showWorkspaceMenu);
+const shellWorkspaceMenuVariant = computed(() => props.runtimeSurfaces.freeform.workspaceMenuVariant);
+const shellWorkspaceMenuStyle = computed(() => props.runtimeSurfaces.freeform.workspaceMenuStyle);
+const shellWorkspaceStageVariant = computed(() => props.runtimeSurfaces.freeform.workspaceStageVariant);
+const shellWorkspaceStageStyle = computed(() => props.runtimeSurfaces.freeform.workspaceStageStyle);
+const isWorkspaceStageStripVisible = computed(() => props.runtimeContext.freeform.isWorkspaceStageStripVisible);
+const workspaceStageStripItems = computed(() => props.runtimeSurfaces.freeform.stageStripItems);
+const isMobile = computed(() => props.runtimeContext.isMobile);
+const isWorkspaceNavigationVisible = computed(() => props.runtimeContext.freeform.isWorkspaceNavigationVisible);
+const activeStageWindowEntries = computed(() => props.runtimeSurfaces.freeform.stageWindowEntries);
+const activeWorkspaceWindowId = computed(() => props.runtimeContext.freeform.activeWorkspaceWindowId);
+const workspaceSceneInsets = computed(() => props.runtimeContext.freeform.workspaceSceneInsets);
+const currentDetailedView = computed(() => props.runtimeContext.currentDetailedView);
+const showWorkspaceLaunchpad = computed(() => props.runtimeContext.freeform.showWorkspaceLaunchpad);
+const activeMainTab = computed(() => props.runtimeContext.activeMainTab);
+const isWorkspaceDockVisible = computed(() => props.runtimeContext.freeform.isWorkspaceDockVisible);
+const workspaceDockDisplayItems = computed(() => props.runtimeSurfaces.freeform.dockDisplayItems);
+
+const onSetDesktopMode = (desktopModeId: string) => props.runtimeActions.navigation.updateDesktopMode(desktopModeId);
+const onCreateStageWithLauncher = () => props.runtimeActions.freeform.createStageWithLauncher();
+const onOpenWorkspaceSettings = () => props.runtimeActions.freeform.openWorkspaceSettings();
+const onActivateWorkspaceStageWithNavigation = (stageId: string) =>
+  props.runtimeActions.freeform.activateWorkspaceStageWithNavigation(stageId);
+const onCreateWorkspaceStageFromStrip = () => props.runtimeActions.freeform.createWorkspaceStageFromStrip();
+const onHoldWorkspaceNavigation = () => props.runtimeActions.freeform.holdWorkspaceNavigation();
+const onScheduleWorkspaceNavigationHide = () => props.runtimeActions.freeform.scheduleWorkspaceNavigationHide();
+const onToggleWorkspaceNavigation = () => props.runtimeActions.freeform.toggleWorkspaceNavigation();
+const onToggleWorkspaceMenu = () => props.runtimeActions.freeform.toggleWorkspaceMenu();
+const onClose = () => props.runtimeActions.navigation.close();
+const onHandleFreeformScenePointerDown = (event: PointerEvent) =>
+  props.runtimeActions.freeform.handleFreeformScenePointerDown(event);
+const onUpdateWorkspaceLayout = (
+  entryId: string,
+  patch: { x?: number; y?: number; width?: number; height?: number; interaction?: 'move' | 'resize'; isFinal?: boolean }
+) => props.runtimeActions.freeform.updateWorkspaceLayout(entryId, patch);
+const onCloseWorkspaceWindow = (entryId: string) => props.runtimeActions.freeform.closeWorkspaceWindow(entryId);
+const onFocusWorkspaceWindow = (entryId: string) => props.runtimeActions.freeform.focusWorkspaceWindow(entryId);
+const onFocusAdjacentWorkspaceWindow = (entryId: string, direction: 'prev' | 'next') =>
+  props.runtimeActions.freeform.focusAdjacentWorkspaceWindow(entryId, direction);
+const onBackFromDetailedSettings = () => props.runtimeActions.freeform.backFromDetailedSettings();
+const onCloseWorkspaceLaunchpad = () => props.runtimeActions.freeform.closeWorkspaceLaunchpad();
+const onHandleWorkspaceDockOpenWithNavigation = (appId: string) =>
+  props.runtimeActions.freeform.handleWorkspaceDockOpenWithNavigation(appId);
 
 const stageElement = ref<HTMLElement | null>(null);
 
 watch(stageElement, (element) => {
-  props.onStageElementChange(element);
+  props.runtimeActions.freeform.stageElementChange(element);
 });
 </script>
 
@@ -251,9 +262,10 @@ watch(stageElement, (element) => {
   inset: 0;
   z-index: 5000;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: 34px 34px 108px;
+  padding: 84px 34px 72px;
+  box-sizing: border-box;
 }
 
 .lw-workspace-launchpad-overlay::before {
@@ -327,20 +339,25 @@ watch(stageElement, (element) => {
   z-index: 12;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 8px;
+  padding: 6px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 86%, white);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 250, 254, 0.78));
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, white);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 249, 255, 0.76));
+  box-shadow:
+    0 18px 42px rgba(48, 73, 114, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(22px) saturate(128%);
 }
 
 .lw-freeform-control {
-  width: 34px;
-  height: 34px;
+  position: relative;
+  width: 36px;
+  height: 36px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -352,9 +369,21 @@ watch(stageElement, (element) => {
 
 .lw-freeform-control:hover,
 .lw-freeform-control.active {
-  background: color-mix(in srgb, var(--lw-primary) 10%, white);
-  border-color: rgba(var(--lw-primary-rgb), 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), color-mix(in srgb, var(--lw-primary) 9%, white));
+  border-color: rgba(var(--lw-primary-rgb), 0.16);
   color: var(--lw-text-main);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(53, 80, 125, 0.1);
+}
+
+@media (max-width: 768px) {
+  .lw-freeform-controls {
+    top: 16px;
+    right: 16px;
+    gap: 6px;
+  }
 }
 
 .lw-freeform-empty-stage strong {

@@ -30,6 +30,7 @@ const EMPTY_CONTEXT: ConversationContext = {
 };
 
 export const useConversationContextStore = defineStore('lumina-conversation-context', () => {
+    const conversationService = luminaWeaveApi.services.conversation;
     const currentContext = ref<ConversationContext>(EMPTY_CONTEXT);
     const sources = ref<ConversationContextOption[]>([]);
     const chatSessions = ref<ConversationSessionRef[]>([]);
@@ -48,14 +49,14 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
     let refreshPromise: Promise<void> | null = null;
 
     const refreshContext = async (): Promise<void> => {
-        const context = await luminaWeaveApi.getConversationContext();
+        const context = await conversationService.getContext();
         currentContext.value = context;
     };
 
     const refreshSessionOptions = async (): Promise<void> => {
         const [sourceOptions, allSessions] = await Promise.all([
-            luminaWeaveApi.listConversationSources(),
-            luminaWeaveApi.listConversationSessions()
+            conversationService.listSources(),
+            conversationService.listSessions()
         ]);
 
         sources.value = sourceOptions;
@@ -123,7 +124,7 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
 
     const switchSource = async (sourceId: ConversationSourceId): Promise<void> => {
         selectedViewSessionId.value = null;
-        currentContext.value = await luminaWeaveApi.switchConversationContext({
+        currentContext.value = await conversationService.switchContext({
             sourceId,
             sessionId: null
         });
@@ -131,7 +132,7 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
 
     const selectForgeSession = async (id: string | null): Promise<void> => {
         selectedViewSessionId.value = id;
-        currentContext.value = await luminaWeaveApi.switchConversationContext({
+        currentContext.value = await conversationService.switchContext({
             sourceId: 'forge',
             sessionId: id
         });
@@ -140,7 +141,7 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
     const selectViewSession = async (id: string | null): Promise<void> => {
         if (!id) {
             selectedViewSessionId.value = null;
-            currentContext.value = await luminaWeaveApi.switchConversationContext({
+            currentContext.value = await conversationService.switchContext({
                 sourceId: 'chat',
                 sessionId: null
             });
@@ -149,7 +150,7 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
 
         selectedViewSessionId.value = id;
         const isForge = forgeSessions.value.some((session) => session.id === id);
-        currentContext.value = await luminaWeaveApi.switchConversationContext({
+        currentContext.value = await conversationService.switchContext({
             sourceId: isForge ? 'forge' : 'chat',
             sessionId: id
         });
@@ -167,7 +168,7 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
             return;
         }
         selectedViewSessionId.value = null;
-        void luminaWeaveApi.switchConversationContext({
+        void conversationService.switchContext({
             sourceId: nextSource,
             sessionId: null
         }).then((context) => {

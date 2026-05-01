@@ -1,0 +1,24 @@
+{
+    "id": "built-in:forge-main-default",
+    "name": "默认主模型",
+    "profileId": "forge-main",
+    "builtIn": true,
+    "engine": "composed",
+    "entries": [
+        { "id": "slot:base_system_prompt", "type": "slot", "enabled": true, "slotId": "base_system_prompt" },
+        { "id": "slot:workspace_lorebook", "type": "slot", "enabled": true, "slotId": "workspace_lorebook" },
+        { "id": "slot:memory_snapshot", "type": "slot", "enabled": true, "slotId": "memory_snapshot" },
+        { "id": "slot:forge_memory_tree", "type": "slot", "enabled": true, "slotId": "forge_memory_tree" },
+        { "id": "slot:structured_state", "type": "slot", "enabled": true, "slotId": "structured_state" },
+        { "id": "slot:draft_tree", "type": "slot", "enabled": true, "slotId": "draft_tree" },
+        { "id": "slot:workflow_snapshot", "type": "slot", "enabled": true, "slotId": "workflow_snapshot" },
+        { "id": "slot:system_protocol", "type": "slot", "enabled": true, "slotId": "system_protocol" },
+        { "id": "slot:chat_history", "type": "slot", "enabled": true, "slotId": "chat_history" }
+    ],
+    "specials": {
+        "plannerSystemPrompt": "@FORGE_PLANNER_PROMPT",
+        "conversationSystemPrompt": "@FORGE_CONVERSATION_PROMPT",
+        "analystSystemPrompt": "@FORGE_ANALYST_PROMPT"
+    },
+    "generationSettings": {}
+}

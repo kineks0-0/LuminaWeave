@@ -78,13 +78,21 @@ export class ForgePromptPayloadResolver {
             })
             .join('\n');
 
+        const submitConfigsDigest = Object.entries(structuredState.submitConfigs || {})
+            .map(([scopeId, config]) => `${scopeId}:${String(config?.label || '').trim() || 'default'}`)
+            .join(' | ');
+
+        const submittedScopesDigest = Object.keys(structuredState.submittedScopes || {}).join(' | ');
+
         return {
             activeFormId: structuredState.activeFormId || 'none',
             activeMessageFormId: structuredState.activeMessageFormId || 'none',
             formCount: Object.keys(structuredState.forms).length,
             lastUpdatedAt: structuredState.lastUpdatedAt,
             formsDigest: formsDigest || 'none',
-            formsDetail: formsDetail || 'none'
+            formsDetail: formsDetail || 'none',
+            submitConfigsDigest: submitConfigsDigest || 'none',
+            submittedScopesDigest: submittedScopesDigest || 'none'
         };
     }
 
@@ -129,6 +137,7 @@ export class ForgePromptPayloadResolver {
             stage: snapshot.stage,
             visiblePhase: snapshot.visiblePhase,
             detailMode: snapshot.detailMode || 'none',
+            collectionMode: snapshot.collectionMode || 'conversation',
             activeLayer: snapshot.activeLayer,
             subLayer: snapshot.subLayer || 'none',
             promptMode: snapshot.promptMode,

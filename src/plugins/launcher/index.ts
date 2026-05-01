@@ -1,6 +1,21 @@
 import { markRaw } from 'vue';
 import LauncherRoot from './LauncherRoot.vue';
 import { LuminaPlugin } from '../../types/plugin';
+import type { PluginManifestV2 } from '../../platform/plugin/types';
+
+const platformManifest: PluginManifestV2 = {
+  id: 'lumina-launcher',
+  name: '启动台',
+  capabilities: [
+    { id: 'launcher.app-grid', description: '展示可打开的插件和工作区入口。' }
+  ],
+  surfaces: [
+    { id: 'launcher.root', ownerPluginId: 'lumina-launcher', description: '启动台 surface。' }
+  ],
+  businessRenderers: {
+    'launcher.root': { contractId: 'launcher.root', component: LauncherRoot }
+  }
+};
 
 const plugin: LuminaPlugin = {
   id: 'lumina-launcher',
@@ -11,8 +26,8 @@ const plugin: LuminaPlugin = {
           <rect x="14" y="14" width="7" height="7"></rect>
           <rect x="3" y="14" width="7" height="7"></rect>
         </svg>`,
-  slots: ['mainView'],
-  component: markRaw(LauncherRoot)
+  component: markRaw(LauncherRoot),
+  platformManifest
 };
 
 export default plugin;

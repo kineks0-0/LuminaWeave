@@ -292,7 +292,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { lwStorage } from '../../api/storage';
+import { settingsDomainService } from '../../api/services/SettingsDomainService';
 import { llmEngine } from '../../api/llmEngine';
 import { LuminaWeaveAPI } from '../../api/index';
 import { gsap } from 'gsap';
@@ -332,31 +332,31 @@ const _generateId = () => 'nx_' + Math.random().toString(36).substring(2, 11);
 
 onMounted(() => {
     // 从全局存储加载 API 配置
-    const loadedApis = lwStorage.get('nexus.apis', [], 'Global');
+    const loadedApis = settingsDomainService.getGlobalValue<NexusApi[]>('nexus.apis', []);
     customApis.value = JSON.parse(JSON.stringify(loadedApis));
     for (const api of customApis.value) {
         if (!api.type) api.type = 'openai_compatible';
     }
 
     // 从全局存储加载 Preset 配置
-    const loadedPresets = lwStorage.get('nexus.presets', [], 'Global');
+    const loadedPresets = settingsDomainService.getGlobalValue<NexusPreset[]>('nexus.presets', []);
     presets.value = JSON.parse(JSON.stringify(loadedPresets));
     console.log('[LuminaWeave] presets', presets.value);
     console.log('[LuminaWeave] customApis', customApis.value);
 
-    useSSE.value = lwStorage.get('nexus.useSSE', true, 'Global') === true;
+    useSSE.value = settingsDomainService.getGlobalValue('nexus.useSSE', true) === true;
 });
 
 const saveApis = () => {
-    void lwStorage.set('nexus.apis', JSON.parse(JSON.stringify(customApis.value)), 'Global');
+    void settingsDomainService.setGlobalValue('nexus.apis', JSON.parse(JSON.stringify(customApis.value)));
 };
 
 const save = () => {
-    void lwStorage.set('nexus.presets', JSON.parse(JSON.stringify(presets.value)), 'Global');
+    void settingsDomainService.setGlobalValue('nexus.presets', JSON.parse(JSON.stringify(presets.value)));
 };
 
 const saveFlags = () => {
-    void lwStorage.set('nexus.useSSE', useSSE.value, 'Global');
+    void settingsDomainService.setGlobalValue('nexus.useSSE', useSSE.value);
 };
 
 const createApi = () => {
@@ -584,32 +584,32 @@ onMounted(() => {
 const fetchModels = async (node: NexusNode) => {
     if (node.provider === 'st_current') {
         const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.showToast('选择原生 ST 后无需手动拉取模型。', 'warning');
+        lw?.services.host.showToast('选择原生 ST 后无需手动拉取模型。', 'warning');
         return;
     }
 
     const targetApi = customApis.value.find(a => a.id === node.provider);
     if (!targetApi) {
         const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.showToast('所选接口不存在，请先配置！', 'error');
+        lw?.services.host.showToast('所选接口不存在，请先配置！', 'error');
         return;
     }
 
     if (!targetApi.key) {
         const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.showToast('该接口的地址或密钥为空！', 'warning');
+        lw?.services.host.showToast('该接口的地址或密钥为空！', 'warning');
         return;
     }
 
     if (targetApi.type !== 'openai' && targetApi.type !== 'openai_compatible') {
         const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.showToast('该 Provider 暂不支持自动拉取模型列表，请手动填写模型名。', 'warning');
+        lw?.services.host.showToast('该 Provider 暂不支持自动拉取模型列表，请手动填写模型名。', 'warning');
         return;
     }
 
     if (!targetApi.url) {
         const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.showToast('该接口的地址为空！', 'warning');
+        lw?.services.host.showToast('该接口的地址为空！', 'warning');
         return;
     }
 
@@ -618,7 +618,7 @@ const fetchModels = async (node: NexusNode) => {
     if (Object.keys(models).length > 0) {
         fetchedModels.value[node.id] = models;
         const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.showToast(`成功为您拉取 [${targetApi.name}] 模型列表！`, 'success');
+        lw?.services.host.showToast(`成功为您拉取 [${targetApi.name}] 模型列表！`, 'success');
 
         if (!node.model) {
             const firstGroup = Object.values(models)[0];
@@ -630,7 +630,7 @@ const fetchModels = async (node: NexusNode) => {
     } else {
         const errMsg = '拉取大模型失败，跨域报错或密钥不正确。请按 F12 检查控制台网络拦截。';
         const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.showToast(errMsg, 'error', '获取失败', 5000);
+        lw?.services.host.showToast(errMsg, 'error', '获取失败', 5000);
     }
 };
 </script>

@@ -13,6 +13,7 @@ import type {
     ForgeWorkflowTurnInput
 } from '../../types/ForgeWorkflowTypes';
 import type {
+    ForgeCollectionMode,
     ForgeLayer,
     ForgeDetailMode,
     ForgeStage,
@@ -51,6 +52,7 @@ const ForgeWorkflowState = new StateSchema({
     hasReferenceChat: z.boolean().default(false),
     activeLeafId: z.string().nullable().default(null),
     detailMode: z.enum(['detailed', 'quick']).nullable().default(null),
+    collectionMode: z.enum(['conversation', 'temporary', 'persistent']).default('conversation'),
     entryMode: z.enum(['structured', 'freeform']).nullable().default(null),
     activeLayer: z.enum(['concept', 'entity', 'state_machine', 'description', 'variables', 'summary', 'output']).nullable().default(null),
     completedLayers: z.array(z.enum(['concept', 'entity', 'state_machine', 'description', 'variables', 'summary', 'output'])).default([]),
@@ -208,6 +210,26 @@ const buildAllowedActions = (state: ForgeWorkflowStateValue): ForgeWorkflowActio
     return ['collect_form', 'chat'];
 };
 
+const resolveCollectionMode = (state: ForgeWorkflowStateValue): ForgeCollectionMode => {
+    if (!state.detailMode) {
+        return 'conversation';
+    }
+
+    if (state.stage === 'kickoff') {
+        return state.missingFields.length > 0 ? 'temporary' : 'conversation';
+    }
+
+    if (state.stage === 'rewrite_export') {
+        return 'conversation';
+    }
+
+    if (state.missingFields.length === 0) {
+        return 'conversation';
+    }
+
+    return state.detailMode === 'quick' ? 'persistent' : 'temporary';
+};
+
 const pickNextLayer = (state: ForgeWorkflowStateValue): ForgeLayer | null => {
     if (state.stage === 'kickoff' || state.stage === 'skeleton') {
         return 'concept';
@@ -324,6 +346,7 @@ const buildSnapshot = (state: ForgeWorkflowStateValue): ForgeWorkflowSnapshot =>
         stage: state.stage,
         visiblePhase: resolveVisiblePhase(state.detailMode, state.stage, activeLayer),
         detailMode: state.detailMode,
+        collectionMode: resolveCollectionMode({ ...state, activeLayer }),
         activeLayer,
         subLayer: state.subLayer,
         promptMode: state.promptMode,
@@ -356,6 +379,7 @@ const toTurnInput = (context: ForgeRuntimeContext): ForgeWorkflowTurnInput => ({
     hasReferenceChat: Boolean(context.selectedChatSessionId),
     activeLeafId: context.activeLeafId,
     detailMode: context.detailMode,
+    collectionMode: context.collectionMode,
     entryMode: context.entryMode,
     activeLayer: context.activeLayer,
     completedLayers: context.completedLayers,
@@ -378,6 +402,7 @@ const buildDirectEffects = (context: ForgeRuntimeContext, snapshot: ForgeWorkflo
                 layer: 'concept'
             },
             { type: 'set_detail_mode', mode: command.mode },
+            { type: 'set_collection_mode', mode: 'conversation' },
             { type: 'set_entry_mode', mode: 'structured' },
             { type: 'set_active_layer', layer: 'concept' },
             { type: 'refresh_workflow' },
@@ -535,6 +560,7 @@ export class ForgeWorkflowGraph {
                 subLayer,
                 nextRecommendedLayer,
                 allowedActions,
+                collectionMode: resolveCollectionMode({ ...state, stage, activeLayer, subLayer, nextRecommendedLayer, allowedActions }),
                 updatedAt: Date.now()
             };
         })
@@ -686,6 +712,7 @@ export class ForgeWorkflowGraph {
             hasReferenceChat: input.hasReferenceChat,
             activeLeafId: input.activeLeafId,
             detailMode: input.detailMode || null,
+            collectionMode: input.collectionMode || 'conversation',
             entryMode: input.entryMode || null,
             activeLayer: input.activeLayer || null,
             completedLayers,

@@ -197,7 +197,7 @@ const close = () => {
 
 const externalize = () => {
   if (!lwApi) return;
-  lwApi.openPanel('sync_report', {}, { mode: 'tab' });
+  lwApi.services?.desktopSurface?.openPanel('sync_report', {}, { mode: 'tab' });
   isOpen.value = false;
 };
 

@@ -1,0 +1,11 @@
+{
+    "id": "built-in:forge-test-chat-st-preset",
+    "name": "ST 预设",
+    "profileId": "forge-test-chat",
+    "builtIn": true,
+    "engine": "st_preset",
+    "charCardMode": "from_st",
+    "entries": [],
+    "specials": {},
+    "generationSettings": {}
+}

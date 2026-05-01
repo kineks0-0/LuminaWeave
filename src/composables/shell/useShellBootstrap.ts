@@ -1,9 +1,8 @@
-import { onMounted, onUnmounted, type Component, type Ref } from 'vue';
+import { onMounted, onUnmounted, type Ref } from 'vue';
 import { luminaWeaveApi as lwApi } from '../../api/index';
 import { registerLuminaPlugins } from '../../bootstrap/registerPlugins';
-import ConflictDiffViewer from '../../plugins/chat/ConflictDiffViewer.vue';
-import SyncReportViewer from '../../plugins/chat/SyncReportViewer.vue';
-import ContextSwitcherPanel from '../../components/ContextSwitcherPanel.vue';
+import type { DynamicTabConfig } from '../../shell/types';
+import { legacyPanelDefinitions } from '../../shell/legacyPanelRegistry';
 
 export const useShellBootstrap = ({
   isApiReady,
@@ -20,12 +19,14 @@ export const useShellBootstrap = ({
   onShowConflictPanel,
   onShowSyncReportPanel,
   onLayoutReady,
-  initSettings
+  initSettings,
+  onOpenTelegramProfile,
+  onOpenTelegramCharacters
 }: {
   isApiReady: Ref<boolean>;
   initStatusText: Ref<string>;
   settingsRevision: Ref<number>;
-  handleOpenTab: (tabConfig: { id: string; name: string; icon: string; component: Component; props?: Record<string, unknown> }) => void;
+  handleOpenTab: (tabConfig: DynamicTabConfig) => void;
   handleSwitchMainView: (tabId: string) => void;
   handleSwitchWidgetPanel: (panelId: string) => void;
   handleToggleWidgetPanel: (panelId: string) => void;
@@ -37,26 +38,44 @@ export const useShellBootstrap = ({
   onShowSyncReportPanel: () => void;
   onLayoutReady: () => void;
   initSettings: () => void;
+  onOpenTelegramProfile?: () => void;
+  onOpenTelegramCharacters?: () => void;
 }) => {
   const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+  const desktopSurfaceService = lwApi.services.desktopSurface;
 
   registerLuminaPlugins();
+
+  const handleTelegramContextTool = (panelId: string) => {
+    if (panelId === 'characters') {
+      onOpenTelegramCharacters?.();
+      return;
+    }
+
+    if (panelId === 'lumina-chat') {
+      handleSwitchMainView('lumina-chat');
+      return;
+    }
+
+    if (panelId === 'telegram-profile') {
+      onOpenTelegramProfile?.();
+      return;
+    }
+
+    if (panelId.startsWith('lumina-')) {
+      handleSwitchWidgetPanel(panelId);
+    }
+  };
 
   onMounted(async () => {
     themeMedia.addEventListener('change', onThemeChange);
     window.addEventListener('keydown', onWorkspaceKeydown);
 
-    lwApi.registerPanel('conflict', ConflictDiffViewer, {
-      title: '版本分歧比对',
-      icon: '⚡'
-    });
-    lwApi.registerPanel('sync_report', SyncReportViewer, {
-      title: '同步对比报告',
-      icon: '🧾'
-    });
-    lwApi.registerPanel('context-switcher', ContextSwitcherPanel, {
-      title: '会话切换',
-      icon: '🔄'
+    legacyPanelDefinitions.forEach((panel) => {
+      desktopSurfaceService.registerPanel(panel.id, panel.component, {
+        title: panel.title,
+        icon: panel.icon
+      });
     });
 
     lwApi.on('OPEN_TAB', handleOpenTab);
@@ -72,6 +91,7 @@ export const useShellBootstrap = ({
     lwApi.on('SWITCH_AUX_SIDEBAR_MODE', (mode: 'left' | 'right' | 'widget') => {
       setSidebarMode(mode);
     });
+    lwApi.on('TELEGRAM_CONTEXT_TOOL', handleTelegramContextTool);
     lwApi.on('OPEN_PANEL_CONFLICT', onShowConflictPanel);
     lwApi.on('OPEN_PANEL_SYNC_REPORT', onShowSyncReportPanel);
 

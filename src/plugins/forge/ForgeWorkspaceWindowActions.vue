@@ -173,7 +173,7 @@ const openDetachedAuxPanel = (kind: ForgeAuxPanelKind) => {
   if (workspaceActions?.openWorkspaceApp) {
     workspaceActions.openWorkspaceApp(`panel:${meta.id}`);
   } else {
-    luminaWeaveApi.openPanel(meta.id, { kind }, { mode: 'tab' });
+    luminaWeaveApi.services.desktopSurface.openPanel(meta.id, { kind }, { mode: 'tab' });
   }
   closeMenus();
 };

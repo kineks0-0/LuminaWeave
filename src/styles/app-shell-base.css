@@ -112,10 +112,9 @@
   isolation: isolate;
 }
 
+.luminaweave-app-root,
 .luminaweave-app-root * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 .luminaweave-app-root p {

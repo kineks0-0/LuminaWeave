@@ -7,6 +7,7 @@
   <ForgeReviewPanel v-else-if="kind === 'review'" />
   <ForgeExportPanel v-else-if="kind === 'export'" />
   <ForgeTestChatPanel v-else-if="kind === 'test_chat'" />
+  <ForgeModelRequestDebugPanel v-else-if="kind === 'dev_requests'" />
   <ForgePostTracksPanel v-else />
 </template>
 
@@ -19,6 +20,7 @@ import ForgeReviewPanel from './ForgeReviewPanel.vue';
 import ForgeExportPanel from './ForgeExportPanel.vue';
 import ForgePostTracksPanel from './ForgePostTracksPanel.vue';
 import ForgeTestChatPanel from './panels/ForgeTestChatPanel.vue';
+import ForgeModelRequestDebugPanel from './ForgeModelRequestDebugPanel.vue';
 
 withDefaults(defineProps<{
   kind: ForgeAuxPanelKind;

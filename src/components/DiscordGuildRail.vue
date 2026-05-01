@@ -85,8 +85,8 @@ const guildStyle = computed<CSSProperties>(() => guildSkinVars.value as CSSPrope
   align-items: center;
   gap: 12px;
   padding: 12px 10px;
-  border-right: 1px solid var(--lw-guild-rail-border, #121317);
-  background: var(--lw-guild-rail-bg, #1b1d21);
+  border-right: 1px solid var(--lw-guild-rail-border, var(--lw-border-strong));
+  background: var(--lw-guild-rail-bg, var(--lw-bg-elevated));
 }
 
 .lw-discord-guild-rail__cluster,
@@ -113,7 +113,7 @@ const guildStyle = computed<CSSProperties>(() => guildSkinVars.value as CSSPrope
   width: 38px;
   height: 2px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-guild-rail-border, #121317) 80%, white 10%);
+  background: color-mix(in srgb, var(--lw-guild-rail-border, var(--lw-border-strong)) 80%, white 10%);
 }
 
 .lw-discord-guild-rail__item {
@@ -122,8 +122,8 @@ const guildStyle = computed<CSSProperties>(() => guildSkinVars.value as CSSPrope
   height: 52px;
   border: none;
   border-radius: 18px;
-  background: var(--lw-guild-rail-item-bg, #2b2d31);
-  color: var(--lw-guild-rail-item-color, #b5bac1);
+  background: var(--lw-guild-rail-item-bg, var(--lw-bg-surface));
+  color: var(--lw-guild-rail-item-color, var(--lw-text-secondary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -155,7 +155,7 @@ const guildStyle = computed<CSSProperties>(() => guildSkinVars.value as CSSPrope
 .lw-discord-guild-rail__item.is-active {
   transform: translateY(-1px);
   border-radius: 15px;
-  background: var(--lw-guild-rail-item-active-bg, #5865f2);
+  background: var(--lw-guild-rail-item-active-bg, var(--lw-primary));
   color: var(--lw-text-main);
 }
 

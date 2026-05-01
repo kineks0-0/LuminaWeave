@@ -10,6 +10,7 @@
  */
 
 import { viewComponentRegistry, type ParsedViewComponent } from './ViewComponentRegistry';
+import { splitForgePipeTokens } from './utils/forgeDslUtils';
 
 /** 消息段落类型 */
 export type SegmentType = 'text' | 'view';
@@ -368,7 +369,7 @@ function coerceValue(raw: string): unknown {
  *        S|生命值|75|100
  */
 function parsePipeLine(line: string): ParsedViewComponent | null {
-    const parts = line.split(/[\s\n]*[|｜丨│┃‖¦][\s\n]*/).map(p => p.trim());
+    const parts = splitForgePipeTokens(line).map(p => p.trim());
     if (parts.length < 1) return null;
 
     const typeCode = parts[0];

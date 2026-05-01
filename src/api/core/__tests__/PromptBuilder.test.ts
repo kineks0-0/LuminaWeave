@@ -140,6 +140,7 @@ describe('PromptBuilder', () => {
                 stage: 'rewrite_export',
                 visiblePhase: 'output_delivery',
                 detailMode: 'detailed',
+                collectionMode: 'conversation',
                 activeLayer: 'output',
                 subLayer: 'output',
                 promptMode: 'planner',
@@ -163,6 +164,7 @@ describe('PromptBuilder', () => {
 
         expect(result[0].content).toContain('【Forge Workflow】');
         expect(result[0].content).toContain('stage=rewrite_export');
+        expect(result[0].content).toContain('collection_mode=conversation');
         expect(result[0].content).toContain('commit_ready_count=0');
         expect(result[0].content).toContain('recommended_action=继续与用户确认 staging 条目。');
     });
@@ -182,10 +184,14 @@ describe('PromptBuilder', () => {
         expect(result[0].content).toContain('<V>');
         expect(result[0].content).not.toContain('<Chat_Reply>');
         expect(result[0].content).toContain('Forge <V> DSL 结构化收集规范');
-        expect(result[0].content).toContain('ForgeInput("role_core_profile", "name", "角色姓名", "例如：林雾")');
-        expect(result[0].content).toContain('绝对禁止写成 XML 标签或属性式伪语法');
-        expect(result[0].content).toContain('参数按位置顺序传入，不得使用任何 key=value 写法。');
-        expect(result[0].content).toContain('ForgeMissingFields("power_system", "name,origin")');
+        expect(result[0].content).toContain('Forge 协议分层');
+        expect(result[0].content).toContain('ForgeInput("role_core_profile/name", "角色姓名", "例如：林雾")');
+        expect(result[0].content).toContain('ForgeFacetChecklist("kickoff_intent/facets"');
+        expect(result[0].content).toContain('ForgeMissingFields("role_core_profile", "name,identity,background")');
+        expect(result[0].content).not.toContain('<ForgeSelect');
+        expect(result[0].content).not.toContain('<forge_choice_group');
+        expect(result[0].content).not.toContain('ForgeMissingFields(formId=');
+        expect(result[0].content).not.toContain('ForgeFacetChecklist(formId=');
     });
 
     it('当设置为管道式时，提示词文档应只暴露管道语法', () => {
@@ -203,7 +209,7 @@ describe('PromptBuilder', () => {
         });
 
         expect(result[0].content).toContain('Forge 当前设置为管道式 DSL');
-        expect(result[0].content).toContain('FI|role_core_profile|name|角色姓名|例如：林雾');
-        expect(result[0].content).not.toContain('ForgeInput("role_core_profile", "name", "角色姓名", "例如：林雾")');
+        expect(result[0].content).toContain('FI|role_core_profile/name|角色姓名|例如：林雾');
+        expect(result[0].content).not.toContain('ForgeInput("role_core_profile/name", "角色姓名", "例如：林雾")');
     });
 });

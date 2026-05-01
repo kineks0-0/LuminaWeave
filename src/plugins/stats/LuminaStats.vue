@@ -1,5 +1,10 @@
 <template>
-  <div class="lw-widgets-pane">
+  <div
+    class="lw-widgets-pane"
+    :class="{ 'is-mobile': props.isMobile, 'is-small': props.mode === 'small' }"
+    :data-skin-variant="statsVariant || 'default'"
+    :style="statsSkinStyle"
+  >
     <div class="widget-content">
       <div class="stats-shell">
         <div class="stats-head">
@@ -43,10 +48,21 @@
 </template>
 
 <script setup lang="ts">
-import { inject } from 'vue';
+import { computed, inject, type CSSProperties } from 'vue';
 import { LuminaWeaveAPI } from '../../api/index';
+import { useComponentSkin } from '../../theme/useComponentSkin';
+
+const props = withDefaults(defineProps<{
+  mode?: 'large' | 'small';
+  isMobile?: boolean;
+}>(), {
+  mode: 'small',
+  isMobile: false
+});
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
+const { cssVars: statsCssVars, variant: statsVariant } = useComponentSkin('stats.panel');
+const statsSkinStyle = computed<CSSProperties>(() => statsCssVars.value as CSSProperties);
 
 const getStatValue = (key: string, fallback: number): number => {
   // 暂时保留 fallback 以防核心状态机未就绪
@@ -67,10 +83,24 @@ const getStatValue = (key: string, fallback: number): number => {
   height: 100%;
 }
 
+.lw-widgets-pane[data-skin-variant='telegram'] {
+  background:
+    var(--lw-stats-panel-highlight, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%)),
+    var(--lw-stats-panel-bg, rgba(232, 245, 255, 0.58));
+}
+
 .widget-content {
   flex: 1;
   overflow-y: auto;
   padding: 18px;
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .widget-content {
+  padding: 14px;
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'].is-mobile .widget-content {
+  padding: 12px 12px calc(92px + env(safe-area-inset-bottom, 0px));
 }
 
 .stats-shell {
@@ -82,6 +112,16 @@ const getStatValue = (key: string, fallback: number): number => {
   border-radius: 20px;
   padding: 16px;
   box-shadow: var(--lw-shadow);
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .stats-shell {
+  gap: 14px;
+  background: var(--lw-stats-shell-bg, rgba(255, 255, 255, 0.74));
+  border-color: var(--lw-stats-shell-border, rgba(148, 190, 219, 0.42));
+  border-radius: 18px;
+  box-shadow: var(--lw-stats-shell-shadow, var(--lw-telegram-panel-shadow, 0 18px 42px rgba(44, 92, 130, 0.12)));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
 }
 
 .stats-head {
@@ -124,6 +164,13 @@ const getStatValue = (key: string, fallback: number): number => {
   text-transform: uppercase;
 }
 
+.lw-widgets-pane[data-skin-variant='telegram'] .stats-badge {
+  min-height: 30px;
+  color: var(--lw-primary);
+  background: var(--lw-stats-badge-bg, rgba(227, 244, 255, 0.76));
+  border-color: var(--lw-stats-badge-border, rgba(118, 184, 230, 0.36));
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -138,6 +185,14 @@ const getStatValue = (key: string, fallback: number): number => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .stat-card {
+  min-height: 112px;
+  background: var(--lw-stats-card-bg, rgba(255, 255, 255, 0.76));
+  border-color: var(--lw-stats-card-border, rgba(148, 190, 219, 0.34));
+  border-radius: 16px;
+  box-shadow: none;
 }
 
 .metric-label {
@@ -172,6 +227,10 @@ const getStatValue = (key: string, fallback: number): number => {
   transition: width 0.24s ease;
 }
 
+.lw-widgets-pane[data-skin-variant='telegram'] .metric-fill {
+  background: var(--lw-stats-metric-fill-bg, linear-gradient(90deg, #35a8eb, #77cdf6));
+}
+
 .metric-fill.is-soft {
   background: var(--lw-primary);
 }
@@ -195,12 +254,30 @@ const getStatValue = (key: string, fallback: number): number => {
   color: var(--lw-text-secondary);
 }
 
+.lw-widgets-pane[data-skin-variant='telegram'] .tag-pill {
+  min-height: 32px;
+  background: var(--lw-stats-tag-bg, rgba(255, 255, 255, 0.72));
+  border-color: var(--lw-stats-tag-border, rgba(148, 190, 219, 0.32));
+}
+
 .helper-info {
   padding-top: 8px;
   border-top: 1px solid var(--lw-border-subtle);
   font-size: 11px;
   color: var(--lw-text-muted);
   line-height: 1.6;
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .helper-info {
+  padding: 12px 14px;
+  border: 1px solid var(--lw-stats-helper-border, rgba(148, 190, 219, 0.3));
+  border-radius: 16px;
+  background: var(--lw-stats-helper-bg, rgba(255, 255, 255, 0.58));
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'].is-small .stats-grid,
+.lw-widgets-pane[data-skin-variant='telegram'].is-mobile .stats-grid {
+  grid-template-columns: 1fr;
 }
 
 @media (max-width: 480px) {

@@ -37,6 +37,12 @@ export interface ParsedViewComponent {
 
 export type ViewSyntaxStyle = 'functional' | 'pipe';
 
+const supportsForgeOptionsVarargs = (schema: ViewComponentSchema): boolean => (
+    schema.name === 'ForgeChoiceGroup'
+    || schema.name === 'ForgeFacetChecklist'
+    || schema.name === 'ForgeFormAssist'
+);
+
 /**
  * 组件 Schema 注册中心
  */
@@ -75,24 +81,7 @@ class ViewComponentRegistryImpl {
      * @param args 位置参数数组（已解析为 JS 值）
      */
     public mapPositionalArgs(schema: ViewComponentSchema, args: unknown[]): Record<string, unknown> {
-        let finalArgs = args;
-
-        // 智能偏移逻辑：针对 Forge 交互组件 (N-1 参数场景)
-        // 场景：AI 经常省略可选的 formId 直接输出 (fieldKey, label, options)，导致参数按索引映射时错位，最终 options 缺失。
-        // 判定条件：
-        // 1. 组件以 Forge 开头
-        // 2. 第一个属性是可选的 formId
-        // 3. 传入参数正好比属性定义少 1 个
-        // 4. 最后一个属性（通常是 options）是必填的
-        if (schema.name.startsWith('Forge') && 
-            schema.props.length > 1 &&
-            schema.props[0].key === 'formId' && 
-            args.length === schema.props.length - 1 &&
-            schema.props[schema.props.length - 1].required) {
-            
-            console.debug(`[ViewComponentRegistry] 自动补位：Forge 组件 "${schema.name}" 疑缺省 formId，执行智能位移。`);
-            finalArgs = [null, ...args];
-        }
+        const finalArgs = args;
 
         const result: Record<string, unknown> = {};
 
@@ -102,7 +91,9 @@ class ViewComponentRegistryImpl {
                 // 如果是最后一个预定义的属性，且实际上还有更多剩余参数，则进行贪婪合并
                 if (i === schema.props.length - 1 && finalArgs.length > schema.props.length) {
                     const remaining = finalArgs.slice(i).map(a => String(a));
-                    result[prop.key] = remaining.join('|');
+                    result[prop.key] = supportsForgeOptionsVarargs(schema)
+                        ? remaining
+                        : remaining.join('|');
                 } else {
                     result[prop.key] = finalArgs[i];
                 }
@@ -112,131 +103,52 @@ class ViewComponentRegistryImpl {
         return result;
     }
 
-    private getExampleArg(schema: ViewComponentSchema, prop: PropDef): string {
-        if (prop.key === 'formId') return '"kickoff_intent"';
-        if (prop.key === 'fieldKey') return '"direction"';
-        if (prop.key === 'title') return '"标题内容"';
-        if (prop.key === 'label') return '"标题内容"';
-        if (prop.key === 'description') return '"补充说明内容"';
-        if (prop.key === 'placeholder') return '"请输入具体内容"';
-        if (prop.key === 'structuredLabel') return '"详细定制"';
-        if (prop.key === 'freeformLabel') return '"快速开始"';
-        if (prop.key === 'layer') return '"concept"';
+    private getExampleArg(schema: ViewComponentSchema, prop: PropDef): any {
+        if (prop.key === 'fieldKey') {
+            if (schema.name === 'ForgeChoiceGroup') return '"kickoff_intent/direction"';
+            if (schema.name === 'ForgeFacetChecklist') return '"kickoff_intent/facets"';
+            if (schema.name === 'ForgeSelect') return '"role_core_profile/faction"';
+            if (schema.name === 'ForgeTextarea') return '"role_core_profile/background"';
+            if (schema.name === 'ForgeInput') return '"role_core_profile/name"';
+            return '"character/name"';
+        }
+        if (prop.key === 'label') {
+            if (schema.name === 'ForgeChoiceGroup') return '"标题内容"';
+            if (schema.name === 'ForgeFacetChecklist') return '"聚焦维度"';
+            if (schema.name === 'ForgeSelect') return '"阵营 / 立场"';
+            if (schema.name === 'ForgeTextarea') return '"背景故事"';
+            if (schema.name === 'ForgeInput') return '"角色姓名"';
+            if (schema.name === 'ForgeForm') return '"角色基元采集"';
+            return '"名称"';
+        }
+        if (prop.key === 'title' && schema.name === 'ForgeForm') return '"角色基元采集"';
+        if (prop.key === 'description' && schema.name === 'ForgeForm') return '"先补齐角色的最小可运行骨架。"';
+        if (prop.key === 'layer' && schema.name === 'ForgeForm') return '"concept"';
+        if (prop.key === 'placeholder') return '"例如：林雾"';
+        if (prop.key === 'options') return '"选项1|选项2"';
+        if (prop.key === 'formId') return '"role_core"';
+        if (prop.key === 'fields') return '"char/name|张三", "age|20"';
         if (prop.key === 'currentLayer') return '"concept"';
-        if (prop.key === 'availableLayers') return '"concept|description|output"';
-        if (prop.key === 'completedLayers') return '"concept|description"';
-        if (prop.key === 'fields') return '"标题内容,补充说明内容"';
-        if (prop.key === 'options') return '"选项1|选项2|选项3"';
-        if (prop.key === 'message') return '"提示内容"';
-        if (prop.key === 'text') return '"正文内容"';
-        if (prop.key === 'summary') return '"摘要内容"';
-        if (prop.key === 'attribution') return '"来源署名"';
-        if (prop.key === 'suggestions') return '"建议1|建议2|建议3"';
-        if (prop.key === 'level') return '"info"';
-        if (prop.key === 'variant') return '"primary"';
-        if (prop.key === 'tone') return '"calm"';
-        if (prop.key === 'value') return prop.type === 'number' ? '50' : '"当前状态"';
-        if (prop.key === 'max') return '100';
-
-        if (prop.type === 'number') return '50';
-        if (prop.type === 'array') return '["选项1", "选项2"]';
-        if (prop.type === 'boolean') return 'true';
-        if (prop.type === 'object') return '{"title":"标题内容"}';
-
-        if (schema.name === 'ForgeInput') return '"角色姓名"';
-        if (schema.name === 'ForgeTextarea') return '"人物背景摘要"';
-        if (schema.name === 'ForgeSelect' || schema.name === 'ForgeChecklist') return '"叙事偏好"';
-
-        return '"字段内容"';
+        if (prop.key === 'availableLayers') return '"concept,entity"';
+        return '""';
     }
 
     private getPropMeaning(schema: ViewComponentSchema, prop: PropDef): string {
-        if (prop.key === 'formId') {
-            return '表单 ID；可选。提供时绑定到蓝图表单（持久模式）；不提供时组件进入“临时模式”，数据仅随消息记录。';
-        }
         if (prop.key === 'fieldKey') {
-            return '字段键；可选。提供时表示写入蓝图中的哪个字段；不提供时将使用 label 作为瞬态存储的键。';
-        }
-        if (prop.key === 'label') {
-            return schema.name.startsWith('Forge')
-                ? '用户可见的字段标题或组件标题。'
-                : '组件标题或标签文本。';
-        }
-        if (prop.key === 'placeholder') {
-            return '输入框占位提示，只影响显示，不参与状态索引。';
-        }
-        if (prop.key === 'title') {
-            return '卡片或组件标题文本。';
-        }
-        if (prop.key === 'suggestions') {
-            return '建议预设选项；函数式写成 "建议1|建议2"，点击后可自动填入框内。';
-        }
-        if (prop.key === 'description') {
-            return '补充说明文本，告诉用户这张表单或卡片要收集什么。';
-        }
-        if (prop.key === 'layer') {
-            return 'Forge 当前层标识，例如 concept、description、output。';
+            return '字段标识路径。例如 "form/field" 表示蓝图字段，仅 "field" 表示消息级临时字段。';
         }
         if (prop.key === 'options') {
-            return '可选项列表；函数式通常写成 "选项1|选项2|选项3"，由组件自行拆分。';
+            return '选项列表。支持 "选项1|选项2" 或 "提交值::显示名" 格式。变长组件支持传递多个字符串参数。';
         }
         if (prop.key === 'fields') {
-            return '缺失字段列表；告诉用户当前还缺哪些字段。';
+            return '建议列表。格式为 "路径|建议值" 或 "路径|建议值::说明"。支持多个参数。';
         }
-        if (prop.key === 'currentLayer') {
-            return '当前所在层。';
-        }
-        if (prop.key === 'availableLayers') {
-            return '可切换层列表。';
-        }
-        if (prop.key === 'completedLayers') {
-            return '已完成层列表，用于导航高亮。';
-        }
-        if (prop.key === 'summary') {
-            return '摘要正文。';
-        }
-        if (prop.key === 'tone') {
-            return '摘要卡的语气/视觉风格标记，例如 calm、warning；当前主要作为样式语义位。';
-        }
-        if (prop.key === 'structuredLabel') {
-            return '模式选择器中“详细定制”按钮文案。';
-        }
-        if (prop.key === 'freeformLabel') {
-            return '模式选择器中“快速开始”按钮文案。';
-        }
-        if (prop.key === 'text') {
-            return '正文内容。';
-        }
-        if (prop.key === 'message') {
-            return '提示内容。';
-        }
-        if (prop.key === 'value') {
-            return prop.type === 'number' ? '数值内容。' : '当前值。';
-        }
-        if (prop.key === 'max') {
-            return '最大值，用于进度或数值上限。';
-        }
-        if (prop.key === 'variant') {
-            return '视觉变体标记。';
-        }
-        if (prop.key === 'level') {
-            return '提示级别，例如 info、warning、danger。';
-        }
-        if (prop.key === 'attribution') {
-            return '引用来源或署名。';
-        }
-
-        if (prop.key === 'id') {
-            return '条目唯一标识符。';
-        }
-        if (prop.key === 'path') {
-            return '记忆路径或分类。';
-        }
-        if (prop.key === 'content') {
-            return '条目或记忆的完整内容文本。';
-        }
-
-        return '组件参数。';
+        if (prop.key === 'label') return '界面显示标签/标题文字';
+        if (prop.key === 'placeholder') return '输入框占位符提示';
+        if (prop.key === 'content') return '卡片展示的正文内容';
+        if (prop.key === 'formId') return '对应的表单 ID';
+        if (prop.key === 'tone') return '摘要卡的语气/视觉风格标记';
+        return prop.key;
     }
 
     /** 注册内置组件 */
@@ -322,11 +234,9 @@ class ViewComponentRegistryImpl {
                 shortCode: 'FI',
                 description: 'Forge 单行字段输入',
                 props: [
-                    { key: 'formId', type: 'string', required: false },
-                    { key: 'fieldKey', type: 'string', required: false },
+                    { key: 'fieldKey', type: 'string', required: true },
                     { key: 'label', type: 'string', required: true },
-                    { key: 'placeholder', type: 'string', required: false },
-                    { key: 'suggestions', type: 'string', required: false }
+                    { key: 'placeholder', type: 'string', required: false }
                 ]
             },
             {
@@ -334,11 +244,9 @@ class ViewComponentRegistryImpl {
                 shortCode: 'FT',
                 description: 'Forge 多行字段输入',
                 props: [
-                    { key: 'formId', type: 'string', required: false },
-                    { key: 'fieldKey', type: 'string', required: false },
+                    { key: 'fieldKey', type: 'string', required: true },
                     { key: 'label', type: 'string', required: true },
-                    { key: 'placeholder', type: 'string', required: false },
-                    { key: 'suggestions', type: 'string', required: false }
+                    { key: 'placeholder', type: 'string', required: false }
                 ]
             },
             {
@@ -346,8 +254,7 @@ class ViewComponentRegistryImpl {
                 shortCode: 'FS',
                 description: 'Forge 单选选择器',
                 props: [
-                    { key: 'formId', type: 'string', required: false },
-                    { key: 'fieldKey', type: 'string', required: false },
+                    { key: 'fieldKey', type: 'string', required: true },
                     { key: 'label', type: 'string', required: true },
                     { key: 'options', type: 'string', required: true }
                 ]
@@ -357,8 +264,7 @@ class ViewComponentRegistryImpl {
                 shortCode: 'FK',
                 description: 'Forge 多选选择器',
                 props: [
-                    { key: 'formId', type: 'string', required: false },
-                    { key: 'fieldKey', type: 'string', required: false },
+                    { key: 'fieldKey', type: 'string', required: true },
                     { key: 'label', type: 'string', required: true },
                     { key: 'options', type: 'string', required: true }
                 ]
@@ -368,8 +274,7 @@ class ViewComponentRegistryImpl {
                 shortCode: 'FCG',
                 description: 'Forge 启动阶段单选方向组',
                 props: [
-                    { key: 'formId', type: 'string', required: false },
-                    { key: 'fieldKey', type: 'string', required: false },
+                    { key: 'fieldKey', type: 'string', required: true },
                     { key: 'label', type: 'string', required: true },
                     { key: 'options', type: 'string', required: true }
                 ]
@@ -379,8 +284,7 @@ class ViewComponentRegistryImpl {
                 shortCode: 'FFC',
                 description: 'Forge 启动阶段多选维度组',
                 props: [
-                    { key: 'formId', type: 'string', required: false },
-                    { key: 'fieldKey', type: 'string', required: false },
+                    { key: 'fieldKey', type: 'string', required: true },
                     { key: 'label', type: 'string', required: true },
                     { key: 'options', type: 'string', required: true }
                 ]
@@ -442,15 +346,20 @@ class ViewComponentRegistryImpl {
                     { key: 'title', type: 'string', required: true },
                     { key: 'content', type: 'string', required: true }
                 ]
+            },
+            {
+                name: 'ForgeFormAssist',
+                shortCode: 'FFA',
+                description: 'Forge 表单辅助能力。所有参数均为 varargs 字段建议，格式为 "路径/键|值1::说明1|值2" 或 "键|值"。路径含斜杠时视为蓝图表单，否则视为临时表单。',
+                props: [
+                    { key: 'fields', type: 'string', required: true }
+                ]
             }
         ];
 
         builtins.forEach(s => this.register(s));
     }
 
-    /**
-     * 生成供 LLM 使用的组件说明文档 (LLM 专用简略版 - 原始纯文本)
-     */
     /**
      * 生成供 LLM 使用的组件说明文档 (结构化 Markdown 版)
      */
@@ -487,6 +396,9 @@ class ViewComponentRegistryImpl {
             const pipeArgs = dummyArgs.map((v, index) => {
                 const prop = s.props[index];
                 if (prop?.key === 'options' || prop?.key === 'availableLayers') {
+                    if (supportsForgeOptionsVarargs(s)) {
+                        return '["正文1|按钮1","正文2|按钮2"]';
+                    }
                     return '["选项A","选项B"]';
                 }
                 return typeof v === 'string' ? v.replace(/"/g, '') : v;
@@ -496,7 +408,19 @@ class ViewComponentRegistryImpl {
             if (style === 'pipe' && pipeEx) {
                 docs += `示例: \`${pipeEx}\`\n`;
             } else {
-                docs += `示例: \`${funcEx}\`\n`;
+                if (supportsForgeOptionsVarargs(s)) {
+                    if (s.name === 'ForgeFormAssist') {
+                        docs += `示例: \`${s.name}("role/name|Alice::主角", "role/age|18")\`\n`;
+                    } else if (s.name === 'ForgeChoiceGroup') {
+                        docs += `示例: \`${s.name}("kickoff_intent/direction", "标题内容", "正文1|按钮1", "正文2|按钮2")\`\n`;
+                    } else if (s.name === 'ForgeFacetChecklist') {
+                        docs += `示例: \`${s.name}("kickoff_intent/facets", "聚焦维度", "人物关系|关系", "空间变化|空间")\`\n`;
+                    } else {
+                        docs += `示例: \`${s.name}("intent", "提示文字", "val1::显示名1", "val2::显示名2")\`\n`;
+                    }
+                } else {
+                    docs += `示例: \`${funcEx}\`\n`;
+                }
             }
             docs += '\n';
         });

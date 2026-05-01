@@ -50,7 +50,7 @@ export const useTimelineStore = defineStore('lumina-timeline-view-model', () => 
         if (refreshPromise) return refreshPromise;
 
         refreshPromise = Promise.resolve().then(async () => {
-            const context = await api.getConversationContext();
+            const context = await api.services.conversation.getContext();
             graph.value = { ...(context.timelineGraph as TimelineGraph) };
             activeLeafId.value = context.activeLeafId;
             isReady.value = true;
@@ -95,25 +95,25 @@ export const useTimelineStore = defineStore('lumina-timeline-view-model', () => 
 
     const branchFromNode = async (targetNodeId: string) => {
         const api = apiRef ?? luminaWeaveApi;
-        await api.branchConversationNode({ targetNodeId });
+        await api.services.conversation.branchNode({ targetNodeId });
         await refreshFromApi();
     };
 
     const rollbackFromNode = async (targetNodeId: string) => {
         const api = apiRef ?? luminaWeaveApi;
-        await api.rollbackConversationNode({ targetNodeId });
+        await api.services.conversation.rollbackNode({ targetNodeId });
         await refreshFromApi();
     };
 
     const switchToNode = async (targetNodeId: string) => {
         const api = apiRef ?? luminaWeaveApi;
-        await api.switchConversationNode({ targetNodeId });
+        await api.services.conversation.switchNode({ targetNodeId });
         await refreshFromApi();
     };
 
     const switchSource = async (sourceId: TimelineSourceId) => {
         const api = apiRef ?? luminaWeaveApi;
-        await api.switchConversationContext({ sourceId, sessionId: null });
+        await api.services.conversation.switchContext({ sourceId, sessionId: null });
         await refreshFromApi();
     };
 

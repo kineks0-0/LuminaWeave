@@ -28,6 +28,8 @@ export interface ForgeStructuredStateTemplateInput {
     lastUpdatedAt: number;
     formsDigest: string;
     formsDetail: string;
+    submitConfigsDigest: string;
+    submittedScopesDigest: string;
 }
 
 export interface ForgeFileMemoryTemplateInput {
@@ -58,6 +60,7 @@ export interface ForgeWorkflowSnapshotTemplateInput {
     stage: string;
     visiblePhase: string;
     detailMode: string;
+    collectionMode: string;
     activeLayer: string;
     subLayer: string;
     promptMode: string;

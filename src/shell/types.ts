@@ -1,11 +1,19 @@
-import type { Component } from 'vue';
+import type { Component, CSSProperties } from 'vue';
+import type {
+  CharacterChannelState,
+  CreateChatConversationInput,
+  DeleteChatConversationInput,
+  RenameChatConversationInput
+} from '../types/ConversationContextTypes';
 import type { LuminaPlugin } from '../types/plugin';
+import type { SurfaceContractId } from '../platform/surface/types';
 
 export interface DynamicTabConfig {
   id: string;
   name: string;
   icon: string;
-  component: Component | string;
+  component?: Component | string;
+  surfaceContractId?: SurfaceContractId;
   props?: Record<string, unknown>;
 }
 
@@ -30,6 +38,13 @@ export interface WidgetPanelItem {
 export interface WidgetPanelGroup {
   label?: string;
   items: WidgetPanelItem[];
+}
+
+export interface TelegramRailToolEntry {
+  id: 'lumina-launcher' | 'lumina-forge';
+  label: string;
+  description: string;
+  icon: string;
 }
 
 export type WidgetPluginEntry = LuminaPlugin;
@@ -80,4 +95,133 @@ export interface WorkspaceWindowEntry {
     height: number;
   };
   isCompact: boolean;
+}
+
+export interface ShellRuntimeContext {
+  layoutMode: 'traditional' | 'freeform';
+  activeDesktopModeId: string;
+  desktopModeOptions: Array<{ value: string; label: string; description?: string }>;
+  activeMainTab: string;
+  isMobile: boolean;
+  currentDetailedView: string | null;
+  saveStatus: string;
+  widgetGroups: WidgetPanelGroup[];
+  characterChannelState: CharacterChannelState;
+  traditional: {
+    shouldShowDiscordGuildRail: boolean;
+    discordGuildEntries: Array<{ id: string; name: string; icon: string }>;
+    shouldShowForgeSidebar: boolean;
+    isForgeSidebarCollapsed: boolean;
+    shouldShowDiscordCharacterRail: boolean;
+    isDiscordMobileMode: boolean;
+    isTelegramMobileMode: boolean;
+    shouldShowDiscordMobileShell: boolean;
+    discordMobileGuildRailPosition: 'top' | 'bottom' | 'left' | 'right';
+    discordMobileCharacterEntryPosition: 'top' | 'bottom' | 'left' | 'right';
+    showDiscordMobileCharacterRail: boolean;
+    discordMobileCharacterEntryStyle: CSSProperties;
+    telegramSelectedCharacterKey: string | null;
+    telegramToolEntries: TelegramRailToolEntry[];
+    activeTelegramToolId: string | null;
+    isTimelineLoadedOnce: boolean;
+    isForgeActiveInTraditional: boolean;
+    sidebarMode: 'left' | 'right' | 'widget' | 'hidden';
+    activeRightPanel: string;
+    widgetWidth: number;
+    isResizing: boolean;
+    telegramLeftRailWidth: number;
+    isTelegramLeftRailResizing: boolean;
+    activeForgeAuxKind: string | null;
+    rawSidebarMode: 'left' | 'right' | 'widget' | 'hidden';
+    activeWidgetPlugin: LuminaPlugin | null;
+    activeRegisteredPanel: RegisteredPanelEntry | null;
+    showWidgetDropdown: boolean;
+    showNexus: boolean;
+  };
+  freeform: {
+    showWorkspaceMenu: boolean;
+    isWorkspaceStageStripVisible: boolean;
+    isWorkspaceNavigationVisible: boolean;
+    activeWorkspaceWindowId: string | null;
+    workspaceSceneInsets: WorkspaceSceneInsets;
+    showWorkspaceLaunchpad: boolean;
+    isWorkspaceDockVisible: boolean;
+  };
+}
+
+export interface ShellRuntimeSurfaces {
+  dynamicTabs: DynamicTabConfig[];
+  traditional: {
+    mainPlugins: LuminaPlugin[];
+    mainSurfaceVariant: string;
+    mainSurfaceStyle: CSSProperties;
+    mobileMainStyle: CSSProperties;
+    widgetSurfaceVariant: string;
+    widgetStyle: CSSProperties;
+  };
+  freeform: {
+    workspaceMenuVariant: string;
+    workspaceMenuStyle: CSSProperties;
+    workspaceStageVariant: string;
+    workspaceStageStyle: CSSProperties;
+    stageStripItems: WorkspaceStageStripItem[];
+    stageWindowEntries: WorkspaceWindowEntry[];
+    dockDisplayItems: WorkspaceDockItem[];
+  };
+}
+
+export interface ShellRuntimeActions {
+  getPluginName: (pluginId: string | null) => string;
+  navigation: {
+    switchMainView: (tabId: string) => void;
+    close: () => void;
+    updateDesktopMode: (desktopModeId: string) => void;
+    openSettingsPanel: () => void;
+  };
+  traditional: {
+    toggleDiscordGuildRail: () => void;
+    handleOpenWidget: (panelId: string) => void;
+    toggleForgeSidebarCollapse: () => void;
+    setSidebarMode: (mode: 'left' | 'right' | 'widget') => void;
+    openDiscordChatSession: (sessionId: string) => void;
+    openDiscordMobileChatSession: (sessionId: string) => void;
+    createDiscordChatSession: (payload: CreateChatConversationInput) => void;
+    createDiscordMobileChatSession: (payload: CreateChatConversationInput) => void;
+    renameDiscordChatSession: (payload: RenameChatConversationInput) => Promise<void> | void;
+    deleteDiscordChatSession: (payload: DeleteChatConversationInput) => Promise<void> | void;
+    toggleDiscordCharacterGroup: (groupKey: string) => void;
+    toggleDiscordCharacterSessionExpansion: (groupKey: string) => void;
+    handleDiscordMobileMainViewSwitch: (tabId: string) => void;
+    updateShowDiscordMobileCharacterRail: (value: boolean) => void;
+    selectTelegramCharacterOverview: (groupKey: string | null) => void;
+    openTelegramToolEntry: (toolId: TelegramRailToolEntry['id']) => void;
+    resizeStart: (event?: MouseEvent) => void;
+    telegramLeftRailResizeStart: (event?: MouseEvent) => void;
+    backFromDetailedSettings: () => void;
+    toggleWidgetDropdown: () => void;
+    switchRightPanel: (panelId: string) => void;
+    restoreSidebarLeft: () => void;
+    closePanel: () => void;
+    updateShowNexus: (value: boolean) => void;
+    selectTelegramBottomNav: (itemId: 'chat' | 'characters' | 'settings' | 'profile') => void;
+  };
+  freeform: {
+    createStageWithLauncher: () => void;
+    openWorkspaceSettings: () => void;
+    activateWorkspaceStageWithNavigation: (stageId: string) => void;
+    createWorkspaceStageFromStrip: () => void;
+    holdWorkspaceNavigation: () => void;
+    scheduleWorkspaceNavigationHide: () => void;
+    toggleWorkspaceNavigation: () => void;
+    toggleWorkspaceMenu: () => void;
+    handleFreeformScenePointerDown: (event: PointerEvent) => void;
+    updateWorkspaceLayout: (entryId: string, patch: { x?: number; y?: number; width?: number; height?: number; interaction?: 'move' | 'resize'; isFinal?: boolean }) => void;
+    closeWorkspaceWindow: (entryId: string) => void;
+    focusWorkspaceWindow: (entryId: string) => void;
+    focusAdjacentWorkspaceWindow: (entryId: string, direction: 'prev' | 'next') => void;
+    backFromDetailedSettings: () => void;
+    closeWorkspaceLaunchpad: () => void;
+    handleWorkspaceDockOpenWithNavigation: (appId: string) => void;
+    stageElementChange: (element: HTMLElement | null) => void;
+  };
 }

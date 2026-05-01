@@ -114,12 +114,12 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
 }
 
 .is-large {
-  background: var(--lw-bg-app);
+  background: var(--lw-settings-large-bg, var(--lw-bg-app));
 }
 
 .settings-sidebar {
   width: 240px;
-  border-right: 1px solid var(--lw-border-base);
+  border-right: 1px solid var(--lw-settings-sidebar-border, var(--lw-border-base));
   display: flex;
   flex-direction: column;
   background: var(--lw-settings-sidebar-bg, color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent));
@@ -128,7 +128,8 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
 
 .sidebar-header {
   padding: 22px 20px 18px;
-  border-bottom: 1px solid var(--lw-border-subtle);
+  border-bottom: 1px solid var(--lw-settings-header-border, var(--lw-border-subtle));
+  background: var(--lw-settings-header-bg, transparent);
 }
 
 .sidebar-header h3 {
@@ -153,27 +154,27 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
   border-radius: 14px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--lw-text-secondary);
+  color: var(--lw-settings-nav-item-color, var(--lw-text-secondary));
   cursor: pointer;
   transition: all 0.2s;
   margin-bottom: 2px;
 }
 
 .nav-item:hover {
-  background: var(--lw-bg-hover);
-  color: var(--lw-text-main);
+  background: var(--lw-settings-nav-hover-bg, var(--lw-bg-hover));
+  color: var(--lw-settings-nav-hover-color, var(--lw-text-main));
 }
 
 .nav-item.active {
-  background: var(--lw-bg-selection);
-  color: var(--lw-text-main);
-  box-shadow: var(--lw-shadow);
+  background: var(--lw-settings-nav-active-bg, var(--lw-bg-selection));
+  color: var(--lw-settings-nav-active-color, var(--lw-text-main));
+  box-shadow: var(--lw-settings-nav-active-shadow, var(--lw-shadow));
 }
 
 .nav-divider {
   font-size: 11px;
   font-weight: 700;
-  color: var(--lw-text-muted);
+  color: var(--lw-settings-muted-color, var(--lw-text-muted));
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 16px 12px 8px;
@@ -199,7 +200,7 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
 
 .main-content-header {
   padding: 16px 28px;
-  border-bottom: 1px solid var(--lw-border-base);
+  border-bottom: 1px solid var(--lw-settings-header-border, var(--lw-border-base));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -214,17 +215,17 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
 }
 
 .breadcrumb-link {
-    color: var(--lw-text-secondary);
+    color: var(--lw-settings-muted-color, var(--lw-text-secondary));
     cursor: pointer;
     transition: color 0.2s;
 }
 
 .breadcrumb-link:hover {
-    color: var(--lw-primary);
+    color: var(--lw-settings-breadcrumb-hover-color, var(--lw-primary));
 }
 
 .breadcrumb-sep {
-    color: var(--lw-text-muted);
+    color: var(--lw-settings-muted-color, var(--lw-text-muted));
 }
 
 .breadcrumb-current {
@@ -243,7 +244,7 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  border-bottom: 1px solid var(--lw-border-base);
+  border-bottom: 1px solid var(--lw-settings-header-border, var(--lw-border-base));
   background: var(--lw-settings-header-bg, color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent));
 }
 
@@ -286,44 +287,59 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
   background: var(--lw-text-muted);
 }
 
-.lw-settings-root[data-skin-variant='discord'] {
-  background: #313338;
+.lw-settings-root[data-skin-variant='telegram'] {
+  --lw-settings-unified-padding: clamp(18px, 3vw, 32px);
+  --lw-settings-detail-outer-padding: var(--lw-panel-padding);
+  --lw-settings-detail-content-padding: 24px;
+  background:
+    var(--lw-settings-shell-overlay, radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--lw-primary) 12%, transparent), transparent 30%)),
+    var(--lw-settings-shell-bg, var(--lw-bg-app));
 }
 
-.lw-settings-root[data-skin-variant='discord'] .settings-sidebar {
-  background: #232428;
-  border-right-color: #1e1f22;
+.lw-settings-root[data-skin-variant='telegram']:not(.is-large) {
+  --lw-settings-unified-padding: 12px;
+  --lw-settings-detail-outer-padding: 12px;
+  --lw-settings-detail-content-padding: 16px;
 }
 
-.lw-settings-root[data-skin-variant='discord'] .sidebar-header,
-.lw-settings-root[data-skin-variant='discord'] .main-content-header,
-.lw-settings-root[data-skin-variant='discord'] .small-back-bar {
-  background: #2b2d31;
-  border-bottom-color: #1e1f22;
+.lw-settings-root[data-skin-variant='telegram']:not(.is-large) .settings-scroll-area {
+  padding: 0 12px 14px;
+  box-sizing: border-box;
 }
 
-.lw-settings-root[data-skin-variant='discord'] .nav-item {
-  color: #b5bac1;
+.lw-settings-root[data-skin-variant='telegram']:not(.is-large) :deep(.settings-unified),
+.lw-settings-root[data-skin-variant='telegram']:not(.is-large) :deep(.settings-detailed) {
+  padding-left: 0;
+  padding-right: 0;
 }
 
-.lw-settings-root[data-skin-variant='discord'] .nav-item:hover {
-  background: #35373c;
-  color: #f2f3f5;
+.lw-settings-root[data-skin-variant='telegram'] .settings-sidebar {
+  width: 256px;
+  background: var(--lw-settings-sidebar-bg, color-mix(in srgb, var(--lw-surface-container-high) 72%, transparent));
+  border-right-color: var(--lw-settings-sidebar-border, var(--lw-border-subtle));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
 }
 
-.lw-settings-root[data-skin-variant='discord'] .nav-item.active {
-  background: #404249;
-  color: #ffffff;
-  box-shadow: none;
+.lw-settings-root[data-skin-variant='telegram'] .sidebar-header,
+.lw-settings-root[data-skin-variant='telegram'] .main-content-header,
+.lw-settings-root[data-skin-variant='telegram'] .small-back-bar {
+  background: var(--lw-settings-header-bg, color-mix(in srgb, var(--lw-surface-container-high) 70%, transparent));
+  border-bottom-color: var(--lw-settings-header-border, var(--lw-border-subtle));
 }
 
-.lw-settings-root[data-skin-variant='discord'] .nav-divider,
-.lw-settings-root[data-skin-variant='discord'] .breadcrumb-link,
-.lw-settings-root[data-skin-variant='discord'] .breadcrumb-sep {
-  color: #949ba4;
+.lw-settings-root[data-skin-variant='telegram'] .nav-item {
+  border: 1px solid transparent;
+  border-radius: 16px;
 }
 
-.lw-settings-root[data-skin-variant='discord'] .breadcrumb-link:hover {
-  color: #f2f3f5;
+.lw-settings-root[data-skin-variant='telegram'] .nav-item:hover {
+  background: var(--lw-settings-nav-hover-bg, color-mix(in srgb, var(--lw-primary) 9%, transparent));
+}
+
+.lw-settings-root[data-skin-variant='telegram'] .nav-item.active {
+  border-color: color-mix(in srgb, var(--lw-primary) 20%, var(--lw-border-subtle));
+  background: var(--lw-settings-nav-active-bg, color-mix(in srgb, var(--lw-surface-container-high) 84%, transparent));
+  box-shadow: var(--lw-settings-nav-active-shadow, 0 10px 24px rgba(44, 92, 130, 0.1));
 }
 </style>

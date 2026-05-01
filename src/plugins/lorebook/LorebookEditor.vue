@@ -841,4 +841,55 @@ textarea:focus {
 .save-button.is-saving {
   background: var(--lw-lorebook-editor-saving-bg, var(--lw-bg-active));
 }
+
+.lore-editor[data-skin-variant='telegram'] {
+  background: var(--lw-lorebook-editor-bg, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%), rgba(232, 245, 255, 0.58));
+}
+
+.lore-editor[data-skin-variant='telegram'] .editor-header {
+  background: var(--lw-lorebook-editor-header-bg, rgba(255, 255, 255, 0.68));
+  border-bottom-color: var(--lw-lorebook-editor-header-border, rgba(148, 190, 219, 0.34));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lore-editor[data-skin-variant='telegram'] .editor-section,
+.lore-editor[data-skin-variant='telegram'] .toggle-card,
+.lore-editor[data-skin-variant='telegram'] .field-item,
+.lore-editor[data-skin-variant='telegram'] .locked-status,
+.lore-editor[data-skin-variant='telegram'] .version-badge,
+.lore-editor[data-skin-variant='telegram'] .remote-font-picker {
+  background: var(--lw-lorebook-editor-section-bg, rgba(255, 255, 255, 0.74));
+  border-color: var(--lw-lorebook-editor-section-border, rgba(148, 190, 219, 0.34));
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.lore-editor[data-skin-variant='telegram'] .lw-input,
+.lore-editor[data-skin-variant='telegram'] .lw-select,
+.lore-editor[data-skin-variant='telegram'] .keyword-input-group,
+.lore-editor[data-skin-variant='telegram'] .key-chip {
+  min-height: 44px;
+  border-radius: 16px;
+  border-color: var(--lw-lorebook-editor-control-border, rgba(148, 190, 219, 0.36));
+  background: var(--lw-lorebook-editor-control-bg, rgba(255, 255, 255, 0.76));
+}
+
+.lore-editor[data-skin-variant='telegram'] .action-toggle-btn {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  border-color: var(--lw-lorebook-editor-control-border, rgba(148, 190, 219, 0.34));
+  background: var(--lw-lorebook-editor-control-bg, rgba(255, 255, 255, 0.72));
+}
+
+.lore-editor[data-skin-variant='telegram'] .save-button {
+  min-height: 44px;
+  border-radius: 999px;
+  background: var(--lw-primary);
+}
+
+.lore-editor[data-skin-variant='telegram'] .editor-body {
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+}
 </style>

@@ -120,11 +120,11 @@ const openMainPlugin = (plugin: any) => {
 const openToolPlugin = (plugin: any) => {
   if (plugin.id === 'lumina-settings') {
     // 特别处理：设置可以打开为标签页
-    lwApi.openTab({
+    lwApi.services.desktopSurface.openTab({
       id: 'lumina-settings-large',
       name: '系统设置',
       icon: plugin.icon,
-      component: 'SettingsRoot', // 字符串形式，App.vue 需在 componentMap 中注册
+      surfaceContractId: 'settings.root',
       props: { mode: 'large' }
     });
   } else {
@@ -136,7 +136,13 @@ const openToolPlugin = (plugin: any) => {
 };
 
 const openCardMaker = () => {
-  lwApi.openPanel('card_maker', {}, { mode: 'tab' });
+  lwApi.services.desktopSurface.openTab({
+    id: 'card_maker',
+    name: '制卡工坊',
+    icon: '🧩',
+    surfaceContractId: 'forge.workspace',
+    props: { isTabMode: true }
+  });
   if (props.dismissOnSelect) {
     emit('dismiss');
   }

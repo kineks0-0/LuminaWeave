@@ -247,6 +247,7 @@
           :key="editingUid || 'new'"
           :entry="editingEntry"
           :mode="props.mode"
+          :is-mobile="props.isMobile"
           :version-label="props.showTimelineChrome ? resolvedView.versionLabel : ''"
           :version-hint="props.showTimelineChrome ? resolvedView.versionHint : ''"
           v-model:is-full-window="isFullWindowActive"
@@ -1528,5 +1529,61 @@ onUnmounted(() => {
 
 .lorebook-root[data-mode="small"] .version-history-list {
   max-height: 180px;
+}
+
+.lorebook-root[data-skin-variant='telegram'] {
+  background: var(--lw-lorebook-workspace-bg, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%), rgba(232, 245, 255, 0.58));
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-header {
+  background: var(--lw-lorebook-header-bg, rgba(255, 255, 255, 0.62));
+  border-bottom-color: var(--lw-lorebook-header-border, rgba(148, 190, 219, 0.34));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lorebook-root[data-skin-variant='telegram'] .book-selector-trigger,
+.lorebook-root[data-skin-variant='telegram'] .view-toggle-group,
+.lorebook-root[data-skin-variant='telegram'] .version-status-bar,
+.lorebook-root[data-skin-variant='telegram'] .version-history-panel,
+.lorebook-root[data-skin-variant='telegram'] .search-input-wrapper {
+  background: var(--lw-lorebook-control-bg, rgba(255, 255, 255, 0.7));
+  border-color: var(--lw-lorebook-control-border, rgba(148, 190, 219, 0.34));
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-list {
+  background: transparent;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-item,
+.lorebook-root[data-skin-variant='telegram'] .grid-card,
+.lorebook-root[data-skin-variant='telegram'] .table-row {
+  min-height: 44px;
+  background: var(--lw-lorebook-item-bg, rgba(255, 255, 255, 0.72));
+  border-color: var(--lw-lorebook-item-border, rgba(148, 190, 219, 0.3));
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-item:hover,
+.lorebook-root[data-skin-variant='telegram'] .grid-card:hover,
+.lorebook-root[data-skin-variant='telegram'] .table-row:hover {
+  background: var(--lw-lorebook-item-hover-bg, rgba(255, 255, 255, 0.88));
+  transform: none;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .view-toggle-btn,
+.lorebook-root[data-skin-variant='telegram'] .version-mode-btn,
+.lorebook-root[data-skin-variant='telegram'] .history-toggle-btn,
+.lorebook-root[data-skin-variant='telegram'] .lw-btn {
+  min-height: 40px;
+  border-radius: 999px;
+}
+
+.lorebook-root[data-skin-variant='telegram'][data-mode='small'] .lore-list,
+.lorebook-root[data-skin-variant='telegram'].is-mobile .lore-list {
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
 }
 </style>

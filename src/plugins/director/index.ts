@@ -8,6 +8,7 @@ export { globalMutationEngine } from './MutationEngine'; // 增量更新引擎
 export { useTier1Store } from './Tier1Store'; // Tier 1 Vue 状态管理 (物品栏等)
 
 import { LuminaPlugin } from '../../types/plugin';
+import type { PluginManifestV2 } from '../../platform/plugin/types';
 import DirectorPanel from './components/DirectorPanel.vue';
 import { useDirectorStore } from './DirectorStore';
 import { useTier1Store } from './Tier1Store';
@@ -19,7 +20,6 @@ export const DirectorPlugin: LuminaPlugin = {
     id: 'lumina-director',
     name: '导演核心引擎',
     icon: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>',
-    slots: ['widget'], // 投射到小侧边栏
     component: DirectorPanel,
     settingsManifest: {
         orchestrationMode: {
@@ -244,3 +244,18 @@ export const DirectorPlugin: LuminaPlugin = {
         }
     }
 };
+
+DirectorPlugin.platformManifest = {
+    id: 'lumina-director',
+    name: '导演核心引擎',
+    capabilities: [
+        { id: 'context.director', description: '维护导演规划、记忆与增量世界状态。' }
+    ],
+    settingsSchema: DirectorPlugin.settingsManifest,
+    surfaces: [
+        { id: 'director.panel', ownerPluginId: 'lumina-director', description: '导演上下文面板 surface。' }
+    ],
+    businessRenderers: {
+        'director.panel': { contractId: 'director.panel', component: DirectorPanel }
+    }
+} satisfies PluginManifestV2;

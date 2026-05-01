@@ -152,6 +152,8 @@ describe('ForgeSessionRepository', () => {
             structuredState: {
                 activeFormId: 'role_core_profile',
                 activeMessageFormId: null,
+                submitConfigs: {},
+                submittedScopes: {},
                 lastUpdatedAt: 123,
                 forms: {
                     role_core_profile: {
@@ -204,6 +206,8 @@ describe('ForgeSessionRepository', () => {
             structuredState: {
                 activeFormId: 'role_core_profile',
                 activeMessageFormId: null,
+                submitConfigs: {},
+                submittedScopes: {},
                 lastUpdatedAt: 999,
                 forms: {
                     role_core_profile: {

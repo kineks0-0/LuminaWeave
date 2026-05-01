@@ -5,9 +5,11 @@ export type ResolvedThemeAppearance = 'light' | 'dark';
 export type ThemeWorkspaceMode = 'traditional' | 'freeform';
 export type DesktopModeShellKind = ThemeWorkspaceMode;
 export type DesktopModeAppearance = ThemePackAppearance;
-export type ThemeHeaderVariant = 'default' | 'discord';
+export type ThemeMessageShape = 'bubble' | 'document';
+export type ThemeAvatarPlacement = 'hidden' | 'inline' | 'topbar' | 'rail';
+export type ThemeHeaderVariant = 'default' | 'discord' | 'telegram';
 export type ThemeRailMode = 'none' | 'character-rail';
-export type ThemeSurfaceVariant = 'default' | 'discord';
+export type ThemeSurfaceVariant = 'default' | 'discord' | 'telegram';
 
 export interface ComponentThemeContext {
     activeSettings: Record<string, any>;

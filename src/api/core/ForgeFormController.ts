@@ -360,14 +360,15 @@ export class ForgeFormController {
         ];
 
         blueprint.fields.forEach((field) => {
+            const fieldPath = `${blueprint.formId}/${field.key}`;
             if (field.kind === 'input') {
-                lines.push(`ForgeInput("${blueprint.formId}", "${field.key}", "${field.label}", "${field.placeholder || ''}")`);
+                lines.push(`ForgeInput("${fieldPath}", "${field.label}", "${field.placeholder || ''}")`);
             } else if (field.kind === 'textarea') {
-                lines.push(`ForgeTextarea("${blueprint.formId}", "${field.key}", "${field.label}", "${field.placeholder || ''}")`);
+                lines.push(`ForgeTextarea("${fieldPath}", "${field.label}", "${field.placeholder || ''}")`);
             } else if (field.kind === 'select') {
-                lines.push(`ForgeSelect("${blueprint.formId}", "${field.key}", "${field.label}", "${field.options || ''}")`);
+                lines.push(`ForgeSelect("${fieldPath}", "${field.label}", "${field.options || ''}")`);
             } else if (field.kind === 'checklist') {
-                lines.push(`ForgeChecklist("${blueprint.formId}", "${field.key}", "${field.label}", "${field.options || ''}")`);
+                lines.push(`ForgeChecklist("${fieldPath}", "${field.label}", "${field.options || ''}")`);
             }
         });
 

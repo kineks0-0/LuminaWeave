@@ -1,0 +1,14 @@
+{
+    "id": "built-in:forge-test-chat-world-only",
+    "name": "纯世界书",
+    "profileId": "forge-test-chat",
+    "builtIn": true,
+    "engine": "composed",
+    "charCardMode": "none",
+    "entries": [
+        { "id": "slot:world_info", "type": "slot", "enabled": true, "slotId": "world_info" },
+        { "id": "slot:chat_history", "type": "slot", "enabled": true, "slotId": "chat_history" }
+    ],
+    "specials": {},
+    "generationSettings": {}
+}

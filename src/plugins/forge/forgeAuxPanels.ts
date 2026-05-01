@@ -12,7 +12,8 @@ export const FORGE_AUX_PANEL_ORDER: ForgeAuxPanelKind[] = [
     'memory',
     'export',
     'post_tracks',
-    'test_chat'
+    'test_chat',
+    'dev_requests'
 ];
 
 export const FORGE_AUX_PANEL_META: Record<ForgeAuxPanelKind, ForgeAuxPanelMeta> = {
@@ -51,5 +52,11 @@ export const FORGE_AUX_PANEL_META: Record<ForgeAuxPanelKind, ForgeAuxPanelMeta> 
         title: '测试聊天',
         shortLabel: '测试聊天',
         icon: '💬'
+    },
+    dev_requests: {
+        id: 'forge_dev_requests',
+        title: '模型请求调试',
+        shortLabel: '调试请求',
+        icon: '🧪'
     }
 };

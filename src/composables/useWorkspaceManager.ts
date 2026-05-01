@@ -1,15 +1,16 @@
 import { computed, onUnmounted, ref, watch, type Component, type ComputedRef, type Ref } from 'vue';
 import { lwStorage } from '../api/storage';
-import LauncherRoot from '../plugins/launcher/LauncherRoot.vue';
-import CardMakerPanel from '../plugins/forge/CardMakerPanel.vue';
 import ForgeAuxPanelView from '../plugins/forge/ForgeAuxPanelView.vue';
-import ContextSwitcherPanel from '../components/ContextSwitcherPanel.vue';
+import SurfaceOutlet from '../platform/surface/SurfaceOutlet.vue';
+import DynamicTabOutlet from '../shell/DynamicTabOutlet.vue';
+import { getPrimarySurfaceContractIdForPlugin } from '../platform/plugin/officialPluginSurfaces';
 import { useCardMakerStore } from '../plugins/forge/CardMakerStore';
 import { useSessionIndexStore } from '../stores/useSessionIndexStore';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../plugins/forge/forgeAuxPanels';
 import { currentDetailedView } from '../plugins/settings/useSettings';
 import type { LuminaPlugin } from '../types/plugin';
 import type { DynamicTabConfig } from '../shell/types';
+import { getLegacyPanelDefinition } from '../shell/legacyPanelRegistry';
 
 type WorkspaceAppKind = 'launcher' | 'main' | 'widget' | 'panel';
 
@@ -120,7 +121,6 @@ export const useWorkspaceManager = ({
   isMobile,
   freeformStageRef,
   workspaceNavigationVisible,
-  componentMap,
   getPluginName
 }: {
   mainPlugins: ComputedRef<LuminaPlugin[]>;
@@ -131,7 +131,6 @@ export const useWorkspaceManager = ({
   isMobile: Ref<boolean>;
   freeformStageRef: Ref<HTMLElement | null>;
   workspaceNavigationVisible: Ref<boolean> | ComputedRef<boolean>;
-  componentMap: Record<string, Component>;
   getPluginName: (pluginId: string | null) => string;
 }) => {
   let workspacePersistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -156,8 +155,8 @@ export const useWorkspaceManager = ({
         id: 'plugin:lumina-launcher',
         title: '启动台',
         icon: '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
-        component: LauncherRoot,
-        props: { activeMainTab: activeMainTab.value },
+        component: SurfaceOutlet,
+        props: { contractId: 'launcher.root', activeMainTab: activeMainTab.value },
         kind: 'launcher',
         dockable: true,
         minWidth: 180,
@@ -172,8 +171,8 @@ export const useWorkspaceManager = ({
         id: 'panel:card_maker',
         title: '制卡工坊',
         icon: '🧩',
-        component: CardMakerPanel,
-        props: { embeddedInWorkspaceWindow: true },
+        component: SurfaceOutlet,
+        props: { contractId: 'forge.workspace', embeddedInWorkspaceWindow: true },
         kind: 'panel',
         dockable: true,
         minWidth: 180,
@@ -216,8 +215,8 @@ export const useWorkspaceManager = ({
         id: `plugin:${plugin.id}`,
         title: plugin.name,
         icon: plugin.icon,
-        component: plugin.component,
-        props: { mode: 'large', isMobile: isMobile.value },
+        component: SurfaceOutlet,
+        props: { contractId: getPrimarySurfaceContractIdForPlugin(plugin.id), mode: 'large', isMobile: isMobile.value },
         kind: 'main',
         dockable: true,
         minWidth: 180,
@@ -237,8 +236,8 @@ export const useWorkspaceManager = ({
         id: isDualRole ? `widget:${plugin.id}` : `plugin:${plugin.id}`,
         title: plugin.name,
         icon: plugin.icon,
-        component: plugin.component,
-        props: { mode: 'small', isMobile: isMobile.value },
+        component: SurfaceOutlet,
+        props: { contractId: getPrimarySurfaceContractIdForPlugin(plugin.id), mode: 'small', isMobile: isMobile.value },
         kind: 'widget',
         dockable: true,
         minWidth: 360,
@@ -251,22 +250,25 @@ export const useWorkspaceManager = ({
       });
     }
 
-    apps.push({
-      id: 'plugin:context-switcher',
-      title: '会话切换',
-      icon: '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>',
-      component: ContextSwitcherPanel,
-      props: {},
-      kind: 'widget',
-      dockable: false,
-      minWidth: 320,
-      maxWidth: 560,
-      minHeight: 320,
-      maxHeight: 880,
-      preferredWidth: 420,
-      preferredHeight: 520,
-      eyebrow: 'Context'
-    });
+    const contextSwitcherPanel = getLegacyPanelDefinition('context-switcher');
+    if (contextSwitcherPanel) {
+      apps.push({
+        id: 'plugin:context-switcher',
+        title: contextSwitcherPanel.title,
+        icon: contextSwitcherPanel.icon,
+        component: contextSwitcherPanel.component,
+        props: {},
+        kind: 'widget',
+        dockable: false,
+        minWidth: 320,
+        maxWidth: 560,
+        minHeight: 320,
+        maxHeight: 880,
+        preferredWidth: 420,
+        preferredHeight: 520,
+        eyebrow: 'Context'
+      });
+    }
 
     return apps;
   });
@@ -276,10 +278,8 @@ export const useWorkspaceManager = ({
       id: `tab:${tab.id}`,
       title: tab.name,
       icon: tab.icon || '',
-      component: typeof tab.component === 'string'
-        ? (componentMap[tab.component] || LauncherRoot)
-        : tab.component,
-      props: tab.props || {},
+      component: DynamicTabOutlet,
+      props: { tab },
       kind: 'panel',
       dockable: false,
       minWidth: 180,

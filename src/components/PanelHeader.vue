@@ -3,9 +3,55 @@
     class="lw-panel-header"
     :class="{ 'is-bottom': headerPlacement === 'bottom' }"
     :data-skin-variant="variant"
+    :style="headerSkinStyle"
   >
     <div class="header-left">
-      <template v-if="variant !== 'discord'">
+      <template v-if="variant === 'telegram'">
+        <div class="telegram-channel-bar">
+          <button
+            class="telegram-channel-avatar"
+            type="button"
+            title="打开个人资料"
+            @click="$emit('openWidget', activeWidgetId || 'lumina-stats')"
+          >
+            <img
+              v-if="activeUserAvatar"
+              :src="activeUserAvatar || defaultAvatar"
+              :alt="activeUserName"
+              @error="(e) => (e.target as HTMLImageElement).src = defaultAvatar"
+            >
+            <span v-else>{{ activeUserName.slice(0, 1).toUpperCase() }}</span>
+          </button>
+          <div class="telegram-channel-copy">
+            <strong>{{ activeTabEntry?.name || '聊天' }}</strong>
+            <span>聊天上下文工具集中在这里</span>
+          </div>
+          <div v-if="!isMobile" class="telegram-context-tools">
+            <button type="button" title="时间线" @click="$emit('openWidget', 'lumina-timeline')">
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M12 7v5l3 2"></path>
+              </svg>
+            </button>
+            <button type="button" title="世界书" @click="$emit('openWidget', 'lumina-lorebook')">
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              </svg>
+            </button>
+            <button type="button" title="记忆与状态" @click="$emit('openWidget', 'lumina-stats')">
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M12 2a5 5 0 0 1 5 5c0 1.9-1.06 3.5-2.6 4.34"></path>
+                <path d="M12 2a5 5 0 0 0-5 5c0 1.9 1.06 3.5 2.6 4.34"></path>
+                <path d="M8 14h8"></path>
+                <path d="M9 18h6"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <template v-else-if="variant !== 'discord'">
       <div class="lw-brand" v-if="!isMobile">
         <span class="lw-title-main">LuminaWeave</span>
       </div>
@@ -247,8 +293,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted, type CSSProperties } from 'vue';
 import { pluginManager } from '@/core/PluginManager';
+import { useComponentSkin } from '../theme/useComponentSkin';
 
 const props = withDefaults(defineProps<{
   activeMainTab?: string;
@@ -256,7 +303,7 @@ const props = withDefaults(defineProps<{
   isMobile?: boolean;
   activeDesktopModeId?: string;
   desktopModes?: { value: string; label: string; description?: string }[];
-  variant?: 'default' | 'discord';
+  variant?: 'default' | 'discord' | 'telegram';
   headerPlacement?: 'top' | 'bottom';
   widgetPanels?: { id: string; name: string; icon: string }[];
   widgetGroups?: { label?: string; items: { id: string; name: string; icon: string }[] }[];
@@ -289,6 +336,8 @@ const emit = defineEmits<{
 const mainPlugins = computed(() => pluginManager.getPluginsInSlot('mainView'));
 const headerCenterPlugins = computed(() => pluginManager.getPluginsInSlot('headerCenter'));
 const headerRightPlugins = computed(() => pluginManager.getPluginsInSlot('headerRight'));
+const { cssVars: headerSkinVars } = useComponentSkin('shell.header');
+const headerSkinStyle = computed<CSSProperties>(() => headerSkinVars.value as CSSProperties);
 
 const activeUserName = computed(() => (window as any).LuminaWeave?.getUserName() || 'User');
 const activeUserAvatar = computed(() => (window as any).LuminaWeave?.getUserAvatar());
@@ -489,8 +538,8 @@ function onDocPointerDown(e: PointerEvent) {
   height: 28px;
   border: 1px solid transparent;
   border-radius: 10px;
-  background: #2b2d31;
-  color: #8e9297;
+  background: var(--lw-header-channel-mark-bg, var(--lw-bg-elevated));
+  color: var(--lw-header-channel-mark-color, var(--lw-text-muted));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -506,9 +555,9 @@ function onDocPointerDown(e: PointerEvent) {
 
 .discord-channel-mark:hover,
 .discord-channel-mark.active {
-  background: #383a40;
-  color: #f2f3f5;
-  border-color: rgba(88, 101, 242, 0.3);
+  background: var(--lw-header-channel-mark-active-bg, var(--lw-bg-hover));
+  color: var(--lw-header-channel-mark-active-color, var(--lw-text-main));
+  border-color: var(--lw-header-channel-mark-active-border, rgba(var(--lw-primary-rgb), 0.3));
 }
 
 .discord-channel-mark:active {
@@ -1071,10 +1120,128 @@ function onDocPointerDown(e: PointerEvent) {
   background: #e2e8f0;
 }
 
+.telegram-channel-bar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.telegram-channel-avatar {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--lw-border-subtle);
+  border-radius: var(--lw-telegram-avatar-radius, 999px);
+  background: color-mix(in srgb, var(--lw-primary) 14%, var(--lw-surface-container-high));
+  color: var(--lw-text-main);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: var(--lw-header-avatar-shadow, 0 10px 24px rgba(44, 92, 130, 0.12));
+}
+
+.telegram-channel-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.telegram-channel-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.telegram-channel-copy strong {
+  max-width: min(34vw, 280px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--lw-text-main);
+}
+
+.telegram-channel-copy span {
+  max-width: min(36vw, 320px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--lw-text-muted);
+}
+
+.telegram-context-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--lw-border-subtle);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-surface-container-high) 72%, transparent);
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+}
+
+.telegram-context-tools button {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.telegram-context-tools button:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--lw-primary) 14%, transparent);
+  color: var(--lw-text-main);
+}
+
+.lw-panel-header[data-skin-variant='telegram'] {
+  min-height: 64px;
+  height: 64px;
+  border-bottom-color: var(--lw-header-border, var(--lw-border-subtle));
+  background: var(--lw-header-bg, linear-gradient(180deg, color-mix(in srgb, var(--lw-surface-container-high) 88%, transparent), color-mix(in srgb, var(--lw-surface-container) 66%, transparent)));
+  box-shadow: var(--lw-header-shadow, 0 14px 34px rgba(44, 92, 130, 0.08));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
+}
+
+.lw-panel-header[data-skin-variant='telegram'] .header-floating-controls,
+.lw-panel-header[data-skin-variant='telegram'] .profile-trigger,
+.lw-panel-header[data-skin-variant='telegram'] .profile-menu,
+.lw-panel-header[data-skin-variant='telegram'] .widget-dropdown,
+.lw-panel-header[data-skin-variant='telegram'] .lw-tab-dropdown {
+  background: var(--lw-header-control-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent));
+  border-color: var(--lw-header-control-border, var(--lw-border-subtle));
+  box-shadow: var(--lw-header-control-shadow, var(--lw-telegram-panel-shadow, var(--lw-shadow-card)));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lw-panel-header[data-skin-variant='telegram'].is-bottom {
+  border-top-color: var(--lw-header-border, var(--lw-border-subtle));
+  box-shadow: var(--lw-header-bottom-shadow, 0 -14px 34px rgba(44, 92, 130, 0.08));
+}
+
 .lw-panel-header[data-skin-variant='discord'] {
-  background: var(--lw-bg-elevated);
-  border-bottom-color: var(--lw-border-strong);
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--lw-text-inverse) 4%, transparent);
+  background: var(--lw-header-bg, var(--lw-bg-elevated));
+  border-bottom-color: var(--lw-header-border, var(--lw-border-strong));
+  box-shadow: var(--lw-header-shadow, inset 0 -1px 0 color-mix(in srgb, var(--lw-text-inverse) 4%, transparent));
 }
 
 .lw-panel-header[data-skin-variant='discord'] .lw-brand {
@@ -1085,23 +1252,23 @@ function onDocPointerDown(e: PointerEvent) {
   width: 40px;
   height: 40px;
   border-radius: 14px;
-  background: var(--lw-surface-container);
-  border-color: var(--lw-border-strong);
+  background: var(--lw-header-control-bg, var(--lw-surface-container));
+  border-color: var(--lw-header-control-border, var(--lw-border-strong));
   color: var(--lw-text-secondary);
   box-shadow: none;
 }
 
 .lw-panel-header[data-skin-variant='discord'] .launcher-btn:hover,
 .lw-panel-header[data-skin-variant='discord'] .launcher-btn.active {
-  background: color-mix(in srgb, var(--lw-primary) 18%, var(--lw-surface-container));
+  background: var(--lw-header-control-hover-bg, color-mix(in srgb, var(--lw-primary) 18%, var(--lw-surface-container)));
   border-color: var(--lw-border-active);
   color: var(--lw-text-main);
   box-shadow: none;
 }
 
 .lw-panel-header[data-skin-variant='discord'] .lw-tabs {
-  background: var(--lw-surface-container);
-  border-color: var(--lw-border-strong);
+  background: var(--lw-header-tab-bg, var(--lw-surface-container));
+  border-color: var(--lw-header-control-border, var(--lw-border-strong));
   border-radius: 14px;
 }
 
@@ -1112,11 +1279,11 @@ function onDocPointerDown(e: PointerEvent) {
 
 .lw-panel-header[data-skin-variant='discord'] .lw-tab:hover {
   color: var(--lw-text-main);
-  background: var(--lw-surface-container-high);
+  background: var(--lw-header-tab-hover-bg, var(--lw-surface-container-high));
 }
 
 .lw-panel-header[data-skin-variant='discord'] .lw-tab.active {
-  background: color-mix(in srgb, var(--lw-primary) 16%, var(--lw-surface-container-high));
+  background: var(--lw-header-tab-active-bg, color-mix(in srgb, var(--lw-primary) 16%, var(--lw-surface-container-high)));
   color: var(--lw-text-main);
   box-shadow: none;
 }
@@ -1126,9 +1293,9 @@ function onDocPointerDown(e: PointerEvent) {
 .lw-panel-header[data-skin-variant='discord'] .profile-menu,
 .lw-panel-header[data-skin-variant='discord'] .widget-dropdown,
 .lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown {
-  background: var(--lw-surface-container);
-  border-color: var(--lw-border-strong);
-  box-shadow: var(--lw-shadow-card);
+  background: var(--lw-header-control-bg, var(--lw-surface-container));
+  border-color: var(--lw-header-control-border, var(--lw-border-strong));
+  box-shadow: var(--lw-header-control-shadow, var(--lw-shadow-card));
 }
 
 .lw-panel-header[data-skin-variant='discord'] .profile-trigger,

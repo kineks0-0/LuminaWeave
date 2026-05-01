@@ -12,11 +12,18 @@ import {
     renderForgeStructuredState,
     renderForgeDraftTree,
     renderForgeWorkflowSnapshot,
-} from '../../resources/prompts/forgePrompts';
-import { ForgePromptPayloadResolver } from './ForgePromptPayloadResolver';
-import type { ForgeWorkflowSnapshot } from '../../types/ForgeWorkflowTypes';
+} from '../../resources/prompts/forgePrompts.js';
+import { ForgePromptPayloadResolver } from './ForgePromptPayloadResolver.js';
+import type { ForgeWorkflowSnapshot } from '../../types/ForgeWorkflowTypes.js';
 import type { ForgeDraftTree, ForgeStructuredState } from '../../types/ForgeStructuredTypes.js';
 import type { ForgeMemoryTree } from '../../types/ForgeMemoryTypes.js';
+import { PromptPresetComposer } from './PromptPresetComposer.js';
+import { getPromptPresetProfile } from './PromptPresetProfiles.js';
+import { promptPresetRegistry } from './PromptPresetRegistry.js';
+import type {
+    PromptComposeSources,
+    PromptPresetProfileId
+} from '../../types/PromptPresetTypes.js';
 
 interface BuildActiveMessagesOptions {
     systemPrompt: string;
@@ -67,83 +74,116 @@ export class PromptBuilder {
             workflowSnapshot
         } = options;
 
-        // A. 宏替换 ({{user}}, {{char}}, {{description}} 等)
         let processedSystem = STClient.substituteMacros(systemPrompt);
 
-        // B. 世界书动态注入
-        if (includeWorldInfo) {
-            const normalizedLorebookEntries = resolvedLorebookEntries
+        const normalizedLorebookEntries = resolvedLorebookEntries.length > 0
+            ? resolvedLorebookEntries
+            : (allowSTWorldInfoFallback && includeWorldInfo ? STClient.getActiveWorldInfoItems().map(item => ({
+                uid: item.id,
+                comment: item.id,
+                key: [item.id],
+                keysecondary: [],
+                content: item.content,
+                constant: false,
+                selective: false,
+                selectiveLogic: 0,
+                disable: false,
+                enabled: true,
+                position: 0,
+                depth: 0,
+                order: 0,
+                probability: 100,
+                scan_depth: 0
+            })) : []);
+
+        const sources: PromptComposeSources = {
+            lorebookEntries: includeWorldInfo ? normalizedLorebookEntries : [],
+            memorySnapshot,
+            forgeMemoryTree,
+            structuredState,
+            draftTree,
+            workflowSnapshot,
+            conversationHistory: messages,
+            macroContext: {
+                legacySystemPrompt: processedSystem
+            },
+            systemProtocolText: includeSystemProtocol
+                ? this.buildCombinedProtocolBlock(promptContext)
+                : null
+        };
+
+        const profileId: PromptPresetProfileId = promptContext === 'forge' ? 'forge-main' : 'forge-test-chat';
+        const profile = getPromptPresetProfile(profileId);
+        const preset = promptPresetRegistry.getActivePreset(profileId);
+
+        if (preset.engine === 'st_preset') {
+            return this.buildLegacySTMessages(sources, promptContext);
+        }
+
+        const result = PromptPresetComposer.compose(profile, preset, sources);
+        return this.collapseLeadingSystemMessages(result.messages);
+    }
+
+    private static buildLegacySTMessages(sources: PromptComposeSources, promptContext: PromptContext): CleanedMessage[] {
+        let processedSystem = sources.macroContext?.legacySystemPrompt || '';
+
+        if (sources.lorebookEntries && sources.lorebookEntries.length > 0) {
+            const worldItems = sources.lorebookEntries
                 .filter(entry => !entry.disable && entry.enabled !== false)
                 .map(entry => ({
                     id: entry.uid ?? entry.comment ?? entry.key?.[0] ?? 'lorebook_entry',
                     content: entry.content || ''
                 }));
             
-            // 策略选择：优先使用显式传入的 entries；若为空，则根据 allowSTWorldInfoFallback 决定是否回退到 ST 全局激活项
-            // 注意：如果 resolvedLorebookEntries 不为空但所有条目都被禁用，也不回退到 ST 全局激活项
-            const worldItems = resolvedLorebookEntries.length > 0
-                ? normalizedLorebookEntries
-                : (allowSTWorldInfoFallback ? STClient.getActiveWorldInfoItems() : []);
-
             if (worldItems.length > 0) {
                 const worldString = worldItems
                     .map(item => `[World Info: ${item.id}]\n${item.content}`)
                     .join('\n\n');
                 
-                // 根据上下文优化显示标签，提高预览可辨识度
                 const label = promptContext === 'forge' ? '参考设定 (Forge Workspace)' : '补充设定 (World Info)';
                 processedSystem += `\n\n【${label}】:\n${worldString}`;
             }
         }
 
-        if (memorySnapshot) {
+        if (sources.memorySnapshot) {
             processedSystem += `\n\n${renderForgeMemorySnapshot(
-                ForgePromptPayloadResolver.buildMemorySnapshotTemplateInput(memorySnapshot)
+                ForgePromptPayloadResolver.buildMemorySnapshotTemplateInput(sources.memorySnapshot)
             )}`;
         }
 
-        if (forgeMemoryTree) {
+        if (sources.forgeMemoryTree) {
             processedSystem += `\n\n${renderForgeFileMemory(
-                ForgePromptPayloadResolver.buildForgeMemoryTreeTemplateInput(forgeMemoryTree)
+                ForgePromptPayloadResolver.buildForgeMemoryTreeTemplateInput(sources.forgeMemoryTree)
             )}`;
         }
 
-        if (structuredState) {
+        if (sources.structuredState) {
             processedSystem += `\n\n${renderForgeStructuredState(
-                ForgePromptPayloadResolver.buildStructuredStateTemplateInput(structuredState)
+                ForgePromptPayloadResolver.buildStructuredStateTemplateInput(sources.structuredState)
             )}`;
         }
 
-        if (draftTree) {
+        if (sources.draftTree) {
             processedSystem += `\n\n${renderForgeDraftTree(
-                ForgePromptPayloadResolver.buildDraftTreeTemplateInput(draftTree)
+                ForgePromptPayloadResolver.buildDraftTreeTemplateInput(sources.draftTree)
             )}`;
         }
 
-        if (workflowSnapshot) {
+        if (sources.workflowSnapshot) {
             processedSystem += `\n\n${renderForgeStageSnapshot(
-                ForgePromptPayloadResolver.buildStageTemplateInput(workflowSnapshot)
+                ForgePromptPayloadResolver.buildStageTemplateInput(sources.workflowSnapshot)
             )}\n\n${renderForgeWorkflowSnapshot(
-                ForgePromptPayloadResolver.buildWorkflowTemplateInput(workflowSnapshot)
+                ForgePromptPayloadResolver.buildWorkflowTemplateInput(sources.workflowSnapshot)
             )}`;
         }
 
-        if (includeSystemProtocol) {
-            const constraintText = PromptBuilder.buildInlineConstraintText(promptContext);
-            if (constraintText) {
-                processedSystem += `\n\n${constraintText}`;
-            }
-
-            const protocolText = PromptBuilder.buildSystemProtocolText(promptContext);
-            if (protocolText) {
-                processedSystem += `\n\n${protocolText}`;
-            }
+        if (sources.systemProtocolText) {
+            processedSystem += `\n\n${sources.systemProtocolText}`;
         }
 
-        // C. 组装消息列表
         return [
             { role: 'system', content: processedSystem },
-            ...messages
+            ...(sources.conversationHistory || [])
         ];
     }
 
@@ -302,6 +342,19 @@ export class PromptBuilder {
         return `[System Protocol]\n你必须严格按以下顺序输出 XML 标签：\n${tagRules}`;
     }
 
+    public static buildCombinedProtocolBlock(context: PromptContext): string | null {
+        const blocks = [
+            this.buildInlineConstraintText(context),
+            this.buildSystemProtocolText(context)
+        ].filter((block): block is string => Boolean(block && block.trim()));
+
+        if (blocks.length === 0) {
+            return null;
+        }
+
+        return blocks.join('\n\n');
+    }
+
     private static buildInlineConstraintText(context: PromptContext): string | null {
         const blocks = globalPromptRegistry.getFragmentsForContext(context)
             .filter(fragment => fragment.type === PromptType.CONSTRAINTS)
@@ -339,6 +392,32 @@ export class PromptBuilder {
             && value !== null
             && 'then' in value
             && typeof value.then === 'function';
+    }
+
+    private static collapseLeadingSystemMessages(messages: CleanedMessage[]): CleanedMessage[] {
+        if (messages.length <= 1 || messages[0]?.role !== 'system') {
+            return messages;
+        }
+
+        let systemEnd = 0;
+        while (systemEnd < messages.length && messages[systemEnd]?.role === 'system') {
+            systemEnd += 1;
+        }
+
+        if (systemEnd <= 1) {
+            return messages;
+        }
+
+        const mergedSystemContent = messages
+            .slice(0, systemEnd)
+            .map(message => message.content?.trim())
+            .filter(Boolean)
+            .join('\n\n');
+
+        return [
+            { role: 'system', content: mergedSystemContent },
+            ...messages.slice(systemEnd)
+        ];
     }
 }
 

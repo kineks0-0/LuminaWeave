@@ -59,18 +59,21 @@ const emit = defineEmits<{
   position: absolute;
   top: 22px;
   right: 20px;
-  z-index: 20;
-  width: 320px;
+  z-index: 6000;
+  width: min(408px, calc(100% - 32px));
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  border-radius: 22px;
-  border: 1px solid var(--lw-shell-workspace-menu-border, rgba(255, 255, 255, 0.42));
+  border-radius: 24px;
+  border: 1px solid var(--lw-shell-workspace-menu-border, color-mix(in srgb, var(--lw-border-base) 72%, white));
   background: var(--lw-shell-workspace-menu-bg,
-      linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(244, 248, 254, 0.34)));
-  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(24px) saturate(135%);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 249, 255, 0.76)));
+  box-shadow:
+    0 18px 42px rgba(48, 73, 114, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(22px) saturate(128%);
 }
 
 .lw-workspace-menu-copy {
@@ -106,6 +109,7 @@ const emit = defineEmits<{
   flex-direction: column;
   gap: 4px;
   width: 100%;
+  box-sizing: border-box;
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.34);
@@ -118,8 +122,12 @@ const emit = defineEmits<{
 
 .lw-workspace-menu-item:hover,
 .lw-workspace-menu-item.active {
-  border-color: rgba(var(--lw-primary-rgb), 0.2);
-  background: var(--lw-shell-workspace-menu-item-active-bg, rgba(255, 255, 255, 0.4));
+  border-color: rgba(var(--lw-primary-rgb), 0.16);
+  background: var(--lw-shell-workspace-menu-item-active-bg,
+      linear-gradient(180deg, rgba(255, 255, 255, 0.86), color-mix(in srgb, var(--lw-primary) 9%, white)));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 18px rgba(53, 80, 125, 0.1);
 }
 
 .lw-workspace-menu-item span {
@@ -131,5 +139,16 @@ const emit = defineEmits<{
   font-size: 11px;
   color: var(--lw-text-secondary);
   line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .lw-workspace-menu {
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-height: calc(100% - 44px);
+    overflow: auto;
+    padding: 12px;
+  }
 }
 </style>

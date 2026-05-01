@@ -195,7 +195,7 @@ const open = () => {
 // 外放至大窗口（标签页）
 const externalize = () => {
   if (!lwApi) return;
-  lwApi.openPanel('conflict', {}, { mode: 'tab' });
+  lwApi.services?.desktopSurface?.openPanel('conflict', {}, { mode: 'tab' });
   isOpen.value = false;
 };
 
@@ -244,11 +244,11 @@ const resolve = async (winner: 'st' | 'lumina') => {
       }
     }, 400);
 
-    lwApi.showToast(winner === 'lumina' ? '已成功覆盖 ST 版本' : '已成功拉取 ST 版本', 'success');
+    lwApi.services.host.showToast(winner === 'lumina' ? '已成功覆盖 ST 版本' : '已成功拉取 ST 版本', 'success');
 
   } catch (err: any) {
     console.error('[ConflictViewer] 解决冲突失败:', err);
-    lwApi.showToast(`解决失败: ${err.message || '未知错误'}`, 'error');
+    lwApi.services.host.showToast(`解决失败: ${err.message || '未知错误'}`, 'error');
   }
 };
 

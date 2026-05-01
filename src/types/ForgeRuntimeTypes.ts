@@ -1,8 +1,10 @@
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { CleanedMessage } from './nexus.js';
 import type { ForgeMemoryTree } from './ForgeMemoryTypes.js';
+import type { MemorySnapshot } from './MemorySnapshotTypes.js';
 import type { ForgeVirtualLorebookEntry } from './SessionTypes.js';
 import type {
+    ForgeCollectionMode,
     ForgeDetailMode,
     ForgeDraftTree,
     ForgeEntryMode,
@@ -11,6 +13,7 @@ import type {
 } from './ForgeStructuredTypes.js';
 import type { ForgeTimelineItem, ForgeTimelineOperationKind, ForgeTimelineOperationStatus } from './ForgeTimelineTypes.js';
 import type { ForgeWorkflowPromptMode, ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
+import type { PromptPresetGenerationSettings } from './PromptPresetTypes.js';
 
 export interface StagingEntry {
     id: string;
@@ -24,6 +27,59 @@ export interface StagingEntry {
     sourceTag: string | null;
     sourceMessageId: string | null;
     sourceSessionId: string | null;
+}
+
+export type ForgeModelRequestSource = 'planner' | 'conversation' | 'analyst' | 'executor' | 'test_chat';
+export type ForgeModelRequestStatus = 'queued' | 'streaming' | 'completed' | 'failed' | 'aborted';
+
+export interface ForgeRequestNodeSummaryItem {
+    provider: string;
+    model: string | null;
+    label: string;
+}
+
+export interface ForgeRequestLorebookEntrySummary {
+    id: string;
+    title: string;
+    comment: string;
+    keywords: string[];
+    disabled: boolean;
+}
+
+export interface ForgeRequestContextSnapshot {
+    kind: 'forge-runtime' | 'forge-test-chat';
+    workspaceTitle: string | null;
+    detailMode: ForgeDetailMode | null;
+    activeLayer: ForgeLayer | null;
+    sourceCommand: ForgeUserCommand | null;
+    workflowSnapshot: ForgeWorkflowSnapshot | null;
+    historyMessages: CleanedMessage[];
+    referenceChatSessionId: string | null;
+    referenceChatSnapshotId: string | null;
+    lorebookEntries: ForgeRequestLorebookEntrySummary[];
+    memorySnapshot: MemorySnapshot | null;
+    selectedPresetId: string | null;
+    testChatPresetId: string | null;
+    nexusPresetId: string | null;
+}
+
+export interface ForgeModelRequestTrace {
+    id: string;
+    source: ForgeModelRequestSource;
+    status: ForgeModelRequestStatus;
+    workspaceSessionId: string;
+    requestPrompt: CleanedMessage[];
+    requestParameters: PromptPresetGenerationSettings;
+    contextSnapshot: ForgeRequestContextSnapshot;
+    responseRaw: string;
+    responseDisplay: string;
+    responseThinking: string;
+    requestedAt: number;
+    firstResponseAt: number | null;
+    completedAt: number | null;
+    errorMessage: string | null;
+    presetId: string | null;
+    nodeSummary: ForgeRequestNodeSummaryItem[];
 }
 
 export type ForgeUserCommand =
@@ -48,6 +104,7 @@ export interface ForgeRuntimeContext {
     selectedChatSessionId: string | null;
     selectedChatSnapshotId: string | null;
     detailMode: ForgeDetailMode | null;
+    collectionMode: ForgeCollectionMode;
     entryMode: ForgeEntryMode | null;
     activeLayer: ForgeLayer;
     completedLayers: ForgeLayer[];
@@ -108,6 +165,7 @@ export type ForgeRuntimeEffect =
     }
     | { type: 'set_entry_mode'; mode: ForgeEntryMode }
     | { type: 'set_detail_mode'; mode: ForgeDetailMode }
+    | { type: 'set_collection_mode'; mode: ForgeCollectionMode }
     | { type: 'set_active_layer'; layer: ForgeLayer }
     | {
         type: 'prefill_structured_form';
@@ -136,9 +194,32 @@ export type ForgeRuntimeEffect =
     | { type: 'attach_reference_chat'; chatSessionId: string | null }
     | { type: 'refresh_workflow'; userInput?: string }
     | { type: 'log_operation_prompt'; dedupeKey: string; prompt: any[] }
+    | { type: 'set_active_model_request'; requestId: string }
+    | { type: 'mark_model_request_first_response'; requestId: string; firstResponseAt?: number }
+    | {
+        type: 'update_model_request_stream';
+        requestId: string;
+        responseRaw: string;
+        responseDisplay: string;
+        responseThinking: string;
+    }
+    | {
+        type: 'complete_model_request';
+        requestId: string;
+        responseRaw: string;
+        responseDisplay: string;
+        responseThinking: string;
+        completedAt?: number;
+    }
+    | { type: 'fail_model_request'; requestId: string; message: string }
     | { type: 'persist_session' };
 
 export interface ForgeExecutionRequest {
+    requestId: string;
+    traceSource: ForgeModelRequestSource;
+    contextSnapshot: ForgeRequestContextSnapshot;
+    nodeSummary: ForgeRequestNodeSummaryItem[];
+    generationSettings: PromptPresetGenerationSettings;
     mode: ForgeWorkflowPromptMode;
     messages: CleanedMessage[];
     sessionChatId: string;
@@ -147,13 +228,23 @@ export interface ForgeExecutionRequest {
     sourceCommand: ForgeUserCommand;
 }
 
+export type ForgeRuntimeEventSource = 'planner' | 'analyst' | 'executor' | 'conversation' | 'system' | 'user';
+
 export type ForgeRuntimeEvent =
-    | { type: 'trace'; tag: string; status: string; timestamp: number }
-    | { type: 'action_completed'; actionType: 'skill' | 'plan' | 'update' | 'memory' | 'context' | 'handoff' | 'prefill'; raw: string; content: string }
-    | { type: 'prompt_ready'; prompt: any[] }
-    | { type: 'stream_chunk'; displayText: string; thinkingText: string; rawText: string }
-    | { type: 'stream_done'; rawText: string; displayText: string; thinkingText: string }
-    | { type: 'stream_error'; message: string };
+    | { type: 'request_started'; requestId: string; requestedAt: number; nodeSummary: ForgeRequestNodeSummaryItem[] }
+    | { type: 'trace'; requestId: string; tag: string; status: string; timestamp: number }
+    | {
+        type: 'action_completed';
+        actionType: 'skill' | 'plan' | 'update' | 'memory' | 'context' | 'handoff' | 'prefill';
+        raw: string;
+        content: string;
+        source: ForgeRuntimeEventSource;
+    }
+    | { type: 'prompt_ready'; requestId: string; prompt: any[] }
+    | { type: 'first_response'; requestId: string; firstResponseAt: number }
+    | { type: 'stream_chunk'; requestId: string; displayText: string; thinkingText: string; rawText: string }
+    | { type: 'stream_done'; requestId: string; rawText: string; displayText: string; thinkingText: string; completedAt: number }
+    | { type: 'stream_error'; requestId: string; message: string };
 
 export interface ForgeExecutionResult {
     rawText: string;

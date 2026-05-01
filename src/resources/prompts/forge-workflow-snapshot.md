@@ -2,6 +2,7 @@
 stage={{stage}}
 visible_phase={{visiblePhase}}
 detail_mode={{detailMode}}
+collection_mode={{collectionMode}}
 active_layer={{activeLayer}}
 sub_layer={{subLayer}}
 prompt_mode={{promptMode}}

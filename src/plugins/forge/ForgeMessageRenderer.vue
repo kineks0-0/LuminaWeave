@@ -6,6 +6,7 @@
     :thinking-text="thinkingText"
     :render-markdown="renderMarkdown"
     :is-streaming="isStreaming"
+    :message-id="messageId"
     render-context="forge"
     thinking-variant="codex"
   />
@@ -15,6 +16,7 @@
 import MessageRenderer from '../chat/components/MessageRenderer.vue';
 
 defineProps<{
+    messageId?: string;
     mes?: string;
     mesRaw: string;
     pluginRaw?: string | null;

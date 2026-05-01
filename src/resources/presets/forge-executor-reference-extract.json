@@ -1,0 +1,19 @@
+{
+    "id": "built-in:forge-executor-reference-extract",
+    "name": "参考提炼·执行模型",
+    "profileId": "forge-executor",
+    "builtIn": true,
+    "engine": "composed",
+    "entries": [
+        { "id": "slot:base_system_prompt", "type": "slot", "enabled": true, "slotId": "base_system_prompt" },
+        { "id": "custom:intent_rewrite", "type": "custom", "enabled": true, "role": "system", "content": "@FORGE_EXECUTOR_REFERENCE_INTENT" },
+        { "id": "custom:clarity_upgrade", "type": "custom", "enabled": true, "role": "system", "content": "@FORGE_EXECUTOR_REFERENCE_STYLE" },
+        { "id": "custom:xp_texture", "type": "custom", "enabled": false, "role": "system", "content": "@FORGE_EXECUTOR_REFERENCE_XP" },
+        { "id": "slot:executor_task", "type": "slot", "enabled": true, "slotId": "executor_task" },
+        { "id": "slot:original_entry", "type": "slot", "enabled": true, "slotId": "original_entry" }
+    ],
+    "specials": {
+        "executorSystemPrompt": "@FORGE_EXECUTOR_SYSTEM_PROMPT"
+    },
+    "generationSettings": {}
+}

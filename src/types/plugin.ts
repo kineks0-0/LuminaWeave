@@ -1,4 +1,5 @@
 import { Component } from 'vue';
+import type { PluginManifestV2 } from '../platform/plugin/types';
 
 export interface SettingOption {
     value: string | number;
@@ -27,7 +28,7 @@ export interface LuminaPlugin {
     id: string;
     name: string;
     icon: string;
-    slots: ('mainView' | 'widget' | 'headerCenter' | 'headerRight')[];
+    slots?: ('mainView' | 'widget' | 'headerCenter' | 'headerRight')[];
     component: Component;
     headerCenterComponent?: Component;
     headerRightComponent?: Component;
@@ -35,6 +36,7 @@ export interface LuminaPlugin {
     /** 内嵌于 SettingsUnified 对应插件 card 底部的自定义组件（无需跳转至 SettingsDetailed 即可访问） */
     settingsInlineComponent?: Component;
     settingsManifest?: Record<string, SettingDefinition>;
+    platformManifest?: PluginManifestV2;
     init?: () => void;
     hooks?: {
         /** 在消息被添加到历史记录前触发，常用于注入快照 (snapshots) */

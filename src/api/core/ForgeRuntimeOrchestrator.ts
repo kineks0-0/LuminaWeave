@@ -4,6 +4,7 @@ import type {
     ForgeRuntimeDecision,
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
+    ForgeRuntimeEventSource,
     ForgeUserCommand
 } from '../../types/ForgeRuntimeTypes.js';
 import type { ForgeLayer } from '../../types/ForgeStructuredTypes.js';
@@ -43,14 +44,7 @@ type ParsedXmlAction = {
     content: string;
 };
 
-type ParsedFormPrefill = {
-    formId: string | null;
-    layer: ForgeLayer | null;
-    fields: Array<{
-        fieldKey: string;
-        value: string | string[];
-    }>;
-};
+
 
 export class ForgeRuntimeOrchestrator {
     constructor(
@@ -58,9 +52,11 @@ export class ForgeRuntimeOrchestrator {
         private readonly executionGateway: ForgeExecutionGateway = new ForgeExecutionGateway()
     ) {}
 
-    private isModelFormPrefillEnabled(): boolean {
-        return lwStorage.get('lumina-forge.enableModelFormPrefill', true, 'Global') !== false;
+    abortActiveGeneration(): void {
+        this.executionGateway.abortActiveTask();
     }
+
+
 
     private parseAttributes(xmlOpenTag: string): Record<string, string> {
         const attributes: Record<string, string> = {};
@@ -101,53 +97,9 @@ export class ForgeRuntimeOrchestrator {
         };
     }
 
-    private normalizePrefillValue(rawValue: string, attributes: Record<string, string>): string | string[] {
-        const normalized = rawValue.trim();
-        const valueType = String(attributes.type || attributes.value_type || '').toLowerCase();
-        const shouldSplitList = valueType === 'array' || valueType === 'list' || attributes.multiple === 'true';
-        if (!shouldSplitList) {
-            return normalized;
-        }
 
-        if (!normalized) {
-            return [];
-        }
 
-        return normalized.split('|').map(item => item.trim()).filter(Boolean);
-    }
 
-    private extractFormPrefill(xmlContent: string, fallbackLayer: ForgeLayer): ParsedFormPrefill {
-        const openTagMatch = xmlContent.match(/^<form_prefill\b[^>]*>/i);
-        const openTag = openTagMatch?.[0] || '';
-        const attributes = this.parseAttributes(openTag);
-        const content = xmlContent
-            .replace(/^<form_prefill\b[^>]*>/i, '')
-            .replace(/<\/form_prefill>$/i, '')
-            .trim();
-        const layer = this.isForgeLayer(attributes.layer) ? attributes.layer : fallbackLayer;
-        const fieldBlocks = extractBlocks(content, new Set(['field']));
-        const fields = fieldBlocks
-            .map((block) => {
-                const fieldOpenTag = content.slice(block.outerStart, block.innerStart);
-                const fieldAttributes = this.parseAttributes(fieldOpenTag);
-                const fieldKey = fieldAttributes.key || fieldAttributes.field || fieldAttributes.name || '';
-                if (!fieldKey) {
-                    return null;
-                }
-
-                return {
-                    fieldKey,
-                    value: this.normalizePrefillValue(block.content, fieldAttributes)
-                };
-            })
-            .filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-        return {
-            formId: attributes.form || attributes.form_id || attributes.formId || null,
-            layer,
-            fields
-        };
-    }
 
     private getOperationDedupeKey(tagOrType: string | null | undefined): string {
         const normalized = String(tagOrType || 'forge').toLowerCase();
@@ -195,12 +147,7 @@ export class ForgeRuntimeOrchestrator {
                 title: '正在整理分析回执'
             };
         }
-        if (normalized === 'form_prefill') {
-            return {
-                operationKind: 'plan',
-                title: '正在预填结构化表单'
-            };
-        }
+
         return {
             operationKind: 'system',
             title: '正在处理 Forge 操作'
@@ -208,6 +155,13 @@ export class ForgeRuntimeOrchestrator {
     }
 
     private buildEventEffects(event: ForgeRuntimeEvent, context: ForgeRuntimeContext): ForgeRuntimeEffect[] {
+        if (event.type === 'request_started') {
+            return [{
+                type: 'set_active_model_request',
+                requestId: event.requestId
+            }];
+        }
+
         if (event.type === 'trace') {
             const presentation = this.resolveRunningOperationPresentation(event.tag);
             return [{
@@ -232,6 +186,43 @@ export class ForgeRuntimeOrchestrator {
                 type: 'log_operation_prompt',
                 dedupeKey: this.getOperationDedupeKey(dedupeTag),
                 prompt: event.prompt
+            }];
+        }
+
+        if (event.type === 'first_response') {
+            return [{
+                type: 'mark_model_request_first_response',
+                requestId: event.requestId,
+                firstResponseAt: event.firstResponseAt
+            }];
+        }
+
+        if (event.type === 'stream_chunk') {
+            return [{
+                type: 'update_model_request_stream',
+                requestId: event.requestId,
+                responseRaw: event.rawText,
+                responseDisplay: event.displayText,
+                responseThinking: event.thinkingText
+            }];
+        }
+
+        if (event.type === 'stream_done') {
+            return [{
+                type: 'complete_model_request',
+                requestId: event.requestId,
+                responseRaw: event.rawText,
+                responseDisplay: event.displayText,
+                responseThinking: event.thinkingText,
+                completedAt: event.completedAt
+            }];
+        }
+
+        if (event.type === 'stream_error') {
+            return [{
+                type: 'fail_model_request',
+                requestId: event.requestId,
+                message: event.message
             }];
         }
 
@@ -274,6 +265,7 @@ export class ForgeRuntimeOrchestrator {
             const title = parsed.attributes.title || path.split('/').slice(-1)[0] || 'Forge 记忆';
             const summary = parsed.attributes.summary || event.content.trim() || path;
             const remove = parsed.attributes.action === 'remove' || parsed.attributes.remove === 'true';
+            const source = this.mapMemoryEffectSource(event.source);
 
             return remove
                 ? [{ type: 'memory_remove', path, dedupeKey: this.getOperationDedupeKey('memory_update') }]
@@ -283,7 +275,7 @@ export class ForgeRuntimeOrchestrator {
                     title,
                     content: parsed.content || event.content.trim(),
                     summary,
-                    source: 'analyst',
+                    source,
                     dedupeKey: this.getOperationDedupeKey('memory_update')
                 }];
         }
@@ -315,40 +307,12 @@ export class ForgeRuntimeOrchestrator {
                 title: '分析阶段回执',
                 content: parsed.content || summary,
                 summary,
-                source: 'analyst',
+                source: event.source === 'analyst' ? 'analyst' : 'planner',
                 dedupeKey: this.getOperationDedupeKey('analysis_handoff')
             }];
         }
 
-        if (event.actionType === 'prefill') {
-            if (!this.isModelFormPrefillEnabled()) {
-                return [];
-            }
 
-            const parsed = this.extractFormPrefill(event.raw, context.activeLayer);
-            if (parsed.fields.length === 0) {
-                return [];
-            }
-
-            return [
-                {
-                    type: 'complete_operation',
-                    dedupeKey: this.getOperationDedupeKey('form_prefill'),
-                    operationKind: 'plan',
-                    title: '已预填结构化表单',
-                    summary: `已生成 ${parsed.fields.length} 个字段建议值`,
-                    detail: event.raw,
-                    sourceTag: 'form_prefill',
-                    layer: parsed.layer || context.activeLayer
-                },
-                {
-                    type: 'prefill_structured_form',
-                    formId: parsed.formId,
-                    layer: parsed.layer,
-                    fields: parsed.fields
-                }
-            ];
-        }
 
 
         const updates = this.extractEntryUpdate(event.raw);
@@ -401,6 +365,12 @@ export class ForgeRuntimeOrchestrator {
         return effects;
     }
 
+    private mapMemoryEffectSource(source: ForgeRuntimeEventSource): 'planner' | 'analyst' | 'system' {
+        if (source === 'analyst') return 'analyst';
+        if (source === 'planner' || source === 'conversation' || source === 'executor') return 'planner';
+        return 'system';
+    }
+
     private getCommandInput(command: ForgeUserCommand): string | undefined {
         if (command.type === 'send_user_input') {
             return command.input;
@@ -448,24 +418,41 @@ export class ForgeRuntimeOrchestrator {
         // 已经完成状态更新，避免 timeline 显示 running 而 Planner 已开始回复的竞态。
         const pendingCompletionEffects: Array<() => Promise<void>> = [];
 
-        await this.executionGateway.run(request, {
-            onEvent: (event) => {
-                if (event.type !== 'trace' && event.type !== 'action_completed') {
-                    return;
-                }
-                const latestContext = this.port.getRuntimeContext(command, commandInput);
-                const effects = this.buildEventEffects(event, latestContext);
-                if (effects.length === 0) return;
+        try {
+            await this.executionGateway.run(request, {
+                onEvent: (event) => {
+                    if (
+                        event.type !== 'request_started'
+                        && event.type !== 'trace'
+                        && event.type !== 'prompt_ready'
+                        && event.type !== 'first_response'
+                        && event.type !== 'stream_chunk'
+                        && event.type !== 'stream_done'
+                        && event.type !== 'stream_error'
+                        && event.type !== 'action_completed'
+                    ) {
+                        return;
+                    }
+                    const latestContext = this.port.getRuntimeContext(command, commandInput);
+                    const effects = this.buildEventEffects(event, latestContext);
+                    if (effects.length === 0) return;
 
-                if (event.type === 'trace') {
-                    // trace 事件：即时刷新 UI，不阻塞流式回调
+                    if (event.type === 'action_completed') {
+                        pendingCompletionEffects.push(() => this.port.applyRuntimeEffects(effects));
+                        return;
+                    }
+
                     void this.port.applyRuntimeEffects(effects);
-                } else {
-                    // action_completed 事件：延迟到 gateway 返回后统一 await
-                    pendingCompletionEffects.push(() => this.port.applyRuntimeEffects(effects));
                 }
-            }
-        });
+            });
+        } catch (error: any) {
+            await this.port.applyRuntimeEffects([{
+                type: 'fail_model_request',
+                requestId: request.requestId,
+                message: error?.message || '模型请求失败'
+            }]);
+            throw error;
+        }
 
         // 按序 await 所有 action_completed 效果，保证 Planner 启动前状态已落定
         for (const apply of pendingCompletionEffects) {
@@ -481,16 +468,25 @@ export class ForgeRuntimeOrchestrator {
     }
 
     private async runRequest(command: ForgeUserCommand, request: ForgeExecutionRequest): Promise<void> {
-        await this.executionGateway.run(request, {
-            onEvent: (event) => {
-                this.port.handleRuntimeEvent(event);
-                const latestContext = this.port.getRuntimeContext(command, this.getCommandInput(command));
-                const effects = this.buildEventEffects(event, latestContext);
-                if (effects.length > 0) {
-                    void this.port.applyRuntimeEffects(effects);
+        try {
+            await this.executionGateway.run(request, {
+                onEvent: (event) => {
+                    this.port.handleRuntimeEvent(event);
+                    const latestContext = this.port.getRuntimeContext(command, this.getCommandInput(command));
+                    const effects = this.buildEventEffects(event, latestContext);
+                    if (effects.length > 0) {
+                        void this.port.applyRuntimeEffects(effects);
+                    }
                 }
-            }
-        });
+            });
+        } catch (error: any) {
+            await this.port.applyRuntimeEffects([{
+                type: 'fail_model_request',
+                requestId: request.requestId,
+                message: error?.message || '模型请求失败'
+            }]);
+            throw error;
+        }
         await this.port.applyRuntimeEffects([
             { type: 'refresh_workflow', userInput: this.getCommandInput(command) },
             { type: 'persist_session' }
@@ -538,16 +534,25 @@ export class ForgeRuntimeOrchestrator {
             sourceCommand: command
         });
 
-        await this.executionGateway.run(request, {
-            onEvent: (event) => {
-                this.port.handleRuntimeEvent(event);
-                const context = this.port.getRuntimeContext(command);
-                const effects = this.buildEventEffects(event, context);
-                if (effects.length > 0) {
-                    void this.port.applyRuntimeEffects(effects);
+        try {
+            await this.executionGateway.run(request, {
+                onEvent: (event) => {
+                    this.port.handleRuntimeEvent(event);
+                    const context = this.port.getRuntimeContext(command);
+                    const effects = this.buildEventEffects(event, context);
+                    if (effects.length > 0) {
+                        void this.port.applyRuntimeEffects(effects);
+                    }
                 }
-            }
-        });
+            });
+        } catch (error: any) {
+            await this.port.applyRuntimeEffects([{
+                type: 'fail_model_request',
+                requestId: request.requestId,
+                message: error?.message || '模型请求失败'
+            }]);
+            throw error;
+        }
 
         await this.port.applyRuntimeEffects([
             { type: 'refresh_workflow' },

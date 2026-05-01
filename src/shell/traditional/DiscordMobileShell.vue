@@ -1,6 +1,11 @@
 <template>
   <template v-if="isDiscordMobileMode">
-    <div v-if="shouldShowDiscordMobileShell" class="lw-discord-mobile-shell" :class="`is-${guildRailPosition}`">
+    <div
+      v-if="shouldShowDiscordMobileShell"
+      class="lw-discord-mobile-shell"
+      :class="`is-${guildRailPosition}`"
+      :style="mobileDiscordStyle"
+    >
       <DiscordGuildRail
         :items="discordGuildEntries"
         :activeMainTab="activeMainTab"
@@ -15,7 +20,7 @@
     <button
       class="lw-discord-mobile-rail-toggle"
       :class="[`is-${characterEntryPosition}`, { active: showDiscordMobileCharacterRail }]"
-      :style="characterEntryStyle"
+      :style="[mobileDiscordStyle, characterEntryStyle]"
       type="button"
       @click="emit('updateShowDiscordMobileCharacterRail', !showDiscordMobileCharacterRail)"
     >
@@ -34,6 +39,7 @@
         v-if="showDiscordMobileCharacterRail"
         class="lw-discord-mobile-sheet"
         :class="`is-${characterEntryPosition}`"
+        :style="mobileDiscordStyle"
         @click.self="emit('updateShowDiscordMobileCharacterRail', false)"
       >
         <DiscordCharacterRail
@@ -53,9 +59,10 @@
 </template>
 
 <script setup lang="ts">
-import type { CSSProperties } from 'vue';
+import { computed, type CSSProperties } from 'vue';
 import DiscordCharacterRail from '../../components/DiscordCharacterRail.vue';
 import DiscordGuildRail from '../../components/DiscordGuildRail.vue';
+import { useComponentSkin } from '../../theme/useComponentSkin';
 import type {
   CharacterChannelState,
   CreateChatConversationInput,
@@ -79,6 +86,9 @@ defineProps<{
   onToggleMobileSessionExpansion: (groupKey: string) => void;
 }>();
 
+const { cssVars: mobileDiscordSkinVars } = useComponentSkin('shell.mobileDiscord');
+const mobileDiscordStyle = computed<CSSProperties>(() => mobileDiscordSkinVars.value as CSSProperties);
+
 const emit = defineEmits<{
   (e: 'switchMainView', tabId: string): void;
   (e: 'toggleSettings'): void;
@@ -101,9 +111,9 @@ const emitCreateMobileSession = (payload: CreateChatConversationInput) => {
 .lw-discord-mobile-shell {
   position: absolute;
   z-index: 22;
-  background: #1f2125;
-  border: 1px solid #121317;
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.22);
+  background: var(--lw-discord-mobile-shell-bg, var(--lw-bg-app));
+  border: 1px solid var(--lw-discord-mobile-shell-border, var(--lw-border-strong));
+  box-shadow: var(--lw-discord-mobile-shell-shadow, 0 16px 30px rgba(0, 0, 0, 0.22));
   overflow: hidden;
 }
 
@@ -151,15 +161,15 @@ const emitCreateMobileSession = (payload: CreateChatConversationInput) => {
   position: absolute;
   z-index: 23;
   padding: 12px 14px;
-  border: 1px solid #3f4147;
+  border: 1px solid var(--lw-discord-mobile-toggle-border, var(--lw-border-strong));
   border-radius: 18px;
-  background: #2b2d31;
+  background: var(--lw-discord-mobile-toggle-bg, var(--lw-bg-elevated));
   color: var(--lw-text-main);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--lw-discord-mobile-toggle-shadow, 0 16px 28px rgba(0, 0, 0, 0.22));
 }
 
 .lw-discord-mobile-rail-toggle.is-top,
@@ -198,8 +208,8 @@ const emitCreateMobileSession = (payload: CreateChatConversationInput) => {
   height: 32px;
   flex-shrink: 0;
   border-radius: 12px;
-  background: #232428;
-  color: #8e9297;
+  background: var(--lw-discord-mobile-toggle-mark-bg, var(--lw-bg-surface));
+  color: var(--lw-discord-mobile-toggle-mark-color, var(--lw-text-muted));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -233,8 +243,8 @@ const emitCreateMobileSession = (payload: CreateChatConversationInput) => {
 }
 
 .lw-discord-mobile-rail-toggle.active {
-  border-color: rgba(88, 101, 242, 0.45);
-  background: #313338;
+  border-color: var(--lw-discord-mobile-toggle-active-border, rgba(var(--lw-primary-rgb), 0.45));
+  background: var(--lw-discord-mobile-toggle-active-bg, var(--lw-bg-hover));
 }
 
 .lw-discord-mobile-sheet {
@@ -242,8 +252,9 @@ const emitCreateMobileSession = (payload: CreateChatConversationInput) => {
   inset: 0;
   z-index: 40;
   display: flex;
-  background: rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(6px);
+  background: var(--lw-discord-mobile-sheet-bg, rgba(0, 0, 0, 0.42));
+  backdrop-filter: var(--lw-discord-mobile-sheet-backdrop, blur(6px));
+  -webkit-backdrop-filter: var(--lw-discord-mobile-sheet-backdrop, blur(6px));
 }
 
 .lw-discord-mobile-sheet.is-top {
