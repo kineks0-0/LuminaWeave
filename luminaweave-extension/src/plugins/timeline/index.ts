@@ -1,6 +1,8 @@
+import { defineAsyncComponent } from 'vue';
 import { LuminaPlugin } from '../../types/plugin';
-import LuminaTimeline from './LuminaTimeline.vue';
 import type { PluginManifestV2 } from '../../platform/plugin/types';
+
+const LuminaTimeline = defineAsyncComponent(() => import('./LuminaTimeline.vue'));
 
 const platformManifest: PluginManifestV2 = {
     id: 'lumina-timeline',

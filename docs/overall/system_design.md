@@ -62,6 +62,7 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
 
 在 ST 定义的插槽位使用 Vue.js 3 开辟独立绘制区域。默认开启 Shadow DOM 以隔离原生 CSS 污染。
 - **严格样式选择性注入 (Strict Style Isolation)**：`index.ts` 中的 `injectStyles` 仅克隆包含 `data-vite-dev-id` 或内容中带有 `LuminaWeave` 特征标识的样式节点。这确保了 Shadow DOM 内部仅应用插件自身样式，彻底杜绝 SillyTavern 全局样式（如对 `input` 和 `button` 的强制覆盖）造成的 UI 异常。
+- **Tailwind Utility Layer + Lumina UI Primitives [NEW]**：UI 实现层开始接入 Tailwind CSS v4，但 Tailwind 只作为 utility layer。入口 `src/styles/tailwind.css` 使用 `tw:` 前缀、只导入 theme/utilities、禁用 Preflight，并通过 `@theme inline` 消费 `--lw-*` 语义 token。业务组件优先复用 `src/ui/primitives/` 中的 Lumina 原语，动态 class 统一通过 `src/ui/cn.ts` 合并。该层不得替代 Desktop Mode manifest、surface skin 或 renderer variant，也不得绕过 Core Runtime 修改业务状态。
 - **兼容性降级**：支持在设置中关闭 Shadow DOM 以增强特定浏览器的兼容性。
 - **Host Surface 映射 [UPDATED]**：由于 Shadow DOM 内部节点默认不暴露给宿主 overlay classifier，移动端 IME 适配不再依赖 Vue 内部 DOM 直接标记 surface；`index.ts` 维护外层 host container 的 `data-tt-mobile-surface`，折叠态映射为 `free-window`，展开态映射为 `fullscreen-window`。
 - **Forge 表单控件宿主隔离 [UPDATED]**：Forge 的 `input / textarea / select / checkbox` 不再依赖浏览器默认样式，而是统一显式声明 `appearance`、背景、文字、边框、placeholder、focus 与 disabled 状态。这样即使关闭 Shadow DOM 或落在宿主全局表单样式较强的环境里，浅色模式也不会被宿主暗色控件样式覆盖。
@@ -80,8 +81,10 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
   - `surface preset`：决定主内容区、辅助区、聊天流、设置面板、时间线等表层容器的承载方式与默认 variant。
   其中 `design tokens`、`surface skins` 与少量受控 `renderer variants` 只作为下层落地附件。
 - **壳层主导 / 表层兼容 [UPDATED]**：桌面模式优先通过 `shell / navigation / surface` 驱动 Shell 组织，并在设置中以“桌面模式”方式暴露；少量受控 `renderer variant` 仅作为表层兼容扩展。当前 `Discord`、`Telegram` 与 `传统桌面`、`自由工作台` 同级，其数据来源仍受限于统一 `ConversationService` 暴露的会话摘要，不直接触碰会话状态机。
-- **消息渲染矩阵 [UPDATED]**：聊天消息的视觉协议已经从 `lumina-chat` 插件迁移到 Desktop Mode。每个桌面模式都需要通过 `settingsManifest + surface skin` 输出角色级消息矩阵：`assistantMessageShape / userMessageShape`、`assistantAvatarPlacement / userAvatarPlacement`，以及排版变量 `chatFontFamily / chatFontWeight / chatFontSize / chatPageWidth / chatLineHeight / chatParagraphSpacing / chatLetterSpacing`。`ChatStream` 与 `ChatPreview` 只消费当前桌面模式解析后的 CSS vars 与 data attributes，不再读取旧 `lumina-chat.*` 外观键。
+- **设计规范分层 [NEW]**：长期设计契约收敛到 `docs/overall/design/`，作为类似接口层的 Core Design Spec，定义 Typography 等跨桌面模式共享的最低 token 契约。每个桌面模式在 `docs/overall/modules/desktop_modes/<mode>/design.md` 维护完整 Desktop Design Language，可表达 Telegram Liquid Glass、Discord Channel Workspace 或未来 M3 Expressive 等强个性化视觉；代码实现仍通过 `DesktopModeManifest / designTokens / surfaceSkins / rendererVariants / settingsManifest` 落地。
+- **消息渲染矩阵 [UPDATED]**：聊天消息的视觉协议已经从 `lumina-chat` 插件迁移到 Desktop Mode。每个桌面模式都需要通过 `settingsManifest + surface skin` 输出角色级消息矩阵：`assistantMessageShape / userMessageShape`、`assistantAvatarPlacement / userAvatarPlacement`，以及统一排版变量 `chatFontFamily / chatFontWeight / chatFontSize / chatPageWidth / chatLineHeight / chatParagraphSpacing / chatLetterSpacing`。在统一排版之上，`assistantTypographyMode / userTypographyMode` 可选择跟随统一值或输出角色级 `fontSize / lineHeight / letterSpacing` 覆盖；`ChatStream` 与 `ChatPreview` 只消费当前桌面模式解析后的 CSS vars 与 data attributes，不再读取旧 `lumina-chat.*` 外观键。
 - **Telegram 桌面模式边界 [UPDATED]**：`telegram` 是 traditional shell 下的独立内置模式，桌面端由 Shell 直接渲染三栏布局，不保留 mac 三色按钮窗口栏。其扩展边界由 `headerVariant='telegram'`、`leftRail='character-rail'`、`surfacePreset.*='telegram'` 以及 `telegram.frame / telegram.chatList / telegram.conversation / telegram.infoPanel / telegram.composer` 专用 surface contract 描述。`panelChromeStyle` 控制 `floating-rounded / edge-to-edge` 两种桌面面板外观，`topBlankSpace` 只控制三栏顶部呼吸空间；这些设置只输出 theme css vars，不改变业务状态。上下文插件只通过受控 component skin 扩展表层，当前新增 `stats.panel` 与 `director.panel`，并继续复用 `timeline.root / lorebook.workspace / lorebook.editor / settings.*` 的 Telegram renderer variant。左栏搜索 query、筛选 tab、`+` 二级菜单、工具入口、聊天顶部更多菜单、composer 工具菜单等均属于 Telegram shell view-model 状态，只能消费 `CharacterChannelState` 与现有会话上下文，不进入 `CharacterChannelService` 或 `ConversationService`。左栏固定工具入口只包含 `lumina-launcher` 与 `lumina-forge`，点击入口通过 shell action 切换主区 surface 并清除角色概览选中态，不创建聊天、不打开会话。桌面端左右栏宽度拖拽同样属于 shell view-model：左栏持久化到 `luminaWeave.telegram.leftRailWidth`，右栏复用 `luminaWeave.widgetWidth`，最大宽度按视口与中间聊天区最小宽度动态计算。移动端底栏固定为 `聊天 / 角色 / 设置 / 个人资料` 四个意图；Timeline、Lorebook、Memory、Director、Stats 等消息型工具只能通过聊天顶部上下文入口、composer 工具菜单或会话资料页摘要入口打开既有面板，不能成为 Telegram 主导航目标。移动端上下文工具由 `mobile-widget:*` 临时页承载，页面自身负责单列和安全区适配。该模式不得绕过 `ConversationService / STAdapter / PersistenceService / PromptBuilder`。
+- **Telegram stack navigator [NEW]**：Telegram 模式不再依赖全局 `lw-panel-header` 作为主导航，desktop/mobile 均由 Telegram shell 自管导航。桌面端左栏、中栏、右栏是独立 stack；左栏 stack 只在 `会话列表页` 与 `角色列表页` 间切换，其中会话列表页继续包含现有搜索、筛选、工具入口和角色聚合列表，并额外支持按对话文件拆分显示。移动端底部 tab 固定为 `对话 / 角色 / 设置 / 个人资料`，每个 tab 内容区拥有独立 stack。上述 stack 状态属于 shell view-model，只能发起既有打开会话、创建会话、打开 surface 等 intent，不持有核心会话真相。
 - **注册方式**：`src/theme/themeRegistry.ts` 维护内置桌面模式注册表，并开放 `registerDesktopMode() / listDesktopModes() / getDesktopMode()`。设置系统把每个桌面模式的 `settingsManifest` 视为一类伪插件设置来源，以复用现有设置总线与存储作用域。用户层正式暴露 `activeDesktopMode` 与 `desktop-mode-*` 命名空间，旧 `activeThemePack` 与 `theme-pack-*` 仅作为兼容映射。
 - **兼容边界**：桌面模式可以决定壳层类型、导航组织、表层容器 variant，并向下分发 token / surface css vars / 受控 `rendererVariants`；但不得直接改变 `ConversationService / STAdapter / PersistenceService / PromptBuilder` 等核心运行时。
 
@@ -152,9 +155,11 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
 - **防回溅泄露保护 (Backsplash Shielding)**：利用 `isPreOrphanZone` 识别流式生成的孤立闭合标签，动态截断泄露到显示区域的原始思考文本。
 
 
-### 7. 模块导入与初始化时序优化 (v4.1, v5.2)
+### 7. 模块导入、构建分块与初始化时序优化 (v4.1, v5.2, v6.0-dev)
 
-- **导入规范化**：为了消除 Vite 编译路径歧义，核心 API 模块统一采用静态导入。
+- **导入规范化与分块边界 [UPDATED]**：为了消除 Vite 编译路径歧义，稳定运行时入口仍保持显式导入；但大型功能面、第三方编排运行时和重型画布不再要求全部静态进入主入口。Forge Workflow runtime、Local Nexus runtime、Timeline 大画布、Forge 专属块组件、Settings/Lorebook/Director/Stats/Launcher 等 surface 按功能入口异步加载，避免把 LangChain、AI SDK、LogicFlow/ELK 等依赖压入首屏同步入口。
+- **ESM 分块分发 [NEW]**：前端扩展构建已从库模式单文件输出切换为 Vite/Rolldown ESM 多 chunk 输出。`manifest.json` 继续指向 `dist/index.js` 与 `dist/style.css`，但安装、同步和发布必须携带完整 `dist/`，尤其是 `dist/assets/*.js` 异步 chunk。构建固定输出 `dist/index.js`、`dist/style.css` 与 `dist/assets/[name]-[hash].js`，并保留 SillyTavern 宿主脚本 external。
+- **构建模式与分析工具 [NEW]**：`npm run build` 使用 `github` 模式生成正式无 sourcemap 分发产物；`build:debug` 与 `watch` 使用 `debug` 模式保留 inline sourcemap。`watch` 仅排除 `dist/` 与 `node_modules/` 的文件监听，不把 `optimizeDeps` 作为 build-watch 优化路径。`npm run analyze` 通过 `vite-bundle-analyzer` 生成 `dist/bundle-report.html`，用于识别入口包、异步 chunk、第三方 vendor 与 sourcemap 占比；分析后发布前需要重新执行正式 build。
 - **配置先行原则 (v5.2) [NEW]**：`index.ts` 在挂载 Vue 应用前，强制 `await lwStorage.loadIndependentGlobalData()`。这是因为 Shadow DOM 的创建是不可逆的底层动作，必须先从独立存储中读取 `useShadowDom` 标记，才能决定后续的挂载目标（Shadow Root 或普通 Div）。
 - **初始化导入守卫与时序管控 (v6.0) [UPDATED]**：
     - `LuminaWeaveAPI.init()` 增加了强时序控制：`initializeAllPlugins()`（插件及其模型注册）必须优于 `syncFromST()`（历史数据同步解析）。
@@ -473,7 +478,7 @@ graph LR
 - **View Router (动态面板总线)**:
     - **Panel 注册**: 允许任何插件通过 `lwApi.registerPanel` 挂载 UI 单元。
     - **多模态展示**: 统一由 `openPanel` 调度，根据配置或实时参数决定以 Modal (弹窗) 或 Tab (标签页) 形态呈现。
-    - **传统桌面移动端临时标签页 [NEW v6.0-dev]**: 当视口进入移动端尺寸时，原先的 widget / auxiliary panel 不再强制占据右栏，而是转换为临时 Tab 进入主内容区；顶部状态区同时隐藏 `weather-chip` 与用户头像，降低头部噪音。Telegram 模式下的 Timeline、Director、Lorebook、Stats、Settings 上下文工具也走同一临时页通道，不进入底栏主导航。
+    - **传统桌面移动端临时标签页 [NEW v6.0-dev]**: 当视口进入移动端尺寸时，原先的 widget / auxiliary panel 不再强制占据右栏，而是转换为临时 Tab 进入主内容区；顶部状态区同时隐藏 `weather-chip` 与用户头像，降低头部噪音。Telegram 模式下的 Timeline、Director、Lorebook、Stats、Settings 上下文工具优先进入 Telegram 当前 tab stack 的工具页，必要时仍可通过 `mobile-widget:*` 临时页承载，不进入底栏主导航。
     - **自由工作台台前调度模型 [NEW v6.0-dev]**: 当前自由工作台由 `App.vue -> LuminaShellRoot.vue` 的内部 shell 分支承载，root 级宿主 frame 则下沉到 `AppRootContainer.vue`。自由工作台本身已从“主窗 + 辅助窗”二元模型升级为 `workspace stage + window instances + dock` 的统一窗口系统。窗口布局采用二维 `x/y/width/height` 状态，允许相互覆盖；系统仅做舞台边界约束，不再执行碰撞避让重排。
     - **Stage Strip / Dock 编排 [NEW v6.0-dev]**: 左侧 Stage Strip 维护最近舞台组，底部 Dock 作为启动台与核心插件入口；两者默认不常驻，而是由工作台菜单、手动开关、空舞台状态或桌面端边缘悬停触发显隐。点击已存在于其他舞台的 App 时，优先切回所属舞台，而不是无条件创建重复窗口；关闭最后一个窗口时保留空舞台。
 - **阻尼交互层 [NEW v6.0-dev]**: `WorkspaceWindow` 在拖拽与缩放收尾阶段增加轻微阻尼 / settle 动画，并为窗口进场、关闭与切换提供更明确的过渡；窗口只执行舞台边界裁剪与弹性回收，不再在靠近舞台边缘时强制磁吸。宽高在 `1/3`、`1/2`、`2/3` 等比例附近提供分段卡点，用“目标位置 + 微小残余位移衰减”的方式模拟 iPadOS 式手感，避免生硬停靠。

@@ -1,7 +1,9 @@
+import { defineAsyncComponent } from 'vue'
 import { LuminaPlugin } from '../../types/plugin'
 import { lwStorage } from '../../api/storage'
-import DevSettings from './DevSettings.vue'
 import type { PluginManifestV2 } from '../../platform/plugin/types'
+
+const DevSettings = defineAsyncComponent(() => import('./DevSettings.vue'))
 
 const settingsSchema = {
   devMode: {

@@ -1,6 +1,8 @@
+import { defineAsyncComponent } from 'vue';
 import { LuminaPlugin } from '../../types/plugin';
-import LuminaStats from './LuminaStats.vue';
 import type { PluginManifestV2 } from '../../platform/plugin/types';
+
+const LuminaStats = defineAsyncComponent(() => import('./LuminaStats.vue'));
 
 const settingsSchema = {
     nexusPreset: { default: '', label: '状态分析专用模型预设', common: true, type: 'nexus-select', allowedScopes: ['Global', 'Character'] }

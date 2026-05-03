@@ -9,11 +9,13 @@ export { useTier1Store } from './Tier1Store'; // Tier 1 Vue 状态管理 (物品
 
 import { LuminaPlugin } from '../../types/plugin';
 import type { PluginManifestV2 } from '../../platform/plugin/types';
-import DirectorPanel from './components/DirectorPanel.vue';
+import { defineAsyncComponent } from 'vue';
 import { useDirectorStore } from './DirectorStore';
 import { useTier1Store } from './Tier1Store';
 import { globalMutationEngine, MutationCommand } from './MutationEngine';
 import { globalAsyncGateway } from './AsyncGateway';
+
+const DirectorPanel = defineAsyncComponent(() => import('./components/DirectorPanel.vue'));
 
 // 注册全局插件并挂载设置项和悬浮面板
 export const DirectorPlugin: LuminaPlugin = {
