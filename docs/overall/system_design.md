@@ -157,7 +157,7 @@ Shared 层不再仅仅是类型定义，它承载了 LuminaWeave 的“业务大
 
 ### 7. 模块导入、构建分块与初始化时序优化 (v4.1, v5.2, v6.0-dev)
 
-- **导入规范化与分块边界 [UPDATED]**：为了消除 Vite 编译路径歧义，稳定运行时入口仍保持显式导入；但大型功能面、第三方编排运行时和重型画布不再要求全部静态进入主入口。Forge Workflow runtime、Local Nexus runtime、Timeline 大画布、Forge 专属块组件、Settings/Lorebook/Director/Stats/Launcher 等 surface 按功能入口异步加载，避免把 LangChain、AI SDK、LogicFlow/ELK 等依赖压入首屏同步入口。
+- **导入规范化与分块边界 [UPDATED]**：为了消除 Vite 编译路径歧义，稳定运行时入口仍保持显式导入；但大型功能面、第三方编排运行时和重型画布不再要求全部静态进入主入口。Forge Workflow runtime、Local Nexus runtime、Timeline 大画布、Forge 专属块组件、Settings/Lorebook/Director/Stats/Launcher 等 surface 按功能入口异步加载，避免把 LangChain、AI SDK、LogicFlow/Dagre 等依赖压入首屏同步入口。
 - **ESM 分块分发 [NEW]**：前端扩展构建已从库模式单文件输出切换为 Vite/Rolldown ESM 多 chunk 输出。`manifest.json` 继续指向 `dist/index.js` 与 `dist/style.css`，但安装、同步和发布必须携带完整 `dist/`，尤其是 `dist/assets/*.js` 异步 chunk。构建固定输出 `dist/index.js`、`dist/style.css` 与 `dist/assets/[name]-[hash].js`，并保留 SillyTavern 宿主脚本 external。
 - **构建模式与分析工具 [NEW]**：`npm run build` 使用 `github` 模式生成正式无 sourcemap 分发产物；`build:debug` 与 `watch` 使用 `debug` 模式保留 inline sourcemap。`watch` 仅排除 `dist/` 与 `node_modules/` 的文件监听，不把 `optimizeDeps` 作为 build-watch 优化路径。`npm run analyze` 通过 `vite-bundle-analyzer` 生成 `dist/bundle-report.html`，用于识别入口包、异步 chunk、第三方 vendor 与 sourcemap 占比；分析后发布前需要重新执行正式 build。
 - **配置先行原则 (v5.2) [NEW]**：`index.ts` 在挂载 Vue 应用前，强制 `await lwStorage.loadIndependentGlobalData()`。这是因为 Shadow DOM 的创建是不可逆的底层动作，必须先从独立存储中读取 `useShadowDom` 标记，才能决定后续的挂载目标（Shadow Root 或普通 Div）。
@@ -539,8 +539,8 @@ st-adapter 的目标是把“**ST 环境交互** / **协议转换** / **同步�
     - **节点合并算法**：`SyncEngine.mergeNodePool` 确保从 ST 读取新消息时，能正确识别重复节点并链入新分支。
 - **读时迁移机制 [UPDATED v6.0-dev]**：legacy `chat_*.jsonl` 与 `forge_sessions.json` 在读取时被迁移为 `ConversationDocument`，首次写入后统一落新格式；前端桥接层只消费迁移后的统一 DTO。
     - **差量截断机制**: `applyDelta`时比较 Lumina(L) 与 ST(S) 的长度。若 `L.length < S.length`，则从 S 的尾部反向执行 `STClient.deleteMessages`，实现物理意义上的世界线重置。
-    - **Dagre 布局引擎 (v5.3) [NEW]**：
-        - **高效分层布局**：放弃 `elkjs`，改用 `@logicflow/layout` 中的 Dagre 算法，通过 `rankdir` 实现横/纵向逻辑流自动分层。
+    - **Dagre 布局引擎 (v5.3) [UPDATED]**：
+        - **高效分层布局**：放弃 `elkjs`，改用 `@logicflow/layout/es/dagre` 的 Dagre 子入口，通过 `rankdir` 实现横/纵向逻辑流自动分层，并避免 `@logicflow/layout` 顶层入口把未使用的 `elkLayout` 打入大画布 chunk。
         - **轴向对齐布局**：优化 `trackIndex` 映射逻辑，同一分支节点在主轴（深度）一致的同时，在侧轴（轨道）上也严格对齐，彻底消除“阶梯式”重叠干扰。
         - **精准高度感应**：集成 `MeasureService` (pretext)，动态计算 HTML 节点高度并注入 LogicFlow，确保布局无重叠。
         - **动态画布坐标系 (Infinite Canvas)**：放弃基于文档流的 Flex 布局，改用 Absolute 定位 + 动态计算的 `canvasWidth/Height`，支持两个维度的平滑滚动与逻辑自由。

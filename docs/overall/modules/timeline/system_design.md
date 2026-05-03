@@ -7,13 +7,14 @@
 1. **TimelineRoot.vue (主容器)**
    `PluginManager` 入口，管理和响应大/小窗口模式 (`mode` prop) 的展示。
 2. **LuminaTimeline.vue (时间线核心组件)**
-   内含独立的树状引擎坐标计算和画布 (`transform-origin`, `.large-timeline-canvas` 等)。
+   负责根据大/小窗口模式分发到轻量列表或大画布视图；大画布通过异步 chunk 加载，避免首屏同步引入 LogicFlow。
 
 ## 二、 核心依赖与算法
-- **Large Mode 布局引擎 (LogicFlow + ELKjs)**:
+- **Large Mode 布局引擎 (LogicFlow + Dagre)**:
     - 采用 `LogicFlow` 作为底层画布引擎，提供更强的 SVG 渲染能力和 Shadow DOM 兼容性。
-    - 配合 `elkjs` 的 `layered` 算法，支持横向 (LR) 与纵向 (TB) 布局。
-    - 自动化处理节点的分层与避让，通过 `ELK` 异步计算坐标并实时回填至 LogicFlow 节点。
+    - 通过 `@logicflow/layout/es/dagre` 直接导入 Dagre 子入口，支持横向 (LR) 与纵向 (TB) 分层布局。
+    - 不再从 `@logicflow/layout` 顶层 barrel 入口导入，避免未使用的 `elkLayout` 将 `elkjs/lib/elk.bundled` 打入大画布 chunk。
+    - 自动化处理节点的分层与避让，通过 Dagre 计算坐标并实时回填至 LogicFlow 节点。
 - **Small Mode (Git-like) 布局算法**:
     - **多轴占位算法**: 递归为每个分支分配独立的 `trackIndex` (轨道号)，通过检测垂直线占用情况动态扩展。
     - **Zero-noise 剪枝**: 非活跃分支在递归时会被物理剪枝，仅保留其根节点作为 UI 入口。

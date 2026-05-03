@@ -129,7 +129,7 @@ import { PolylineEdge } from '@logicflow/core';
 import '@logicflow/core/dist/index.css';
 import '@logicflow/extension/lib/style/index.css';
 
-import { Dagre } from '@logicflow/layout';
+import { Dagre } from '@logicflow/layout/es/dagre';
 import HistoryNode from './HistoryNode.vue';
 import NodePreviewModal from './NodePreviewModal.vue';
 
