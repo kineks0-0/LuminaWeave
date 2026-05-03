@@ -1,13 +1,15 @@
+import { defineAsyncComponent } from 'vue';
 import { LuminaPlugin } from '../../types/plugin';
-import CardMakerPanel from './CardMakerPanel.vue';
-import ForgeAuxPanelView from './ForgeAuxPanelView.vue';
-import ForgePromptPresetInlineSummary from './ForgePromptPresetInlineSummary.vue';
-import ForgePromptPresetWorkbench from './ForgePromptPresetWorkbench.vue';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from './forgeAuxPanels';
 import type { PluginManifestV2 } from '../../platform/plugin/types';
 import { forgeConversationGateway } from '../../api/core/ForgeConversationGateway';
 import { setForgeIsolatedRewriteRunner } from '../../api/core/ForgeAgentController';
 import { useCardMakerStore } from './CardMakerStore';
+
+const CardMakerPanel = defineAsyncComponent(() => import('./CardMakerPanel.vue'));
+const ForgeAuxPanelView = defineAsyncComponent(() => import('./ForgeAuxPanelView.vue'));
+const ForgePromptPresetInlineSummary = defineAsyncComponent(() => import('./ForgePromptPresetInlineSummary.vue'));
+const ForgePromptPresetWorkbench = defineAsyncComponent(() => import('./ForgePromptPresetWorkbench.vue'));
 
 const settingsSchema = {
     nexusPreset: {

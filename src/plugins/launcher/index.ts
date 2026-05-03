@@ -1,7 +1,8 @@
-import { markRaw } from 'vue';
-import LauncherRoot from './LauncherRoot.vue';
+import { defineAsyncComponent, markRaw } from 'vue';
 import { LuminaPlugin } from '../../types/plugin';
 import type { PluginManifestV2 } from '../../platform/plugin/types';
+
+const LauncherRoot = defineAsyncComponent(() => import('./LauncherRoot.vue'));
 
 const platformManifest: PluginManifestV2 = {
   id: 'lumina-launcher',

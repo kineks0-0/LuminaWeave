@@ -1,4 +1,4 @@
-import { OpenAI } from 'openai';
+import type { OpenAI } from 'openai';
 
 /**
  * Nexus 生成节点

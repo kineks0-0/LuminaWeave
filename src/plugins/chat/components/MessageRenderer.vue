@@ -27,25 +27,24 @@
         </template>
       </div>
     </template>
-    <ForgeMessageSubmitBlock
-      v-if="autoSubmitScopeId"
-      :message-id="autoSubmitScopeId"
-      :label="autoSubmitLabel"
-      auto-generated
+    <ForgeMessageAutoSubmit
+      v-if="effectiveRenderContext === 'forge' && messageId"
+      :message-id="messageId"
+      :segments="segments"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, watchEffect } from 'vue';
+import { computed, defineAsyncComponent } from 'vue';
 import { splitToSegments, type MessageSegment } from '../../../api/core/LVParser';
 import TextBlock from './blocks/TextBlock.vue';
 import ThinkingBlock from './blocks/ThinkingBlock.vue';
 import { globalXMLInterceptor, XMLInterceptor } from '../../../api/core/XMLInterceptor';
 import { lwStorage } from '../../../api/storage';
 import { viewRenderRegistry, type ViewRenderContext } from '../../../api/core/ViewRenderRegistry';
-import ForgeMessageSubmitBlock from '../../forge/blocks/ForgeMessageSubmitBlock.vue';
-import { useCardMakerStore } from '../../forge/CardMakerStore';
+
+const ForgeMessageAutoSubmit = defineAsyncComponent(() => import('../../forge/blocks/ForgeMessageAutoSubmit.vue'));
 
 const props = defineProps<{
   /** 手动处理后的显示文本（ST 渲染主要来源） */
@@ -67,8 +66,6 @@ const props = defineProps<{
   /** 思维链的展示风格 */
   thinkingVariant?: 'default' | 'codex';
 }>();
-
-const forgeStore = useCardMakerStore();
 
 const effectiveRenderContext = computed<ViewRenderContext>(() => props.renderContext || 'chat');
 
@@ -158,93 +155,6 @@ const renderSegments = computed<MessageSegment[]>(() => {
   });
 });
 
-const explicitSubmitLabel = computed<string | null>(() => {
-  if (effectiveRenderContext.value !== 'forge') {
-    return null;
-  }
-
-  for (const segment of segments.value) {
-    if (segment.type !== 'view' || !segment.components?.length) {
-      continue;
-    }
-
-    const submitComponent = segment.components.find((component) => component.component === 'ForgeMessageSubmit');
-    if (submitComponent) {
-      return String(submitComponent.props.label || '').trim() || null;
-    }
-  }
-
-  return null;
-});
-
-watchEffect(() => {
-  if (effectiveRenderContext.value !== 'forge' || !props.messageId || !explicitSubmitLabel.value) {
-    return;
-  }
-
-  forgeStore.rememberSubmitConfig(props.messageId, explicitSubmitLabel.value);
-});
-
-const hasPersistentForgeForm = computed(() => segments.value.some((segment) => (
-  segment.type === 'view' && Boolean(segment.components?.some((component) => component.component === 'ForgeForm'))
-)));
-
-const hasTemporaryForgeCollection = computed(() => {
-  if (effectiveRenderContext.value !== 'forge') {
-    return false;
-  }
-
-  const interactiveComponents = new Set([
-    'ForgeInput',
-    'ForgeTextarea',
-    'ForgeSelect',
-    'ForgeChecklist',
-    'ForgeChoiceGroup',
-    'ForgeFacetChecklist'
-  ]);
-
-  return segments.value.some((segment) => {
-    if (segment.type !== 'view' || !segment.components?.length) {
-      return false;
-    }
-
-    return segment.components.some((component) => {
-      if (!interactiveComponents.has(component.component)) {
-        return false;
-      }
-
-      const formId = String(component.props.formId || '').trim();
-      const fieldKey = String(component.props.fieldKey || '').trim();
-      if (!formId) {
-        return true;
-      }
-
-      return !fieldKey || !forgeStore.hasStructuredFieldBinding(formId, fieldKey);
-    });
-  });
-});
-
-const autoSubmitScopeId = computed<string | null>(() => {
-  if (effectiveRenderContext.value !== 'forge' || !props.messageId) {
-    return null;
-  }
-  if (hasPersistentForgeForm.value || !hasTemporaryForgeCollection.value) {
-    return null;
-  }
-  return props.messageId;
-});
-
-const autoSubmitLabel = computed(() => {
-  if (!autoSubmitScopeId.value) {
-    return '提交并继续';
-  }
-
-  return forgeStore.resolveSubmitLabel(
-    autoSubmitScopeId.value,
-    explicitSubmitLabel.value || '提交并继续'
-  );
-});
-
 const hasVisibleContent = computed(() => renderSegments.value.some((segment) => {
   if (segment.type === 'text') {
     return Boolean(segment.raw.trim());
@@ -273,12 +183,18 @@ const hasVisibleContent = computed(() => renderSegments.value.some((segment) => 
   background: #fef3c7;
   border: 1px dashed #f59e0b;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: #92400e;
 }
 
 .lv-unknown-block code {
   font-family: monospace;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
 }
 </style>

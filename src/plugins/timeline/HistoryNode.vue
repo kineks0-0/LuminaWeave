@@ -100,8 +100,9 @@
 
 <script setup lang="ts">
 import { computed, ref, inject, onMounted, onUnmounted, watch } from 'vue';
-import { type TimelineViewNode } from './LuminaTimeline.vue';
-import { EventType } from '@logicflow/core';
+import { type TimelineViewNode } from './useTimelineGraphViewModel';
+
+const NODE_PROPERTIES_CHANGE_EVENT = 'node:properties-change';
 
 const props = defineProps<{
   node: {
@@ -153,11 +154,11 @@ onMounted(() => {
       }
     };
 
-    graphInstance.eventCenter.on(EventType.NODE_PROPERTIES_CHANGE, updateHandler);
+    graphInstance.eventCenter.on(NODE_PROPERTIES_CHANGE_EVENT, updateHandler);
 
     onUnmounted(() => {
       console.log('[HistoryNode] Unmounting node:', props.node.id);
-      graphInstance.eventCenter.off(EventType.NODE_PROPERTIES_CHANGE, updateHandler);
+      graphInstance.eventCenter.off(NODE_PROPERTIES_CHANGE_EVENT, updateHandler);
     });
   }
 });
@@ -207,8 +208,8 @@ const formatTime = (ts?: number) => {
   transform: translateX(-50%);
   background: var(--lw-primary);
   color: white;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   padding: 3px 12px;
   border-radius: 20px;
   z-index: 50;
@@ -284,16 +285,16 @@ const formatTime = (ts?: number) => {
 }
 
 .l-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-dim);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
 .l-status-pill {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
 }
 
@@ -312,8 +313,8 @@ const formatTime = (ts?: number) => {
 }
 
 .l-stat-tag {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: #10b981;
   display: flex;
   align-items: center;
@@ -332,7 +333,7 @@ const formatTime = (ts?: number) => {
 }
 
 .l-main-text {
-  font-size: 14px;
+  font-size: var(--lw-type-title-small-size);
   color: var(--lw-text-main);
   line-height: 1.6;
   margin: 0;
@@ -341,7 +342,7 @@ const formatTime = (ts?: number) => {
   line-clamp: 10;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-weight: 500;
+  font-weight: var(--lw-type-label-medium-weight);
 }
 
 .l-card-footer {
@@ -399,14 +400,14 @@ const formatTime = (ts?: number) => {
 }
 
 .l-author {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
 }
 
 .l-floor-tag {
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-dim);
   font-family: monospace;
   background: var(--lw-bg-app);

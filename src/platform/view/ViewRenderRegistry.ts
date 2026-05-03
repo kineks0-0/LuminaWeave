@@ -1,4 +1,4 @@
-import type { Component } from 'vue';
+import { defineAsyncComponent, type Component } from 'vue';
 import AlertBlock from '../../plugins/chat/components/blocks/AlertBlock.vue';
 import BadgeBlock from '../../plugins/chat/components/blocks/BadgeBlock.vue';
 import ChoiceBlock from '../../plugins/chat/components/blocks/ChoiceBlock.vue';
@@ -6,25 +6,26 @@ import ProgressBlock from '../../plugins/chat/components/blocks/ProgressBlock.vu
 import QuoteBlock from '../../plugins/chat/components/blocks/QuoteBlock.vue';
 import SepBlock from '../../plugins/chat/components/blocks/SepBlock.vue';
 import StatBlock from '../../plugins/chat/components/blocks/StatBlock.vue';
-import ForgeChecklistBlock from '../../plugins/forge/blocks/ForgeChecklistBlock.vue';
-import ForgeChoiceBlock from '../../plugins/forge/blocks/ForgeChoiceBlock.vue';
-import ForgeChoiceGroupBlock from '../../plugins/forge/blocks/ForgeChoiceGroupBlock.vue';
-import ForgeFacetChecklistBlock from '../../plugins/forge/blocks/ForgeFacetChecklistBlock.vue';
-import ForgeFormBlock from '../../plugins/forge/blocks/ForgeFormBlock.vue';
-import ForgeInputBlock from '../../plugins/forge/blocks/ForgeInputBlock.vue';
-import ForgeLayerNavigatorBlock from '../../plugins/forge/blocks/ForgeLayerNavigatorBlock.vue';
-import ForgeMessageSubmitBlock from '../../plugins/forge/blocks/ForgeMessageSubmitBlock.vue';
-import ForgeEntryProposalBlock from '../../plugins/forge/blocks/ForgeEntryProposalBlock.vue';
-import ForgeMemoryProposalBlock from '../../plugins/forge/blocks/ForgeMemoryProposalBlock.vue';
-import ForgeMissingFieldsBlock from '../../plugins/forge/blocks/ForgeMissingFieldsBlock.vue';
-import ForgeModePickerBlock from '../../plugins/forge/blocks/ForgeModePickerBlock.vue';
-import ForgeSelectBlock from '../../plugins/forge/blocks/ForgeSelectBlock.vue';
-import ForgeSummaryCardBlock from '../../plugins/forge/blocks/ForgeSummaryCardBlock.vue';
-import ForgeTextareaBlock from '../../plugins/forge/blocks/ForgeTextareaBlock.vue';
-import ForgeAutoListBlock from '../../plugins/forge/blocks/ForgeAutoListBlock.vue';
-import ForgeFormAssistBlock from '../../plugins/forge/blocks/ForgeFormAssistBlock.vue';
 
 export type ViewRenderContext = 'chat' | 'forge';
+
+const ForgeChecklistBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeChecklistBlock.vue'));
+const ForgeChoiceBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeChoiceBlock.vue'));
+const ForgeChoiceGroupBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeChoiceGroupBlock.vue'));
+const ForgeFacetChecklistBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeFacetChecklistBlock.vue'));
+const ForgeFormBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeFormBlock.vue'));
+const ForgeInputBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeInputBlock.vue'));
+const ForgeLayerNavigatorBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeLayerNavigatorBlock.vue'));
+const ForgeMessageSubmitBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeMessageSubmitBlock.vue'));
+const ForgeEntryProposalBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeEntryProposalBlock.vue'));
+const ForgeMemoryProposalBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeMemoryProposalBlock.vue'));
+const ForgeMissingFieldsBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeMissingFieldsBlock.vue'));
+const ForgeModePickerBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeModePickerBlock.vue'));
+const ForgeSelectBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeSelectBlock.vue'));
+const ForgeSummaryCardBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeSummaryCardBlock.vue'));
+const ForgeTextareaBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeTextareaBlock.vue'));
+const ForgeAutoListBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeAutoListBlock.vue'));
+const ForgeFormAssistBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeFormAssistBlock.vue'));
 
 class ViewRenderRegistry {
     private readonly registry = new Map<string, Map<ViewRenderContext, Component>>();

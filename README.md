@@ -38,6 +38,22 @@ https://github.com/kineks0-0/LuminaWeave
 
 > 当前共享引擎源码已并入本仓库内的 `shared/` 目录，因此通过插件子仓库即可直接查看前后端共用的协议、事务与解析实现。
 
+> 构建产物采用 ESM 分块输出。`manifest.json` 仍加载 `dist/index.js` 与 `dist/style.css`，但安装、同步或发布时必须保留完整 `dist/` 目录，包括 `dist/assets/*.js` 异步 chunk。Forge workflow、Local Nexus、Timeline 大画布与部分大型第三方依赖会在对应功能首次打开或执行时按需加载。
+
+### 构建与体积分析
+
+```powershell
+npm run build
+npm run build:debug
+npm run watch
+npm run analyze
+```
+
+- `npm run build` 使用 `github` 模式生成正式分发产物，不输出 sourcemap。
+- `npm run build:debug` 与 `npm run watch` 使用 `debug` 模式，保留 inline sourcemap，便于本地排查。
+- `npm run watch` 仍走 `vite build --watch`，只排除 `dist/` 与 `node_modules/` 的文件监听，避免输出目录触发重复构建；不使用 `optimizeDeps` 作为 build-watch 优化路径。
+- `npm run analyze` 使用 `analyze` 模式生成静态体积报告 `dist/bundle-report.html`。该报告仅供本地分析，发布前仍应重新执行 `npm run build`。
+
 
 
 ------

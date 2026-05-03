@@ -1,7 +1,9 @@
+import { defineAsyncComponent } from 'vue';
 import { LuminaPlugin } from '../../types/plugin';
-import LorebookRoot from './LorebookRoot.vue';
-import LorebookWorkspace from './components/LorebookWorkspace.vue';
 import type { PluginManifestV2 } from '../../platform/plugin/types';
+
+const LorebookRoot = defineAsyncComponent(() => import('./LorebookRoot.vue'));
+const LorebookWorkspace = defineAsyncComponent(() => import('./components/LorebookWorkspace.vue'));
 
 const settingsSchema = {
     autoSync: { default: true, label: '自动同步世界书', common: true, type: 'boolean', allowedScopes: ['Global'] },

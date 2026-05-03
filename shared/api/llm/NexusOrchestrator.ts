@@ -1,7 +1,4 @@
-import { type ModelMessage } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import type { ModelMessage } from 'ai';
 import { NexusApiConfig, NexusProviderType } from './NexusTypes.js';
 
 const ST_TO_AI_SDK_KEY_MAP: Record<string, string> = {
@@ -102,7 +99,7 @@ export class NexusOrchestrator {
     /**
      * 获取 AI SDK 模型实例
      */
-    getModelForNode(node: any, api: NexusApiConfig | null): any {
+    async getModelForNode(node: any, api: NexusApiConfig | null): Promise<any> {
         const providerType = this.getProviderType(node, api);
         const modelId = typeof node?.model === 'string' ? node.model : '';
         if (!modelId) throw new Error('missing_model');
@@ -111,10 +108,12 @@ export class NexusOrchestrator {
         
         if (providerType === 'anthropic') {
             if (!apiKey) throw new Error('missing_api_key');
+            const { createAnthropic } = await import('@ai-sdk/anthropic');
             return createAnthropic({ apiKey })(modelId);
         }
         if (providerType === 'google') {
             if (!apiKey) throw new Error('missing_api_key');
+            const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
             return createGoogleGenerativeAI({ apiKey })(modelId);
         }
 
@@ -122,6 +121,7 @@ export class NexusOrchestrator {
         if (!apiKey) throw new Error('missing_api_key');
         if (!baseURL) throw new Error('missing_base_url');
 
+        const { createOpenAI } = await import('@ai-sdk/openai');
         const openai = createOpenAI({ apiKey, baseURL });
         if (providerType === 'openai') {
             return baseURL.includes('api.openai.com') ? openai(modelId) : openai.chat(modelId);
