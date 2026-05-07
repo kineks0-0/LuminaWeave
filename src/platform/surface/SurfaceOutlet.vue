@@ -7,10 +7,12 @@
 
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue';
-import { activeSettings } from '../../plugins/settings/useSettings';
-import { getActiveDesktopModeIdFromSettings } from '../../theme/themeRegistry';
-import { surfaceRegistry } from './SurfaceRegistry';
-import type { SurfaceContractId, SurfaceRuntimeContext, SurfaceThemeContext } from './types';
+import { lwStorage } from '../../api/storage.js';
+import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
+import { activeSettings } from '../../plugins/settings/useSettings.js';
+import { getActiveDesktopModeIdFromSettings } from '../../theme/themeRegistry.js';
+import { surfaceRegistry } from './SurfaceRegistry.js';
+import type { SurfaceContractId, SurfaceRendererRuntimeBridge, SurfaceRuntimeContext, SurfaceThemeContext } from './types.js';
 
 const props = withDefaults(defineProps<{
   contractId: SurfaceContractId;
@@ -45,17 +47,46 @@ const themeContext = computed<SurfaceThemeContext>(() => ({
   containerProps: props.containerProps
 }));
 
+const rendererRuntime: SurfaceRendererRuntimeBridge = {
+  getSetting: (key, fallback) => {
+    const trackedValue = activeSettings[key];
+    return trackedValue !== undefined && trackedValue !== null
+      ? trackedValue
+      : lwStorage.get(key, fallback);
+  },
+  updateSetting: (key, value) => {
+    activeSettings[key] = value;
+    return settingsDomainService.setSetting(key, value, 'Global');
+  },
+  openSurface: (contractId, surfaceProps = {}) => {
+    const lw = typeof window !== 'undefined' ? (window as any).LuminaWeave : null;
+    const desktopSurface = lw?.services?.desktopSurface || lw?.desktopSurface;
+    if (desktopSurface && typeof desktopSurface.openTab === 'function') {
+      desktopSurface.openTab({
+        id: contractId,
+        name: String(contractId),
+        icon: '',
+        surfaceContractId: contractId,
+        props: surfaceProps
+      });
+    }
+  }
+};
+
 const runtimeContext = computed<SurfaceRuntimeContext>(() => ({
-  state: props.state,
-  intents: props.intents,
+  ...(resolved.value.renderer.createContext?.(rendererRuntime) || {
+    state: props.state,
+    intents: props.intents,
+    theme: themeContext.value
+  }),
   theme: themeContext.value
 }));
 
 const componentProps = computed(() => ({
   ...attrs,
   contractId: props.contractId,
-  state: props.state,
-  intents: props.intents,
+  state: runtimeContext.value.state,
+  intents: runtimeContext.value.intents,
   theme: themeContext.value,
   runtimeContext: runtimeContext.value,
   rendererSource: resolved.value.source,

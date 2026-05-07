@@ -1,7 +1,7 @@
 import { defineComponent } from 'vue';
 import { describe, expect, it } from 'vitest';
-import { SurfaceRegistry } from '../SurfaceRegistry';
-import type { SurfaceRendererDefinition } from '../types';
+import { SurfaceRegistry } from '../SurfaceRegistry.js';
+import type { SurfaceRendererDefinition } from '../types.js';
 
 const createRenderer = (
     ownerId: string,
@@ -70,5 +70,42 @@ describe('SurfaceRegistry', () => {
         expect(resolved.source).toBe('empty');
         expect(resolved.renderer.contractId).toBe('settings.root');
         expect(resolved.renderer.ownerId).toBe('core-empty');
+    });
+
+    it('selects the requested renderer variant when one is available', () => {
+        const registry = new SurfaceRegistry();
+        registry.registerBusinessRenderer(createRenderer('lumina-chat', 'plugin-business'));
+        registry.registerBusinessRenderer(createRenderer('lumina-chat-compact', 'plugin-business', 'compact'));
+
+        const resolved = registry.resolve({
+            contractId: 'chat.preview',
+            desktopModeId: 'classic',
+            preferredVariant: 'compact'
+        });
+
+        expect(resolved.source).toBe('plugin-business');
+        expect(resolved.renderer.ownerId).toBe('lumina-chat-compact');
+    });
+
+    it('rejects duplicate renderers for the same contract and variant', () => {
+        const registry = new SurfaceRegistry();
+        registry.registerBusinessRenderer(createRenderer('lumina-chat', 'plugin-business'));
+
+        expect(() => registry.registerBusinessRenderer(createRenderer('other-chat', 'plugin-business'))).toThrow(
+            /Duplicate plugin business renderer/
+        );
+    });
+
+    it('allows official empty contracts to be enriched by their owning plugin', () => {
+        const registry = new SurfaceRegistry();
+        registry.registerContract({ id: 'chat.preview' });
+
+        expect(() => registry.registerContract({
+            id: 'chat.preview',
+            ownerPluginId: 'lumina-chat',
+            description: 'Chat preview'
+        })).not.toThrow();
+
+        expect(registry.getContract('chat.preview')?.ownerPluginId).toBe('lumina-chat');
     });
 });

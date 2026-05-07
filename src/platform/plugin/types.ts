@@ -1,11 +1,11 @@
 import type { Component } from 'vue';
-import type { SettingDefinition } from '../../types/plugin';
+import type { SettingDefinition } from '../../types/plugin.js';
 import type {
     SurfaceContractDefinition,
     SurfaceContractId,
     SurfaceRendererDefinition,
     SurfaceRuntimeContext
-} from '../surface/types';
+} from '../surface/types.js';
 
 export interface PluginCapabilityDefinition {
     id: string;
@@ -39,6 +39,8 @@ export interface PluginManifestV2 {
     description?: string;
     icon?: string;
     capabilities?: PluginCapabilityDefinition[];
+    primarySurface?: SurfaceContractId;
+    navigationSlots?: ('mainView' | 'widget' | 'headerCenter' | 'headerRight')[];
     selectors?: Record<string, PluginStateSelector>;
     intents?: Record<string, PluginIntentHandler>;
     settingsSchema?: Record<string, SettingDefinition>;

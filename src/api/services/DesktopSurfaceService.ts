@@ -1,17 +1,19 @@
 import type { Component } from 'vue';
-import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces';
-import type { SurfaceContractId } from '../../platform/surface/types';
+import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
+import { surfaceRegistry } from '../../platform/surface/SurfaceRegistry.js';
+import type { SurfaceContractId } from '../../platform/surface/types.js';
 import {
     getDesktopMode,
     listDesktopModes,
     registerDesktopMode
-} from '../../theme/themeRegistry';
-import type { DesktopModeManifest } from '../../theme/types';
+} from '../../theme/themeRegistry.js';
+import type { DesktopModeManifest } from '../../theme/types.js';
 
 export interface RegisteredPanelConfig {
     title: string;
     icon?: string;
     defaultMode?: 'tab' | 'modal';
+    surfaceContractId?: SurfaceContractId;
 }
 
 export interface RegisteredPanelEntry {
@@ -69,7 +71,11 @@ export class DesktopSurfaceService {
         const mode = options.mode || panel.config.defaultMode || 'modal';
 
         if (mode === 'tab') {
-            const surfaceContractId = getSurfaceContractIdForRegisteredPanel(panel.id);
+            const inferredContractId = id as SurfaceContractId;
+            const surfaceContractId =
+                panel.config.surfaceContractId ||
+                getSurfaceContractIdForRegisteredPanel(panel.id) ||
+                (surfaceRegistry.getContract(inferredContractId) ? inferredContractId : null);
             this.openTab({
                 id: panel.id,
                 name: panel.config.title,

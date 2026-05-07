@@ -34,12 +34,19 @@ export interface SurfaceRuntimeContext<TState = unknown, TIntentMap extends Reco
     theme: SurfaceThemeContext;
 }
 
+export interface SurfaceRendererRuntimeBridge {
+    getSetting: <TValue>(key: string, fallback: TValue) => TValue;
+    updateSetting: <TValue>(key: string, value: TValue) => void | Promise<void>;
+    openSurface: (contractId: SurfaceContractId, props?: Record<string, unknown>) => void;
+}
+
 export interface SurfaceRendererDefinition<TState = unknown, TIntentMap extends Record<string, unknown> = Record<string, unknown>> {
     contractId: SurfaceContractId;
     component: Component;
     ownerId: string;
     kind: SurfaceRendererKind;
     variant?: string;
+    createContext?: (runtime: SurfaceRendererRuntimeBridge) => SurfaceRuntimeContext<TState, TIntentMap>;
 }
 
 export interface SurfaceContractDefinition<TState = unknown, TIntentMap extends Record<string, unknown> = Record<string, unknown>> {

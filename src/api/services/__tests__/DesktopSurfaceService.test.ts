@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Component } from 'vue';
-import { DesktopSurfaceService } from '../DesktopSurfaceService';
+import { DesktopSurfaceService } from '../DesktopSurfaceService.js';
 
 const DummyPanel = { name: 'DummyPanel' } as Component;
 
@@ -45,6 +45,26 @@ describe('DesktopSurfaceService', () => {
             name: 'Custom',
             icon: '',
             component: DummyPanel,
+            props: { isTabMode: true }
+        });
+    });
+
+    it('opens a registered panel with an explicit surface contract', () => {
+        const emit = vi.fn();
+        const service = new DesktopSurfaceService(emit);
+
+        service.registerPanel('custom_panel', DummyPanel, {
+            title: 'Custom',
+            defaultMode: 'tab',
+            surfaceContractId: 'custom.surface'
+        });
+        service.openPanel('custom_panel');
+
+        expect(emit).toHaveBeenCalledWith('OPEN_TAB', {
+            id: 'custom_panel',
+            name: 'Custom',
+            icon: '',
+            surfaceContractId: 'custom.surface',
             props: { isTabMode: true }
         });
     });

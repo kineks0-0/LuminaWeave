@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
-import type { LuminaPlugin } from '../../../types/plugin';
-import { getPrimarySurfaceContractIdForPlugin } from '../officialPluginSurfaces';
-import { getSurfaceContractIdForRegisteredPanel } from '../officialPanelSurfaces';
-import { deriveNavigationSlotsFromManifest, getPluginNavigationSlots } from '../pluginNavigationSlots';
+import type { LuminaPlugin } from '../../../types/plugin.js';
+import { getPrimarySurfaceContractIdForPlugin } from '../officialPluginSurfaces.js';
+import { getSurfaceContractIdForRegisteredPanel } from '../officialPanelSurfaces.js';
+import { deriveNavigationSlotsFromManifest, getPluginNavigationSlots } from '../pluginNavigationSlots.js';
 
 let officialPlugins: LuminaPlugin[] = [];
 
@@ -41,7 +41,7 @@ describe('official plugin platform manifests', () => {
             })
         });
 
-        const module = await import('../../../plugins/officialPlugins');
+        const module = await import('../../../plugins/officialPlugins.js');
         officialPlugins = module.officialPlugins;
     });
 
@@ -97,6 +97,16 @@ describe('official plugin platform manifests', () => {
             expect(plugin.slots).toBeUndefined();
             expect(getPluginNavigationSlots(plugin)).toEqual(expectedSlots[plugin.id]);
         });
+    });
+
+    it('uses manifest-declared navigation before official plugin id fallbacks', () => {
+        expect(deriveNavigationSlotsFromManifest({
+            id: 'third-party-panel',
+            name: 'Third Party Panel',
+            primarySurface: 'third-party.surface',
+            navigationSlots: ['widget'],
+            surfaces: [{ id: 'third-party.surface' }]
+        })).toEqual(['widget']);
     });
 
     it('maps official registered panels that have platform surfaces', () => {
