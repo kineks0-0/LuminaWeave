@@ -2,12 +2,27 @@
 
 本目录按“整体规划 / 当前步骤 / 已完成归档”组织。发生上下文压缩或中断时，先读本文件，再进入对应任务的 `README.md` 和 `steps/`。
 
+## 仓库级文档
+
+这些文档用于理解项目、协作规则、验证方式和数据边界。
+
+- [短版架构入口](./architecture.md)
+- [文档规范](./documentation-standards.md)
+- [协作指南](./contributing.md)
+- [测试与 CI](./testing-and-ci.md)
+- [配置参考](./configuration.md)
+- [存储与数据](./storage-and-data.md)
+- [ADR](./adr/)
+
+> 仓库级协作规则中历史上曾提到 `docs/PDR.md` 与 `docs/system_design.md`。当前实际长期文档路径为 `docs/overall/PDR.md` 与 `docs/overall/system_design.md`，后续引用应使用实际路径。
+
 ## 整体规划
 
 长期有效的产品、架构、API 与模块设计放在 `overall/`。
 
 - [全局 PDR](./overall/PDR.md)
 - [全局 System Design](./overall/system_design.md)
+- [Design Specs](./overall/design/)
 - [API 参考](./overall/api/luminaweave_api.md)
 - [架构与行为文档](./overall/architecture/)
 - [模块文档](./overall/modules/)
@@ -37,6 +52,8 @@
 - [General](./current/tasks/general/)
 - [Desktop Modes](./current/tasks/desktop-modes/)
 - [Forge](./current/tasks/forge/)
+- [Standalone Resource Runtime](./current/tasks/standalone-resource-runtime/)
+- [Tailwind System Migration](./current/tasks/tailwind-system-migration/)
 
 ## 已完成归档
 

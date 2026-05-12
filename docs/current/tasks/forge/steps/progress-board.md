@@ -7,7 +7,8 @@
 
 相关交接文档：
 
-- `docs/forge/implementation.md`
+- `docs/overall/modules/forge/implementation.md`
+- [Forge Agent Runtime 与 Skill 系统迁移计划](./2026-05-09-forge-agent-runtime-skills-plan.md)
 
 ## 1. 本次对话上下文
 
@@ -21,8 +22,8 @@
   - 改为当前世界书条目查看与编辑
 - Forge 会话体系：
   - 默认页面不变
-  - 新增可切换的 `历史聊天会话 / Forge 工作会话` 选择页
-  - 支持新建 Forge 会话
+  - 新增可切换的 Forge 项目中心
+  - 支持新建 Forge 项目
   - 支持关闭插件后下次继续
 - 历史记录体系：
   - 后续明确取消“独立历史记录面板”方向，不再继续做工作流历史面板
@@ -47,7 +48,7 @@
 - 已支持：
   - Forge 工作会话切换
   - 新建 Forge 工作会话
-  - 选择历史聊天会话作为参考源
+  - 项目中心右侧显示选中项目的协作线程
   - Forge 工作会话重命名
   - 当前参考聊天会话解绑
   - 最近恢复工作会话快捷入口
@@ -62,6 +63,23 @@
   - 服务端不再以 `forge_sessions.json` 作为唯一真相源
   - 前端仓库现通过统一 conversation bridge 读写 Forge 会话
   - 工作台启动与会话索引刷新会优先读取统一会话文档，再按需回填本地存根
+- Forge 已开始迁移为项目化主语：
+  - `forgeProjectId / conversationId / workspacePath` normalize 后作为长期项目容器字段使用
+  - 项目中心主列表显示 Forge 项目，右侧显示选中项目的协作线程
+  - 顶部工具栏、辅助区和审阅空态改为围绕当前项目表达
+  - 传统桌面展开态已取消重复 hero/topbar，并在重置会话左侧提供“工作区”二级菜单入口
+- Forge 项目 VFS 数据层已接通第一阶段：
+  - 新增 `ForgeProjectDataService`
+  - `/workspaces/forge/<projectId>/project.json` 保存项目元数据、active conversation、参考聊天、预设与发布状态
+  - `/workspaces/forge/<projectId>/lorebook/entries/*.json` 保存虚拟世界书条目
+  - `/workspaces/forge/<projectId>/memory/tree.json` 保存项目记忆树
+  - `/workspaces/forge/<projectId>/drafts/tree.json` 保存结构化草稿树与表单状态
+  - `/workspaces/forge/<projectId>/review/staging.json` 保存 staging 与 commit-ready 审阅状态
+  - 旧会话首次打开时若项目 VFS 文件不存在，会从现有 session 字段生成项目文件
+  - 已补 `ForgeProjectDataService` 单元测试，覆盖旧会话 normalize、VFS hydrate/save、虚拟世界书条目文件清理重写
+- Prompt resource binding owner 已从旧工作会话 id 迁移到项目 id：
+  - 首次 hydrate 项目时迁移 `forge-workspace:<workspaceSessionId/sessionChatId>` 到 `forge-workspace:<forgeProjectId>`
+  - 测试聊天与项目级绑定读取同一 owner
 - 已新增最小会话视图聚合层：
   - `MemorySnapshotTypes`
   - `MemoryViewResolver`
@@ -77,6 +95,11 @@
   - `MemorySnapshot` 已纳入世界书条目摘要
   - `PromptBuilder` 可优先使用解析后的世界书视图，而不只依赖 ST 当前激活世界书
   - Forge Prompt 预览会显示当前使用的会话记忆快照
+- Forge Agent Prompt Layout 已进入可解释预览：
+  - `ForgeWorkingStatementBuilder` 生成正式 tail restatement，不再由 graph 内联拼接临时字符串
+  - `ForgeAgentGraphRuntime` 输出 `workingStatement` 与 `PromptSourceUnit`
+  - Forge Prompt Preview 新增 Agent / Attention 视图，显示 graph node、capability、shell profile、working statement、slot / region 与最终 message 位置
+  - 主模型预览已把 Agent source units 注入 Prompt Assembly，避免 skill / VFS / working statement 只停留在 graph trace 中
 - 已增加 Forge 工作会话本地持久化骨架
 
 相关文件：
@@ -153,10 +176,8 @@
   - 小窗模式下已增加折叠式版本库，但仍未做更完整的版本筛选与分组
 - Forge 右栏虽然已经能直接调用世界书工作区组件
   - 但“世界书条目与当前节点的命中关系”还没有做更细的可视化
-- 历史聊天会话列表目前已接轻量索引能力
-  - 但是否覆盖所有 ST 历史会话，当前仍未彻底验证
-- 历史聊天会话标题/摘要目前已从预览文本中提炼
-  - 但仍不是基于正式会话元数据生成
+- 项目中心当前只展示 Forge 项目与项目内协作线程
+  - 历史聊天来源不再作为项目中心主列展示
 - 记忆系统与消息结构的大重构还没有正式开始
 
 ## 4. 剩余最高优先级 TODO
@@ -185,20 +206,32 @@
 - [ ] 评估是否需要为 `chat` 和 `forge` 分别维护更明确的世界书上下文绑定
 - [ ] 补充世界书跟随 Forge 时间线的交互验证
 
-### 4.3 Forge 会话页继续完善
+### 4.3 Forge 项目中心继续完善
 
-- [x] 历史聊天会话列表增加更清晰的标题、摘要与排序
+- [x] 历史聊天会话列表曾增加更清晰的标题、摘要与排序（现已不再作为项目中心主列）
 - [x] Forge 工作会话支持重命名
 - [x] Forge 工作会话支持最近更新时间显示
 - [x] Forge 当前参考聊天会话支持更友好的展示与解绑
 - [x] 评估是否需要“最近恢复的 Forge 会话”入口
+- [x] 将 Forge 会话页迁移为项目中心
+- [x] 将项目中心右侧从历史聊天来源改为选中项目的协作线程
+- [x] 传统桌面展开态 Forge 视图去重内部 hero/topbar，并新增工作区二级菜单
+- [x] 传统桌面展开态补回紧凑项目标题，并恢复辅助视图位置菜单与辅助按钮 toggle 语义
+- [x] 增加项目线程派生回归测试，覆盖 legacy 单线程项目与选中线程消失后的最近项目 fallback
+- [ ] 验证项目中心在传统桌面、自由工作台和移动端下的视觉稳定性
 
-### 4.4 Forge 会话持久化补强
+### 4.4 Forge 项目持久化补强
 
 - [x] 校验 `ForgeSessionRepository` 当前持久化字段是否完整
 - [x] 评估是否需要从本地持久化升级到后端持久化
 - [x] 确认 `stagingArea`、草稿输入、参考聊天绑定是否都完整恢复
 - [x] 增加会话切换时的保存时机与防抖策略校验
+- [x] 增加项目 VFS 文件 hydrate/save 服务
+- [x] 将虚拟世界书、项目记忆、draft tree、staging 写入项目 VFS
+- [x] 增加旧会话字段到项目 VFS 的首次打开迁移
+- [x] 增加 VFS 项目数据服务测试，验证 project.json、lorebook entries、memory/tree、drafts/tree、review/staging 可重新 hydrate
+- [ ] 继续补真实宿主下的刷新恢复与文件检查 walkthrough
+- [ ] 将真实生成请求同步接入 Agent source units，并让运行请求 trace 与 Prompt Preview 保持同一套 slot / region 来源
 
 ## 5. 中优先级 TODO
 
@@ -337,13 +370,33 @@
 
 以下内容当前仍是“合理假设”，不是已验证事实：
 
-- 历史聊天会话列表的数据源已经足够覆盖当前需要的历史会话范围
+- Forge 项目协作线程目前由 `ForgeWorkspaceSessionRef` 按 `forgeProjectId` 派生，后续多 conversation 项目需要继续验证真实宿主列表恢复
 - 世界书前端快照索引方案足以支撑第一阶段版本回溯体验
 - Forge 与 Chat 在未来可以共享更统一的会话/记忆中层结构
 - 当前本地持久化不会和未来后端持久化方案冲突
 
 后续继续开发前，优先验证：
 
-- Forge 时间线切换时的世界书内容是否完全正确
-- 历史聊天会话列表是否存在漏项
-- 快照索引是否会产生过多重复版本
+1. Forge Agent Runtime 与 Skill 系统迁移：先按 [迁移计划](./2026-05-09-forge-agent-runtime-skills-plan.md) 接入 single Forge Agent + dynamic skills、Capability/Skill 按需加载、会话级 `project-readonly` shell 搜索查看、LangGraph orchestration harness、Prompt Layout Slots / 静态动态区域契约、Working Statement、Prompt Preview Agent/Attention 视图、typed effects 与 human review gate；isolated subagent 只在上下文隔离场景启用。
+2. 真实宿主刷新恢复 walkthrough：新建项目、编辑虚拟世界书/记忆/草稿/审阅状态、刷新后检查 `/workspaces/forge/<projectId>/...` 文件与 UI 派生视图一致。
+3. 多协作线程项目验证：在同一 `forgeProjectId` 下创建/恢复多个 conversation，确认项目中心按 `forgeProjectId` 聚合、打开线程不串项目。
+4. Forge 时间线切换核验：确认时间线切换时虚拟世界书、staging、draft tree 与记忆树仍指向正确节点快照。
+5. 真实发布/导出设计：继续保持“冻结到 Forge 虚拟项目”边界，另起步骤设计真实 ST 世界书发布与导出确认流。
+6. 世界书版本体验：评估快照索引是否产生过多重复版本，并补版本筛选、分组和命中关系展示。
+
+2026-05-09 执行进展：
+
+- 已新增 `ForgeSkillRegistry` 与内置 skill 文本，支持 built-in fallback 与项目 VFS materialize。
+- 已新增 `ForgeCapabilityRegistry`，常驻 capability index 只保留摘要、触发词、skill/namespace/shell profile 引用。
+- 已新增 `ForgeWorkspaceSearchShell`，默认 `project-readonly`，允许 list/read/search/stat 类命令，阻断 redirection、写入命令、跨项目绝对路径，并限制输出长度。
+- 已新增 `ForgeAgentGraphRuntime` 骨架，串起 `intent_router / skill_selector / capability_loader / context_loader`，只产出 trace、project resource snapshot 和 prompt source 候选，不写项目资源。
+- 已接入 Forge Prompt Layout Slots：
+  - `PromptSourceUnit` / trace 记录 `forgeSlot / forgeRegion / slotPolicy`
+  - `forge-main` 预设增加 `agent_runtime_contract / agent_skill_context / agent_project_resources / agent_review_state / agent_working_statement / agent_user_input`
+  - `ForgeAgentGraphRuntime` 输出的 skill、shell profile、项目资源、审阅状态、working statement、user input 可直接进入 Prompt Assembly
+  - Prompt Preview / PromptInspector 来源视图可显示新增 source kind 与 slot/region
+- 已验证：
+  - `npm run test -- ForgePromptLayoutSlots ForgeAgentGraphRuntime`
+  - `npm run test -- PromptPresetComposer PromptAssemblyTracer`
+  - `npm run type-check`
+- 下一步转入正式 `ForgeWorkingStatement` builder 与 Prompt Preview Agent / Attention 视图，而不是继续扩展工具面。

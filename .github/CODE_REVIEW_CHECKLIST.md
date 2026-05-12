@@ -4,7 +4,7 @@
 
 ## 一、 PDR & System Design 架构同步 (PDR Protocol)
 
-- [ ] **前置阅读已完成**: 确认已阅读 `docs/PDR.md`、`docs/system_design.md` 及 `docs/business_behavior_spec.md`。
+- [ ] **前置阅读已完成**: 确认已阅读 `docs/overall/PDR.md`、`docs/overall/system_design.md` 及 `docs/overall/architecture/business_behavior_spec.md`。
 - [ ] **影响评估**: 本次修改是否越界或改变现有架构？
     - *如果是，请在 PR 描述中详细说明对微内核（microkernel）与子插件（sub-plugins）架构边界、高自由度的请求编排逻辑或增量更新机制的影响。*
 - [ ] **文档同步更新**: 本次开发若引入了新的接口、改变了数据流，或使得原有假设失效，是否已**同步更新**相关文档？

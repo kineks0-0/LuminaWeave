@@ -136,7 +136,7 @@ ST 宿主 → STClient → STProtocol → STAdapter → WorldlineStore
 4. **同步安全**：执行 `save` 前须通过 `PersistenceService` 进行 ID 锚定，防止竞态覆盖。
 5. **ST 适配层依赖方向**：`STAdapter → (STProtocol, STClient)`；业务层只依赖 `STAdapter`，禁止直接调用 `STClient`。
 6. **i18n 强制**：界面字符串禁止硬编码，必须通过 `manifest.json` 注册并走 i18n 系统。
-7. **PDR & System Design 协议**：重大功能修改前后同步阅读并更新 `docs/PDR.md` 与 `docs/system_design.md`。
+7. **PDR & System Design 协议**：重大功能修改前后同步阅读并更新 `docs/overall/PDR.md` 与 `docs/overall/system_design.md`。
 8. **Git 规范**：遵循 Conventional Commits（`feat/fix/refactor/docs/chore`）。
 
 ---
@@ -144,10 +144,11 @@ ST 宿主 → STClient → STProtocol → STAdapter → WorldlineStore
 ## 关键目录与外部文档
 
 - `docs/index.md` — 项目全景向导（架构一览）
-- `docs/PDR.md` — 产品需求文档 v6.0-dev
-- `docs/system_design.md` — 系统架构设计 v6.0-dev
-- `docs/luminaweave_api.md` — 子插件开发 API 手册
-- `docs/forge/` — Forge 制卡专项文档（规划/实现/进度看板）
-- `luminaweave-server/` — 独立后端（Node.js，JSONL 事务存储 + OpenAI SDK 路由）；**只修改 `index.ts`，`index.js` 是构建产物**
+- `docs/overall/PDR.md` — 产品需求文档
+- `docs/overall/system_design.md` — 系统架构设计
+- `docs/overall/api/luminaweave_api.md` — 子插件开发 API 手册
+- `docs/overall/modules/forge/` — Forge 制卡专项文档（规划/实现/进度看板）
+- `docs/configuration.md`、`docs/storage-and-data.md`、`docs/testing-and-ci.md` — 配置、存储和测试参考
+- `luminaweave-server/` — 独立后端；真实源码位于 `src/`，`index.js` 是构建产物
 - `TavernHelper@types/` — SillyTavern 插件环境类型定义
 - `luminaweave-server/data/` — 用户数据，已 `.gitignore`，禁止提交

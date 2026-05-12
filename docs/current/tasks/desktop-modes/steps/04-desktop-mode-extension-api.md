@@ -15,7 +15,7 @@
 - `luminaweave-extension/src/theme/*` 注册中心与公开类型
 - 桌面模式列表与设置详情区的自动接入逻辑
 - 运行时桌面模式解析逻辑
-- `docs/luminaweave_api.md`
+- `docs/overall/api/luminaweave_api.md`
 
 ## 明确输出
 
@@ -25,7 +25,7 @@
   - 桌面模式选择列表
   - 设置详情区
   - 运行时模式解析
-- 在 `docs/luminaweave_api.md` 新增“自定义桌面模式开发”章节
+- 在 `docs/overall/api/luminaweave_api.md` 新增“自定义桌面模式开发”章节
 - 明确越权边界与受控 renderer variant 规则
 
 ## 禁止事项

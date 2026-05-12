@@ -21,15 +21,24 @@
 
 - `docs/`
   - 产品与架构文档中心。
-  - `index.md` 是总览入口；详细设计分散在 `PDR.md`、`system_design.md` 以及各子目录文档中。
+  - `index.md` 是总览入口；长期产品与架构文档位于 `overall/PDR.md`、`overall/system_design.md`。
+  - 仓库级协作与参考文档：
+    - `documentation-standards.md`：文档体系和更新规则。
+    - `contributing.md`：人类协作指南、分层边界和验证要求。
+    - `testing-and-ci.md`：测试入口与验证矩阵。
+    - `configuration.md`：构建、运行和宿主配置参考。
+    - `storage-and-data.md`：ConversationDocument、事务日志、VFS、server data 等存储说明。
+    - `adr/`：重大架构决策记录。
+  - 当前任务放在 `current/tasks/`，已完成任务归档到 `archive/completed-tasks/`。
 - `luminaweave-extension/`
   - 前端扩展，技术栈为 Vue 3 + Vite + TypeScript + Pinia。
   - 关键入口：
     - `src/index.ts`：扩展挂载、宿主桥接、样式隔离。
     - `src/App.vue`：UI Shell。
     - `src/bootstrap/registerPlugins.ts`：插件注册。
-  - 核心逻辑集中在 `src/api/core/`。
-  - 子插件集中在 `src/plugins/`，当前包括 `chat`、`director`、`forge`、`launcher`、`lorebook`、`settings`、`stats`、`timeline`、`dev`。
+  - 核心逻辑集中在 `src/api/core/`，并按功能域拆分为 `conversation/`、`storage/`、`generation/`、`hal/`、`host-drivers/`、`forge/`、`lorebook/`、`xml-view/`、`facade/` 等目录。
+  - 平台运行时位于 `src/platform/`，包含 Plugin Domain、Surface Runtime 和 Desktop Mode Runtime。
+  - 子插件集中在 `src/plugins/`，当前包括 `chat`、`director`、`forge`、`launcher`、`lorebook`、`settings`、`stats`、`timeline`、`dev`、`terminal` 等方向。
 - `luminaweave-server/`
   - 后端服务，当前源码在 `src/`，构建产物输出到根下的 `index.js`。
   - 关键文件：
@@ -37,7 +46,7 @@
     - `src/StorageService.ts`、`src/StreamingManager.ts`、`src/NexusService.ts`：后端核心能力。
   - `data/` 为本地数据目录，禁止提交用户数据。
 - `luminaweave-extension/shared/`
-  - 前后端共享类型与基础模块，当前已承载部分 XML/消息相关基础能力。
+  - 前后端共享类型与基础模块，承载 XML、消息、ConversationDocument、事务、同步、资源/VFS 等共享协议。
 - `.agents/`
   - 本地代理技能与工作流配置，不属于产品运行时代码。
 - `dev-start.ps1`
@@ -60,7 +69,7 @@
 - 做判断时遵循以下顺序：
   1. 当前代码与测试
   2. 当前目录结构与构建脚本
-  3. `docs/index.md` 与相关设计文档
+  3. `docs/index.md`、`docs/overall/PDR.md`、`docs/overall/system_design.md` 与相关模块文档
 - 如果代码与文档不一致：
   - 小改动：优先保持代码现实可运行。
   - 架构级改动：同步更新对应文档，避免继续漂移。
@@ -69,8 +78,12 @@
 
 - 修改前先读相关模块附近代码，不要只依据总览文档操作。
 - 涉及核心能力时，优先定位这些目录：
-  - 聊天/同步：`luminaweave-extension/src/api/core/`
+  - 聊天/同步：`luminaweave-extension/src/api/core/conversation/`、`luminaweave-extension/src/api/core/storage/`、`luminaweave-extension/src/api/core/host-drivers/`
+  - 生成/Prompt：`luminaweave-extension/src/api/core/generation/`、`luminaweave-extension/src/api/core/hal/`
+  - Forge 编排：`luminaweave-extension/src/api/core/forge/`
+  - XML/视图协议：`luminaweave-extension/src/api/core/xml-view/` 与 `luminaweave-extension/shared/`
   - 插件 UI：`luminaweave-extension/src/plugins/`
+  - 平台/桌面/surface：`luminaweave-extension/src/platform/`、`luminaweave-extension/src/shell/`
   - 全局状态：`luminaweave-extension/src/stores/`
   - 服务端：`luminaweave-server/src/`
   - 共享契约：`luminaweave-extension/shared/`
@@ -94,8 +107,15 @@
   - 对外 API
 - 最少应检查：
   - `docs/index.md`
-  - `docs/PDR.md`
-  - `docs/system_design.md`
+  - `docs/overall/PDR.md`
+  - `docs/overall/system_design.md`
+  - 目标模块的 `docs/overall/modules/<module>/README.md`
+- 若改动涉及配置、存储、测试或协作流程，额外检查：
+  - `docs/configuration.md`
+  - `docs/storage-and-data.md`
+  - `docs/testing-and-ci.md`
+  - `docs/contributing.md`
+- 若做出重大架构取舍，应新增或更新 `docs/adr/`。
 - 若只是局部实现细节修复，可不强制改总览文档，但要确认不会让文档描述失真。
 
 ## 6. 构建、测试与常用命令
@@ -146,28 +166,41 @@ cd D:\LuminaWeave
 - `luminaweave-extension/src/api/core/TimelineManager.ts`
 - `luminaweave-extension/src/api/core/XMLInterceptor.ts`
 - `luminaweave-extension/src/api/core/st-adapter/`
+- `luminaweave-extension/src/api/core/conversation/`
+- `luminaweave-extension/src/api/core/storage/`
+- `luminaweave-extension/src/api/core/generation/`
+- `luminaweave-extension/src/api/core/hal/`
+- `luminaweave-extension/src/api/core/host-drivers/`
+- `luminaweave-extension/src/api/core/forge/`
+- `luminaweave-extension/src/api/core/xml-view/`
 - `luminaweave-server/src/StorageService.ts`
 - `luminaweave-server/src/StreamingManager.ts`
+- `luminaweave-server/src/NexusService.ts`
 - `luminaweave-extension/shared/` 中的共享协议与基础解析器
 
 这些区域直接关系到：
 
 - ST 原生消息 `id` 与 Lumina 树结构 `nodeId` 的映射
+- `ConversationDocument` 与事务日志
 - 持久化事务安全
 - 时间线回滚与世界线分支
 - XML 标签生命周期与流式解析稳定性
 - 前后端共享事件/消息协议
+- Resource Ref、VFS 路径和外部资源写入策略
 
 ## 8. 测试建议
 
 - 前端测试主要位于：
   - `luminaweave-extension/src/api/__tests__/`
   - `luminaweave-extension/src/api/core/__tests__/`
+  - `luminaweave-extension/src/api/services/__tests__/`
   - `luminaweave-extension/src/plugins/director/__tests__/`
+  - 各 store、shell、platform 或插件目录下的 `__tests__/`
 - 服务端测试主要位于：
   - `luminaweave-server/src/__tests__/`
-- 如果改动影响同步、流式生成、解析器、持久化或共享协议，至少运行对应子项目的 `npm run test`。
+- 如果改动影响同步、事务、XML、流式生成、持久化、HAL、Resource/VFS、Forge Agent 或共享协议，至少运行对应子项目的 `npm run test`。
 - 如果改动影响类型边界或 Vue 组件接口，额外运行 extension 的 `npm run type-check`。
+- 如果改动影响构建、chunk、依赖或分发产物，额外运行 extension 的 `npm run build`。
 
 ## 9. 提交与协作约束
 
@@ -197,6 +230,7 @@ cd D:\LuminaWeave
 ## 12. 当前已知现实差异
 
 - `docs/index.md` 中部分文件清单偏架构视角；实际代码已经扩展出 `luminaweave-extension/shared/`、`forge`、`NexusClient`、更多测试与新的服务端 `src/` 布局。
+- `docs/PDR.md` 与 `docs/system_design.md` 已不是实际路径；当前长期文档位于 `docs/overall/PDR.md` 与 `docs/overall/system_design.md`。
 - 服务端 README 中“仅修改根级 `index.ts`”的说法已不再完全符合当前结构；现阶段应以 `luminaweave-server/src/` 为源码主目录。
 
 如无更具体的局部说明，默认以本文件作为仓库级协作指南执行。
@@ -205,7 +239,7 @@ cd D:\LuminaWeave
 
 在执行任何功能开发、代码重构或 Bug 修复时，必须严格遵守以下工作流：
 
-1. **前置读取 (Read)**: 在编写任何代码之前，必须先静默读取 `docs/index.md`， `docs/PDR.md` 和 `docs/system_design.md`（或对应的架构文档），理解当前的系统约束与设计意图。
+1. **前置读取 (Read)**: 在编写任何代码之前，必须先静默读取 `docs/index.md`、`docs/overall/PDR.md` 和 `docs/overall/system_design.md`（或对应的架构文档），理解当前的系统约束与设计意图。
 2. **影响评估 (Evaluate)**: 评估你的代码修改是否会越界或改变现有架构。例如：是否影响了现有的微内核 (microkernel) 与子插件 (sub-plugins) 架构边界？是否改变了高自由度的请求编排逻辑或增量更新机制？
 3. **同步更新 (Update)**: 如果当前开发引入了新的接口、改变了数据流，或使得 PDR 中的原有假设失效，**必须**在提交代码修改的同时，同步更新 PDR 和 System Design 文档。
 4. **输出记录 (Log)**: 在你的回复末尾，简要说明本次开发对 PDR/System Design 产生了哪些影响，或者明确声明“本次修改未改变核心系统设计”。
