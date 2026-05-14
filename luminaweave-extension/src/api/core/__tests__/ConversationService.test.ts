@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LuminaWeaveAPIBase } from '../LuminaWeaveAPIBase';
-import { WorldlineStore } from '../WorldlineStore';
-import { ConversationService } from '../ConversationService';
+import { LuminaWeaveAPIBase } from '../facade/LuminaWeaveAPIBase.js';
+import { WorldlineStore } from '../storage/WorldlineStore.js';
+import { ConversationService } from '../conversation/ConversationService.js';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { STClient } from '../st-adapter/STClient';
 import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
-import { forgeConversationGateway } from '../ForgeConversationGateway';
+import { forgeConversationGateway } from '../forge/ForgeConversationGateway.js';
+import { initMockHAL } from './halMock.js';
+import { configureChatHostProvider, type ChatSessionDirectoryPort } from '../conversation/ChatHostPorts.js';
 
 const mockState = vi.hoisted(() => ({
     currentChatId: 'chat_live',
@@ -71,7 +72,7 @@ vi.mock('../../storage.js', () => ({
     }
 }));
 
-vi.mock('../ChatSessionIndexService.js', () => ({
+vi.mock('../conversation/ChatSessionIndexService.js', () => ({
     buildTitleAndSummary: (chatId: string, previewMessage: string) => ({
         title: previewMessage ? previewMessage.slice(0, 22) : `聊天 ${chatId.slice(0, 10)}`,
         summary: previewMessage || '暂无预览内容'
@@ -81,7 +82,7 @@ vi.mock('../ChatSessionIndexService.js', () => ({
     }
 }));
 
-vi.mock('../ForgeSessionRepository.js', () => ({
+vi.mock('../forge/ForgeSessionRepository.js', () => ({
     forgeSessionRepository: {
         refreshFromServer: vi.fn(async () => undefined),
         listSessions: vi.fn(() => mockState.forgeSessions),
@@ -89,7 +90,7 @@ vi.mock('../ForgeSessionRepository.js', () => ({
     }
 }));
 
-vi.mock('../PersistenceService', () => ({
+vi.mock('../storage/PersistenceService.js', () => ({
     PersistenceService: vi.fn(function (store: WorldlineStore) {
         return {
             loadFromIndependentChat: vi.fn(async (chatId: string) => {
@@ -109,7 +110,7 @@ vi.mock('../PersistenceService', () => ({
     })
 }));
 
-vi.mock('../STAdapter.js', () => ({
+vi.mock('../host-drivers/st/STAdapter.js', () => ({
     STAdapter: {
         getSnapshot: vi.fn(async () => ({
             lumina: [],
@@ -193,6 +194,39 @@ const createMessage = (
     createdAt: extra.send_date || Date.now()
 });
 
+const hostDirectoryPort: ChatSessionDirectoryPort = {
+    listCharacterRoster: vi.fn(async () => []),
+    openSession: vi.fn(async () => true),
+    createSession: vi.fn(async () => ({
+        success: true,
+        resolvedCharacterId: null,
+        resolvedCharacterName: null,
+        resolvedCharacterAvatarUrl: null,
+        resolvedChatFile: null
+    })),
+    renameSession: vi.fn(async () => ({
+        success: true,
+        previousChatFile: null,
+        resolvedCharacterId: null,
+        resolvedCharacterName: null,
+        resolvedCharacterAvatarUrl: null,
+        resolvedChatFile: null
+    })),
+    deleteSession: vi.fn(async () => ({
+        success: true,
+        resolvedCharacterId: null,
+        resolvedCharacterName: null,
+        resolvedCharacterAvatarUrl: null,
+        resolvedChatFile: null
+    })),
+    closeCurrentSession: vi.fn(async () => true),
+    resolveSessionCharacterMeta: vi.fn(async (_sessionId, target = {}) => ({
+        characterId: target.characterId ?? null,
+        characterName: target.characterName ?? null,
+        characterAvatarUrl: target.characterAvatarUrl ?? null
+    }))
+};
+
 class MockApi extends LuminaWeaveAPIBase {
     public chatManager: {
         store: WorldlineStore;
@@ -240,6 +274,30 @@ describe('ConversationService', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        initMockHAL();
+        configureChatHostProvider(hostDirectoryPort);
+        vi.mocked(hostDirectoryPort.createSession).mockResolvedValue({
+            success: true,
+            resolvedCharacterId: '1',
+            resolvedCharacterName: 'Beta',
+            resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
+            resolvedChatFile: 'chat_beta_new'
+        });
+        vi.mocked(hostDirectoryPort.renameSession).mockResolvedValue({
+            success: true,
+            previousChatFile: 'chat_archive',
+            resolvedCharacterId: '1',
+            resolvedCharacterName: 'Beta',
+            resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
+            resolvedChatFile: 'Renamed Archive'
+        });
+        vi.mocked(hostDirectoryPort.deleteSession).mockResolvedValue({
+            success: true,
+            resolvedCharacterId: '1',
+            resolvedCharacterName: 'Beta',
+            resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
+            resolvedChatFile: 'chat_archive'
+        });
         mockState.currentChatId = 'chat_live';
         mockState.persistedChats.clear();
         mockState.savedConversationDocuments.clear();
@@ -427,7 +485,7 @@ describe('ConversationService', () => {
     });
 
     it('creates a new chat session and persists an empty conversation document immediately', async () => {
-        vi.spyOn(STClient, 'createNewCharacterChat').mockResolvedValue({
+        vi.mocked(hostDirectoryPort.createSession).mockResolvedValue({
             success: true,
             resolvedCharacterId: '1',
             resolvedCharacterName: 'Beta',
@@ -476,7 +534,7 @@ describe('ConversationService', () => {
     });
 
     it('does not persist an empty conversation document when host chat creation fails', async () => {
-        vi.spyOn(STClient, 'createNewCharacterChat').mockResolvedValue({
+        vi.mocked(hostDirectoryPort.createSession).mockResolvedValue({
             success: false,
             resolvedCharacterId: '1',
             resolvedCharacterName: 'Beta',
@@ -528,7 +586,7 @@ describe('ConversationService', () => {
                 messageCount: 0
             }
         });
-        vi.spyOn(STClient, 'renameCharacterChat').mockResolvedValue({
+        vi.mocked(hostDirectoryPort.renameSession).mockResolvedValue({
             success: true,
             previousChatFile: 'chat_archive',
             resolvedCharacterId: '1',
@@ -570,7 +628,7 @@ describe('ConversationService', () => {
     });
 
     it('deletes the current archived chat session and falls back to the default live chat context', async () => {
-        vi.spyOn(STClient, 'deleteCharacterChat').mockResolvedValue({
+        vi.mocked(hostDirectoryPort.deleteSession).mockResolvedValue({
             success: true,
             resolvedCharacterId: '1',
             resolvedCharacterName: 'Beta',
@@ -608,7 +666,7 @@ describe('ConversationService', () => {
     });
 
     it('treats missing unified conversation documents as an idempotent success when deleting a chat session', async () => {
-        vi.spyOn(STClient, 'deleteCharacterChat').mockResolvedValue({
+        vi.mocked(hostDirectoryPort.deleteSession).mockResolvedValue({
             success: true,
             resolvedCharacterId: '1',
             resolvedCharacterName: 'Beta',

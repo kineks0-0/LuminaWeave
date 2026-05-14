@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CharacterChannelService } from '../CharacterChannelService.js';
+import { CharacterChannelService } from '../conversation/CharacterChannelService.js';
 import type {
     CreateChatConversationInput,
     DeleteChatConversationInput,

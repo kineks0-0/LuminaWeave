@@ -1,5 +1,5 @@
 import type { LuminaChatMessage } from '@shared/LuminaMessage';
-import type { ConversationService } from '../core/ConversationService';
+import type { ConversationService } from '../core/conversation/ConversationService.js';
 import type {
     ConversationContextOption,
     ConversationContextOverride,
@@ -14,7 +14,7 @@ import type {
     DeleteChatConversationResult,
     RenameChatConversationInput,
     RenameChatConversationResult
-} from '../../types/ConversationContextTypes';
+} from '../../types/ConversationContextTypes.js';
 
 export type RuntimeReadyGate = () => Promise<boolean>;
 

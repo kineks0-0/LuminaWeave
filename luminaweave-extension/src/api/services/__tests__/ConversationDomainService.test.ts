@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConversationDomainService } from '../ConversationDomainService';
+import { ConversationDomainService } from '../ConversationDomainService.js';
 
 const createCoreConversationService = () => ({
     listConversationSources: vi.fn(async () => [{ id: 'chat', label: 'Chat' }]),

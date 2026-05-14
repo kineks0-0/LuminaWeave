@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ForgeRuntimeOrchestrator, type ForgeRuntimePort } from '../ForgeRuntimeOrchestrator';
+import { ForgeRuntimeOrchestrator, type ForgeRuntimePort } from '../forge/ForgeRuntimeOrchestrator.js';
 import type {
     ForgeExecutionRequest,
     ForgeRequestContextSnapshot,
@@ -7,7 +7,7 @@ import type {
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
     StagingEntry
-} from '../../../types/ForgeRuntimeTypes';
+} from '../../../types/ForgeRuntimeTypes.js';
 
 const createContext = (overrides: Partial<ForgeRuntimeContext> = {}): ForgeRuntimeContext => ({
     workspaceSessionId: 'forge_ws_test',

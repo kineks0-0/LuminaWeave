@@ -1,5 +1,5 @@
-import { LuminaWeaveAPIBase } from '../core/LuminaWeaveAPIBase.js';
-import type { ChatManager } from '../core/ChatManager.js';
+import { LuminaWeaveAPIBase } from '../core/facade/LuminaWeaveAPIBase.js';
+import type { ChatManager } from '../core/conversation/ChatManager.js';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 
 type ChatDebugHost = LuminaWeaveAPIBase & {

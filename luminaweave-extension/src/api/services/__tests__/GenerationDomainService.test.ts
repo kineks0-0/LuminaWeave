@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GenerationDomainService } from '../GenerationDomainService';
+import { GenerationDomainService } from '../GenerationDomainService.js';
 
 describe('GenerationDomainService', () => {
     it('delegates message sending to the runtime generation port', async () => {
@@ -13,9 +13,21 @@ describe('GenerationDomainService', () => {
         };
         const service = new GenerationDomainService(runtime);
 
-        await expect(service.sendMessage('hello', { chatType: 'plugin' })).resolves.toBe(true);
+        const options = {
+            chatType: 'plugin' as const,
+            promptAssembly: {
+                engine: 'lumina' as const,
+                sessionBinding: {
+                    kind: 'plugin-session' as const,
+                    sessionId: 'plugin_chat_1',
+                    sourceId: 'chat'
+                }
+            }
+        };
 
-        expect(runtime.sendMessage).toHaveBeenCalledWith('hello', { chatType: 'plugin' });
+        await expect(service.sendMessage('hello', options)).resolves.toBe(true);
+
+        expect(runtime.sendMessage).toHaveBeenCalledWith('hello', options);
     });
 
     it('delegates regeneration to the runtime generation port', async () => {

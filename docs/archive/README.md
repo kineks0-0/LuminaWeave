@@ -13,6 +13,7 @@ docs/archive/completed-tasks/<task-name>/
 ```
 
 - [Plugin Platform Refactor](./completed-tasks/plugin-platform-refactor/)
+- [Host Driver Boundary Cleanup](./completed-tasks/host-driver-boundary-cleanup/)
 
 ## Historical
 

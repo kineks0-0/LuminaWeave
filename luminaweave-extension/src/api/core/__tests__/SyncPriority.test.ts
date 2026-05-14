@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { STProtocol } from '../st-adapter/STProtocol';
+import { STProtocol } from '../host-drivers/st/STProtocol.js';
 
 describe('SyncPriority - STProtocol 数据提取优先级', () => {
     it('应该优先从 pluginRaw 的 <Chat_Reply> 标签中提取内容作为 mesRaw', () => {

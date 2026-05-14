@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SettingsDomainService, type SettingsStorageChange, type SettingsStoragePort } from '../SettingsDomainService';
-import type { StorageScope } from '../../storage';
+import { SettingsDomainService, type SettingsStorageChange, type SettingsStoragePort } from '../SettingsDomainService.js';
+import type { StorageScope } from '../../storage.js';
 
 const createStoragePort = (initialValues: Record<string, unknown> = {}) => {
     const values = new Map<string, unknown>(Object.entries(initialValues));

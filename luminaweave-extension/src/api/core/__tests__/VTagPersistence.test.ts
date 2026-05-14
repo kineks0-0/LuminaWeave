@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { XMLInterceptor, BuiltinXMLTags } from '../XMLInterceptor';
+import { XMLInterceptor, BuiltinXMLTags } from '../xml-view/XMLInterceptor.js';
 
 describe('V Tag Persistence Reproducer', () => {
     it('should NOT strip <V> tags from deriveStreamState displayText', () => {

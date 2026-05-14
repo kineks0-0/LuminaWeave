@@ -1,7 +1,7 @@
 # LuminaWeave 系统架构与设计文档 (System Design)
 
 **版本:** v6.1-docs  
-**最后更新时间:** 2026-05-12
+**最后更新时间:** 2026-05-14
 
 本文记录 LuminaWeave 长期系统设计、模块边界、数据流和不可破坏的工程约束。短版入口见 `docs/architecture.md`，产品目标见 `docs/overall/PDR.md`。
 
@@ -47,6 +47,7 @@ Host Drivers 只负责宿主物理交互。
 - 探测和访问 SillyTavern、TauriTavern、Standalone 等运行环境。
 - 读写宿主资源、事件、网络和基础存储。
 - 封装宿主全局对象、TavernHelper、Tauri ABI、local fallback。
+- ST 世界书、会话目录、物理消息列表、角色资料、Forge 测试聊天宿主资料、环境就绪、生成函数定位等宿主物理操作必须通过 `host-drivers/st/*Driver` 或 HAL ST provider 暴露给 Core / Facade。
 
 禁止：
 
@@ -63,12 +64,16 @@ HAL 是 Host Abstraction Layer，负责把宿主能力和多源资源组装为�
 | 域 | 职责 |
 | ---- | ---- |
 | Resource | 注册、浏览、读取、导入、导出、fork 多源资源 |
-| Prompt | Prompt Source、Information Planner、Prompt Assembly、来源 trace |
+| Prompt | Prompt Source、Prompt Assembly Router、Information Planner、Prompt Assembly、来源 trace |
 | Storage | extensionStore、local fallback、写入策略、workspace snapshot |
 | Network | HTTP、SSE、Tauri invoke、Nexus 生成网关 |
 | Event | 宿主事件规范化为 Lumina 领域事件 |
 
 HAL 内部模块禁止直接访问宿主全局变量或 host driver 具体类。需要宿主能力时，必须通过注入接口消费。
+
+例外边界：`hal/adapters/st/*` 是 ST 宿主 provider 的实现层，可以依赖 `host-drivers/st/*`。`hal/prompt/*` 等 HAL 通用模块不得直接 import ST 具体类。
+
+Resource source、世界书物理 I/O、宿主正则同步等带宿主实现的能力必须在对应 adapter / host-driver 注册侧接入；`hal/resource/*`、`core/lorebook/*` 等通用模块只消费端口、注册表或 host-neutral service。
 
 ### 2.3 Core Runtime
 
@@ -77,6 +82,7 @@ Core Runtime 是业务真相层。
 职责：
 
 - ConversationDocument、消息节点、世界线和当前上下文。
+- Conversation / Prompt / Generation command services，承接 Facade public method 背后的业务命令编排。
 - Generation、流式状态、停止、恢复和错误处理。
 - Storage、事务日志、幂等、序列对账和迁移。
 - XML/LuminaView 解析、标签注册和显示派生。
@@ -88,6 +94,8 @@ Core Runtime 是业务真相层。
 - Core 不 import 具体桌面 shell、theme 或插件页面 Vue 组件。
 - Core 通过 HAL 消费宿主与资源能力。
 - UI 只能通过 service/store/intents 与 Core 交互。
+- `LuminaWeaveAPI` 的 public methods 是兼容 Facade；消息更新、Prompt 探测、生成路由等业务流程应委托 Core command services。
+- Command services 不进入 HAL，也不由各宿主 adapter 分别实现；宿主差异通过 host writer、prompt probe、generation invoker、token counter、macro resolver 等窄端口表达。
 
 ### 2.4 Plugin Domain
 
@@ -248,18 +256,59 @@ flowchart LR
 
 ## 6. 生成与 Prompt 设计
 
-### 6.1 Prompt Assembly Pipeline
+### 6.1 会话绑定与 Prompt Engine
+
+会话绑定只回答“材料从哪里来”，Prompt Engine 只回答“如何合成”。二者必须分离。
+
+会话绑定类型：
+
+- `st-chat`：会话绑定到 ST 聊天，可读取 ST 角色卡、世界书、预设、历史等资源。
+- `plugin-session`：会话在 Lumina 插件内独立打开，可用于 Chat、Forge、Director 等来源。
+
+Prompt Assembly Target 描述本次合成目的：
+
+- `chat.continuation`
+- `forge.card`
+- `forge.conversation`
+- `forge.planner`
+- `forge.analyst`
+- `forge.executor`
+- `director.memory`
+
+Prompt Engine 能力边界：
+
+| Engine | 能力 | 限制 |
+| ---- | ---- | ---- |
+| `st-native` | 使用 ST 原生聊天合成链路 | 只允许 `chat.continuation`，且必须存在 `st-chat` 绑定 |
+| `lumina` | 使用 Lumina/HAL Prompt 合成链路 | 支持 Chat、Forge、Director；可读取 ST 绑定资源，但合成由 Lumina 接管 |
+
+路由规则：
+
+- 非 `chat.continuation` 目标必须走 `lumina`。
+- `st-native` 是显式选择，不因会话绑定到 ST 而自动启用。
+- `lumina-assembly` 是显式策略别名，表示插件形态下也由 Lumina 生成 payload；该路径不依赖 ST dry-run prompt probe。
+- Forge / 制卡 / Agent 协作场景永远不走 `st-native`；若绑定 ST，ST 只作为资源来源。
+- UI、插件和 Core 只提交合成意图、会话绑定、source policy 和 preset 选择，不在组件内拼接最终 prompt。
+- ST native prompt probe 是兼容、调试和对比路径，不是 Lumina-owned Prompt Assembly 的必需输入。
+
+### 6.2 Prompt Assembly Pipeline
 
 Prompt 不应只输出最终 messages，还应保留来源与变换 trace。
 
 ```mermaid
 flowchart LR
+    Request["PromptAssemblyRequest\nTarget / Binding / Policy"]
+    Router["PromptAssemblyRouter"]
+    Engine["ST Native or Lumina Engine"]
     Sources["ResourceRef / History / Memory / Forge State"]
     Units["PromptSourceUnit"]
     Planner["InformationPlanner"]
     Composer["PromptAssemblyTracer"]
     Result["PromptAssemblyResult"]
 
+    Request --> Router
+    Router --> Engine
+    Engine --> Sources
     Sources --> Units
     Units --> Planner
     Planner --> Composer
@@ -279,7 +328,7 @@ Trace 应记录：
 - 输出 message index 和 offset。
 - diagnostics。
 
-### 6.2 ST Engine Resource Policy
+### 6.3 ST Engine Resource Policy
 
 当使用 ST 原生合成或 ST 预设直通时，只有 ST-owned ResourceRef 可直接 passthrough。Lumina local 或 subscription 资源不得静默混入 ST prompt。
 
@@ -289,7 +338,7 @@ Trace 应记录：
 - 虚拟世界书注入。
 - 宏注入。
 
-### 6.3 生成流
+### 6.4 生成流
 
 生成链路应支持：
 
@@ -386,6 +435,12 @@ XMLTagRegistry 是 XML 标签元数据真相源。
 - `SettingsDomainService`：设置读写、legacy key、导入导出和监听。
 
 Facade 可保留委托入口，但新增 UI 应优先消费明确 domain service。
+
+当前已落地的收口：
+
+- `LorebookManager` 只维护世界书领域状态、快照和事件派发；ST/TavernHelper/REST 世界书读写由 `STWorldInfoDriver` 承担。
+- `LuminaWeaveAPIBase` 的环境等待、ST context / event source 访问由 `STEnvironmentDriver` 承担。
+- `LuminaWeaveAPI` 中角色名、用户头像、角色头像等宿主资料读取由 `STCharacterProfileDriver` 承担。
 
 ## 11. 后端服务设计
 

@@ -1,7 +1,7 @@
 # LuminaWeave 产品需求文档 (PDR)
 
 **版本:** v6.1-docs  
-**最后更新时间:** 2026-05-12
+**最后更新时间:** 2026-05-13
 
 本文记录 LuminaWeave 长期有效的产品目标、核心能力和边界。阶段性执行记录进入 `docs/current/tasks/`，已完成任务归档到 `docs/archive/completed-tasks/`。
 
@@ -194,7 +194,7 @@ LuminaWeave 至少支持三类运行形态：
 
 - 项目仍处于快速演进阶段，插件 API、桌面模式 API 和存储结构仍可能破坏式调整。
 - 群聊、前端卡、完整移动端体验、Forge 详细定制流程和部分附件能力仍未稳定。
-- ST 原生合成和 Lumina 自合成之间的资源转换策略仍需继续明确。
+- ST 原生合成与 Lumina 自合成的边界为：ST native 只作为绑定 ST 聊天时的聊天续写引擎；Forge、制卡、Agent 协作和插件内独立会话必须走 Lumina/HAL Prompt 合成。
 - 文档仍在从阶段性记录向长期设计文档收敛。
 
 ## 8. 非目标

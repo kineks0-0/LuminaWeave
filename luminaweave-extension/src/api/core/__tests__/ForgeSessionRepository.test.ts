@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForgeSessionRepository } from '../ForgeSessionRepository';
+import { ForgeSessionRepository } from '../forge/ForgeSessionRepository.js';
 import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import { shellWorkspaceService } from '../hal/shell/ShellWorkspaceService.js';
 
-vi.mock('../../stores/useForgeStore.js', () => ({
+vi.mock('../../stores/useForgeStore', () => ({
     useForgeStore: () => ({
         stagingArea: [],
         commitReadyEntries: []
@@ -106,6 +107,7 @@ describe('ForgeSessionRepository', () => {
     let serverStorage: Map<string, any>;
 
     beforeEach(() => {
+        shellWorkspaceService.resetForTests();
         serverStorage = new Map<string, any>();
         bridge = injectMockBridge(serverStorage);
         const storage = new Map<string, string>();
@@ -233,7 +235,7 @@ describe('ForgeSessionRepository', () => {
 
         const loaded = await repository.loadSession('forge_ws_2');
 
-        expect(loaded?.structuredState?.forms).toEqual({});
+        expect(loaded?.structuredState?.forms.role_core_profile.fields.identity.value).toBe('失忆的教会审讯官');
         expect(bridge.conversation.getConversation).toHaveBeenCalledWith('forge_ws_2');
     });
 
@@ -260,5 +262,106 @@ describe('ForgeSessionRepository', () => {
         expect(sessionInLocal.worldlineNodes).toEqual([]);
         expect(sessionInLocal.structuredState.forms).toEqual({});
         expect(sessionInLocal.workspaceMode).toBe('stub');
+    });
+
+    it('应把 Forge 会话保存为项目级 workspace 绑定', async () => {
+        const repository = new ForgeSessionRepository();
+
+        await repository.saveSession({
+            id: 'forge_ws_project',
+            sessionChatId: 'lw_card_conversation',
+            title: 'Project Workspace',
+            createdAt: 300,
+            updatedAt: 300,
+            presetId: 'preset_1',
+            activeLeafId: null,
+            worldlineNodes: [],
+            selectedChatSessionId: null,
+            selectedChatSnapshotId: null,
+            draftInput: '',
+            timelineItems: [],
+            stagingEntries: [],
+            commitReadyEntries: [],
+            virtualLorebookEntries: [],
+            importedLorebookId: null,
+            workflowSnapshot: null,
+            structuredState: { forms: {} } as any,
+            draftTree: { nodes: [], lastUpdatedAt: 300 } as any,
+            forgeMemoryTree: { nodes: [], lastUpdatedAt: 300 } as any,
+            activeLayer: 'concept',
+            completedLayers: [],
+            publishState: 'drafting',
+            workspaceMode: 'workspace'
+        });
+
+        const saved = serverStorage.get('forge_ws_project');
+        expect(saved.pluginState.forge).toMatchObject({
+            forgeProjectId: 'forge_ws_project',
+            conversationId: 'lw_card_conversation',
+            workspacePath: '/workspaces/forge/forge_ws_project',
+            sessionChatId: 'lw_card_conversation'
+        });
+        expect(bridge.extensionStore.setJson).toHaveBeenCalledWith(expect.objectContaining({
+            namespace: 'lumina.resource-runtime',
+            table: 'shell-workspaces',
+            key: 'forge-project-bindings.v1',
+            value: expect.objectContaining({
+                bindings: expect.objectContaining({
+                    lw_card_conversation: expect.objectContaining({
+                        forgeProjectId: 'forge_ws_project',
+                        workspacePath: '/workspaces/forge/forge_ws_project'
+                    })
+                })
+            })
+        }));
+        const fs = await shellWorkspaceService.getFileSystem({ projectId: 'forge_ws_project' });
+        await expect(fs.readFile('/forge/forge_ws_project/project.json')).resolves.toContain('"title": "Project Workspace"');
+        await expect(fs.readFile('/forge/forge_ws_project/drafts/tree.json')).resolves.toContain('"nodes": []');
+        await expect(fs.readFile('/forge/forge_ws_project/review/staging.json')).resolves.toContain('"stagingEntries": []');
+    });
+
+    it('列表引用应暴露项目与协作线程标识', async () => {
+        const repository = new ForgeSessionRepository();
+
+        await repository.saveSession({
+            id: 'forge_ws_thread_ref',
+            forgeProjectId: 'forge_project_ref',
+            conversationId: 'conversation_ref',
+            workspacePath: '/workspaces/forge/forge_project_ref',
+            sessionChatId: 'conversation_ref',
+            title: 'Thread Ref',
+            createdAt: 400,
+            updatedAt: 500,
+            presetId: 'preset_1',
+            activeLeafId: 'leaf_ref',
+            worldlineNodes: [{ id: 'leaf_ref', mes: 'hello' } as any],
+            selectedChatSessionId: null,
+            selectedChatSnapshotId: null,
+            draftInput: '',
+            timelineItems: [],
+            stagingEntries: [],
+            commitReadyEntries: [],
+            virtualLorebookEntries: [],
+            importedLorebookId: null,
+            workflowSnapshot: null,
+            structuredState: { forms: {} } as any,
+            draftTree: { nodes: [], lastUpdatedAt: 500 } as any,
+            forgeMemoryTree: { nodes: [], lastUpdatedAt: 500 } as any,
+            activeLayer: 'concept',
+            completedLayers: [],
+            publishState: 'drafting',
+            workspaceMode: 'workspace'
+        });
+
+        const refs = repository.listSessions();
+
+        expect(refs[0]).toMatchObject({
+            id: 'forge_ws_thread_ref',
+            forgeProjectId: 'forge_project_ref',
+            conversationId: 'conversation_ref',
+            sessionChatId: 'conversation_ref',
+            workspacePath: '/workspaces/forge/forge_project_ref',
+            activeLeafId: 'leaf_ref'
+        });
     });
 });

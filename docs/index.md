@@ -65,6 +65,7 @@
 已完成任务入口：
 
 - [Archive](./archive/README.md)
+- [Host Driver Boundary Cleanup](./archive/completed-tasks/host-driver-boundary-cleanup/)
 - [Plugin Platform Refactor](./archive/completed-tasks/plugin-platform-refactor/)
 
 ## 维护规则

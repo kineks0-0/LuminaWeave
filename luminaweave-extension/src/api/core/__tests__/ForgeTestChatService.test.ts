@@ -73,7 +73,7 @@ const {
     }))
 }));
 
-vi.mock('../../llmEngine', () => ({
+vi.mock('../../llmEngine.js', () => ({
     llmEngine: {
         resolveNodesFromPreset,
         createSession,
@@ -81,7 +81,7 @@ vi.mock('../../llmEngine', () => ({
     }
 }));
 
-vi.mock('../../storage', () => ({
+vi.mock('../../storage.js', () => ({
     lwStorage: {
         get: storageGet,
         set: vi.fn(),
@@ -90,13 +90,13 @@ vi.mock('../../storage', () => ({
     }
 }));
 
-vi.mock('../PromptPresetComposer', () => ({
+vi.mock('../hal/prompt/PromptPresetComposer.js', () => ({
     PromptPresetComposer: {
         compose: composePromptPreset
     }
 }));
 
-vi.mock('../PromptPresetRegistry', () => ({
+vi.mock('../hal/prompt/PromptPresetRegistry.js', () => ({
     promptPresetRegistry: {
         reload: registryReload,
         listPresets: registryListPresets,
@@ -106,30 +106,11 @@ vi.mock('../PromptPresetRegistry', () => ({
     }
 }));
 
-vi.mock('../ForgeTestChatPromptBuilder', () => ({
+vi.mock('../forge/ForgeTestChatPromptBuilder.js', () => ({
     buildSTPresetMessages
 }));
 
-vi.mock('../EnvDetector', () => ({
-    EnvDetector: {
-        ctx: {
-            characterId: 0,
-            characters: [
-                {
-                    data: {
-                        name: '测试角色',
-                        description: '角色描述',
-                        personality: '角色性格',
-                        scenario: '角色场景',
-                        system_prompt: '角色系统提示词'
-                    }
-                }
-            ]
-        }
-    }
-}));
-
-vi.mock('../LuminaGenerationTask', () => ({
+vi.mock('../generation/LuminaGenerationTask.js', () => ({
     LuminaGenerationTask: vi.fn().mockImplementation(function MockLuminaGenerationTask(_session: unknown) {
         return {
             run: runTask,
@@ -138,18 +119,28 @@ vi.mock('../LuminaGenerationTask', () => ({
     })
 }));
 
-vi.mock('../st-adapter/STClient', () => ({
-    STClient: {
-        getPreset,
-        getInstructSettings
-    }
-}));
-
-import { ForgeTestChatService } from '../ForgeTestChatService';
+import { ForgeTestChatService } from '../forge/ForgeTestChatService.js';
+import { configureForgeTestChatHostPort } from '../forge/ForgeTestChatHostPort.js';
 
 describe('ForgeTestChatService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        configureForgeTestChatHostPort({
+            createPromptContext: () => ({
+                substituteMacros: (text: string) => text,
+                snapshotVariables: () => ({}),
+                restoreVariables: vi.fn()
+            }),
+            resolveCurrentCharCard: () => ({
+                name: '测试角色',
+                description: '角色描述',
+                personality: '角色性格',
+                scenario: '角色场景',
+                systemPrompt: '角色系统提示词'
+            }),
+            getPreset,
+            getInstructSettings
+        });
         resolveNodesFromPreset.mockReturnValue([{ id: 'node-1', provider: 'openai', model: 'gpt-test' }]);
         createSession.mockImplementation((options) => ({ options }));
         cleanMessages.mockImplementation((messages) => messages);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MemoryManager } from '../MemoryManager';
+import { MemoryManager } from '../runtime-utils/MemoryManager.js';
 
 describe('MemoryManager Core Logic', () => {
     let manager: MemoryManager;

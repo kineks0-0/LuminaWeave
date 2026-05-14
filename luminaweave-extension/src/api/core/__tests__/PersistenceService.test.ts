@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PersistenceService } from '../PersistenceService';
-import { WorldlineStore } from '../WorldlineStore';
+import { PersistenceService } from '../storage/PersistenceService.js';
+import { WorldlineStore } from '../storage/WorldlineStore.js';
 import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import { HALContext } from '../hal/HALContext.js';
+import { initMockHAL } from './halMock.js';
 
 vi.mock('../../storage.js', () => ({
     lwStorage: {
@@ -83,6 +85,7 @@ describe('PersistenceService Transaction Protocol', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        initMockHAL();
         bridge = injectMockBridge();
         bridge.conversation.getTransactions.mockResolvedValue({ success: true, transactions: [], lastCommittedSeq: 0 });
         bridge.conversation.getConversation.mockResolvedValue({ document: null });

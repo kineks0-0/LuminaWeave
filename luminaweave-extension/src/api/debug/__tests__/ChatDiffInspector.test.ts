@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ChatDiffInspector } from '../ChatDiffInspector.js';
-import { SyncUtils } from '../../core/SyncUtils.js';
-import type { LuminaChatMessage } from '../../core/ChatManager.js';
+import { SyncUtils } from '../../core/host-drivers/st/SyncUtils.js';
+import type { LuminaChatMessage } from '../../core/conversation/ChatManager.js';
 
 function makeMsg(partial: Partial<LuminaChatMessage>): LuminaChatMessage {
     return {

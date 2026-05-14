@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HostInteractionService } from '../HostInteractionService';
+import { HostInteractionService } from '../HostInteractionService.js';
 
 describe('HostInteractionService', () => {
     afterEach(() => {

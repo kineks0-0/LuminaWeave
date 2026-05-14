@@ -46,10 +46,15 @@ export interface ChatSessionSnapshot {
 
 export interface ForgeWorkspaceSessionRef {
     id: string;
+    forgeProjectId?: string;
+    conversationId?: string;
+    sessionChatId?: string;
+    workspacePath?: string;
     title: string;
     createdAt: number;
     updatedAt: number;
     messageCount: number;
+    activeLeafId?: string | null;
     selectedChatSessionId: string | null;
 }
 
@@ -63,6 +68,9 @@ export interface ForgeVirtualLorebookEntry {
 
 export interface ForgeWorkspaceSession {
     id: string;
+    forgeProjectId?: string;
+    conversationId?: string;
+    workspacePath?: string;
     sessionChatId: string;
     title: string;
     createdAt: number;

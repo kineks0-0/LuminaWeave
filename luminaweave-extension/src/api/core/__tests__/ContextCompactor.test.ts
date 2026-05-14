@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ContextCompactor } from '../ContextCompactor';
-import { ContextControlSettings } from '../types';
+import { ContextCompactor } from '../hal/prompt/ContextCompactor.js';
+import { ContextControlSettings } from '../storage/types.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { STClient } from '../st-adapter/STClient';
+import { STClient } from '../host-drivers/st/STClient.js';
 
-vi.mock('../st-adapter/STClient', () => ({
+vi.mock('../host-drivers/st/STClient.js', () => ({
     STClient: {
         getTokenCount: vi.fn(async (text) => text.length), // 简单模拟：1 字符 = 1 Token
         getResolvedCurrentCharacterId: vi.fn(() => '0'),

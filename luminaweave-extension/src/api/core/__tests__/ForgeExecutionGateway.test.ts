@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ForgeRuntimeEvent } from '../../../types/ForgeRuntimeTypes';
+import type { ForgeRuntimeEvent } from '../../../types/ForgeRuntimeTypes.js';
 
 const {
     resolveNodesFromPreset,
@@ -17,7 +17,7 @@ const {
     })
 }));
 
-vi.mock('../../llmEngine', () => ({
+vi.mock('../../llmEngine.js', () => ({
     llmEngine: {
         resolveNodesFromPreset,
         createSession,
@@ -25,13 +25,13 @@ vi.mock('../../llmEngine', () => ({
     }
 }));
 
-vi.mock('../../storage', () => ({
+vi.mock('../../storage.js', () => ({
     lwStorage: {
         get: storageGet
     }
 }));
 
-vi.mock('../LuminaGenerationTask', () => ({
+vi.mock('../generation/LuminaGenerationTask.js', () => ({
     LuminaGenerationTask: vi.fn().mockImplementation(function MockLuminaGenerationTask(_session: unknown) {
         return {
             run: runTask
@@ -39,7 +39,7 @@ vi.mock('../LuminaGenerationTask', () => ({
     })
 }));
 
-import { ForgeExecutionGateway } from '../ForgeExecutionGateway';
+import { ForgeExecutionGateway } from '../forge/ForgeExecutionGateway.js';
 
 describe('ForgeExecutionGateway', () => {
     beforeEach(() => {

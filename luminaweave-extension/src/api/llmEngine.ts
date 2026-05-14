@@ -1,8 +1,9 @@
 import { lwStorage } from './storage.js';
 import { NexusNode, NexusAPI, NexusPreset, CleanedMessage } from '../types/nexus.js';
-import { NexusClient } from './core/NexusClient.js';
-import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
-import { GenerationSession, GenerationSessionOptions } from './core/GenerationSession.js';
+import { NexusClient } from './core/hal/network/NexusClient.js';
+import { LuminaWeaveAPIBase } from './core/facade/LuminaWeaveAPIBase.js';
+import { getHostRuntimePort } from './core/facade/HostRuntimePort.js';
+import { GenerationSession, GenerationSessionOptions } from './core/generation/GenerationSession.js';
 
 /**
  * 幻光流式引擎工厂 (LuminaWeaveLLMEngine)
@@ -75,7 +76,7 @@ export class LuminaWeaveLLMEngine extends LuminaWeaveAPIBase {
             nodesToTry = targetPreset.nodes.map((node: NexusNode) => {
                 // st_current 类型的节点需要动态获取 ST 当前模型配置
                 if (node.provider === 'st_current') {
-                    const settings = (this.stMain as any)?.chatCompletionSettings;
+                    const settings = (getHostRuntimePort().getCore() as any)?.chatCompletionSettings;
                     return {
                         ...node,
                         model: settings?.model || node.model

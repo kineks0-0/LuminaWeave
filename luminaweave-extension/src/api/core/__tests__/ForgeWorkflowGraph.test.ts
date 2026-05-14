@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ForgeWorkflowGraph } from '../ForgeWorkflowGraph';
-import type { ForgeStructuredState } from '../../../types/ForgeStructuredTypes';
-import type { ForgeRuntimeContext } from '../../../types/ForgeRuntimeTypes';
+import { ForgeWorkflowGraph } from '../forge/ForgeWorkflowGraph.js';
+import type { ForgeStructuredState } from '../../../types/ForgeStructuredTypes.js';
+import type { ForgeRuntimeContext } from '../../../types/ForgeRuntimeTypes.js';
 
 const emptyStructuredState: ForgeStructuredState = {
     activeFormId: null,

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ForgePromptContextService } from '../ForgePromptContextService';
-import type { MemorySnapshot } from '../../../types/MemorySnapshotTypes';
+import { ForgePromptContextService } from '../forge/ForgePromptContextService.js';
+import type { MemorySnapshot } from '../../../types/MemorySnapshotTypes.js';
 
-vi.mock('../st-adapter/STClient', () => ({
+vi.mock('../host-drivers/st/STClient.js', () => ({
     STClient: {
         substituteMacros: vi.fn((text: string) => text),
         getActiveWorldInfoItems: vi.fn(() => []),
@@ -138,6 +138,55 @@ describe('ForgePromptContextService', () => {
         expect(request.presetId).toBe('forge_preset_alpha');
     });
 
+    it('应为 Forge 主模型预览生成来源 trace', () => {
+        const assembly = ForgePromptContextService.buildPromptPreviewAssembly({
+            mode: 'planner',
+            presetData: null,
+            messages: [{ role: 'user', content: '帮我做一张卡' }],
+            resolvedLorebookEntries: [
+                {
+                    uid: 'entry-1',
+                    comment: '世界设定',
+                    key: ['world'],
+                    keysecondary: [],
+                    content: '世界书内容',
+                    constant: false,
+                    selective: false,
+                    selectiveLogic: 0,
+                    disable: false,
+                    enabled: true,
+                    position: 0,
+                    depth: 0,
+                    order: 0,
+                    probability: 100,
+                    scan_depth: 0
+                }
+            ],
+            memorySnapshot: { ...baseMemorySnapshot },
+            forgeMemoryTree: { entries: [], lastUpdatedAt: 0 },
+            structuredState: {
+                activeFormId: null,
+                activeMessageFormId: null,
+                submitConfigs: {},
+                submittedScopes: {},
+                forms: {},
+                lastUpdatedAt: Date.now()
+            },
+            draftTree: { nodes: [], lastUpdatedAt: Date.now() },
+            workflowSnapshot: null
+        });
+
+        expect(assembly.messages.length).toBeGreaterThan(0);
+        expect(assembly.trace.length).toBeGreaterThan(0);
+        expect(assembly.trace.some(trace => trace.sourceKind === 'worldbook')).toBe(true);
+        expect(assembly.trace.some(trace => trace.sourceKind === 'history')).toBe(true);
+        expect(assembly.trace.every(trace => trace.outputMessageIndex === null || trace.outputMessageIndex >= 0)).toBe(true);
+        expect(assembly.route).toMatchObject({
+            target: 'forge.planner',
+            engine: 'lumina'
+        });
+    });
+
     it('应能生成 executor 预览载荷', () => {
         const messages = ForgePromptContextService.buildExecutorPreviewPayload({
             instruction: '重写性格描述，使其更冷静克制',
@@ -172,5 +221,25 @@ describe('ForgePromptContextService', () => {
         });
 
         expect(request.presetId).toBe('forge_preset_alpha');
+    });
+
+    it('应为 executor 预览生成控制来源 trace', () => {
+        const assembly = ForgePromptContextService.buildExecutorPreviewAssembly({
+            instruction: '重写性格描述，使其更冷静克制',
+            entryId: 'character.alpha',
+            originalContent: '原始条目内容',
+            sessionChatId: 'forge_session_1',
+            charName: 'Forge Assistant',
+            presetId: 'forge_preset_alpha',
+            sourceCommand: { type: 'noop' }
+        });
+
+        expect(assembly.messages).toHaveLength(3);
+        expect(assembly.trace.some(trace => trace.sourceKind === 'forge')).toBe(true);
+        expect(assembly.trace.every(trace => trace.kind === 'control')).toBe(true);
+        expect(assembly.route).toMatchObject({
+            target: 'forge.executor',
+            engine: 'lumina'
+        });
     });
 });

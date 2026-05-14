@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SeedHandler } from '../SeedHandler';
+import { SeedHandler } from '../runtime-utils/SeedHandler.js';
 
 describe('SeedHandler', () => {
     it('应该能从文本中萃取出高分对话片段', () => {

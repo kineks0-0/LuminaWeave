@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NexusClient, StreamCallbacks } from '../NexusClient.js';
+import { NexusClient, StreamCallbacks } from '../hal/network/NexusClient.js';
 import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 
 function createMockStreamingHandle() {

@@ -3,9 +3,9 @@ import {
     buildFrozenVirtualLorebookContent,
     findVirtualLorebookEntry,
     findVirtualLorebookEntryIndex
-} from '../utils/forgeVirtualLorebook';
-import type { ForgeVirtualLorebookEntry } from '../../../types/SessionTypes';
-import type { StagingEntry } from '../../../types/ForgeRuntimeTypes';
+} from '../utils/forgeVirtualLorebook.js';
+import type { ForgeVirtualLorebookEntry } from '../../../types/SessionTypes.js';
+import type { StagingEntry } from '../../../types/ForgeRuntimeTypes.js';
 
 const importedEntry: ForgeVirtualLorebookEntry = {
     id: 'forge_lore_import_character.alpha',

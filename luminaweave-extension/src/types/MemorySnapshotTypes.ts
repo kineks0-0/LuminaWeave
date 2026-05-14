@@ -1,5 +1,5 @@
-import type { TimelineSourceId } from '../stores/useTimelineStore';
-import type { LorebookVersionMode } from './LorebookViewTypes';
+import type { TimelineSourceId } from '../stores/useTimelineStore.js';
+import type { LorebookVersionMode } from './LorebookViewTypes.js';
 
 export interface ResolvedLorebookMemoryItem {
     id: string;

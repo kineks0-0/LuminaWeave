@@ -1,6 +1,6 @@
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { globalXMLInterceptor } from '../core/XMLInterceptor.js';
-import { MessageComparator, MessageTextResolver, SyncUtils } from '../core/SyncUtils.js';
+import { globalXMLInterceptor } from '../core/xml-view/XMLInterceptor.js';
+import { MessageComparator, MessageTextResolver, SyncUtils } from '../core/host-drivers/st/SyncUtils.js';
 
 export type ChatDiffSide = 'lumina' | 'st';
 

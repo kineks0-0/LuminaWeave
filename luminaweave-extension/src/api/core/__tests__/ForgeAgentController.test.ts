@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { XMLInterceptor } from '../XMLInterceptor';
+import { XMLInterceptor } from '../xml-view/XMLInterceptor.js';
 
 describe('ForgeAgentController & XMLInterceptor integration', () => {
     let interceptor: XMLInterceptor;

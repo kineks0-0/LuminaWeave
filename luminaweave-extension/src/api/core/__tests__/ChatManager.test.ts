@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ChatManager } from '../ChatManager';
-import { SyncUtils } from '../SyncUtils';
-import { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { ChatManager } from '../conversation/ChatManager.js';
 import { lwStorage } from '../../storage.js';
 
 vi.mock('../../storage.js', () => ({
@@ -14,7 +12,7 @@ vi.mock('../../storage.js', () => ({
     }
 }));
 
-vi.mock('../PersistenceService', () => ({
+vi.mock('../storage/PersistenceService.js', () => ({
     PersistenceService: vi.fn(function () {
         return {
             loadFromIndependentChat: vi.fn().mockResolvedValue(true),
