@@ -1,5 +1,15 @@
+import type {
+    PromptAssemblyEnginePolicy,
+    PromptAssemblyPolicy,
+    PromptSessionBinding
+} from '../../types/PromptAssemblyTypes.js';
+
 export interface SendMessageOptions {
     chatType?: 'st' | 'plugin';
+    promptAssembly?: PromptAssemblyPolicy & {
+        engine?: PromptAssemblyEnginePolicy;
+        sessionBinding?: PromptSessionBinding;
+    };
 }
 
 export interface GenerationStreamState {

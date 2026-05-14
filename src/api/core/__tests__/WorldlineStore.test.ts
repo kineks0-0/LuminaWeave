@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { WorldlineStore, WorldlineEvent } from '../WorldlineStore';
+import { WorldlineStore, WorldlineEvent } from '../storage/WorldlineStore.js';
 
 describe('WorldlineStore', () => {
     let store: WorldlineStore;

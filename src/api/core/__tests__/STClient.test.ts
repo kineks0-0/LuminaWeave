@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { EnvDetector } from '../EnvDetector.js';
-import { ST_EVENT } from '../STEvent';
-import { STClient } from '../st-adapter/STClient';
+import { STGlobalAccessor } from '../host-drivers/st/STGlobalAccessor.js';
+import { ST_EVENT } from '../host-drivers/STEvent.js';
+import { STClient } from '../host-drivers/st/STClient.js';
 
 describe('STClient - extra normalization', () => {
     let helper: any;
@@ -20,12 +20,12 @@ describe('STClient - extra normalization', () => {
         stEventTypes = undefined;
         vi.useRealTimers();
         vi.restoreAllMocks();
-        vi.spyOn(EnvDetector, 'stHelper', 'get').mockImplementation(() => helper);
-        vi.spyOn(EnvDetector, 'stMain', 'get').mockImplementation(() => stMain as any);
-        vi.spyOn(EnvDetector, 'ctx', 'get').mockImplementation(() => ctx as any);
-        vi.spyOn(EnvDetector, 'stGlobal', 'get').mockImplementation(() => stGlobal as any);
-        vi.spyOn(EnvDetector, 'stEventSource', 'get').mockImplementation(() => stEventSource as any);
-        vi.spyOn(EnvDetector, 'stEventTypes', 'get').mockImplementation(() => stEventTypes as any);
+        vi.spyOn(STGlobalAccessor, 'stHelper', 'get').mockImplementation(() => helper);
+        vi.spyOn(STGlobalAccessor, 'stMain', 'get').mockImplementation(() => stMain as any);
+        vi.spyOn(STGlobalAccessor, 'ctx', 'get').mockImplementation(() => ctx as any);
+        vi.spyOn(STGlobalAccessor, 'stGlobal', 'get').mockImplementation(() => stGlobal as any);
+        vi.spyOn(STGlobalAccessor, 'stEventSource', 'get').mockImplementation(() => stEventSource as any);
+        vi.spyOn(STGlobalAccessor, 'stEventTypes', 'get').mockImplementation(() => stEventTypes as any);
     });
 
     it('updateMessages should flatten nested extra.extra into extra', async () => {

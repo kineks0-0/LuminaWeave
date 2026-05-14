@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitToSegments } from '../LVParser';
+import { splitToSegments } from '../xml-view/LVParser.js';
 
 describe('LVParser Reproducer', () => {
     it('should parse a complete V block correctly', () => {

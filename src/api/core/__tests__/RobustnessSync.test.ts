@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { LuminaChatMessage, MessageUtils } from '@shared/LuminaMessage.js';
-import { STProtocol } from '../st-adapter/STProtocol.js';
-import { WorldlineStore } from '../WorldlineStore.js';
-import { globalXMLInterceptor } from '../XMLInterceptor.js';
+import { STProtocol } from '../host-drivers/st/STProtocol.js';
+import { WorldlineStore } from '../storage/WorldlineStore.js';
+import { globalXMLInterceptor } from '../xml-view/XMLInterceptor.js';
 
 describe('RobustnessSync Pipeline', () => {
 

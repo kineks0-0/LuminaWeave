@@ -11,7 +11,7 @@ import {
     IStreamingHandle 
 } from '@shared/api/IBridge';
 import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints';
-import { STClient } from '../core/st-adapter/STClient';
+import { STClient } from '../core/host-drivers/st/STClient.js';
 import type { ConversationDocument, ConversationMutation } from '@shared/ConversationTypes';
 import { migrateLegacyChatArray, migrateLegacyForgeSession } from '@shared/ConversationMigration';
 

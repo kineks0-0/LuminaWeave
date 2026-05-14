@@ -1,0 +1,470 @@
+import { LuminaWeaveAPIBase } from '../facade/LuminaWeaveAPIBase.js';
+import { LorebookTimelineResolver } from './LorebookTimelineResolver.js';
+import { getLorebookHostPort, type LorebookHostPort } from './LorebookHostPort.js';
+import type {
+    LorebookEntrySnapshot,
+    LorebookTimelineContext,
+    LorebookVersionMode
+} from '../../../types/LorebookViewTypes.js';
+
+/**
+ * LorebookManager (世界书管理器)
+ * 负责世界书领域状态、快照和事件派发；宿主物理操作由 LorebookHostPort 承担。
+ */
+export class LorebookManager extends LuminaWeaveAPIBase {
+    private parentApi: any;
+    private readonly host: LorebookHostPort;
+    private readonly snapshotStorageKey = 'lumina-lorebook.entry-snapshots';
+    /** 每本书最多保留的快照数量，超出时删除最旧的 */
+    private readonly MAX_SNAPSHOTS_PER_BOOK = 5;
+    public entries: LuminaLorebookEntry[] = [];
+    public books: { name: string, id: string }[] = [];
+    public selectedBook: string | null = null;
+    public currentBookData: LorebookData | null = null; // 存储当前独立编辑的书籍全量数据
+    public activeEditingEntry: LuminaLorebookEntry | null = null; // 全局活跃编辑项 (多窗口协作用)
+    public isLoading: boolean = false;
+    public versionMode: LorebookVersionMode = 'follow-timeline';
+    public pinnedSnapshotKey: string | null = null;
+    public manualSnapshotKey: string | null = null;
+    public snapshotRevision: number = 0;
+    private snapshots = new Map<string, LorebookEntrySnapshot>();
+
+    constructor(parentApi: any, host: LorebookHostPort = getLorebookHostPort()) {
+        super();
+        this.parentApi = parentApi;
+        this.host = host;
+        this.restoreSnapshots();
+    }
+
+    private restoreSnapshots(): void {
+        if (typeof window === 'undefined' || !window.localStorage) return;
+        try {
+            const raw = window.localStorage.getItem(this.snapshotStorageKey);
+            if (!raw) return;
+            const list = JSON.parse(raw) as LorebookEntrySnapshot[];
+            this.snapshots = new Map(
+                list
+                    .filter(snapshot => snapshot?.key && snapshot?.bookId)
+                    .map(snapshot => [snapshot.key, snapshot])
+            );
+            this.snapshotRevision = this.snapshots.size;
+        } catch (error) {
+            console.warn('[LorebookManager] 恢复世界书快照失败', error);
+        }
+    }
+
+    private persistSnapshots(): void {
+        if (typeof window === 'undefined' || !window.localStorage) return;
+
+        const tryWrite = (list: LorebookEntrySnapshot[]): boolean => {
+            try {
+                window.localStorage.setItem(this.snapshotStorageKey, JSON.stringify(list));
+                return true;
+            } catch {
+                return false;
+            }
+        };
+
+        // 按时间倒序（最新优先）排列，优先保留最近的快照
+        let list = Array.from(this.snapshots.values())
+            .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+
+        // 首次尝试
+        if (tryWrite(list)) return;
+
+        // QuotaExceededError：逐步裁剪最旧的快照直到写入成功
+        while (list.length > 0) {
+            list = list.slice(0, Math.max(1, Math.floor(list.length * 0.7)));
+            if (tryWrite(list)) {
+                // 同步内存中的快照 Map，移除已被裁剪的条目
+                const keepKeys = new Set(list.map(s => s.key));
+                for (const key of Array.from(this.snapshots.keys())) {
+                    if (!keepKeys.has(key)) this.snapshots.delete(key);
+                }
+                console.warn(`[LorebookManager] 存储配额不足，已裁剪至 ${list.length} 个快照`);
+                return;
+            }
+        }
+
+        // 完全无法写入时清空，避免后续持续报错
+        try {
+            window.localStorage.removeItem(this.snapshotStorageKey);
+            this.snapshots.clear();
+            console.warn('[LorebookManager] 存储配额严重不足，已清空所有世界书快照');
+        } catch { /* ignore */ }
+    }
+
+    /**
+     * 对条目进行标准排序，先排开启的，再按 order 降序
+     */
+    private sortEntries(entries: LuminaLorebookEntry[]): LuminaLorebookEntry[] {
+        return entries.sort((a: any, b: any) => {
+            // 1. 开启状态优先
+            const aEnabled = a.enabled !== false;
+            const bEnabled = b.enabled !== false;
+            if (aEnabled !== bEnabled) {
+                return aEnabled ? -1 : 1;
+            }
+            // 2. 优先级排序 (order 大的在前)
+            return (Number(b.position?.order) || 0) - (Number(a.position?.order) || 0);
+        });
+    }
+
+    /**
+     * 同步书籍目录列表
+     */
+    async syncFromST(): Promise<void> {
+        this.isLoading = true;
+        try {
+            console.log('[LorebookManager] 正在同步世界书列表...');
+            this.books = this.host.getWorldbookRefs();
+
+            console.log(`[LorebookManager] 成功发现 ${this.books.length} 本世界书`);
+
+            if (!this.selectedBook && this.books.length > 0) {
+                const initialBookId = this.host.getSelectedWorldbookName() || this.books[0].id;
+                if (initialBookId) await this.loadLorebook(initialBookId);
+            }
+
+            this.emit('LOREBOOK_SYNCED', { entries: this.entries, book: this.selectedBook, books: this.books });
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    /**
+     * 读取世界书原始数据 (Helper 优先)
+     */
+    async getLorebookRaw(name: string): Promise<any> {
+        const normalizedTarget = name.replace(/\.json$/, '');
+        try {
+            return await this.host.getWorldbook(normalizedTarget);
+        } catch (e) {
+            console.warn(`[LorebookManager] 获取世界书 ${normalizedTarget} 失败，返回空结构`, e);
+        }
+
+        // 发生错误或不可用时返回空结构，避免流程崩溃
+        return { entries: {} };
+    }
+
+    async syncLuminaRegexToHost(): Promise<void> {
+        await this.host.syncLuminaRegex?.();
+    }
+
+    /**
+     * 规范化条目数据，补全原生 ST 及其插件 (及 TavernHelper) 必填字段
+     */
+    private _normalizeEntry(entry: any): any {
+        if (!entry) return entry;
+        const normalized = { ...entry };
+
+        // 补全缺失的关键数组字段，防止 TavernHelper 的 .map() 崩溃
+        if (!Array.isArray(normalized.key)) normalized.key = [];
+        if (!Array.isArray(normalized.keysecondary)) normalized.keysecondary = [];
+        
+        // 补全其他推荐的基础字段
+        if (normalized.comment === undefined) normalized.comment = "";
+        if (normalized.enabled === undefined) normalized.enabled = true;
+        if (normalized.constant === undefined) normalized.constant = true;
+        if (normalized.selective === undefined) normalized.selective = false;
+        if (normalized.nsfw === undefined) normalized.nsfw = false;
+        if (normalized.role === undefined) normalized.role = null;
+        if (normalized.position === undefined) normalized.position = 1;
+        if (normalized.depth === undefined) normalized.depth = 0;
+        
+        return normalized;
+    }
+
+    /**
+     * 独立加载世界书
+     */
+    async loadLorebook(idOrObj: string | { id: string }): Promise<boolean> {
+        let name = typeof idOrObj === 'string' ? idOrObj : idOrObj?.id;
+        if (!name) return false;
+
+        name = name.replace(/\.json$/, '');
+
+        this.isLoading = true;
+        try {
+            const bookData = await this.host.getWorldbook(name);
+            this.currentBookData = bookData as LorebookData;
+            this.selectedBook = name;
+
+            const rawEntries = bookData.entries || bookData.data || {};
+            const list = Object.entries(rawEntries)
+                .map(([uid, entry]) => ({ uid, ...(entry as any) }));
+            this.entries = this.sortEntries(list);
+
+            this.emit('UPDATED');
+            this.emit('LOREBOOK_SYNCED', { entries: this.entries, book: this.selectedBook, books: this.books });
+            return true;
+        } catch (e) {
+            console.error('[LorebookManager] 加载书籍失败:', e);
+        } finally {
+            this.isLoading = false;
+        }
+        return false;
+    }
+
+    /**
+     * 确保世界书存在 (新建逻辑)
+     */
+    async ensureBookExists(name: string): Promise<boolean> {
+        const normalizedTarget = name.replace(/\.json$/, '');
+        const existingBooks = this.host.getWorldbookRefs().map(book => book.id.replace(/\.json$/, ''));
+
+        if (existingBooks.includes(normalizedTarget)) {
+            return true;
+        }
+
+        console.log(`[LorebookManager] 正在创建世界书 ${normalizedTarget}`);
+        const created = await this.host.createWorldbook(normalizedTarget, []);
+        if (created) await new Promise(resolve => setTimeout(resolve, 100));
+        return created;
+    }
+
+    /**
+     * 保存或更新条目
+     */
+    async saveEntry(uid: string | number | null, entryData: LuminaLorebookEntry): Promise<boolean> {
+        if (!this.selectedBook || !this.currentBookData) return false;
+
+        try {
+            const targetUid = uid || `lw_${Date.now()}`;
+
+            const book = this.currentBookData as any;
+            if (!book.entries && !book.data) {
+                book.entries = {};
+            }
+            const entriesContainer = book.entries || book.data;
+            if (entriesContainer) {
+                entriesContainer[targetUid] = this._normalizeEntry({ ...entryData, uid: targetUid });
+            }
+
+            console.log(`[LorebookManager] Syncing via host driver (Entry Update): ${this.selectedBook}`);
+            if (await this.host.importRawWorldbook(this.selectedBook, JSON.stringify(this.currentBookData))) {
+                await this.loadLorebook(this.selectedBook);
+                return true;
+            }
+        } catch (e) {
+            console.error('[LorebookManager] 保存条目失败:', e);
+        }
+        return false;
+    }
+
+    /**
+     * 保存全量世界书数据
+     */
+    async saveLorebook(name: string, entries: any): Promise<boolean> {
+        if (!name || !entries) return false;
+
+        await this.ensureBookExists(name);
+
+        try {
+            // 构建标准的 ST 书籍 JSON 结构 (不再包含冗余的顶级 name)
+            const normalizedEntries: any = {};
+            if (Array.isArray(entries)) {
+                entries.forEach(curr => {
+                    normalizedEntries[curr.uid] = this._normalizeEntry(curr);
+                });
+            } else {
+                Object.entries(entries).forEach(([uid, curr]: [string, any]) => {
+                    normalizedEntries[uid] = this._normalizeEntry({ ...curr, uid });
+                });
+            }
+
+            const bookData = {
+                entries: normalizedEntries
+            };
+
+            console.log(`[LorebookManager] Syncing via host driver (Full Sync): ${name}`);
+            if (await this.host.importRawWorldbook(name, JSON.stringify(bookData))) {
+                if (this.selectedBook === name) await this.loadLorebook(name);
+                return true;
+            }
+        } catch (e) {
+            console.error(`[LorebookManager] 保存书籍 ${name} 失败:`, e);
+        }
+        return false;
+    }
+
+    /**
+     * 删除条目
+     */
+    async deleteEntry(uid: string | number): Promise<boolean> {
+        if (!this.selectedBook || !this.currentBookData || !uid) return false;
+
+        try {
+            const book = this.currentBookData as any;
+            const entriesContainer = book.entries || book.data;
+            if (entriesContainer && entriesContainer[uid]) {
+                delete entriesContainer[uid];
+            } else {
+                return false;
+            }
+
+            console.log(`[LorebookManager] Syncing via host driver (Delete Entry): ${this.selectedBook}`);
+            if (await this.host.importRawWorldbook(this.selectedBook, JSON.stringify(this.currentBookData))) {
+                await this.loadLorebook(this.selectedBook);
+                return true;
+            }
+        } catch (e) {
+            console.error('[LorebookManager] 删除条目失败:', e);
+        }
+        return false;
+    }
+
+    /**
+     * 激活为全局世界书
+     */
+    async activateAsGlobal(bookName: string): Promise<boolean> {
+        if (!bookName) return false;
+
+        try {
+            const globalBooks = this.host.getGlobalWorldbookNames();
+            // 无论是否已包含，都执行一次强制重新绑定，以确保 ST 刷新内部缓存
+            const newList = globalBooks.includes(bookName) ? [...globalBooks] : [...globalBooks, bookName];
+            await this.host.rebindGlobalWorldbooks(newList);
+            return true;
+        } catch (e) {
+            console.warn(`[LorebookManager] 激活全局世界书 ${bookName} 失败`, e);
+            return false;
+        }
+    }
+
+    getFilteredEntries(query: string): any[] {
+        if (!query) return this.entries;
+        const q = query.toLowerCase();
+        return this.entries.filter((e: any) =>
+            e.comment?.toLowerCase().includes(q) ||
+            (e.keys || e.key)?.some((k: string) => typeof k === 'string' && k.toLowerCase().includes(q)) ||
+            e.content?.toLowerCase().includes(q)
+        );
+    }
+
+    public findTriggers(text: string): any[] {
+        if (!text) return [];
+        return this.entries.filter((entry: any) => {
+            const keys = entry.keys || entry.key;
+            if ((entry.enabled === false) || !keys) return false;
+            return keys.some((k: string) => text.includes(k));
+        });
+    }
+
+    public setEditingEntry(entry: LuminaLorebookEntry | null): void {
+        this.activeEditingEntry = entry ? JSON.parse(JSON.stringify(entry)) : null;
+        this.emit('EDITING_ENTRY_CHANGED', this.activeEditingEntry);
+        this.emit('UPDATED');
+    }
+
+    public captureSnapshot(context: LorebookTimelineContext, entries: LuminaLorebookEntry[] = this.entries): string | null {
+        const key = LorebookTimelineResolver.createSnapshotKey(context);
+        if (!key || !context.bookId || !entries.length) return null;
+
+        const snapshot: LorebookEntrySnapshot = {
+            key,
+            bookId: context.bookId,
+            sourceId: context.sourceId,
+            activeLeafId: context.activeLeafId,
+            sessionId: context.sessionId,
+            capturedAt: new Date().toISOString(),
+            label: LorebookTimelineResolver.createSnapshotLabel(context),
+            entries: JSON.parse(JSON.stringify(entries))
+        };
+
+        this.snapshots.set(key, snapshot);
+        this.pruneSnapshotsForBook(context.bookId);
+        this.snapshotRevision += 1;
+        this.persistSnapshots();
+        this.emit('LOREBOOK_SNAPSHOTS_UPDATED', { key, revision: this.snapshotRevision });
+        this.emit('UPDATED');
+        return key;
+    }
+
+    /**
+     * 每本书只保留最新的 MAX_SNAPSHOTS_PER_BOOK 个快照，超出时删除最旧的。
+     */
+    private pruneSnapshotsForBook(bookId: string): void {
+        const bookSnapshots = Array.from(this.snapshots.values())
+            .filter(s => s.bookId === bookId)
+            .sort((a, b) => a.capturedAt.localeCompare(b.capturedAt)); // 最旧在前
+
+        const excess = bookSnapshots.length - this.MAX_SNAPSHOTS_PER_BOOK;
+        if (excess > 0) {
+            bookSnapshots.slice(0, excess).forEach(s => this.snapshots.delete(s.key));
+        }
+    }
+
+    public getSnapshotsForBook(bookId: string | null): LorebookEntrySnapshot[] {
+        if (!bookId) return [];
+        return Array.from(this.snapshots.values())
+            .filter(snapshot => snapshot.bookId === bookId)
+            .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+    }
+
+    public setVersionMode(mode: LorebookVersionMode): void {
+        this.versionMode = mode;
+        this.emit('UPDATED');
+    }
+
+    public enterFollowTimelineMode(): void {
+        this.versionMode = 'follow-timeline';
+        this.manualSnapshotKey = null;
+        this.emit('UPDATED');
+    }
+
+    public enterPinnedMode(snapshotKey: string | null): void {
+        this.pinnedSnapshotKey = snapshotKey;
+        this.versionMode = snapshotKey ? 'pinned' : 'follow-timeline';
+        this.manualSnapshotKey = null;
+        this.emit('UPDATED');
+    }
+
+    public enterManualMode(snapshotKey: string | null): void {
+        if (!snapshotKey) {
+            this.manualSnapshotKey = null;
+            this.versionMode = 'follow-timeline';
+            this.emit('UPDATED');
+            return;
+        }
+
+        this.manualSnapshotKey = snapshotKey;
+        this.versionMode = 'manual';
+        this.emit('UPDATED');
+    }
+
+    public pinSnapshot(snapshotKey: string | null): void {
+        this.pinnedSnapshotKey = snapshotKey;
+        if (snapshotKey) {
+            this.versionMode = 'pinned';
+        }
+        this.emit('UPDATED');
+    }
+
+    public setManualSnapshot(snapshotKey: string | null): void {
+        this.manualSnapshotKey = snapshotKey;
+        if (snapshotKey) {
+            this.versionMode = 'manual';
+        }
+        this.emit('UPDATED');
+    }
+
+    /**
+     * 从全局世界书列表中移除
+     */
+    async deactivateFromGlobal(bookName: string): Promise<boolean> {
+        if (!bookName) return false;
+
+        try {
+            const globalBooks = this.host.getGlobalWorldbookNames();
+            const newList = globalBooks.filter(name => name.replace(/\.json$/, '') !== bookName.replace(/\.json$/, ''));
+            if (newList.length !== globalBooks.length) {
+                await this.host.rebindGlobalWorldbooks(newList);
+            }
+            return true;
+        } catch (e) {
+            console.warn(`[LorebookManager] 取消激活全局世界书 ${bookName} 失败`, e);
+            return false;
+        }
+    }
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { llmEngine } from '../llmEngine.js';
-import { LuminaGenerationTask } from '../core/LuminaGenerationTask.js';
+import { LuminaGenerationTask } from '../core/generation/LuminaGenerationTask.js';
 
 // 提前模拟 lwStorage 以免触发真正的存储访问
 vi.mock('../storage.js', () => ({

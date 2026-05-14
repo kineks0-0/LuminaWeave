@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { STSyncService } from '../STSyncService';
-import { WorldlineStore } from '../WorldlineStore';
+import { STSyncService } from '../host-drivers/st/STSyncService.js';
+import { WorldlineStore } from '../storage/WorldlineStore.js';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { STAdapter } from '../STAdapter';
-import { STProtocol } from '../st-adapter/STProtocol';
-import { STClient } from '../st-adapter/STClient';
-import { SyncUtils } from '../SyncUtils';
+import { STAdapter } from '../host-drivers/st/STAdapter.js';
+import { STProtocol } from '../host-drivers/st/STProtocol.js';
+import { STClient } from '../host-drivers/st/STClient.js';
+import { SyncUtils } from '../host-drivers/st/SyncUtils.js';
+import { initMockHAL } from './halMock.js';
 
 // Mock STAdapter
-vi.mock('../STAdapter', () => ({
+vi.mock('../host-drivers/st/STAdapter.js', () => ({
     STAdapter: {
         getSnapshot: vi.fn(),
         compareStates: vi.fn(),
@@ -17,7 +18,7 @@ vi.mock('../STAdapter', () => ({
 }));
 
 // Mock STClient
-vi.mock('../st-adapter/STClient', () => ({
+vi.mock('../host-drivers/st/STClient.js', () => ({
     STClient: {
         hasActiveLiveChat: vi.fn(() => true),
         getResolvedCurrentChatId: vi.fn(() => 'chat_live'),
@@ -31,7 +32,7 @@ vi.mock('../st-adapter/STClient', () => ({
 }));
 
 // Mock lwStorage
-vi.mock('../../storage', () => ({
+vi.mock('../../storage.js', () => ({
     lwStorage: {
         _getContextIds: vi.fn(() => ({ charId: 'c1' })),
         get: vi.fn((key, def) => def),
@@ -72,6 +73,7 @@ describe('STSyncService', () => {
         store = new WorldlineStore();
         service = new STSyncService(store);
         vi.clearAllMocks();
+        initMockHAL();
         (STClient.hasActiveLiveChat as any).mockReturnValue(true);
         
         (STAdapter.compareStates as any).mockReturnValue({

@@ -1,4 +1,4 @@
-import { useModalStore, type ModalOptions } from '../../stores/useModalStore';
+import { useModalStore, type ModalOptions } from '../../stores/useModalStore.js';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 

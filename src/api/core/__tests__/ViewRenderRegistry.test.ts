@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { viewRenderRegistry } from '../ViewRenderRegistry';
+import { viewRenderRegistry } from '../xml-view/ViewRenderRegistry.js';
 
 describe('ViewRenderRegistry', () => {
     it('应让同一 Choices DSL 在 chat 与 forge 上下文解析到不同组件', () => {

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { MessageListGateway } from '../MessageListGateway';
-import { STClient } from '../st-adapter/STClient';
+import { MessageListGateway } from '../conversation/MessageListGateway.js';
+import { STClient } from '../host-drivers/st/STClient.js';
 
-vi.mock('../st-adapter/STClient', () => ({
+vi.mock('../host-drivers/st/STClient.js', () => ({
     STClient: {
         hasActiveLiveChat: vi.fn(),
         getRawMessages: vi.fn(),

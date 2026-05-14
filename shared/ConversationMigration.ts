@@ -8,6 +8,9 @@ import { resolveConversationSummary } from './ConversationSummaryResolver.js';
 
 type LegacyForgeSessionRecord = {
     id: string;
+    forgeProjectId?: string;
+    conversationId?: string;
+    workspacePath?: string;
     sessionChatId?: string;
     title?: string;
     createdAt?: number;
@@ -89,6 +92,9 @@ export const migrateLegacyForgeSession = (
         : (Array.isArray(legacyChatPayload) ? migrateLegacyChatArray(session.sessionChatId || session.id, legacyChatPayload, 'forge').nodes : []);
 
     const forgeState: ForgeConversationPluginState = {
+        forgeProjectId: session.forgeProjectId || session.id,
+        conversationId: session.conversationId || session.sessionChatId || session.id,
+        workspacePath: session.workspacePath || `/workspaces/forge/${encodeURIComponent(session.forgeProjectId || session.id)}`,
         structuredState: session.structuredState,
         draftTree: session.draftTree,
         forgeMemoryTree: session.forgeMemoryTree,

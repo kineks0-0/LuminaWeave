@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { XMLInterceptor, BuiltinXMLTags } from '../XMLInterceptor';
+import { XMLInterceptor, BuiltinXMLTags } from '../xml-view/XMLInterceptor.js';
 
 describe('XMLInterceptor Streaming Policy (流式策略性测试)', () => {
 

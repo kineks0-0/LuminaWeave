@@ -13,7 +13,7 @@ import {
 import { lwStorage } from '../storage.js';
 import { NexusGenerationFlow, PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
 import { BaseXMLInterceptor } from '@shared/BaseXMLInterceptor.js';
-import { promptBuilder } from '../core/PromptBuilder.js';
+import { promptBuilder } from '../core/hal/prompt/PromptBuilder.js';
 import { OpenAIProvider } from '@shared/api/llm/OpenAIProvider.js';
 import { LLMMessage } from '@shared/api/llm/ILLMProvider.js';
 import { TransactionMutationResponse } from '@shared/api/TransactionTypes.js';
@@ -458,8 +458,15 @@ export class LocalBridgeAdapter implements ILuminaBridge {
         };
 
         this.settings = {
-            getSettings: async () => lwStorage.get('lumina-settings', {}, 'Global'),
-            saveSettings: async (s: any) => lwStorage.set('lumina-settings', s, 'Global')
+            getSettings: async () => {
+                const data = localStorage.getItem('tt_ext_store_lumina_weave_main_global-settings-mirror');
+                return data ? JSON.parse(data) : {};
+            },
+            saveSettings: async (s: any) => {
+                // global-settings-mirror 已经在 storage.ts 中通过 extensionStore.setJson 被写入了。
+                // 这里如果还有其他的 settings 后端保存逻辑，可直接写 localStorage，避免回调 lwStorage.set 产生死循环。
+                localStorage.setItem('tt_ext_store_lumina_weave_main_global-settings-mirror', JSON.stringify(s));
+            }
         };
 
         this.presets = {

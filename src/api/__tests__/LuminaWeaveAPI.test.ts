@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LuminaWeaveAPI } from '../index.js';
-import { globalXMLInterceptor } from '../core/XMLInterceptor.js';
-import { globalMemoryManager } from '../core/MemoryManager.js';
+import { globalXMLInterceptor } from '../core/xml-view/XMLInterceptor.js';
+import { globalMemoryManager } from '../core/runtime-utils/MemoryManager.js';
 import { pluginManager } from '../../core/PluginManager.js';
 
 // Mock dependecies
@@ -13,7 +13,7 @@ vi.mock('../storage.js', () => ({
     }
 }));
 
-vi.mock('../core/SyncUtils.js', () => ({
+vi.mock('../core/host-drivers/st/SyncUtils.js', () => ({
     SyncUtils: {
         compareStates: vi.fn(),
         getFingerprint: vi.fn(),

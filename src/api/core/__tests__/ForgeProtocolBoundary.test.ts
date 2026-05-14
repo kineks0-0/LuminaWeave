@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { PromptBuilder } from '../PromptBuilder';
+import { describe, expect, it, beforeEach } from 'vitest';
+import { PromptBuilder } from '../hal/prompt/PromptBuilder.js';
+import { initMockHAL } from './halMock.js';
 
 describe('Forge protocol boundary', () => {
+    beforeEach(() => {
+        initMockHAL();
+    });
+
     it('应只暴露合法 XML 标签与 <V> 内真实 DSL 组件调用', () => {
         const result = PromptBuilder.buildForgePrompt({
             systemPrompt: 'Forge Start.',

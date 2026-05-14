@@ -5,7 +5,7 @@ import {
     FORGE_PLANNER_INTENT_APPLIED,
     FORGE_WORKSPACE_FREEZE_REQUESTED,
     ForgeAgentController
-} from '../ForgeAgentController';
+} from '../forge/ForgeAgentController.js';
 
 const { mockForgeStore, mockLoadSession } = vi.hoisted(() => ({
     mockForgeStore: {
@@ -23,7 +23,7 @@ vi.mock('../../../stores/useForgeStore.js', () => ({
     useForgeStore: () => mockForgeStore
 }));
 
-vi.mock('../ForgeSessionRepository.js', () => ({
+vi.mock('../forge/ForgeSessionRepository.js', () => ({
     forgeSessionRepository: {
         loadSession: mockLoadSession
     }
@@ -151,9 +151,10 @@ describe('ForgeAgentController control bridge', () => {
         });
     });
 
-    it('应忽略短时间内重复的 FORGE_TRACE 事件', () => {
+    it('应忽略短时间内重复的 FORGE_TRACE 事件', async () => {
         const parentApi = new MockParentApi();
-        new ForgeAgentController(parentApi);
+        const controller = new ForgeAgentController(parentApi);
+        await controller.initialize();
 
         parentApi.emit('FORGE_TRACE', { tag: 'forge_skill', status: 'Agent 正在执行技能...', timestamp: 1 });
         parentApi.emit('FORGE_TRACE', { tag: 'forge_skill', status: 'Agent 正在执行技能...', timestamp: 2 });
@@ -163,7 +164,8 @@ describe('ForgeAgentController control bridge', () => {
 
     it('应忽略重复的 FORGE_ACTION_COMPLETED 事件，即使跨过短 TTL', async () => {
         const parentApi = new MockParentApi();
-        new ForgeAgentController(parentApi);
+        const controller = new ForgeAgentController(parentApi);
+        await controller.initialize();
 
         parentApi.emit('FORGE_ACTION_COMPLETED', {
             type: 'update',

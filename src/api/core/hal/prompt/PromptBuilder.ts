@@ -1,0 +1,679 @@
+import { lwStorage } from '../../../storage.js';
+import { HALContext } from '../HALContext.js';
+import { SystemPromptProvider } from './SystemPromptProvider.js';
+import { pluginManager } from '../../../../core/PluginManager.js';
+import { globalPromptRegistry, PromptType, type PromptContext } from './PromptRegistry.js';
+import { CleanedMessage } from '../../../../types/nexus.js';
+import type { MemorySnapshot } from '../../../../types/MemorySnapshotTypes.js';
+import {
+    renderForgeMemorySnapshot,
+    renderForgeFileMemory,
+    renderForgeStageSnapshot,
+    renderForgeStructuredState,
+    renderForgeDraftTree,
+    renderForgeWorkflowSnapshot,
+} from '../../../../resources/prompts/forgePrompts.js';
+import { ForgePromptPayloadResolver } from '../../forge/ForgePromptPayloadResolver.js';
+import type { ForgeWorkflowSnapshot } from '../../../../types/ForgeWorkflowTypes.js';
+import type { ForgeDraftTree, ForgeStructuredState } from '../../../../types/ForgeStructuredTypes.js';
+import type { ForgeMemoryTree } from '../../../../types/ForgeMemoryTypes.js';
+import { PromptPresetComposer } from './PromptPresetComposer.js';
+import { getPromptPresetProfile } from './PromptPresetProfiles.js';
+import { promptPresetRegistry } from './PromptPresetRegistry.js';
+import type {
+    PromptComposeSources,
+    PromptPresetProfileId
+} from '../../../../types/PromptPresetTypes.js';
+import type { PromptAssemblyResult } from '../../../../types/PromptAssemblyTypes.js';
+import {
+    promptResourceResolver,
+    PromptResourceBindingService,
+    type PromptResourceBindingResolution,
+    PromptResourceResolver,
+    luminaWorldbookTriggerEngine,
+    type PromptResourceBundle
+} from '../resource/index.js';
+import type {
+    ResourceDiagnostic,
+    ResourceRef
+} from '@shared/resources/index.js';
+
+interface BuildActiveMessagesOptions {
+    systemPrompt: string;
+    messages: CleanedMessage[];
+    includeWorldInfo?: boolean;
+    /**
+     * 是否允许在没有传 entries 时回退到 ST 全局世界书。
+     * 默认为 true。对于 Forge 制卡等需要严格隔离的场景，应设为 false。
+     */
+    allowSTWorldInfoFallback?: boolean;
+    promptContext?: PromptContext;
+    includeSystemProtocol?: boolean;
+    resolvedLorebookEntries?: LuminaLorebookEntry[];
+    memorySnapshot?: MemorySnapshot;
+    forgeMemoryTree?: ForgeMemoryTree;
+    structuredState?: ForgeStructuredState;
+    draftTree?: ForgeDraftTree;
+    workflowSnapshot?: ForgeWorkflowSnapshot | null;
+    resourceRefs?: ResourceRef[];
+    resourceBindingResolution?: PromptResourceBindingResolution;
+    resourceBundle?: PromptResourceBundle;
+    promptEngine?: 'lumina' | 'st';
+}
+
+export interface BuildActiveMessagesWithResourcesResult {
+    messages: CleanedMessage[];
+    assembly: PromptAssemblyResult;
+    resourceDiagnostics: ResourceDiagnostic[];
+    resourceBundle: PromptResourceBundle;
+}
+
+/**
+ * 宏注入引擎 (原提示词构建器)
+ * 负责在前端合成最终的消息序列。
+ * 包括系统协议挂载、宏替换、世界书集成以及上下文组装。
+ */
+export class PromptBuilder {
+    constructor() {
+        SystemPromptProvider.registerAll();
+    }
+
+    /**
+     * 【核心】前端提示词合成引擎
+     * 用于制卡、条目重写等不需要依赖全量聊天历史的场景，或者作为全量合成的准备工作。
+     */
+    public static buildActiveMessages(options: BuildActiveMessagesOptions): CleanedMessage[] {
+        const {
+            systemPrompt,
+            messages,
+            includeWorldInfo = true,
+            allowSTWorldInfoFallback = true,
+            promptContext = 'chat',
+            includeSystemProtocol = false,
+            resolvedLorebookEntries = [],
+            memorySnapshot,
+            forgeMemoryTree,
+            structuredState,
+            draftTree,
+            workflowSnapshot,
+            resourceRefs = [],
+            resourceBindingResolution,
+            resourceBundle,
+            promptEngine = 'lumina'
+        } = options;
+        const effectiveResourceRefs = resourceBindingResolution?.enabledRefs ?? resourceRefs;
+        const excludedResourceRefs = resourceBindingResolution?.excludedRefs ?? [];
+        const stEngineResourceResolution = promptEngine === 'st'
+            ? PromptResourceResolver.resolveSTEngineResources(effectiveResourceRefs)
+            : null;
+        const effectiveResourceBundle = promptEngine === 'st' && resourceBundle
+            ? PromptResourceResolver.filterBundleForSTEngine(resourceBundle)
+            : resourceBundle;
+
+        let processedSystem = HALContext.instance.macroResolver.resolve(systemPrompt);
+
+        const bundleLorebookEntries = effectiveResourceBundle?.lorebookEntries ?? [];
+        const normalizedLorebookEntries = resolvedLorebookEntries.length > 0
+            ? resolvedLorebookEntries
+            : (bundleLorebookEntries.length > 0 ? bundleLorebookEntries
+            : (allowSTWorldInfoFallback && includeWorldInfo ? HALContext.instance.resourceProvider.getActiveLorebookEntries().map(item => ({
+                uid: item.id,
+                comment: item.id,
+                key: [item.id],
+                keysecondary: [],
+                content: item.content,
+                constant: false,
+                selective: false,
+                selectiveLogic: 0,
+                disable: false,
+                enabled: true,
+                position: 0,
+                depth: 0,
+                order: 0,
+                probability: 100,
+                scan_depth: 0
+            })) : []));
+        const worldbookActivation = includeWorldInfo
+            ? this.resolveWorldbookActivation(normalizedLorebookEntries, messages)
+            : null;
+
+        const sources: PromptComposeSources = {
+            lorebookEntries: includeWorldInfo ? normalizedLorebookEntries : [],
+            worldbookActivation,
+            charCard: effectiveResourceBundle?.charCard ?? null,
+            memorySnapshot,
+            forgeMemoryTree,
+            structuredState,
+            draftTree,
+            workflowSnapshot,
+            conversationHistory: messages,
+            macroContext: {
+                legacySystemPrompt: processedSystem
+            },
+            systemProtocolText: includeSystemProtocol
+                ? this.buildCombinedProtocolBlock(promptContext)
+                : null,
+            resourceRefs: effectiveResourceRefs,
+            resourceDiagnostics: [
+                ...(effectiveResourceBundle?.diagnostics ?? []),
+                ...(worldbookActivation?.diagnostics ?? []),
+                ...PromptResourceBindingService.createSourceSelectionDiagnostics(excludedResourceRefs),
+                ...(stEngineResourceResolution?.diagnostics ?? [])
+            ]
+        };
+
+        const profileId: PromptPresetProfileId = promptContext === 'forge' ? 'forge-main' : 'forge-test-chat';
+        const profile = getPromptPresetProfile(profileId);
+        const preset = promptPresetRegistry.getActivePreset(profileId);
+
+        if (preset.engine === 'st_preset') {
+            return this.buildLegacySTMessages(sources, promptContext);
+        }
+
+        const result = PromptPresetComposer.compose(profile, preset, sources);
+        return this.collapseLeadingSystemMessages(result.messages);
+    }
+
+    public static async buildActiveMessagesWithResources(
+        options: BuildActiveMessagesOptions & { resourceRefs: ResourceRef[] }
+    ): Promise<BuildActiveMessagesWithResourcesResult> {
+        const effectiveResourceRefs = options.resourceBindingResolution?.enabledRefs ?? options.resourceRefs;
+        const excludedResourceRefs = options.resourceBindingResolution?.excludedRefs ?? [];
+        const rawResourceBundle = options.resourceBundle ?? await promptResourceResolver.resolve(effectiveResourceRefs);
+        const promptEngine = options.promptEngine ?? 'lumina';
+        const resourceBundle = promptEngine === 'st'
+            ? PromptResourceResolver.filterBundleForSTEngine(rawResourceBundle)
+            : rawResourceBundle;
+        const resourceDiagnostics = [
+            ...resourceBundle.diagnostics,
+            ...PromptResourceBindingService.createSourceSelectionDiagnostics(excludedResourceRefs),
+            ...(promptEngine === 'st' ? PromptResourceResolver.resolveSTEngineResources(effectiveResourceRefs).diagnostics : [])
+        ];
+        const messages = this.buildActiveMessages({
+            ...options,
+            resourceRefs: effectiveResourceRefs,
+            resourceBundle,
+            promptEngine
+        });
+        return {
+            messages,
+            assembly: this.buildActiveMessagesTrace({
+                ...options,
+                resourceRefs: effectiveResourceRefs,
+                resourceBundle,
+                promptEngine
+            }),
+            resourceDiagnostics,
+            resourceBundle
+        };
+    }
+
+    public static buildActiveMessagesTrace(options: BuildActiveMessagesOptions): PromptAssemblyResult {
+        const sources = this.buildComposeSources(options);
+        const profileId: PromptPresetProfileId = (options.promptContext ?? 'chat') === 'forge' ? 'forge-main' : 'forge-test-chat';
+        const profile = getPromptPresetProfile(profileId);
+        const preset = promptPresetRegistry.getActivePreset(profileId);
+
+        if (preset.engine === 'st_preset') {
+            const messages = this.buildLegacySTMessages(sources, options.promptContext ?? 'chat');
+            return {
+                messages,
+                sourceUnits: [],
+                plannedUnits: [],
+                trace: [],
+                diagnostics: sources.resourceDiagnostics ?? []
+            };
+        }
+
+        return PromptPresetComposer.composeWithTrace(profile, preset, sources, {
+            mergeLeadingSystemMessages: true
+        });
+    }
+
+    private static buildLegacySTMessages(sources: PromptComposeSources, promptContext: PromptContext): CleanedMessage[] {
+        let processedSystem = sources.macroContext?.legacySystemPrompt || '';
+
+        if (sources.lorebookEntries && sources.lorebookEntries.length > 0) {
+            const worldItems = sources.lorebookEntries
+                .filter(entry => !entry.disable && entry.enabled !== false)
+                .map(entry => ({
+                    id: entry.uid ?? entry.comment ?? entry.key?.[0] ?? 'lorebook_entry',
+                    content: entry.content || ''
+                }));
+            
+            if (worldItems.length > 0) {
+                const worldString = worldItems
+                    .map(item => `[World Info: ${item.id}]\n${item.content}`)
+                    .join('\n\n');
+                
+                const label = promptContext === 'forge' ? '参考设定 (Forge Workspace)' : '补充设定 (World Info)';
+                processedSystem += `\n\n【${label}】:\n${worldString}`;
+            }
+        }
+
+        if (sources.memorySnapshot) {
+            processedSystem += `\n\n${renderForgeMemorySnapshot(
+                ForgePromptPayloadResolver.buildMemorySnapshotTemplateInput(sources.memorySnapshot)
+            )}`;
+        }
+
+        if (sources.forgeMemoryTree) {
+            processedSystem += `\n\n${renderForgeFileMemory(
+                ForgePromptPayloadResolver.buildForgeMemoryTreeTemplateInput(sources.forgeMemoryTree)
+            )}`;
+        }
+
+        if (sources.structuredState) {
+            processedSystem += `\n\n${renderForgeStructuredState(
+                ForgePromptPayloadResolver.buildStructuredStateTemplateInput(sources.structuredState)
+            )}`;
+        }
+
+        if (sources.draftTree) {
+            processedSystem += `\n\n${renderForgeDraftTree(
+                ForgePromptPayloadResolver.buildDraftTreeTemplateInput(sources.draftTree)
+            )}`;
+        }
+
+        if (sources.workflowSnapshot) {
+            processedSystem += `\n\n${renderForgeStageSnapshot(
+                ForgePromptPayloadResolver.buildStageTemplateInput(sources.workflowSnapshot)
+            )}\n\n${renderForgeWorkflowSnapshot(
+                ForgePromptPayloadResolver.buildWorkflowTemplateInput(sources.workflowSnapshot)
+            )}`;
+        }
+
+        if (sources.systemProtocolText) {
+            processedSystem += `\n\n${sources.systemProtocolText}`;
+        }
+
+        return [
+            { role: 'system', content: processedSystem },
+            ...(sources.conversationHistory || [])
+        ];
+    }
+
+    private static buildComposeSources(options: BuildActiveMessagesOptions): PromptComposeSources {
+        const {
+            systemPrompt,
+            messages,
+            includeWorldInfo = true,
+            allowSTWorldInfoFallback = true,
+            promptContext = 'chat',
+            includeSystemProtocol = false,
+            resolvedLorebookEntries = [],
+            memorySnapshot,
+            forgeMemoryTree,
+            structuredState,
+            draftTree,
+            workflowSnapshot,
+            resourceRefs = [],
+            resourceBindingResolution,
+            resourceBundle,
+            promptEngine = 'lumina'
+        } = options;
+        const effectiveResourceRefs = resourceBindingResolution?.enabledRefs ?? resourceRefs;
+        const excludedResourceRefs = resourceBindingResolution?.excludedRefs ?? [];
+        const stEngineResourceResolution = promptEngine === 'st'
+            ? PromptResourceResolver.resolveSTEngineResources(effectiveResourceRefs)
+            : null;
+        const effectiveResourceBundle = promptEngine === 'st' && resourceBundle
+            ? PromptResourceResolver.filterBundleForSTEngine(resourceBundle)
+            : resourceBundle;
+
+        const processedSystem = HALContext.instance.macroResolver.resolve(systemPrompt);
+        const bundleLorebookEntries = effectiveResourceBundle?.lorebookEntries ?? [];
+        const normalizedLorebookEntries = resolvedLorebookEntries.length > 0
+            ? resolvedLorebookEntries
+            : (bundleLorebookEntries.length > 0 ? bundleLorebookEntries
+                : (allowSTWorldInfoFallback && includeWorldInfo ? HALContext.instance.resourceProvider.getActiveLorebookEntries().map(item => ({
+                    uid: item.id,
+                    comment: item.id,
+                    key: [item.id],
+                    keysecondary: [],
+                    content: item.content,
+                    constant: false,
+                    selective: false,
+                    selectiveLogic: 0,
+                    disable: false,
+                    enabled: true,
+                    position: 0,
+                    depth: 0,
+                    order: 0,
+                    probability: 100,
+                    scan_depth: 0
+                })) : []));
+        const worldbookActivation = includeWorldInfo
+            ? this.resolveWorldbookActivation(normalizedLorebookEntries, messages)
+            : null;
+
+        return {
+            lorebookEntries: includeWorldInfo ? normalizedLorebookEntries : [],
+            worldbookActivation,
+            charCard: resourceBundle?.charCard ?? null,
+            memorySnapshot,
+            forgeMemoryTree,
+            structuredState,
+            draftTree,
+            workflowSnapshot,
+            conversationHistory: messages,
+            macroContext: {
+                legacySystemPrompt: processedSystem
+            },
+            systemProtocolText: includeSystemProtocol
+                ? this.buildCombinedProtocolBlock(promptContext)
+                : null,
+            resourceRefs: effectiveResourceRefs,
+            resourceDiagnostics: [
+                ...(effectiveResourceBundle?.diagnostics ?? []),
+                ...(worldbookActivation?.diagnostics ?? []),
+                ...PromptResourceBindingService.createSourceSelectionDiagnostics(excludedResourceRefs),
+                ...(stEngineResourceResolution?.diagnostics ?? [])
+            ]
+        };
+    }
+
+    private static resolveWorldbookActivation(
+        entries: LuminaLorebookEntry[],
+        messages: CleanedMessage[]
+    ): PromptComposeSources['worldbookActivation'] {
+        if (entries.length === 0) return null;
+        const inputText = [...messages].reverse().find(message => message.role === 'user')?.content ?? '';
+        const result = luminaWorldbookTriggerEngine.resolve(entries, {
+            messages,
+            inputText
+        });
+        if (result.activatedEntries.length === 0 && messages.length === 0) {
+            return {
+                entries: entries
+                    .filter(entry => !entry.disable && entry.enabled !== false && entry.content?.trim())
+                    .map(entry => ({
+                        uid: entry.uid ?? entry.comment ?? entry.key?.[0] ?? 'lorebook_entry',
+                        comment: entry.comment ?? String(entry.uid ?? entry.key?.[0] ?? 'lorebook_entry'),
+                        content: entry.content,
+                        role: 'system' as const,
+                        depth: Number(entry.depth ?? 0),
+                        order: Number(entry.order ?? 0),
+                        resourceRef: (entry as LuminaLorebookEntry & { resourceRef?: ResourceRef }).resourceRef,
+                        sourceId: (entry as LuminaLorebookEntry & { sourceId?: string }).sourceId,
+                        resourceId: (entry as LuminaLorebookEntry & { resourceId?: string }).resourceId,
+                        sourcePath: (entry as LuminaLorebookEntry & { sourcePath?: string }).sourcePath,
+                        insertion: {
+                            position: 'after' as const,
+                            role: 'system' as const
+                        }
+                    })),
+                insertionBuckets: {
+                    before: [],
+                    after: entries
+                        .filter(entry => !entry.disable && entry.enabled !== false && entry.content?.trim())
+                        .map(entry => ({
+                            uid: entry.uid ?? entry.comment ?? entry.key?.[0] ?? 'lorebook_entry',
+                            comment: entry.comment ?? String(entry.uid ?? entry.key?.[0] ?? 'lorebook_entry'),
+                            content: entry.content,
+                            role: 'system' as const,
+                            depth: Number(entry.depth ?? 0),
+                            order: Number(entry.order ?? 0),
+                            resourceRef: (entry as LuminaLorebookEntry & { resourceRef?: ResourceRef }).resourceRef,
+                            sourceId: (entry as LuminaLorebookEntry & { sourceId?: string }).sourceId,
+                            resourceId: (entry as LuminaLorebookEntry & { resourceId?: string }).resourceId,
+                            sourcePath: (entry as LuminaLorebookEntry & { sourcePath?: string }).sourcePath,
+                            insertion: {
+                                position: 'after' as const,
+                                role: 'system' as const
+                            }
+                        })),
+                    an_top: [],
+                    an_bottom: [],
+                    em_top: [],
+                    em_bottom: [],
+                    at_depth: [],
+                    outlet: []
+                },
+                trace: result.trace,
+                diagnostics: result.diagnostics
+            };
+        }
+        return {
+            entries: result.activatedEntries,
+            insertionBuckets: result.insertionBuckets,
+            trace: result.trace,
+            diagnostics: result.diagnostics
+        };
+    }
+
+    public static buildForContext(
+        context: PromptContext,
+        options: Omit<BuildActiveMessagesOptions, 'promptContext'>
+    ): CleanedMessage[] {
+        return this.buildActiveMessages({
+            ...options,
+            promptContext: context
+        });
+    }
+
+    public static buildChatPrompt(options: Omit<BuildActiveMessagesOptions, 'promptContext'>): CleanedMessage[] {
+        return this.buildForContext('chat', options);
+    }
+
+    public static buildForgePrompt(options: Omit<BuildActiveMessagesOptions, 'promptContext'>): CleanedMessage[] {
+        return this.buildForContext('forge', options);
+    }
+
+    /**
+     * 保持兼容：旧版 build 拦截逻辑
+     */
+    public async build(originalPayload: any[]): Promise<{ messages: any[], settings?: any }> {
+        const preset = await HALContext.instance.resourceProvider.getPreset('in_use');
+        return { messages: originalPayload, settings: preset?.settings };
+    }
+
+    /**
+     * 构建所有符合规则的提示词片段，供挂载器写入世界书。
+     * 这部分逻辑保持兼容，用于 Lumina 系统的元协议注入。
+     */
+    public buildWorldInfoPrompts(context: PromptContext = 'chat'): any[] {
+        const isGlobalEnabled = lwStorage.get('lumina-settings.isPromptInjectionEnabled', true, 'Global');
+        if (!isGlobalEnabled) {
+            return [];
+        }
+
+        const fragmentsToMount: any[] = [];
+        const dialogueUIFrequency = lwStorage.get('lumina-chat.dialogueUIFrequency', 1, 'Global');
+
+        for (const f of globalPromptRegistry.getFragmentsForContext(context)) {
+            // 物理隔离：如果对话 UI 频率设置为 0 (关闭)，则彻底不挂载 DSL 文档与元数据定义
+            if (dialogueUIFrequency === 0) {
+                if (f.id === 'core-luminaview-dsl-docs' || f.id === 'core-luminaview-metadata') {
+                    console.debug(`[PromptBuilder] 因为互动 UI 频率为 0，跳过挂载核心 UI 片段: ${f.id}`);
+                    continue;
+                }
+            }
+
+            let pluginId: string | null = null;
+            Object.keys(pluginManager.plugins).forEach(pid => {
+                const shortId = pid.replace('lumina-', '');
+                if (f.id.includes(pid) || f.id.includes(shortId)) {
+                    pluginId = pid;
+                }
+            });
+
+            if (pluginId && !pluginManager.isPluginPromptEnabled(pluginId)) {
+                console.debug(`[PromptBuilder] 忽略被禁用的插件片段: ${f.id} (插件: ${pluginId})`);
+                continue;
+            }
+            fragmentsToMount.push(f);
+        }
+
+        // 追加 XML System Protocol 约束
+        let allTags = globalPromptRegistry.getAllXMLTags(context);
+        
+        // 物理隔离：如果频率为 0，从协议列表中也剔除 V 标签 (交互 UI)
+        if (dialogueUIFrequency === 0) {
+            allTags = allTags.filter(t => t.tag !== 'V');
+        }
+
+        if (allTags.length > 0) {
+            // 分层渲染逻辑：基于 parent 构建树并生成嵌套编号
+            const tagMap = new Map<string, any>(allTags.map(t => [t.tag, { ...t, children: [] }]));
+            const rootTags: any[] = [];
+
+            allTags.forEach((t: any) => {
+                const node = tagMap.get(t.tag);
+                if (t.parent && tagMap.has(t.parent)) {
+                    tagMap.get(t.parent).children.push(node);
+                } else {
+                    rootTags.push(node);
+                }
+            });
+
+            const renderNode = (node: any, prefix: string, depth: number): string => {
+                const indent = '  '.repeat(depth);
+                const tagStr = (node.aliases && node.aliases.length > 0)
+                    ? `<${node.tag}> (简写 <${node.aliases.join('> <')}>)`
+                    : `<${node.tag}>`;
+                let line = `${indent}${prefix}. ${tagStr} : ${node.description}`;
+
+                if (node.children.length > 0) {
+                    const childLines = node.children.map((c: any, i: number) => renderNode(c, `${prefix}.${i + 1}`, depth + 1));
+                    line += '\n' + childLines.join('\n');
+                }
+                return line;
+            };
+
+            const tagRules = rootTags.map((t, i) => renderNode(t, (i + 1).toString(), 0)).join('\n');
+
+            const protocolText = `[System Protocol]\n你必须严格按以下顺序输出 XML 标签：\n${tagRules}`;
+
+            fragmentsToMount.push({
+                id: 'lumina-system-protocol',
+                label: 'System Protocol',
+                getFragment: () => protocolText,
+                priority: 999
+            });
+        }
+
+        return fragmentsToMount;
+    }
+
+    public static buildSystemProtocolText(context: PromptContext = 'chat'): string | null {
+        let allTags = globalPromptRegistry.getAllXMLTags(context);
+        if (context === 'chat') {
+            const dialogueUIFrequency = lwStorage.get('lumina-chat.dialogueUIFrequency', 1, 'Global');
+            if (dialogueUIFrequency === 0) {
+                allTags = allTags.filter(tag => tag.tag !== 'V');
+            }
+        }
+
+        if (allTags.length === 0) return null;
+
+        const tagMap = new Map<string, any>(allTags.map(tag => [tag.tag, { ...tag, children: [] }]));
+        const rootTags: any[] = [];
+
+        allTags.forEach((tag: any) => {
+            const node = tagMap.get(tag.tag);
+            if (tag.parent && tagMap.has(tag.parent)) {
+                tagMap.get(tag.parent).children.push(node);
+            } else {
+                rootTags.push(node);
+            }
+        });
+
+        const renderNode = (node: any, prefix: string, depth: number): string => {
+            const indent = '  '.repeat(depth);
+            const tagStr = (node.aliases && node.aliases.length > 0)
+                ? `<${node.tag}> (简写 <${node.aliases.join('> <')}>)`
+                : `<${node.tag}>`;
+            let line = `${indent}${prefix}. ${tagStr} : ${node.description}`;
+
+            if (node.children.length > 0) {
+                const childLines = node.children.map((child: any, index: number) => renderNode(child, `${prefix}.${index + 1}`, depth + 1));
+                line += '\n' + childLines.join('\n');
+            }
+            return line;
+        };
+
+        const tagRules = rootTags.map((tag, index) => renderNode(tag, String(index + 1), 0)).join('\n');
+        return `[System Protocol]\n你必须严格按以下顺序输出 XML 标签：\n${tagRules}`;
+    }
+
+    public static buildCombinedProtocolBlock(context: PromptContext): string | null {
+        const blocks = [
+            this.buildInlineConstraintText(context),
+            this.buildSystemProtocolText(context)
+        ].filter((block): block is string => Boolean(block && block.trim()));
+
+        if (blocks.length === 0) {
+            return null;
+        }
+
+        return blocks.join('\n\n');
+    }
+
+    private static buildInlineConstraintText(context: PromptContext): string | null {
+        const blocks = globalPromptRegistry.getFragmentsForContext(context)
+            .filter(fragment => fragment.type === PromptType.CONSTRAINTS)
+            .map(fragment => {
+                const content = fragment.getFragment();
+                if (!content || this.isPromiseLike(content)) {
+                    return null;
+                }
+
+                if (typeof content === 'string') {
+                    return content.trim() || null;
+                }
+
+                if (Array.isArray(content)) {
+                    const combined = content
+                        .map(message => message.content?.trim())
+                        .filter(Boolean)
+                        .join('\n\n');
+                    return combined || null;
+                }
+
+                return content.content?.trim() || null;
+            })
+            .filter((block): block is string => Boolean(block));
+
+        if (blocks.length === 0) {
+            return null;
+        }
+
+        return blocks.join('\n\n');
+    }
+
+    private static isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+        return typeof value === 'object'
+            && value !== null
+            && 'then' in value
+            && typeof value.then === 'function';
+    }
+
+    private static collapseLeadingSystemMessages(messages: CleanedMessage[]): CleanedMessage[] {
+        if (messages.length <= 1 || messages[0]?.role !== 'system') {
+            return messages;
+        }
+
+        let systemEnd = 0;
+        while (systemEnd < messages.length && messages[systemEnd]?.role === 'system') {
+            systemEnd += 1;
+        }
+
+        if (systemEnd <= 1) {
+            return messages;
+        }
+
+        const mergedSystemContent = messages
+            .slice(0, systemEnd)
+            .map(message => message.content?.trim())
+            .filter(Boolean)
+            .join('\n\n');
+
+        return [
+            { role: 'system', content: mergedSystemContent },
+            ...messages.slice(systemEnd)
+        ];
+    }
+}
+
+export const promptBuilder = new PromptBuilder();

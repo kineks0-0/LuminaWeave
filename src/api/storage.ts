@@ -3,13 +3,12 @@
  * 负责集中管理插件的所有设置项及拓展数据，支持细粒度的作用域 (Scopes) 分发。
  */
 
-import { STClient } from './core/st-adapter/STClient.js';
-import { LuminaWeaveAPIBase } from './core/LuminaWeaveAPIBase.js';
 import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import { HALContext } from './core/hal/HALContext.js';
 
 export type StorageScope = 'Global' | 'Character' | 'Chat' | 'Session';
 
-export class StorageCore extends LuminaWeaveAPIBase {
+export class StorageCore {
     private sessionData: Map<string, any>;
     private globalIndependentData: Record<string, any> = {}; // 独立存储的全局配置
     private listeners: Map<string, Function[]> = new Map(); // 订阅设置变更
@@ -17,7 +16,6 @@ export class StorageCore extends LuminaWeaveAPIBase {
     private _activeSavePromise: Promise<void> | null = null;
 
     constructor() {
-        super();
         this.sessionData = new Map();
     }
 
@@ -25,14 +23,14 @@ export class StorageCore extends LuminaWeaveAPIBase {
      * 初始化异步存储数据
      */
     public async initStorage(): Promise<void> {
-        // 先尝试从 Bridge 加载 Session
+        // 先尝试从引导存储加载 Session
         try {
-            const data = await BridgeDispatcher.extensionStore.getJson({ namespace: 'lumina_weave', key: 'session-state' });
+            const data = HALContext.instance.bootstrapStorage.getJson<any>('session-state');
             if (data) {
                 this.sessionData = new Map(Object.entries(data));
             }
         } catch (e) {
-            console.warn('[LuminaWeave Storage] Failed to load Session Data from extensionStore, fallback to localStorage.');
+            console.warn('[LuminaWeave Storage] Failed to load Session Data from bootstrapStorage, fallback to localStorage.');
             this.sessionData = this._loadSessionData();
         }
 
@@ -40,10 +38,11 @@ export class StorageCore extends LuminaWeaveAPIBase {
         await this.loadIndependentGlobalData();
     }
 
-    // 统一通过基类 ctx 访问
+    // 统一通过 HALContext 访问宿主状态
 
     /**
      * 判断当前是否启用了独立的 JSON 存储引擎 (依靠本地浏览器缓存记录该开关)
+     * todo: 移除残留的保存至ST逻辑，统一使用独立的json存储，实际后端存储由share那边统一路由
      */
     get useIndependentGlobalStorage(): boolean {
         return true;
@@ -51,11 +50,7 @@ export class StorageCore extends LuminaWeaveAPIBase {
     }
 
     set useIndependentGlobalStorage(val: boolean) {
-        BridgeDispatcher.extensionStore.setJson({ 
-            namespace: 'lumina_weave', 
-            key: 'storage-mode', 
-            value: { independent: val } 
-        });
+        HALContext.instance.bootstrapStorage.setJson('storage-mode', { independent: val });
         // 切换后触发界面全面更新响应
         this.emit('*', null, 'Global');
     }
@@ -66,13 +61,9 @@ export class StorageCore extends LuminaWeaveAPIBase {
     async loadIndependentGlobalData(): Promise<void> {
         try {
             this.globalIndependentData = await BridgeDispatcher.settings.getSettings();
-            
-            // 镜像备份到 extensionStore，而不是 localStorage
-            await BridgeDispatcher.extensionStore.setJson({ 
-                namespace: 'lumina_weave', 
-                key: 'global-settings-mirror', 
-                value: this.globalIndependentData 
-            });
+
+            // 镜像备份到引导存储
+            HALContext.instance.bootstrapStorage.setJson('global-settings-mirror', this.globalIndependentData);
 
             // 如果当前处在独立模式，拉取完毕后通知全体渲染刷新
             if (this.useIndependentGlobalStorage) {
@@ -80,18 +71,15 @@ export class StorageCore extends LuminaWeaveAPIBase {
             }
             console.log('[LuminaWeave Storage] Independent backend loaded successfully and mirrored to extension store.');
         } catch (e) {
-            console.warn('[LuminaWeave Storage] Independent backend not reachable. Attempting to recover from extension mirror...');
+            console.warn('[LuminaWeave Storage] Independent backend not reachable. Attempting to recover from bootstrap mirror...');
             try {
-                const mirror = await BridgeDispatcher.extensionStore.getJson({ 
-                    namespace: 'lumina_weave', 
-                    key: 'global-settings-mirror' 
-                });
+                const mirror = HALContext.instance.bootstrapStorage.getJson<any>('global-settings-mirror');
                 if (mirror) {
                     this.globalIndependentData = mirror;
-                    console.info('[LuminaWeave Storage] Successfully recovered API configuration from extension mirror.');
+                    console.info('[LuminaWeave Storage] Successfully recovered API configuration from bootstrap mirror.');
                 }
             } catch (recoveryErr) {
-                console.error('[LuminaWeave Storage] Failed to recover from extension mirror:', recoveryErr);
+                console.error('[LuminaWeave Storage] Failed to recover from bootstrap mirror:', recoveryErr);
             }
         }
     }
@@ -102,15 +90,15 @@ export class StorageCore extends LuminaWeaveAPIBase {
     async _saveIndependentGlobalData(): Promise<void> {
         try {
             // 同步备份到 extensionStore
-            await BridgeDispatcher.extensionStore.setJson({ 
-                namespace: 'lumina_weave', 
-                key: 'global-settings-mirror', 
-                value: this.globalIndependentData 
+            await BridgeDispatcher.extensionStore.setJson({
+                namespace: 'lumina_weave',
+                key: 'global-settings-mirror',
+                value: this.globalIndependentData
             });
             await BridgeDispatcher.settings.saveSettings(this.globalIndependentData);
         } catch (e) {
             console.error('[LuminaWeave Storage] Failed to save independent JSON:', e);
-            throw e; 
+            throw e;
         }
     }
 
@@ -173,7 +161,7 @@ export class StorageCore extends LuminaWeaveAPIBase {
             clearTimeout(this._saveTimeout);
             this._saveTimeout = null;
         }
-        
+
         if (this._activeSavePromise) {
             return this._activeSavePromise;
         }
@@ -200,10 +188,10 @@ export class StorageCore extends LuminaWeaveAPIBase {
     private async _saveSessionData(): Promise<void> {
         try {
             const obj = Object.fromEntries(this.sessionData);
-            await BridgeDispatcher.extensionStore.setJson({ 
-                namespace: 'lumina_weave', 
-                key: 'session-state', 
-                value: obj 
+            await BridgeDispatcher.extensionStore.setJson({
+                namespace: 'lumina_weave',
+                key: 'session-state',
+                value: obj
             });
         } catch (e) {
             console.error('[LuminaWeave Storage] Failed to save Session Data to extensionStore:', e);
@@ -211,22 +199,19 @@ export class StorageCore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * 动态获取或初始化底层的 extension_settings，划分 luminaWeave 命名空间
+     * 获取宿主特定的原始存储对象（用于支持同步 get）
+     * 逻辑已抽象到 HAL 适配器中，Core 层不再直接依赖 window.extension_settings
      */
     private _getBase(): any {
-        // 如果能获取到官方上下文的设置字典，优先挂载在那上面；否则降级退回全局变量
-        const extSettings = this.ctx?.extensionSettings || (typeof window !== 'undefined' ? (window as any).extension_settings : null);
-
-        if (!extSettings) return null; // 极端冷启动防呆
-
-        if (!extSettings.luminaWeave) {
-            extSettings.luminaWeave = {
-                global: {},
-                characters: {},
-                chats: {}
-            };
+        try {
+            const storage = HALContext.instance.storage as any;
+            if (storage && typeof storage._getInternalBase === 'function') {
+                return storage._getInternalBase();
+            }
+        } catch (e) {
+            // 正常现象：在某些测试环境或初始化极早期，HAL 尚未就绪
         }
-        return extSettings.luminaWeave;
+        return null;
     }
 
     /**
@@ -261,24 +246,26 @@ export class StorageCore extends LuminaWeaveAPIBase {
      * 获取当前的上下文标识符
      */
     public _getContextIds(): { charId: string | number; chatId: string } {
-        const resolvedCharId = STClient.getResolvedCurrentCharacterId();
-        let charId = resolvedCharId ?? null;
+        try {
+            const provider = HALContext.instance.resourceProvider;
+            const charId = provider.getCurrentCharacterId() ?? 'Global';
+            const rawChatId = provider.getCurrentChatId();
+            const chatId = HALContext.instance.sessionIdNormalizer.normalize(rawChatId) ?? '';
 
-        // 如果不存在 charId 尝试防御
-        if (charId === undefined || charId === null) charId = 'Global';
-
-        const chatId = STClient.getResolvedCurrentChatId();
-
-        const finalCharId = charId !== null && charId !== undefined ? String(charId) : 'Global';
-        const finalChatId = chatId ? String(chatId) : '';
-
-        return { charId: finalCharId, chatId: finalChatId };
+            return {
+                charId: String(charId),
+                chatId
+            };
+        } catch (e) {
+            // 如果 HAL 尚未就绪，降级到 Global 模式
+            return { charId: 'Global', chatId: '' };
+        }
     }
 
     /**
      * 写入数据，触发底层落盘，返回 Promise 以便 UI 捕获异步服务器错误（如 CSRF）
-     * @param key 
-     * @param value 
+     * @param key
+     * @param value
      * @param scope - 强制指定写入的作用域
      */
     async set(key: string, value: any, scope: StorageScope = 'Session'): Promise<void> {
@@ -331,7 +318,7 @@ export class StorageCore extends LuminaWeaveAPIBase {
     /**
      * 读取数据（如果作用域未传递，会尝试按 Session -> Chat -> Character -> Global 优先级查找）
      * 但通常由具体的 Settings 模块传递显式的 scope。
-     * @param key 
+     * @param key
      * @param scope - 限定的作用域
      * @param defaultValue - 默认值
      */
@@ -368,7 +355,7 @@ export class StorageCore extends LuminaWeaveAPIBase {
 
     /**
      * 获取当前生效值所在的作用域层级
-     * @param key 
+     * @param key
      */
     getScopeOf(key: string): StorageScope | null {
         const { charId, chatId } = this._getContextIds();
@@ -385,12 +372,17 @@ export class StorageCore extends LuminaWeaveAPIBase {
     }
 
     /**
-     * 触发 ST 原生系统的保存落地
+     * 触发宿主原生系统的保存落地
      */
     public save(): void {
-        const saveFn = this.ctx?.saveSettingsDebounced || (typeof window !== 'undefined' ? (window as any).saveSettingsDebounced : null);
-        if (typeof saveFn === 'function') {
-            saveFn();
+        try {
+            const storage = HALContext.instance.storage as any;
+            if (storage && typeof storage._triggerSave === 'function') {
+                storage._triggerSave();
+                return;
+            }
+        } catch (e) {
+            // 忽略初始化阶段的错误
         }
     }
 }

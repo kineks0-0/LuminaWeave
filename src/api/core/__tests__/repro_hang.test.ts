@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { globalXMLInterceptor } from '../XMLInterceptor';
-import { globalPromptRegistry, PromptSlot, STIdentifier } from '../PromptRegistry';
+import { globalXMLInterceptor } from '../xml-view/XMLInterceptor.js';
+import { globalPromptRegistry, PromptSlot, STIdentifier } from '../hal/prompt/PromptRegistry.js';
 
 describe('XMLInterceptor Hang Reproduction', () => {
     beforeEach(() => {

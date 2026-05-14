@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PromptBuilder } from '../PromptBuilder';
-import { STClient } from '../st-adapter/STClient';
-import { lwStorage } from '../../storage';
+import { PromptBuilder } from '../hal/prompt/PromptBuilder.js';
+import { HALContext } from '../hal/HALContext.js';
+import { lwStorage } from '../../storage.js';
+import { initMockHAL } from './halMock.js';
 
-vi.mock('../st-adapter/STClient', () => ({
+vi.mock('../host-drivers/st/STClient.js', () => ({
     STClient: {
         substituteMacros: vi.fn(text => text.replace('{{user}}', 'UserA')),
         getActiveWorldInfoItems: vi.fn(() => []),
-        getResolvedCurrentCharacterId: vi.fn(() => '0'),
-        getResolvedCurrentChatId: vi.fn(() => 'chat_1')
     }
 }));
 
@@ -18,12 +17,18 @@ describe('PromptBuilder', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.restoreAllMocks();
+        initMockHAL({
+            macroResolver: { resolve: vi.fn(text => text.replace('{{user}}', 'UserA')) },
+            resourceProvider: {
+                getActiveLorebookEntries: vi.fn(() => [])
+            }
+        });
     });
 
     it('应该能正确合成基础系统提示词', () => {
         const messages = [{ role: 'user' as const, content: 'Hello' }];
         const systemPrompt = 'You are an assistant.';
-        
+
         const result = PromptBuilder.buildActiveMessages({
             systemPrompt,
             messages
@@ -42,13 +47,13 @@ describe('PromptBuilder', () => {
             messages: []
         });
 
-        expect(STClient.substituteMacros).toHaveBeenCalledWith(systemPrompt);
+        expect(HALContext.instance.macroResolver.resolve).toHaveBeenCalledWith(systemPrompt);
         expect(result[0].content).toBe('Hello UserA!');
     });
 
     it('应该能动态注入已激活的世界书条目', () => {
-        vi.mocked(STClient.getActiveWorldInfoItems).mockReturnValue([
-            { id: 'item1', content: 'World setting A', role: 0 }
+        vi.mocked(HALContext.instance.resourceProvider.getActiveLorebookEntries).mockReturnValue([
+            { id: 'item1', content: 'World setting A' } as any
         ]);
 
         const result = PromptBuilder.buildActiveMessages({
@@ -61,7 +66,7 @@ describe('PromptBuilder', () => {
     });
 
     it('如果没有激活的世界书条目，不应增加额外内容', () => {
-        vi.mocked(STClient.getActiveWorldInfoItems).mockReturnValue([]);
+        vi.mocked(HALContext.instance.resourceProvider.getActiveLorebookEntries).mockReturnValue([]);
 
         const result = PromptBuilder.buildActiveMessages({
             systemPrompt: 'Start.',
@@ -72,8 +77,8 @@ describe('PromptBuilder', () => {
     });
 
     it('应优先使用解析后的世界书视图条目，而不是 ST 当前激活世界书', () => {
-        vi.mocked(STClient.getActiveWorldInfoItems).mockReturnValue([
-            { id: 'st_item', content: 'ST World setting', role: 0 }
+        vi.mocked(HALContext.instance.resourceProvider.getActiveLorebookEntries).mockReturnValue([
+            { uid: 'st_item', content: 'ST World setting' } as any
         ]);
 
         const result = PromptBuilder.buildActiveMessages({
@@ -100,6 +105,52 @@ describe('PromptBuilder', () => {
         });
 
         expect(result[0].content).toContain('Resolved World setting');
+        expect(result[0].content).not.toContain('ST World setting');
+    });
+
+    it('应能使用 ResourceRef 解析后的世界书 bundle，并保留 ref 诊断输入', () => {
+        vi.mocked(HALContext.instance.resourceProvider.getActiveLorebookEntries).mockReturnValue([
+            { uid: 'st_item', content: 'ST World setting' } as any
+        ]);
+
+        const result = PromptBuilder.buildActiveMessages({
+            systemPrompt: 'Start.',
+            messages: [],
+            allowSTWorldInfoFallback: true,
+            resourceRefs: [{
+                sourceId: 'local',
+                resourceType: 'worldbook',
+                resourceId: 'book',
+                path: '/sources/local/worldbooks/book',
+                writable: true
+            }],
+            resourceBundle: {
+                refs: [],
+                documents: [],
+                diagnostics: [],
+                charCard: null,
+                presetRaw: null,
+                lorebookEntries: [{
+                    uid: 'local_entry',
+                    comment: 'Local Entry',
+                    key: ['local'],
+                    keysecondary: [],
+                    content: 'Local Resource World setting',
+                    constant: false,
+                    selective: false,
+                    selectiveLogic: 0,
+                    disable: false,
+                    enabled: true,
+                    position: 0,
+                    depth: 0,
+                    order: 0,
+                    probability: 100,
+                    scan_depth: 0
+                }]
+            }
+        });
+
+        expect(result[0].content).toContain('Local Resource World setting');
         expect(result[0].content).not.toContain('ST World setting');
     });
 

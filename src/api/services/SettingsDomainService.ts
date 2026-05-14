@@ -1,8 +1,8 @@
-import { lwStorage, type StorageScope } from '../storage';
+import { lwStorage, type StorageScope } from '../storage.js';
 import {
     getCanonicalSettingsStorageKey,
     getLegacySettingsStorageKey
-} from '../../theme/themeRegistry';
+} from '../../theme/themeRegistry.js';
 
 export interface SettingsStorageChange {
     key: string;

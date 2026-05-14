@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
-import { XMLInterceptor, BuiltinXMLTags } from '../XMLInterceptor';
-import { globalPromptRegistry, PromptSlot, STIdentifier } from '../PromptRegistry';
+import { XMLInterceptor, BuiltinXMLTags } from '../xml-view/XMLInterceptor.js';
+import { globalPromptRegistry, PromptSlot, STIdentifier } from '../hal/prompt/PromptRegistry.js';
 import { globalXMLTagRegistry } from '@shared/XMLTagRegistry.js';
 
 describe('XMLInterceptor stream semantics', () => {

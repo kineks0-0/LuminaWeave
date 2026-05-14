@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ForgePromptPayloadResolver } from '../ForgePromptPayloadResolver';
+import { ForgePromptPayloadResolver } from '../forge/ForgePromptPayloadResolver.js';
 
 describe('ForgePromptPayloadResolver', () => {
     it('应正确构造会话记忆快照模板输入', () => {

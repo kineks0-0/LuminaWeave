@@ -1,22 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { initMockHAL } from './halMock.js';
 
 const { storageGet, storageSet } = vi.hoisted(() => ({
     storageGet: vi.fn((key: string, defaultValue?: unknown) => defaultValue),
     storageSet: vi.fn()
 }));
 
-vi.mock('../../storage', () => ({
+vi.mock('../../storage.js', () => ({
     lwStorage: {
         get: storageGet,
         set: storageSet
     }
 }));
 
-import { promptPresetRegistry } from '../PromptPresetRegistry';
+import { promptPresetRegistry } from '../hal/prompt/PromptPresetRegistry.js';
 
 describe('PromptPresetRegistry', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        initMockHAL();
         promptPresetRegistry.resetForTests();
         storageGet.mockImplementation((key: string, defaultValue?: unknown) => defaultValue);
     });

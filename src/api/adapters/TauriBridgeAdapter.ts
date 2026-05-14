@@ -5,11 +5,13 @@ import {
     IStoreService,
     IConversationService
 } from '@shared/api/IBridge.js';
-import { EnvDetector } from '../core/EnvDetector.js';
+import { HostDetector } from '../core/host-drivers/HostDetector.js';
+import { TauriGlobalAccessor } from '../core/host-drivers/tauri/TauriGlobalAccessor.js';
 import { globalNexusOrchestrator } from '@shared/api/llm/NexusOrchestrator.js';
 import { lwStorage } from '../storage.js';
-import { STClient } from '../core/st-adapter/STClient.js';
-import { LocalNexusHandler } from '../core/LocalNexusHandler.js';
+import { STClient } from '../core/host-drivers/st/STClient.js';
+import { STGlobalAccessor } from '../core/host-drivers/st/STGlobalAccessor.js';
+import { LocalNexusHandler } from '../core/generation/LocalNexusHandler.js';
 import { PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
 import type { ConversationDocument, ConversationMutation } from '@shared/ConversationTypes.js';
 import { createEmptyConversationDocument } from '@shared/ConversationTypes.js';
@@ -48,7 +50,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
     private static readonly SYNC_INTERVAL = 1500;
 
     private get bridge() {
-        return EnvDetector.tauriBridge;
+        return TauriGlobalAccessor.tauriBridge;
     }
 
     private async readUnifiedConversation(id: string): Promise<ConversationDocument | null> {
@@ -224,15 +226,15 @@ export class TauriBridgeAdapter implements ILuminaBridge {
 
 
     private async waitReady(): Promise<void> {
-        const ready = EnvDetector.tauriReady;
+        const ready = TauriGlobalAccessor.tauriReady;
         if (ready) await ready;
     }
 
     private async invoke(cmd: string, args: any = {}): Promise<any> {
         await this.waitReady();
-        const invokeFn = EnvDetector.tauriInvoke;
+        const invokeFn = TauriGlobalAccessor.tauriInvoke;
         if (!invokeFn) {
-            throw new Error(`[Lumina Tauri] Native invoke function not found. Environment: ${EnvDetector.isTauriTavern ? 'Tauri-like' : 'Non-Tauri'}`);
+            throw new Error(`[Lumina Tauri] Native invoke function not found. Environment: ${HostDetector.isTauriTavern ? 'Tauri-like' : 'Non-Tauri'}`);
         }
         return await invokeFn(cmd, args);
     }
@@ -301,7 +303,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
     }
 
     private getCharacterName(): string {
-        const ctx = EnvDetector.ctx as any;
+        const ctx = STGlobalAccessor.ctx as any;
         // 优先从官方上下文获取 characterName，用于 Native 端的隔离识别
         return ctx?.characterName || ctx?.name || 'Global';
     }
@@ -943,7 +945,7 @@ export class TauriBridgeAdapter implements ILuminaBridge {
                 await this.waitReady();
 
                 // 探测可用的监听函数 (兼容标准 Tauri 与 TauriTavern)
-                const bridge = EnvDetector.tauriBridge;
+                const bridge = TauriGlobalAccessor.tauriBridge;
                 const w = window as any;
                 const listenFn = (bridge && typeof bridge.listen === 'function')
                     ? bridge.listen.bind(bridge)

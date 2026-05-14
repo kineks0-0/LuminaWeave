@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitToSegments } from '../LVParser';
+import { splitToSegments } from '../xml-view/LVParser.js';
 
 describe('Forge DSL Robust Splitting', () => {
     const splitRegex = /[|｜丨]/;

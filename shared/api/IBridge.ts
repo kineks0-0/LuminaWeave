@@ -1,4 +1,3 @@
-import { LuminaChatMessage } from '../LuminaMessage.js';
 import { TransactionMutationResponse, TransactionQueryResponse } from './TransactionTypes.js';
 import type {
     ConversationDocument,

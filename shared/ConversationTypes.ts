@@ -6,6 +6,9 @@ export const CONVERSATION_SCHEMA_VERSION = 1;
 export type LuminaConversationDocumentType = 'chat' | 'forge';
 
 export interface ForgeConversationPluginState {
+    forgeProjectId?: string;
+    conversationId?: string;
+    workspacePath?: string;
     structuredState?: unknown;
     draftTree?: unknown;
     forgeMemoryTree?: unknown;

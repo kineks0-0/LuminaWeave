@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { StreamHandler } from '../StreamHandler';
+import { StreamHandler } from '../generation/StreamHandler.js';
 import { lwStorage } from '../../storage.js';
 import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 
