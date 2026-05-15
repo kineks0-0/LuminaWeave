@@ -8,7 +8,13 @@
 
 ## 当前状态
 
-架构设计与违例审查已完成；`docs/architecture.md` 已固化 HAL 接口契约（`IMacroResolver` / `IEventBridge` / `ISessionIdNormalizer` / `IHostStorage` / `IHostNetwork`）、宿主实现层归口规范、目标目录分层结构，以及 7 项已确认的架构违例清单。代码尚未改动。
+架构设计与违例审查已完成；`docs/architecture.md` 已固化 HAL 接口契约（`IMacroResolver` / `IEventBridge` / `ISessionIdNormalizer` / `IHostStorage` / `IHostNetwork`）、宿主实现层归口规范、目标目录分层结构，以及 7 项已确认的架构违例清单。P0-P3 主体迁移已进入代码落地阶段，剩余重点是 Forge/Chat Prompt 路由收口与验证闭环。
+
+2026-05-14 更新：runtime 能力总线已从 `BridgeDispatcher` / `ILuminaBridge` 迁入 `HALContext.instance.runtime`。HTTP 后端现在明确是 SillyTavern 插件模式下的 `st-plugin-enhanced` 增强 runtime；Tauri 与 Standalone 分别使用 `tauri-native` 和 `standalone-local` runtime ports。
+
+2026-05-15 收尾判定：`src/api/adapters` 合并至 HAL 层的 runtime port 重塑已满足代码验收，可进入收尾阶段。当前扫描结果：`src/api/adapters` 不存在；生产代码不再引用 `BridgeDispatcher` / `ILuminaBridge` / 旧 adapter 名称；Core/UI 不直接 import `STPluginEnhancementRuntime`；shared `ApiEndpoints.ts` 已移除 legacy `CHAT` / `FORGE` 常量。后端已收敛为 ST plugin enhancement router，并清理重复的 `NEXUS.GENERATE` 注册。
+
+收尾阶段只处理验证、文档状态和小型路由清理；P4 Prompt HAL 路由属于后续专项，不阻塞本次 adapter 合并归档。
 
 ## 新增架构决策：Prompt HAL 路由
 
@@ -121,7 +127,15 @@ src/api/core/
 
 10. [x] Bootstrap 存储与领域存储分离: `lwStorage` 接入 `IBootstrapStorage` 接口，解除了对 `BridgeDispatcher.extensionStore` 的直接依赖。
 
+10.1. [x] Runtime ports 重塑。
+   - 删除 `src/api/adapters` 作为独立 bridge 目录。
+   - `HttpBridgeAdapter` / `TauriBridgeAdapter` / `LocalBridgeAdapter` 分别迁入 HAL adapter 并重命名为 `STPluginEnhancementRuntime` / `TauriNativeRuntime` / `StandaloneLocalRuntime`。
+   - 生产代码通过 `HALContext.instance.runtime` 访问 conversation、generation、settings、presets、extensionStore。
+   - 删除 `BridgeDispatcher` / `ILuminaBridge` 生产运行时总线。
+
 ### P4 — Prompt HAL 路由与多引擎合成
+
+状态：拆分为后续 Prompt HAL 路由专项。该部分不再阻塞 `src/api/adapters -> hal/adapters` 的 runtime port 收尾，但仍保留在本文作为后续任务入口。
 
 11. [x] 定义 `PromptAssemblyRequest` / `PromptAssemblyTarget` / `SessionBinding` / `PromptAssemblyEngine` 共享契约。
     - `SessionBinding` 至少区分 `st-chat` 与 `plugin-session`。
@@ -162,6 +176,18 @@ src/api/core/
 ```powershell
 cd D:\LuminaWeave\luminaweave-extension
 npm run type-check
+npm run test
+npm run build
+```
+
+2026-05-15 runtime port 收尾验证已执行：
+
+```powershell
+cd D:\LuminaWeave\luminaweave-extension
+npm run type-check
+npm run test
+
+cd D:\LuminaWeave\luminaweave-server
 npm run test
 npm run build
 ```

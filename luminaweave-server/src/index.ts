@@ -8,7 +8,7 @@ import { StorageService } from './StorageService.js';
 import { NexusService, mapSTSettingsToAISdk } from './NexusService.js';
 import { BaseXMLInterceptor } from '@shared/BaseXMLInterceptor.js';
 import { API_ROUTES } from '@shared/ApiEndpoints.js';
-import { TransactionRecord, TransactionScope, TransactionStatus, NexusApiConfig, PresetRecord, ForgeSessionRecord } from './types.js';
+import { NexusApiConfig } from './types.js';
 import { LuminaChatMessage, MessageUtils } from '@shared/LuminaMessage.js';
 import { NexusGenerationFlow, PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
 import { ConversationDocument, ConversationMutation } from '@shared/ConversationTypes.js';
@@ -214,145 +214,6 @@ export class LuminaWeaveServer {
             });
         });
 
-        // --- 聊天与同步 (Critical Fix) ---
-        router.get(API_ROUTES.CHAT.LIST, (req: Request, res: Response) => {
-            res.json({ chats: this.storage.listChats() });
-        });
-
-        router.get('/chat/:chatId', (req: Request, res: Response) => {
-            const data = this.storage.readChat(String(req.params.chatId));
-            data.length > 0 ? res.json(data) : res.status(404).json({ error: 'Chat not found' });
-        });
-
-        router.get('/chat/:chatId/sync-status', (req: Request, res: Response) => {
-            const chatId = String(req.params.chatId);
-            const records = this.storage.readTransactionLog(chatId);
-            const lastCommitted = [...records]
-                .filter((record) => record.status === 'committed')
-                .sort((left, right) => right.seq - left.seq)[0];
-            res.json({
-                success: true,
-                isTransactionsCompleted: this.storage.isAllTransactionsCompleted(chatId),
-                lastCommittedSeq: this.storage.getLastCommittedSeq(records),
-                lastTransactionId: lastCommitted?.id || null
-            });
-        });
-
-        router.get('/chat/:chatId/transactions', (req: Request, res: Response) => {
-            const chatId = String(req.params.chatId);
-            const records = this.storage.readTransactionLog(chatId);
-            res.json({
-                success: true,
-                transactions: records,
-                lastCommittedSeq: this.storage.getLastCommittedSeq(records)
-            });
-        });
-
-        router.post('/chat/:chatId/transactions/:transactionId/rollback', (req: Request, res: Response) => {
-            const chatId = String(req.params.chatId);
-            const transactionId = String(req.params.transactionId);
-            const records = this.storage.readTransactionLog(chatId);
-            const target = this.storage.findTransactionById(records, transactionId);
-            if (!target) {
-                return res.status(404).json({ success: false, error: 'Transaction not found' });
-            }
-
-            const rolledBack = this.storage.transitionTransaction(chatId, target, 'rolled_back');
-            this.storage.syncToDisk();
-            res.status(200).json({
-                success: true,
-                transaction: rolledBack,
-                lastCommittedSeq: this.storage.getLastCommittedSeq(this.storage.readTransactionLog(chatId))
-            });
-        });
-
-        router.post('/chat/save/:chatId', (req: Request, res: Response) => {
-            const chatId = String(req.params.chatId);
-            const payload = Array.isArray(req.body?.data) ? req.body.data : (Array.isArray(req.body) ? req.body : []);
-            const records = this.storage.readTransactionLog(chatId);
-            const digest = this.storage.digestPayload(payload);
-            const tx = this.storage.createTransaction(
-                chatId,
-                'chat.save',
-                digest,
-                req.body?.transactionContext?.idempotencyKey || `save_${Date.now()}`,
-                this.storage.getLastCommittedSeq(records) + 1
-            );
-
-            this.storage.writeChat(chatId, payload);
-            const committedTx = this.storage.transitionTransaction(chatId, tx, 'committed');
-            this.storage.syncToDisk();
-            res.json({ success: true, transaction: committedTx });
-        });
-
-        router.patch('/chat/:chatId', (req: Request, res: Response) => {
-            const chatId = String(req.params.chatId);
-            const conversation = this.storage.readConversation(chatId) || createEmptyConversationDocument({
-                id: chatId,
-                conversationType: chatId.startsWith('lw_card_') ? 'forge' : 'chat'
-            });
-            const mutation: ConversationMutation = {
-                nodes: {
-                    added: Array.isArray(req.body?.added) ? req.body.added : [],
-                    updated: Array.isArray(req.body?.updated) ? req.body.updated : [],
-                    deletedIds: Array.isArray(req.body?.deletedIds) ? req.body.deletedIds : []
-                },
-                activeLeafId: req.body?.metadata?.activeLeafId ?? conversation.activeLeafId,
-                updatedAt: req.body?.metadata?.updatedAt ?? Date.now(),
-                pluginState: req.body?.metadata?.pluginData ? {
-                    chat: {
-                        pluginData: req.body.metadata.pluginData
-                    }
-                } : undefined
-            };
-            const records = this.storage.readTransactionLog(chatId);
-            const tx = this.storage.createTransaction(
-                chatId,
-                'chat.patch',
-                this.storage.digestPayload(mutation),
-                req.body?.transactionContext?.idempotencyKey || `patch_${Date.now()}`,
-                this.storage.getLastCommittedSeq(records) + 1
-            );
-
-            this.storage.mutateConversation(chatId, mutation);
-            const committedTx = this.storage.transitionTransaction(chatId, tx, 'committed');
-            this.storage.syncToDisk();
-            res.json({
-                success: true,
-                count: this.storage.readConversation(chatId)?.nodes.length || 0,
-                transaction: committedTx,
-                lastCommittedSeq: committedTx.seq
-            });
-        });
-
-        // --- Forge 工作会话持久化 ---
-        router.get(API_ROUTES.FORGE.LIST, (req: Request, res: Response) => {
-            res.json({ sessions: this.storage.listForgeSessions() });
-        });
-
-        router.get('/forge/sessions/:sessionId', (req: Request, res: Response) => {
-            const session = this.storage.getForgeSession(String(req.params.sessionId));
-            session ? res.json({ session }) : res.status(404).json({ error: 'Forge session not found' });
-        });
-
-        router.post(API_ROUTES.FORGE.SAVE, (req: Request, res: Response) => {
-            const session = req.body as ForgeSessionRecord;
-            if (!session?.id) {
-                return res.status(400).json({ error: 'Missing forge session id' });
-            }
-            this.storage.saveForgeSession(session);
-            res.status(201).json({ session });
-        });
-
-        router.put('/forge/sessions/:sessionId', (req: Request, res: Response) => {
-            const session = req.body as ForgeSessionRecord;
-            if (!session?.id || session.id !== String(req.params.sessionId)) {
-                return res.status(400).json({ error: 'Forge session id mismatch' });
-            }
-            this.storage.saveForgeSession(session);
-            res.json({ session });
-        });
-
         // --- Nexus 生成核心 (Parity with index.ts.bak) ---
         router.get('/nexus/models/:providerId', async (req: Request, res: Response) => {
             const dataDir = path.join(process.cwd(), 'plugins/luminaweave/data');
@@ -360,13 +221,6 @@ export class LuminaWeaveServer {
             const api = (config['nexus.apis'] || []).find((a: any) => a.id === String(req.params.providerId));
             if (!api) return res.status(404).json({ error: 'Provider not found' });
             res.json({ models: await this.nexus.listModelsForProvider(api) });
-        });
-
-        router.post(API_ROUTES.NEXUS.GENERATE, async (req: Request, res: Response) => {
-            // 异步生成逻辑（非 SSE 版本），立即返回 200
-            const { chatId, messages } = req.body;
-            res.json({ success: true });
-            this._runNexusGeneration(String(chatId), messages, req.body);
         });
 
         // SSE 流式生成接口 (核心通道)
