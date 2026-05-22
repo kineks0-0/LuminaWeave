@@ -28,8 +28,8 @@
 
 <script setup lang="ts">
 import { computed, inject } from 'vue';
-import { LuminaWeaveAPI } from '../../../../api/index';
-import { useSettings } from '../../../settings/useSettings';
+import { LuminaWeaveAPI } from '../../../../api/index.js';
+import { useSettings } from '../../../settings/useSettings.js';
 
 interface ChoiceOption {
   label: string;
@@ -87,11 +87,12 @@ const handleChoice = (opt: ChoiceOption) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: #8b5cf6;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .choice-list {
@@ -137,16 +138,19 @@ const handleChoice = (opt: ChoiceOption) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: #64748b;
 }
 
 .choice-label {
   flex: 1;
-  font-size: 14px;
-  line-height: 1.5;
-  font-weight: 500;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
 }
 
 .choice-arrow {

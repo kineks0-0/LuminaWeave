@@ -8,7 +8,7 @@
     :style="appRootStyle"
   >
     <transition name="fade">
-      <MiniSidebar v-if="!isExpanded" @expand="emit('expand')" />
+      <MiniSidebar v-if="!isExpanded && showMiniSidebar" @expand="emit('expand')" />
     </transition>
 
     <transition name="panel-slide">
@@ -43,6 +43,7 @@ defineProps<{
   appRootStyle: CSSProperties;
   rootFrameStyle: CSSProperties;
   shellAppVariant: string;
+  showMiniSidebar?: boolean;
 }>();
 
 const emit = defineEmits<{

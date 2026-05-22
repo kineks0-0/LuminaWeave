@@ -32,6 +32,23 @@
 - 左侧会话列表新增工具入口：`启动台` 置顶、`制卡工坊` 第二，视觉复用角色行结构；`所有` 显示工具 + 角色，`角色` 只显示角色，`工具` 只显示工具，`筛选` 继续只作用于角色/会话派生列表。
 - 左侧列表与右侧资料栏均支持桌面端拖拽调整宽度。左栏持久化到 `luminaWeave.telegram.leftRailWidth`，右栏继续使用 `luminaWeave.widgetWidth`，并按视口动态约束以保留中间聊天区最小宽度。
 
+下一轮导航重构任务已记录：
+
+- Telegram desktop/mobile 均隐藏 `lw-panel-header`，但 Telegram mobile 保留 `对话 / 角色 / 设置 / 个人资料` 底部 tab。
+- 会话列表页支持 `角色聚合 / 对话文件` 双模式；角色聚合 item 点击进入角色概览，对话文件 item 点击直接进入聊天。
+- 桌面左栏拆为 `会话列表页` 与 `角色列表页` 两个 stack 页面；桌面左栏 / 中栏 / 右栏各自维护独立 stack。
+- 移动端四个 tab 内容区各自维护独立 stack，个人资料页显示用户本人资料，角色 / 会话资料继续由角色资料 surface 承载。
+
+该导航重构已完成首轮实现与 `npm run type-check` 验证，待真实宿主视觉走查。
+
+Android Telegram 视觉对齐任务已记录并进入实现：
+
+- 移动端第二 tab 文案改为 `联系人`，底层仍复用角色/会话聚合 stack。
+- Telegram shell 图标统一映射到 `lucide-vue-next` 风格，不直接裸用 emoji、字符图标或插件原始 icon。
+- 联系人、聊天列表、资料页与底栏头像统一圆形裁切、占位渐变和破图兜底。
+- 角色资料页不复制无业务能力入口，`动态 / 群组` 改为 `历史 / 工具`。
+- 设置页使用 Telegram Android 风格小窗口首页，但设置条目仍来自 Lumina 真实设置分类。
+
 验证状态见 [05 Verification and Doc Sync](./steps/05-verification-and-doc-sync.md)。
 
 ## 设计来源
@@ -70,7 +87,9 @@ Figma 原始文件链接：
 - [04 Mobile Character Overview](./steps/04-mobile-character-overview.md)
 - [05 Verification and Doc Sync](./steps/05-verification-and-doc-sync.md)
 - [06 Desktop Chrome Tools and Resize](./steps/06-desktop-chrome-tools-and-resize.md)
+- [07 Stack Navigation and Mobile Tabs](./steps/07-stack-navigation-and-mobile-tabs.md)
+- [08 Android Telegram Visual Alignment](./steps/08-android-telegram-visual-alignment.md)
 
 ## 下一步
 
-下一步需要在真实宿主或本地预览环境中进行视觉走查，重点确认默认圆角外边距三栏、顶部留白开关、左栏工具入口、筛选二级菜单、左右拖拽宽度、右侧角色资料页和移动端安全区/IME 是否满足最终稿预期。
+下一步需要在真实宿主或本地预览环境中进行视觉走查，重点确认 [07 Stack Navigation and Mobile Tabs](./steps/07-stack-navigation-and-mobile-tabs.md) 的独立栈行为，以及 [08 Android Telegram Visual Alignment](./steps/08-android-telegram-visual-alignment.md) 的底栏、搜索框、筛选 chip、资料卡、设置页、图标和头像一致性。

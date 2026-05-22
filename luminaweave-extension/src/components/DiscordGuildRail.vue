@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue';
-import { useComponentSkin } from '../theme/useComponentSkin';
+import { useComponentSkin } from '../theme/useComponentSkin.js';
 
 defineProps<{
   items: { id: string; name: string; icon?: string }[];
@@ -183,9 +183,10 @@ const guildStyle = computed<CSSProperties>(() => guildSkinVars.value as CSSPrope
 }
 
 .lw-discord-guild-rail__glyph {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
 }
 
 .lw-discord-guild-rail.is-mobile {

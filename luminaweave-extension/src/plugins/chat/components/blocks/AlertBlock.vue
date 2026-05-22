@@ -48,8 +48,10 @@ const alertType = computed(() => {
   gap: 10px;
   padding: 10px 14px;
   border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   border: 1px solid transparent;
   margin: 4px 0;
   transition: transform 0.2s;
@@ -66,7 +68,6 @@ const alertType = computed(() => {
 
 .alert-content {
   flex: 1;
-  font-weight: 500;
 }
 
 /* 颜色方案 */

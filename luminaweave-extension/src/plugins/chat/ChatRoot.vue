@@ -1,20 +1,30 @@
 <template>
   <div class="chat-root-container">
-    <ChatStream :messages="messages" :isMobile="isMobile" :workspaceCompact="workspaceCompact" />
+    <ChatStream
+      :messages="messages"
+      :isMobile="isMobile"
+      :workspaceCompact="workspaceCompact"
+      :onTelegramBack="onTelegramBack"
+      :onTelegramOpenRoleProfile="onTelegramOpenRoleProfile"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 import ChatStream from './ChatStream.vue';
-import { useConversationContextStore } from '../../stores/useConversationContextStore';
+import { useConversationContextStore } from '../../stores/useConversationContextStore.js';
 
 withDefaults(defineProps<{
   isMobile?: boolean;
   workspaceCompact?: boolean;
+  onTelegramBack?: () => void;
+  onTelegramOpenRoleProfile?: () => void;
 }>(), {
   isMobile: false,
-  workspaceCompact: false
+  workspaceCompact: false,
+  onTelegramBack: undefined,
+  onTelegramOpenRoleProfile: undefined
 });
 
 const contextStore = useConversationContextStore();

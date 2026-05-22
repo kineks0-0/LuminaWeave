@@ -1,5 +1,5 @@
 import { computed } from 'vue';
-import { activeSettings, useSettings } from '../plugins/settings/useSettings';
+import { activeSettings, useSettings } from '../plugins/settings/useSettings.js';
 import {
     getActiveDesktopModeIdFromSettings,
     DEFAULT_THEME_PACK_ID,
@@ -8,8 +8,8 @@ import {
     getDesktopModeShell,
     getThemeNavigationPreset,
     getThemeSurfacePreset,
-} from './themeRegistry';
-import type { ResolvedThemeAppearance, ThemeWorkspaceMode } from './types';
+} from './themeRegistry.js';
+import type { ResolvedThemeAppearance, ThemeWorkspaceMode } from './types.js';
 
 const mediaQuery = typeof window !== 'undefined'
     ? window.matchMedia('(prefers-color-scheme: dark)')

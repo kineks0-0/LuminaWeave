@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, ref } from 'vue';
-import { useWorkspaceNavigation } from '../shell/useWorkspaceNavigation';
+import { useWorkspaceNavigation } from '../shell/useWorkspaceNavigation.js';
 
 describe('useWorkspaceNavigation', () => {
   beforeEach(() => {

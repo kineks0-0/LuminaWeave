@@ -38,19 +38,22 @@ export class HALBootstrap {
             console.log('[HALBootstrap] Starting host detection...');
             reportProgress('探测宿主环境...');
 
-        // 1. 探测宿主环境
-        // 探测优先级：TauriTavern (Native) > SillyTavern (Plugin) > Standalone
-        const childOptions = { onProgress: reportProgress };
-        if (HostDetector.isTauriTavern) {
-            console.log('[HALBootstrap] TauriTavern detected. Injecting Tauri providers.');
-            await this.initTauriHost(childOptions);
-        } else if (HostDetector.isSillyTavern) {
-            console.log('[HALBootstrap] SillyTavern detected. Injecting ST providers.');
-            await this.initSTHost(childOptions);
-        } else {
-            console.log('[HALBootstrap] Standalone mode detected. Injecting default providers.');
-            await this.initStandaloneHost(childOptions);
-        }
+            // 1. 探测宿主环境
+            // 探测优先级：TauriTavern (Native) > SillyTavern (Plugin) > Standalone
+            const childOptions = { onProgress: reportProgress };
+            if (HostDetector.isTauriTavern) {
+                console.log('[HALBootstrap] TauriTavern detected. Injecting Tauri providers.');
+                await this.initTauriHost(childOptions);
+                await this.initTauriRuntime(childOptions);
+            } else if (HostDetector.isSillyTavern) {
+                console.log('[HALBootstrap] SillyTavern detected. Injecting ST providers.');
+                await this.initSTHost(childOptions);
+                await this.initSTPluginRuntime(childOptions);
+            } else {
+                console.log('[HALBootstrap] Standalone mode detected. Injecting default providers.');
+                await this.initStandaloneHost(childOptions);
+                await this.initStandaloneRuntime(childOptions);
+            }
 
         this._initialized = true;
 
@@ -87,11 +90,17 @@ export class HALBootstrap {
      * 初始化 TauriTavern (Android/Native) 宿主实现
      */
     private static async initTauriHost(options: { onProgress?: (msg: string) => void }): Promise<void> {
-        options.onProgress?.('加载 Tauri 宿主驱动...');
-        const { registerLocalResourceSource } = await import('./adapters/standalone/LocalResourceSourceProvider.js');
-        registerLocalResourceSource();
+        options.onProgress?.('加载 TauriTavern 宿主驱动...');
+        const { registerSTRuntimePorts } = await import('./adapters/st/STRuntimePortRegistration.js');
+        registerSTRuntimePorts();
         const { TauriHostProvider } = await import('./adapters/tauri/TauriHostProvider.js');
         HALContext.instance = new TauriHostProvider().createContext();
+
+        // TauriTavern 承载的是 SillyTavern Web 内容，宿主事件和聊天同步仍由 ST driver 负责。
+        const { getHostRuntimePort } = await import('../facade/HostRuntimePort.js');
+        await getHostRuntimePort().waitForReady({
+            onProgress: options.onProgress
+        });
     }
 
     /**
@@ -105,5 +114,31 @@ export class HALBootstrap {
 
         const { StandaloneHostProvider } = await import('./adapters/standalone/StandaloneHostProvider.js');
         HALContext.instance = new StandaloneHostProvider().createContext();
+    }
+
+    private static async initTauriRuntime(options: { onProgress?: (msg: string) => void }): Promise<void> {
+        options.onProgress?.('加载 Tauri runtime ports...');
+        const { TauriNativeRuntime } = await import('./adapters/tauri/TauriNativeRuntime.js');
+        HALContext.instance.runtime = new TauriNativeRuntime();
+    }
+
+    private static async initSTPluginRuntime(options: { onProgress?: (msg: string) => void }): Promise<void> {
+        options.onProgress?.('探测 ST 插件增强 runtime...');
+        const { STPluginEnhancementRuntime } = await import('./adapters/st/STPluginEnhancementRuntime.js');
+        const runtime = new STPluginEnhancementRuntime();
+        try {
+            await runtime.settings.getSettings();
+            HALContext.instance.runtime = runtime;
+            options.onProgress?.('ST 插件增强 runtime 已就绪');
+        } catch (error) {
+            console.warn('[HALBootstrap] ST plugin enhancement runtime unavailable; falling back to standalone local runtime.', error);
+            await this.initStandaloneRuntime(options);
+        }
+    }
+
+    private static async initStandaloneRuntime(options: { onProgress?: (msg: string) => void }): Promise<void> {
+        options.onProgress?.('加载 standalone local runtime...');
+        const { StandaloneLocalRuntime } = await import('./adapters/standalone/StandaloneLocalRuntime.js');
+        HALContext.instance.runtime = new StandaloneLocalRuntime();
     }
 }

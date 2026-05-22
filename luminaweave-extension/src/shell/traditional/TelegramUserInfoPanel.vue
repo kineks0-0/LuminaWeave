@@ -7,31 +7,26 @@
   >
     <header class="lw-telegram-profile__topbar">
       <button type="button" title="返回" @click="emit('openTool', 'none')">
-        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.4" fill="none">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
+        <component :is="getTelegramIconComponent('back')" :size="22" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
       </button>
       <div>
         <strong>{{ isMobile ? profile.name : '角色资料' }}</strong>
         <span>{{ syncText }}</span>
       </div>
       <button type="button" title="更多" @click="handleTopbarTrailingClick">
-        <svg v-if="!isMobile" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.2" fill="none">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-        <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-          <circle cx="5" cy="12" r="1.7"></circle>
-          <circle cx="12" cy="12" r="1.7"></circle>
-          <circle cx="19" cy="12" r="1.7"></circle>
-        </svg>
+        <component
+          :is="getTelegramIconComponent(isMobile ? 'more' : 'close')"
+          :size="22"
+          :stroke-width="TELEGRAM_ICON_STROKE_WIDTH"
+          aria-hidden="true"
+        />
       </button>
     </header>
 
     <section class="lw-telegram-profile__hero">
-      <div class="lw-telegram-profile__avatar">
-        <img v-if="profile.avatarUrl" :src="profile.avatarUrl" :alt="profile.name">
-        <span v-else>{{ profile.initial }}</span>
+      <div class="lw-telegram-profile__avatar" :style="getTelegramAvatarStyle(profile.name)">
+        <img v-if="profile.avatarUrl" :src="profile.avatarUrl" :alt="profile.name" @error="hideBrokenTelegramAvatar">
+        <span v-else>{{ getTelegramInitial(profile.name) }}</span>
       </div>
       <div class="lw-telegram-profile__identity">
         <div>
@@ -41,9 +36,7 @@
         <p>{{ profileDescription }}</p>
         <div class="lw-telegram-profile__sync">
           <span>
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none">
-              <path d="M20 6 9 17l-5-5"></path>
-            </svg>
+            <component :is="getTelegramIconComponent('check')" :size="14" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
             已同步
           </span>
           <small>最后同步：{{ lastSyncText }}</small>
@@ -51,8 +44,28 @@
       </div>
     </section>
 
-    <section class="lw-telegram-profile__section">
-      <h3>快速操作</h3>
+    <div class="lw-telegram-profile__actions" aria-label="角色操作">
+      <button type="button" :disabled="!activeGroup" @click="createSession">
+        <component :is="getTelegramIconComponent('chat')" :size="26" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
+        <span>{{ isMobile ? '消息' : '新聊天' }}</span>
+      </button>
+      <button type="button" @click="activeTab = 'history'">
+        <component :is="getTelegramIconComponent('history')" :size="26" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
+        <span>历史</span>
+      </button>
+      <button type="button" @click="activeTab = 'tools'">
+        <component :is="getTelegramIconComponent('grid')" :size="26" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
+        <span>工具</span>
+      </button>
+    </div>
+
+    <nav class="lw-telegram-profile__tabs" aria-label="角色资料分区">
+      <button type="button" :class="{ active: activeTab === 'history' }" @click="activeTab = 'history'">历史</button>
+      <button type="button" :class="{ active: activeTab === 'tools' }" @click="activeTab = 'tools'">工具</button>
+    </nav>
+
+    <section v-if="activeTab === 'tools'" class="lw-telegram-profile__section">
+      <h3>上下文工具</h3>
       <div class="lw-telegram-profile__quick">
         <button
           v-for="tool in contextTools"
@@ -60,13 +73,15 @@
           type="button"
           @click="emit('openTool', tool.panelId)"
         >
-          <span class="tool-icon">{{ tool.icon }}</span>
+          <span class="tool-icon">
+            <component :is="getTelegramIconComponent(tool.icon)" :size="22" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
+          </span>
           <strong>{{ tool.label }}</strong>
         </button>
       </div>
     </section>
 
-    <section class="lw-telegram-profile__section">
+    <section v-else class="lw-telegram-profile__section">
       <header>
         <h3>最近聊天</h3>
         <button type="button" :disabled="allSessions.length === 0" @click="openFirstSession">查看全部</button>
@@ -79,9 +94,7 @@
           @click="emit('openSession', session.id)"
         >
           <span class="chat-icon">
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
-            </svg>
+            <component :is="getTelegramIconComponent('chat')" :size="20" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
           </span>
           <span>
             <strong>{{ session.title }}</strong>
@@ -91,61 +104,51 @@
         </button>
       </div>
       <p v-else class="lw-telegram-profile__empty">还没有最近聊天。</p>
-    </section>
-
-    <section class="lw-telegram-profile__section">
-      <header>
-        <h3>所有聊天记录</h3>
-        <button type="button" disabled>筛选</button>
-      </header>
-      <div class="lw-telegram-profile__history">
+      <div v-if="allSessions.length > recentSessions.length" class="lw-telegram-profile__history">
         <button
-          v-for="item in historyGroups"
-          :key="item.id"
+          v-for="session in allSessions.slice(recentSessions.length)"
+          :key="session.id"
           type="button"
-          :disabled="item.count === 0"
-          @click="openHistoryGroup(item.id)"
+          @click="emit('openSession', session.id)"
         >
-          <span class="history-icon">{{ item.icon }}</span>
-          <strong>{{ item.label }}</strong>
-          <small>{{ item.count }}</small>
-          <span>›</span>
+          <span class="history-icon">
+            <component :is="getTelegramIconComponent('chat')" :size="18" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
+          </span>
+          <strong>{{ session.title }}</strong>
+          <small>{{ formatSessionTime(session.updatedAt) }}</small>
+          <span>
+            <component :is="getTelegramIconComponent('chevronRight')" :size="18" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
+          </span>
         </button>
       </div>
     </section>
-
-    <button
-      class="lw-telegram-profile__primary"
-      type="button"
-      :disabled="!activeGroup"
-      @click="createSession"
-    >
-      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.2" fill="none">
-        <path d="M21 15a4 4 0 0 1-4 4H9l-6 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
-        <path d="M12 8v6"></path>
-        <path d="M9 11h6"></path>
-      </svg>
-      {{ isMobile ? '开始新聊天' : '新聊天' }}
-    </button>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { CSSProperties } from 'vue';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 import type {
   CharacterChannelGroup,
   CharacterChannelSessionItem,
   CharacterChannelState,
   CreateChatConversationInput
-} from '../../types/ConversationContextTypes';
+} from '../../types/ConversationContextTypes.js';
+import {
+  TELEGRAM_ICON_STROKE_WIDTH,
+  type TelegramIconName,
+  getTelegramAvatarStyle,
+  getTelegramIconComponent,
+  getTelegramInitial,
+  hideBrokenTelegramAvatar
+} from './telegramVisual.js';
 
 interface ContextTool {
   id: string;
   label: string;
   panelId: string;
-  icon: string;
+  icon: TelegramIconName;
 }
 
 const props = withDefaults(defineProps<{
@@ -163,6 +166,7 @@ const emit = defineEmits<{
 
 const { cssVars: infoPanelVars } = useComponentSkin('telegram.infoPanel');
 const infoPanelStyle = computed<CSSProperties>(() => infoPanelVars.value as CSSProperties);
+const activeTab = ref<'history' | 'tools'>('history');
 
 const activeGroup = computed<CharacterChannelGroup | null>(() => {
   const activeSessionId = props.state.activeSessionId || props.state.selectedViewSessionId;
@@ -193,7 +197,7 @@ const profile = computed(() => {
   return {
     name,
     avatarUrl: group?.characterAvatarUrl || '',
-    initial: group?.characterInitial || name.slice(0, 1).toUpperCase()
+    initial: group?.characterInitial || getTelegramInitial(name)
   };
 });
 
@@ -216,16 +220,10 @@ const lastSyncText = computed(() => (
 ));
 
 const contextTools = computed<ContextTool[]>(() => [
-  { id: 'timeline', label: '时间线', panelId: 'lumina-timeline', icon: '◈' },
-  { id: 'stats', label: '状态', panelId: 'lumina-stats', icon: '▮' },
-  { id: 'director', label: '导演', panelId: 'lumina-director', icon: '▰' },
-  { id: 'lorebook', label: '世界书', panelId: 'lumina-lorebook', icon: '▤' }
-]);
-
-const historyGroups = computed(() => [
-  { id: 'all', label: '全部对话', count: allSessions.value.length, icon: '▱' },
-  { id: 'favorites', label: '已收藏', count: allSessions.value.filter((session) => session.title.includes('★')).length, icon: '☆' },
-  { id: 'archive', label: '归档', count: 0, icon: '▣' }
+  { id: 'timeline', label: '时间线', panelId: 'lumina-timeline', icon: 'timeline' },
+  { id: 'stats', label: '状态', panelId: 'lumina-stats', icon: 'spark' },
+  { id: 'director', label: '导演', panelId: 'lumina-director', icon: 'bot' },
+  { id: 'lorebook', label: '世界书', panelId: 'lumina-lorebook', icon: 'book' }
 ]);
 
 const createSession = () => {
@@ -245,23 +243,12 @@ const openFirstSession = () => {
   }
 };
 
-const openHistoryGroup = (groupId: string) => {
-  if (groupId === 'all') {
-    openFirstSession();
-    return;
-  }
-  if (groupId === 'favorites') {
-    const favorite = allSessions.value.find((session) => session.title.includes('★'));
-    if (favorite) {
-      emit('openSession', favorite.id);
-    }
-  }
-};
-
 const handleTopbarTrailingClick = () => {
   if (!props.isMobile) {
     emit('openTool', 'none');
+    return;
   }
+  activeTab.value = activeTab.value === 'tools' ? 'history' : 'tools';
 };
 
 const formatSessionTime = (timestamp: number) => {
@@ -298,7 +285,7 @@ const formatSessionTime = (timestamp: number) => {
   height: 38px;
   border: none;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 72%, transparent);
+  background: var(--lw-telegram-glass-bg, color-mix(in srgb, var(--lw-surface-container-highest) 72%, transparent));
   color: var(--lw-text-main);
   display: inline-flex;
   align-items: center;
@@ -316,13 +303,18 @@ const formatSessionTime = (timestamp: number) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 17px;
-  font-weight: 900;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
 }
 
 .lw-telegram-profile__topbar span {
   color: var(--lw-text-secondary);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-telegram-profile__hero {
@@ -341,11 +333,13 @@ const formatSessionTime = (timestamp: number) => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #82c7f5;
+  background: var(--lw-telegram-avatar-bg, #82c7f5);
   border: 3px solid color-mix(in srgb, var(--lw-surface-container-highest) 92%, transparent);
   color: #102338;
-  font-size: 34px;
-  font-weight: 900;
+  font-size: var(--lw-type-headline-large-size);
+  line-height: var(--lw-type-headline-large-line-height);
+  font-weight: var(--lw-type-headline-large-weight);
+  letter-spacing: var(--lw-type-headline-large-tracking);
   box-shadow: 0 18px 34px rgba(44, 92, 130, 0.16);
 }
 
@@ -378,9 +372,10 @@ const formatSessionTime = (timestamp: number) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 26px;
-  line-height: 1.1;
-  font-weight: 950;
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .lw-telegram-profile__badge,
@@ -392,7 +387,9 @@ const formatSessionTime = (timestamp: number) => {
   background: color-mix(in srgb, var(--lw-primary) 14%, transparent);
   color: var(--lw-primary);
   font-size: 12px;
-  font-weight: 850;
+  line-height: 17px;
+  font-weight: 650;
+  letter-spacing: 0;
 }
 
 .lw-telegram-profile__badge {
@@ -402,7 +399,9 @@ const formatSessionTime = (timestamp: number) => {
 .lw-telegram-profile__identity p {
   color: var(--lw-text-secondary);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 19px;
+  font-weight: 450;
+  letter-spacing: 0;
 }
 
 .lw-telegram-profile__sync {
@@ -420,17 +419,82 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-telegram-profile__sync small {
   color: var(--lw-text-muted);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-telegram-profile__section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 64%, transparent);
+  gap: 10px;
+  padding: 14px;
+  border: 0;
   border-radius: 22px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 72%, transparent);
+  background: var(--lw-telegram-glass-bg, color-mix(in srgb, var(--lw-surface-container-highest) 72%, transparent));
+  box-shadow: none;
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+}
+
+.lw-telegram-profile__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.lw-telegram-profile__actions button {
+  min-height: 62px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--lw-telegram-glass-bg, color-mix(in srgb, var(--lw-surface-container-highest) 62%, transparent));
+  color: var(--lw-text-main);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.lw-telegram-profile__actions button:disabled {
+  opacity: 0.54;
+  cursor: default;
+}
+
+.lw-telegram-profile__tabs {
+  width: max-content;
+  max-width: 100%;
+  align-self: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(90px, 1fr));
+  padding: 5px;
+  border: 0.5px solid var(--lw-telegram-tab-rim, color-mix(in srgb, var(--lw-border-base) 42%, transparent));
+  border-radius: 999px;
+  background: var(--lw-telegram-tab-bg, color-mix(in srgb, var(--lw-surface-container-highest) 52%, transparent));
+  box-shadow: none;
+}
+
+.lw-telegram-profile__tabs button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.lw-telegram-profile__tabs button.active {
+  color: var(--lw-primary);
+  background: var(--lw-telegram-active-pill, color-mix(in srgb, var(--lw-primary) 16%, transparent));
 }
 
 .lw-telegram-profile__section > header {
@@ -443,15 +507,19 @@ const formatSessionTime = (timestamp: number) => {
 .lw-telegram-profile__section h3 {
   margin: 0;
   font-size: 15px;
-  font-weight: 950;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .lw-telegram-profile__section header button {
   border: none;
   background: transparent;
   color: var(--lw-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
 }
 
 .lw-telegram-profile__quick {
@@ -467,9 +535,9 @@ const formatSessionTime = (timestamp: number) => {
   align-items: center;
   justify-content: center;
   gap: 9px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 60%, transparent);
+  border: 0;
   border-radius: 18px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 68%, transparent);
+  background: color-mix(in srgb, var(--lw-surface-container-highest) 38%, transparent);
   color: var(--lw-text-main);
   cursor: pointer;
 }
@@ -488,12 +556,17 @@ const formatSessionTime = (timestamp: number) => {
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  font-size: 18px;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: var(--lw-type-title-large-weight);
+  letter-spacing: var(--lw-type-title-large-tracking);
 }
 
 .lw-telegram-profile__quick strong {
   font-size: 13px;
-  font-weight: 900;
+  line-height: 18px;
+  font-weight: 650;
+  letter-spacing: 0;
 }
 
 .lw-telegram-profile__recent,
@@ -551,7 +624,9 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-telegram-profile__recent strong {
   font-size: 14px;
-  font-weight: 900;
+  line-height: 20px;
+  font-weight: 650;
+  letter-spacing: 0;
 }
 
 .lw-telegram-profile__recent small,
@@ -559,6 +634,9 @@ const formatSessionTime = (timestamp: number) => {
 .lw-telegram-profile__empty {
   color: var(--lw-text-secondary);
   font-size: 12px;
+  line-height: 17px;
+  font-weight: 450;
+  letter-spacing: 0;
 }
 
 .lw-telegram-profile__history button {
@@ -580,18 +658,26 @@ const formatSessionTime = (timestamp: number) => {
   width: 34px;
   height: 34px;
   border-radius: 11px;
-  font-size: 15px;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .lw-telegram-profile__history strong {
-  font-size: 13px;
-  font-weight: 850;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .lw-telegram-profile__history small,
 .lw-telegram-profile__history span:last-child {
   color: var(--lw-text-muted);
-  font-size: 13px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-telegram-profile__primary {
@@ -605,8 +691,10 @@ const formatSessionTime = (timestamp: number) => {
   border-radius: 16px;
   background: linear-gradient(135deg, #48b9ff, #2685ee);
   color: white;
-  font-size: 14px;
-  font-weight: 950;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   cursor: pointer;
   box-shadow: 0 14px 30px rgba(38, 133, 238, 0.24);
 }
@@ -617,8 +705,8 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .lw-telegram-profile.is-mobile {
-  gap: 24px;
-  padding: calc(20px + var(--lw-safe-top, 0px)) 22px calc(100px + var(--lw-safe-bottom, 0px));
+  gap: 22px;
+  padding: calc(24px + var(--lw-safe-top, 0px)) 22px calc(100px + var(--lw-safe-bottom, 0px));
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__topbar {
@@ -626,25 +714,36 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__topbar strong {
-  font-size: 22px;
+  font-size: 18px;
+  line-height: 24px;
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__hero {
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__avatar {
-  width: min(32vw, 148px);
-  height: min(32vw, 148px);
+  width: 104px;
+  height: 104px;
+}
+
+.lw-telegram-profile.is-mobile .lw-telegram-profile__identity,
+.lw-telegram-profile.is-mobile .lw-telegram-profile__identity > div,
+.lw-telegram-profile.is-mobile .lw-telegram-profile__sync {
+  align-items: center;
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__identity h2 {
-  font-size: 34px;
+  font-size: 24px;
+  line-height: 30px;
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__identity p {
-  font-size: 18px;
+  font-size: 13px;
+  line-height: 19px;
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__section {
@@ -653,7 +752,8 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__section h3 {
-  font-size: 22px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__quick {
@@ -670,20 +770,23 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__recent strong,
 .lw-telegram-profile.is-mobile .lw-telegram-profile__history strong {
-  font-size: 18px;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__recent small,
 .lw-telegram-profile.is-mobile .lw-telegram-profile__recent time,
 .lw-telegram-profile.is-mobile .lw-telegram-profile__history small,
 .lw-telegram-profile.is-mobile .lw-telegram-profile__history span:last-child {
-  font-size: 16px;
+  font-size: 12px;
+  line-height: 17px;
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__primary {
   min-height: 64px;
   border-radius: 20px;
-  font-size: 20px;
+  font-size: 14px;
+  line-height: 20px;
   position: sticky;
   bottom: calc(10px + var(--lw-safe-bottom, 0px));
   z-index: 4;

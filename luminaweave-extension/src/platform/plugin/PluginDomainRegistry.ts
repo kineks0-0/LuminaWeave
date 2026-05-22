@@ -1,4 +1,4 @@
-import type { PluginManifestV2 } from './types';
+import type { PluginManifestV2 } from './types.js';
 
 export class PluginDomainRegistry {
     private readonly manifests = new Map<string, PluginManifestV2>();

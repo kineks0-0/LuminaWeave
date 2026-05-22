@@ -5,6 +5,8 @@ declare module '*.md?raw' {
     export default content;
 }
 
+declare module '@wterm/vue/css';
+
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
   const component: DefineComponent<{}, {}, any>

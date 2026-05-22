@@ -1,9 +1,9 @@
 import ChatStream from './ChatStream.vue';
 import ChatPreview from './ChatPreview.vue';
-import { LuminaPlugin } from '../../types/plugin';
+import { LuminaPlugin } from '../../types/plugin.js';
 import ChatRoot from './ChatRoot.vue';
-import { useChatStore } from '../../stores/useChatStore';
-import type { PluginManifestV2 } from '../../platform/plugin/types';
+import { useChatStore } from '../../stores/useChatStore.js';
+import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 
 const settingsSchema = {
     nexusPreset: { default: '', label: '专用模型/网关预设', common: true, type: 'nexus-select', allowedScopes: ['Global', 'Character'] },

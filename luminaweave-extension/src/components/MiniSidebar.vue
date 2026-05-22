@@ -1,5 +1,6 @@
 <template>
   <div 
+    v-if="!isStandalone || isApiReady"
     class="lw-sidebar-root" 
     :class="{ 'is-bubbled': isBubbled, 'is-dragging': isDragging }"
     :style="{ 
@@ -9,11 +10,13 @@
   >
     <!-- 悬浮球模式 (Bubble) -->
     <div v-if="isBubbled" class="lw-bubble" 
+      :class="{ 'is-loading': !isApiReady }"
       @mousedown="startDrag" 
       @touchstart.passive="startDrag"
       @click="handleBubbleClick">
       <div class="lw-dot"></div>
-      <div class="bubble-hover-hint">Lumina</div>
+      <div class="bubble-hover-hint">{{ isApiReady ? 'Lumina' : initStatusText }}</div>
+      <div v-if="!isApiReady" class="bubble-loading-ring"></div>
     </div>
 
     <!-- 面板模式 (Panel) -->
@@ -54,13 +57,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted, onUnmounted } from 'vue';
-import { lwStorage } from '../api/storage';
-import { luminaWeaveApi as lwApi } from '../api/index';
+import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue';
+import { lwStorage } from '../api/storage.js';
+import { luminaWeaveApi as lwApi } from '../api/index.js';
+import { HostDetector } from '../api/core/host-drivers/HostDetector.js';
 
 defineEmits<{
   (e: 'expand'): void
 }>();
+
+// --- 环境探测 ---
+const isStandalone = computed(() => HostDetector.isStandalone);
+const isApiReady = ref(false);
 
 // --- 状态与初始化进度 ---
 const initStatusText = ref('系统启动中...');
@@ -72,6 +80,7 @@ onMounted(() => {
   lwApi.on('INIT_PROGRESS', handleProgress);
   if ((lwApi as any)._ready) {
     initStatusText.value = '实时指纹捕获中...';
+    isApiReady.value = true;
   }
 });
 
@@ -192,6 +201,13 @@ const handleBubbleClick = (e: MouseEvent | TouchEvent) => {
 watch(isBubbled, (val) => {
   lwStorage.set('lumina-ui.miniSidebar.isBubbled', val, 'Global');
 });
+
+// 监听 Ready 状态
+watch(() => (lwApi as any)._ready, (val) => {
+  if (val) {
+    isApiReady.value = true;
+  }
+});
 </script>
 
 <script lang="ts">
@@ -240,12 +256,31 @@ export default {
   cursor: grabbing;
 }
 
+.lw-bubble.is-loading .lw-dot {
+  background-color: var(--lw-primary);
+  box-shadow: 0 0 10px var(--lw-primary);
+  animation: pulse 2s infinite ease-in-out;
+}
+
+.bubble-loading-ring {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid transparent;
+  border-top-color: var(--lw-primary);
+  border-radius: inherit;
+  animation: rotate 1.5s linear infinite;
+  pointer-events: none;
+}
+
 .bubble-hover-hint {
   position: absolute;
   bottom: -24px;
   background: var(--lw-black);
   color: var(--lw-text-inverse);
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   padding: 2px 6px;
   border-radius: 999px;
   opacity: 0;
@@ -285,12 +320,14 @@ export default {
 
 .lw-logo {
   font-family: var(--lw-font-display);
-  font-weight: 700;
+  font-weight: var(--lw-type-title-small-weight);
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--lw-text-main);
-  font-size: 13px;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .lw-dot {
@@ -299,7 +336,7 @@ export default {
   border-radius: 50%;
   background-color: var(--lw-black);
   box-shadow: 0 0 0 4px rgba(17, 18, 21, 0.08);
-  animation: pulse 2s infinite ease-in-out;
+  /* animation: pulse 2s infinite ease-in-out; */
 }
 
 .lw-header-actions {
@@ -330,13 +367,14 @@ export default {
 }
 
 .lw-text-mini {
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
   color: var(--lw-text-secondary);
   margin-top: 0;
   margin-bottom: 10px;
-  letter-spacing: 0.5px;
-  font-weight: 600;
 }
 
 .lw-timeline-node {
@@ -365,13 +403,18 @@ export default {
 }
 
 .node-title {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-text-main);
 }
 
 .node-desc {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
 }
 

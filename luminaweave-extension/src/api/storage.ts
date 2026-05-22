@@ -3,7 +3,6 @@
  * 负责集中管理插件的所有设置项及拓展数据，支持细粒度的作用域 (Scopes) 分发。
  */
 
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 import { HALContext } from './core/hal/HALContext.js';
 
 export type StorageScope = 'Global' | 'Character' | 'Chat' | 'Session';
@@ -60,7 +59,7 @@ export class StorageCore {
      */
     async loadIndependentGlobalData(): Promise<void> {
         try {
-            this.globalIndependentData = await BridgeDispatcher.settings.getSettings();
+            this.globalIndependentData = await HALContext.instance.runtime.settings.getSettings();
 
             // 镜像备份到引导存储
             HALContext.instance.bootstrapStorage.setJson('global-settings-mirror', this.globalIndependentData);
@@ -90,12 +89,12 @@ export class StorageCore {
     async _saveIndependentGlobalData(): Promise<void> {
         try {
             // 同步备份到 extensionStore
-            await BridgeDispatcher.extensionStore.setJson({
+            await HALContext.instance.runtime.extensionStore.setJson({
                 namespace: 'lumina_weave',
                 key: 'global-settings-mirror',
                 value: this.globalIndependentData
             });
-            await BridgeDispatcher.settings.saveSettings(this.globalIndependentData);
+            await HALContext.instance.runtime.settings.saveSettings(this.globalIndependentData);
         } catch (e) {
             console.error('[LuminaWeave Storage] Failed to save independent JSON:', e);
             throw e;
@@ -188,7 +187,7 @@ export class StorageCore {
     private async _saveSessionData(): Promise<void> {
         try {
             const obj = Object.fromEntries(this.sessionData);
-            await BridgeDispatcher.extensionStore.setJson({
+            await HALContext.instance.runtime.extensionStore.setJson({
                 namespace: 'lumina_weave',
                 key: 'session-state',
                 value: obj

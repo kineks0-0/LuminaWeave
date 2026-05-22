@@ -1,4 +1,4 @@
-import type { SettingDefinition, SettingOption } from '../../types/plugin';
+import type { SettingDefinition, SettingOption } from '../../types/plugin.js';
 
 export type SettingControlConfig = SettingDefinition;
 
@@ -75,7 +75,7 @@ export const getSettingControlClass = (
     isVerticalLayout: boolean
 ): string => {
     const classes: string[] = [];
-    if (config.type === 'theme') classes.push('theme-options');
+    if (config.type === 'theme') classes.push('theme-options tw:flex-wrap tw:gap-2.5');
     if (config.type === 'stepper') classes.push('stepper-control');
     if (isVerticalLayout) classes.push('full-width');
     return classes.join(' ');
@@ -85,7 +85,7 @@ export const getSettingControlBodyClass = (config: SettingControlConfig): string
     const classes: string[] = [];
     if (config.type === 'theme') classes.push('theme-options');
     if (config.type === 'options') classes.push('options-control');
-    if (config.type === 'stepper') classes.push('stepper-body');
+    if (config.type === 'stepper') classes.push('stepper-body tw:max-[720px]:justify-start');
     return classes.join(' ');
 };
 

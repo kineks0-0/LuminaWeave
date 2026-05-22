@@ -119,7 +119,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useConversationContextStore } from '../stores/useConversationContextStore';
+import { useConversationContextStore } from '../stores/useConversationContextStore.js';
 
 const props = defineProps<{
   isCompact?: boolean;
@@ -270,7 +270,10 @@ const formatDate = (ts?: number) => {
   border: 1px solid var(--lw-border-base);
   border-radius: 8px;
   padding: 8px 32px;
-  font-size: 13px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-main);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -328,10 +331,11 @@ const formatDate = (ts?: number) => {
 .section-title {
   padding: 0 12px;
   margin: 0 0 8px;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
 }
 
@@ -380,7 +384,10 @@ const formatDate = (ts?: number) => {
   align-items: center;
   justify-content: center;
   background: var(--lw-bg-subtle);
-  font-size: 16px;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
   flex-shrink: 0;
 }
 
@@ -394,19 +401,24 @@ const formatDate = (ts?: number) => {
 }
 
 .item-title {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .is-core .item-title {
-  font-weight: 700;
+  font-weight: var(--lw-type-title-medium-weight);
 }
 
 .item-subtitle {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -426,7 +438,10 @@ const formatDate = (ts?: number) => {
   padding: 40px 20px;
   text-align: center;
   color: var(--lw-text-muted);
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
 }
 
 .nexus-footer {
@@ -438,9 +453,11 @@ const formatDate = (ts?: number) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
-  font-weight: 500;
 }
 
 .status-dot {

@@ -1,67 +1,82 @@
 <template>
   <div
     class="lw-settings-root"
-    :class="{ 'is-large': mode === 'large' }"
+    :class="rootClass"
     :data-skin-variant="settingsVariant || 'default'"
     :style="settingsSkinStyle"
   >
     <!-- 大窗口模式下的侧边栏导航 -->
-    <div v-if="mode === 'large'" class="settings-sidebar">
-      <div class="sidebar-header">
-        <h3>设置中心</h3>
+    <aside v-if="mode === 'large'" class="settings-sidebar tw:flex tw:w-60 tw:shrink-0 tw:flex-col tw:border-r tw:border-lw-border tw:bg-lw-elevated/90">
+      <div class="sidebar-header tw:border-b tw:border-lw-border-subtle tw:px-5 tw:pb-[18px] tw:pt-[22px]">
+        <h3 class="tw:font-lw-display tw:text-[length:var(--lw-type-title-large-size)] tw:font-[var(--lw-type-title-large-weight)] tw:leading-[var(--lw-type-title-large-line-height)] tw:tracking-[var(--lw-type-title-large-tracking)] tw:text-lw-text">设置中心</h3>
       </div>
-      <div class="sidebar-nav">
-        <div class="nav-item" :class="{ active: !currentDetailedView }" @click="currentDetailedView = null">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
-          </svg>
-          常规概览
-        </div>
-        <div v-if="activeThemeEntry" class="nav-divider">当前桌面模式</div>
-        <div v-if="activeThemeEntry" class="nav-item"
-          :class="{ active: currentDetailedView === activeThemeEntry.pluginId }" @click="currentDetailedView = activeThemeEntry.pluginId">
-          <span class="nav-icon" v-html="activeThemeEntry.pluginIcon"></span>
-          {{ activeThemeEntry.pluginName }}
-        </div>
-        <div class="nav-divider">插件专属设置</div>
-        <div v-for="sb in settingsBlocks" :key="sb.pluginId" class="nav-item"
-          :class="{ active: currentDetailedView === sb.pluginId }" @click="currentDetailedView = sb.pluginId">
-          <span class="nav-icon" v-html="sb.pluginIcon"></span>
-          {{ sb.pluginName }}
-        </div>
-      </div>
-    </div>
+      <nav class="sidebar-nav tw:flex-1 tw:overflow-y-auto tw:p-3" aria-label="设置导航">
+        <button
+          type="button"
+          :class="navItemClass(!currentDetailedView)"
+          :aria-current="!currentDetailedView ? 'page' : undefined"
+          @click="currentDetailedView = null"
+        >
+          <LayoutGrid :size="16" :stroke-width="2" aria-hidden="true" />
+          <span class="tw:truncate">常规概览</span>
+        </button>
+        <div v-if="activeThemeEntry" class="nav-divider tw:px-3 tw:pb-2 tw:pt-4 tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">当前桌面模式</div>
+        <button
+          v-if="activeThemeEntry"
+          type="button"
+          :class="navItemClass(currentDetailedView === activeThemeEntry.pluginId)"
+          :aria-current="currentDetailedView === activeThemeEntry.pluginId ? 'page' : undefined"
+          @click="currentDetailedView = activeThemeEntry.pluginId"
+        >
+          <span class="nav-icon tw:flex tw:items-center tw:justify-center" aria-hidden="true" v-html="activeThemeEntry.pluginIcon"></span>
+          <span class="tw:truncate">{{ activeThemeEntry.pluginName }}</span>
+        </button>
+        <div class="nav-divider tw:px-3 tw:pb-2 tw:pt-4 tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">插件专属设置</div>
+        <button
+          v-for="sb in settingsBlocks"
+          :key="sb.pluginId"
+          type="button"
+          :class="navItemClass(currentDetailedView === sb.pluginId)"
+          :aria-current="currentDetailedView === sb.pluginId ? 'page' : undefined"
+          @click="currentDetailedView = sb.pluginId"
+        >
+          <span class="nav-icon tw:flex tw:items-center tw:justify-center" aria-hidden="true" v-html="sb.pluginIcon"></span>
+          <span class="tw:truncate">{{ sb.pluginName }}</span>
+        </button>
+      </nav>
+    </aside>
 
     <!-- 主内容区 -->
-    <div class="settings-main-container">
-      <div v-if="mode === 'large' && currentDetailedView" class="main-content-header">
-        <div class="header-breadcrumb">
-            <span @click="currentDetailedView = null" class="breadcrumb-link">设置</span>
-            <span class="breadcrumb-sep">/</span>
-            <span class="breadcrumb-current">{{ getPluginName(currentDetailedView) }}</span>
+    <div class="settings-main-container tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
+      <div v-if="mode === 'large' && currentDetailedView" class="main-content-header tw:flex tw:items-center tw:justify-between tw:border-b tw:border-lw-border tw:bg-lw-elevated/90 tw:px-7 tw:py-4">
+        <div class="header-breadcrumb tw:flex tw:items-center tw:gap-2 tw:text-[length:var(--lw-type-body-medium-size)] tw:font-[var(--lw-type-body-medium-weight)] tw:leading-[var(--lw-type-body-medium-line-height)] tw:tracking-[var(--lw-type-body-medium-tracking)]">
+            <button type="button" class="tw:rounded-lw-sm tw:border-0 tw:bg-transparent tw:p-0 tw:text-lw-text-secondary tw:transition-colors tw:duration-150 tw:hover:text-lw-primary" @click="currentDetailedView = null">设置</button>
+            <span class="tw:text-lw-text-muted">/</span>
+            <span class="tw:font-[var(--lw-type-title-small-weight)] tw:text-lw-text">{{ getPluginName(currentDetailedView) }}</span>
         </div>
-        <button class="lw-btn lw-btn-ghost lw-btn-small" @click="currentDetailedView = null">
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" style="margin-right: 4px;">
-                <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
+        <LuminaButton variant="ghost" size="sm" @click="currentDetailedView = null">
+            <ChevronLeft :size="14" :stroke-width="2" aria-hidden="true" />
             返回概览
-        </button>
+        </LuminaButton>
       </div>
-      <div v-if="mode === 'small' && currentDetailedView" class="small-back-bar">
-        <button class="small-back-btn" @click="currentDetailedView = null">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
-            <polyline points="15 18 9 12 15 6"></polyline>
-          </svg>
+      <div v-if="mode === 'small' && currentDetailedView" class="small-back-bar tw:sticky tw:top-0 tw:z-20 tw:flex tw:items-center tw:gap-2 tw:border-b tw:border-lw-border tw:bg-lw-elevated/90 tw:px-3.5 tw:py-2.5">
+        <LuminaButton variant="ghost" size="sm" tone="primary" @click="currentDetailedView = null">
+          <ChevronLeft :size="16" :stroke-width="2.5" aria-hidden="true" />
           <span>返回</span>
-        </button>
-        <span class="small-back-title">{{ getPluginName(currentDetailedView) }}</span>
+        </LuminaButton>
+        <span class="small-back-title tw:min-w-0 tw:truncate tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:tracking-[var(--lw-type-title-small-tracking)] tw:text-lw-text">{{ getPluginName(currentDetailedView) }}</span>
       </div>
-      <div class="settings-scroll-area" @wheel.stop>
-        <component :is="currentDetailedView ? SettingsDetailed : SettingsUnified" :pluginId="currentDetailedView"
-          @open-detail="openDetailedView" />
+      <div class="settings-scroll-area tw:relative tw:flex-1 tw:overflow-y-auto" :class="mode !== 'large' && 'tw:box-border tw:px-3 tw:pb-3.5'" @wheel.stop>
+        <TelegramSettingsHome
+          v-if="mode === 'small' && settingsVariant === 'telegram' && !currentDetailedView"
+          @open-detail="openDetailedView"
+        />
+        <component
+          v-else
+          :is="currentDetailedView ? SettingsDetailed : SettingsUnified"
+          :pluginId="currentDetailedView"
+          @open-detail="openDetailedView"
+        />
       </div>
     </div>
   </div>
@@ -69,12 +84,16 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { ChevronLeft, LayoutGrid } from 'lucide-vue-next';
 import SettingsUnified from './SettingsUnified.vue';
 import SettingsDetailed from './SettingsDetailed.vue';
+import TelegramSettingsHome from './TelegramSettingsHome.vue';
 import { activeSettings, currentDetailedView } from './useSettings.js';
-import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry';
-import { getActiveDesktopModeIdFromSettings } from '../../theme/themeRegistry';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry.js';
+import { getActiveDesktopModeIdFromSettings } from '../../theme/themeRegistry.js';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { cn } from '../../ui/cn.js';
+import { LuminaButton } from '../../ui/primitives';
 
 const props = defineProps({
   mode: {
@@ -86,10 +105,21 @@ const props = defineProps({
 const { cssVars, variant: settingsVariant } = useComponentSkin('settings.root');
 const settingsSkinStyle = computed(() => cssVars.value);
 const activeThemeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings));
+const rootClass = computed(() => cn(
+  'tw:flex tw:h-full tw:flex-row tw:overflow-hidden tw:font-lw-main',
+  props.mode === 'large' ? 'is-large' : 'is-small'
+));
 
 const openDetailedView = (pluginId: string) => {
   currentDetailedView.value = pluginId;
 };
+
+const navItemClass = (isActive: boolean) => cn(
+  'nav-item tw:mb-0.5 tw:flex tw:w-full tw:items-center tw:gap-2.5 tw:rounded-lw-md tw:border-0 tw:px-3 tw:py-2.5 tw:text-left tw:text-[length:var(--lw-type-label-large-size)] tw:font-[var(--lw-type-label-large-weight)] tw:leading-[var(--lw-type-label-large-line-height)] tw:tracking-[var(--lw-type-label-large-tracking)] tw:transition-[background-color,color,box-shadow] tw:duration-150 tw:ease-out',
+  isActive
+    ? 'active tw:bg-lw-selection tw:text-lw-text tw:shadow-lw'
+    : 'tw:bg-transparent tw:text-lw-text-secondary tw:hover:bg-lw-hover tw:hover:text-lw-text'
+);
 
 const getPluginName = (pluginId: string | null) => {
   if (!pluginId) return '';
@@ -103,87 +133,16 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
 </script>
 
 <style scoped>
-.lw-settings-root {
-  display: flex;
-  flex-direction: row;
-  height: 100%;
-  background: var(--lw-settings-shell-bg,
-    linear-gradient(180deg, rgba(var(--lw-bg-elevated-rgb), 0.48), rgba(var(--lw-bg-elevated-rgb), 0)));
-  font-family: inherit;
-  overflow: hidden;
-}
-
 .is-large {
   background: var(--lw-settings-large-bg, var(--lw-bg-app));
 }
 
-.settings-sidebar {
-  width: 240px;
-  border-right: 1px solid var(--lw-settings-sidebar-border, var(--lw-border-base));
-  display: flex;
-  flex-direction: column;
-  background: var(--lw-settings-sidebar-bg, color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent));
-  flex-shrink: 0;
+.is-small {
+  background: var(--lw-settings-small-bg, color-mix(in srgb, var(--lw-bg-app) 96%, var(--lw-bg-elevated)));
 }
 
 .sidebar-header {
-  padding: 22px 20px 18px;
-  border-bottom: 1px solid var(--lw-settings-header-border, var(--lw-border-subtle));
   background: var(--lw-settings-header-bg, transparent);
-}
-
-.sidebar-header h3 {
-  font-family: var(--lw-font-display);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-  letter-spacing: -0.02em;
-}
-
-.sidebar-nav {
-  flex: 1;
-  padding: 12px;
-  overflow-y: auto;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--lw-settings-nav-item-color, var(--lw-text-secondary));
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 2px;
-}
-
-.nav-item:hover {
-  background: var(--lw-settings-nav-hover-bg, var(--lw-bg-hover));
-  color: var(--lw-settings-nav-hover-color, var(--lw-text-main));
-}
-
-.nav-item.active {
-  background: var(--lw-settings-nav-active-bg, var(--lw-bg-selection));
-  color: var(--lw-settings-nav-active-color, var(--lw-text-main));
-  box-shadow: var(--lw-settings-nav-active-shadow, var(--lw-shadow));
-}
-
-.nav-divider {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--lw-settings-muted-color, var(--lw-text-muted));
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 16px 12px 8px;
-}
-
-.nav-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .nav-icon :deep(svg) {
@@ -191,86 +150,12 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
   height: 14px;
 }
 
-.settings-main-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .main-content-header {
-  padding: 16px 28px;
-  border-bottom: 1px solid var(--lw-settings-header-border, var(--lw-border-base));
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   background: var(--lw-settings-header-bg, color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent));
-}
-
-.header-breadcrumb {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-}
-
-.breadcrumb-link {
-    color: var(--lw-settings-muted-color, var(--lw-text-secondary));
-    cursor: pointer;
-    transition: color 0.2s;
-}
-
-.breadcrumb-link:hover {
-    color: var(--lw-settings-breadcrumb-hover-color, var(--lw-primary));
-}
-
-.breadcrumb-sep {
-    color: var(--lw-settings-muted-color, var(--lw-text-muted));
-}
-
-.breadcrumb-current {
-    color: var(--lw-text-main);
-    font-weight: 600;
-}
-
-.settings-scroll-area {
-  flex: 1;
-  overflow-y: auto;
-  position: relative;
 }
 
 .small-back-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--lw-settings-header-border, var(--lw-border-base));
   background: var(--lw-settings-header-bg, color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent));
-}
-
-.small-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  color: var(--lw-primary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 8px;
-  transition: background 0.2s;
-}
-
-.small-back-btn:hover {
-  background: var(--lw-primary-soft);
-}
-
-.small-back-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--lw-text-main);
 }
 
 /* 隐藏滚动条但保留功能 */
@@ -305,6 +190,53 @@ const settingsBlocks = computed(() => visibleEntries.value.filter(entry => entry
 .lw-settings-root[data-skin-variant='telegram']:not(.is-large) .settings-scroll-area {
   padding: 0 12px 14px;
   box-sizing: border-box;
+}
+
+.lw-settings-root.is-small :deep(.settings-unified) {
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.lw-settings-root.is-small :deep(.settings-detailed) {
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.lw-settings-root.is-small :deep(.plugin-settings-block.lw-card),
+.lw-settings-root.is-small :deep(.settings-detailed .block-content) {
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.lw-settings-root.is-small :deep(.block-header) {
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 10px;
+}
+
+.lw-settings-root.is-small :deep(.sync-meta),
+.lw-settings-root.is-small :deep(.scope-selector),
+.lw-settings-root.is-small :deep(.dcc-paired-settings) {
+  grid-template-columns: 1fr;
+}
+
+.lw-settings-root.is-small :deep(.setting-item) {
+  padding: 12px 0;
+}
+
+.lw-settings-root.is-small :deep(.label-text) {
+  min-width: 0;
+}
+
+.lw-settings-root.is-small :deep(.sync-actions),
+.lw-settings-root.is-small :deep(.migration-actions) {
+  flex-direction: column;
+}
+
+.lw-settings-root.is-small :deep(.sync-actions .lw-btn),
+.lw-settings-root.is-small :deep(.migration-actions .lw-btn) {
+  width: 100%;
 }
 
 .lw-settings-root[data-skin-variant='telegram']:not(.is-large) :deep(.settings-unified),

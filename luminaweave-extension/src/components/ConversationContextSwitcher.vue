@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue';
-import { useConversationContextStore } from '../stores/useConversationContextStore';
+import { useConversationContextStore } from '../stores/useConversationContextStore.js';
 
 const contextStore = useConversationContextStore();
 
@@ -60,7 +60,10 @@ onMounted(async () => {
   background: color-mix(in srgb, var(--lw-bg-elevated) 88%, white);
   color: var(--lw-text-main);
   padding: 9px 14px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   cursor: pointer;
 }
 

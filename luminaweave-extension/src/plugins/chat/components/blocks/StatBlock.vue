@@ -100,23 +100,28 @@ const barGradient = computed(() => {
 }
 
 .stat-label {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-color, #334155);
   opacity: 0.75;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
 }
 
 .stat-value {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
   font-variant-numeric: tabular-nums;
 }
 
 .stat-max {
-  font-size: 11px;
-  font-weight: 400;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   opacity: 0.5;
   margin-left: 2px;
 }

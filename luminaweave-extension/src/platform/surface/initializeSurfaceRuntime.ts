@@ -1,6 +1,6 @@
 import EmptySurface from './EmptySurface.vue';
-import { OFFICIAL_SURFACE_CONTRACTS } from './officialContracts';
-import { surfaceRegistry } from './SurfaceRegistry';
+import { OFFICIAL_SURFACE_CONTRACTS } from './officialContracts.js';
+import { surfaceRegistry } from './SurfaceRegistry.js';
 
 let initialized = false;
 

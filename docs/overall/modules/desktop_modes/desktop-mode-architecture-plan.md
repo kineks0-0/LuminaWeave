@@ -100,6 +100,8 @@
 
 桌面模式也是表层视觉 token 的归属层。组件可以暴露语义化 CSS 变量并提供结构性 variant，但不得在组件内按 `activeDesktopMode`、`data-desktop-mode` 或具体模式名手写颜色、边框、阴影等主题值。Discord、Telegram 等模式的视觉差异应集中写入对应 `DesktopModeManifest.surfaceSkins`，由 `useComponentSkin()` / `resolveComponentSkin()` 分发给组件消费。
 
+设计文档分为两层：全局设计规范位于 [`docs/overall/design/`](../../design/)，只定义最低共同契约和 token 接口；每个桌面模式在自己的模块目录下维护完整设计语言，例如 `classic/design.md`、`stage/design.md`、`discord/design.md` 与 `telegram/design.md`。强个性化主题（如未来的 M3 Expressive）应作为完整桌面设计语言接入，而不是污染全局规范层。
+
 ## 6. 兼容策略
 
 正式命名：

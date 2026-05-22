@@ -82,6 +82,32 @@ const worldbookVirtualEntryFor = (
     enabled: true
 });
 
+const FORGE_MAIN_ORCHESTRATION_ENTRIES: PromptPresetEntry[] = [
+    { id: 'orchestration:system', type: 'slot', enabled: true, slotId: 'base_system_prompt' },
+    { id: 'orchestration:contract', type: 'slot', enabled: true, slotId: 'agent_runtime_contract' },
+    { id: 'orchestration:skills', type: 'slot', enabled: true, slotId: 'agent_skill_context' },
+    { id: 'orchestration:capabilities', type: 'slot', enabled: true, slotId: 'agent_project_resources' },
+    { id: 'orchestration:review', type: 'slot', enabled: true, slotId: 'agent_review_state' },
+    { id: 'orchestration:lorebook', type: 'slot', enabled: true, slotId: 'workspace_lorebook' },
+    { id: 'orchestration:memory_snapshot', type: 'slot', enabled: true, slotId: 'memory_snapshot' },
+    { id: 'orchestration:forge_memory_tree', type: 'slot', enabled: true, slotId: 'forge_memory_tree' },
+    { id: 'orchestration:structured_state', type: 'slot', enabled: true, slotId: 'structured_state' },
+    { id: 'orchestration:draft_tree', type: 'slot', enabled: true, slotId: 'draft_tree' },
+    { id: 'orchestration:workflow_snapshot', type: 'slot', enabled: true, slotId: 'workflow_snapshot' },
+    { id: 'orchestration:system_protocol', type: 'slot', enabled: true, slotId: 'system_protocol' },
+    { id: 'orchestration:working_statement', type: 'slot', enabled: true, slotId: 'agent_working_statement' },
+    { id: 'orchestration:branch_messages', type: 'slot', enabled: true, slotId: 'chat_history' },
+    { id: 'orchestration:user_input', type: 'slot', enabled: true, slotId: 'agent_user_input' }
+];
+
+const resolveComposableEntries = (preset: PromptPresetDefinition): PromptPresetEntry[] => {
+    if (preset.entries.length > 0) return preset.entries;
+    if (preset.profileId === 'forge-main' && preset.forgeAgentOrchestration) {
+        return FORGE_MAIN_ORCHESTRATION_ENTRIES.map(entry => ({ ...entry }));
+    }
+    return [];
+};
+
 export class PromptPresetComposer {
     public static compose(
         profile: PromptPresetProfileId | PromptPresetProfileDefinition,
@@ -105,7 +131,7 @@ export class PromptPresetComposer {
         const messages: CleanedMessage[] = [];
         const resolvedEntries: PromptComposeResolvedEntry[] = [];
 
-        const enabledEntries = resolvedPreset.entries.filter(entry => entry.enabled);
+        const enabledEntries = resolveComposableEntries(resolvedPreset).filter(entry => entry.enabled);
         enabledEntries.forEach((entry, entryIndex) => {
             if (!entry.enabled) return;
 
@@ -175,7 +201,7 @@ export class PromptPresetComposer {
 
         const sourceUnits: PromptSourceUnit[] = [];
 
-        const enabledEntries = resolvedPreset.entries.filter(entry => entry.enabled);
+        const enabledEntries = resolveComposableEntries(resolvedPreset).filter(entry => entry.enabled);
         enabledEntries.forEach((entry, entryIndex) => {
             if (!entry.enabled) return;
 

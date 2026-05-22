@@ -1,6 +1,6 @@
 import { defineAsyncComponent } from 'vue';
-import { LuminaPlugin } from '../../types/plugin';
-import type { PluginManifestV2 } from '../../platform/plugin/types';
+import { LuminaPlugin } from '../../types/plugin.js';
+import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 
 const LuminaStats = defineAsyncComponent(() => import('./LuminaStats.vue'));
 

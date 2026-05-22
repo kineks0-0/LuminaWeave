@@ -2,7 +2,7 @@
   <div class="lw-chat-stream" data-lw-ime-scope :class="{ 'is-compact': isCompact }"
     :data-skin-variant="chatVariant || 'default'" :style="streamStyle">
     <header v-if="isTelegramVariant" class="telegram-chat-header">
-      <button type="button" class="telegram-chat-header__back" title="返回聊天列表">
+      <button type="button" class="telegram-chat-header__back" title="返回聊天列表" @click="handleTelegramBack">
         <svg viewBox="0 0 24 24" width="17" height="17" stroke="currentColor" stroke-width="2.2" fill="none">
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
@@ -23,7 +23,7 @@
             <path d="m21 21-4.35-4.35"></path>
           </svg>
         </button>
-        <button type="button" title="打开右侧栏" @click="openTelegramContextTool('telegram-profile')">
+        <button type="button" title="打开角色资料" @click="handleTelegramRoleProfileClick">
           <svg viewBox="0 0 24 24" width="17" height="17" stroke="currentColor" stroke-width="2" fill="none">
             <rect x="4" y="4" width="10" height="16" rx="1.8"></rect>
             <path d="M18 5v14"></path>
@@ -299,8 +299,8 @@
             </svg>
           </button>
 
-          <button class="lw-btn" :class="showInspector ? 'lw-btn-primary' : 'lw-btn-secondary'"
-            style="font-size: 11px; padding: 4px 10px;" @click="showInspector = !showInspector"
+          <button class="lw-btn prompt-preview-toggle" :class="showInspector ? 'lw-btn-primary' : 'lw-btn-secondary'"
+            @click="showInspector = !showInspector"
             :title="showInspector ? '隐藏提示词查看器' : '查看/编辑提示词'">
             <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
               <circle cx="11" cy="11" r="8"></circle>
@@ -366,15 +366,15 @@
 
 <script setup lang="ts">
 import { ref, watch, inject, nextTick, computed, onMounted, onUnmounted } from 'vue';
-import { useSettings } from '../settings/useSettings';
+import { useSettings } from '../settings/useSettings.js';
 import PromptInspector from './PromptInspector.vue';
 import MessageRenderer from './components/MessageRenderer.vue';
-import { LuminaWeaveAPI } from '../../api/index';
+import { LuminaWeaveAPI } from '../../api/index.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { useConversationContextStore } from '../../stores/useConversationContextStore';
+import { useConversationContextStore } from '../../stores/useConversationContextStore.js';
 import { useImeSubmitGuard } from '../../composables/useImeSubmitGuard.js';
-import { useComponentSkin } from '../../theme/useComponentSkin';
-import { getThemeSettingValue } from '../../theme/themeRegistry';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { getThemeSettingValue } from '../../theme/themeRegistry.js';
 import { resolveChatSurfaceState, resolveChatViewState } from './chatViewState.js';
 import type { ChatSessionRef } from '../../types/SessionTypes.js';
 
@@ -382,6 +382,8 @@ interface Props {
   messages: LuminaChatMessage[];
   isMobile?: boolean;
   workspaceCompact?: boolean;
+  onTelegramBack?: () => void;
+  onTelegramOpenRoleProfile?: () => void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -582,6 +584,20 @@ const closeTelegramMenus = () => {
 const openTelegramContextTool = (panelId: string) => {
   closeTelegramMenus();
   lwApi?.emit('TELEGRAM_CONTEXT_TOOL', panelId);
+};
+
+const handleTelegramBack = () => {
+  closeTelegramMenus();
+  props.onTelegramBack?.();
+};
+
+const handleTelegramRoleProfileClick = () => {
+  closeTelegramMenus();
+  if (props.onTelegramOpenRoleProfile) {
+    props.onTelegramOpenRoleProfile();
+    return;
+  }
+  openTelegramContextTool('telegram-profile');
 };
 
 const togglePromptInspector = () => {
@@ -791,7 +807,13 @@ const streamStyle = computed(() => {
     '--lw-size': 'var(--lw-chat-font-size, 16px)',
     '--lw-line-height': 'var(--lw-chat-line-height, 1.6)',
     '--lw-p-spacing': 'var(--lw-chat-paragraph-spacing, 16px)',
-    '--lw-letter-spacing': 'var(--lw-chat-letter-spacing, 0px)'
+    '--lw-letter-spacing': 'var(--lw-chat-letter-spacing, 0px)',
+    '--lw-assistant-size': 'var(--lw-chat-assistant-font-size, var(--lw-chat-font-size, 16px))',
+    '--lw-assistant-line-height': 'var(--lw-chat-assistant-line-height, var(--lw-chat-line-height, 1.6))',
+    '--lw-assistant-letter-spacing': 'var(--lw-chat-assistant-letter-spacing, var(--lw-chat-letter-spacing, 0px))',
+    '--lw-user-size': 'var(--lw-chat-user-font-size, var(--lw-chat-font-size, 16px))',
+    '--lw-user-line-height': 'var(--lw-chat-user-line-height, var(--lw-chat-line-height, 1.6))',
+    '--lw-user-letter-spacing': 'var(--lw-chat-user-letter-spacing, var(--lw-chat-letter-spacing, 0px))'
   } as Record<string, string>;
 });
 
@@ -1112,8 +1134,18 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   border-radius: 12px;
   background: color-mix(in srgb, var(--lw-chat-input-surface) 84%, transparent);
   color: var(--lw-text-muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
+}
+
+.prompt-preview-toggle {
+  padding: 4px 10px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
 }
 
 /* 章节线设计 */
@@ -1128,7 +1160,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   background: var(--lw-bg);
   padding: 6px 16px;
   border-radius: 20px;
-  font-size: 12px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-text-muted);
   border: 1px solid var(--lw-border);
   display: flex;
@@ -1204,18 +1239,22 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .status-label {
-  font-weight: 500;
+  font-weight: var(--lw-type-label-medium-weight);
 }
 
 .status-count {
   opacity: 0.7;
-  font-size: 0.85em;
-  font-weight: normal;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
 }
 
 .msg-name {
-  font-weight: 600;
-  font-size: 14px;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-color);
   opacity: 0.9;
   min-width: 0;
@@ -1223,10 +1262,12 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .msg-info {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .msg-bubble {
@@ -1235,10 +1276,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   border-radius: var(--lw-chat-bubble-radius, 18px);
   border: 1px solid var(--lw-chat-border, var(--lw-border));
   box-shadow: var(--lw-chat-bubble-shadow, var(--lw-shadow));
-  font-size: var(--lw-size);
+  font-size: var(--lw-current-message-size, var(--lw-size));
   font-family: var(--lw-font);
   font-weight: var(--lw-font-weight, 400);
-  line-height: var(--lw-line-height);
+  line-height: var(--lw-current-message-line-height, var(--lw-line-height));
   color: var(--lw-chat-color, var(--lw-color));
   max-width: 100%;
   min-width: 0;
@@ -1261,7 +1302,19 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  letter-spacing: var(--lw-letter-spacing);
+  letter-spacing: var(--lw-current-message-letter-spacing, var(--lw-letter-spacing));
+}
+
+.chat-msg:not(.user) {
+  --lw-current-message-size: var(--lw-assistant-size, var(--lw-size));
+  --lw-current-message-line-height: var(--lw-assistant-line-height, var(--lw-line-height));
+  --lw-current-message-letter-spacing: var(--lw-assistant-letter-spacing, var(--lw-letter-spacing));
+}
+
+.chat-msg.user {
+  --lw-current-message-size: var(--lw-user-size, var(--lw-size));
+  --lw-current-message-line-height: var(--lw-user-line-height, var(--lw-line-height));
+  --lw-current-message-letter-spacing: var(--lw-user-letter-spacing, var(--lw-letter-spacing));
 }
 
 .chat-empty-state {
@@ -1277,8 +1330,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .chat-empty-state p {
   margin: 0;
   max-width: 32rem;
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
 }
 
 /* 编辑模式增强 */
@@ -1335,7 +1390,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .edit-tip {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
 }
 
@@ -1350,8 +1408,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   border: none;
   padding: 6px 14px;
   border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   cursor: pointer;
   transition: 0.2s;
   box-shadow: var(--lw-shadow);
@@ -1368,7 +1428,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   border: none;
   padding: 6px 14px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   cursor: pointer;
   transition: 0.2s;
 }
@@ -1427,7 +1490,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 .stream-error {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-danger);
   background: color-mix(in srgb, var(--lw-danger) 10%, white);
   border: 1px solid color-mix(in srgb, var(--lw-danger) 20%, white);
@@ -1436,7 +1502,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .filtered-tag {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
   background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
   padding: 2px 8px;
@@ -1488,7 +1557,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 .msg-actions button {
   background: none;
   border: none;
-  font-size: 14px;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   cursor: pointer;
   color: #94a3b8;
   transition: 0.2s;
@@ -1513,10 +1585,12 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .status-tag {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   padding: 4px 8px;
   border-radius: 4px;
-  font-weight: 600;
 }
 
 .status-tag.red {
@@ -1564,13 +1638,15 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   min-height: 40px !important;
   max-height: 200px !important;
   font-family: inherit !important;
-  font-size: 14px !important;
+  font-size: var(--lw-user-size, var(--lw-size)) !important;
+  line-height: var(--lw-user-line-height, var(--lw-line-height)) !important;
+  font-weight: var(--lw-font-weight, 400) !important;
+  letter-spacing: var(--lw-user-letter-spacing, var(--lw-letter-spacing)) !important;
   outline: none !important;
   padding: 10px 12px !important;
   background-color: transparent !important;
   color: var(--lw-text-main) !important;
   box-sizing: border-box !important;
-  line-height: 1.6 !important;
   box-shadow: none !important;
   margin: 0 !important;
   white-space: pre-wrap !important;
@@ -1890,8 +1966,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   border: none;
   background: var(--lw-black);
   color: var(--lw-text-inverse);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -1906,7 +1984,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   border: 1px solid var(--lw-border-base);
   background: var(--lw-bg-elevated);
   color: var(--lw-text-secondary);
-  font-size: 12px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   cursor: pointer;
   transition: 0.15s;
 }
@@ -1953,7 +2034,7 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   display: inline;
   animation: lw-blink 0.8s step-end infinite;
   color: var(--lw-text-main);
-  font-weight: 300;
+  font-weight: var(--lw-type-body-medium-weight);
   user-select: none;
 }
 @keyframes lw-blink {
@@ -1999,13 +2080,16 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   margin-top: 10px;
   padding-top: 8px;
   border-top: 1px dashed var(--lw-border);
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
 }
 
 .meta-item.status {
   color: var(--lw-primary);
-  font-weight: 500;
+  font-weight: var(--lw-type-label-medium-weight);
   display: flex;
   align-items: center;
 }
@@ -2121,8 +2205,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .telegram-chat-header__copy strong span {
@@ -2130,7 +2216,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .telegram-chat-header__copy small {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-primary);
 }
 
@@ -2180,8 +2269,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   border-radius: 10px;
   background: transparent;
   color: var(--lw-text-main);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   text-align: left;
 }
 
@@ -2210,11 +2301,17 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   padding: 0 12px;
   background: color-mix(in srgb, var(--lw-surface-container-highest) 70%, transparent);
   color: var(--lw-text-main);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .telegram-chat-search-strip span {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
 }
 
@@ -2241,7 +2338,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   color: white;
   background: var(--lw-chat-empty-mark-bg, linear-gradient(135deg, #58c4ff, #168bd4));
   box-shadow: var(--lw-chat-empty-mark-shadow, 0 18px 34px rgba(44, 92, 130, 0.16));
-  font-size: 24px;
+  font-size: var(--lw-type-headline-medium-size);
+  line-height: var(--lw-type-headline-medium-line-height);
+  font-weight: var(--lw-type-headline-medium-weight);
+  letter-spacing: var(--lw-type-headline-medium-tracking);
 }
 
 .telegram-empty-state h2,
@@ -2250,15 +2350,19 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .telegram-empty-state h2 {
-  font-size: 18px;
-  line-height: 1.25;
+  font-size: var(--lw-type-title-large-size);
+  line-height: var(--lw-type-title-large-line-height);
+  font-weight: var(--lw-type-title-large-weight);
+  letter-spacing: var(--lw-type-title-large-tracking);
 }
 
 .telegram-empty-state p {
   max-width: 380px;
   color: var(--lw-text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .telegram-empty-state__actions,
@@ -2276,8 +2380,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   border-radius: 999px;
   background: color-mix(in srgb, var(--lw-surface-container-highest) 70%, transparent);
   color: var(--lw-text-main);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   cursor: pointer;
 }
 
@@ -2303,7 +2409,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 .telegram-empty-state__section > strong {
   padding: 0 4px;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
 }
 
@@ -2328,7 +2437,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 
 .telegram-empty-state__section small {
   color: var(--lw-text-muted);
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .telegram-empty-state__chips button {
@@ -2391,8 +2503,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .lw-chat-stream[data-skin-variant='telegram'] .msg-name {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-secondary);
 }
 
@@ -2407,8 +2521,6 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   color: var(--lw-chat-color, var(--lw-text-main));
   box-shadow: var(--lw-chat-bubble-shadow, 0 10px 22px rgba(44, 92, 130, 0.10));
   padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.45;
   backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
   -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
 }
@@ -2531,8 +2643,9 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   min-height: 28px !important;
   max-height: 96px !important;
   padding: 7px 8px !important;
-  font-size: 12px !important;
-  line-height: 1.4 !important;
+  font-size: var(--lw-user-size, var(--lw-size)) !important;
+  line-height: var(--lw-user-line-height, var(--lw-line-height)) !important;
+  letter-spacing: var(--lw-user-letter-spacing, var(--lw-letter-spacing)) !important;
 }
 
 .telegram-composer-icon {
@@ -2574,8 +2687,10 @@ const handleDelete = async (index: number, msg: LuminaChatMessage) => {
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .msg-name {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .lw-chat-stream[data-skin-variant='discord'] .msg-info {

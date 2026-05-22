@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, effectScope, ref } from 'vue';
-import { luminaWeaveApi as lwApi } from '../../api/index';
-import { useWidgetPanels } from '../shell/useWidgetPanels';
+import { luminaWeaveApi as lwApi } from '../../api/index.js';
+import { useWidgetPanels } from '../shell/useWidgetPanels.js';
 
 describe('useWidgetPanels', () => {
   afterEach(() => {

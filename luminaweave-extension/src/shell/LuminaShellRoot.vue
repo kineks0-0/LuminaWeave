@@ -1,66 +1,28 @@
 <template>
   <PanelHeader
     v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'top' && shouldRenderTraditionalHeader"
-    :activeMainTab="activeMainTab"
-    :dynamicTabs="dynamicTabs"
-    :isMobile="isMobile"
-    :activeDesktopModeId="activeDesktopModeId"
-    :desktopModes="desktopModeOptions"
-    :variant="panelHeaderVariant"
-    :headerPlacement="traditionalHeaderPosition"
-    :widgetPanels="widgetPanelList"
-    :widgetGroups="widgetGroups"
-    :activeWidgetId="activeRightPanel !== 'none' ? activeRightPanel : ''"
-    :guildRailVisible="discordChannelMarkVisible"
-    @switchMainView="onSwitchMainView"
-    @closeTab="onCloseTab"
-    @close="onClose"
-    @toggleSettings="onOpenSettingsPanel"
-    @toggleGuildRail="onToggleDiscordGuildRail"
-    @setDesktopMode="onUpdateDesktopMode"
-    @openWidget="onHandleOpenWidget"
-  />
+    :activeMainTab="activeMainTab" :dynamicTabs="dynamicTabs" :isMobile="isMobile"
+    :activeDesktopModeId="activeDesktopModeId" :desktopModes="desktopModeOptions" :variant="panelHeaderVariant"
+    :headerPlacement="traditionalHeaderPosition" :widgetPanels="widgetPanelList" :widgetGroups="widgetGroups"
+    :activeWidgetId="activeRightPanel !== 'none' ? activeRightPanel : ''" :guildRailVisible="discordChannelMarkVisible"
+    @switchMainView="onSwitchMainView" @closeTab="onCloseTab" @close="onClose" @toggleSettings="onOpenSettingsPanel"
+    @toggleGuildRail="onToggleDiscordGuildRail" @setDesktopMode="onUpdateDesktopMode"
+    @openWidget="onHandleOpenWidget" />
 
-  <div
-    ref="panelBodyElement"
-    class="lw-panel-body"
-    :class="{ 'is-freeform': layoutMode === 'freeform' }"
-    :style="shellPanelBodyStyle"
-  >
-    <div v-if="!isApiReady" class="lw-global-loading">
-      <div class="spinner"></div>
-      <span>环境加载中... 若长时间无响应请检查 ST 相关扩展(例如 JS-Slash-Runner)是否正常。</span>
-      <span style="color: var(--lw-primary); font-weight: bold; margin-top: 8px;">当前进度: {{ initStatusText }}</span>
-    </div>
-
-    <component
-      v-else
-      :is="currentShellRenderer"
-      v-bind="shellRendererProps"
-    />
+  <div ref="panelBodyElement" class="lw-panel-body" :class="{ 'is-freeform': layoutMode === 'freeform' }"
+    :style="shellPanelBodyStyle">
+    <component v-show="!showSplash" :is="currentShellRenderer" v-bind="shellRendererProps" />
   </div>
 
   <PanelHeader
     v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'bottom' && shouldRenderTraditionalHeader"
-    :activeMainTab="activeMainTab"
-    :dynamicTabs="dynamicTabs"
-    :isMobile="isMobile"
-    :activeDesktopModeId="activeDesktopModeId"
-    :desktopModes="desktopModeOptions"
-    :variant="panelHeaderVariant"
-    :headerPlacement="traditionalHeaderPosition"
-    :widgetPanels="widgetPanelList"
-    :widgetGroups="widgetGroups"
-    :activeWidgetId="activeRightPanel !== 'none' ? activeRightPanel : ''"
-    :guildRailVisible="discordChannelMarkVisible"
-    @switchMainView="onSwitchMainView"
-    @closeTab="onCloseTab"
-    @close="onClose"
-    @toggleSettings="onOpenSettingsPanel"
-    @toggleGuildRail="onToggleDiscordGuildRail"
-    @setDesktopMode="onUpdateDesktopMode"
-    @openWidget="onHandleOpenWidget"
-  />
+    :activeMainTab="activeMainTab" :dynamicTabs="dynamicTabs" :isMobile="isMobile"
+    :activeDesktopModeId="activeDesktopModeId" :desktopModes="desktopModeOptions" :variant="panelHeaderVariant"
+    :headerPlacement="traditionalHeaderPosition" :widgetPanels="widgetPanelList" :widgetGroups="widgetGroups"
+    :activeWidgetId="activeRightPanel !== 'none' ? activeRightPanel : ''" :guildRailVisible="discordChannelMarkVisible"
+    @switchMainView="onSwitchMainView" @closeTab="onCloseTab" @close="onClose" @toggleSettings="onOpenSettingsPanel"
+    @toggleGuildRail="onToggleDiscordGuildRail" @setDesktopMode="onUpdateDesktopMode"
+    @openWidget="onHandleOpenWidget" />
 
   <LegacyGlobalPanels ref="legacyGlobalPanels" />
 </template>
@@ -68,20 +30,24 @@
 <script setup lang="ts">
 import { computed, ref, watch, type CSSProperties } from 'vue';
 import PanelHeader from '../components/PanelHeader.vue';
-import { desktopModeRuntimeRegistry } from '../platform/desktop/DesktopModeRuntimeRegistry';
-import type { LuminaPlugin } from '../types/plugin';
+import { desktopModeRuntimeRegistry } from '../platform/desktop/DesktopModeRuntimeRegistry.js';
+import type { LuminaPlugin } from '../types/plugin.js';
 import type {
   CharacterChannelState,
   CreateChatConversationInput,
   DeleteChatConversationInput,
   RenameChatConversationInput
-} from '../types/ConversationContextTypes';
+} from '../types/ConversationContextTypes.js';
 import type {
   DynamicTabConfig,
   RegisteredPanelEntry,
   WidgetPanelGroup,
   WidgetPanelItem,
   TelegramRailToolEntry,
+  TelegramConversationListMode,
+  TelegramDesktopLeftRoute,
+  TelegramMobileTabId,
+  TelegramStackRoute,
   WorkspaceDockItem,
   ShellRuntimeActions,
   ShellRuntimeContext,
@@ -89,7 +55,7 @@ import type {
   WorkspaceSceneInsets,
   WorkspaceStageStripItem,
   WorkspaceWindowEntry
-} from './types';
+} from './types.js';
 import FreeformShell from './freeform/FreeformShell.vue';
 import LegacyGlobalPanels from './LegacyGlobalPanels.vue';
 import TraditionalShell from './traditional/TraditionalShell.vue';
@@ -112,6 +78,7 @@ const props = defineProps<{
   discordChannelMarkVisible: boolean;
   shellPanelBodyStyle: CSSProperties;
   isApiReady: boolean;
+  showSplash: boolean;
   initStatusText: string;
   shouldShowDiscordGuildRail: boolean;
   discordGuildEntries: Array<{ id: string; name: string; icon: string }>;
@@ -129,6 +96,10 @@ const props = defineProps<{
   telegramSelectedCharacterKey: string | null;
   telegramToolEntries: TelegramRailToolEntry[];
   activeTelegramToolId: string | null;
+  telegramConversationListMode: TelegramConversationListMode;
+  telegramDesktopLeftRoute: TelegramDesktopLeftRoute;
+  telegramMobileActiveTab: TelegramMobileTabId;
+  telegramMobileCurrentRoute: TelegramStackRoute;
   mainPlugins: LuminaPlugin[];
   shellMainSurfaceVariant: string;
   shellMainSurfaceStyle: CSSProperties;
@@ -186,6 +157,10 @@ const props = defineProps<{
   onUpdateShowDiscordMobileCharacterRail: (value: boolean) => void;
   onSelectTelegramCharacterOverview: (groupKey: string | null) => void;
   onOpenTelegramToolEntry: (toolId: TelegramRailToolEntry['id']) => void;
+  onSetTelegramConversationListMode: (mode: TelegramConversationListMode) => void;
+  onSetTelegramDesktopLeftRoute: (route: TelegramDesktopLeftRoute) => void;
+  onPushTelegramMobileRoute: (route: TelegramStackRoute) => void;
+  onPopTelegramMobileRoute: () => void;
   onResizeStart: (event?: MouseEvent) => void;
   onTelegramLeftRailResizeStart: (event?: MouseEvent) => void;
   onBackFromDetailedSettings: () => void;
@@ -214,8 +189,9 @@ const props = defineProps<{
   onPanelBodyElementChange: (element: HTMLElement | null) => void;
 }>();
 
+
 const shouldRenderTraditionalHeader = computed(() => (
-  props.activeDesktopModeId !== 'telegram' || props.isMobile
+  props.activeDesktopModeId !== 'telegram'
 ));
 
 const currentShellRenderer = computed(() => (
@@ -249,6 +225,10 @@ const shellContext = computed<ShellRuntimeContext>(() => ({
     telegramSelectedCharacterKey: props.telegramSelectedCharacterKey,
     telegramToolEntries: props.telegramToolEntries,
     activeTelegramToolId: props.activeTelegramToolId,
+    telegramConversationListMode: props.telegramConversationListMode,
+    telegramDesktopLeftRoute: props.telegramDesktopLeftRoute,
+    telegramMobileActiveTab: props.telegramMobileActiveTab,
+    telegramMobileCurrentRoute: props.telegramMobileCurrentRoute,
     isTimelineLoadedOnce: props.isTimelineLoadedOnce,
     isForgeActiveInTraditional: props.isForgeActiveInTraditional,
     sidebarMode: props.sidebarMode,
@@ -321,6 +301,10 @@ const shellActions = computed<ShellRuntimeActions>(() => ({
     updateShowDiscordMobileCharacterRail: props.onUpdateShowDiscordMobileCharacterRail,
     selectTelegramCharacterOverview: props.onSelectTelegramCharacterOverview,
     openTelegramToolEntry: props.onOpenTelegramToolEntry,
+    setTelegramConversationListMode: props.onSetTelegramConversationListMode,
+    setTelegramDesktopLeftRoute: props.onSetTelegramDesktopLeftRoute,
+    pushTelegramMobileRoute: props.onPushTelegramMobileRoute,
+    popTelegramMobileRoute: props.onPopTelegramMobileRoute,
     resizeStart: props.onResizeStart,
     telegramLeftRailResizeStart: props.onTelegramLeftRailResizeStart,
     backFromDetailedSettings: props.onBackFromDetailedSettings,

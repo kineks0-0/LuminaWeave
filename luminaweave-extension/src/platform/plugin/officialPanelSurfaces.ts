@@ -1,4 +1,4 @@
-import type { SurfaceContractId } from '../surface/types';
+import type { SurfaceContractId } from '../surface/types.js';
 
 const REGISTERED_PANEL_SURFACE_CONTRACTS: Record<string, SurfaceContractId> = {
     card_maker: 'forge.workspace'

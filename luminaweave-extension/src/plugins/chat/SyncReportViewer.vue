@@ -47,6 +47,14 @@
               <div class="sum-val">{{ formatIndex(report.firstMismatchIndex) }}</div>
             </div>
             <div class="sum-item">
+              <div class="sum-label">Lumina 独有</div>
+              <div class="sum-val">{{ report.summary.localOnlyCount }}</div>
+            </div>
+            <div class="sum-item">
+              <div class="sum-label">ST 独有</div>
+              <div class="sum-val">{{ report.summary.stOnlyCount }}</div>
+            </div>
+            <div class="sum-item">
               <div class="sum-label">内容不一致</div>
               <div class="sum-val">{{ report.summary.contentMismatchCount }}</div>
             </div>
@@ -161,9 +169,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, inject } from 'vue';
+import { LuminaWeaveAPI } from '../../api/index.js';
 
-const lwApi = (window as any).LuminaWeave_API;
+const lwApi = inject<LuminaWeaveAPI>('lwApi');
 
 const props = defineProps<{
   isTabMode?: boolean | string
@@ -304,8 +313,10 @@ defineExpose({ open });
 }
 .brand-badge {
   display: inline-flex;
-  font-weight: 700;
-  font-size: 12px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   padding: 2px 8px;
   border-radius: 999px;
   color: var(--lw-primary, #0061e0);
@@ -314,11 +325,17 @@ defineExpose({ open });
 }
 .title-area h2 {
   margin: 8px 0 4px;
-  font-size: 18px;
+  font-size: var(--lw-type-title-large-size);
+  line-height: var(--lw-type-title-large-line-height);
+  font-weight: var(--lw-type-title-large-weight);
+  letter-spacing: var(--lw-type-title-large-tracking);
 }
 .title-area p {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-dim, #6b7280);
 }
 .header-actions {
@@ -345,11 +362,12 @@ defineExpose({ open });
   flex: 1;
 }
 .lw-section-title {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-dim, #6b7280);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
   margin: 10px 0 10px;
 }
 .summary-grid {
@@ -365,12 +383,17 @@ defineExpose({ open });
   backdrop-filter: blur(10px) saturate(180%);
 }
 .sum-label {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-dim, #6b7280);
 }
 .sum-val {
-  font-size: 18px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-large-size);
+  line-height: var(--lw-type-title-large-line-height);
+  font-weight: var(--lw-type-title-large-weight);
+  letter-spacing: var(--lw-type-title-large-tracking);
   color: var(--lw-text-main, #111827);
   margin-top: 4px;
 }
@@ -378,7 +401,10 @@ defineExpose({ open });
 .report-controls {
   display: flex;
   gap: 14px;
-  font-size: 12px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-text-main, #111827);
   margin-bottom: 10px;
 }
@@ -407,11 +433,14 @@ defineExpose({ open });
   gap: 8px;
 }
 .idx {
-  font-weight: 800;
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main, #111827);
 }
 .pill {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   padding: 2px 8px;
   border: 1px solid var(--lw-border, #e2e8f0);
   border-radius: 999px;
@@ -425,7 +454,10 @@ defineExpose({ open });
   gap: 6px;
 }
 .tag {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   padding: 2px 6px;
   border-radius: 8px;
   border: 1px solid var(--lw-border, #e2e8f0);
@@ -469,13 +501,18 @@ defineExpose({ open });
   padding: 8px 10px;
 }
 .mini-label {
-  font-weight: 800;
-  font-size: 12px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-text-dim, #6b7280);
   margin-right: 6px;
 }
 .mini-text {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-main, #111827);
 }
 .empty {
@@ -503,7 +540,7 @@ defineExpose({ open });
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 800;
+  font-weight: var(--lw-type-title-small-weight);
   margin-bottom: 10px;
 }
 .dot {
@@ -521,12 +558,15 @@ defineExpose({ open });
   display: grid;
   grid-template-columns: 70px 1fr;
   gap: 6px 10px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   margin-bottom: 10px;
 }
 .k {
   color: var(--lw-text-dim, #6b7280);
-  font-weight: 700;
+  font-weight: var(--lw-type-label-medium-weight);
 }
 .v {
   color: var(--lw-text-main, #111827);
@@ -536,8 +576,10 @@ defineExpose({ open });
   margin-top: 10px;
 }
 .text-title {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-dim, #6b7280);
   margin-bottom: 6px;
 }
@@ -551,8 +593,10 @@ defineExpose({ open });
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-footer {
@@ -564,7 +608,10 @@ defineExpose({ open });
 }
 .lw-stats {
   color: var(--lw-text-dim, #6b7280);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 @media (max-width: 960px) {

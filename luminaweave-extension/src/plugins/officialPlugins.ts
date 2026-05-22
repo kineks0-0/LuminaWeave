@@ -7,7 +7,8 @@ import { DirectorPlugin } from './director';
 import LauncherPlugin from './launcher';
 import DevPlugin from './dev';
 import ForgePlugin from './forge';
-import type { LuminaPlugin } from '../types/plugin';
+import TerminalPlugin from './terminal';
+import type { LuminaPlugin } from '../types/plugin.js';
 
 export const officialPlugins: LuminaPlugin[] = [
     ChatPlugin,
@@ -18,5 +19,6 @@ export const officialPlugins: LuminaPlugin[] = [
     DirectorPlugin,
     LauncherPlugin,
     DevPlugin,
+    TerminalPlugin,
     ForgePlugin
 ];

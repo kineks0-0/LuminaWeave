@@ -1,5 +1,5 @@
 import { shallowReactive } from 'vue';
-import type { ThemeableComponentContract } from './types';
+import type { ThemeableComponentContract } from './types.js';
 
 class ThemeComponentRegistry {
     public readonly contracts = shallowReactive<Record<string, ThemeableComponentContract>>(

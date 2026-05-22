@@ -33,6 +33,7 @@ export default defineConfig(({ mode }) => {
   const inlineSourceMap = runtimeBuildMode !== 'github';
 
   return {
+    base: './',
     plugins: [
       vue(),
       tailwindcss(),
@@ -56,6 +57,7 @@ export default defineConfig(({ mode }) => {
         '@shared': resolve(__dirname, './shared'),
         'ai': resolve(__dirname, './node_modules/ai'),
         '@ai-sdk': resolve(__dirname, './node_modules/@ai-sdk'),
+        'node:zlib': resolve(__dirname, './src/shims/node-zlib.ts'),
       }
     },
     build: {

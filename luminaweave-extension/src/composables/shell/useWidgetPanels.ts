@@ -1,11 +1,11 @@
 import { computed, onUnmounted, ref, watch, getCurrentInstance, type Component, type ComputedRef, type Ref } from 'vue';
-import { lwStorage } from '../../api/storage';
-import { luminaWeaveApi as lwApi } from '../../api/index';
-import { pluginManager } from '../../core/PluginManager';
-import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces';
-import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces';
-import type { LuminaPlugin } from '../../types/plugin';
-import type { RegisteredPanelEntry, WidgetPanelGroup, WidgetPanelItem, WidgetPluginEntry } from '../../shell/types';
+import { lwStorage } from '../../api/storage.js';
+import { luminaWeaveApi as lwApi } from '../../api/index.js';
+import { pluginManager } from '../../core/PluginManager.js';
+import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
+import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
+import type { LuminaPlugin } from '../../types/plugin.js';
+import type { RegisteredPanelEntry, WidgetPanelGroup, WidgetPanelItem, WidgetPluginEntry } from '../../shell/types.js';
 
 const FORGE_AUX_PANEL_PATTERN = /^forge_(lorebook|memory|export|post_tracks|test_chat)$/;
 const TELEGRAM_LEFT_RAIL_STORAGE_KEY = 'luminaWeave.telegram.leftRailWidth';

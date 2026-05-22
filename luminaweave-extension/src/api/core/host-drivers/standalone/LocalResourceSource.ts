@@ -1,4 +1,4 @@
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import { HALContext } from '../../hal/HALContext.js';
 import {
     buildSourceResourcePath,
     cloneSTRawPayload,
@@ -126,7 +126,7 @@ export class LocalResourceSource implements ResourceSource {
 
     private async listKeys(): Promise<string[]> {
         try {
-            return await BridgeDispatcher.extensionStore.listKeys({ namespace: NAMESPACE, table: TABLE });
+            return await HALContext.instance.runtime.extensionStore.listKeys({ namespace: NAMESPACE, table: TABLE });
         } catch (error) {
             console.warn('[LocalResourceSource] listKeys failed', error);
             return [];
@@ -135,7 +135,7 @@ export class LocalResourceSource implements ResourceSource {
 
     private async getRaw(resourceType: ResourceType, resourceId: string): Promise<unknown | null> {
         try {
-            return await BridgeDispatcher.extensionStore.getJson({
+            return await HALContext.instance.runtime.extensionStore.getJson({
                 namespace: NAMESPACE,
                 table: TABLE,
                 key: toKey(resourceType, resourceId)
@@ -146,7 +146,7 @@ export class LocalResourceSource implements ResourceSource {
     }
 
     private async setRaw(resourceType: ResourceType, resourceId: string, raw: unknown): Promise<void> {
-        await BridgeDispatcher.extensionStore.setJson({
+        await HALContext.instance.runtime.extensionStore.setJson({
             namespace: NAMESPACE,
             table: TABLE,
             key: toKey(resourceType, resourceId),

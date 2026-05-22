@@ -1,8 +1,8 @@
 import { onMounted, onUnmounted, type Ref } from 'vue';
-import { luminaWeaveApi as lwApi } from '../../api/index';
-import { registerLuminaPlugins } from '../../bootstrap/registerPlugins';
-import type { DynamicTabConfig } from '../../shell/types';
-import { legacyPanelDefinitions } from '../../shell/legacyPanelRegistry';
+import { luminaWeaveApi as lwApi } from '../../api/index.js';
+import { registerLuminaPlugins } from '../../bootstrap/registerPlugins.js';
+import type { DynamicTabConfig } from '../../shell/types.js';
+import { legacyPanelDefinitions } from '../../shell/legacyPanelRegistry.js';
 
 export const useShellBootstrap = ({
   isApiReady,

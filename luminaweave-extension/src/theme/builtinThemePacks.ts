@@ -1,5 +1,5 @@
-import type { SettingDefinition } from '../types/plugin';
-import { getThemeSettingValue } from './themeRegistry';
+import type { SettingDefinition } from '../types/plugin.js';
+import { getThemeSettingValue } from './themeRegistry.js';
 import type {
     ComponentThemeContext,
     DesktopModeManifest,
@@ -8,7 +8,7 @@ import type {
     ThemeMessageShape,
     ThemeValueMap,
     ThemeValueResolver
-} from './types';
+} from './types.js';
 
 const resolveAvatarRadius = (shape: string | undefined) => {
     if (shape === 'square') return '14px';
@@ -45,7 +45,35 @@ const CHAT_AVATAR_PLACEMENT_OPTIONS = [
     { value: 'topbar', label: '顶栏', description: '头像移动到会话顶栏，不在消息流重复出现。' },
     { value: 'rail', label: '侧栏', description: '头像主要由外部角色/频道侧栏承担。' }
 ] as const;
+const CHAT_ROLE_TYPOGRAPHY_OPTIONS = [
+    { value: 'follow', label: '跟随统一值', description: '使用聊天字号、行高和文字间距。' },
+    { value: 'custom', label: '单独设置', description: '为该侧消息使用专用排版数值。' }
+] as const;
 const GLOBAL_SCOPES: Array<'Global'> = ['Global'];
+const ACTIVE_DESKTOP_MODE_SETTING_KEY = 'lumina-settings.activeDesktopMode';
+const LEGACY_ACTIVE_THEME_PACK_SETTING_KEY = 'lumina-settings.activeThemePack';
+
+const getActiveDesktopModeScopedSetting = (
+    settings: Record<string, any>,
+    settingKey: string,
+    fallback: unknown
+) => {
+    const activeMode = String(
+        settings[ACTIVE_DESKTOP_MODE_SETTING_KEY]
+        ?? settings[LEGACY_ACTIVE_THEME_PACK_SETTING_KEY]
+        ?? 'classic'
+    );
+    return settings[`desktop-mode-${activeMode}.${settingKey}`]
+        ?? settings[`theme-pack-${activeMode}.${settingKey}`]
+        ?? fallback;
+};
+
+const isRoleTypographyCustom = (role: 'assistant' | 'user') => (
+    settings: Record<string, any>
+) => getActiveDesktopModeScopedSetting(settings, `${role}TypographyMode`, 'follow') === 'custom';
+
+const isAssistantTypographyCustom = isRoleTypographyCustom('assistant');
+const isUserTypographyCustom = isRoleTypographyCustom('user');
 
 const resolveFontFamily = (fontFamily: string | undefined) => {
     if (fontFamily === 'serif') return '"Noto Serif CJK SC", "Songti SC", serif';
@@ -178,8 +206,129 @@ const createChatTypographySettings = (defaults: {
         max: 10,
         step: 0.1,
         allowedScopes: GLOBAL_SCOPES
+    },
+    assistantTypographyMode: {
+        default: 'follow',
+        label: 'AI 回复排版',
+        description: '控制 AI 回复是否跟随统一聊天排版。',
+        common: false,
+        type: 'options' as const,
+        allowedScopes: GLOBAL_SCOPES,
+        options: CHAT_ROLE_TYPOGRAPHY_OPTIONS.map(option => ({ ...option }))
+    },
+    assistantFontSize: {
+        default: defaults.fontSize ?? 16,
+        label: 'AI 回复字号',
+        common: false,
+        type: 'stepper' as const,
+        min: 12,
+        max: 72,
+        showIf: isAssistantTypographyCustom,
+        allowedScopes: GLOBAL_SCOPES
+    },
+    assistantLineHeight: {
+        default: defaults.lineHeight ?? 1.6,
+        label: 'AI 回复行高',
+        common: false,
+        type: 'slider' as const,
+        min: 1,
+        max: 3,
+        step: 0.05,
+        showIf: isAssistantTypographyCustom,
+        allowedScopes: GLOBAL_SCOPES
+    },
+    assistantLetterSpacing: {
+        default: defaults.letterSpacing ?? 0,
+        label: 'AI 回复字距',
+        common: false,
+        type: 'slider' as const,
+        min: 0,
+        max: 10,
+        step: 0.1,
+        showIf: isAssistantTypographyCustom,
+        allowedScopes: GLOBAL_SCOPES
+    },
+    userTypographyMode: {
+        default: 'follow',
+        label: '用户输入排版',
+        description: '控制用户消息和输入框是否跟随统一聊天排版。',
+        common: false,
+        type: 'options' as const,
+        allowedScopes: GLOBAL_SCOPES,
+        options: CHAT_ROLE_TYPOGRAPHY_OPTIONS.map(option => ({ ...option }))
+    },
+    userFontSize: {
+        default: defaults.fontSize ?? 16,
+        label: '用户输入字号',
+        common: false,
+        type: 'stepper' as const,
+        min: 12,
+        max: 72,
+        showIf: isUserTypographyCustom,
+        allowedScopes: GLOBAL_SCOPES
+    },
+    userLineHeight: {
+        default: defaults.lineHeight ?? 1.6,
+        label: '用户输入行高',
+        common: false,
+        type: 'slider' as const,
+        min: 1,
+        max: 3,
+        step: 0.05,
+        showIf: isUserTypographyCustom,
+        allowedScopes: GLOBAL_SCOPES
+    },
+    userLetterSpacing: {
+        default: defaults.letterSpacing ?? 0,
+        label: '用户输入字距',
+        common: false,
+        type: 'slider' as const,
+        min: 0,
+        max: 10,
+        step: 0.1,
+        showIf: isUserTypographyCustom,
+        allowedScopes: GLOBAL_SCOPES
     }
 });
+
+const resolveRoleTypographyVars = (
+    activeSettings: ThemeValueMap,
+    themePackId: string,
+    prefix: '--lw-chat' | '--lw-chat-preview'
+): Record<string, string> => {
+    const fontSize = Number(getThemeSettingValue(activeSettings, themePackId, 'chatFontSize', 16));
+    const lineHeight = Number(getThemeSettingValue(activeSettings, themePackId, 'chatLineHeight', 1.6));
+    const letterSpacing = Number(getThemeSettingValue(activeSettings, themePackId, 'chatLetterSpacing', 0));
+    const assistantMode = String(getThemeSettingValue(activeSettings, themePackId, 'assistantTypographyMode', 'follow'));
+    const userMode = String(getThemeSettingValue(activeSettings, themePackId, 'userTypographyMode', 'follow'));
+    const assistantFontSize = assistantMode === 'custom'
+        ? Number(getThemeSettingValue(activeSettings, themePackId, 'assistantFontSize', fontSize))
+        : fontSize;
+    const assistantLineHeight = assistantMode === 'custom'
+        ? Number(getThemeSettingValue(activeSettings, themePackId, 'assistantLineHeight', lineHeight))
+        : lineHeight;
+    const assistantLetterSpacing = assistantMode === 'custom'
+        ? Number(getThemeSettingValue(activeSettings, themePackId, 'assistantLetterSpacing', letterSpacing))
+        : letterSpacing;
+    const userFontSize = userMode === 'custom'
+        ? Number(getThemeSettingValue(activeSettings, themePackId, 'userFontSize', fontSize))
+        : fontSize;
+    const userLineHeight = userMode === 'custom'
+        ? Number(getThemeSettingValue(activeSettings, themePackId, 'userLineHeight', lineHeight))
+        : lineHeight;
+    const userLetterSpacing = userMode === 'custom'
+        ? Number(getThemeSettingValue(activeSettings, themePackId, 'userLetterSpacing', letterSpacing))
+        : letterSpacing;
+
+    return {
+        [`${prefix}-assistant-font-size`]: `${assistantFontSize}px`,
+        [`${prefix}-assistant-line-height`]: String(assistantLineHeight),
+        [`${prefix}-assistant-letter-spacing`]: `${assistantLetterSpacing}px`,
+        [`${prefix}-user-font-size`]: `${userFontSize}px`,
+        [`${prefix}-user-line-height`]: String(userLineHeight),
+        [`${prefix}-user-letter-spacing`]: `${userLetterSpacing}px`
+    };
+};
 
 const discordThemeSettings: Record<string, SettingDefinition> = {
     messageDensity: {
@@ -707,6 +856,7 @@ const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifes
                 '--lw-chat-paragraph-spacing': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatParagraphSpacing', 16))}px`,
                 '--lw-chat-letter-spacing': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatLetterSpacing', 0))}px`,
                 '--lw-chat-page-width': String(getThemeSettingValue(activeSettings, themePackId, 'chatPageWidth', 'auto')),
+                ...resolveRoleTypographyVars(activeSettings, themePackId, '--lw-chat'),
                 ...overrides
             };
         }
@@ -737,6 +887,7 @@ const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifes
                 '--lw-chat-preview-line-height': Number(getThemeSettingValue(activeSettings, themePackId, 'chatLineHeight', 1.6)),
                 '--lw-chat-preview-paragraph-spacing': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatParagraphSpacing', 16))}px`,
                 '--lw-chat-preview-letter-spacing': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatLetterSpacing', 0))}px`,
+                ...resolveRoleTypographyVars(activeSettings, themePackId, '--lw-chat-preview'),
                 ...overrides
             };
         }
@@ -1533,10 +1684,10 @@ const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance, theme
         ? {
             '--lw-primary': '#4aa3ff',
             '--lw-primary-rgb': '74, 163, 255',
-            '--lw-bg-app': '#0f1b27',
-            '--lw-bg-surface': '#172638',
-            '--lw-bg-elevated': '#20354b',
-            '--lw-bg-subtle': '#16283a',
+            '--lw-bg-app': '#101820',
+            '--lw-bg-surface': '#17212c',
+            '--lw-bg-elevated': '#202b38',
+            '--lw-bg-subtle': '#172330',
             '--lw-bg-hover': 'rgba(115, 177, 255, 0.12)',
             '--lw-bg-active': 'rgba(115, 177, 255, 0.18)',
             '--lw-text-main': '#eaf5ff',
@@ -1545,14 +1696,24 @@ const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance, theme
             '--lw-border-base': 'rgba(143, 192, 232, 0.18)',
             '--lw-border-strong': 'rgba(176, 216, 255, 0.26)',
             '--lw-border-active': 'rgba(98, 178, 255, 0.44)',
-            '--lw-surface-container-lowest': 'rgba(18, 34, 50, 0.78)',
-            '--lw-surface-container-low': 'rgba(24, 45, 65, 0.76)',
-            '--lw-surface-container': 'rgba(31, 56, 80, 0.78)',
-            '--lw-surface-container-high': 'rgba(42, 72, 101, 0.82)',
-            '--lw-surface-container-highest': 'rgba(58, 91, 124, 0.88)',
+            '--lw-surface-container-lowest': 'rgba(18, 28, 39, 0.78)',
+            '--lw-surface-container-low': 'rgba(27, 39, 52, 0.76)',
+            '--lw-surface-container': 'rgba(34, 50, 66, 0.78)',
+            '--lw-surface-container-high': 'rgba(43, 61, 78, 0.82)',
+            '--lw-surface-container-highest': 'rgba(53, 73, 94, 0.88)',
             '--lw-theme-accent-soft': 'rgba(74, 163, 255, 0.18)',
             '--lw-telegram-diffuse-bg': 'radial-gradient(ellipse 112% 62% at 48% 38%, rgba(107, 171, 255, 0.58) 0%, rgba(107, 171, 255, 0.26) 42%, transparent 78%), radial-gradient(ellipse 52% 30% at 25% 26%, rgba(255, 255, 255, 0.20) 0%, transparent 68%), radial-gradient(ellipse 18% 22% at 56% 24%, rgba(255, 255, 255, 0.26) 0%, transparent 70%)',
             '--lw-telegram-glass-blur': glassBlur,
+            '--lw-telegram-glass-bg': 'rgba(34, 50, 66, 0.58)',
+            '--lw-telegram-glass-bg-strong': 'rgba(38, 56, 73, 0.72)',
+            '--lw-telegram-hairline': 'rgba(143, 192, 232, 0.16)',
+            '--lw-telegram-tab-bg': 'rgba(45, 63, 82, 0.48)',
+            '--lw-telegram-tab-rim': 'rgba(132, 164, 194, 0.16)',
+            '--lw-telegram-tab-top-light': 'transparent',
+            '--lw-telegram-tab-bottom-shade': 'transparent',
+            '--lw-telegram-glass-highlight': 'rgba(255, 255, 255, 0.12)',
+            '--lw-telegram-glass-shade': 'rgba(0, 7, 14, 0.24)',
+            '--lw-telegram-active-pill': 'rgba(74, 163, 255, 0.16)',
             '--lw-telegram-panel-shadow': panelShadow,
             '--lw-telegram-user-bubble': 'linear-gradient(135deg, rgba(31, 92, 64, 0.92), rgba(35, 116, 74, 0.88))',
             '--lw-telegram-ai-bubble': 'rgba(20, 38, 56, 0.88)'
@@ -1580,6 +1741,16 @@ const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance, theme
             '--lw-theme-accent-soft': 'rgba(46, 159, 232, 0.14)',
             '--lw-telegram-diffuse-bg': 'radial-gradient(ellipse 112% 62% at 48% 38%, rgba(107, 171, 255, 0.84) 0%, rgba(107, 171, 255, 0.42) 42%, transparent 78%), radial-gradient(ellipse 52% 30% at 25% 26%, rgba(255, 255, 255, 0.52) 0%, transparent 68%), radial-gradient(ellipse 18% 22% at 56% 24%, rgba(255, 255, 255, 0.71) 0%, transparent 70%)',
             '--lw-telegram-glass-blur': glassBlur,
+            '--lw-telegram-glass-bg': 'rgba(240, 249, 255, 0.58)',
+            '--lw-telegram-glass-bg-strong': 'rgba(247, 252, 255, 0.76)',
+            '--lw-telegram-hairline': 'rgba(84, 136, 178, 0.16)',
+            '--lw-telegram-tab-bg': 'rgba(231, 243, 252, 0.58)',
+            '--lw-telegram-tab-rim': 'rgba(84, 136, 178, 0.16)',
+            '--lw-telegram-tab-top-light': 'transparent',
+            '--lw-telegram-tab-bottom-shade': 'transparent',
+            '--lw-telegram-glass-highlight': 'rgba(255, 255, 255, 0.76)',
+            '--lw-telegram-glass-shade': 'rgba(69, 126, 164, 0.12)',
+            '--lw-telegram-active-pill': 'rgba(46, 159, 232, 0.16)',
             '--lw-telegram-panel-shadow': panelShadow,
             '--lw-telegram-user-bubble': 'linear-gradient(135deg, #dff7d6, #c9f0bf)',
             '--lw-telegram-ai-bubble': 'rgba(255, 255, 255, 0.92)'
@@ -1651,8 +1822,8 @@ const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => 
                 ) !== false;
 
                 return {
-                    '--lw-telegram-frame-bg': context.resolvedAppearance === 'dark'
-                        ? 'var(--lw-telegram-diffuse-bg), rgba(18, 34, 50, 0.72)'
+                '--lw-telegram-frame-bg': context.resolvedAppearance === 'dark'
+                        ? 'var(--lw-telegram-diffuse-bg), rgba(16, 24, 32, 0.82)'
                         : 'var(--lw-telegram-diffuse-bg), rgba(225, 241, 252, 0.62)',
                     '--lw-telegram-frame-border': context.resolvedAppearance === 'dark'
                         ? 'rgba(143, 192, 232, 0.22)'
@@ -1685,7 +1856,7 @@ const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => 
             variant: 'telegram',
             cssVars: ({ resolvedAppearance }) => ({
                 '--lw-telegram-chat-list-bg': resolvedAppearance === 'dark'
-                    ? 'rgba(18, 34, 50, 0.72)'
+                    ? 'rgba(16, 24, 32, 0.82)'
                     : 'rgba(255, 255, 255, 0.56)',
                 '--lw-telegram-chat-list-width': '320px',
                 '--lw-telegram-chat-list-compact-width': '268px'
@@ -1696,7 +1867,7 @@ const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => 
             variant: 'telegram',
             cssVars: ({ resolvedAppearance }) => ({
                 '--lw-telegram-conversation-bg': resolvedAppearance === 'dark'
-                    ? 'rgba(15, 28, 42, 0.68)'
+                    ? 'rgba(16, 24, 32, 0.74)'
                     : 'rgba(231, 244, 253, 0.58)',
                 '--lw-chat-message-max-width': '560px',
                 '--lw-chat-bubble': 'var(--lw-telegram-ai-bubble)',
@@ -1708,7 +1879,7 @@ const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => 
             variant: 'telegram',
             cssVars: ({ resolvedAppearance }) => ({
                 '--lw-telegram-info-panel-bg': resolvedAppearance === 'dark'
-                    ? 'rgba(24, 45, 65, 0.84)'
+                    ? 'rgba(27, 39, 52, 0.84)'
                     : 'rgba(255, 255, 255, 0.74)',
                 '--lw-telegram-info-panel-border': 'var(--lw-border-base)',
                 '--lw-telegram-avatar-radius': '999px'

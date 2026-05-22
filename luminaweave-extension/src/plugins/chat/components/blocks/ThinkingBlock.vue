@@ -266,22 +266,26 @@ onUnmounted(() => {
 }
 
 .thinking-title {
-  font-size: 13px;
-  line-height: 1.3;
-  font-weight: 700;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-secondary);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .thinking-meta {
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
 }
 
 .thinking-duration {
-  font-size: 12px;
-  line-height: 1.3;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
 }
 
@@ -372,8 +376,10 @@ onUnmounted(() => {
 
 .thinking-entry-content {
   max-width: 76ch;
-  font-size: 12.5px;
-  line-height: 1.78;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
 }
 
@@ -393,7 +399,8 @@ onUnmounted(() => {
 
 .thinking-entry-content :deep(code) {
   font-family: var(--lw-font-mono);
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
   padding: 1px 5px;
   border-radius: 6px;
   background: color-mix(in srgb, var(--lw-bg-subtle) 86%, white);

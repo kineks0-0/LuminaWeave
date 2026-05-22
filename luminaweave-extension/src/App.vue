@@ -1,113 +1,72 @@
 <template>
-  <AppRootContainer
-    :isExpanded="isExpanded"
-    :resolvedTheme="resolvedTheme"
-    :activeDesktopModeId="activeDesktopModeId"
-    :motionPerformanceSetting="motionPerformanceSetting"
-    :layoutMode="layoutMode"
-    :appRootStyle="appRootStyle"
-    :rootFrameStyle="rootFrameStyle"
-    :shellAppVariant="shellAppVariant || 'default'"
-    @expand="toggleExpand"
-  >
-    <LuminaShellRoot
-      ref="shellRootRef"
-      :layoutMode="layoutMode"
-      :panelHeaderVariant="panelHeaderVariant"
-      :traditionalHeaderPosition="traditionalHeaderPosition"
-      :activeMainTab="activeMainTab"
-      :dynamicTabs="dynamicTabs"
-      :isMobile="isMobile"
-      :activeDesktopModeId="activeDesktopModeId"
-      :desktopModeOptions="desktopModeOptions"
-      :widgetPanelList="widgetPanelList"
-      :widgetGroups="widgetGroups"
-      :activeRightPanel="visibleRightPanel"
-      :discordChannelMarkVisible="discordChannelMarkVisible"
-      :shellPanelBodyStyle="shellPanelBodyStyle"
-      :isApiReady="isApiReady"
-      :initStatusText="initStatusText"
-      :shouldShowDiscordGuildRail="shouldShowDiscordGuildRail"
-      :discordGuildEntries="discordGuildEntries"
-      :shouldShowForgeSidebar="shouldShowForgeSidebar"
+  <transition name="fade">
+    <SplashPage
+      v-if="showSplash && isExpanded"
+      :statusText="initStatusText"
+      :isReady="isApiReady"
+      @finished="showSplash = false"
+    />
+  </transition>
+  <AppRootContainer :isExpanded="isExpanded" :resolvedTheme="resolvedTheme" :activeDesktopModeId="activeDesktopModeId"
+    :motionPerformanceSetting="motionPerformanceSetting" :layoutMode="layoutMode" :appRootStyle="appRootStyle"
+    :rootFrameStyle="rootFrameStyle" :shellAppVariant="shellAppVariant || 'default'" :showMiniSidebar="!isStandalone" @expand="toggleExpand">
+    <LuminaShellRoot ref="shellRootRef" :layoutMode="layoutMode" :panelHeaderVariant="panelHeaderVariant"
+      :traditionalHeaderPosition="traditionalHeaderPosition" :activeMainTab="activeMainTab" :dynamicTabs="dynamicTabs"
+      :isMobile="isMobile" :activeDesktopModeId="activeDesktopModeId" :desktopModeOptions="desktopModeOptions"
+      :widgetPanelList="widgetPanelList" :widgetGroups="widgetGroups" :activeRightPanel="visibleRightPanel"
+      :discordChannelMarkVisible="discordChannelMarkVisible" :shellPanelBodyStyle="shellPanelBodyStyle"
+      :isApiReady="isApiReady" :showSplash="showSplash" :initStatusText="initStatusText" :shouldShowDiscordGuildRail="shouldShowDiscordGuildRail"
+      :discordGuildEntries="discordGuildEntries" :shouldShowForgeSidebar="shouldShowForgeSidebar"
       :isForgeSidebarCollapsed="isForgeSidebarCollapsed"
-      :shouldShowDiscordCharacterRail="shouldShowDiscordCharacterRail"
-      :characterChannelState="characterChannelState"
-      :isDiscordMobileMode="isDiscordMobileMode"
-      :isTelegramMobileMode="isTelegramMobileMode"
+      :shouldShowDiscordCharacterRail="shouldShowDiscordCharacterRail" :characterChannelState="characterChannelState"
+      :isDiscordMobileMode="isDiscordMobileMode" :isTelegramMobileMode="isTelegramMobileMode"
       :shouldShowDiscordMobileShell="shouldShowDiscordMobileShell"
       :discordMobileGuildRailPosition="discordMobileGuildRailPosition"
       :discordMobileCharacterEntryPosition="discordMobileCharacterEntryPosition"
       :showDiscordMobileCharacterRail="showDiscordMobileCharacterRail"
       :discordMobileCharacterEntryStyle="discordMobileCharacterEntryStyle"
-      :telegramSelectedCharacterKey="telegramSelectedCharacterKey"
-      :telegramToolEntries="telegramToolEntries"
-      :activeTelegramToolId="activeTelegramToolId"
-      :mainPlugins="mainPlugins"
-      :shellMainSurfaceVariant="shellMainSurfaceVariant"
-      :shellMainSurfaceStyle="shellMainSurfaceStyle"
-      :discordMobileMainStyle="discordMobileMainStyle"
-      :isTimelineLoadedOnce="isTimelineLoadedOnce"
-      :isForgeActiveInTraditional="isForgeActiveInTraditional"
-      :sidebarMode="sidebarMode"
-      :shellWidgetSurfaceVariant="shellWidgetSurfaceVariant"
-      :shellWidgetStyle="shellWidgetStyle"
-      :widgetWidth="visibleWidgetWidth"
-      :isResizing="isResizing"
-      :telegramLeftRailWidth="telegramLeftRailWidth"
-      :isTelegramLeftRailResizing="isTelegramLeftRailResizing"
-      :currentDetailedView="currentDetailedView"
-      :saveStatus="saveStatus"
-      :activeForgeAuxKind="activeForgeAuxKind"
-      :rawSidebarMode="rawSidebarMode"
-      :activeWidgetPlugin="activeWidgetPlugin"
-      :activeRegisteredPanel="activeRegisteredPanel"
-      :showWidgetDropdown="showWidgetDropdown"
-      :showNexus="visibleShowNexus"
-      :getPluginName="getPluginName"
-      :showWorkspaceMenu="showWorkspaceMenu"
-      :shellWorkspaceMenuVariant="shellWorkspaceMenuVariant || 'default'"
+      :telegramSelectedCharacterKey="telegramSelectedCharacterKey" :telegramToolEntries="telegramToolEntries"
+      :activeTelegramToolId="activeTelegramToolId" :telegramConversationListMode="telegramConversationListMode"
+      :telegramDesktopLeftRoute="telegramDesktopLeftRoute" :telegramMobileActiveTab="telegramMobileActiveTab"
+      :telegramMobileCurrentRoute="telegramMobileCurrentRoute" :mainPlugins="mainPlugins"
+      :shellMainSurfaceVariant="shellMainSurfaceVariant" :shellMainSurfaceStyle="shellMainSurfaceStyle"
+      :discordMobileMainStyle="discordMobileMainStyle" :isTimelineLoadedOnce="isTimelineLoadedOnce"
+      :isForgeActiveInTraditional="isForgeActiveInTraditional" :sidebarMode="sidebarMode"
+      :shellWidgetSurfaceVariant="shellWidgetSurfaceVariant" :shellWidgetStyle="shellWidgetStyle"
+      :widgetWidth="visibleWidgetWidth" :isResizing="isResizing" :telegramLeftRailWidth="telegramLeftRailWidth"
+      :isTelegramLeftRailResizing="isTelegramLeftRailResizing" :currentDetailedView="currentDetailedView"
+      :saveStatus="saveStatus" :activeForgeAuxKind="activeForgeAuxKind" :rawSidebarMode="rawSidebarMode"
+      :activeWidgetPlugin="activeWidgetPlugin" :activeRegisteredPanel="activeRegisteredPanel"
+      :showWidgetDropdown="showWidgetDropdown" :showNexus="visibleShowNexus" :getPluginName="getPluginName"
+      :showWorkspaceMenu="showWorkspaceMenu" :shellWorkspaceMenuVariant="shellWorkspaceMenuVariant || 'default'"
       :shellWorkspaceMenuStyle="shellWorkspaceMenuStyle"
       :shellWorkspaceStageVariant="shellWorkspaceStageVariant || 'default'"
-      :shellWorkspaceStageStyle="shellWorkspaceStageStyle"
-      :isWorkspaceStageStripVisible="isWorkspaceStageStripVisible"
-      :workspaceStageStripItems="workspaceStageStripItems"
-      :isWorkspaceNavigationVisible="isWorkspaceNavigationVisible"
-      :activeStageWindowEntries="activeStageWindowEntries"
-      :activeWorkspaceWindowId="activeWorkspaceWindowId"
-      :workspaceSceneInsets="workspaceSceneInsets"
-      :showWorkspaceLaunchpad="showWorkspaceLaunchpad"
-      :isWorkspaceDockVisible="isWorkspaceDockVisible"
-      :workspaceDockDisplayItems="workspaceDockDisplayItems"
-      :onSwitchMainView="handleSwitchMainView"
-      :onCloseTab="closeTab"
-      :onClose="toggleExpand"
-      :onOpenSettingsPanel="openSettingsPanel"
-      :onToggleDiscordGuildRail="toggleDiscordGuildRail"
-      :onUpdateDesktopMode="updateDesktopMode"
-      :onHandleOpenWidget="handleOpenWidget"
-      :onToggleForgeSidebarCollapse="toggleForgeSidebarCollapse"
-      :onSetSidebarMode="setSidebarMode"
+      :shellWorkspaceStageStyle="shellWorkspaceStageStyle" :isWorkspaceStageStripVisible="isWorkspaceStageStripVisible"
+      :workspaceStageStripItems="workspaceStageStripItems" :isWorkspaceNavigationVisible="isWorkspaceNavigationVisible"
+      :activeStageWindowEntries="activeStageWindowEntries" :activeWorkspaceWindowId="activeWorkspaceWindowId"
+      :workspaceSceneInsets="workspaceSceneInsets" :showWorkspaceLaunchpad="showWorkspaceLaunchpad"
+      :isWorkspaceDockVisible="isWorkspaceDockVisible" :workspaceDockDisplayItems="workspaceDockDisplayItems"
+      :onSwitchMainView="handleSwitchMainView" :onCloseTab="closeTab" :onClose="toggleExpand"
+      :onOpenSettingsPanel="openSettingsPanel" :onToggleDiscordGuildRail="toggleDiscordGuildRail"
+      :onUpdateDesktopMode="updateDesktopMode" :onHandleOpenWidget="handleOpenWidget"
+      :onToggleForgeSidebarCollapse="toggleForgeSidebarCollapse" :onSetSidebarMode="setSidebarMode"
       :onOpenDiscordChatSession="handleOpenDiscordChatSession"
       :onOpenDiscordMobileChatSession="handleOpenDiscordMobileChatSession"
       :onCreateDiscordChatSession="handleCreateDiscordChatSession"
       :onCreateDiscordMobileChatSession="handleCreateDiscordMobileChatSession"
-      :onRenameDiscordChatSession="renameDiscordChatSession"
-      :onDeleteDiscordChatSession="deleteDiscordChatSession"
+      :onRenameDiscordChatSession="renameDiscordChatSession" :onDeleteDiscordChatSession="deleteDiscordChatSession"
       :onToggleDiscordCharacterGroup="toggleDiscordCharacterGroup"
       :onToggleDiscordCharacterSessionExpansion="toggleDiscordCharacterSessionExpansion"
       :onHandleDiscordMobileMainViewSwitch="handleDiscordMobileMainViewSwitch"
       :onUpdateShowDiscordMobileCharacterRail="updateShowDiscordMobileCharacterRail"
       :onSelectTelegramCharacterOverview="selectTelegramCharacterOverview"
       :onOpenTelegramToolEntry="openTelegramToolEntry"
-      :onResizeStart="initResize"
-      :onTelegramLeftRailResizeStart="initLeftRailResize"
-      :onBackFromDetailedSettings="backFromDetailedSettings"
-      :onToggleWidgetDropdown="toggleWidgetDropdown"
-      :onSwitchRightPanel="switchRightPanel"
-      :onRestoreSidebarLeft="restoreSidebarLeft"
-      :onClosePanel="closeWidgetPanel"
-      :onUpdateShowNexus="updateShowNexus"
+      :onSetTelegramConversationListMode="setTelegramConversationListMode"
+      :onSetTelegramDesktopLeftRoute="setTelegramDesktopLeftRoute" :onPushTelegramMobileRoute="pushTelegramMobileRoute"
+      :onPopTelegramMobileRoute="popTelegramMobileRoute" :onResizeStart="initResize"
+      :onTelegramLeftRailResizeStart="initLeftRailResize" :onBackFromDetailedSettings="backFromDetailedSettings"
+      :onToggleWidgetDropdown="toggleWidgetDropdown" :onSwitchRightPanel="switchRightPanel"
+      :onRestoreSidebarLeft="restoreSidebarLeft" :onClosePanel="closeWidgetPanel" :onUpdateShowNexus="updateShowNexus"
       :onSelectTelegramBottomNav="handleTelegramBottomNavSelect"
       :onCreateStageWithLauncher="createStageWithLauncherAndCloseMenu"
       :onOpenWorkspaceSettings="openWorkspaceSettingsAndCloseMenu"
@@ -115,47 +74,44 @@
       :onCreateWorkspaceStageFromStrip="createWorkspaceStageFromStrip"
       :onHoldWorkspaceNavigation="holdWorkspaceNavigation"
       :onScheduleWorkspaceNavigationHide="scheduleWorkspaceNavigationHideWrapper"
-      :onToggleWorkspaceNavigation="toggleWorkspaceNavigation"
-      :onToggleWorkspaceMenu="toggleWorkspaceMenu"
+      :onToggleWorkspaceNavigation="toggleWorkspaceNavigation" :onToggleWorkspaceMenu="toggleWorkspaceMenu"
       :onHandleFreeformScenePointerDown="handleFreeformScenePointerDown"
-      :onUpdateWorkspaceLayout="updateWorkspaceLayout"
-      :onCloseWorkspaceWindow="closeWorkspaceWindow"
-      :onFocusWorkspaceWindow="focusWorkspaceWindow"
-      :onFocusAdjacentWorkspaceWindow="focusAdjacentWorkspaceWindow"
+      :onUpdateWorkspaceLayout="updateWorkspaceLayout" :onCloseWorkspaceWindow="closeWorkspaceWindow"
+      :onFocusWorkspaceWindow="focusWorkspaceWindow" :onFocusAdjacentWorkspaceWindow="focusAdjacentWorkspaceWindow"
       :onCloseWorkspaceLaunchpad="closeWorkspaceLaunchpad"
       :onHandleWorkspaceDockOpenWithNavigation="handleWorkspaceDockOpenWithNavigation"
-      :onStageElementChange="handleStageElementChange"
-      :onPanelBodyElementChange="handlePanelBodyElementChange"
-    />
+      :onStageElementChange="handleStageElementChange" :onPanelBodyElementChange="handlePanelBodyElementChange" />
   </AppRootContainer>
 </template>
 
 <script setup lang="ts">
 import { computed, inject, provide, ref, watch, type CSSProperties } from 'vue';
-import { luminaWeaveApi as lwApi } from './api/index';
-import { lwStorage } from './api/storage';
-import { pluginManager } from './core/PluginManager';
-import { useSettings, currentDetailedView } from './plugins/settings/useSettings';
-import { useResponsiveLayout } from './composables/useResponsiveLayout';
-import { useWorkspaceManager } from './composables/useWorkspaceManager';
-import { useHostLayoutViewport } from './composables/shell/useHostLayoutViewport';
-import { useShellBootstrap } from './composables/shell/useShellBootstrap';
-import { useTelegramShell } from './composables/shell/useTelegramShell';
-import { useWidgetPanels } from './composables/shell/useWidgetPanels';
-import { useWorkspaceNavigation } from './composables/shell/useWorkspaceNavigation';
-import { useDiscordShell } from './composables/shell/useDiscordShell';
+import { luminaWeaveApi as lwApi } from './api/index.js';
+import { lwStorage } from './api/storage.js';
+import { pluginManager } from './core/PluginManager.js';
+import { useSettings, currentDetailedView } from './plugins/settings/useSettings.js';
+import { useResponsiveLayout } from './composables/useResponsiveLayout.js';
+import { useWorkspaceManager } from './composables/useWorkspaceManager.js';
+import { useHostLayoutViewport } from './composables/shell/useHostLayoutViewport.js';
+import { useShellBootstrap } from './composables/shell/useShellBootstrap.js';
+import { useTelegramShell } from './composables/shell/useTelegramShell.js';
+import { useWidgetPanels } from './composables/shell/useWidgetPanels.js';
+import { useWorkspaceNavigation } from './composables/shell/useWorkspaceNavigation.js';
+import { useDiscordShell } from './composables/shell/useDiscordShell.js';
 import {
   getDesktopModeOptions,
   resolveThemeValues
-} from './theme/themeRegistry';
-import { useComponentSkin } from './theme/useComponentSkin';
-import { useThemePack } from './theme/useThemePack';
-import type { ThemeTraditionalNavigationPreset } from './theme/types';
-import type { DynamicTabConfig, TelegramRailToolEntry } from './shell/types';
-import { registerLuminaPlugins } from './bootstrap/registerPlugins';
+} from './theme/themeRegistry.js';
+import { useComponentSkin } from './theme/useComponentSkin.js';
+import { useThemePack } from './theme/useThemePack.js';
+import type { ThemeTraditionalNavigationPreset } from './theme/types.js';
+import type { DynamicTabConfig, TelegramRailToolEntry } from './shell/types.js';
+import { registerLuminaPlugins } from './bootstrap/registerPlugins.js';
+import { HostDetector } from './api/core/host-drivers/HostDetector.js';
 
 import AppRootContainer from './shell/AppRootContainer.vue';
 import LuminaShellRoot from './shell/LuminaShellRoot.vue';
+import SplashPage from './components/SplashPage.vue';
 
 type LayoutMode = 'traditional' | 'freeform';
 
@@ -166,8 +122,10 @@ const shellRootRef = ref<InstanceType<typeof LuminaShellRoot> | null>(null);
 
 const { initSettings, saveStatus, activeSettings, updateSetting } = useSettings();
 
-const isExpanded = ref(false);
+const isStandalone = computed(() => HostDetector.isStandalone);
+const isExpanded = ref(isStandalone.value);
 const isApiReady = ref(false);
+const showSplash = ref(true);
 const initStatusText = ref('等待系统启动...');
 const settingsRevision = ref(0);
 const panelBodyRef = ref<HTMLElement | null>(null);
@@ -180,8 +138,19 @@ const workspaceNavigationVisibleState = ref(false);
 
 const activeMainTab = ref(lwStorage.get('luminaWeave.activeMainTab', 'lumina-chat', 'Global'));
 const dynamicTabs = ref<DynamicTabConfig[]>([]);
+let initialRightPanel = String(lwStorage.get('luminaWeave.activeRightPanel', 'lumina-settings', 'Global'));
+// 兼容旧版本：lumina-nexus 已经被移出侧边栏插件并独立，如果缓存中仍是它，重置为设置面板
+/*if (initialRightPanel === 'lumina-nexus') {
+  initialRightPanel = 'lumina-settings';
+  lwStorage.set('luminaWeave.activeRightPanel', 'lumina-settings', 'Global');
+}
+
+const activeRightPanel = ref(initialRightPanel);
+const lastKnownRightPanel = ref(initialRightPanel !== 'none' ? initialRightPanel : 'lumina-settings');
+*/
 const activeRightPanel = ref(lwStorage.get('luminaWeave.activeRightPanel', 'lumina-settings', 'Global'));
 const lastKnownRightPanel = ref(lwStorage.get('luminaWeave.activeRightPanel', 'lumina-settings', 'Global'));
+
 const showWidgetDropdown = ref(false);
 const showNexus = ref(lwStorage.get('luminaWeave.showNexus', true, 'Global'));
 const telegramSelectedCharacterKey = ref<string | null>(null);
@@ -620,9 +589,17 @@ const {
   visibleRightPanel,
   visibleWidgetWidth,
   visibleShowNexus,
+  telegramConversationListMode,
+  telegramDesktopLeftRoute,
+  telegramMobileActiveTab,
+  telegramMobileCurrentRoute,
   openProfilePanel: openTelegramProfilePanel,
   openCharacters: openTelegramCharacters,
-  selectBottomNav: handleTelegramBottomNavSelect
+  selectBottomNav: handleTelegramBottomNavSelect,
+  setTelegramConversationListMode,
+  setTelegramDesktopLeftRoute,
+  pushTelegramMobileRoute,
+  popTelegramMobileRoute
 } = useTelegramShell({
   activeDesktopModeId,
   layoutMode,
@@ -632,13 +609,7 @@ const {
   widgetWidth,
   showNexus,
   activeRightPanel,
-  characterChannelState,
   showCharacterRail: showDiscordMobileCharacterRail,
-  handleOpenTab,
-  switchRightPanel,
-  createMobileChatSession: handleCreateDiscordMobileChatSession,
-  openMobileChatSession: handleOpenDiscordMobileChatSession,
-  openSettingsPanel,
   switchMainView: handleSwitchMainView
 });
 
@@ -720,6 +691,11 @@ const toggleExpand = () => {
     return;
   }
 
+  // 独立模式下强制保持展开
+  if (isStandalone.value) {
+    isExpanded.value = true;
+  }
+
   setTimeout(() => {
     lwApi.emit('SCROLL_TO_BOTTOM', { force: true });
   }, 400);
@@ -743,7 +719,7 @@ useShellBootstrap({
   setSidebarMode,
   onWorkspaceKeydown: handleWorkspaceKeydown,
   onThemeChange: handleThemeChange,
-  onReady: () => {},
+  onReady: () => { },
   onShowConflictPanel: () => shellRootRef.value?.openConflictViewer(),
   onShowSyncReportPanel: () => shellRootRef.value?.openSyncReportViewer(),
   onOpenTelegramProfile: openTelegramProfilePanel,

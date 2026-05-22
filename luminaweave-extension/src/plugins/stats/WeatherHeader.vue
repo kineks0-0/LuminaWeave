@@ -13,8 +13,8 @@
 
 <style scoped>
 .weather-chip {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--lw-type-body-medium-size);
+  font-weight: var(--lw-type-label-medium-weight);
   color: #475569;
   display: flex;
   align-items: center;

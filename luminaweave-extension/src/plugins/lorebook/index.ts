@@ -1,6 +1,6 @@
 import { defineAsyncComponent } from 'vue';
-import { LuminaPlugin } from '../../types/plugin';
-import type { PluginManifestV2 } from '../../platform/plugin/types';
+import { LuminaPlugin } from '../../types/plugin.js';
+import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 
 const LorebookRoot = defineAsyncComponent(() => import('./LorebookRoot.vue'));
 const LorebookWorkspace = defineAsyncComponent(() => import('./components/LorebookWorkspace.vue'));

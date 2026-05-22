@@ -1,7 +1,7 @@
 import { defineAsyncComponent } from 'vue';
-import { LuminaPlugin } from '../../types/plugin';
-import { getDesktopModeOptions } from '../../theme/themeRegistry';
-import type { PluginManifestV2 } from '../../platform/plugin/types';
+import { LuminaPlugin } from '../../types/plugin.js';
+import { getDesktopModeOptions } from '../../theme/themeRegistry.js';
+import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 
 const SettingsRoot = defineAsyncComponent(() => import('./SettingsRoot.vue'));
 const SettingControl = defineAsyncComponent(() => import('./SettingControl.vue'));

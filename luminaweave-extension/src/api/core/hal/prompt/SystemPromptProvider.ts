@@ -145,7 +145,9 @@ export class SystemPromptProvider {
                 const syntaxStyle = this.getLuminaViewSyntaxStyle();
                 let output = '# [协议] Forge <V> DSL 结构化收集规范\n\n';
                 output += '## 0. Forge 协议分层\n';
-                output += '- XML 操作层只允许：`<thinking>`、`<forge_skill>`、`<draft_plan>`、`<entry_update>`、`<forge_auto_list>`、`<forge_form_result>`、`<V>`。\n';
+                output += '- Forge 主路径使用原生 tool calling：`capabilitySearch`、`capabilityLoad`、`skillList`、`skillLoad`、`readFile`、`bash`、`writeFile`、`editFile`、`stageEntry`。\n';
+                output += '- XML 只保留 `<thinking>` 与 `<V>` 容器；不要再用旧 Forge action XML 标签模拟工具调用。\n';
+                output += '- 写入必须进入 Review Gate；`writeFile`、`editFile`、`stageEntry` 只生成可审阅提案，不代表已发布真实 ST 世界书。\n';
                 output += '- `<V>` 内部才是 DSL 组件层；组件必须写成真实 DSL 调用，而不是 XML 标签。\n';
                 output += '- `ForgeFacetChecklist`、`ForgeChoiceGroup`、`ForgeInput`、`ForgeSelect` 等都不是 XML 标签，也不是 `key=value` 函数。\n\n';
 
@@ -170,8 +172,8 @@ export class SystemPromptProvider {
                 output += '- `ForgeMissingFields` 用于明确还缺哪些关键字段。\n';
                 output += '- `ForgeSummaryCard` 用于汇总当前已收集结果，不替代正式条目写回。\n';
                 output += '- 如需引导层推进，可输出 `ForgeLayerNavigator`。\n\n';
-                output += '- 若同时需要 XML 操作标签和组件，先输出自然语言与操作标签，再把组件放在最后的 `<V>...</V>` 中。\n';
-                output += '- 不允许把 `ForgeChoiceGroup`、`ForgeFacetChecklist`、`ForgeInput`、`ForgeSelect` 放进 `<entry_update>` 或 `<draft_plan>` 里。\n\n';
+                output += '- 若同时需要工具调用和组件，先完成必要的 tool calling，再把组件放在最后的 `<V>...</V>` 中。\n';
+                output += '- 不允许把 `ForgeChoiceGroup`、`ForgeFacetChecklist`、`ForgeInput`、`ForgeSelect` 放进工具参数正文里冒充写入内容。\n\n';
 
                 output += '## 4. Forge 推荐示例\n';
                 output += '<V>\n';

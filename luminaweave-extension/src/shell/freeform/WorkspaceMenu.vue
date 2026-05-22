@@ -84,24 +84,29 @@ const emit = defineEmits<{
 }
 
 .lw-workspace-menu-kicker {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
   color: var(--lw-text-muted);
 }
 
 .lw-workspace-menu-copy strong {
   font-family: var(--lw-font-display);
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
   color: var(--lw-text-main);
 }
 
 .lw-workspace-menu-copy span:last-child {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
-  line-height: 1.6;
 }
 
 .lw-workspace-menu-item {
@@ -131,14 +136,18 @@ const emit = defineEmits<{
 }
 
 .lw-workspace-menu-item span {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
 }
 
 .lw-workspace-menu-item small {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
-  line-height: 1.5;
 }
 
 @media (max-width: 768px) {

@@ -31,7 +31,10 @@ defineProps<{
   position: absolute;
   top: -10px;
   left: 6px;
-  font-size: 53px;
+  font-size: var(--lw-type-display-large-size);
+  line-height: var(--lw-type-display-large-line-height);
+  font-weight: var(--lw-type-display-large-weight);
+  letter-spacing: var(--lw-type-display-large-tracking);
   font-family: serif;
   color: var(--lw-primary, #8b5cf6);
   opacity: 0.15;
@@ -40,18 +43,21 @@ defineProps<{
 
 .quote-text {
   color: var(--lw-text-main, #334155);
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
 }
 
 .quote-attribution {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-light, #94a3b8);
-  font-weight: 600;
   text-align: right;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
 }
 
 /* 暗色模式适配 */

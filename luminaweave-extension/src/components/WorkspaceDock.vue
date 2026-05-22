@@ -94,8 +94,10 @@ defineEmits<{
 
 .dock-fallback {
   font-family: var(--lw-font-display);
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
 }
 
 .dock-running-indicator {

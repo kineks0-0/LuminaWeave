@@ -39,8 +39,7 @@ g.window = {
     selected_chat: 'test_chat'
 };
 
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
-import { HttpBridgeAdapter } from './src/api/adapters/HttpBridgeAdapter.js';
+import { HALContext } from './src/api/core/hal/HALContext.js';
 
 // Mock fetch
 g.fetch = vi.fn(() =>
@@ -51,5 +50,74 @@ g.fetch = vi.fn(() =>
   } as Response)
 );
 
-// 初始化 Bridge
-BridgeDispatcher.inject(new HttpBridgeAdapter());
+// 初始化 HAL runtime ports
+HALContext.instance = new HALContext(
+    { resolve: (content: string) => content },
+    { normalize: (id: string) => (id === 'default' || !id ? null : id) },
+    {
+        bindHostEvents: vi.fn(),
+        unbindHostEvents: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
+        emit: vi.fn()
+    },
+    {
+        getItem: vi.fn(),
+        setItem: vi.fn(),
+        removeItem: vi.fn()
+    },
+    {
+        generateStream: vi.fn()
+    },
+    {
+        getCurrentCharacterId: vi.fn(() => 'test_char'),
+        getCurrentChatId: vi.fn(() => 'test_chat'),
+        getActiveLorebookEntries: vi.fn(() => []),
+        getPreset: vi.fn(async () => ({}))
+    },
+    {
+        getItem: vi.fn(),
+        setItem: vi.fn(),
+        getJson: vi.fn(),
+        setJson: vi.fn()
+    }
+);
+
+HALContext.instance.runtime = {
+    mode: 'standalone-local',
+    conversation: {
+        listConversations: vi.fn(),
+        getConversation: vi.fn(),
+        saveConversation: vi.fn(),
+        mutateConversation: vi.fn(),
+        deleteConversation: vi.fn(),
+        getTransactions: vi.fn(),
+        rollbackTransaction: vi.fn()
+    },
+    generation: {
+        generateStream: vi.fn(),
+        attachStream: vi.fn(),
+        stop: vi.fn(),
+        fetchModels: vi.fn(),
+        getStatus: vi.fn()
+    },
+    settings: {
+        getSettings: vi.fn(),
+        saveSettings: vi.fn()
+    },
+    presets: {
+        listPresets: vi.fn(),
+        importPreset: vi.fn(),
+        exportPreset: vi.fn(),
+        restoreDefaults: vi.fn()
+    },
+    extensionStore: {
+        getJson: vi.fn(),
+        setJson: vi.fn(),
+        updateJson: vi.fn(),
+        deleteJson: vi.fn(),
+        listKeys: vi.fn(),
+        setBlob: vi.fn(),
+        getBlob: vi.fn()
+    }
+};

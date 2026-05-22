@@ -1,6 +1,6 @@
 import { markRaw } from 'vue';
-import { surfaceRegistry } from '../surface/SurfaceRegistry';
-import type { DesktopModeManifestV2 } from './types';
+import { surfaceRegistry } from '../surface/SurfaceRegistry.js';
+import type { DesktopModeManifestV2 } from './types.js';
 
 export class DesktopModeRuntimeRegistry {
     private readonly modes = new Map<string, DesktopModeManifestV2>();

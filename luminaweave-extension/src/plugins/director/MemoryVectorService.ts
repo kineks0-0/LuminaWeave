@@ -1,7 +1,7 @@
-import { llmEngine } from '../../api/llmEngine';
-import { useDirectorStore } from './DirectorStore';
-import { lwStorage } from '../../api/storage';
-import { cosineSimilarity } from '../../api/utils/math';
+import { llmEngine } from '../../api/llmEngine.js';
+import { useDirectorStore } from './DirectorStore.js';
+import { lwStorage } from '../../api/storage.js';
+import { cosineSimilarity } from '../../api/utils/math.js';
 
 /**
  * 记忆片段结构 (Vectorized Fragment)

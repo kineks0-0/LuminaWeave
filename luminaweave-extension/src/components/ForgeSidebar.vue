@@ -90,12 +90,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
-import { useCardMakerStore } from '../plugins/forge/CardMakerStore';
-import { useSessionIndexStore } from '../stores/useSessionIndexStore';
-import ForgeAuxPanelView from '../plugins/forge/ForgeAuxPanelView.vue';
-import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../plugins/forge/forgeAuxPanels';
-import type { ForgeAuxPanelKind } from '../types/ForgeWorkflowTypes';
+import { computed, defineAsyncComponent, onMounted } from 'vue';
+import { useCardMakerStore } from '../plugins/forge/CardMakerStore.js';
+import { useSessionIndexStore } from '../stores/useSessionIndexStore.js';
+import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../plugins/forge/forgeAuxPanels.js';
+import type { ForgeAuxPanelKind } from '../types/ForgeWorkflowTypes.js';
+
+const ForgeAuxPanelView = defineAsyncComponent(() => import('../plugins/forge/app/ForgeAuxPanelView.vue'));
 
 defineProps<{
   isCollapsed?: boolean;
@@ -173,9 +174,10 @@ onMounted(async () => {
 }
 
 .forge-sidebar__section-label {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
   color: var(--lw-text-muted);
 }
@@ -226,8 +228,10 @@ onMounted(async () => {
   border: 1px solid transparent;
   background: transparent;
   color: var(--lw-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   cursor: pointer;
   text-align: left;
   transition: var(--lw-transition);
@@ -252,14 +256,20 @@ onMounted(async () => {
 }
 
 .forge-sidebar__session-meta {
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
   flex-shrink: 0;
 }
 
 .forge-sidebar__empty {
   padding: 12px 10px;
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
   text-align: center;
 }
@@ -288,8 +298,10 @@ onMounted(async () => {
   border: 1px solid var(--lw-border-base);
   background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
   color: var(--lw-text-secondary);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   cursor: pointer;
   transition: var(--lw-transition);
 }
@@ -306,7 +318,10 @@ onMounted(async () => {
 }
 
 .forge-sidebar__aux-icon {
-  font-size: 12px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
 }
 
 .forge-sidebar__aux-body {

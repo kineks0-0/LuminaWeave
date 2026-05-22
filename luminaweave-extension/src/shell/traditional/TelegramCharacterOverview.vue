@@ -102,7 +102,7 @@ import type {
   CharacterChannelSessionItem,
   CharacterChannelState,
   CreateChatConversationInput
-} from '../../types/ConversationContextTypes';
+} from '../../types/ConversationContextTypes.js';
 
 const props = defineProps<{
   state: CharacterChannelState;
@@ -219,8 +219,10 @@ const formatSessionTime = (timestamp: number) => {
   justify-content: center;
   overflow: hidden;
   color: #102338;
-  font-size: 38px;
-  font-weight: 900;
+  font-size: var(--lw-type-headline-large-size);
+  line-height: var(--lw-type-headline-large-line-height);
+  font-weight: var(--lw-type-headline-large-weight);
+  letter-spacing: var(--lw-type-headline-large-tracking);
   background: #82c7f5;
   border: 3px solid rgba(255, 255, 255, 0.86);
 }
@@ -240,9 +242,10 @@ const formatSessionTime = (timestamp: number) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 30px;
-  line-height: 1.12;
-  font-weight: 900;
+  font-size: var(--lw-type-headline-small-size);
+  line-height: var(--lw-type-headline-small-line-height);
+  font-weight: var(--lw-type-headline-small-weight);
+  letter-spacing: var(--lw-type-headline-small-tracking);
 }
 
 .lw-telegram-character-overview__identity h2 span {
@@ -252,8 +255,10 @@ const formatSessionTime = (timestamp: number) => {
 .lw-telegram-character-overview__identity p {
   margin: 6px 0 0;
   color: var(--lw-primary);
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
 }
 
 .lw-telegram-character-overview__new {
@@ -267,8 +272,10 @@ const formatSessionTime = (timestamp: number) => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 14px;
-  font-weight: 850;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   cursor: pointer;
 }
 
@@ -289,8 +296,10 @@ const formatSessionTime = (timestamp: number) => {
   border: none;
   background: transparent;
   color: var(--lw-text-secondary);
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   cursor: pointer;
 }
 
@@ -321,9 +330,10 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-telegram-character-overview__section h3 {
   margin: 0;
-  font-size: 18px;
-  line-height: 1.2;
-  font-weight: 900;
+  font-size: var(--lw-type-title-large-size);
+  line-height: var(--lw-type-title-large-line-height);
+  font-weight: var(--lw-type-title-large-weight);
+  letter-spacing: var(--lw-type-title-large-tracking);
 }
 
 .lw-telegram-character-overview__section header button {
@@ -333,8 +343,10 @@ const formatSessionTime = (timestamp: number) => {
   border-radius: 999px;
   background: transparent;
   color: var(--lw-text-main);
-  font-size: 28px;
-  line-height: 1;
+  font-size: var(--lw-type-headline-large-size);
+  line-height: var(--lw-type-headline-large-line-height);
+  font-weight: var(--lw-type-headline-large-weight);
+  letter-spacing: var(--lw-type-headline-large-tracking);
   cursor: pointer;
 }
 
@@ -351,7 +363,7 @@ const formatSessionTime = (timestamp: number) => {
 .lw-telegram-character-overview__tools button {
   width: 100%;
   min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 74%, transparent);
+  border: 0;
   border-radius: 16px;
   background: color-mix(in srgb, var(--lw-surface-container-highest) 76%, transparent);
   color: var(--lw-text-main);
@@ -378,21 +390,29 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .lw-telegram-character-overview__recent strong {
-  font-size: 14px;
-  font-weight: 900;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .lw-telegram-character-overview__recent small {
   grid-column: 1;
   color: var(--lw-text-secondary);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-telegram-character-overview__recent time {
   grid-row: 1 / span 2;
   grid-column: 2;
   color: var(--lw-text-muted);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-telegram-character-overview__history button,
@@ -408,7 +428,10 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-telegram-character-overview__history span {
   color: var(--lw-text-secondary);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-telegram-character-overview__tools button {
@@ -417,12 +440,18 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-telegram-character-overview__tools button > span {
   color: var(--lw-primary);
-  font-size: 16px;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
 }
 
 .lw-telegram-character-overview__tools small {
   color: var(--lw-text-muted);
-  font-size: 18px;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
 }
 
 .lw-telegram-character-overview__empty {
@@ -431,7 +460,10 @@ const formatSessionTime = (timestamp: number) => {
   border-radius: 16px;
   background: color-mix(in srgb, var(--lw-surface-container-highest) 58%, transparent);
   color: var(--lw-text-secondary);
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
 }
 
 @media (max-width: 760px) {
@@ -449,11 +481,12 @@ const formatSessionTime = (timestamp: number) => {
   .lw-telegram-character-overview__avatar {
     width: 78px;
     height: 78px;
-    font-size: 30px;
+    font-size: var(--lw-type-headline-small-size);
   }
 
   .lw-telegram-character-overview__identity h2 {
-    font-size: 28px;
+    font-size: var(--lw-type-title-large-size);
+    line-height: var(--lw-type-title-large-line-height);
   }
 
   .lw-telegram-character-overview__new {

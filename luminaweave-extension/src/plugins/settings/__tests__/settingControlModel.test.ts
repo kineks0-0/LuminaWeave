@@ -13,7 +13,7 @@ import {
     resolveSettingOptions,
     shouldUseVerticalSettingLayout,
     type SettingControlConfig
-} from '../settingControlModel';
+} from '../settingControlModel.js';
 
 const createConfig = (overrides: Partial<SettingControlConfig> = {}): SettingControlConfig => ({
     label: '测试设置',
@@ -54,7 +54,7 @@ describe('settingControlModel', () => {
         expect(shouldUseVerticalSettingLayout(createConfig({ type: 'slider' }), 'volume')).toBe(true);
         expect(shouldUseVerticalSettingLayout(createConfig({ type: 'stepper' }), 'count')).toBe(false);
         expect(isRowToggleSetting(createConfig({ type: 'boolean' }), 'discord-channel-mark')).toBe(true);
-        expect(getSettingControlClass(createConfig({ type: 'theme' }), true)).toBe('theme-options full-width');
+        expect(getSettingControlClass(createConfig({ type: 'theme' }), true)).toBe('theme-options tw:flex-wrap tw:gap-2.5 full-width');
         expect(getSettingControlBodyClass(createConfig({ type: 'options' }))).toBe('options-control');
     });
 

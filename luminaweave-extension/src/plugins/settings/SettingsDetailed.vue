@@ -1,9 +1,19 @@
 <template>
-  <div class="settings-detailed" :data-skin-variant="detailVariant || 'default'" :style="detailSkinStyle">
-    <div class="preview-container" v-if="plugin?.settingsPreviewComponent">
+  <div
+    class="settings-detailed tw:flex tw:flex-col tw:gap-[var(--lw-item-gap)] tw:bg-transparent tw:p-[var(--lw-settings-detail-outer-padding,var(--lw-panel-padding))]"
+    :data-skin-variant="detailVariant || 'default'"
+    :style="detailSkinStyle"
+  >
+    <div
+      v-if="plugin?.settingsPreviewComponent"
+      class="preview-container tw:sticky tw:top-0 tw:z-20 tw:mb-2 tw:flex tw:flex-col tw:border-b tw:border-lw-border tw:bg-lw-surface tw:px-0 tw:py-2.5"
+    >
       <component :is="plugin.settingsPreviewComponent" :pluginId="pluginId" />
     </div>
-    <div class="block-content" v-if="manifest && pluginId">
+    <div
+      v-if="manifest && pluginId"
+      class="block-content tw:flex tw:flex-col tw:rounded-[var(--lw-settings-detail-radius,24px)] tw:border tw:border-lw-border tw:bg-lw-elevated tw:p-[var(--lw-settings-detail-content-padding,24px)] tw:shadow-lw-card"
+    >
       <SurfaceOutlet contract-id="settings.control" v-for="key in Object.keys(manifest)" :key="key" :pluginId="pluginId" :settingKey="key"
         :config="manifest[key]" />
     </div>
@@ -14,8 +24,8 @@
 import { computed, onMounted } from 'vue';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 import { useSettings } from './useSettings.js';
-import { getSettingsEntry } from './settingsRegistry';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { getSettingsEntry } from './settingsRegistry.js';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 
 const props = defineProps({
   pluginId: String
@@ -40,36 +50,6 @@ const manifest = computed(() => {
 </script>
 
 <style scoped>
-.settings-detailed {
-  padding: var(--lw-settings-detail-outer-padding, var(--lw-panel-padding));
-  background: transparent;
-  display: flex;
-  flex-direction: column;
-  gap: var(--lw-item-gap);
-}
-
-.preview-container {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 8px;
-  position: sticky;
-  /* 对齐 top: -24px;padding */
-  z-index: 100;
-  background: var(--lw-bg-app);
-  padding: 10px 0;
-  border-bottom: 1px solid var(--lw-border-base);
-}
-
-.block-content {
-  display: flex;
-  flex-direction: column;
-  background: var(--lw-settings-detail-bg, color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent));
-  border: 1px solid var(--lw-settings-detail-border, var(--lw-border-base));
-  border-radius: var(--lw-settings-detail-radius, 24px);
-  padding: var(--lw-settings-detail-content-padding, 24px);
-  box-shadow: var(--lw-settings-detail-shadow, var(--lw-shadow-card));
-}
-
 .settings-detailed[data-skin-variant='telegram'] .preview-container,
 .settings-detailed[data-skin-variant='telegram'] .block-content {
   border-color: var(--lw-settings-detail-border, var(--lw-border-subtle));

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { IncrementalMutationEngine } from '../MutationEngine';
+import { IncrementalMutationEngine } from '../MutationEngine.js';
 
 describe('MutationEngine Robustness (Sandbox)', () => {
     let engine: IncrementalMutationEngine;

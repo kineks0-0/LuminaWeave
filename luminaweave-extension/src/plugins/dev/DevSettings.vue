@@ -8,6 +8,57 @@
       <div class="header-badge">v5.3-dev</div>
     </div>
 
+    <div class="dev-section">
+      <div class="section-header">
+        <div class="section-title">资源 VFS 终端</div>
+        <div class="header-actions">
+          <button class="icon-btn" :disabled="vfsHistory.length === 0" title="清空输出" @click="clearVfsHistory">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="dev-card glass-effect vfs-card">
+        <form class="vfs-command-row" @submit.prevent="executeVfsCommand()">
+          <span class="vfs-prompt">$</span>
+          <input
+            v-model="vfsCommandLine"
+            class="lw-input transparent vfs-input"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="cat /sources/local/worldbooks/example | grep key"
+          />
+          <button class="lw-btn primary sm" type="submit" :disabled="isRunningVfsCommand || !vfsCommandLine.trim()">
+            {{ isRunningVfsCommand ? '运行中' : '运行' }}
+          </button>
+        </form>
+
+        <div class="vfs-quick-row">
+          <button
+            v-for="command in vfsQuickCommands"
+            :key="command"
+            class="helper-btn sm"
+            type="button"
+            @click="runVfsQuickCommand(command)"
+          >
+            {{ command }}
+          </button>
+        </div>
+
+        <div class="vfs-output custom-scrollbar">
+          <div v-if="vfsHistory.length === 0" class="empty-mini">暂无命令输出</div>
+          <div
+            v-for="record in vfsHistory"
+            :key="record.id"
+            :class="['vfs-record', { error: !record.ok }]"
+          >
+            <div class="vfs-record-command">$ {{ record.command }}</div>
+            <pre class="vfs-record-output">{{ record.output }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 消息节点选择器 (优化版) -->
     <div class="dev-section">
       <div class="section-header">
@@ -209,6 +260,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import { luminaWeaveApi } from '../../api/index.js';
+import { vfsCommandService } from '../../api/core/hal/shell/index.js';
 
 const debugChat = luminaWeaveApi.debugChat;
 
@@ -219,6 +271,17 @@ const isRebuilding = ref(false);
 
 const nodeSearchQuery = ref('');
 const parentSearchQuery = ref('');
+const vfsCommandLine = ref('ls /');
+const vfsHistory = ref([]);
+const isRunningVfsCommand = ref(false);
+const vfsQuickCommands = [
+  'ls /',
+  'ls /sources',
+  'ls /library',
+  'find /library',
+  'grep world /library/worldbooks',
+  'cat /sources/local/worldbooks/example | grep key'
+];
 
 const tabs = [
   { id: 'mesRaw', label: '原始正文 (mesRaw)' },
@@ -442,6 +505,41 @@ const openSyncReport = () => {
   luminaWeaveApi.services.desktopSurface.openPanel('sync_report');
 };
 
+const executeVfsCommand = async (line = vfsCommandLine.value) => {
+  const command = line.trim();
+  if (!command || isRunningVfsCommand.value) return;
+
+  isRunningVfsCommand.value = true;
+  try {
+    const result = await vfsCommandService.executeLine(command);
+    vfsHistory.value.unshift({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      command,
+      ok: result.ok,
+      output: result.ok ? (result.text || '(empty)') : (result.error || 'Command failed')
+    });
+  } catch (error) {
+    vfsHistory.value.unshift({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      command,
+      ok: false,
+      output: error instanceof Error ? error.message : String(error)
+    });
+  } finally {
+    vfsHistory.value = vfsHistory.value.slice(0, 24);
+    isRunningVfsCommand.value = false;
+  }
+};
+
+const runVfsQuickCommand = (command) => {
+  vfsCommandLine.value = command;
+  executeVfsCommand(command);
+};
+
+const clearVfsHistory = () => {
+  vfsHistory.value = [];
+};
+
 const truncate = (str, len) => {
   if (!str) return '空';
   return str.length > len ? str.slice(0, len) + '...' : str;
@@ -468,25 +566,25 @@ const truncate = (str, len) => {
 
 .dev-header h4 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-large-size);
+  font-weight: var(--lw-type-title-small-weight);
   background: linear-gradient(135deg, var(--lw-primary) 0%, #a78bfa 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .header-badge {
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
   padding: 2px 6px;
   background: rgba(var(--lw-primary-rgb, 99, 102, 241), 0.1);
   color: var(--lw-primary);
   border-radius: 4px;
-  font-weight: 600;
+  font-weight: var(--lw-type-label-medium-weight);
 }
 
 .dev-desc {
   margin: 4px 0 0 0;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   color: var(--lw-text-dim);
 }
 
@@ -503,8 +601,8 @@ const truncate = (str, len) => {
 }
 
 .section-title {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-dim);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -545,7 +643,7 @@ const truncate = (str, len) => {
   border: none !important;
   outline: none !important;
   color: var(--lw-text-main);
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
   width: 100%;
 }
 
@@ -602,8 +700,8 @@ const truncate = (str, len) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   flex-shrink: 0;
 }
 
@@ -616,7 +714,7 @@ const truncate = (str, len) => {
 }
 
 .node-text {
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -631,15 +729,15 @@ const truncate = (str, len) => {
 }
 
 .node-id {
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
   font-family: var(--lw-font-mono);
   color: var(--lw-text-dim);
 }
 
 .active-label {
-  font-size: 9px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-primary);
-  font-weight: 700;
+  font-weight: var(--lw-type-title-small-weight);
 }
 
 .snapshot-indicator {
@@ -659,7 +757,7 @@ const truncate = (str, len) => {
 .tab-btn {
   flex: 1;
   padding: 6px 4px;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   border-radius: 6px;
   border: none;
   background: transparent;
@@ -682,7 +780,7 @@ const truncate = (str, len) => {
   border: 1px solid var(--lw-border);
   border-radius: 8px;
   padding: 12px;
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
   line-height: 1.6;
   font-family: inherit;
   resize: vertical;
@@ -691,7 +789,7 @@ const truncate = (str, len) => {
 .json-editor {
   min-height: 240px;
   font-family: var(--lw-font-mono, monospace);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
 }
 
 .json-editor-container {
@@ -713,14 +811,14 @@ const truncate = (str, len) => {
 }
 
 .helper-label {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-dim);
   margin-right: 4px;
 }
 
 .helper-btn {
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
   border-radius: 4px;
   border: 1px solid var(--lw-border);
   background: white;
@@ -734,6 +832,87 @@ const truncate = (str, len) => {
 }
 
 .helper-btn.sm { padding: 2px 6px; }
+
+.vfs-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vfs-command-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid var(--lw-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.vfs-prompt {
+  font-family: var(--lw-font-mono);
+  font-size: var(--lw-type-body-small-size);
+  color: var(--lw-primary);
+  flex-shrink: 0;
+}
+
+.vfs-input {
+  font-family: var(--lw-font-mono);
+  font-size: var(--lw-type-body-small-size);
+}
+
+.vfs-quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vfs-output {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.vfs-record {
+  border: 1px solid var(--lw-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+  overflow: hidden;
+}
+
+.vfs-record.error {
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.vfs-record-command {
+  font-family: var(--lw-font-mono);
+  font-size: var(--lw-type-label-small-size);
+  color: var(--lw-text-dim);
+  background: rgba(15, 23, 42, 0.04);
+  border-bottom: 1px solid var(--lw-border);
+  padding: 6px 8px;
+}
+
+.vfs-record.error .vfs-record-command {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.vfs-record-output {
+  margin: 0;
+  padding: 8px;
+  font-family: var(--lw-font-mono);
+  font-size: var(--lw-type-label-small-size);
+  line-height: 1.5;
+  color: var(--lw-text-main);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 220px;
+  overflow: auto;
+}
 
 /* Parent Selector */
 .parent-list {
@@ -763,8 +942,8 @@ const truncate = (str, len) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   flex-shrink: 0;
   color: white;
 }
@@ -774,7 +953,7 @@ const truncate = (str, len) => {
 .role-tag-sm.system { background: #64748b; }
 
 .parent-text {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -818,13 +997,13 @@ const truncate = (str, len) => {
 }
 
 .stat-val {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-large-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-primary);
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-dim);
 }
 
@@ -858,7 +1037,7 @@ const truncate = (str, len) => {
 }
 
 .snap-text {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-main);
 }
 
@@ -869,7 +1048,7 @@ const truncate = (str, len) => {
 }
 
 .snap-tag {
-  font-size: 9px;
+  font-size: var(--lw-type-label-small-size);
   padding: 1px 4px;
   border-radius: 3px;
   font-family: var(--lw-font-mono);
@@ -885,8 +1064,8 @@ const truncate = (str, len) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: white;
 }
 
@@ -894,7 +1073,7 @@ const truncate = (str, len) => {
 .role-tag-xs.assistant { background: #10b981; }
 
 .empty-mini {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-dim);
   text-align: center;
   padding: 12px;
@@ -910,12 +1089,12 @@ const truncate = (str, len) => {
 
 .maintenance-item h5 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--lw-type-title-small-size);
 }
 
 .maintenance-item p {
   margin: 2px 0 0 0;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-dim);
 }
 
@@ -943,7 +1122,7 @@ const truncate = (str, len) => {
 
 .lw-btn {
   border-radius: 8px;
-  font-weight: 600;
+  font-weight: var(--lw-type-label-medium-weight);
   cursor: pointer;
   transition: all 0.2s;
   border: 1px solid transparent;
@@ -961,7 +1140,7 @@ const truncate = (str, len) => {
   filter: brightness(1.1);
 }
 
-.sm { padding: 4px 10px; font-size: 11px; }
+.sm { padding: 4px 10px; font-size: var(--lw-type-label-small-size); }
 
 /* Scrollbar */
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -975,6 +1154,6 @@ const truncate = (str, len) => {
   text-align: center;
   padding: 20px;
   color: var(--lw-text-dim);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
 }
 </style>

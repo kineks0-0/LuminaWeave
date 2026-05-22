@@ -1,14 +1,17 @@
-import type { IStreamingCallbacks, IStreamingHandle } from '@shared/api/IBridge.js';
+import type {
+    RuntimeStreamingCallbacks,
+    RuntimeStreamingHandle
+} from '@shared/api/HALRuntimePorts.js';
 import type { PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
 
 type RuntimeLocalNexusHandler = new (
     payload: any,
     persistenceDelegate: PersistenceDelegate
-) => IStreamingHandle;
+) => RuntimeStreamingHandle;
 
-export class LocalNexusHandler implements IStreamingHandle {
-    private runtime: IStreamingHandle | null = null;
-    private readonly callbacks: IStreamingCallbacks = {};
+export class LocalNexusHandler implements RuntimeStreamingHandle {
+    private runtime: RuntimeStreamingHandle | null = null;
+    private readonly callbacks: RuntimeStreamingCallbacks = {};
     private pendingAbort = false;
     private loadFailed = false;
 

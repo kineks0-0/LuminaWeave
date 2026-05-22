@@ -1,16 +1,17 @@
-import { computed, onUnmounted, ref, watch, type Component, type ComputedRef, type Ref } from 'vue';
-import { lwStorage } from '../api/storage';
-import ForgeAuxPanelView from '../plugins/forge/ForgeAuxPanelView.vue';
+import { computed, defineAsyncComponent, onUnmounted, ref, watch, type Component, type ComputedRef, type Ref } from 'vue';
+import { lwStorage } from '../api/storage.js';
 import SurfaceOutlet from '../platform/surface/SurfaceOutlet.vue';
 import DynamicTabOutlet from '../shell/DynamicTabOutlet.vue';
-import { getPrimarySurfaceContractIdForPlugin } from '../platform/plugin/officialPluginSurfaces';
-import { useCardMakerStore } from '../plugins/forge/CardMakerStore';
-import { useSessionIndexStore } from '../stores/useSessionIndexStore';
-import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../plugins/forge/forgeAuxPanels';
-import { currentDetailedView } from '../plugins/settings/useSettings';
-import type { LuminaPlugin } from '../types/plugin';
-import type { DynamicTabConfig } from '../shell/types';
-import { getLegacyPanelDefinition } from '../shell/legacyPanelRegistry';
+import { getPrimarySurfaceContractIdForPlugin } from '../platform/plugin/officialPluginSurfaces.js';
+import { useCardMakerStore } from '../plugins/forge/CardMakerStore.js';
+import { useSessionIndexStore } from '../stores/useSessionIndexStore.js';
+import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../plugins/forge/forgeAuxPanels.js';
+import { currentDetailedView } from '../plugins/settings/useSettings.js';
+import type { LuminaPlugin } from '../types/plugin.js';
+import type { DynamicTabConfig } from '../shell/types.js';
+import { getLegacyPanelDefinition } from '../shell/legacyPanelRegistry.js';
+
+const ForgeAuxPanelView = defineAsyncComponent(() => import('../plugins/forge/app/ForgeAuxPanelView.vue'));
 
 type WorkspaceAppKind = 'launcher' | 'main' | 'widget' | 'panel';
 

@@ -100,7 +100,8 @@
 
 <script setup lang="ts">
 import { computed, ref, inject, onMounted, onUnmounted, watch } from 'vue';
-import { type TimelineViewNode } from './useTimelineGraphViewModel';
+import { LuminaWeaveAPI } from '../../api/index.js';
+import { type TimelineViewNode } from './useTimelineGraphViewModel.js';
 
 const NODE_PROPERTIES_CHANGE_EVENT = 'node:properties-change';
 
@@ -120,7 +121,7 @@ const props = defineProps<{
   }
 }>();
 
-const lwApi = (window as any).LuminaWeave;
+const lwApi = inject<LuminaWeaveAPI>('lwApi');
 
 // 注入 LogicFlow 提供的获取方法
 const getNode = inject<() => any>('getNode');

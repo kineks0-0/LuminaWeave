@@ -182,11 +182,11 @@
 
 <script setup lang="ts">
 import { ref, computed, inject, watch, type CSSProperties } from 'vue';
-import { useDirectorStore } from '../DirectorStore';
-import { useTier1Store } from '../Tier1Store';
-import { lwStorage } from '../../../api/storage';
+import { useDirectorStore } from '../DirectorStore.js';
+import { useTier1Store } from '../Tier1Store.js';
+import { lwStorage } from '../../../api/storage.js';
 import { LuminaWeaveAPI } from '../../../api';
-import { useComponentSkin } from '../../../theme/useComponentSkin';
+import { useComponentSkin } from '../../../theme/useComponentSkin.js';
 
 const props = withDefaults(defineProps<{
   mode?: 'large' | 'small';
@@ -301,7 +301,10 @@ const saveTable = (tableId: string) => {
 
 .action-btn {
   padding: 6px 12px;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
 }
 
 .action-btn.primary {
@@ -368,11 +371,12 @@ const saveTable = (tableId: string) => {
 
 .section-main-title {
   margin: 0;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
 }
 
 /* 3. Plan Hub */
@@ -391,17 +395,21 @@ const saveTable = (tableId: string) => {
 }
 
 .bubble-label {
-    font-size: 10px;
-    font-weight: 800;
+    font-size: var(--lw-type-label-small-size);
+    line-height: var(--lw-type-label-small-line-height);
+    font-weight: var(--lw-type-label-small-weight);
+    letter-spacing: var(--lw-type-label-small-tracking);
     color: var(--lw-text-muted);
     margin-bottom: 6px;
     text-transform: uppercase;
 }
 
 .bubble-text {
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   color: var(--lw-text-secondary);
-  line-height: 1.6;
   white-space: pre-wrap;
 }
 
@@ -412,8 +420,10 @@ const saveTable = (tableId: string) => {
     border: none;
     outline: none;
     color: var(--lw-text-main);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--lw-type-body-small-size);
+    line-height: var(--lw-type-body-small-line-height);
+    font-weight: var(--lw-type-body-small-weight);
+    letter-spacing: var(--lw-type-body-small-tracking);
     resize: vertical;
     font-family: inherit;
 }
@@ -424,7 +434,10 @@ const saveTable = (tableId: string) => {
 
 .bubble-placeholder {
   color: var(--lw-text-muted);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   padding: 8px 0;
 }
 
@@ -456,16 +469,26 @@ const saveTable = (tableId: string) => {
   gap: 8px;
 }
 
-.table-icon { font-size: 14px; }
+.table-icon {
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
+}
 
 .table-name {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-secondary);
 }
 
 .table-schema-id {
-  font-size: 9px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
   font-family: var(--lw-font-mono);
   background: var(--lw-bg-surface);
@@ -484,7 +507,10 @@ const saveTable = (tableId: string) => {
     border: 1px solid var(--lw-border-base);
     border-radius: 4px;
     color: var(--lw-text-main);
-    font-size: 11px;
+    font-size: var(--lw-type-body-small-size);
+    line-height: var(--lw-type-body-small-line-height);
+    font-weight: var(--lw-type-body-small-weight);
+    letter-spacing: var(--lw-type-body-small-tracking);
     padding: 2px 6px;
     width: 100%;
     outline: none;
@@ -501,7 +527,10 @@ const saveTable = (tableId: string) => {
     border: 1px solid var(--lw-border-base);
     border-radius: 4px;
     color: var(--lw-text-main);
-    font-size: 11px;
+    font-size: var(--lw-type-body-small-size);
+    line-height: var(--lw-type-body-small-line-height);
+    font-weight: var(--lw-type-body-small-weight);
+    letter-spacing: var(--lw-type-body-small-tracking);
     padding: 4px 8px;
     margin-top: 4px;
     outline: none;
@@ -526,7 +555,10 @@ const saveTable = (tableId: string) => {
     background: transparent;
     color: var(--lw-text-muted);
     cursor: pointer;
-    font-size: 14px;
+    font-size: var(--lw-type-label-large-size);
+    line-height: var(--lw-type-label-large-line-height);
+    font-weight: var(--lw-type-label-large-weight);
+    letter-spacing: var(--lw-type-label-large-tracking);
     padding: 0 4px;
 }
 
@@ -548,17 +580,21 @@ const saveTable = (tableId: string) => {
 }
 
 .grid-item label { 
-  font-size: 9px; 
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted); 
-  font-weight: 700; 
+  font-weight: var(--lw-type-label-small-weight);
   text-transform: uppercase; 
   margin-bottom: 2px;
 }
 
 .grid-item span { 
-  font-size: 12px; 
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-main); 
-  font-weight: 600; 
+  font-weight: var(--lw-type-body-small-weight);
 }
 
 .relationships-list { display: flex; flex-direction: column; gap: 8px; }
@@ -573,19 +609,53 @@ const saveTable = (tableId: string) => {
 }
 
 .rel-info { display: flex; justify-content: space-between; align-items: center; }
-.rel-name { font-size: 12px; font-weight: 700; color: var(--lw-text-main); }
-.rel-status { font-size: 10px; color: var(--lw-text-muted); font-weight: 600; }
+.rel-name {
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
+  color: var(--lw-text-main);
+}
+.rel-status {
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
+  color: var(--lw-text-muted);
+}
 
 .rel-affinity { display: flex; align-items: center; gap: 10px; }
 .affinity-track { flex: 1; height: 4px; background: var(--lw-border-base); border-radius: 2px; overflow: hidden; }
 .affinity-fill { height: 100%; background: var(--lw-primary); border-radius: 2px; transition: width 0.5s ease; }
-.affinity-num { font-size: 10px; font-weight: 800; color: var(--lw-primary); min-width: 20px; text-align: right; }
+.affinity-num {
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
+  color: var(--lw-primary);
+  min-width: 20px;
+  text-align: right;
+}
 
-.data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
+}
 .data-table td { padding: 6px 4px; border-bottom: 1px solid var(--lw-border-subtle); }
-.cell-main { font-weight: 600; color: var(--lw-text-secondary); width: 40%; }
-.cell-val { color: var(--lw-primary); font-weight: 800; text-align: center; width: 15%; }
-.cell-dim { color: var(--lw-text-muted); font-size: 10px; width: 45%; }
+.cell-main { font-weight: var(--lw-type-label-medium-weight); color: var(--lw-text-secondary); width: 40%; }
+.cell-val { color: var(--lw-primary); font-weight: var(--lw-type-title-small-weight); text-align: center; width: 15%; }
+.cell-dim {
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
+  width: 45%;
+}
 
 .director-panel[data-skin-variant='telegram'] .plan-bubble,
 .director-panel[data-skin-variant='telegram'] .table-card,
@@ -645,17 +715,36 @@ const saveTable = (tableId: string) => {
   align-items: center;
   padding: 2px 8px;
   border-radius: 6px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
-  letter-spacing: 0.02em;
   background: var(--lw-bg-selection);
   color: var(--lw-primary);
 }
 
-.text-block { font-size: 12px; color: var(--lw-text-secondary); display: flex; flex-direction: column; gap: 6px; }
+.text-block {
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
+  color: var(--lw-text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
-.data-empty { padding: 12px; text-align: center; font-size: 11px; color: var(--lw-text-muted); font-style: italic; }
+.data-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
+  color: var(--lw-text-muted);
+  font-style: italic;
+}
 
 /* 5. Memory Cards */
 .memory-cards { display: flex; flex-direction: column; gap: 16px; }
@@ -668,15 +757,22 @@ const saveTable = (tableId: string) => {
 }
 
 .card-label {
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-primary);
   margin-bottom: 8px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-.card-text { font-size: 12px; line-height: 1.6; color: var(--lw-text-secondary); }
+.card-text {
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
+  color: var(--lw-text-secondary);
+}
 
 .memory-rows { display: flex; flex-direction: column; gap: 12px; }
 
@@ -688,9 +784,26 @@ const saveTable = (tableId: string) => {
 .memory-row:last-child { border-bottom: none; padding-bottom: 0; }
 
 .row-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
-.row-time { font-size: 9px; }
-.row-loc { font-size: 10px; color: var(--lw-text-muted); font-weight: 600; }
-.row-summary { font-size: 12px; color: var(--lw-text-main); font-weight: 500; line-height: 1.5; }
+.row-time {
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
+}
+.row-loc {
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
+  color: var(--lw-text-muted);
+}
+.row-summary {
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
+  color: var(--lw-text-main);
+}
 
 @keyframes blink {
   0% { opacity: 0.3; }

@@ -19,3 +19,6 @@ docs/current/tasks/<task-name>/
 - [General](./tasks/general/)
 - [Desktop Modes](./tasks/desktop-modes/)
 - [Forge](./tasks/forge/)
+- [HAL Architecture Migration](./tasks/hal-architecture-migration/)
+- [Standalone Resource Runtime](./tasks/standalone-resource-runtime/)
+- [Tailwind System Migration](./tasks/tailwind-system-migration/)

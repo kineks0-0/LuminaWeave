@@ -110,9 +110,9 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 import NodePreviewModal from './NodePreviewModal.vue';
-import { useTimelineGraphViewModel } from './useTimelineGraphViewModel';
+import { useTimelineGraphViewModel } from './useTimelineGraphViewModel.js';
 
 const props = defineProps<{
   mode?: 'small' | 'large';
