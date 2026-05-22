@@ -89,4 +89,67 @@ describe('ForgePiSessionManager', () => {
         expect(restored.getSnapshot().contextBundleSummary?.activeSkills).toEqual(['中文技能']);
         expect(restored.getActiveNodeId()).toBe('node_2');
     });
+
+    it('replays only provider-safe reasoning artifacts instead of raw thinking', () => {
+        const manager = createManager();
+        manager.ensureMetadata();
+        manager.append('assistant', 'Assistant', '可见结论', {
+            agentMessage: {
+                role: 'assistant',
+                content: [
+                    { type: 'thinking', thinking: 'provider signed reasoning', thinkingSignature: 'sig-ok' },
+                    { type: 'thinking', thinking: 'raw private chain of thought' },
+                    { type: 'text', text: '可见结论' },
+                    {
+                        type: 'toolCall',
+                        id: 'call_read',
+                        name: 'readFile',
+                        arguments: { path: './AGENTS.md' },
+                        thoughtSignature: 'tool-sig'
+                    }
+                ],
+                api: 'anthropic-messages',
+                provider: 'anthropic',
+                model: 'claude-sonnet-4-5',
+                usage: {
+                    input: 0,
+                    output: 0,
+                    cacheRead: 0,
+                    cacheWrite: 0,
+                    totalTokens: 0,
+                    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+                },
+                stopReason: 'toolUse',
+                timestamp: 1010
+            },
+            text: '可见结论'
+        } as any);
+
+        const sameProviderReplay = manager.getBranchMessages({
+            providerId: 'anthropic',
+            modelId: 'claude-sonnet-4-5'
+        });
+        const crossProviderReplay = manager.getBranchMessages({
+            providerId: 'openai',
+            modelId: 'gpt-5'
+        });
+
+        expect(sameProviderReplay[0]).toMatchObject({
+            role: 'assistant',
+            content: [
+                { type: 'thinking', thinkingSignature: 'sig-ok' },
+                { type: 'text', text: '可见结论' },
+                { type: 'toolCall', id: 'call_read', thoughtSignature: 'tool-sig' }
+            ]
+        });
+        expect(JSON.stringify(sameProviderReplay)).not.toContain('raw private chain of thought');
+        expect(crossProviderReplay[0]).toMatchObject({
+            role: 'assistant',
+            content: [
+                { type: 'text', text: '可见结论' },
+                { type: 'toolCall', id: 'call_read', thoughtSignature: 'tool-sig' }
+            ]
+        });
+        expect(JSON.stringify(crossProviderReplay)).not.toContain('provider signed reasoning');
+    });
 });

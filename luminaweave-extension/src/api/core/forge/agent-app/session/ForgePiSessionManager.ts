@@ -8,6 +8,10 @@ import type {
     ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import {
+    sanitizeForgePiAgentMessageForReplay,
+    type ForgePiReplayTarget
+} from './ForgePiMessageSanitizer.js';
 
 export interface ForgePiSessionMetadata {
     sessionId: string;
@@ -35,6 +39,10 @@ export interface ForgePiSessionManagerDeps {
     now?: () => number;
     createNodeId?: () => string;
     initialState?: ForgePiPersistedSessionState | null;
+}
+
+export interface ForgePiBranchMessageOptions extends ForgePiReplayTarget {
+    nodeId?: string | null;
 }
 
 export class ForgePiSessionManager {
@@ -123,10 +131,14 @@ export class ForgePiSessionManager {
         return this.activeNodeId;
     }
 
-    getBranchMessages(nodeId: string | null = this.activeNodeId): AgentMessage[] {
+    getBranchMessages(input: string | null | ForgePiBranchMessageOptions = this.activeNodeId): AgentMessage[] {
+        const options: ForgePiBranchMessageOptions = typeof input === 'object' && input !== null
+            ? input
+            : { nodeId: input };
+        const nodeId = options.nodeId === undefined ? this.activeNodeId : options.nodeId;
         const branch = this.getBranch(nodeId);
         return branch
-            .map(entry => this.extractAgentMessage(entry.payload))
+            .map(entry => this.extractAgentMessage(entry.payload, options))
             .filter((message): message is AgentMessage => Boolean(message));
     }
 
@@ -236,9 +248,14 @@ export class ForgePiSessionManager {
         return Array.isArray(value.files) && Array.isArray(value.activeSkills) && Array.isArray(value.loadedExtensions);
     }
 
-    private extractAgentMessage(payload: unknown): AgentMessage | null {
+    private extractAgentMessage(payload: unknown, target: ForgePiReplayTarget = {}): AgentMessage | null {
         if (!this.isRecord(payload)) return null;
-        return this.isAgentMessage(payload.agentMessage) ? payload.agentMessage : null;
+        const candidate = this.isAgentMessage(payload.replayAgentMessage)
+            ? payload.replayAgentMessage
+            : this.isAgentMessage(payload.agentMessage)
+                ? payload.agentMessage
+                : null;
+        return candidate ? sanitizeForgePiAgentMessageForReplay(candidate, target) : null;
     }
 
     private isAgentMessage(value: unknown): value is AgentMessage {
