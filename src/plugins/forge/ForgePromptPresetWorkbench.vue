@@ -2,8 +2,8 @@
   <div class="prompt-preset-workbench">
     <div class="workbench-head">
       <div>
-        <div class="workbench-title">Prompt 预设工作台</div>
-        <div class="workbench-subtitle">管理 Forge 主模型、执行模型和测试聊天的预设提示词组合。</div>
+        <div class="workbench-title">Agent 预设工作台</div>
+        <div class="workbench-subtitle">管理 Forge 主模型、执行模型和测试聊天的 Agent 资源包、提示词编排和请求参数。</div>
       </div>
       <div class="workbench-actions">
         <button class="head-btn" type="button" @click="createPresetFromCurrent">新建</button>
@@ -31,18 +31,49 @@
           {{ preset.name }}
         </option>
       </select>
-      <span class="preset-engine">{{ draft.engine === 'st_preset' ? 'ST 预设直通' : '组合预设' }}</span>
-      <span class="preset-state" :class="{ builtIn: draft.builtIn }">{{ draft.builtIn ? '内置预设' : '自定义预设' }}</span>
+      <span class="preset-engine">{{ workbenchOverview.typeLabel }}</span>
+      <span class="preset-state" :class="{ builtIn: draft.builtIn }">{{ workbenchOverview.editLabel }}</span>
       <button v-if="!draft.builtIn" class="danger-btn" type="button" @click="deleteCurrentPreset">删除</button>
     </div>
 
-    <div v-if="draft.builtIn" class="built-in-note">
-      当前内置预设只支持条目启停。本体名称、结构和正文内容保持锁定；如需改写，请先复制为自定义预设。
+    <div class="preset-overview">
+      <div class="overview-copy">
+        <div class="overview-eyebrow">CURRENT PRESET</div>
+        <div class="overview-title">{{ draft.name || '未命名预设' }}</div>
+        <div class="overview-description">
+          <template v-if="hasAgentResourcePreset">
+            资源从项目覆盖、当前预设和内置 fallback 逐级解析；最终请求由右侧编排顺序装配。
+          </template>
+          <template v-else-if="draft.engine === 'st_preset'">
+            当前配置直通 SillyTavern 上下文预设，Forge 不接管条目编排。
+          </template>
+          <template v-else>
+            当前配置是兼容条目预设，用于旧的组合条目链路。
+          </template>
+        </div>
+      </div>
+      <div class="overview-metrics">
+        <div class="overview-metric">
+          <span>资源</span>
+          <strong>{{ workbenchOverview.resourceCount }}</strong>
+        </div>
+        <div class="overview-metric">
+          <span>编排</span>
+          <strong>{{ workbenchOverview.orchestrationCount }}</strong>
+        </div>
+        <div class="overview-metric">
+          <span>技能</span>
+          <strong>{{ workbenchOverview.skillCount }}</strong>
+        </div>
+      </div>
+      <button v-if="draft.builtIn" class="save-btn" type="button" @click="duplicateCurrentPreset">
+        {{ workbenchOverview.primaryActionLabel }}
+      </button>
     </div>
 
     <div class="editor-grid">
       <section class="editor-pane">
-        <div class="section-title">预设基础</div>
+        <div class="section-title">{{ hasAgentResourcePreset ? '资源编辑器' : '预设基础' }}</div>
         <label class="field-label">
           <span>名称</span>
           <input v-model="draft.name" class="field-input" type="text" :disabled="draft.builtIn" />
@@ -90,32 +121,128 @@
           </div>
         </template>
 
-        <div class="generation-settings-block">
-          <div class="section-title">请求参数</div>
-          <div class="generation-settings-grid">
-            <label
-              v-for="field in generationSettingFields"
-              :key="field.key"
-              class="field-label"
+        <div v-if="hasAgentResourcePreset" class="agent-resource-block">
+          <div class="resource-tabs" role="tablist" aria-label="Agent 资源分组">
+            <button
+              v-for="group in resourceGroups"
+              :key="group.id"
+              class="resource-tab"
+              :class="{ active: activeResourceGroup?.id === group.id }"
+              type="button"
+              @click="activeResourceGroupId = group.id"
             >
-              <span>{{ field.label }}</span>
-              <input
-                class="field-input"
-                type="number"
-                :step="field.step"
-                :value="getGenerationSettingInputValue(field.key)"
-                :disabled="draft.builtIn"
-                :placeholder="field.placeholder"
-                @input="updateGenerationSetting(field.key, $event)"
-              />
-            </label>
+              {{ group.label }}
+              <span>{{ group.resources.length }}</span>
+            </button>
           </div>
+
+            <div v-if="activeResourceGroup" class="resource-group-panel">
+              <div class="resource-group-head">
+                <div>
+                  <div class="resource-group-title">{{ activeResourceGroup.label }}</div>
+                  <div class="resource-group-description">{{ activeResourceGroup.description }}</div>
+                </div>
+                <button
+                  v-if="activeResourceGroup.id === 'skills' && resourceEditable"
+                  class="secondary-btn"
+                  type="button"
+                  @click="addSkillResource"
+                >
+                  新增技能
+                </button>
+                <span class="preset-state" :class="{ builtIn: !resourceEditable }">
+                  {{ resourceEditable ? '可编辑' : '只读预览' }}
+                </span>
+              </div>
+
+            <div v-if="activeResourceGroup.resources.length === 0" class="empty-resource-state">
+              当前预设没有提供自定义技能。技能仍可从项目或内置技能库按需加载。
+            </div>
+
+            <div v-for="row in activeResourceGroup.resources" :key="row.id" class="resource-editor-card">
+              <div class="resource-editor-head">
+                <span class="entry-tag">{{ row.label }}</span>
+                <div class="resource-editor-title">
+                  <strong>{{ row.title }}</strong>
+                  <span>{{ row.path }}</span>
+                </div>
+              </div>
+              <div v-if="row.kind === 'skill'" class="skill-resource-controls">
+                <label class="field-label compact">
+                  <span>加载策略</span>
+                  <select
+                    class="field-select"
+                    :value="row.loadPolicy || 'on_demand'"
+                    :disabled="!resourceEditable"
+                    @change="updateSkillLoadPolicy(row.skillName || '', $event)"
+                  >
+                    <option value="on_demand">按需加载</option>
+                    <option value="always">常驻</option>
+                  </select>
+                </label>
+                <span class="entry-tag">{{ row.loadPolicyLabel || '按需' }}</span>
+                <button
+                  v-if="resourceEditable"
+                  class="icon-btn danger"
+                  type="button"
+                  aria-label="移除技能"
+                  title="移除技能"
+                  @click="removeSkillResource(row.skillName || '')"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path>
+                    <path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"></path>
+                  </svg>
+                </button>
+              </div>
+              <textarea
+                v-if="resourceEditable"
+                class="field-textarea resource-textarea"
+                rows="10"
+                :value="row.content"
+                @input="updateResourceContent(row.id, $event)"
+              />
+              <pre v-else class="resource-preview">{{ row.content }}</pre>
+            </div>
+          </div>
+
           <p class="section-hint">
-            留空表示不覆盖该参数。这里的值会随 Prompt 预设一起保存，并在模型请求调试窗中显示。
+            这些内容会通过语义 VFS 映射为 <code>./AGENTS.md</code> 和 <code>./.forge/agent/*.md</code>。项目文件覆盖预设资源，预设资源覆盖内置 fallback。
           </p>
         </div>
 
-        <div v-if="specialDefinitions.length > 0 && draft.engine !== 'st_preset'" class="special-block">
+        <details class="collapsible-block" :open="!hasAgentResourcePreset">
+          <summary>
+            <span>请求参数</span>
+            <span>{{ overriddenGenerationSettingCount }} 项覆盖</span>
+          </summary>
+          <div class="generation-settings-block">
+            <div class="generation-settings-grid">
+              <label
+                v-for="field in generationSettingFields"
+                :key="field.key"
+                class="field-label"
+              >
+                <span>{{ field.label }}</span>
+                <input
+                  class="field-input"
+                  type="number"
+                  :step="field.step"
+                  :value="getGenerationSettingInputValue(field.key)"
+                  :disabled="draft.builtIn"
+                  :placeholder="field.placeholder"
+                  @input="updateGenerationSetting(field.key, $event)"
+                />
+              </label>
+            </div>
+            <p class="section-hint">
+              留空表示不覆盖该参数。这里的值会随 Agent 预设一起保存，并在模型请求调试窗中显示。
+            </p>
+          </div>
+        </details>
+
+        <div v-if="specialDefinitions.length > 0 && draft.engine !== 'st_preset' && !hasAgentResourcePreset" class="special-block">
           <div class="section-title">Special Prompt</div>
           <label v-for="special in specialDefinitions" :key="special.key" class="field-label">
             <span>{{ special.label }}</span>
@@ -129,8 +256,11 @@
         </div>
 
         <div class="editor-actions">
-          <button class="save-btn" type="button" :disabled="draft.builtIn" @click="savePreset">
+          <button v-if="!draft.builtIn" class="save-btn" type="button" @click="savePreset">
             保存当前预设
+          </button>
+          <button v-else class="save-btn" type="button" @click="duplicateCurrentPreset">
+            复制为自定义预设
           </button>
           <button class="secondary-btn" type="button" @click="applyActivePreset">
             设为当前绑定
@@ -140,8 +270,8 @@
 
       <section class="editor-pane">
         <div class="section-head">
-          <div class="section-title">条目顺序</div>
-          <div class="section-actions">
+          <div class="section-title">{{ hasAgentResourcePreset ? '编排检查' : canEditLegacyEntries ? '兼容条目预设' : 'Agent 资源预设' }}</div>
+          <div v-if="canEditLegacyEntries" class="section-actions">
             <select v-model="selectedSlotToAdd" class="slot-select" :disabled="draft.builtIn || availableSlots.length === 0 || draft.engine === 'st_preset'">
               <option value="">添加 Slot</option>
               <option v-for="slot in availableSlots" :key="slot.id" :value="slot.id">
@@ -157,8 +287,40 @@
           </div>
         </div>
 
-        <div v-if="draft.engine === 'st_preset'" class="engine-hint">
+        <div v-if="hasAgentResourcePreset" class="agent-orchestration">
+          <div class="engine-hint">
+            Forge Agent 预设使用资源包和编排步骤，不再通过旧条目顺序编辑。实际请求由 runtime 按下列顺序装配。
+          </div>
+
+          <div class="orchestration-list">
+            <div v-for="(row, index) in orchestrationRows" :key="row.id" class="orchestration-card">
+              <span class="orchestration-index">{{ index + 1 }}</span>
+              <div class="orchestration-main">
+                <div class="orchestration-title">{{ row.label }}</div>
+                <div v-if="row.path" class="orchestration-path">{{ row.path }}</div>
+              </div>
+              <span class="entry-tag" :class="{ disabled: !row.enabled }">{{ row.enabled ? '启用' : '关闭' }}</span>
+            </div>
+          </div>
+
+          <div class="resource-list">
+            <div class="section-title">资源路径</div>
+            <div v-for="row in resourceRows" :key="row.id" class="resource-card">
+              <div class="resource-card-head">
+                <span class="entry-tag">{{ row.label }}</span>
+                <span class="resource-title">{{ row.title }}</span>
+              </div>
+              <div class="resource-path">{{ row.path }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="draft.engine === 'st_preset'" class="engine-hint">
           当前使用 ST 预设直通模式，条目顺序由 ST 当前上下文预设决定。
+        </div>
+
+        <div v-else-if="!canEditLegacyEntries" class="engine-hint">
+          Forge Agent 主模型与执行模型只使用资源包、技能和 Agent 提示词编排。旧条目预设不再作为公开编辑模型；请恢复默认预设或复制默认资源包后编辑。
         </div>
 
         <div v-else class="entry-list">
@@ -266,10 +428,19 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
-import { promptPresetRegistry } from '../../api/core/PromptPresetRegistry.js';
+import { promptPresetRegistry } from '../../api/core/hal/prompt/PromptPresetRegistry.js';
 import { clonePromptPresetGenerationSettings } from '../../api/core/utils/promptPresetGenerationSettings.js';
 import { lwStorage } from '../../api/storage.js';
+import {
+    buildForgePromptPresetOrchestrationRows,
+    buildForgePromptPresetResourceGroups,
+    buildForgePromptPresetResourceRows,
+    buildForgePromptPresetWorkbenchOverview,
+    hasForgeAgentResourcePreset
+} from './store/forgePromptPresetPresentation.js';
+import type { ForgePromptPresetResourceGroupId } from './store/forgePromptPresetPresentation.js';
 import type {
+    ForgeAgentSkillLoadPolicy,
     PromptPresetDefinition,
     PromptPresetEntry,
     PromptPresetGenerationSettings,
@@ -300,6 +471,7 @@ const activeProfileId = ref<PromptPresetProfileId>('forge-main');
 const presets = ref<PromptPresetDefinition[]>([]);
 const activePresetId = ref('');
 const selectedSlotToAdd = ref('');
+const activeResourceGroupId = ref<ForgePromptPresetResourceGroupId>('contract');
 const expandedEntryIds = reactive(new Set<string>());
 const generationSettingFields: GenerationSettingField[] = [
     { key: 'temperature', label: 'temperature', step: '0.01', placeholder: '例如 0.7' },
@@ -334,6 +506,19 @@ const draft = reactive<EditablePreset>({
 });
 
 const currentProfile = computed(() => profiles.find(profile => profile.id === activeProfileId.value) || profiles[0]);
+const hasAgentResourcePreset = computed(() => hasForgeAgentResourcePreset(draft));
+const canEditLegacyEntries = computed(() => activeProfileId.value === 'forge-test-chat' && !hasAgentResourcePreset.value);
+const resourceEditable = computed(() => hasAgentResourcePreset.value && !draft.builtIn);
+const resourceRows = computed(() => buildForgePromptPresetResourceRows(draft));
+const resourceGroups = computed(() => buildForgePromptPresetResourceGroups(draft));
+const activeResourceGroup = computed(() =>
+    resourceGroups.value.find(group => group.id === activeResourceGroupId.value) || resourceGroups.value[0] || null
+);
+const orchestrationRows = computed(() => buildForgePromptPresetOrchestrationRows(draft));
+const workbenchOverview = computed(() => buildForgePromptPresetWorkbenchOverview(draft));
+const overriddenGenerationSettingCount = computed(() =>
+    Object.values(draft.generationSettings).filter(value => typeof value === 'number' && Number.isFinite(value)).length
+);
 const slotDefinitions = computed<Record<string, PromptPresetSlotDefinition>>(() =>
     Object.fromEntries(currentProfile.value.slots.map(slot => [slot.slot.id, slot.slot]))
 );
@@ -348,6 +533,25 @@ const clonePreset = (preset: PromptPresetDefinition): EditablePreset => ({
     ...preset,
     entries: preset.entries.map(entry => ({ ...entry })),
     specials: { ...preset.specials },
+    forgeAgentResources: preset.forgeAgentResources
+        ? {
+            contract: { ...preset.forgeAgentResources.contract },
+            system: { ...preset.forgeAgentResources.system },
+            modes: {
+                planner: { ...preset.forgeAgentResources.modes.planner },
+                conversation: { ...preset.forgeAgentResources.modes.conversation },
+                analyst: { ...preset.forgeAgentResources.modes.analyst },
+                executor: { ...preset.forgeAgentResources.modes.executor }
+            },
+            skills: preset.forgeAgentResources.skills?.map(skill => ({ ...skill }))
+        }
+        : undefined,
+    forgeAgentOrchestration: preset.forgeAgentOrchestration
+        ? {
+            label: preset.forgeAgentOrchestration.label,
+            steps: preset.forgeAgentOrchestration.steps.map(step => ({ ...step }))
+        }
+        : undefined,
     generationSettings: clonePromptPresetGenerationSettings(preset.generationSettings),
     customCharCard: {
         name: preset.customCharCard?.name || '',
@@ -361,6 +565,7 @@ const clonePreset = (preset: PromptPresetDefinition): EditablePreset => ({
 const assignDraft = (preset: PromptPresetDefinition) => {
     const next = clonePreset(preset);
     Object.assign(draft, next);
+    activeResourceGroupId.value = buildForgePromptPresetResourceGroups(next)[0]?.id || 'contract';
     expandedEntryIds.clear();
 };
 
@@ -395,6 +600,8 @@ const createPresetFromCurrent = () => {
         customCharCard: draft.customCharCard,
         entries: draft.entries,
         specials: draft.specials,
+        forgeAgentResources: draft.forgeAgentResources,
+        forgeAgentOrchestration: draft.forgeAgentOrchestration,
         generationSettings: draft.generationSettings
     });
     loadProfile(activeProfileId.value);
@@ -430,6 +637,8 @@ const savePreset = () => {
         customCharCard: draft.charCardMode === 'custom' ? draft.customCharCard : undefined,
         entries: draft.entries.map(entry => ({ ...entry })),
         specials: { ...draft.specials },
+        forgeAgentResources: draft.forgeAgentResources,
+        forgeAgentOrchestration: draft.forgeAgentOrchestration,
         generationSettings: clonePromptPresetGenerationSettings(draft.generationSettings)
     });
     loadProfile(activeProfileId.value);
@@ -532,6 +741,73 @@ const updateGenerationSetting = (key: keyof PromptPresetGenerationSettings, even
     draft.generationSettings[key] = parsedValue;
 };
 
+const updateResourceContent = (resourceId: string, event: Event) => {
+    const resources = draft.forgeAgentResources;
+    if (!resources) return;
+
+    const content = (event.target as HTMLTextAreaElement).value;
+    if (resourceId === 'contract') {
+        resources.contract.content = content;
+        return;
+    }
+    if (resourceId === 'system') {
+        resources.system.content = content;
+        return;
+    }
+    if (resourceId.startsWith('mode:')) {
+        const mode = resourceId.slice('mode:'.length) as keyof typeof resources.modes;
+        if (resources.modes[mode]) {
+            resources.modes[mode].content = content;
+        }
+        return;
+    }
+    if (resourceId.startsWith('skill:')) {
+        const skillName = resourceId.slice('skill:'.length);
+        const skill = resources.skills?.find(item => item.name === skillName);
+        if (skill) {
+            skill.content = content;
+        }
+    }
+};
+
+const updateSkillLoadPolicy = (skillName: string, event: Event) => {
+    const resources = draft.forgeAgentResources;
+    if (!resources || !skillName) return;
+    const policy: ForgeAgentSkillLoadPolicy = (event.target as HTMLSelectElement).value === 'always' ? 'always' : 'on_demand';
+    const skill = resources.skills?.find(item => item.name === skillName);
+    if (skill) {
+        skill.loadPolicy = policy;
+    }
+};
+
+const addSkillResource = () => {
+    const resources = draft.forgeAgentResources;
+    if (!resources) return;
+    resources.skills = resources.skills || [];
+    const existingNames = new Set(resources.skills.map(skill => skill.name));
+    let index = resources.skills.length + 1;
+    let name = `custom-skill-${index}`;
+    while (existingNames.has(name)) {
+        index += 1;
+        name = `custom-skill-${index}`;
+    }
+    resources.skills.push({
+        name,
+        path: `./agent/skills/${name}/SKILL.md`,
+        title: '自定义技能',
+        description: '预设提供的自定义技能。',
+        loadPolicy: 'on_demand',
+        content: '# 自定义技能\n\n描述该技能的适用场景、输入、步骤和输出要求。'
+    });
+    activeResourceGroupId.value = 'skills';
+};
+
+const removeSkillResource = (skillName: string) => {
+    const resources = draft.forgeAgentResources;
+    if (!resources?.skills || !skillName) return;
+    resources.skills = resources.skills.filter(skill => skill.name !== skillName);
+};
+
 const handleStorageChange = (data: { key?: string } | null) => {
     const key = data?.key;
     if (!key || key === 'lumina-prompt-presets.registry' || key === 'lumina-prompt-presets.bindings' || key === STORAGE_KEY_BUILTIN_OVERRIDES) {
@@ -565,7 +841,11 @@ onUnmounted(() => {
 .workbench-actions,
 .profile-tabs,
 .entry-row,
-.entry-actions {
+.entry-actions,
+.overview-metrics,
+.resource-tabs,
+.resource-group-head,
+.resource-editor-head {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -574,7 +854,7 @@ onUnmounted(() => {
 .workbench-head,
 .preset-toolbar,
 .editor-pane,
-.built-in-note {
+.preset-overview {
   border: 1px solid var(--lw-border-base);
   border-radius: 20px;
   background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
@@ -587,15 +867,15 @@ onUnmounted(() => {
 }
 
 .workbench-title {
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-medium-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
   text-wrap: balance;
 }
 
 .workbench-subtitle {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   color: var(--lw-text-muted);
   line-height: 1.6;
   text-wrap: pretty;
@@ -616,8 +896,8 @@ onUnmounted(() => {
   background: var(--lw-bg-app);
   color: var(--lw-text-main);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
 }
 
 .head-btn,
@@ -643,8 +923,8 @@ onUnmounted(() => {
   border-radius: 999px;
   padding: 8px 14px;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
 }
 
 .profile-tab.active {
@@ -659,11 +939,65 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-.built-in-note {
-  padding: 12px 16px;
-  font-size: 12px;
+.preset-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 20px;
+}
+
+.overview-copy {
+  min-width: 0;
+}
+
+.overview-eyebrow {
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: 0;
+  color: var(--lw-primary);
+}
+
+.overview-title {
+  margin-top: 3px;
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
+  color: var(--lw-text-main);
+  overflow-wrap: anywhere;
+}
+
+.overview-description {
+  margin-top: 4px;
+  max-width: 72ch;
+  font-size: var(--lw-type-body-small-size);
   line-height: 1.6;
   color: var(--lw-text-muted);
+}
+
+.overview-metrics {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.overview-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 58px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lw-bg-subtle) 72%, transparent);
+}
+
+.overview-metric span {
+  font-size: var(--lw-type-label-small-size);
+  color: var(--lw-text-muted);
+}
+
+.overview-metric strong {
+  font-size: var(--lw-type-title-small-size);
+  line-height: 1;
+  color: var(--lw-text-main);
 }
 
 .section-head {
@@ -738,8 +1072,8 @@ onUnmounted(() => {
 .entry-tag {
   border-radius: 999px;
   padding: 4px 9px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   background: color-mix(in srgb, var(--lw-bg-subtle) 86%, transparent);
   color: var(--lw-text-secondary);
 }
@@ -770,8 +1104,8 @@ onUnmounted(() => {
 }
 
 .section-title {
-  font-size: 13px;
-  font-weight: 800;
+  font-size: var(--lw-type-body-medium-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
   min-width: 0;
 }
@@ -780,8 +1114,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-secondary);
 }
 
@@ -798,16 +1132,183 @@ onUnmounted(() => {
   line-height: 1.55;
 }
 
+.resource-textarea {
+  min-height: 148px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: var(--lw-type-body-small-size);
+}
+
 .slot-select {
   width: min(100%, 220px);
 }
 
 .char-card-grid,
 .special-block,
-.generation-settings-block {
+.generation-settings-block,
+.agent-resource-block,
+.agent-orchestration,
+.orchestration-list,
+.resource-list,
+.resource-group-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.resource-tabs {
+  flex-wrap: wrap;
+  padding: 4px;
+  border: 1px solid var(--lw-border-base);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--lw-bg-subtle) 64%, transparent);
+}
+
+.resource-tab {
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
+}
+
+.resource-tab.active {
+  background: var(--lw-bg-elevated);
+  color: var(--lw-text-main);
+  box-shadow: inset 0 0 0 1px var(--lw-border-base);
+}
+
+.resource-tab span {
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: color-mix(in srgb, var(--lw-bg-muted) 78%, transparent);
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size);
+}
+
+.resource-group-panel {
+  min-width: 0;
+}
+
+.resource-group-head {
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 4px 2px 0;
+}
+
+.resource-group-title {
+  font-size: var(--lw-type-body-medium-size);
+  font-weight: var(--lw-type-title-small-weight);
+  color: var(--lw-text-main);
+}
+
+.resource-group-description {
+  margin-top: 3px;
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-body-small-size);
+  line-height: 1.55;
+}
+
+.resource-editor-card,
+.empty-resource-state,
+.collapsible-block {
+  border: 1px solid var(--lw-border-base);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--lw-bg-app) 78%, transparent);
+}
+
+.resource-editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.resource-editor-head {
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.resource-editor-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.resource-editor-title strong {
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-body-small-size);
+}
+
+.resource-editor-title span {
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size);
+  overflow-wrap: anywhere;
+}
+
+.skill-resource-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.field-label.compact {
+  max-width: 180px;
+}
+
+.resource-preview {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lw-bg-subtle) 78%, transparent);
+  padding: 12px;
+  color: var(--lw-text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: var(--lw-type-body-small-size);
+  line-height: 1.55;
+}
+
+.empty-resource-state {
+  padding: 14px;
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-body-small-size);
+  line-height: 1.6;
+}
+
+.collapsible-block {
+  padding: 0;
+  overflow: hidden;
+}
+
+.collapsible-block summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
+}
+
+.collapsible-block summary span:last-child {
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size);
+}
+
+.collapsible-block .generation-settings-block {
+  padding: 0 14px 14px;
 }
 
 .generation-settings-grid {
@@ -818,7 +1319,7 @@ onUnmounted(() => {
 
 .section-hint {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   line-height: 1.6;
   color: var(--lw-text-muted);
 }
@@ -887,8 +1388,8 @@ onUnmounted(() => {
 }
 
 .entry-title {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-medium-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
   line-height: 1.5;
   word-break: break-word;
@@ -903,6 +1404,75 @@ onUnmounted(() => {
 
 .entry-tag.role {
   color: var(--lw-primary);
+}
+
+.entry-tag.disabled {
+  color: var(--lw-text-muted);
+  background: color-mix(in srgb, var(--lw-bg-muted) 92%, transparent);
+}
+
+.orchestration-card,
+.resource-card {
+  border: 1px solid var(--lw-border-base);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--lw-bg-app) 78%, transparent);
+  min-width: 0;
+}
+
+.orchestration-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.orchestration-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(var(--lw-primary-rgb), 0.1);
+  color: var(--lw-primary);
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
+}
+
+.orchestration-main,
+.resource-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.orchestration-title,
+.resource-title {
+  color: var(--lw-text-main);
+  font-weight: var(--lw-type-title-small-weight);
+  font-size: var(--lw-type-body-small-size);
+}
+
+.orchestration-path,
+.resource-path {
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.resource-card {
+  padding: 12px;
+}
+
+.resource-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .entry-row {
@@ -953,7 +1523,7 @@ onUnmounted(() => {
 }
 
 .engine-hint {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   line-height: 1.6;
   color: var(--lw-text-muted);
   border: 1px dashed var(--lw-border-base);
@@ -964,6 +1534,11 @@ onUnmounted(() => {
 @media (max-width: 1080px) {
   .workbench-head {
     flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .preset-overview {
+    grid-template-columns: minmax(0, 1fr);
     align-items: flex-start;
   }
 
