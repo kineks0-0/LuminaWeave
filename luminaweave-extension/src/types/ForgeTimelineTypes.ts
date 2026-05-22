@@ -1,5 +1,6 @@
 import type { ForgeModelRole } from './ForgeContextTypes.js';
 import type { ForgeLayer } from './ForgeStructuredTypes.js';
+import type { ForgeTimelinePiOrigin } from '@shared/ForgePiTypes.js';
 
 export type ForgeTimelineOperationKind =
     | 'analysis'
@@ -32,6 +33,7 @@ export interface ForgeTimelineMessageItem {
     id: string;
     kind: 'message';
     messageId: string;
+    origin?: ForgeTimelinePiOrigin;
     createdAt: number;
     updatedAt: number;
 }
@@ -52,6 +54,7 @@ export interface ForgeTimelineOperationItem {
     requestPrompt?: any[] | null;
     role?: ForgeModelRole;
     subSteps?: ForgeOperationSubStep[];
+    origin?: ForgeTimelinePiOrigin;
     createdAt: number;
     updatedAt: number;
     completedAt?: number | null;

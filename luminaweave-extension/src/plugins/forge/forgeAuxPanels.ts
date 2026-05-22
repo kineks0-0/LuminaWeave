@@ -13,7 +13,10 @@ export const FORGE_AUX_PANEL_ORDER: ForgeAuxPanelKind[] = [
     'export',
     'post_tracks',
     'test_chat',
-    'dev_requests'
+    'dev_requests',
+    'agent_inspector',
+    'semantic_vfs',
+    'workspace_versions'
 ];
 
 export const FORGE_AUX_PANEL_META: Record<ForgeAuxPanelKind, ForgeAuxPanelMeta> = {
@@ -58,5 +61,23 @@ export const FORGE_AUX_PANEL_META: Record<ForgeAuxPanelKind, ForgeAuxPanelMeta> 
         title: '模型请求调试',
         shortLabel: '调试请求',
         icon: '🧪'
+    },
+    agent_inspector: {
+        id: 'forge_agent_inspector',
+        title: 'Agent 检视器',
+        shortLabel: 'Agent',
+        icon: '🔍'
+    },
+    semantic_vfs: {
+        id: 'forge_semantic_vfs',
+        title: '项目 VFS',
+        shortLabel: 'VFS',
+        icon: '🗂️'
+    },
+    workspace_versions: {
+        id: 'forge_workspace_versions',
+        title: '文件版本',
+        shortLabel: '版本',
+        icon: '🧾'
     }
 };

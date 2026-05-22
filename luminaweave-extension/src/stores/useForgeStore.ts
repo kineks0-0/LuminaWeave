@@ -7,9 +7,59 @@ import type {
 } from '../types/ForgeTimelineTypes.js';
 import type {
     ForgeModelRequestTrace,
+    ForgeModelRequestToolEvent,
+    ForgeModelRequestToolSummary,
     ForgeModelRequestStatus,
+    ForgeToolApprovalRequest,
     StagingEntry
 } from '../types/ForgeRuntimeTypes.js';
+import type {
+    ForgePiContextBundleSummary,
+    ForgePiPersistedSessionState,
+    ForgePiSessionEntry,
+    ForgePiTreeNode
+} from '@shared/ForgePiTypes.js';
+
+const clonePiPayload = <TPayload>(payload: TPayload): TPayload => {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return payload;
+    }
+    return { ...(payload as Record<string, unknown>) } as TPayload;
+};
+
+const clonePiEntry = (entry: ForgePiSessionEntry): ForgePiSessionEntry => ({
+    ...entry,
+    payload: clonePiPayload(entry.payload)
+});
+
+const clonePiTreeNode = (node: ForgePiTreeNode): ForgePiTreeNode => ({
+    ...node,
+    payload: clonePiPayload(node.payload),
+    children: node.children?.map(clonePiTreeNode) ?? []
+});
+
+const buildPiTreeFromEntries = (entries: ForgePiSessionEntry[]): ForgePiTreeNode[] => {
+    const byId = new Map<string, ForgePiTreeNode>();
+    const roots: ForgePiTreeNode[] = [];
+    entries.forEach((entry) => {
+        byId.set(entry.id, { ...clonePiEntry(entry), children: [] });
+    });
+    entries.forEach((entry) => {
+        const node = byId.get(entry.id);
+        if (!node) return;
+        if (!entry.parentId) {
+            roots.push(node);
+            return;
+        }
+        const parent = byId.get(entry.parentId);
+        if (parent) {
+            parent.children = [...(parent.children ?? []), node];
+        } else {
+            roots.push(node);
+        }
+    });
+    return roots;
+};
 
 export const useForgeStore = defineStore('forge', {
     state: () => ({
@@ -22,11 +72,25 @@ export const useForgeStore = defineStore('forge', {
         // Forge 模型请求调试 trace（瞬态，不持久化）
         modelRequestTraces: [] as ForgeModelRequestTrace[],
         activeModelRequestTraceId: null as string | null,
+        // Tool calling 写入授权队列（瞬态，由 Review Gate 展示）
+        toolApprovals: [] as ForgeToolApprovalRequest[],
+        // Forge pi-core runtime tree/context state（由前端 pi-agent-core 浏览器适配层派生）
+        piSessionTree: [] as ForgePiTreeNode[],
+        piSessionEntries: [] as ForgePiSessionEntry[],
+        activePiNodeId: null as string | null,
+        piContextBundleSummary: null as ForgePiContextBundleSummary | null,
+        piLoadedSkills: [] as string[],
+        piLoadedExtensions: [] as string[],
         // 当前制卡会话 ID
         currentSessionId: null as string | null,
         // 是否正在进行制卡任务
         isProcessing: false,
     }),
+
+    getters: {
+        pendingToolApprovals: (state): ForgeToolApprovalRequest[] =>
+            state.toolApprovals.filter(item => item.status === 'pending')
+    },
 
     actions: {
         replaceTrace(trace: ForgeModelRequestTrace) {
@@ -47,7 +111,11 @@ export const useForgeStore = defineStore('forge', {
         },
 
         createModelRequestTrace(payload: ForgeModelRequestTrace) {
-            this.replaceTrace(payload);
+            this.replaceTrace({
+                ...payload,
+                toolEvents: payload.toolEvents ?? [],
+                piModelTraces: payload.piModelTraces ?? []
+            });
             this.activeModelRequestTraceId = payload.id;
             return payload;
         },
@@ -119,6 +187,123 @@ export const useForgeStore = defineStore('forge', {
                 completedAt: existing.completedAt ?? Date.now(),
                 errorMessage: message
             });
+        },
+
+        appendModelRequestToolEvent(requestId: string, event: ForgeModelRequestToolEvent) {
+            const index = this.modelRequestTraces.findIndex(item => item.id === requestId);
+            if (index < 0) return;
+            const existing = this.modelRequestTraces[index];
+            const toolEvents = [...(existing.toolEvents ?? []), event]
+                .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
+            this.replaceTrace({
+                ...existing,
+                toolEvents
+            });
+        },
+
+        setModelRequestToolSetSummary(requestId: string, tools: ForgeModelRequestToolSummary[]) {
+            const index = this.modelRequestTraces.findIndex(item => item.id === requestId);
+            if (index < 0) return;
+            const existing = this.modelRequestTraces[index];
+            this.replaceTrace({
+                ...existing,
+                toolSetSummary: tools.map(tool => ({ ...tool }))
+            });
+        },
+
+        setModelRequestPiTrace(requestId: string, trace: ForgeModelRequestTrace['piModelTrace']) {
+            const index = this.modelRequestTraces.findIndex(item => item.id === requestId);
+            if (index < 0 || !trace) return;
+            const existing = this.modelRequestTraces[index];
+            const piModelTraces = [...(existing.piModelTraces ?? [])];
+            const traceIndex = piModelTraces.findIndex(item => item.traceId === trace.traceId);
+            if (traceIndex >= 0) {
+                piModelTraces.splice(traceIndex, 1, trace);
+            } else {
+                piModelTraces.push(trace);
+            }
+            this.replaceTrace({
+                ...existing,
+                piModelTrace: trace,
+                piModelTraces
+            });
+        },
+
+        upsertToolApproval(approval: ForgeToolApprovalRequest) {
+            const existingIndex = this.toolApprovals.findIndex(item => item.toolCallId === approval.toolCallId);
+            const next: ForgeToolApprovalRequest = {
+                ...approval,
+                status: approval.status || 'pending',
+                resolvedAt: approval.resolvedAt ?? null,
+                message: approval.message ?? null
+            };
+
+            if (existingIndex >= 0) {
+                this.toolApprovals.splice(existingIndex, 1, {
+                    ...this.toolApprovals[existingIndex],
+                    ...next
+                });
+                return;
+            }
+
+            this.toolApprovals.push(next);
+        },
+
+        resolveToolApproval(toolCallId: string, approved: boolean, message?: string) {
+            const existingIndex = this.toolApprovals.findIndex(item => item.toolCallId === toolCallId);
+            if (existingIndex < 0) return;
+            const existing = this.toolApprovals[existingIndex];
+            this.toolApprovals.splice(existingIndex, 1, {
+                ...existing,
+                status: approved ? 'approved' : 'rejected',
+                resolvedAt: Date.now(),
+                message: message ?? existing.message ?? null
+            });
+        },
+
+        setForgePiSessionState(payload: {
+            tree: ForgePiTreeNode[];
+            entries?: ForgePiSessionEntry[];
+            activeNodeId: string | null;
+            contextBundleSummary?: ForgePiContextBundleSummary | null;
+            loadedExtensions?: string[];
+        }) {
+            this.piSessionTree = payload.tree.map(clonePiTreeNode);
+            this.piSessionEntries = (payload.entries ?? []).map(clonePiEntry);
+            this.activePiNodeId = payload.activeNodeId;
+            this.piContextBundleSummary = payload.contextBundleSummary
+                ? {
+                    files: payload.contextBundleSummary.files.map(file => ({ ...file })),
+                    activeSkills: [...payload.contextBundleSummary.activeSkills],
+                    loadedExtensions: [...payload.contextBundleSummary.loadedExtensions]
+                }
+                : null;
+            this.piLoadedSkills = [...(payload.contextBundleSummary?.activeSkills ?? [])];
+            this.piLoadedExtensions = [...(payload.loadedExtensions ?? payload.contextBundleSummary?.loadedExtensions ?? [])];
+        },
+
+        setForgePiPersistedSessionState(payload: ForgePiPersistedSessionState | null | undefined) {
+            if (!payload) {
+                this.piSessionEntries = [];
+                this.piSessionTree = [];
+                this.activePiNodeId = null;
+                this.piContextBundleSummary = null;
+                this.piLoadedSkills = [];
+                this.piLoadedExtensions = [];
+                return;
+            }
+            this.piSessionEntries = payload.entries.map(clonePiEntry);
+            this.piSessionTree = buildPiTreeFromEntries(payload.entries);
+            this.activePiNodeId = payload.activeNodeId;
+            this.piContextBundleSummary = payload.contextBundleSummary
+                ? {
+                    files: payload.contextBundleSummary.files.map(file => ({ ...file })),
+                    activeSkills: [...payload.contextBundleSummary.activeSkills],
+                    loadedExtensions: [...payload.contextBundleSummary.loadedExtensions]
+                }
+                : null;
+            this.piLoadedSkills = [...(payload.contextBundleSummary?.activeSkills ?? [])];
+            this.piLoadedExtensions = [...(payload.loadedExtensions ?? payload.contextBundleSummary?.loadedExtensions ?? [])];
         },
 
         abortModelRequestTrace(requestId: string) {
@@ -349,6 +534,7 @@ export const useForgeStore = defineStore('forge', {
                 id: entry.id || (existingIndex >= 0
                     ? this.stagingArea[existingIndex].id
                     : Math.random().toString(36).substring(2, 9)),
+                operation: entry.operation || this.stagingArea[existingIndex]?.operation || 'upsert',
                 timestamp: entry.timestamp || Date.now(),
                 layer: entry.layer || this.stagingArea[existingIndex]?.layer || null,
                 sourceTag: entry.sourceTag || this.stagingArea[existingIndex]?.sourceTag || null,
@@ -390,6 +576,13 @@ export const useForgeStore = defineStore('forge', {
             this.timelineItems = [];
             this.stagingArea = [];
             this.commitReadyEntries = [];
+            this.toolApprovals = [];
+            this.piSessionTree = [];
+            this.piSessionEntries = [];
+            this.activePiNodeId = null;
+            this.piContextBundleSummary = null;
+            this.piLoadedSkills = [];
+            this.piLoadedExtensions = [];
             this.clearModelRequestTraces();
             this.isProcessing = false;
         }

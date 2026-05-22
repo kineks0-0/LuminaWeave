@@ -1,7 +1,8 @@
 <template>
   <ForgeMessageSubmitBlock
-    v-if="autoSubmitScopeId"
-    :message-id="autoSubmitScopeId"
+    v-if="autoSubmitTarget"
+    :form-id="autoSubmitTarget.kind === 'form' ? autoSubmitTarget.id : undefined"
+    :message-id="autoSubmitTarget.kind === 'message' ? autoSubmitTarget.id : undefined"
     :label="autoSubmitLabel"
     auto-generated
   />
@@ -9,8 +10,9 @@
 
 <script setup lang="ts">
 import { computed, watchEffect } from 'vue';
-import type { MessageSegment } from '../../../api/core/LVParser';
-import { useCardMakerStore } from '../CardMakerStore';
+import type { MessageSegment } from '../../../api/core/xml-view/LVParser.js';
+import { resolveForgeAutoSubmitTarget } from '../../../api/core/forge/forms/ForgeAutoSubmitTarget.js';
+import { useCardMakerStore } from '../CardMakerStore.js';
 import ForgeMessageSubmitBlock from './ForgeMessageSubmitBlock.vue';
 
 const props = defineProps<{
@@ -43,56 +45,21 @@ watchEffect(() => {
   forgeStore.rememberSubmitConfig(props.messageId, explicitSubmitLabel.value);
 });
 
-const hasPersistentForgeForm = computed(() => props.segments.some((segment) => (
-  segment.type === 'view' && Boolean(segment.components?.some((component) => component.component === 'ForgeForm'))
-)));
-
-const hasTemporaryForgeCollection = computed(() => {
-  const interactiveComponents = new Set([
-    'ForgeInput',
-    'ForgeTextarea',
-    'ForgeSelect',
-    'ForgeChecklist',
-    'ForgeChoiceGroup',
-    'ForgeFacetChecklist'
-  ]);
-
-  return props.segments.some((segment) => {
-    if (segment.type !== 'view' || !segment.components?.length) {
-      return false;
-    }
-
-    return segment.components.some((component) => {
-      if (!interactiveComponents.has(component.component)) {
-        return false;
-      }
-
-      const formId = String(component.props.formId || '').trim();
-      const fieldKey = String(component.props.fieldKey || '').trim();
-      if (!formId) {
-        return true;
-      }
-
-      return !fieldKey || !forgeStore.hasStructuredFieldBinding(formId, fieldKey);
-    });
-  });
-});
-
-const autoSubmitScopeId = computed<string | null>(() => {
-  if (hasPersistentForgeForm.value || !hasTemporaryForgeCollection.value) {
-    return null;
+const autoSubmitTarget = computed(() => resolveForgeAutoSubmitTarget(
+  props.segments,
+  props.messageId,
+  {
+    hasStructuredFieldBinding: (formId, fieldKey) => forgeStore.hasStructuredFieldBinding(formId, fieldKey)
   }
-
-  return props.messageId;
-});
+));
 
 const autoSubmitLabel = computed(() => {
-  if (!autoSubmitScopeId.value) {
+  if (!autoSubmitTarget.value) {
     return '提交并继续';
   }
 
   return forgeStore.resolveSubmitLabel(
-    autoSubmitScopeId.value,
+    autoSubmitTarget.value.id,
     explicitSubmitLabel.value || '提交并继续'
   );
 });

@@ -1,19 +1,20 @@
 <template>
-  <div class="forge-field-card">
-    <span class="forge-field-label">{{ label }}</span>
-    <div class="forge-check-list">
-      <label v-for="option in parsedOptions" :key="option" class="forge-check-item">
+  <LuminaPanel variant="elevated" padding="sm">
+    <span class="tw:text-xs tw:font-bold tw:text-lw-text tw:text-balance">{{ label }}</span>
+    <div class="tw:mt-2 tw:flex tw:flex-wrap tw:gap-2">
+      <label v-for="option in parsedOptions" :key="option" class="tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-lw-pill tw:border tw:border-lw-border tw:bg-lw-surface tw:px-2.5 tw:py-2 tw:text-xs tw:text-lw-text-secondary">
         <input :checked="selectedSet.has(option)" type="checkbox" @change="toggleOption(option)" />
         <span>{{ option }}</span>
       </label>
     </div>
-  </div>
+  </LuminaPanel>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useCardMakerStore } from '../CardMakerStore';
-import { splitForgeOptions, parseCompositePath } from '../../../api/core/utils/forgeDslUtils';
+import { LuminaPanel } from '../../../ui/primitives';
+import { useCardMakerStore } from '../CardMakerStore.js';
+import { splitForgeOptions, parseCompositePath } from '../../../api/core/utils/forgeDslUtils.js';
 
 const props = defineProps<{
     fieldKey: string;
@@ -61,39 +62,3 @@ const toggleOption = (option: string) => {
     store.upsertTransientSelection(compositeKey.value, nextValues, props.messageId);
 };
 </script>
-
-<style scoped>
-.forge-field-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--lw-border-base);
-  background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
-}
-
-.forge-field-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-}
-
-.forge-check-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.forge-check-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: var(--lw-bg-surface);
-  border: 1px solid var(--lw-border-base);
-  font-size: 12px;
-  color: var(--lw-text-secondary);
-}
-</style>

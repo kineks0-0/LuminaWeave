@@ -1,15 +1,15 @@
 <template>
   <!-- 渲染一行轻量提示，让操作留痕 -->
-  <div v-if="injectedCount > 0" class="forge-assist-notice">
-    <span class="forge-assist-icon">✨</span>
-    <span class="forge-assist-text">助理已为 {{ injectedCount }} 个字段提供{{ modeLabel }}辅助</span>
+  <div v-if="injectedCount > 0" class="tw:my-1 tw:flex tw:items-center tw:gap-1.5 tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-3 tw:py-1.5">
+    <span class="tw:shrink-0 tw:text-xs" aria-hidden="true">✨</span>
+    <span class="tw:text-xs tw:leading-5 tw:text-lw-text-secondary">助理已为 {{ injectedCount }} 个字段提供{{ modeLabel }}辅助</span>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
-import { useCardMakerStore } from '../CardMakerStore';
-import { parseFormAssistVararg, type FormAssistField, parseCompositePath } from '../../../api/core/utils/forgeDslUtils';
+import { useCardMakerStore } from '../CardMakerStore.js';
+import { parseFormAssistVararg, type FormAssistField, parseCompositePath } from '../../../api/core/utils/forgeDslUtils.js';
 
 const props = defineProps<{
     /** 对应的消息 ID（临时表单必需，用于隔离选值） */
@@ -91,27 +91,3 @@ onMounted(() => {
     }
 });
 </script>
-
-<style scoped>
-.forge-assist-notice {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  background: rgba(var(--lw-primary-rgb), 0.06);
-  border: 1px solid rgba(var(--lw-primary-rgb), 0.10);
-  margin: 4px 0;
-}
-
-.forge-assist-icon {
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.forge-assist-text {
-  font-size: 11px;
-  color: var(--lw-text-secondary);
-  line-height: 1.4;
-}
-</style>

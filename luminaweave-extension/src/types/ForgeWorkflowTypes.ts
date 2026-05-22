@@ -20,7 +20,7 @@ export type ForgeVisiblePhase =
     | 'build'
     | 'finalize';
 
-export type ForgeAuxPanelKind = 'lorebook' | 'memory' | 'review' | 'export' | 'post_tracks' | 'test_chat' | 'dev_requests';
+export type ForgeAuxPanelKind = 'lorebook' | 'memory' | 'review' | 'export' | 'post_tracks' | 'test_chat' | 'dev_requests' | 'agent_inspector' | 'semantic_vfs' | 'workspace_versions';
 
 export type ForgeWorkflowAction =
     | 'choose_detail_mode'

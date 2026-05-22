@@ -1,7 +1,7 @@
 # LuminaWeave 产品需求文档 (PDR)
 
 **版本:** v6.1-docs  
-**最后更新时间:** 2026-05-13
+**最后更新时间:** 2026-05-21
 
 本文记录 LuminaWeave 长期有效的产品目标、核心能力和边界。阶段性执行记录进入 `docs/current/tasks/`，已完成任务归档到 `docs/archive/completed-tasks/`。
 
@@ -106,11 +106,20 @@ Director 负责剧情推演、上下文压缩、记忆整理和提示词注入�
 
 Forge 是制卡工坊和 Agent 工作台。
 
+[Forge 文档索引](./modules/forge/index.md)
+
 应提供：
 
 - 以 `forgeProjectId` 为长期容器的项目模型。
 - 多协作线程共享同一项目资源、项目记忆、草稿和审阅区。
 - Planner / Analyst / Executor 等分工明确的 Agent 流程。
+- pi-agent-core Agent Runtime 试验路径：前端可内嵌浏览器可打包的 pi core，并由 Forge browser adapters 维护 tree-structured session history、上下文包、技能/能力资源、工具桥接和 Review Gate 边界。
+- Forge Agent 使用项目相对语义 VFS：`./AGENTS.md` 是 Agent 工作契约，不是系统提示词；默认系统提示词位于 `./.forge/agent/SYSTEM.md`，模式提示词位于 `./.forge/agent/<MODE>.md`，技能位于 `./agent/skills/<skill-name>/SKILL.md`，当前协作线程通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 动态访问。
+- Forge 预设提供 Agent 资源包与提示词编排，而不是面向模型暴露 slot 拼接概念；编排顺序固定为 Contract、System、Mode Prompt、Skills、Capabilities、Context Files、Branch Messages。默认主预设提供参考提炼类 preset skills，默认按需加载，可在自定义预设中改为常驻。
+- 项目 VFS 面板浏览 Agent 可见的语义 VFS 投影，而不是 raw workspace storage 树；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构只作为映射源，不进入模型长期上下文。
+- Forge shell、`readFile` 工具、Prompt/Skill loader 和项目 VFS 面板必须共用 Forge Semantic VFS provider；HAL Bash 只提供通用 mount 扩展，不理解 Forge 业务语义。
+- 制卡聊天内的 fork / 回滚 / 切换应基于同一协作线程内的 pi session tree 分支；Forge timeline 是用户可见投影，必须保留可操作的用户输入节点映射。
+- 项目文件、staging 和虚拟世界书的版本恢复由 Forge workspace version manager 负责，切换对话分支时默认询问用户是否同时恢复文件版本。
 - 虚拟世界书、Forge memory tree、draft tree、review staging 和发布/导出。
 - Forge 专属 `<V>` 交互块和 Prompt Preset 组合。
 
@@ -119,6 +128,7 @@ Forge 是制卡工坊和 Agent 工作台。
 - Forge 默认写入项目 VFS，不静默改写真实 ST 世界书。
 - 发布到 ST 或导出必须是用户确认后的后置动作。
 - 项目资源写入走 typed effects 或明确的 workspace 写入策略。
+- pi-agent-core runtime 只替换 Forge Agent kernel；ST 宿主适配、Vue UI、VFS、Review Gate 和真实发布边界仍属于 LuminaWeave。
 
 ### 4.5 Resource / VFS / Terminal
 
@@ -128,6 +138,9 @@ Resource Domain 负责统一 ST、本地和未来订阅源等资源来源。VFS 
 
 - 稳定 Resource Ref。
 - `/sources/<sourceId>/...`、`/library/...`、`/workspaces/...` 路径视图。
+- Forge Agent 语义 VFS 的 `./...` 是项目级视图；绝对 `/sources/...` 与 `/library/...` 仍可直通底层 Resource VFS。
+- Forge 项目 VFS 浏览器应展示面向 Agent 的语义项目视图，并用 `./...` 形式隐藏内部项目 id、conversation id 和 raw storage 文件名；底层 `/workspaces/forge/<projectId>/...` 只由 Core/HAL 服务消费。
+- HAL Bash 支持调用方注入额外挂载点，Forge 通过该机制把 semantic VFS 挂到 Agent shell 项目根；非 Forge shell 默认挂载行为不变。
 - 只读浏览、搜索、读取和受控写入。
 - 终端和 Agent shell 共用同一 Resource-backed FS、权限门和写入策略。
 
@@ -188,7 +201,13 @@ LuminaWeave 至少支持三类运行形态：
 - TauriTavern / 原生宿主环境。
 - Standalone / local fallback 路径。
 
-运行形态由 Runtime Host 与 host-drivers 描述；资源来源由 Resource Source 描述。二者不应混为一谈。
+运行形态由 Runtime Host、host-drivers 与 HAL runtime ports 描述；资源来源由 Resource Source 描述。二者不应混为一谈。
+
+当前 runtime port 模式：
+
+- `st-plugin-enhanced`：SillyTavern 插件环境下的 HTTP 后端增强模式。
+- `tauri-native`：TauriTavern / 原生宿主模式。
+- `standalone-local`：无后端或无宿主增强能力时的本地 fallback。
 
 ## 7. 当前限制
 

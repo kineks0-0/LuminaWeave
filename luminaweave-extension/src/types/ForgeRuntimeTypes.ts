@@ -1,7 +1,14 @@
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { CleanedMessage } from './nexus.js';
 import type { ForgeMemoryTree } from './ForgeMemoryTypes.js';
+import type { ForgePromptPreviewAgentContext } from './ForgeAgentTypes.js';
 import type { MemorySnapshot } from './MemorySnapshotTypes.js';
+import type {
+    ForgePiContextBundleSummary,
+    ForgePiPersistedSessionState,
+    ForgePiSessionEntry,
+    ForgePiTreeNode
+} from '@shared/ForgePiTypes.js';
 import type { ForgeVirtualLorebookEntry } from './SessionTypes.js';
 import type {
     ForgeCollectionMode,
@@ -17,6 +24,7 @@ import type { PromptPresetGenerationSettings } from './PromptPresetTypes.js';
 
 export interface StagingEntry {
     id: string;
+    operation?: 'upsert' | 'delete';
     originalContent: string;
     proposedContent: string;
     description: string;
@@ -29,8 +37,102 @@ export interface StagingEntry {
     sourceSessionId: string | null;
 }
 
-export type ForgeModelRequestSource = 'planner' | 'conversation' | 'analyst' | 'executor' | 'test_chat';
+export type ForgeToolApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ForgeToolApprovalRequest {
+    id: string;
+    approvalId?: string | null;
+    requestId: string;
+    toolCallId: string;
+    toolName: string;
+    args: unknown;
+    reason: string;
+    source: ForgeRuntimeEventSource;
+    status: ForgeToolApprovalStatus;
+    createdAt: number;
+    resolvedAt?: number | null;
+    message?: string | null;
+}
+
+export interface ForgeToolApprovalResponse {
+    approvalId: string;
+    toolCallId: string;
+    toolName: string;
+    args: unknown;
+    approved: boolean;
+    message?: string | null;
+}
+
+export type ForgeModelRequestSource = 'planner' | 'conversation' | 'analyst' | 'executor' | 'test_chat' | 'batch_creative';
 export type ForgeModelRequestStatus = 'queued' | 'streaming' | 'completed' | 'failed' | 'aborted';
+export type ForgeModelRequestToolEventType =
+    | 'tool_call'
+    | 'tool_result'
+    | 'tool_approval_needed'
+    | 'tool_approval_resolved';
+
+export interface ForgeModelRequestToolEvent {
+    id: string;
+    type: ForgeModelRequestToolEventType;
+    toolCallId: string;
+    toolName: string;
+    payload: unknown;
+    createdAt: number;
+}
+
+export interface ForgeModelRequestToolSummary {
+    name: string;
+    description?: string | null;
+    needsApproval: boolean | 'dynamic';
+}
+
+export interface ForgePiTraceMessage {
+    role: string;
+    content?: unknown;
+    toolCallId?: string;
+    toolName?: string;
+    isError?: boolean;
+}
+
+export interface ForgePiModelTraceTool {
+    name: string;
+    description?: string | null;
+}
+
+export interface ForgePiModelTraceEvent {
+    type: 'request_prepared' | 'stream_start' | 'text_delta' | 'tool_call' | 'stream_done' | 'stream_error';
+    message: string;
+    timestamp: number;
+    payload?: unknown;
+}
+
+export interface ForgePiModelRequestTrace {
+    traceId: string;
+    requestId: string;
+    modelCallIndex?: number;
+    api: 'lumina-nexus';
+    modelId: string;
+    providerId: string;
+    systemPrompt: string;
+    piMessages: ForgePiTraceMessage[];
+    transformedPiMessages: ForgePiTraceMessage[];
+    providerPayload?: unknown;
+    providerResponse?: unknown;
+    tools: ForgePiModelTraceTool[];
+    generationSettings: PromptPresetGenerationSettings;
+    contextBundleSummary: ForgePiContextBundleSummary | null;
+    lifecycle: ForgePiModelTraceEvent[];
+    finalText: string;
+    errorMessage?: string | null;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface ForgeRuntimePromptMessage {
+    role: string;
+    content?: unknown;
+    name?: string;
+}
 
 export interface ForgeRequestNodeSummaryItem {
     provider: string;
@@ -80,6 +182,11 @@ export interface ForgeModelRequestTrace {
     errorMessage: string | null;
     presetId: string | null;
     nodeSummary: ForgeRequestNodeSummaryItem[];
+    agentContext?: ForgePromptPreviewAgentContext | null;
+    toolEvents: ForgeModelRequestToolEvent[];
+    toolSetSummary?: ForgeModelRequestToolSummary[];
+    piModelTrace?: ForgePiModelRequestTrace | null;
+    piModelTraces?: ForgePiModelRequestTrace[];
 }
 
 export type ForgeUserCommand =
@@ -122,6 +229,7 @@ export interface ForgeRuntimeContext {
     virtualLorebookEntries: ForgeVirtualLorebookEntry[];
     latestUserInput: string;
     latestUserCommand: ForgeUserCommand;
+    piSession?: ForgePiPersistedSessionState | null;
 }
 
 export type ForgeRuntimeEffect =
@@ -193,7 +301,7 @@ export type ForgeRuntimeEffect =
     | { type: 'freeze_workspace' }
     | { type: 'attach_reference_chat'; chatSessionId: string | null }
     | { type: 'refresh_workflow'; userInput?: string }
-    | { type: 'log_operation_prompt'; dedupeKey: string; prompt: any[] }
+    | { type: 'log_operation_prompt'; dedupeKey: string; prompt: ForgeRuntimePromptMessage[] }
     | { type: 'set_active_model_request'; requestId: string }
     | { type: 'mark_model_request_first_response'; requestId: string; firstResponseAt?: number }
     | {
@@ -212,6 +320,40 @@ export type ForgeRuntimeEffect =
         completedAt?: number;
     }
     | { type: 'fail_model_request'; requestId: string; message: string }
+    | {
+        type: 'append_model_request_tool_event';
+        requestId: string;
+        event: ForgeModelRequestToolEvent;
+    }
+    | {
+        type: 'set_model_request_tool_set_summary';
+        requestId: string;
+        tools: ForgeModelRequestToolSummary[];
+    }
+    | {
+        type: 'set_model_request_pi_trace';
+        requestId: string;
+        trace: ForgePiModelRequestTrace;
+    }
+    | {
+        type: 'set_forge_pi_session_state';
+        tree: ForgePiTreeNode[];
+        entries?: ForgePiSessionEntry[];
+        activeNodeId: string | null;
+        contextBundleSummary?: ForgePiContextBundleSummary | null;
+        loadedExtensions?: string[];
+    }
+    | { type: 'upsert_tool_approval'; approval: ForgeToolApprovalRequest }
+    | { type: 'resolve_tool_approval'; toolCallId: string; approved: boolean; message?: string }
+    | {
+        type: 'stage_from_shell_write';
+        entries: Array<{
+            path: string;
+            content: string;
+            originalContent: string;
+            command: string;
+        }>;
+    }
     | { type: 'persist_session' };
 
 export interface ForgeExecutionRequest {
@@ -234,13 +376,44 @@ export type ForgeRuntimeEvent =
     | { type: 'request_started'; requestId: string; requestedAt: number; nodeSummary: ForgeRequestNodeSummaryItem[] }
     | { type: 'trace'; requestId: string; tag: string; status: string; timestamp: number }
     | {
-        type: 'action_completed';
-        actionType: 'skill' | 'plan' | 'update' | 'memory' | 'context' | 'handoff' | 'prefill';
-        raw: string;
-        content: string;
+        type: 'tool_call';
+        requestId: string;
+        toolCallId: string;
+        toolName: string;
+        args: unknown;
         source: ForgeRuntimeEventSource;
     }
-    | { type: 'prompt_ready'; requestId: string; prompt: any[] }
+    | {
+        type: 'tool_result';
+        requestId: string;
+        toolCallId: string;
+        toolName: string;
+        result: unknown;
+        isError?: boolean;
+        source: ForgeRuntimeEventSource;
+    }
+    | {
+        type: 'tool_approval_needed';
+        requestId: string;
+        approvalId?: string;
+        toolCallId: string;
+        toolName: string;
+        args: unknown;
+        reason: string;
+        source: ForgeRuntimeEventSource;
+    }
+    | {
+        type: 'tool_approval_resolved';
+        requestId: string;
+        approvalId?: string;
+        toolCallId: string;
+        toolName: string;
+        approved: boolean;
+        message?: string;
+        source: ForgeRuntimeEventSource;
+    }
+    | { type: 'model_request_trace'; requestId: string; trace: ForgePiModelRequestTrace }
+    | { type: 'prompt_ready'; requestId: string; prompt: ForgeRuntimePromptMessage[] }
     | { type: 'first_response'; requestId: string; firstResponseAt: number }
     | { type: 'stream_chunk'; requestId: string; displayText: string; thinkingText: string; rawText: string }
     | { type: 'stream_done'; requestId: string; rawText: string; displayText: string; thinkingText: string; completedAt: number }
@@ -259,3 +432,5 @@ export interface ForgeRuntimeDecision {
     requiresGeneration: boolean;
     requiresUserDecision: boolean;
 }
+
+// Shell Write 相关类型定义于 ForgeWorkspaceSearchShell.ts

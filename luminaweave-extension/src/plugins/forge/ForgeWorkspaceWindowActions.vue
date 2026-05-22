@@ -1,6 +1,6 @@
 <template>
   <div class="forge-window-header-actions" ref="rootRef" @pointerdown.stop>
-    <ForgePromptPreview :open="isPromptPreviewOpen" @close="isPromptPreviewOpen = false" />
+    <ForgePromptPreview :open="isPromptPreviewOpen" placement="below" @close="isPromptPreviewOpen = false" />
 
     <div class="header-menu-wrap">
       <button
@@ -56,7 +56,6 @@
             <button
               class="header-menu-item"
               type="button"
-              :disabled="!store.selectedPresetId"
               @click="openPromptPreview"
             >
               <span>Prompt 预览</span>
@@ -106,11 +105,11 @@ import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { luminaWeaveApi } from '../../api';
 import type { ForgeDetailMode } from '../../types/ForgeStructuredTypes.js';
 import type { ForgeAuxPanelKind } from '../../types/ForgeWorkflowTypes.js';
-import { useCardMakerStore } from './CardMakerStore';
-import ForgePromptPreview from './ForgePromptPreview.vue';
+import { useCardMakerStore } from './CardMakerStore.js';
+import ForgePromptPreview from './inspector/ForgePromptPreview.vue';
 import SeedSnippetSelector from './SeedSnippetSelector.vue';
-import { useForgeSeedImport } from './useForgeSeedImport';
-import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from './forgeAuxPanels';
+import { useForgeSeedImport } from './useForgeSeedImport.js';
+import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from './forgeAuxPanels.js';
 
 const store = useCardMakerStore();
 const workspaceActions = inject<{
@@ -219,6 +218,7 @@ onUnmounted(() => {
 
 <style scoped>
 .forge-window-header-actions {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -231,8 +231,8 @@ onUnmounted(() => {
   border: 1px solid color-mix(in srgb, var(--lw-border-base) 88%, white);
   background: color-mix(in srgb, var(--lw-bg-elevated) 96%, transparent);
   color: var(--lw-text-main);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   cursor: pointer;
   transition: var(--lw-transition);
 }
@@ -274,8 +274,8 @@ onUnmounted(() => {
 .header-menu-label {
   display: block;
   margin-bottom: 8px;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--lw-text-muted);
