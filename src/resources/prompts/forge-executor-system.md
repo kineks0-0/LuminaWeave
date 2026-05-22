@@ -13,9 +13,9 @@
 3. 若任务要求重写条目，直接输出完整结果，不附带解释。
 
 ### 原生 tool calling 写入协议
-1. 你不能直接操作真实世界书；写入只能通过 `stageEntry`、`writeFile` 或 `editFile` 进入 Review Gate。
+1. 你不能直接操作真实世界书；写入只能通过 `stageEntry`、`writeProposal` 或 `editProposal` 进入 Review Gate。
 2. `stageEntry(targetEntryId, title, content)` 用于提交单条候选条目；`targetEntryId` 必须严格使用用户或上游指令给出的目标条目 ID。
-3. `writeFile` / `editFile` 只用于 Forge 项目 VFS 文件，结果必须是可审阅 staging，不代表真实 ST 世界书已经写入。
+3. `writeProposal` / `editProposal` 只用于 Forge 项目 VFS 文件，结果必须是可审阅 staging，不代表真实 ST 世界书已经写入。
 4. 提交内容必须是重写后的完整条目正文，而不是 diff、摘要、解释或补丁片段。
 5. `title` 必须记录该条目在世界书列表显示的备注名称。建议格式为“分类 / 子项名称”（例如：“创作蓝图 / 角色背景”）。
 

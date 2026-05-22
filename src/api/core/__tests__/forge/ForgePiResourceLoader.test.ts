@@ -96,7 +96,8 @@ describe('ForgePiResourceLoader', () => {
         const bundle = await loader.buildContextBundle(createContext());
 
         expect(bundle.loadedExtensions).toEqual(['@luminaweave/pi-forge-browser']);
-        expect(bundle.activeSkills).toContain('虚拟世界书编辑器');
+        expect(bundle.activeSkills).toContain('虚拟世界书编辑器 (skillName: virtual-lorebook-editor, path: ./agent/skills/virtual-lorebook-editor/SKILL.md)');
+        expect(bundle.activeSkills).toContain('需求捕捉与支撑点识别 (skillName: reference-needs-capture, path: ./agent/skills/reference-needs-capture/SKILL.md)');
         expect(bundle.files.map(file => file.path)).toEqual(expect.arrayContaining([
             './AGENTS.md',
             './.forge/agent/SYSTEM.md',
