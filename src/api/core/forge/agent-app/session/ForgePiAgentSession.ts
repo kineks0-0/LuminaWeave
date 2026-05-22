@@ -27,6 +27,7 @@ import {
     ForgePiSessionManager,
     type ForgePiSessionManagerDeps
 } from './ForgePiSessionManager.js';
+import { classifyForgePiAssistantMessageForReplay } from './ForgePiMessageSanitizer.js';
 import {
     forgePiExtensionRunner,
     type ForgePiExtensionRunner
@@ -394,7 +395,10 @@ export class ForgePiAgentSession {
             effects ? nextEffects => effects.push(...nextEffects) : undefined
         );
         const systemPrompt = this.resourceLoader.buildSystemPrompt({ systemFragments, contextBundle });
-        const branchMessages = this.sessionManager.getBranchMessages();
+        const branchMessages = this.sessionManager.getBranchMessages({
+            providerId: modelConfig.model.provider,
+            modelId: modelConfig.model.id
+        });
         return {
             contextBundle,
             source: this.resolveEventSource(input.request),
@@ -515,9 +519,22 @@ export class ForgePiAgentSession {
         }
         if (event.type === 'message_end' && event.message.role === 'assistant') {
             const text = this.extractAssistantText(event.message);
+            const classified = classifyForgePiAssistantMessageForReplay(event.message, {
+                providerId: event.message.provider,
+                modelId: event.message.responseModel ?? event.message.model
+            });
             this.sessionManager.append('assistant', 'Assistant', text, {
-                agentMessage: event.message,
-                text
+                agentMessage: classified.replayMessage,
+                replayAgentMessage: classified.replayMessage,
+                text,
+                providerReasoningArtifactCount: classified.providerReasoningArtifacts.length,
+                unsafeInternalPartCount: classified.unsafeInternalParts.length,
+                reasoningSanitizerTrace: {
+                    rawPartTypes: this.describeAgentMessageParts(event.message),
+                    replayPartTypes: this.describeAgentMessageParts(classified.replayMessage),
+                    rawPartCount: this.getAgentMessageContent(event.message).length,
+                    replayPartCount: this.getAgentMessageContent(classified.replayMessage).length
+                }
             });
         }
         if (event.type === 'tool_execution_start') {
@@ -593,6 +610,20 @@ export class ForgePiAgentSession {
             ? this.modelRegistry.getTrace(requestId)
             : null;
         return trace ? [trace] : [];
+    }
+
+    private describeAgentMessageParts(message: AgentMessage): string[] {
+        return this.getAgentMessageContent(message).map(part => this.describeAgentMessagePart(part));
+    }
+
+    private getAgentMessageContent(message: AgentMessage): unknown[] {
+        if (!('content' in message) || !Array.isArray(message.content)) return [];
+        return message.content;
+    }
+
+    private describeAgentMessagePart(part: unknown): string {
+        const type = (part as { type?: unknown }).type;
+        return typeof type === 'string' && type.length > 0 ? type : 'unknown';
     }
 
     private extractAssistantText(message: AgentMessage): string {
