@@ -9,6 +9,7 @@ import type {
     ITokenCounter
 } from './interfaces.js';
 import { DefaultTokenCounter } from './defaults/DefaultTokenCounter.js';
+import type { HALRuntimeMode, HALRuntimePorts } from '@shared/api/HALRuntimePorts.js';
 
 /**
  * HAL 运行时上下文
@@ -16,6 +17,7 @@ import { DefaultTokenCounter } from './defaults/DefaultTokenCounter.js';
  */
 export class HALContext {
     private static _instance: HALContext | null = null;
+    private _runtime: HALRuntimePorts | null = null;
 
     /**
      * 获取当前 HAL 上下文实例
@@ -32,6 +34,21 @@ export class HALContext {
      */
     static set instance(value: HALContext) {
         this._instance = value;
+    }
+
+    get runtime(): HALRuntimePorts {
+        if (!this._runtime) {
+            throw new Error('[HALContext] Runtime ports not initialized. Make sure HALBootstrap.init() is called.');
+        }
+        return this._runtime;
+    }
+
+    set runtime(value: HALRuntimePorts) {
+        this._runtime = value;
+    }
+
+    get runtimeMode(): HALRuntimeMode {
+        return this.runtime.mode;
     }
 
     constructor(

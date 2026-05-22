@@ -31,8 +31,13 @@ declare global {
         oai_settings: Record<string, unknown>;
         extension_settings: Record<string, any>;
         selected_chat: string;
+        chat_metadata: {
+            variables?: Record<string, any>;
+            [key: string]: any;
+        };
         world_info: Record<string, unknown>;
         world_info_active: Array<Record<string, unknown>>;
+        worldbooks: Record<string, unknown>;
         
         // ST 核心对象
         eventSource: {
@@ -71,7 +76,15 @@ declare global {
         depth: number;
         order: number;
         probability: number;
+        useProbability?: boolean;
         scan_depth: number;
+        caseSensitive?: boolean;
+        matchWholeWords?: boolean;
+        useRegex?: boolean;
+        excludeRecursion?: boolean;
+        preventRecursion?: boolean;
+        delayUntilRecursion?: boolean;
+        outletName?: string;
         [key: string]: any;
     }
     

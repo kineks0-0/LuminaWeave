@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { globalMutationEngine } from './MutationEngine';
-import { globalPromptRegistry, PromptSlot, PromptType } from '../../api/core/PromptRegistry';
+import { globalMutationEngine } from './MutationEngine.js';
+import { globalPromptRegistry, PromptSlot, PromptType } from '../../api/core/hal/prompt/PromptRegistry.js';
 
 /**
  * 动态表格元数据定义

@@ -1,6 +1,6 @@
-import { globalXMLInterceptor } from '../../api/core/XMLInterceptor';
-import { globalPromptRegistry, PromptSlot, STIdentifier } from '../../api/core/PromptRegistry';
-import { p } from '../../api/core/PromptUtils';
+import { globalXMLInterceptor } from '../../api/core/xml-view/XMLInterceptor.js';
+import { globalPromptRegistry, PromptSlot, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
+import { p } from '../../api/core/hal/prompt/PromptUtils.js';
 
 /**
  * 对应大模型必须输出的标准化 Mutation 操作指令结构

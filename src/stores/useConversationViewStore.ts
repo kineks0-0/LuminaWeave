@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { luminaWeaveApi } from '../api';
-import { LorebookTimelineResolver } from '../api/core/LorebookTimelineResolver';
-import { MemoryViewResolver } from '../api/core/MemoryViewResolver';
-import type { ResolveMemoryViewParams } from '../api/core/MemoryViewResolver';
-import { useConversationContextStore } from './useConversationContextStore';
+import { LorebookTimelineResolver } from '../api/core/lorebook/LorebookTimelineResolver.js';
+import { MemoryViewResolver } from '../api/core/runtime-utils/MemoryViewResolver.js';
+import type { ResolveMemoryViewParams } from '../api/core/runtime-utils/MemoryViewResolver.js';
+import { useConversationContextStore } from './useConversationContextStore.js';
 
 let hasBoundLorebookListeners = false;
 const sharedLorebookRevision = ref(0);

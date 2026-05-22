@@ -1,4 +1,5 @@
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import type { ForgePiPersistedSessionState } from '@shared/ForgePiTypes.js';
 import type { ForgeMemoryTree } from './ForgeMemoryTypes.js';
 import type { StagingEntry } from './ForgeRuntimeTypes.js';
 import type { ForgeTimelineItem } from './ForgeTimelineTypes.js';
@@ -50,6 +51,7 @@ export interface ForgeWorkspaceSessionRef {
     conversationId?: string;
     sessionChatId?: string;
     workspacePath?: string;
+    projectTitle?: string;
     title: string;
     createdAt: number;
     updatedAt: number;
@@ -71,6 +73,7 @@ export interface ForgeWorkspaceSession {
     forgeProjectId?: string;
     conversationId?: string;
     workspacePath?: string;
+    projectTitle?: string;
     sessionChatId: string;
     title: string;
     createdAt: number;
@@ -82,6 +85,7 @@ export interface ForgeWorkspaceSession {
     selectedChatSnapshotId: string | null;
     draftInput: string;
     timelineItems?: ForgeTimelineItem[];
+    piSession?: ForgePiPersistedSessionState;
     stagingEntries: StagingEntry[];
     commitReadyEntries?: StagingEntry[];
     virtualLorebookEntries?: ForgeVirtualLorebookEntry[];

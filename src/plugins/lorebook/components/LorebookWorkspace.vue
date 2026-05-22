@@ -263,12 +263,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, inject, watch } from 'vue';
-import { LuminaWeaveAPI } from '../../../api/index';
-import { lwStorage } from '../../../api/storage';
-import { useTimelineStore, type TimelineSourceId } from '../../../stores/useTimelineStore';
-import { useConversationContextStore } from '../../../stores/useConversationContextStore';
-import { LorebookTimelineResolver } from '../../../api/core/LorebookTimelineResolver';
-import type { LorebookVersionMode } from '../../../types/LorebookViewTypes';
+import { LuminaWeaveAPI } from '../../../api/index.js';
+import { lwStorage } from '../../../api/storage.js';
+import { useTimelineStore, type TimelineSourceId } from '../../../stores/useTimelineStore.js';
+import { useConversationContextStore } from '../../../stores/useConversationContextStore.js';
+import { LorebookTimelineResolver } from '../../../api/core/lorebook/LorebookTimelineResolver.js';
+import type { LorebookVersionMode } from '../../../types/LorebookViewTypes.js';
 import LorebookEditor from '../LorebookEditor.vue';
 
 const props = defineProps<{
@@ -669,7 +669,7 @@ onUnmounted(() => {
 }
 
 .lorebook-root[data-mode="small"] .book-select {
-  font-size: 15px;
+  font-size: var(--lw-type-title-small-size);
 }
 
 .lorebook-root[data-mode="small"] .lore-search {
@@ -685,7 +685,7 @@ onUnmounted(() => {
 }
 
 .lorebook-root[data-mode="small"] .header-title {
-  font-size: 18px;
+  font-size: var(--lw-type-title-large-size);
 }
 
 .lorebook-root[data-mode="small"] .lore-actions {
@@ -754,8 +754,8 @@ onUnmounted(() => {
 }
 
 .header-title {
-  font-size: 24px;
-  font-weight: 800;
+  font-size: var(--lw-type-headline-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   font-family: var(--lw-font-display);
   color: var(--lw-text-main);
 }
@@ -813,8 +813,8 @@ onUnmounted(() => {
 .status-kicker {
   display: inline-block;
   margin-bottom: 4px;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--lw-primary);
@@ -822,13 +822,13 @@ onUnmounted(() => {
 
 .version-status-copy strong {
   display: block;
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
   color: var(--lw-text-main);
 }
 
 .version-status-copy p {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   color: var(--lw-text-muted);
 }
 
@@ -846,7 +846,7 @@ onUnmounted(() => {
   border-radius: 999px;
   background: var(--lw-lorebook-chip-bg, var(--lw-surface-container-high));
   color: var(--lw-text-secondary);
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
 }
 
 .version-controls {
@@ -868,7 +868,7 @@ onUnmounted(() => {
   color: var(--lw-text-secondary);
   border-radius: 999px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   cursor: pointer;
   transition: var(--lw-transition);
 }
@@ -904,7 +904,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   color: var(--lw-text-muted);
 }
 
@@ -917,7 +917,7 @@ onUnmounted(() => {
 
 .version-history-header strong {
   color: var(--lw-text-main);
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
 }
 
 .history-toggle-btn {
@@ -926,8 +926,8 @@ onUnmounted(() => {
   color: var(--lw-text-secondary);
   border-radius: 999px;
   padding: 5px 10px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   cursor: pointer;
   transition: var(--lw-transition);
 }
@@ -980,19 +980,19 @@ onUnmounted(() => {
 }
 
 .version-history-title {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
 }
 
 .version-history-mode {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-primary);
 }
 
 .version-history-meta {
   flex-wrap: wrap;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-muted);
 }
 
@@ -1094,8 +1094,8 @@ onUnmounted(() => {
 }
 
 .item-id {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-primary);
   letter-spacing: 0.02em;
   font-family: var(--lw-font-mono);
@@ -1108,9 +1108,9 @@ onUnmounted(() => {
 }
 
 .meta-tag {
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
   font-family: var(--lw-font-mono);
-  font-weight: 700;
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-muted);
   background: var(--lw-lorebook-chip-bg, var(--lw-surface-container-high));
   padding: 1px 6px;
@@ -1129,8 +1129,8 @@ onUnmounted(() => {
 }
 
 .table-pos-badge {
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   padding: 2px 6px;
   background: var(--lw-lorebook-chip-bg, var(--lw-surface-container-low));
   border-radius: 4px;
@@ -1143,15 +1143,15 @@ onUnmounted(() => {
 }
 
 .item-title {
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-medium-size);
+  font-weight: var(--lw-type-title-small-weight);
   font-family: var(--lw-font-display);
   color: var(--lw-text-main);
   margin-bottom: 8px;
 }
 
 .item-summary {
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
   color: var(--lw-text-secondary);
   line-height: 1.5;
   margin-bottom: 16px;
@@ -1172,8 +1172,8 @@ onUnmounted(() => {
   padding: 2px 8px;
   background: var(--lw-lorebook-chip-bg, var(--lw-surface-container-high));
   border-radius: 8px;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-label-medium-weight);
   color: var(--lw-text-secondary);
 }
 
@@ -1220,7 +1220,7 @@ onUnmounted(() => {
 }
 
 .empty-icon {
-  font-size: 80px;
+  font-size: var(--lw-type-display-large-size);
   margin-bottom: 24px;
   filter: grayscale(1);
   opacity: 0.1;
@@ -1234,9 +1234,9 @@ onUnmounted(() => {
 
 .empty-state p {
   color: var(--lw-text-muted);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -0.01em;
+  font-weight: var(--lw-type-title-small-weight);
+  font-size: var(--lw-type-title-small-size);
+  letter-spacing: 0;
 }
 
 /* ========================================
@@ -1320,8 +1320,8 @@ onUnmounted(() => {
 }
 
 .grid-card-title {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   font-family: var(--lw-font-display);
   color: var(--lw-text-main);
   overflow: hidden;
@@ -1330,7 +1330,7 @@ onUnmounted(() => {
 }
 
 .grid-card-body {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   color: var(--lw-text-secondary);
   line-height: 1.5;
   display: -webkit-box;
@@ -1349,7 +1349,7 @@ onUnmounted(() => {
 }
 
 .grid-card-meta {
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
   font-family: var(--lw-font-mono);
   color: var(--lw-text-muted);
   letter-spacing: 0.03em;
@@ -1375,8 +1375,8 @@ onUnmounted(() => {
   grid-template-columns: 28px 1fr minmax(100px, 0.6fr) 56px 56px 56px;
   gap: 0;
   padding: 6px 12px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   font-family: var(--lw-font-mono);
   color: var(--lw-text-muted);
   text-transform: uppercase;
@@ -1398,7 +1398,7 @@ onUnmounted(() => {
   transition: background 0.12s ease;
   border-bottom: 1px solid var(--lw-border-base);
   align-items: center;
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
   color: var(--lw-text-main);
 }
 
@@ -1434,7 +1434,7 @@ onUnmounted(() => {
 }
 
 .table-col-name {
-  font-weight: 600;
+  font-weight: var(--lw-type-label-medium-weight);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1442,7 +1442,7 @@ onUnmounted(() => {
 }
 
 .table-col-keys {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   color: var(--lw-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1453,7 +1453,7 @@ onUnmounted(() => {
 .table-col-depth,
 .table-col-order,
 .table-col-prob {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   font-family: var(--lw-font-mono);
   color: var(--lw-text-secondary);
   text-align: center;
@@ -1485,11 +1485,11 @@ onUnmounted(() => {
 
 .lorebook-root[data-mode="small"] .table-row {
   padding: 6px 8px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
 }
 
 .lorebook-root[data-mode="small"] .table-col-name {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
 }
 
 /* 侧边栏下卡片模式适配 */

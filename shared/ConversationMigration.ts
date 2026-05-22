@@ -3,6 +3,7 @@ import type {
     ConversationDocument,
     ForgeConversationPluginState
 } from './ConversationTypes.js';
+import type { ForgePiPersistedSessionState } from './ForgePiTypes.js';
 import { createEmptyConversationDocument } from './ConversationTypes.js';
 import { resolveConversationSummary } from './ConversationSummaryResolver.js';
 
@@ -11,6 +12,7 @@ type LegacyForgeSessionRecord = {
     forgeProjectId?: string;
     conversationId?: string;
     workspacePath?: string;
+    projectTitle?: string;
     sessionChatId?: string;
     title?: string;
     createdAt?: number;
@@ -37,6 +39,7 @@ type LegacyForgeSessionRecord = {
     worldlineSnapshots?: Record<string, unknown>;
     detailMode?: string | null;
     entryMode?: string | null;
+    piSession?: ForgePiPersistedSessionState;
 };
 
 type LegacyChatMetadata = {
@@ -94,7 +97,8 @@ export const migrateLegacyForgeSession = (
     const forgeState: ForgeConversationPluginState = {
         forgeProjectId: session.forgeProjectId || session.id,
         conversationId: session.conversationId || session.sessionChatId || session.id,
-        workspacePath: session.workspacePath || `/workspaces/forge/${encodeURIComponent(session.forgeProjectId || session.id)}`,
+        workspacePath: session.workspacePath || `/workspaces/forge/${encodeURIComponent(session.forgeProjectId || session.id)}/chat/${encodeURIComponent(session.conversationId || session.sessionChatId || session.id)}`,
+        projectTitle: session.projectTitle || session.title,
         structuredState: session.structuredState,
         draftTree: session.draftTree,
         forgeMemoryTree: session.forgeMemoryTree,
@@ -115,7 +119,8 @@ export const migrateLegacyForgeSession = (
         entryMode: session.entryMode || null,
         draftInput: session.draftInput || '',
         presetId: session.presetId || '',
-        sessionChatId: session.sessionChatId || session.id
+        sessionChatId: session.sessionChatId || session.id,
+        piSession: session.piSession
     };
 
     const document = createEmptyConversationDocument({

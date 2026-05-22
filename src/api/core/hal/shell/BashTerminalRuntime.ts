@@ -7,6 +7,7 @@ import {
     type BashExecResult,
     type BashOptions,
     type Command,
+    type IFileSystem,
     type NetworkConfig
 } from 'just-bash';
 import type { ShellExecResult, ShellSessionRef, VFSCompletionCandidate, VFSCompletionResult } from '@shared/resources/index.js';
@@ -24,6 +25,12 @@ export interface BashTerminalRuntimeOptions {
     networkAllowList?: string[];
     network?: NetworkConfig;
     cwd?: string;
+    extraMounts?: BashRuntimeMount[];
+}
+
+export interface BashRuntimeMount {
+    path: string;
+    fs: IFileSystem;
 }
 
 export interface ShellSessionState {
@@ -100,6 +107,9 @@ export class BashTerminalRuntime {
         fs.mount('/sources', new ResourceBackedBashFs('/sources', options.vfs, options.permissions, options.session));
         fs.mount('/library', new ResourceBackedBashFs('/library', options.vfs, options.permissions, options.session));
         fs.mount('/workspaces', new WorkspaceBashFs(options.permissions, options.session));
+        for (const mount of options.extraMounts ?? []) {
+            fs.mount(mount.path, mount.fs);
+        }
 
         this.bash = new Bash({
             fs,

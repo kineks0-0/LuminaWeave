@@ -1,6 +1,6 @@
 import { STClient } from './STClient.js';
 import { STGlobalAccessor } from './STGlobalAccessor.js';
-import { configureForgeTestChatHostPort } from '../../forge/ForgeTestChatHostPort.js';
+import { configureForgeTestChatHostPort } from '../../forge/test-chat/ForgeTestChatHostPort.js';
 import type { ForgeTestChatCharCard } from '../../../../types/ForgeTestChatTypes.js';
 import type { PromptPresetCharCard, PromptPresetGenerationSettings } from '../../../../types/PromptPresetTypes.js';
 

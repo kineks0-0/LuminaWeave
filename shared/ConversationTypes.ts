@@ -1,5 +1,6 @@
 import type { LuminaChatMessage } from './LuminaMessage.js';
 import type { TransactionRecord } from './api/TransactionTypes.js';
+import type { ForgePiPersistedSessionState } from './ForgePiTypes.js';
 
 export const CONVERSATION_SCHEMA_VERSION = 1;
 
@@ -9,6 +10,7 @@ export interface ForgeConversationPluginState {
     forgeProjectId?: string;
     conversationId?: string;
     workspacePath?: string;
+    projectTitle?: string;
     structuredState?: unknown;
     draftTree?: unknown;
     forgeMemoryTree?: unknown;
@@ -30,6 +32,7 @@ export interface ForgeConversationPluginState {
     draftInput?: string;
     presetId?: string;
     sessionChatId?: string;
+    piSession?: ForgePiPersistedSessionState;
 }
 
 export interface ChatConversationPluginState {

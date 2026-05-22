@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LuminaWeaveAPIBase } from '../facade/LuminaWeaveAPIBase.js';
-import { WorldlineStore } from '../storage/WorldlineStore.js';
-import { ConversationService } from '../conversation/ConversationService.js';
+import { LuminaWeaveAPIBase } from '@/api/core/facade/LuminaWeaveAPIBase.js';
+import { WorldlineStore } from '@/api/core/storage/WorldlineStore.js';
+import { ConversationService } from '@/api/core/conversation/ConversationService.js';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
-import { forgeConversationGateway } from '../forge/ForgeConversationGateway.js';
-import { initMockHAL } from './halMock.js';
-import { configureChatHostProvider, type ChatSessionDirectoryPort } from '../conversation/ChatHostPorts.js';
+import { HALContext } from '@/api/core/hal/HALContext.js';
+import { forgeConversationGateway } from '@/api/core/forge/project/ForgeConversationGateway.js';
+import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
+import { configureChatHostProvider, type ChatSessionDirectoryPort } from '@/api/core/conversation/ChatHostPorts.js';
 
 const mockState = vi.hoisted(() => ({
     currentChatId: 'chat_live',
@@ -63,7 +63,7 @@ const mockState = vi.hoisted(() => ({
     }
 }));
 
-vi.mock('../../storage.js', () => ({
+vi.mock('@/api/storage.js', () => ({
     lwStorage: {
         _getContextIds: vi.fn(() => ({ chatId: mockState.currentChatId })),
         get: vi.fn((_: string, def: unknown) => def),
@@ -72,7 +72,7 @@ vi.mock('../../storage.js', () => ({
     }
 }));
 
-vi.mock('../conversation/ChatSessionIndexService.js', () => ({
+vi.mock('@/api/core/conversation/ChatSessionIndexService.js', () => ({
     buildTitleAndSummary: (chatId: string, previewMessage: string) => ({
         title: previewMessage ? previewMessage.slice(0, 22) : `聊天 ${chatId.slice(0, 10)}`,
         summary: previewMessage || '暂无预览内容'
@@ -82,7 +82,7 @@ vi.mock('../conversation/ChatSessionIndexService.js', () => ({
     }
 }));
 
-vi.mock('../forge/ForgeSessionRepository.js', () => ({
+vi.mock('@/api/core/forge/project/ForgeSessionRepository.js', () => ({
     forgeSessionRepository: {
         refreshFromServer: vi.fn(async () => undefined),
         listSessions: vi.fn(() => mockState.forgeSessions),
@@ -90,7 +90,7 @@ vi.mock('../forge/ForgeSessionRepository.js', () => ({
     }
 }));
 
-vi.mock('../storage/PersistenceService.js', () => ({
+vi.mock('@/api/core/storage/PersistenceService.js', () => ({
     PersistenceService: vi.fn(function (store: WorldlineStore) {
         return {
             loadFromIndependentChat: vi.fn(async (chatId: string) => {
@@ -110,70 +110,13 @@ vi.mock('../storage/PersistenceService.js', () => ({
     })
 }));
 
-vi.mock('../host-drivers/st/STAdapter.js', () => ({
+vi.mock('@/api/core/host-drivers/st/STAdapter.js', () => ({
     STAdapter: {
         getSnapshot: vi.fn(async () => ({
             lumina: [],
             st: [],
             idToIndex: new Map<string, number>()
         }))
-    }
-}));
-
-vi.mock('@shared/api/BridgeDispatcher.js', () => ({
-    BridgeDispatcher: {
-        conversation: {
-            getConversation: vi.fn(async (id: string) => ({
-                document: mockState.savedConversationDocuments.get(id) || null
-            })),
-            saveConversation: vi.fn(async (id: string, document: any) => {
-                mockState.savedConversationDocuments.set(id, document);
-                mockState.chatSessions = [
-                    {
-                        id,
-                        title: document.title,
-                        source: 'lumina-server',
-                        createdAt: document.createdAt,
-                        updatedAt: document.updatedAt,
-                        messageCount: document.summary?.messageCount ?? 0,
-                        summary: document.summary?.previewMessage || '暂无预览内容',
-                        previewMessage: document.summary?.previewMessage || '',
-                        activeLeafId: document.activeLeafId,
-                        characterId: document.pluginState?.chat?.characterId ?? null,
-                        characterName: document.pluginState?.chat?.characterName || '',
-                        characterAvatarUrl: document.pluginState?.chat?.characterAvatarUrl ?? null
-                    },
-                    ...mockState.chatSessions.filter((session) => session.id !== id)
-                ];
-                return {
-                    success: true,
-                    document,
-                    summary: {
-                        id,
-                        schemaVersion: document.schemaVersion,
-                        conversationType: document.conversationType,
-                        title: document.title,
-                        createdAt: document.createdAt,
-                        updatedAt: document.updatedAt,
-                        activeLeafId: document.activeLeafId,
-                        previewMessage: document.summary?.previewMessage || '',
-                        messageCount: document.summary?.messageCount ?? 0,
-                        characterId: document.pluginState?.chat?.characterId ?? null,
-                        characterName: document.pluginState?.chat?.characterName || '',
-                        characterAvatarUrl: document.pluginState?.chat?.characterAvatarUrl ?? null
-                    },
-                    lastCommittedSeq: 0
-                };
-            }),
-            deleteConversation: vi.fn(async (id: string) => {
-                mockState.savedConversationDocuments.delete(id);
-                mockState.chatSessions = mockState.chatSessions.filter((session) => session.id !== id);
-                return {
-                    success: true,
-                    id
-                };
-            })
-        }
     }
 }));
 
@@ -274,7 +217,66 @@ describe('ConversationService', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        initMockHAL();
+        initMockHAL({
+            runtime: {
+                conversation: {
+                    listConversations: vi.fn(async () => ({ conversations: mockState.chatSessions })),
+                    getConversation: vi.fn(async (id: string) => ({
+                        document: mockState.savedConversationDocuments.get(id) || null
+                    })),
+                    saveConversation: vi.fn(async (id: string, document: any) => {
+                        mockState.savedConversationDocuments.set(id, document);
+                        mockState.chatSessions = [
+                            {
+                                id,
+                                title: document.title,
+                                source: 'lumina-server',
+                                createdAt: document.createdAt,
+                                updatedAt: document.updatedAt,
+                                messageCount: document.summary?.messageCount ?? 0,
+                                summary: document.summary?.previewMessage || '暂无预览内容',
+                                previewMessage: document.summary?.previewMessage || '',
+                                activeLeafId: document.activeLeafId,
+                                characterId: document.pluginState?.chat?.characterId ?? null,
+                                characterName: document.pluginState?.chat?.characterName || '',
+                                characterAvatarUrl: document.pluginState?.chat?.characterAvatarUrl ?? null
+                            },
+                            ...mockState.chatSessions.filter((session) => session.id !== id)
+                        ];
+                        return {
+                            success: true,
+                            document,
+                            summary: {
+                                id,
+                                schemaVersion: document.schemaVersion,
+                                conversationType: document.conversationType,
+                                title: document.title,
+                                createdAt: document.createdAt,
+                                updatedAt: document.updatedAt,
+                                activeLeafId: document.activeLeafId,
+                                previewMessage: document.summary?.previewMessage || '',
+                                messageCount: document.summary?.messageCount ?? 0,
+                                characterId: document.pluginState?.chat?.characterId ?? null,
+                                characterName: document.pluginState?.chat?.characterName || '',
+                                characterAvatarUrl: document.pluginState?.chat?.characterAvatarUrl ?? null
+                            },
+                            lastCommittedSeq: 0
+                        };
+                    }),
+                    mutateConversation: vi.fn(),
+                    deleteConversation: vi.fn(async (id: string) => {
+                        mockState.savedConversationDocuments.delete(id);
+                        mockState.chatSessions = mockState.chatSessions.filter((session) => session.id !== id);
+                        return {
+                            success: true,
+                            id
+                        };
+                    }),
+                    getTransactions: vi.fn(),
+                    rollbackTransaction: vi.fn()
+                }
+            }
+        });
         configureChatHostProvider(hostDirectoryPort);
         vi.mocked(hostDirectoryPort.createSession).mockResolvedValue({
             success: true,
@@ -673,7 +675,7 @@ describe('ConversationService', () => {
             resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
             resolvedChatFile: 'chat_archive'
         });
-        vi.mocked(BridgeDispatcher.conversation.deleteConversation).mockRejectedValueOnce(
+        vi.mocked(HALContext.instance.runtime.conversation.deleteConversation).mockRejectedValueOnce(
             new Error('Failed to delete chat default_Seraphina/Seraphina - 2026-04-19@17h28m44s049ms: Not found: Chat not found: default_Seraphina/Seraphina - 2026-04-19@17h28m44s049ms')
         );
 

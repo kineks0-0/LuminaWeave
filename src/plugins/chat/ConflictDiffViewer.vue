@@ -107,11 +107,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted, inject } from 'vue';
+import { LuminaWeaveAPI } from '../../api/index.js';
 
-import { DiffVisualizer } from '../../api/core/SyncUtils.js';
+import { DiffVisualizer } from '../../api/core/host-drivers/st/SyncUtils.js';
 
-const lwApi = (window as any).LuminaWeave_API;
+const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const props = defineProps<{
   isTabMode?: boolean | string
 }>();
@@ -223,7 +224,7 @@ const close = () => {
 const resolve = async (winner: 'st' | 'lumina') => {
   if (!lwApi) return;
   try {
-    console.log(`[ConflictViewer] 用户选择解决版本: ${winner}`);
+    console.log(`[ConflictViewer] 用户选择解决版本:  ${winner}`);
 
     // UI 层不再直接调用底层的 commitToST 或决定 forceOverwrite
     // 而是通过触发带意图的 sync 请求，由服务层统一决议
@@ -366,30 +367,38 @@ defineExpose({ open });
 }
 
 .title-area h2 {
-  font-size: 20px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-large-size);
+  line-height: var(--lw-type-title-large-line-height);
+  font-weight: var(--lw-type-title-large-weight);
+  letter-spacing: var(--lw-type-title-large-tracking);
   color: #0f172a;
   margin: 12px 0 6px;
-  letter-spacing: -0.02em;
 }
 
 @media (max-width: 768px) {
   .title-area h2 {
-    font-size: 17px;
+    font-size: var(--lw-type-title-medium-size);
+    line-height: var(--lw-type-title-medium-line-height);
+    font-weight: var(--lw-type-title-medium-weight);
+    letter-spacing: var(--lw-type-title-medium-tracking);
     margin: 8px 0 4px;
   }
 
   .title-area p {
-    font-size: 11px;
-    line-height: 1.4;
+    font-size: var(--lw-type-body-small-size);
+    line-height: var(--lw-type-body-small-line-height);
+    font-weight: var(--lw-type-body-small-weight);
+    letter-spacing: var(--lw-type-body-small-tracking);
   }
 }
 
 .title-area p {
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   color: #64748b;
   max-width: 480px;
-  line-height: 1.5;
 }
 
 .brand-badge {
@@ -398,10 +407,11 @@ defineExpose({ open });
   background: rgba(15, 23, 42, 0.1);
   color: var(--lw-primary);
   border-radius: 8px;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .header-actions {
@@ -453,8 +463,10 @@ defineExpose({ open });
 }
 
 .lw-section-title {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: #64748b;
   margin-left: 4px;
 }
@@ -551,13 +563,18 @@ defineExpose({ open });
 }
 
 .lw-side-label {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: #1e293b;
 }
 
 .lw-side-status {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: #94a3b8;
   margin-top: 2px;
 }
@@ -565,8 +582,10 @@ defineExpose({ open });
 .lw-apply-btn {
   padding: 8px 16px;
   border-radius: 12px;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   border: none;
   background: #111827;
   color: white;
@@ -580,7 +599,6 @@ defineExpose({ open });
   .lw-apply-btn {
     width: auto; /* 恢复自适应宽度 */
     padding: 8px 12px; /* 适当减小 padding */
-    font-size: 12px;
   }
 }
 
@@ -618,7 +636,10 @@ defineExpose({ open });
 }
 
 .lw-diff-controls label {
-  font-size: 13px;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   color: #475569;
   cursor: pointer;
   display: flex;
@@ -636,7 +657,7 @@ defineExpose({ open });
 
 @media (max-width: 768px) {
   .lw-diff-scroll {
-    border-radius: 0; /* 去掉圆角 */
+    border-radius: 0;
   }
 }
 
@@ -665,11 +686,12 @@ defineExpose({ open });
     display: flex; /* 改为 flex 以支持右侧对齐信息 */
     justify-content: space-between;
     align-items: center;
-    font-size: 10px; /* 稍微调大一点，提升可读性 */
-    font-weight: 700; /* 去掉极粗的字重，看起来更和谐 */
+    font-size: var(--lw-type-label-small-size);
+    line-height: var(--lw-type-label-small-line-height);
+    font-weight: var(--lw-type-label-small-weight);
+    letter-spacing: var(--lw-type-label-small-tracking);
     padding: 6px 12px; /* 增加一点内边距 */
     text-transform: uppercase;
-    letter-spacing: 0.02em;
     background: #1e293b; /* 使用稍微亮一点的背景，区分内容区 */
     color: #cbd5e1; /* 提升对比度 */
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -692,7 +714,10 @@ defineExpose({ open });
     background: rgba(255, 255, 255, 0.1);
     padding: 2px 6px;
     border-radius: 4px;
-    font-size: 9px;
+    font-size: var(--lw-type-label-small-size);
+    line-height: var(--lw-type-label-small-line-height);
+    font-weight: var(--lw-type-label-small-weight);
+    letter-spacing: var(--lw-type-label-small-tracking);
   }
 }
 
@@ -724,7 +749,10 @@ defineExpose({ open });
 
 .lw-code-no {
   color: #64748b;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   padding: 8px 8px;
   text-align: right;
   border-right: 1px solid rgba(148, 163, 184, 0.14);
@@ -734,7 +762,10 @@ defineExpose({ open });
 
 .lw-code-sign {
   color: #94a3b8;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   padding: 8px 6px;
   text-align: center;
   border-right: 1px solid rgba(148, 163, 184, 0.14);
@@ -744,8 +775,10 @@ defineExpose({ open });
 
 .lw-code-text {
   color: #e2e8f0;
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   padding: 8px 12px;
   white-space: pre-wrap;
   word-break: break-word; /* 确保长单词不会撑破布局 */
@@ -791,8 +824,10 @@ defineExpose({ open });
   justify-content: center;
   width: 40px;
   background: #f1f5f9;
-  font-size: 10px;
-  font-weight: 900;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: #cbd5e1;
   user-select: none;
 }
@@ -816,14 +851,18 @@ defineExpose({ open });
     min-height: 24px;
     background: #1e293b;
     color: #64748b;
-    font-size: 9px;
+    font-size: var(--lw-type-label-small-size);
+    line-height: var(--lw-type-label-small-line-height);
   }
 }
 
 .lw-empty-node {
   padding: 32px 0;
   text-align: center;
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   color: #94a3b8;
   font-style: italic;
 }
@@ -844,9 +883,11 @@ defineExpose({ open });
 }
 
 .lw-stats {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: #94a3b8;
-  font-weight: 600;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
