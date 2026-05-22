@@ -221,6 +221,7 @@ describe('ForgePiToolBridge', () => {
 
         const listResult = await skillList?.execute('call_list', {});
         const loadResult = await skillLoad?.execute('call_load', { skillName: 'reference-anti-cliche' });
+        const titleLoadResult = await skillLoad?.execute('call_load_title', { skillName: '反八股与偏向强化' });
 
         expect(listResult?.details).toMatchObject({
             presetSkills: expect.arrayContaining([
@@ -238,6 +239,10 @@ describe('ForgePiToolBridge', () => {
             files: [expect.objectContaining({
                 content: expect.stringContaining('反八股与偏向强化')
             })]
+        });
+        expect(titleLoadResult?.details).toMatchObject({
+            name: 'reference-anti-cliche',
+            path: './agent/skills/reference-anti-cliche/SKILL.md'
         });
     });
 
@@ -406,5 +411,32 @@ describe('ForgePiToolBridge', () => {
         });
         expect(JSON.stringify(result?.details)).not.toContain('conversation_alpha');
         expect(JSON.stringify(result?.details)).not.toContain('forge_project_alpha');
+    });
+
+    it('reports semantic directories instead of treating them as missing files', async () => {
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities()
+        });
+        const readFile = bridge.getTools(createContext()).find(tool => tool.name === 'readFile');
+
+        const result = await readFile?.execute('call_current_thread_dir', {
+            path: './threads/目前/'
+        });
+
+        expect(result?.content?.[0]).toMatchObject({
+            type: 'text',
+            text: expect.stringContaining('Path is a directory')
+        });
+        expect(result?.details).toMatchObject({
+            path: './threads/目前/',
+            directory: true,
+            entries: expect.arrayContaining([
+                expect.objectContaining({ path: './threads/目前/messages.md', kind: 'file' })
+            ])
+        });
+        expect(result?.details).not.toMatchObject({
+            error: expect.stringContaining('File not found')
+        });
     });
 });

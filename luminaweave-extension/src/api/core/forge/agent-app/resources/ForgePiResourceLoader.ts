@@ -49,9 +49,21 @@ export class ForgePiResourceLoader {
         const presetSkills = listForgePresetSkillResources(context);
         const builtInSkills = this.skills.listBuiltInSkills();
         const activeSkills = [
-            ...projectSkills.map(item => item.skill.description || item.skill.name),
-            ...presetSkills.map(item => item.title || item.description || item.name),
-            ...builtInSkills.map(item => item.title || item.name)
+            ...projectSkills.map(item => this.formatSkillRef({
+                name: item.skill.name,
+                title: item.skill.description || item.skill.name,
+                path: item.path
+            })),
+            ...presetSkills.map(item => this.formatSkillRef({
+                name: item.name,
+                title: item.title || item.description || item.name,
+                path: item.path
+            })),
+            ...builtInSkills.map(item => this.formatSkillRef({
+                name: item.name,
+                title: item.title || item.description || item.name,
+                path: `./agent/skills/${item.name}/SKILL.md`
+            }))
         ].filter((value, index, all) => value && all.indexOf(value) === index);
         const alwaysSkillFiles = presetSkills
             .filter(skill => skill.loadPolicy === 'always')
@@ -113,6 +125,10 @@ export class ForgePiResourceLoader {
             `- 细节模式：${context.detailMode ?? '未指定'}`,
             `- 发布状态：${context.publishState}`
         ].join('\n');
+    }
+
+    private formatSkillRef(input: { name: string; title: string; path: string }): string {
+        return `${input.title} (skillName: ${input.name}, path: ${input.path})`;
     }
 
     private buildWorkflowFile(context: ForgeRuntimeContext): string {

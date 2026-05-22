@@ -422,20 +422,22 @@ export class ForgePiToolBridge {
 
     private createSkillLoadTool(ctx: ForgePiToolContext): ForgePiAgentTool {
         const parameters = Type.Object({
-            skillName: Type.String({ description: '要加载的技能 name' })
+            skillName: Type.String({ description: '要加载的技能 name。优先使用 skillList 返回的 canonical slug，也可传入标题或 ./agent/skills/<skill-name>/SKILL.md 路径。' })
         });
         return {
             name: 'skillLoad',
             label: '加载技能',
-            description: '加载 Forge 技能完整内容。优先读取项目 skill，缺失时回退内置中文 skill。',
+            description: '加载 Forge 技能完整内容。优先读取项目 skill，缺失时回退 preset / 内置中文 skill；支持中文标题解析到 canonical skillName。',
             parameters,
             execute: async (_toolCallId, params: any) => {
-                const { skillName } = params;
+                const requestedSkillName = String(params?.skillName ?? '');
+                const skillName = await this.resolveSkillNameAlias(requestedSkillName, ctx);
                 const displayPath = `./agent/skills/${skillName}/SKILL.md`;
                 const semanticContent = await this.projectVfs.readFile(ctx.runtimeContext, displayPath).catch(() => null);
                 if (semanticContent !== null) {
                     return textResult(`已加载技能：${skillName}`, {
                         name: skillName,
+                        requestedName: requestedSkillName,
                         description: skillName,
                         source: 'semantic-vfs',
                         path: displayPath,
@@ -449,12 +451,13 @@ export class ForgePiToolBridge {
                     forgeProjectId: ctx.forgeProjectId,
                     conversationId: ctx.conversationId,
                     skillName
-                });
+                }).catch(() => null);
                 if (!loaded) {
                     return textResult(`未找到技能：${skillName}`, { name: skillName, error: `Forge skill not found: ${skillName}` });
                 }
                 const details = {
                     name: loaded.skill.name,
+                    requestedName: requestedSkillName,
                     description: loaded.skill.description,
                     source: loaded.source,
                     path: loaded.path,
@@ -547,13 +550,29 @@ export class ForgePiToolBridge {
                     }
                     return textResult(content ?? '', { path: resolved.displayPath, content: content ?? '' });
                 } catch {
+                    const directory = resolved.kind !== 'resource-vfs'
+                        ? await this.resolveSemanticDirectory(ctx, resolved.displayPath)
+                        : null;
+                    if (directory) {
+                        const body = [
+                            `Path is a directory: ${directory.path}`,
+                            '',
+                            ...directory.entries.map(entry => `- ${entry.kind}: ${entry.path}`)
+                        ].join('\n');
+                        return textResult(body, {
+                            path: directory.path,
+                            content: '',
+                            directory: true,
+                            entries: directory.entries
+                        });
+                    }
                     const skillName = this.skillNameFromDisplayPath(resolved.displayPath);
                     if (skillName) {
                         const loaded = await this.skills.loadSkill({
                             forgeProjectId: ctx.forgeProjectId,
                             conversationId: ctx.conversationId,
                             skillName
-                        });
+                        }).catch(() => null);
                         const skillFile = loaded?.skill.files.find(file => file.path === 'SKILL.md');
                         if (loaded && skillFile) {
                             return textResult(skillFile.content, {
@@ -720,8 +739,110 @@ export class ForgePiToolBridge {
         return `./.pi/agent/skill-overrides/${skillName}/SKILL.patch`;
     }
 
+    private async resolveSkillNameAlias(skillName: string, ctx: ForgePiToolContext): Promise<string> {
+        const requested = skillName.trim();
+        const skillPathName = this.skillNameFromDisplayPath(this.normalizeSkillPathCandidate(requested));
+        if (skillPathName) return skillPathName;
+        if (this.isCanonicalSkillName(requested)) return requested.toLowerCase();
+
+        const candidates: Array<{
+            name: string;
+            aliases: string[];
+        }> = [];
+        const projectSkills = await this.skills.listProjectSkills(ctx.forgeProjectId, ctx.conversationId).catch(() => []);
+        for (const item of projectSkills) {
+            candidates.push({
+                name: item.skill.name,
+                aliases: [
+                    item.skill.name,
+                    item.skill.description,
+                    item.path,
+                    `./agent/skills/${item.skill.name}/SKILL.md`
+                ].filter(Boolean)
+            });
+        }
+        for (const item of listForgePresetSkillResources(ctx.runtimeContext)) {
+            candidates.push({
+                name: item.name,
+                aliases: [
+                    item.name,
+                    item.title ?? '',
+                    item.description ?? '',
+                    item.path,
+                    `./agent/skills/${item.name}/SKILL.md`
+                ].filter(Boolean)
+            });
+        }
+        for (const item of this.skills.listBuiltInSkills()) {
+            candidates.push({
+                name: item.name,
+                aliases: [
+                    item.name,
+                    item.title,
+                    item.description,
+                    `./agent/skills/${item.name}/SKILL.md`
+                ].filter(Boolean)
+            });
+        }
+
+        const normalizedRequested = this.normalizeSkillAlias(requested);
+        const matched = candidates.find(candidate =>
+            candidate.aliases.some(alias => this.normalizeSkillAlias(alias) === normalizedRequested)
+        );
+        return matched?.name ?? requested;
+    }
+
+    private normalizeSkillPathCandidate(value: string): string {
+        const normalized = value.trim().replace(/\\/g, '/').replace(/\/+/g, '/');
+        if (normalized.startsWith('./')) return normalized;
+        if (normalized.startsWith('agent/')) return `./${normalized}`;
+        return normalized;
+    }
+
+    private normalizeSkillAlias(value: string): string {
+        return this.normalizeSkillPathCandidate(value).toLowerCase();
+    }
+
+    private isCanonicalSkillName(value: string): boolean {
+        return /^[a-z0-9][a-z0-9-]*$/.test(value.trim().toLowerCase());
+    }
+
     private skillNameFromDisplayPath(displayPath: string): string | null {
-        return displayPath.match(/^\.\/agent\/skills\/([^/]+)\/SKILL\.md$/)?.[1] ?? null;
+        return this.normalizeSkillPathCandidate(displayPath).match(/^\.\/agent\/skills\/([^/]+)\/SKILL\.md$/)?.[1] ?? null;
+    }
+
+    private async resolveSemanticDirectory(
+        ctx: ForgePiToolContext,
+        displayPath: string
+    ): Promise<{
+        path: string;
+        entries: Array<{ path: string; kind: string; title?: string | null }>;
+    } | null> {
+        const directoryPath = this.normalizeDirectoryDisplayPath(displayPath);
+        const entries = await this.projectVfs.listEntries(ctx.runtimeContext).catch(() => []);
+        const exists = entries.some(entry => entry.path === directoryPath && entry.kind === 'directory');
+        const children = entries
+            .filter(entry => entry.path !== directoryPath && entry.path.startsWith(directoryPath))
+            .filter(entry => {
+                const rest = entry.path.slice(directoryPath.length);
+                return rest.length > 0 && !rest.replace(/\/$/, '').includes('/');
+            })
+            .map(entry => ({
+                path: entry.path,
+                kind: entry.kind
+            }));
+        if (!exists && children.length === 0) return null;
+        return {
+            path: directoryPath,
+            entries: children
+        };
+    }
+
+    private normalizeDirectoryDisplayPath(path: string): string {
+        const normalized = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
+        if (!normalized || normalized === '.' || normalized === './') return './';
+        const prefixed = normalized.startsWith('./') ? normalized : `./${normalized.replace(/^\//, '')}`;
+        return prefixed === './' ? './' : `${prefixed}/`;
     }
 
     private createStageEntryTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
