@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { globalPromptRegistry, PromptSlot, PromptType, STIdentifier } from '../../api/core/PromptRegistry';
-import { globalMutationEngine } from './MutationEngine';
-import { MemoryFragment } from './MemoryVectorService';
+import { globalPromptRegistry, PromptSlot, PromptType, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
+import { globalMutationEngine } from './MutationEngine.js';
+import { MemoryFragment } from './MemoryVectorService.js';
 
 /**
  * 结构化记忆条目 (长效记忆)

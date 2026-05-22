@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
 import {
     buildSourceResourcePath,
     parseVFSPath,
@@ -8,21 +9,21 @@ import {
     type ResourceDocument,
     type ResourceRef
 } from '@shared/resources/index.js';
-import { LocalResourceSource } from '../host-drivers/standalone/LocalResourceSource.js';
-import { LuminaWorldbookTriggerEngine } from '../hal/resource/LuminaWorldbookTriggerEngine.js';
-import { PromptResourceBindingService } from '../hal/resource/PromptResourceBindingService.js';
-import { ForgeProjectDataService } from '../forge/ForgeProjectDataService.js';
-import { PromptResourceResolver, type PromptResourceBundle } from '../hal/resource/PromptResourceResolver.js';
-import { ResourceService } from '../hal/resource/ResourceService.js';
-import { ResourceSourceRegistry } from '../hal/resource/ResourceSourceRegistry.js';
-import { AgentBashToolService } from '../hal/shell/AgentBashToolService.js';
-import { BashTerminalRuntime } from '../hal/shell/BashTerminalRuntime.js';
-import { ShellPermissionService } from '../hal/shell/ShellPermissionService.js';
-import { shellWorkspaceService } from '../hal/shell/ShellWorkspaceService.js';
-import { STResourceSource } from '../host-drivers/st/STResourceSource.js';
-import { VFSCommandService } from '../hal/shell/VFSCommandService.js';
-import { VirtualFileSystemService } from '../hal/resource/VirtualFileSystemService.js';
-import type { ForgeWorkspaceSession } from '../../../types/SessionTypes.js';
+import { LocalResourceSource } from '@/api/core/host-drivers/standalone/LocalResourceSource.js';
+import { LuminaWorldbookTriggerEngine } from '@/api/core/hal/resource/LuminaWorldbookTriggerEngine.js';
+import { PromptResourceBindingService } from '@/api/core/hal/resource/PromptResourceBindingService.js';
+import { ForgeProjectDataService } from '@/api/core/forge/project/ForgeProjectDataService.js';
+import { PromptResourceResolver, type PromptResourceBundle } from '@/api/core/hal/resource/PromptResourceResolver.js';
+import { ResourceService } from '@/api/core/hal/resource/ResourceService.js';
+import { ResourceSourceRegistry } from '@/api/core/hal/resource/ResourceSourceRegistry.js';
+import { AgentBashToolService } from '@/api/core/hal/shell/AgentBashToolService.js';
+import { BashTerminalRuntime } from '@/api/core/hal/shell/BashTerminalRuntime.js';
+import { ShellPermissionService } from '@/api/core/hal/shell/ShellPermissionService.js';
+import { shellWorkspaceService } from '@/api/core/hal/shell/ShellWorkspaceService.js';
+import { STResourceSource } from '@/api/core/host-drivers/st/STResourceSource.js';
+import { VFSCommandService } from '@/api/core/hal/shell/VFSCommandService.js';
+import { VirtualFileSystemService } from '@/api/core/hal/resource/VirtualFileSystemService.js';
+import type { ForgeWorkspaceSession } from '@/types/SessionTypes.js';
 
 const { store, stMainRef, stHelperRef, ctxRef } = vi.hoisted(() => ({
     store: new Map<string, unknown>(),
@@ -31,19 +32,8 @@ const { store, stMainRef, stHelperRef, ctxRef } = vi.hoisted(() => ({
     ctxRef: { value: null as any }
 }));
 
-vi.mock('@shared/api/BridgeDispatcher.js', () => ({
-    BridgeDispatcher: {
-        extensionStore: {
-            listKeys: vi.fn(async () => Array.from(store.keys())),
-            getJson: vi.fn(async ({ key }: { key: string }) => store.get(key) ?? null),
-            setJson: vi.fn(async ({ key, value }: { key: string; value: unknown }) => {
-                store.set(key, value);
-            })
-        }
-    }
-}));
 
-vi.mock('../host-drivers/st/STGlobalAccessor.js', () => ({
+vi.mock('@/api/core/host-drivers/st/STGlobalAccessor.js', () => ({
     STGlobalAccessor: {
         get stMain() { return stMainRef.value; },
         get stHelper() { return stHelperRef.value; },
@@ -52,7 +42,7 @@ vi.mock('../host-drivers/st/STGlobalAccessor.js', () => ({
     }
 }));
 
-vi.mock('../host-drivers/st/STClient.js', () => ({
+vi.mock('@/api/core/host-drivers/st/STClient.js', () => ({
     STClient: {
         getResolvedCurrentCharacterId: vi.fn(() => 'test-character'),
         getResolvedCurrentChatId: vi.fn(() => 'test-chat'),
@@ -68,6 +58,7 @@ vi.mock('../host-drivers/st/STClient.js', () => ({
 describe('Resource Runtime', () => {
     beforeEach(() => {
         store.clear();
+        initMockHAL({ runtime: { extensionStore: { listKeys: vi.fn(async () => Array.from(store.keys())), getJson: vi.fn(async ({ key }: { key: string }) => store.get(key) ?? null), setJson: vi.fn(async ({ key, value }: { key: string; value: unknown }) => { store.set(key, value); }), updateJson: vi.fn(async ({ key, value }: { key: string; value: unknown }) => { store.set(key, value); }), deleteJson: vi.fn(async ({ key }: { key: string }) => { store.delete(key); }), setBlob: vi.fn(), getBlob: vi.fn() } } });
         shellWorkspaceService.resetForTests();
         stMainRef.value = null;
         stHelperRef.value = null;
@@ -707,7 +698,7 @@ describe('Resource Runtime', () => {
         expect(binding).toMatchObject({
             forgeProjectId: 'project-bind',
             conversationId: 'conversation-bind',
-            workspacePath: '/workspaces/forge/project-bind'
+            workspacePath: '/workspaces/forge/project-bind/chat/conversation-bind'
         });
         await expect(shellWorkspaceService.getForgeBinding('conversation-bind')).resolves.toMatchObject({
             forgeProjectId: 'project-bind'
@@ -715,7 +706,7 @@ describe('Resource Runtime', () => {
 
         shellWorkspaceService.resetForTests();
         await expect(shellWorkspaceService.getForgeBinding('conversation-bind')).resolves.toMatchObject({
-            workspacePath: '/workspaces/forge/project-bind'
+            workspacePath: '/workspaces/forge/project-bind/chat/conversation-bind'
         });
     });
 

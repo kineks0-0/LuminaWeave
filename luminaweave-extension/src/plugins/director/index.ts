@@ -1,19 +1,19 @@
-import { globalXMLInterceptor } from '../../api/core/XMLInterceptor';
-import { globalPromptRegistry, PromptSlot, PromptType, STIdentifier } from '../../api/core/PromptRegistry';
-import { globalMemoryManager } from '../../api/core/MemoryManager';
+import { globalXMLInterceptor } from '../../api/core/xml-view/XMLInterceptor.js';
+import { globalPromptRegistry, PromptSlot, PromptType, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
+import { globalMemoryManager } from '../../api/core/runtime-utils/MemoryManager.js';
 
 // 导出核心引擎组件
-export * from './DirectorStore';
-export { globalMutationEngine } from './MutationEngine'; // 增量更新引擎
-export { useTier1Store } from './Tier1Store'; // Tier 1 Vue 状态管理 (物品栏等)
+export * from './DirectorStore.js';
+export { globalMutationEngine } from './MutationEngine.js'; // 增量更新引擎
+export { useTier1Store } from './Tier1Store.js'; // Tier 1 Vue 状态管理 (物品栏等)
 
-import { LuminaPlugin } from '../../types/plugin';
-import type { PluginManifestV2 } from '../../platform/plugin/types';
+import { LuminaPlugin } from '../../types/plugin.js';
+import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 import { defineAsyncComponent } from 'vue';
-import { useDirectorStore } from './DirectorStore';
-import { useTier1Store } from './Tier1Store';
-import { globalMutationEngine, MutationCommand } from './MutationEngine';
-import { globalAsyncGateway } from './AsyncGateway';
+import { useDirectorStore } from './DirectorStore.js';
+import { useTier1Store } from './Tier1Store.js';
+import { globalMutationEngine, MutationCommand } from './MutationEngine.js';
+import { globalAsyncGateway } from './AsyncGateway.js';
 
 const DirectorPanel = defineAsyncComponent(() => import('./components/DirectorPanel.vue'));
 

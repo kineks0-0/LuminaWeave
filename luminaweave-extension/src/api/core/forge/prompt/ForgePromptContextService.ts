@@ -400,6 +400,25 @@ export class ForgePromptContextService {
         specialKey: Extract<PromptPresetSpecialKey, 'plannerSystemPrompt' | 'conversationSystemPrompt' | 'analystSystemPrompt'>,
         options: BuildPlannerPromptOptions
     ): PromptAssemblyResult {
+        const presetId = promptPresetRegistry.getActivePresetId('forge-main');
+        const activePreset = promptPresetRegistry.getPreset('forge-main', presetId) ?? promptPresetRegistry.getActivePreset('forge-main');
+        const target = this.resolveForgeMainTarget(specialKey);
+        const route = PromptAssemblyRouter.route({
+            target,
+            sessionBinding: this.resolveForgeSessionBinding(options),
+            policy: { engine: 'lumina', sourceMode: 'project' },
+            presetId,
+            inputs: {
+                mode: target,
+                messageCount: options.messages.length
+            }
+        });
+
+        const resourceAssembly = this.buildForgeMainResourceAssembly(specialKey, options, activePreset);
+        if (resourceAssembly) {
+            return PromptAssemblyRouter.attachRoute(resourceAssembly, route);
+        }
+
         const sources: PromptComposeSources = {
             baseSystemPromptKey: specialKey,
             lorebookEntries: options.resolvedLorebookEntries,
@@ -416,25 +435,182 @@ export class ForgePromptContextService {
             }
         };
 
-        const target = this.resolveForgeMainTarget(specialKey);
-        const route = PromptAssemblyRouter.route({
-            target,
-            sessionBinding: this.resolveForgeSessionBinding(options),
-            policy: { engine: 'lumina', sourceMode: 'project' },
-            presetId: promptPresetRegistry.getActivePresetId('forge-main'),
-            inputs: {
-                mode: target,
-                messageCount: options.messages.length
-            }
-        });
-
         const assembly = PromptPresetComposer.composeWithTrace(
             'forge-main',
-            promptPresetRegistry.getActivePresetId('forge-main'),
+            presetId,
             sources,
             { mergeLeadingSystemMessages: true }
         );
         return PromptAssemblyRouter.attachRoute(assembly, route);
+    }
+
+    private static buildForgeMainResourceAssembly(
+        specialKey: Extract<PromptPresetSpecialKey, 'plannerSystemPrompt' | 'conversationSystemPrompt' | 'analystSystemPrompt'>,
+        options: BuildPlannerPromptOptions,
+        preset: PromptPresetDefinition
+    ): PromptAssemblyResult | null {
+        const resources = preset.forgeAgentResources;
+        if (!resources) return null;
+
+        const modeResource = specialKey === 'conversationSystemPrompt'
+            ? resources.modes.conversation
+            : specialKey === 'analystSystemPrompt'
+                ? resources.modes.analyst
+                : resources.modes.planner;
+        if (!modeResource) return null;
+
+        const protocolBlock = PromptBuilder.buildCombinedProtocolBlock('forge') ?? '';
+        const sourceUnits: PromptSourceUnit[] = [
+            {
+                id: 'forge-main-contract',
+                kind: 'control',
+                sourceKind: 'forge',
+                sourcePath: resources.contract.path,
+                label: resources.contract.title ?? 'Forge Agent 工作契约',
+                roleHint: 'system',
+                priority: 100,
+                rawContent: resources.contract.content,
+                content: this.resolveMacros(resources.contract.content),
+                budgetPolicy: 'pinned',
+                forgeSlot: 'runtime_contract',
+                forgeRegion: 'static_system'
+            },
+            {
+                id: 'forge-main-system',
+                kind: 'control',
+                sourceKind: 'forge',
+                sourcePath: resources.system.path,
+                label: resources.system.title ?? '默认系统提示词',
+                roleHint: 'system',
+                priority: 100,
+                rawContent: resources.system.content,
+                content: this.resolveMacros(resources.system.content),
+                budgetPolicy: 'pinned',
+                forgeSlot: 'system_static',
+                forgeRegion: 'static_system'
+            },
+            {
+                id: `forge-main-mode:${modeResource.path ?? 'mode'}`,
+                kind: 'control',
+                sourceKind: 'forge',
+                sourcePath: modeResource.path ?? './.forge/agent/MODE.md',
+                label: modeResource.title ?? '模式提示词',
+                roleHint: 'system',
+                priority: 95,
+                rawContent: modeResource.content,
+                content: this.resolveMacros(modeResource.content),
+                budgetPolicy: 'pinned',
+                forgeSlot: 'system_static',
+                forgeRegion: 'static_system'
+            },
+            {
+                id: 'forge-main-protocol',
+                kind: 'control',
+                sourceKind: 'system_protocol',
+                sourcePath: './.forge/agent/protocol.md',
+                label: 'Forge protocol block',
+                roleHint: 'system',
+                priority: 90,
+                rawContent: protocolBlock,
+                content: protocolBlock,
+                budgetPolicy: 'pinned',
+                forgeRegion: 'static_system'
+            },
+            ...(options.forgeAgentSourceUnits ?? []).map((unit) => ({ ...unit })),
+            ...options.resolvedLorebookEntries.map((entry, index): PromptSourceUnit => ({
+                id: `worldbook:${entry.uid ?? index}`,
+                kind: 'information',
+                sourceKind: 'worldbook',
+                sourcePath: `./lorebook/entries/${entry.uid ?? index}.md`,
+                label: entry.comment || `Worldbook entry ${index + 1}`,
+                roleHint: 'system',
+                priority: 70,
+                rawContent: entry.content,
+                content: `[World Info: ${entry.comment || (entry.uid ?? index)}]\n${entry.content}`,
+                budgetPolicy: 'full'
+            })),
+            ...options.messages.map((message, index): PromptSourceUnit => ({
+                id: `history:${index}`,
+                kind: 'information',
+                sourceKind: 'history',
+                sourcePath: `./threads/目前/messages/${index + 1}.md`,
+                label: `History ${index + 1}`,
+                roleHint: message.role,
+                priority: 50,
+                rawContent: message.content,
+                content: message.content,
+                budgetPolicy: 'full'
+            }))
+        ];
+
+        const messages: CleanedMessage[] = [];
+        const outputIndexByUnitId = new Map<string, number>();
+
+        sourceUnits.forEach((unit) => {
+            const role = unit.roleHint ?? 'system';
+            if (role === 'system' && messages.length > 0 && messages[messages.length - 1]?.role === 'system') {
+                messages[messages.length - 1].content += `\n\n${unit.content}`;
+                outputIndexByUnitId.set(unit.id, messages.length - 1);
+                return;
+            }
+            messages.push({
+                role,
+                content: unit.content
+            });
+            outputIndexByUnitId.set(unit.id, messages.length - 1);
+        });
+
+        const plannedUnits: PromptPlannedUnit[] = sourceUnits.map((unit) => ({
+            ...unit,
+            inclusion: 'full',
+            finalContent: unit.content,
+            transforms: [],
+            sourceSpans: []
+        }));
+
+        const trace: PromptSourceTrace[] = sourceUnits.map((unit) => ({
+            traceId: `${unit.id}:trace`,
+            unitId: unit.id,
+            kind: unit.kind,
+            sourceKind: unit.sourceKind,
+            resourceRef: unit.resourceRef,
+            sourcePath: unit.sourcePath,
+            label: unit.label,
+            role: unit.roleHint,
+            inclusion: 'full',
+            outputMessageIndex: outputIndexByUnitId.get(unit.id) ?? null,
+            outputStart: null,
+            outputEnd: null,
+            rawLength: unit.rawContent.length,
+            finalLength: unit.content.length,
+            transforms: [],
+            forgeSlot: unit.forgeSlot,
+            forgeRegion: unit.forgeRegion,
+            slotPolicy: unit.slotPolicy,
+            sourceSpans: []
+        }));
+
+        return {
+            messages,
+            sourceUnits,
+            plannedUnits,
+            trace,
+            diagnostics: [],
+            tokenUsage: {
+                estimatedTotal: messages.reduce((total, message) => total + Math.ceil(message.content.length / 4), 0),
+                bySourceKind: {
+                    forge: sourceUnits
+                        .filter((unit) => unit.sourceKind === 'forge')
+                        .reduce((total, unit) => total + unit.content.length, 0),
+                    worldbook: sourceUnits
+                        .filter((unit) => unit.sourceKind === 'worldbook')
+                        .reduce((total, unit) => total + unit.content.length, 0),
+                    history: sourceUnits
+                        .filter((unit) => unit.sourceKind === 'history')
+                        .reduce((total, unit) => total + unit.content.length, 0)
+                }
+            }
+        };
     }
 
     private static resolveForgeMainTarget(

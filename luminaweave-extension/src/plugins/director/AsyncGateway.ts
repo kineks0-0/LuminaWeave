@@ -1,10 +1,10 @@
-import { llmEngine } from '../../api/llmEngine';
-import { LuminaGenerationTask } from '../../api/core/LuminaGenerationTask';
-import { lwStorage } from '../../api/storage';
-import { useDirectorStore } from './DirectorStore';
-import { globalXMLInterceptor } from '../../api/core/XMLInterceptor';
-import { useTier1Store } from './Tier1Store';
-import { SyncUtils } from '../../api/core/SyncUtils';
+import { llmEngine } from '../../api/llmEngine.js';
+import { LuminaGenerationTask } from '../../api/core/generation/LuminaGenerationTask.js';
+import { lwStorage } from '../../api/storage.js';
+import { useDirectorStore } from './DirectorStore.js';
+import { globalXMLInterceptor } from '../../api/core/xml-view/XMLInterceptor.js';
+import { useTier1Store } from './Tier1Store.js';
+import { SyncUtils } from '../../api/core/host-drivers/st/SyncUtils.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 
 export class AsyncGateway {

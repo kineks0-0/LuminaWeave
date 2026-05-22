@@ -45,7 +45,7 @@ import { getChatMessageMutationPort } from './core/conversation/ChatMessageMutat
 import { getConversationHostFacadePort } from './core/facade/ConversationHostFacadePort.js';
 import { PromptCommandService } from './core/generation/PromptCommandService.js';
 import { GenerationCommandService } from './core/generation/GenerationCommandService.js';
-import { ForgeAgentController } from './core/forge/ForgeAgentController.js';
+import { ForgeAgentController } from './core/forge/runtime/ForgeAgentController.js';
 import type {
     ConversationContextOverride,
     ConversationContextSwitchInput,
@@ -898,6 +898,10 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
      */
     openConflictViewer() {
         this.openPanel('conflict');
+    }
+
+    openSyncReportViewer() {
+        this.openPanel('sync_report');
     }
 
     // --- 消息发送与生成逻辑 ---

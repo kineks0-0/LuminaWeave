@@ -37,12 +37,12 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent } from 'vue';
-import { splitToSegments, type MessageSegment } from '../../../api/core/LVParser';
+import { splitToSegments, type MessageSegment } from '../../../api/core/xml-view/LVParser.js';
 import TextBlock from './blocks/TextBlock.vue';
 import ThinkingBlock from './blocks/ThinkingBlock.vue';
-import { globalXMLInterceptor, XMLInterceptor } from '../../../api/core/XMLInterceptor';
-import { lwStorage } from '../../../api/storage';
-import { viewRenderRegistry, type ViewRenderContext } from '../../../api/core/ViewRenderRegistry';
+import { globalXMLInterceptor, XMLInterceptor } from '../../../api/core/xml-view/XMLInterceptor.js';
+import { lwStorage } from '../../../api/storage.js';
+import { viewRenderRegistry, type ViewRenderContext } from '../../../api/core/xml-view/ViewRenderRegistry.js';
 
 const ForgeMessageAutoSubmit = defineAsyncComponent(() => import('../../forge/blocks/ForgeMessageAutoSubmit.vue'));
 

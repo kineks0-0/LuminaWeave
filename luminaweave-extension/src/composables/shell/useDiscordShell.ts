@@ -1,16 +1,16 @@
 import { computed, nextTick, ref, watch, type CSSProperties, type ComputedRef, type Ref } from 'vue';
-import { CharacterChannelService } from '../../api/core/CharacterChannelService';
-import { luminaWeaveApi as lwApi } from '../../api/index';
-import { getDesktopModeSettingStorageKey, getThemeSettingValue } from '../../theme/themeRegistry';
-import { useConversationContextStore } from '../../stores/useConversationContextStore';
-import type { DynamicTabConfig } from '../../shell/types';
-import type { LuminaPlugin } from '../../types/plugin';
+import { CharacterChannelService } from '../../api/core/conversation/CharacterChannelService.js';
+import { luminaWeaveApi as lwApi } from '../../api/index.js';
+import { getDesktopModeSettingStorageKey, getThemeSettingValue } from '../../theme/themeRegistry.js';
+import { useConversationContextStore } from '../../stores/useConversationContextStore.js';
+import type { DynamicTabConfig } from '../../shell/types.js';
+import type { LuminaPlugin } from '../../types/plugin.js';
 import type {
   CharacterChannelState,
   CreateChatConversationInput,
   DeleteChatConversationInput,
   RenameChatConversationInput
-} from '../../types/ConversationContextTypes';
+} from '../../types/ConversationContextTypes.js';
 
 type DiscordMobileEdge = 'top' | 'bottom' | 'left' | 'right';
 type PendingDiscordAction =

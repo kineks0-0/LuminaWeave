@@ -13,7 +13,7 @@ import {
     renderForgeDraftTree,
     renderForgeWorkflowSnapshot,
 } from '../../../../resources/prompts/forgePrompts.js';
-import { ForgePromptPayloadResolver } from '../../forge/ForgePromptPayloadResolver.js';
+import { ForgePromptPayloadResolver } from '../../forge/prompt/ForgePromptPayloadResolver.js';
 import type { ForgeWorkflowSnapshot } from '../../../../types/ForgeWorkflowTypes.js';
 import type { ForgeDraftTree, ForgeStructuredState } from '../../../../types/ForgeStructuredTypes.js';
 import type { ForgeMemoryTree } from '../../../../types/ForgeMemoryTypes.js';
@@ -171,6 +171,19 @@ export class PromptBuilder {
         }
 
         const result = PromptPresetComposer.compose(profile, preset, sources);
+        if (promptContext === 'forge' && result.messages.length === 0 && preset.forgeAgentResources) {
+            const resources = preset.forgeAgentResources;
+            const systemBlocks = [
+                processedSystem,
+                resources.contract.content,
+                resources.system.content,
+                resources.modes.planner.content
+            ].filter((block): block is string => Boolean(block && block.trim()));
+            return this.collapseLeadingSystemMessages([
+                { role: 'system', content: systemBlocks.join('\n\n') },
+                ...messages
+            ]);
+        }
         return this.collapseLeadingSystemMessages(result.messages);
     }
 
@@ -558,6 +571,19 @@ export class PromptBuilder {
 
     public static buildSystemProtocolText(context: PromptContext = 'chat'): string | null {
         let allTags = globalPromptRegistry.getAllXMLTags(context);
+        if (context === 'forge') {
+            const legacyForgeActionTags = new Set([
+                'forge_skill',
+                'draft_plan',
+                'entry_update',
+                'memory_update',
+                'context_read',
+                'analysis_handoff',
+                'forge_auto_list',
+                'forge_form_result'
+            ]);
+            allTags = allTags.filter(tag => !legacyForgeActionTags.has(tag.tag));
+        }
         if (context === 'chat') {
             const dialogueUIFrequency = lwStorage.get('lumina-chat.dialogueUIFrequency', 1, 'Global');
             if (dialogueUIFrequency === 0) {
