@@ -100,14 +100,12 @@ export class ForgePromptPreviewPayloadBuilder {
             forgeAgentSourceUnits,
             mode: primaryMode
         };
-        const primaryPayload = this.deps.promptContextService.buildPromptPreviewPayload(sharedPreviewInput);
         const primaryAssembly = this.deps.promptContextService.buildPromptPreviewAssembly(sharedPreviewInput);
         const primaryAgentContext = agentGraph
             ? buildPromptPreviewAgentContext(agentGraph, primaryAssembly)
             : null;
         const piPreview = await this.previewPrimaryPiPrompt({
             primaryMode,
-            primaryPayload,
             previewMessages,
             resolvedLorebookView,
             memorySnapshot,
@@ -177,7 +175,6 @@ export class ForgePromptPreviewPayloadBuilder {
 
     private async previewPrimaryPiPrompt(input: {
         primaryMode: ForgeWorkflowPromptMode;
-        primaryPayload: CleanedMessage[];
         previewMessages: CleanedMessage[];
         resolvedLorebookView: ResolvedLorebookViewState;
         memorySnapshot: MemorySnapshot;
@@ -199,7 +196,7 @@ export class ForgePromptPreviewPayloadBuilder {
             nodeSummary: this.deps.summarizeRequestNodeSummary(resolvedPresetId),
             generationSettings: this.deps.resolvePromptPresetGenerationSettings('forge-main'),
             mode: input.primaryMode,
-            messages: input.primaryPayload,
+            messages: [],
             sessionChatId: this.deps.getSessionChatId(),
             charName: 'Forge Assistant',
             presetId: resolvedPresetId,

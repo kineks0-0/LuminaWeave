@@ -8,7 +8,8 @@ import type {
     ForgePiBranchFromUserResult,
     ForgePiContextBundleSummary,
     ForgePiSessionEntry,
-    ForgePiTreeNode
+    ForgePiTreeNode,
+    ForgePiWorkspacePatchPayload
 } from '@shared/ForgePiTypes.js';
 import type {
     ForgeExecutionRequest,
@@ -41,7 +42,6 @@ import {
     type ForgePiAgentTool,
     type ForgePiToolBridge
 } from '../tools/ForgePiToolBridge.js';
-import { forgeWorkspaceVersionManager } from '../../project/ForgeWorkspaceVersionManager.js';
 
 export interface ForgePiAgentSessionTurnInput {
     command: ForgeUserCommand;
@@ -184,12 +184,7 @@ export class ForgePiAgentSession {
             systemPrompt: prepared.systemPrompt,
             messages: prepared.branchMessages,
             tools: prepared.tools,
-            modelConfig: prepared.modelConfig,
-            source: prepared.source,
-            events,
-            effects,
-            request: input.request,
-            context: input.context
+            modelConfig: prepared.modelConfig
         });
         this.agent = agent;
 
@@ -316,24 +311,8 @@ export class ForgePiAgentSession {
                         ? { ...event, agentMessage: resolved.toolResultMessage }
                         : event
                 );
+                this.appendWorkspacePatchesFromToolResult(event.result);
             }
-        }
-        for (const effect of resolved.effects) {
-            if (effect.type !== 'stage_from_shell_write') continue;
-            const beforeFiles = Object.fromEntries(effect.entries.map(entry => [entry.path, entry.originalContent]));
-            const afterFiles = Object.fromEntries(effect.entries.map(entry => [entry.path, entry.content]));
-            const patch = forgeWorkspaceVersionManager.createPatch({
-                nodeId: this.sessionManager.getActiveNodeId() ?? this.sessionId,
-                beforeFiles,
-                afterFiles,
-                sourceToolCallId: toolCallId
-            });
-            this.sessionManager.append(
-                'workspace_patch',
-                'Workspace patch',
-                `${patch.changes.length} file change(s)`,
-                patch
-            );
         }
 
         if (approved && resolved.toolResultMessage && this.agent && this.latestRequest) {
@@ -383,9 +362,6 @@ export class ForgePiAgentSession {
         effects?: ForgeRuntimeEffect[]
     ): Promise<ForgePiPreparedPrompt> {
         const contextBundle = await this.resourceLoader.buildContextBundle(input.context);
-        const systemFragments = input.request.messages
-            .filter(message => message.role === 'system')
-            .map(message => message.content);
         const modelConfig = this.modelRegistry.resolveRunConfig({
             request: input.request,
             context: input.context
@@ -394,7 +370,7 @@ export class ForgePiAgentSession {
             input.context,
             effects ? nextEffects => effects.push(...nextEffects) : undefined
         );
-        const systemPrompt = this.resourceLoader.buildSystemPrompt({ systemFragments, contextBundle });
+        const systemPrompt = this.resourceLoader.buildSystemPrompt({ systemFragments: [], contextBundle });
         const branchMessages = this.sessionManager.getBranchMessages({
             providerId: modelConfig.model.provider,
             modelId: modelConfig.model.id
@@ -419,11 +395,6 @@ export class ForgePiAgentSession {
         messages: AgentMessage[];
         tools: ForgePiAgentTool[];
         modelConfig: ReturnType<ForgePiModelRegistry['resolveRunConfig']>;
-        source: ForgeRuntimeEventSource;
-        events: ForgeRuntimeEvent[];
-        effects: ForgeRuntimeEffect[];
-        request: ForgeExecutionRequest;
-        context: ForgeRuntimeContext;
     }): Agent {
         const agent = new Agent({
             initialState: {
@@ -434,31 +405,7 @@ export class ForgePiAgentSession {
                 thinkingLevel: 'off'
             },
             streamFn: input.modelConfig.streamFn,
-            toolExecution: 'sequential',
-            beforeToolCall: async ({ toolCall, args }) => {
-                if (!await this.toolBridge.needsApproval(toolCall.name, args, input.context)) return undefined;
-                this.toolBridge.registerPendingApproval({
-                    requestId: input.request.requestId,
-                    toolCallId: toolCall.id,
-                    toolName: toolCall.name,
-                    args,
-                    context: input.context,
-                    source: input.source
-                });
-                const event: ForgeRuntimeEvent = {
-                    type: 'tool_approval_needed',
-                    requestId: input.request.requestId,
-                    approvalId: `approval-${toolCall.id}`,
-                    toolCallId: toolCall.id,
-                    toolName: toolCall.name,
-                    args,
-                    reason: `工具 ${toolCall.name} 需要通过 Forge Review Gate 授权后才能执行。`,
-                    source: input.source
-                };
-                input.events.push(event);
-                this.sessionManager.append('approval_needed', `Approval · ${toolCall.name}`, event.reason, event);
-                return { block: true, reason: '等待 Forge Review Gate 授权。' };
-            }
+            toolExecution: 'sequential'
         });
 
         agent.subscribe((event) => {
@@ -561,7 +508,43 @@ export class ForgePiAgentSession {
             };
             input.events.push(runtimeEvent);
             this.sessionManager.append('tool_result', `Tool result · ${event.toolName}`, JSON.stringify(runtimeEvent.result).slice(0, 160), runtimeEvent);
+            this.appendWorkspacePatchesFromToolResult(runtimeEvent.result);
         }
+    }
+
+    private appendWorkspacePatchesFromToolResult(result: unknown): void {
+        for (const patch of this.extractWorkspacePatches(result)) {
+            this.sessionManager.append(
+                'workspace_patch',
+                'Workspace patch',
+                `${patch.changes.length} file change(s)`,
+                patch
+            );
+        }
+    }
+
+    private extractWorkspacePatches(result: unknown): ForgePiWorkspacePatchPayload[] {
+        if (!this.isRecord(result)) return [];
+        const patches: ForgePiWorkspacePatchPayload[] = [];
+        if (this.isWorkspacePatchPayload(result.workspacePatch)) {
+            patches.push(result.workspacePatch);
+        }
+        if (Array.isArray(result.workspacePatches)) {
+            patches.push(...result.workspacePatches.filter((patch): patch is ForgePiWorkspacePatchPayload =>
+                this.isWorkspacePatchPayload(patch)
+            ));
+        }
+        return patches;
+    }
+
+    private isWorkspacePatchPayload(value: unknown): value is ForgePiWorkspacePatchPayload {
+        return this.isRecord(value)
+            && typeof value.nodeId === 'string'
+            && Array.isArray(value.changes);
+    }
+
+    private isRecord(value: unknown): value is Record<string, unknown> {
+        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
     }
 
     private replacePendingApprovalWithToolResult(toolResultMessage: ToolResultMessage): void {

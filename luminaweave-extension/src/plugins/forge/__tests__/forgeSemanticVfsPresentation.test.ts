@@ -28,7 +28,7 @@ const contextBundle: ForgePiContextBundleSummary = {
         }
     ],
     activeSkills: ['virtual-lorebook-editor'],
-    loadedExtensions: ['forge.readFile', 'forge.writeProposal']
+    loadedExtensions: ['forge.readFile', 'forge.writeFile']
 };
 
 const entry = (
@@ -83,13 +83,13 @@ describe('forgeSemanticVfsPresentation', () => {
         expect(rows.find(row => row.path === './project.json')).toEqual(expect.objectContaining({
             source: 'workspace',
             kind: 'file',
-            writePolicy: 'review-required',
+            writePolicy: 'direct-write',
             content: '{"title":"实际项目"}'
         }));
         expect(rows.find(row => row.path === './lorebook/entries/')).toEqual(expect.objectContaining({
             source: 'workspace',
             kind: 'directory',
-            writePolicy: 'review-required',
+            writePolicy: 'direct-write',
             content: expect.stringContaining('./lorebook/entries/city.json')
         }));
     });
@@ -127,6 +127,8 @@ describe('forgeSemanticVfsPresentation', () => {
             './',
             './AGENTS.md',
             './.forge/agent/SYSTEM.md',
+            './.forge/agent/UI_DSL.md',
+            './.forge/agent/REASONING.md',
             './.forge/agent/PLANNER.md',
             './.forge/agent/CONVERSATION.md',
             './.forge/agent/ANALYST.md',
@@ -161,7 +163,7 @@ describe('forgeSemanticVfsPresentation', () => {
                 entry('n3', 'n2', 'workspace_patch', {
                     nodeId: 'n3',
                     changes: [{
-                        path: './review/staging.json',
+                        path: './card.md',
                         kind: 'update',
                         beforeHash: 'before',
                         afterHash: 'after',
@@ -179,10 +181,10 @@ describe('forgeSemanticVfsPresentation', () => {
             label: 'User',
             content: '第一轮'
         }));
-        expect(rows.find(row => row.path === './review/staging.json')).toEqual(expect.objectContaining({
+        expect(rows.find(row => row.path === './card.md')).toEqual(expect.objectContaining({
             source: 'workspace',
-            writePolicy: 'review-required',
-            label: 'staging.json'
+            writePolicy: 'direct-write',
+            label: 'card.md'
         }));
     });
 });

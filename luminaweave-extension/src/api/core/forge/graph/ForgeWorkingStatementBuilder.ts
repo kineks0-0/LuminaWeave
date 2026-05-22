@@ -54,7 +54,7 @@ export class ForgeWorkingStatementBuilder {
             `- loaded capabilities: ${none(loadedCapabilities)}`,
             `- shell profiles: ${none(shellProfiles)}`,
             `- project resources: ${input.projectResources.lorebookEntryCount} lorebook, ${input.projectResources.memoryEntryCount} memory, ${input.projectResources.draftNodeCount} draft nodes`,
-            `- review gate: staging=${reviewGate.stagingCount}, commit-ready=${reviewGate.commitReadyCount}, user-decision=${reviewGate.requiresUserDecision}`,
+            `- direct workspace writes: legacy-staging=${reviewGate.stagingCount}, legacy-commit-ready=${reviewGate.commitReadyCount}, user-decision=${reviewGate.requiresUserDecision}`,
             `- write scope: ${input.workspacePath}`,
             `- recommended action: ${workflow?.recommendedAction || 'continue current Forge project collaboration'}`
         ];

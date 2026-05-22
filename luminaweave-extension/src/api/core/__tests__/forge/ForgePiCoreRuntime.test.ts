@@ -67,21 +67,22 @@ const textStreamFn = (text: string) => () => {
 describe('ForgePiCoreRuntime', () => {
     it('previews the exact pi AgentSession prompt without running the model or mutating the session tree', async () => {
         const streamFn = vi.fn(textStreamFn('不应被调用'));
+        const resourceLoader = {
+            buildContextBundle: vi.fn(async () => ({
+                files: [{ path: 'context/project.md', title: '项目概况', content: '# Forge Alpha' }],
+                activeSkills: ['中文制卡技能'],
+                loadedExtensions: ['@luminaweave/pi-forge-browser']
+            })),
+            buildSystemPrompt: vi.fn(({ systemFragments, contextBundle }) =>
+                ['pi-system', ...systemFragments, ...contextBundle.files.map((file: any) => file.content)].join('\n')
+            )
+        };
         const runtime = new ForgePiCoreRuntime({
             createNodeId: (() => {
                 let index = 0;
                 return () => `pi_preview_node_${++index}`;
             })(),
-            resourceLoader: {
-                buildContextBundle: vi.fn(async () => ({
-                    files: [{ path: 'context/project.md', title: '项目概况', content: '# Forge Alpha' }],
-                    activeSkills: ['中文制卡技能'],
-                    loadedExtensions: ['@luminaweave/pi-forge-browser']
-                })),
-                buildSystemPrompt: vi.fn(({ systemFragments, contextBundle }) =>
-                    ['pi-system', ...systemFragments, ...contextBundle.files.map((file: any) => file.content)].join('\n')
-                )
-            } as any,
+            resourceLoader: resourceLoader as any,
             modelRegistry: {
                 resolveRunConfig: vi.fn(() => ({
                     model: {
@@ -126,8 +127,11 @@ describe('ForgePiCoreRuntime', () => {
 
         expect(result.prompt).toEqual([{
             role: 'system',
-            content: 'pi-system\nlegacy system fragment\n# Forge Alpha'
+            content: 'pi-system\n# Forge Alpha'
         }]);
+        expect(resourceLoader.buildSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
+            systemFragments: []
+        }));
         expect(result.contextBundleSummary.activeSkills).toEqual(['中文制卡技能']);
         expect(result.loadedExtensions).toEqual(['@luminaweave/pi-forge-browser']);
         expect(result.activeTools).toEqual([{
@@ -205,7 +209,7 @@ describe('ForgePiCoreRuntime', () => {
         expect(result.piSessionState.activeNodeId).toBe('pi_node_4');
     });
 
-    it('appends approval resolution and approved tool results into the pi session tree', async () => {
+    it('appends direct tool results and workspace patches into the pi session tree', async () => {
         let calls = 0;
         const runtime = new ForgePiCoreRuntime({
             createNodeId: (() => {
@@ -238,30 +242,20 @@ describe('ForgePiCoreRuntime', () => {
                         calls += 1;
                         const stream = createAssistantMessageEventStream();
                         if (calls === 2) {
-                            const message = assistantMessage([{ type: 'text', text: '等待审阅。' }]);
+                            const message = assistantMessage([{ type: 'text', text: '已写入项目。' }]);
                             stream.push({ type: 'start', partial: assistantMessage([]) });
                             stream.push({ type: 'text_start', contentIndex: 0, partial: assistantMessage([{ type: 'text', text: '' }]) });
-                            stream.push({ type: 'text_delta', contentIndex: 0, delta: '等待审阅。', partial: message });
-                            stream.push({ type: 'text_end', contentIndex: 0, content: '等待审阅。', partial: message });
-                            stream.push({ type: 'done', reason: 'stop', message });
-                            stream.end(message);
-                            return stream;
-                        }
-                        if (calls === 3) {
-                            const message = assistantMessage([{ type: 'text', text: '已完成暂存。' }]);
-                            stream.push({ type: 'start', partial: assistantMessage([]) });
-                            stream.push({ type: 'text_start', contentIndex: 0, partial: assistantMessage([{ type: 'text', text: '' }]) });
-                            stream.push({ type: 'text_delta', contentIndex: 0, delta: '已完成暂存。', partial: message });
-                            stream.push({ type: 'text_end', contentIndex: 0, content: '已完成暂存。', partial: message });
+                            stream.push({ type: 'text_delta', contentIndex: 0, delta: '已写入项目。', partial: message });
+                            stream.push({ type: 'text_end', contentIndex: 0, content: '已写入项目。', partial: message });
                             stream.push({ type: 'done', reason: 'stop', message });
                             stream.end(message);
                             return stream;
                         }
                         const message = assistantMessage([{
                             type: 'toolCall',
-                            id: 'call_stage',
-                            name: 'stageEntry',
-                            arguments: { targetEntryId: 'entry.1', title: '候选', content: 'new' }
+                            id: 'call_write',
+                            name: 'writeFile',
+                            arguments: { path: './card.md', content: 'new' }
                         }], 'toolUse');
                         stream.push({ type: 'start', partial: assistantMessage([]) });
                         stream.push({ type: 'toolcall_start', contentIndex: 0, partial: assistantMessage([]) });
@@ -271,6 +265,36 @@ describe('ForgePiCoreRuntime', () => {
                         return stream;
                     }
                 }))
+            } as any,
+            extensionRunner: {
+                loadTools: vi.fn(() => [{
+                    name: 'writeFile',
+                    label: '写入文件',
+                    description: '直接写入 Forge 项目 VFS',
+                    parameters: {} as any,
+                    execute: vi.fn(async () => ({
+                        content: [{ type: 'text', text: '已写入项目文件：./card.md' }],
+                        details: {
+                            path: './card.md',
+                            applied: true,
+                            workspacePatch: {
+                                nodeId: 'tool:call_write',
+                                changes: [{
+                                    path: './card.md',
+                                    kind: 'create',
+                                    beforeHash: null,
+                                    afterHash: 'after',
+                                    beforeContentRef: null,
+                                    afterContentRef: 'inline:new'
+                                }],
+                                sourceToolCallId: 'call_write',
+                                sourceNodeId: 'tool:call_write',
+                                createdAt: 1,
+                                reversible: true
+                            }
+                        }
+                    }))
+                }])
             } as any
         });
 
@@ -286,22 +310,15 @@ describe('ForgePiCoreRuntime', () => {
                 nodeSummary: []
             } as any
         });
-        const approved = await runtime.resolveToolApproval('call_stage', true, '允许进入暂存');
-
         expect(turn.events).toEqual(expect.arrayContaining([
-            expect.objectContaining({ type: 'tool_approval_needed', toolCallId: 'call_stage' })
+            expect.objectContaining({ type: 'tool_call', toolCallId: 'call_write', toolName: 'writeFile' }),
+            expect.objectContaining({ type: 'tool_result', toolCallId: 'call_write', result: expect.objectContaining({ applied: true }) }),
+            expect.objectContaining({ type: 'stream_done', displayText: '已写入项目。' })
         ]));
-        expect(approved.events).toEqual(expect.arrayContaining([
-            expect.objectContaining({ type: 'tool_approval_resolved', toolCallId: 'call_stage', approved: true }),
-            expect.objectContaining({ type: 'tool_result', toolCallId: 'call_stage', result: expect.objectContaining({ staged: true }) }),
-            expect.objectContaining({ type: 'stream_done', displayText: '已完成暂存。' })
-        ]));
-        expect(approved.effects).toEqual([
-            expect.objectContaining({ type: 'upsert_staging_entry' })
-        ]);
-        expect(approved.piSessionState?.tree.map(node => node.kind)).toContain('approval_resolved');
-        expect(approved.piSessionState?.tree.map(node => node.kind)).toContain('tool_result');
-        expect(approved.piSessionState?.tree.map(node => node.summary)).toContain('已完成暂存。');
-        expect(calls).toBe(3);
+        expect(turn.effects).toEqual([]);
+        expect(turn.piSessionState.tree.map(node => node.kind)).toContain('tool_result');
+        expect(turn.piSessionState.tree.map(node => node.kind)).toContain('workspace_patch');
+        expect(turn.piSessionState.tree.map(node => node.summary)).toContain('已写入项目。');
+        expect(calls).toBe(2);
     });
 });

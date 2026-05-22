@@ -99,6 +99,8 @@ export interface ForgePiWorkspacePatchPayload {
     nodeId: string;
     changes: ForgePiWorkspacePatchChange[];
     sourceToolCallId?: string | null;
+    restoresEntryId?: string | null;
+    restoreDirection?: 'before' | 'after' | null;
 }
 
 export interface ForgePiWorkspaceCheckpointPayload {

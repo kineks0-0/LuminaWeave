@@ -93,7 +93,7 @@ export class ForgeSemanticVfsProvider implements ForgeSemanticVfsReader {
             kind: 'directory',
             content: null,
             source: 'virtual',
-            writePolicy: 'review-required'
+            writePolicy: 'direct-write'
         });
 
         for (const entry of entries) {
@@ -264,7 +264,7 @@ export class ForgeSemanticBashFs implements IFileSystem {
                 kind: 'directory',
                 content: null,
                 source: 'workspace',
-                writePolicy: 'review-required'
+                writePolicy: 'direct-write'
             });
         }
         for (const [path, content] of this.overlay) {
@@ -273,7 +273,7 @@ export class ForgeSemanticBashFs implements IFileSystem {
                 kind: 'file',
                 content,
                 source: 'workspace',
-                writePolicy: 'review-required'
+                writePolicy: 'direct-write'
             });
         }
         const byPath = new Map<string, ForgeProjectSemanticVfsEntry>();

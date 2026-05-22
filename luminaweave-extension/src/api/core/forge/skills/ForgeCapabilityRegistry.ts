@@ -46,7 +46,7 @@ const CAPABILITIES: ForgeCapabilityIndexItem[] = [
     {
         id: 'virtual-lorebook-editor',
         title: '虚拟世界书编辑器',
-        summary: '在 Forge 虚拟世界书内创建、拆分、合并、重写条目，并进入审阅提案。',
+        summary: '在 Forge 虚拟世界书内创建、拆分、合并、重写条目，并写入可撤回项目补丁。',
         triggers: ['lorebook', 'worldbook', 'entry', 'rewrite', 'merge', 'split', '世界书', '条目'],
         loadAs: 'skill',
         namespace: 'forge.lorebook',
@@ -64,13 +64,13 @@ const CAPABILITIES: ForgeCapabilityIndexItem[] = [
         risk: 'medium'
     },
     {
-        id: 'review-stager',
-        title: '审阅暂存员',
-        summary: '把生成变更整理为可 diff、可批准或拒绝的 Review Gate 提案。',
-        triggers: ['review', 'staging', 'commit-ready', 'approve', '审阅', '暂存'],
+        id: 'workspace-patch-auditor',
+        title: '工作区补丁审计员',
+        summary: '把生成变更整理为可 diff、可撤回的 workspace_patch 记录。',
+        triggers: ['patch', 'version', 'undo', 'audit', '补丁', '版本', '撤回'],
         loadAs: 'skill',
-        namespace: 'forge.review',
-        skillName: 'review-stager',
+        namespace: 'forge.workspacePatch',
+        skillName: 'forge-project-writer',
         risk: 'medium'
     },
     {
@@ -96,7 +96,7 @@ const CAPABILITIES: ForgeCapabilityIndexItem[] = [
     {
         id: 'material-analyzer',
         title: '素材分析员',
-        summary: '用只读 shell 搜索和检查项目素材，并提取可审阅设定提案。',
+        summary: '用只读 shell 搜索和检查项目素材，并提取可直接写入项目 VFS 的设定草案。',
         triggers: ['material', 'source file', 'extract', 'grep', 'search', '素材', '提取', '搜索'],
         loadAs: 'shell-skill',
         namespace: 'forge.material',

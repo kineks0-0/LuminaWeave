@@ -10,7 +10,11 @@
 
 2026-05-15：项目中心开始按“项目 / 协作线程”边界收敛，执行记录见 `steps/2026-05-15-forge-project-thread-boundary-plan.md`。当前已覆盖新建线程、删除线程、删除项目的 repository / store / UI 链路。
 
-2026-05-22：Forge pi agent 补齐 reasoning artifact 与工具契约边界。provider-native reasoning artifact 只进入同 provider / 同模型的 replay-safe 通道；raw thinking 不进入普通历史、Review/Staging、Forge memory 或虚拟世界书。`skillLoad` 支持标题/path alias 到 canonical slug，prompt 工具名对齐 `writeProposal` / `editProposal`，`readFile` 对语义目录返回目录提示，疑似 prompt/protocol staging 污染会被标记供 Review Gate 清理。
+2026-05-22：Forge pi agent 补齐 reasoning artifact 与工具契约边界。provider-native reasoning artifact 只进入同 provider / 同模型的 replay-safe 通道；raw thinking 不进入普通历史、Forge memory 或虚拟世界书。`skillLoad` 支持标题/path alias 到 canonical slug，prompt 工具名对齐直接语义 `writeFile` / `editFile` / `deleteFile`，`readFile` 对语义目录返回目录提示。
+
+2026-05-22：Forge 项目 VFS 写入边界从 Review Gate 收敛为 direct workspace patch。Prompt Preview 与真实生成都以 `ForgePiAgentSession.preparePrompt()` 的 dry-run / runtime prepared prompt 为事实源；模型可见协议只保留可读 VFS、原生 tool calling、`workspace_patch` 审计和可撤回变更，不再把 `<entry_update>` / `<memory_update>` / proposal XML 当工作流动作。项目 workspace、`./memory/**/*.md`、`./lorebook/entries/*.md` 写入默认直接落 Forge 项目 VFS 并生成 `workspace_patch`；真实 ST 世界书发布和导出仍保持用户确认边界。
+
+2026-05-22：Forge `<V>` 组件与可见推理边界从旧 `PromptBuilder` / `PromptType.CONSTRAINTS` 接缝迁移到 pi runtime 资源：`./.forge/agent/UI_DSL.md` 固定承载完整 Forge `<V>` DSL 与“优先用组件收集用户意图”的规则，`./.forge/agent/REASONING.md` 固定承载隐藏思维链与可见工作笔记边界。`ForgePiAgentSession.preparePrompt()` 不再把旧 Forge Prompt Context messages 当 system fragment 追加到 pi system prompt；旧 `PromptBuilder` 仅保留 Chat / ST 世界书提示词挂载能力。
 
 ## 下一步
 
@@ -26,19 +30,21 @@
 8. ~~将项目资源写入收敛到 typed effects 与 VFS。~~
 9. ~~为条目重写与测试聊天接入按需 isolated subagent。~~
 10. ~~接入 pi 风格能力/技能 tool calling 实验路径，Graph 仅保留状态、阶段和能力索引。~~
-11. [x] 接入 human review gate UI，承接 `tool_approval_needed / tool_approval_resolved`。
+11. [x] 接入 human review gate UI，承接 `tool_approval_needed / tool_approval_resolved`。（历史阶段，已被 direct workspace patch 主路径取代）
+    - 2026-05-22 已从 AI 项目写入主路径撤出；旧 approval/staging 只作为历史记录和真实发布/导出边界的遗留能力保留。
 12. [x] 接入真实 approve/resume 闭环和写入细节展示；真实宿主 walkthrough 单独保留。
+    - 2026-05-22 起，新 AI 项目写入不再依赖 approve/resume，改为直接写入 + `workspace_patch` 可撤回审计。
 13. [x] 将 Forge Agent runtime 收敛到 pi-style runtime。
     - 不再保留旧 XML Action、Vercel AI SDK tool loop 或 isolated subagent fallback。
     - conversation / planner / analyst / executor 统一进入 Forge 内嵌版 pi runtime。
-14. [~] review / staging / export prepare 已复用 Review Gate 与 staging 链路，仍需真实宿主 walkthrough。
+14. [~] review / staging / export prepare 作为真实发布/导出边界的历史链路保留，AI 项目 VFS 写入已改为 direct workspace patch；仍需真实宿主 walkthrough。
 15. [x] Forge 主提示词切到原生 tool calling 优先，并将内置技能/能力展示文案中文化。
 16. [x] 补齐模型请求调试面板的 tool calling trace 视图。
     - 模型请求调试面板已新增“工具调用”视图，可显示 tool set 摘要、tool call/result 与 approval trace。
     - `modelRequestTraces` 仍是前端会话内瞬态调试记录；长期操作记录继续由 `timelineItems` 保存。
 17. [x] 执行 Forge Agent Runtime pi-coding-agent 化迁移。
     - 参考 `D:\Program\pi\packages\coding-agent` 的 AgentSession / ResourceLoader / SessionManager / ExtensionRunner 结构，在前端实现 Forge 浏览器 adapter 版本。
-    - 提示词最终合成迁移到 pi runtime；Forge 只提供 context resources、Graph guidance、Review Gate 边界和工具。
+    - 提示词最终合成迁移到 pi runtime；Forge 只提供 context resources、Graph guidance、直接写入审计边界和工具。
     - 旧 Forge runtime 与 XML Action 工具调用路径已移除，不做向后兼容。
     - 新规划见 `steps/2026-05-20-forge-pi-agent-core-browser-runtime-plan.md`，调研快照见 `steps/2026-05-20-pi-sdk-browser-adapter-research.md`。
 18. [x] 完成 Forge core 第一阶段结构归位。
@@ -56,7 +62,7 @@
 20. [x] 将 Forge 预览提示词对齐 pi agent 实际输出。
     - `ForgePiAgentSession.preparePrompt()` 提供 dry-run prompt preview，不触发模型请求、不执行工具、不写 session tree。
     - Agent Inspector / Forge Prompt Preview 的主模型 payload 改为展示 pi runtime 实际合成的 system prompt、branch messages、context files 与 active tools 摘要。
-    - 旧 Forge Prompt Context preview 仍仅作为 pi 预览输入来源和 Prompt Assembly trace 来源，不再作为主模型最终提示词事实源。
+    - 旧 Forge Prompt Context preview 不再作为主模型 payload 输入来源；Prompt Assembly 仅保留 source-unit trace / attention 视图辅助定位来源。
 21. [x] 将 Forge 模型协议层对齐 `@earendil-works/pi-ai`。
     - `ForgePiModelRegistry` 不再直接拼旧模型协议消息；它只返回 pi-ai `streamSimple()` 兼容的 model / streamFn。
     - `ForgePiNexusProvider` 直接把 Nexus preset / API 配置映射为 pi-ai provider model 与 request options，不再桥接 AI SDK 层。
@@ -79,8 +85,8 @@
     - 已修复 persisted pi entries 恢复为树结构的问题，刷新后可还原分支节点层级。
     - 已新增“文件版本”辅助面板，从 pi session entries 投影 workspace patch / checkpoint，并展示变更路径、hash 与当前 active node。
     - workspace patch / checkpoint 时间线节点已提供“查看文件版本”入口，可直接打开文件版本辅助面板。
-    - 文件版本面板已显示当前分支 / 其他分支变更计数；patch 行可查看单文件 inline before/after，并可生成“恢复变更前 / 恢复变更后”的 Review/Staging 暂存条目，不直接写 VFS。
-    - `StagingEntry` 已支持 `operation: upsert | delete`，删除类文件恢复会生成 delete 暂存，冻结时删除 Forge 虚拟工作区条目而不是写入空内容。
+    - 文件版本面板已显示当前分支 / 其他分支变更计数；patch 行可查看单文件 inline before/after，并可直接生成反向或重放 `workspace_patch` 写回 Forge 项目 VFS。
+    - 对话中的 assistant 回复会聚合同一轮产生的 `workspace_patch` 为“AI 更改文件”列表，提供单文件撤回；撤回同样生成新的反向 `workspace_patch`，不进入暂存/审阅。
     - 剩余：真实宿主 walkthrough 与文件版本恢复的端到端手动验证。
     - 设计记录见 `steps/2026-05-20-forge-pi-session-branch-and-workspace-version-design.md`。
 24. [x] 接入 Forge Agent 语义 VFS。
@@ -88,19 +94,20 @@
     - `./AGENTS.md` 作为 Agent 工作契约，不是系统提示词；默认系统提示词从 `./.forge/agent/SYSTEM.md` 暴露，模式提示词从 `./.forge/agent/<MODE>.md` 暴露，并可通过 `readFile` 读取。
     - 技能统一暴露为 `./agent/skills/<skill-name>/SKILL.md`，项目技能优先、内置技能回退；修改内置技能会生成 overlay patch proposal。
     - 当前协作线程通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 动态访问；历史线程稳定路径采用 `./threads/NN标题/thread.md` 与 `./threads/NN标题/messages.md`，并已接入 workspace binding / projection 数据源。
-    - 已新增“项目 VFS”辅助面板，浏览 Agent 可见的 Forge 项目语义 VFS 投影：提示词、技能、记忆、当前线程、历史线程、世界书、审阅区与非内部项目素材统一以 `./...` 展示；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等 raw storage 结构只保留在内部映射层。
+    - 已新增“项目 VFS”辅助面板，浏览 Agent 可见的 Forge 项目语义 VFS 投影：提示词、技能、记忆、当前线程、历史线程、世界书与非内部项目素材统一以 `./...` 展示；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等 raw storage 结构只保留在内部映射层。
 25. [x] 将 Forge Semantic VFS 挂载到 HAL Bash。
     - `BashTerminalRuntimeOptions.extraMounts` 支持调用方注入通用 `IFileSystem` mount；默认 `/sources`、`/library`、`/workspaces` 行为不变。
     - 新增 `ForgeSemanticVfsProvider` 与 `ForgeSemanticBashFs`，Forge shell cwd 继续对 Agent 显示为 `./`，底层通过 semantic mount 读取 `./AGENTS.md`、prompt、skill、thread、memory、review 与项目素材。
     - `ForgePiResourceLoader`、`ForgePiToolBridge.readFile()`、Forge shell 和项目 VFS 面板已收敛到同一 semantic VFS 数据源。
-    - shell/write proposal 仍只生成 Review Gate 可审阅写入，不静默发布或改写真实 ST 世界书。
+    - shell 项目写入会进入 direct patch reducer，直接写 Forge 项目 VFS 并生成 `workspace_patch`；资源 VFS、运行时 prompt、内置 skill 等受保护目标保持只读。
 26. [x] 将 Forge prompt / Contract VFS 边界迁移到 `.forge`。
-    - `./AGENTS.md` 已改为工作契约，只规定工具、审计、Review Gate、session tree / timeline / rollback 等工作边界。
+    - `./AGENTS.md` 已改为工作契约，只规定工具、`workspace_patch` 审计、session tree / timeline / rollback 等工作边界。
     - `./.forge/agent/SYSTEM.md` 是默认系统提示词，`./.forge/agent/PLANNER.md`、`./.forge/agent/CONVERSATION.md`、`./.forge/agent/ANALYST.md`、`./.forge/agent/EXECUTOR.md` 是模式提示词。
+    - `./.forge/agent/UI_DSL.md` 与 `./.forge/agent/REASONING.md` 是 pi prompt 固定资源，分别承载 Forge `<V>` DSL 和可见推理边界；不再通过旧 `PromptBuilder` 注入 Forge DSL。
     - `./.pi/agent/prompts/*.md` 不再作为 Forge prompt 主路径。
 27. [x] 将 Forge 预设资源化为 Agent Prompt Orchestration。
     - Forge 主预设提供 `AGENTS.md`、`.forge/agent/SYSTEM.md`、`.forge/agent/<MODE>.md`、自定义技能、生成参数和 Agent 提示词编排。
-    - Forge 面向 Agent / UI 的语义从 slot 拼接改为 `Contract -> System -> Mode Prompt -> Skills -> Capabilities -> Context Files -> Branch Messages`。
+    - Forge 面向 Agent / UI 的语义从 slot 拼接改为 `Contract -> System -> Mode Prompt -> UI DSL -> Reasoning Boundary -> Skills -> Capabilities -> Context Files -> Branch Messages`。
     - Semantic VFS 的资源优先级固定为 project override > active preset resources > bundled fallback。
     - 设置中的 Forge Agent 预设工作台已同步为资源包 / 编排视图；复制与保存自定义预设会保留 `forgeAgentResources` 和 `forgeAgentOrchestration`。
     - 预设工作台 UI 已调整为总览、资源编辑器、编排检查三段式：内置预设只读预览，自定义副本可编辑 Contract / System / Mode prompt。

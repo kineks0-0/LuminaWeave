@@ -469,10 +469,6 @@ export class PromptBuilder {
         return this.buildForContext('chat', options);
     }
 
-    public static buildForgePrompt(options: Omit<BuildActiveMessagesOptions, 'promptContext'>): CleanedMessage[] {
-        return this.buildForContext('forge', options);
-    }
-
     /**
      * 保持兼容：旧版 build 拦截逻辑
      */
@@ -570,25 +566,13 @@ export class PromptBuilder {
     }
 
     public static buildSystemProtocolText(context: PromptContext = 'chat'): string | null {
-        let allTags = globalPromptRegistry.getAllXMLTags(context);
-        if (context === 'forge') {
-            const legacyForgeActionTags = new Set([
-                'forge_skill',
-                'draft_plan',
-                'entry_update',
-                'memory_update',
-                'context_read',
-                'analysis_handoff',
-                'forge_auto_list',
-                'forge_form_result'
-            ]);
-            allTags = allTags.filter(tag => !legacyForgeActionTags.has(tag.tag));
+        if (context !== 'chat') {
+            return null;
         }
-        if (context === 'chat') {
-            const dialogueUIFrequency = lwStorage.get('lumina-chat.dialogueUIFrequency', 1, 'Global');
-            if (dialogueUIFrequency === 0) {
-                allTags = allTags.filter(tag => tag.tag !== 'V');
-            }
+        let allTags = globalPromptRegistry.getAllXMLTags(context);
+        const dialogueUIFrequency = lwStorage.get('lumina-chat.dialogueUIFrequency', 1, 'Global');
+        if (dialogueUIFrequency === 0) {
+            allTags = allTags.filter(tag => tag.tag !== 'V');
         }
 
         if (allTags.length === 0) return null;
@@ -637,6 +621,9 @@ export class PromptBuilder {
     }
 
     private static buildInlineConstraintText(context: PromptContext): string | null {
+        if (context !== 'chat') {
+            return null;
+        }
         const blocks = globalPromptRegistry.getFragmentsForContext(context)
             .filter(fragment => fragment.type === PromptType.CONSTRAINTS)
             .map(fragment => {

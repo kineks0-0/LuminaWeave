@@ -27,18 +27,18 @@ const forgeStore = useForgeStore();
 
 const trackCards = computed(() => {
   const hasWorkspaceContent = store.virtualLorebookEntries.length > 0 || store.draftTree.nodes.length > 0;
-  const hasReviewQueue = forgeStore.stagingArea.length > 0 || forgeStore.commitReadyEntries.length > 0;
+  const hasWorkspacePatches = forgeStore.piSessionEntries.some(entry => entry.kind === 'workspace_patch');
   const isFinalizing = store.publishState === 'workspace_frozen' || store.workflowSnapshot?.visiblePhase === 'finalize' || store.workflowSnapshot?.visiblePhase === 'output_delivery';
 
   return [
     {
       id: 'async_tasks',
       title: '异步任务',
-      status: hasReviewQueue ? 'ready' : 'pending',
-      statusLabel: hasReviewQueue ? '可挂接' : '待积累',
-      description: hasReviewQueue
-        ? '当前已经有待审或待冻结内容，可以继续拆分为独立后续任务。'
-        : '先让主流程产出 proposal 或 workspace-ready 内容，再决定需要挂起的异步任务。'
+      status: hasWorkspacePatches ? 'ready' : 'pending',
+      statusLabel: hasWorkspacePatches ? '可挂接' : '待积累',
+      description: hasWorkspacePatches
+        ? '当前已经有项目文件变更记录，可以继续拆分为独立后续任务。'
+        : '先让主流程产出可审计的 workspace_patch，再决定需要挂起的异步任务。'
     },
     {
       id: 'worldbook_reorg',

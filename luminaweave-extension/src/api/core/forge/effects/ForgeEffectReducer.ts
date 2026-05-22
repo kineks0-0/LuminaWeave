@@ -111,6 +111,8 @@ export interface ForgeEffectTarget {
     // --- 记忆 ---
     upsertForgeMemory(path: string, title: string, content: string, source: ForgeMemorySource, summary?: string): void;
     removeForgeMemory(path: string): void;
+    upsertVirtualLorebookEntry(payload: { id?: string; entry: LuminaLorebookEntry; sourceBookId?: string | null }): string;
+    removeVirtualLorebookEntry(id: string): boolean;
 
     // --- 暂存区 & 世界书 ---
     upsertStagingEntry(entry: Omit<StagingEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: number }): void;
@@ -253,6 +255,19 @@ export async function applyForgeEffects(
                     sourceTag: 'memory_remove',
                     layer: target.getActiveLayer()
                 });
+            }
+            break;
+        case 'virtual_lorebook_upsert':
+            target.upsertVirtualLorebookEntry({
+                id: effect.id,
+                entry: effect.entry,
+                sourceBookId: effect.sourceBookId ?? null
+            });
+            markProjectResourceWrite();
+            break;
+        case 'virtual_lorebook_remove':
+            if (target.removeVirtualLorebookEntry(effect.id)) {
+                markProjectResourceWrite();
             }
             break;
         case 'memory_read':

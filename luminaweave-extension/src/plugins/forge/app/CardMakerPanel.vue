@@ -153,6 +153,29 @@
                           :plugin-raw="item.message.pluginRaw || null"
                           :thinking-text="item.message.thinkingText || null" :render-markdown="renderMarkdown" />
                       </div>
+                      <div v-if="item.workspaceChanges?.length" class="msg-file-changes">
+                        <div class="file-changes-head">
+                          <span>AI 更改文件</span>
+                          <button type="button" @click="handleOpenWorkspaceVersions">版本面板</button>
+                        </div>
+                        <div
+                          v-for="change in item.workspaceChanges"
+                          :key="change.id"
+                          class="file-change-row"
+                        >
+                          <div class="file-change-main">
+                            <strong>{{ change.path }}</strong>
+                            <span>{{ workspaceChangeKindLabel(change.kind) }}</span>
+                          </div>
+                          <button
+                            type="button"
+                            :disabled="change.restoreApplied"
+                            @click="handleUndoWorkspaceChange(change)"
+                          >
+                            {{ change.restoreApplied ? '已撤回' : '撤回' }}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -384,6 +407,11 @@ import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
 import type { ForgeDetailMode } from '../../../types/ForgeStructuredTypes.js';
 import type { ForgeTimelineOperationItem } from '../../../types/ForgeTimelineTypes.js';
 import type { ForgeAuxPanelKind, ForgeVisiblePhase } from '../../../types/ForgeWorkflowTypes.js';
+import type {
+  ForgePiSessionEntry,
+  ForgePiWorkspacePatchChange,
+  ForgePiWorkspacePatchPayload
+} from '@shared/ForgePiTypes.js';
 import type { SidebarMode } from '../../../composables/useResponsiveLayout.js';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../forgeAuxPanels.js';
 
@@ -465,14 +493,75 @@ const forgeTypographyStyle = computed<Record<string, string>>(() => ({
 // 操作分组：连续的 operation 条目聚合为一组，全部完成后可折叠
 const expandedGroups = reactive<Set<string>>(new Set());
 
-interface FeedMessage { kind: 'message'; id: string; message: any }
+interface FeedWorkspaceChange {
+  id: string;
+  patchEntryId: string;
+  path: string;
+  kind: ForgePiWorkspacePatchChange['kind'];
+  beforeHash: string | null;
+  afterHash: string | null;
+  beforeContentRef: string | null;
+  afterContentRef: string | null;
+  restoreApplied: boolean;
+}
+
+interface FeedMessage { kind: 'message'; id: string; message: any; workspaceChanges?: FeedWorkspaceChange[] }
 interface FeedOpGroup { kind: 'op-group'; id: string; operations: ForgeTimelineOperationItem[]; allDone: boolean }
 type GroupedFeedItem = FeedMessage | FeedOpGroup;
+
+const isWorkspacePatchPayload = (payload: unknown): payload is ForgePiWorkspacePatchPayload => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+  const value = payload as { nodeId?: unknown; changes?: unknown };
+  return typeof value.nodeId === 'string' && Array.isArray(value.changes);
+};
+
+const restoredInlineChangeKeys = computed(() => new Set(
+  forgeStore.piSessionEntries
+    .map((entry) => {
+      const payload = entry.payload as { restoresEntryId?: unknown; restoreDirection?: unknown };
+      return typeof payload.restoresEntryId === 'string' && payload.restoreDirection === 'before'
+        ? `${payload.restoresEntryId}:before`
+        : null;
+    })
+    .filter((key): key is string => Boolean(key))
+));
+
+const workspacePatchGroupsByAssistantTurn = computed<FeedWorkspaceChange[][]>(() => {
+  const groups: FeedWorkspaceChange[][] = [];
+  let pending: FeedWorkspaceChange[] = [];
+
+  forgeStore.piSessionEntries.forEach((entry: ForgePiSessionEntry) => {
+    if (entry.kind === 'workspace_patch' && isWorkspacePatchPayload(entry.payload) && !entry.payload.restoresEntryId) {
+      pending.push(...entry.payload.changes.map((change, index) => {
+        const restoreEntryId = `${entry.id}:${change.path}`;
+        return {
+          id: `${entry.id}:${change.path}:${index}`,
+          patchEntryId: entry.id,
+          path: change.path,
+          kind: change.kind,
+          beforeHash: change.beforeHash,
+          afterHash: change.afterHash,
+          beforeContentRef: change.beforeContentRef ?? null,
+          afterContentRef: change.afterContentRef ?? null,
+          restoreApplied: restoredInlineChangeKeys.value.has(`${restoreEntryId}:before`)
+        };
+      }));
+      return;
+    }
+    if (entry.kind === 'assistant') {
+      groups.push(pending);
+      pending = [];
+    }
+  });
+
+  return groups;
+});
 
 const groupedFeed = computed((): GroupedFeedItem[] => {
   const result: GroupedFeedItem[] = [];
   let opBuffer: ForgeTimelineOperationItem[] = [];
   let groupIndex = 0;
+  let assistantIndex = 0;
 
   const flushBuffer = () => {
     if (opBuffer.length === 0) return;
@@ -486,7 +575,16 @@ const groupedFeed = computed((): GroupedFeedItem[] => {
   for (const item of store.timelineFeed) {
     if (item.kind === 'message') {
       flushBuffer();
-      result.push(item as FeedMessage);
+      const messageItem = item as FeedMessage;
+      if (messageItem.message.role === 'assistant') {
+        result.push({
+          ...messageItem,
+          workspaceChanges: workspacePatchGroupsByAssistantTurn.value[assistantIndex] ?? []
+        });
+        assistantIndex++;
+      } else {
+        result.push(messageItem);
+      }
     } else {
       opBuffer.push(item.item);
     }
@@ -494,6 +592,42 @@ const groupedFeed = computed((): GroupedFeedItem[] => {
   flushBuffer();
   return result;
 });
+
+const workspaceChangeKindLabel = (kind: ForgePiWorkspacePatchChange['kind']): string => {
+  if (kind === 'create') return '新增';
+  if (kind === 'delete') return '删除';
+  return '更新';
+};
+
+const resolvePatchKind = (
+  beforeContentRef: string | null,
+  afterContentRef: string | null
+): ForgePiWorkspacePatchChange['kind'] => {
+  if (beforeContentRef === null && afterContentRef !== null) return 'create';
+  if (beforeContentRef !== null && afterContentRef === null) return 'delete';
+  return 'update';
+};
+
+const handleUndoWorkspaceChange = async (change: FeedWorkspaceChange): Promise<void> => {
+  if (change.restoreApplied) return;
+  const beforeContentRef = change.afterContentRef;
+  const afterContentRef = change.beforeContentRef;
+  const patch: ForgePiWorkspacePatchPayload = {
+    nodeId: `workspace-restore-${Date.now().toString(36)}-${change.patchEntryId}`,
+    sourceToolCallId: `workspace-change-restore:${change.patchEntryId}:${change.path}`,
+    restoresEntryId: `${change.patchEntryId}:${change.path}`,
+    restoreDirection: 'before',
+    changes: [{
+      path: change.path,
+      kind: resolvePatchKind(beforeContentRef, afterContentRef),
+      beforeHash: change.afterHash,
+      afterHash: change.beforeHash,
+      beforeContentRef,
+      afterContentRef
+    }]
+  };
+  await store.applyWorkspacePatch(patch);
+};
 
 const hasPiWorkspaceVersionHistory = computed(() =>
   forgeStore.piSessionEntries.some(entry =>
@@ -1624,6 +1758,73 @@ onUnmounted(() => {
 
 .role-assistant .msg-bubble :deep(.lv-message-renderer > *) {
   max-width: 74ch;
+}
+
+.msg-file-changes {
+  width: min(640px, 100%);
+  margin-top: 4px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--lw-bg-subtle) 88%, transparent);
+}
+
+.file-changes-head,
+.file-change-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.file-changes-head {
+  margin-bottom: 8px;
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
+}
+
+.file-changes-head button,
+.file-change-row button {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 76%, transparent);
+  border-radius: 8px;
+  background: var(--lw-bg-elevated);
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-label-small-size);
+  cursor: pointer;
+}
+
+.file-change-row {
+  padding: 8px 0;
+  border-top: 1px solid color-mix(in srgb, var(--lw-border-base) 68%, transparent);
+}
+
+.file-change-main {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.file-change-main strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-body-small-size);
+}
+
+.file-change-main span {
+  flex: 0 0 auto;
+  color: rgb(var(--lw-primary-rgb));
+  font-size: var(--lw-type-label-small-size);
+}
+
+.file-change-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
 }
 
 .chat-section.is-detached-workspace .role-assistant .msg-bubble :deep(.lv-message-renderer > *) {

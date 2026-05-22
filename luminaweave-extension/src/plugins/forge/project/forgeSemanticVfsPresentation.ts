@@ -7,7 +7,7 @@ import type {
 
 export type ForgeSemanticVfsNodeKind = 'directory' | 'file' | 'alias' | 'resource-root';
 export type ForgeSemanticVfsSource = 'virtual' | 'context' | 'session' | 'workspace' | 'resource';
-export type ForgeSemanticVfsWritePolicy = 'read-only' | 'review-required' | 'pass-through';
+export type ForgeSemanticVfsWritePolicy = 'read-only' | 'protected' | 'direct-write' | 'pass-through';
 
 export interface ForgeSemanticVfsNode {
     path: string;
@@ -48,6 +48,8 @@ interface SemanticFileSeed {
 }
 
 const DEFAULT_PROMPT_FILES = [
+    './.forge/agent/UI_DSL.md',
+    './.forge/agent/REASONING.md',
     './.forge/agent/PLANNER.md',
     './.forge/agent/CONVERSATION.md',
     './.forge/agent/ANALYST.md',
@@ -58,31 +60,31 @@ const DEFAULT_FILE_SEEDS: SemanticFileSeed[] = [
     {
         path: './AGENTS.md',
         source: 'virtual',
-        writePolicy: 'review-required',
+        writePolicy: 'protected',
         preview: 'Forge Agent 工作契约'
     },
     {
         path: './.forge/agent/SYSTEM.md',
         source: 'virtual',
-        writePolicy: 'review-required',
+        writePolicy: 'protected',
         preview: 'Forge 默认系统提示词'
     },
     ...DEFAULT_PROMPT_FILES.map(path => ({
         path,
         source: 'virtual' as const,
-        writePolicy: 'review-required' as const,
+        writePolicy: 'protected' as const,
         preview: 'Forge mode prompt'
     })),
     {
         path: './memory/AUTO/Checklist.md',
         source: 'virtual',
-        writePolicy: 'review-required',
+        writePolicy: 'direct-write',
         preview: '自动维护的制卡检查清单'
     },
     {
         path: './memory/用户偏好.md',
         source: 'virtual',
-        writePolicy: 'review-required',
+        writePolicy: 'direct-write',
         preview: '用户偏好和约束记忆'
     },
     {
@@ -94,14 +96,8 @@ const DEFAULT_FILE_SEEDS: SemanticFileSeed[] = [
     {
         path: './lorebook/',
         source: 'virtual',
-        writePolicy: 'review-required',
+        writePolicy: 'direct-write',
         preview: '虚拟世界书项目视图'
-    },
-    {
-        path: './review/',
-        source: 'virtual',
-        writePolicy: 'review-required',
-        preview: 'Review Gate 暂存区'
     },
     {
         path: '/library/',
@@ -135,7 +131,7 @@ export const flattenForgeSemanticVfsTree = (nodes: ForgeSemanticVfsNode[]): Forg
     nodes.flatMap(node => [node, ...flattenForgeSemanticVfsTree(node.children)]);
 
 const createBaseRoots = (includeResourceRoots: boolean): ForgeSemanticVfsNode[] => [
-    createNode('./', './', 'directory', 'virtual', 'review-required', 'Forge 项目语义根', 0),
+    createNode('./', './', 'directory', 'virtual', 'direct-write', 'Forge 项目语义根', 0),
     ...(includeResourceRoots ? [
         createNode('/library/', '/library', 'resource-root', 'resource', 'pass-through', '底层 Resource VFS library', 0),
         createNode('/sources/', '/sources', 'resource-root', 'resource', 'pass-through', '底层 Resource VFS sources', 0)
@@ -176,7 +172,7 @@ const projectFileSeeds = (files: ForgeSemanticVfsProjectEntry[]): SemanticFileSe
         path: normalizeProjectEntryPath(file),
         kind: file.kind === 'directory' ? 'directory' : 'file',
         source: file.source ?? 'workspace',
-        writePolicy: file.writePolicy ?? 'review-required',
+        writePolicy: file.writePolicy ?? 'direct-write',
         preview: file.kind === 'directory' ? '目录' : compactPreview(file.content ?? ''),
         content: file.content
     }));
@@ -185,7 +181,7 @@ const skillFileSeeds = (contextBundle: ForgePiContextBundleSummary | null): Sema
     (contextBundle?.activeSkills ?? []).map(skillName => ({
         path: `./agent/skills/${skillName}/SKILL.md`,
         source: 'context',
-        writePolicy: 'review-required',
+        writePolicy: 'protected',
         preview: `已加载技能：${skillName}`
     }));
 
@@ -210,7 +206,7 @@ const sessionFileSeeds = (input: ForgeSemanticVfsTreeInput): SemanticFileSeed[] 
                 seeds.push({
                     path: normalizeSemanticPath(change.path),
                     source: 'workspace',
-                    writePolicy: 'review-required',
+                    writePolicy: 'direct-write',
                     preview: `${change.kind}: ${entry.summary}`
                 });
             });
@@ -348,7 +344,9 @@ const normalizeProjectEntryPath = (entry: ForgeSemanticVfsProjectEntry): string 
 const inferWritePolicy = (path: string): ForgeSemanticVfsWritePolicy => {
     if (path.startsWith('/library/') || path.startsWith('/sources/')) return 'pass-through';
     if (path.startsWith('./threads/')) return 'read-only';
-    return 'review-required';
+    return path.startsWith('./.forge/') || path.startsWith('./agent/skills/') || path === './AGENTS.md'
+        ? 'protected'
+        : 'direct-write';
 };
 
 const inferDirectoryKind = (path: string): ForgeSemanticVfsNodeKind =>

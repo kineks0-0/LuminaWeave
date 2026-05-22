@@ -108,14 +108,15 @@ describe('ForgePromptPreviewPayloadBuilder', () => {
         expect(syncAutoChecklistToMemory).not.toHaveBeenCalled();
     });
 
-    it('builds primary preview with agent graph source units and assembly', async () => {
+    it('builds primary preview from pi prepared prompt while keeping source-unit assembly trace', async () => {
         const syncAutoChecklistToMemory = vi.fn();
         const { builder, promptContextService } = createBuilder({ syncAutoChecklistToMemory });
 
         const bundle = await builder.buildPromptPreviewPayload();
 
         expect(syncAutoChecklistToMemory).toHaveBeenCalledTimes(1);
-        expect(promptContextService.buildPromptPreviewPayload).toHaveBeenCalledWith(expect.objectContaining({
+        expect(promptContextService.buildPromptPreviewPayload).not.toHaveBeenCalled();
+        expect(promptContextService.buildPromptPreviewAssembly).toHaveBeenCalledWith(expect.objectContaining({
             messages: [{ role: 'user', content: 'raw hello', name: 'You' }],
             forgeAgentSourceUnits: [{ id: 'unit-1', label: '能力索引', kind: 'context', sourceKind: 'forge-agent' }],
             mode: 'conversation'
@@ -143,7 +144,7 @@ describe('ForgePromptPreviewPayloadBuilder', () => {
         });
     });
 
-    it('passes the Forge preview payload into the pi preview path as system fragments without creating a runtime trace', async () => {
+    it('passes no legacy Forge Prompt Context payload into the pi preview path', async () => {
         const previewPiPrompt = vi.fn().mockResolvedValue({
             requestId: 'req_preview',
             prompt: [{ role: 'system', content: 'pi exact system prompt' }],
@@ -158,6 +159,7 @@ describe('ForgePromptPreviewPayloadBuilder', () => {
 
         const bundle = await builder.buildPromptPreviewPayload();
 
+        expect(promptContextService.buildPromptPreviewPayload).not.toHaveBeenCalled();
         expect(previewPiPrompt).toHaveBeenCalledWith(expect.objectContaining({
             command: { type: 'send_user_input', input: 'raw hello' },
             commandInput: 'raw hello',
@@ -165,7 +167,7 @@ describe('ForgePromptPreviewPayloadBuilder', () => {
                 requestId: 'req_preview',
                 traceSource: 'conversation',
                 mode: 'conversation',
-                messages: promptContextService.buildPromptPreviewPayload.mock.results[0].value
+                messages: []
             })
         }));
         expect(bundle.primary.payload).toEqual([{ role: 'system', content: 'pi exact system prompt' }]);

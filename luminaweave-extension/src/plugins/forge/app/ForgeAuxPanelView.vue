@@ -4,7 +4,6 @@
     :workspace-session-id="store.workspaceSessionId"
   />
   <ForgeMemoryPanel v-else-if="kind === 'memory'" />
-  <ForgeReviewPanel v-else-if="kind === 'review'" />
   <ForgeExportPanel v-else-if="kind === 'export'" />
   <ForgeTestChatPanel v-else-if="kind === 'test_chat'" />
   <ForgeModelRequestDebugPanel v-else-if="kind === 'dev_requests'" />
@@ -19,7 +18,6 @@ import { useCardMakerStore } from '../CardMakerStore.js';
 import type { ForgeAuxPanelKind } from '../../../types/ForgeWorkflowTypes.js';
 import ForgeLorebookSidebar from '../project/ForgeLorebookSidebar.vue';
 import ForgeMemoryPanel from '../project/ForgeMemoryPanel.vue';
-import ForgeReviewPanel from '../review/ForgeReviewPanel.vue';
 import ForgeExportPanel from '../project/ForgeExportPanel.vue';
 import ForgePostTracksPanel from '../ForgePostTracksPanel.vue';
 import ForgeTestChatPanel from '../panels/ForgeTestChatPanel.vue';

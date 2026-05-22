@@ -81,11 +81,11 @@ const approvalPresentation = (approval: ForgeToolApprovalRequest) =>
   buildToolApprovalPresentation(approval.toolName, approval.args);
 
 const approveToolCall = (toolCallId: string): void => {
-  void cardMakerStore.resolveToolApproval(toolCallId, true, '已在 Review Gate 批准。');
+  void cardMakerStore.resolveToolApproval(toolCallId, true, '已批准历史工具请求。');
 };
 
 const rejectToolCall = (toolCallId: string): void => {
-  void cardMakerStore.resolveToolApproval(toolCallId, false, '已在 Review Gate 拒绝。');
+  void cardMakerStore.resolveToolApproval(toolCallId, false, '已拒绝历史工具请求。');
 };
 </script>
 

@@ -16,10 +16,8 @@ import {
 import {
     forgeWorkspaceSearchShell,
     type ForgeShellAccessMode,
-    type ForgeShellWriteLogEntry,
     type ForgeWorkspaceSearchShell
 } from '../../shell/ForgeWorkspaceSearchShell.js';
-import { forgeShellWriteInterceptor } from '../../effects/ForgeShellWriteInterceptor.js';
 import {
     forgeCapabilityRegistry,
     type ForgeCapabilityRegistry
@@ -49,6 +47,8 @@ import {
 import {
     listForgePresetSkillResources
 } from '../../project/ForgeProjectSemanticVfsService.js';
+import { forgeWorkspaceVersionManager } from '../../project/ForgeWorkspaceVersionManager.js';
+import type { ForgePiWorkspacePatchPayload } from '@shared/ForgePiTypes.js';
 
 export interface ForgePiToolContext {
     forgeProjectId: string;
@@ -92,6 +92,35 @@ interface PendingPiToolApproval {
     input: ForgePiToolCallInput;
 }
 
+interface ForgeDirectWorkspaceChangeInput {
+    toolCallId: string;
+    path: string;
+    contentAfter: string | null;
+    command: string;
+    ctx: ForgePiToolContext;
+    emitEffects?: (effects: ForgeRuntimeEffect[]) => void;
+}
+
+interface ForgeDirectWorkspaceChangeResult {
+    path: string;
+    workspacePath?: string;
+    applied: boolean;
+    workspacePatch?: ForgePiWorkspacePatchPayload;
+    error?: string;
+    command?: string;
+}
+
+type ForgeWritableProjectFileResult = {
+    ok: true;
+    path: string;
+    workspacePath: string;
+    content: string;
+} | {
+    ok: false;
+    path: string;
+    error: string;
+}
+
 const textResult = <TDetails>(text: string, details: TDetails): AgentToolResult<TDetails> => ({
     content: [{ type: 'text', text }],
     details
@@ -122,9 +151,9 @@ export class ForgePiToolBridge {
             this.createSkillLoadTool(ctx),
             this.createBashTool(ctx, emitEffects),
             this.createReadFileTool(ctx),
-            this.createWriteProposalTool(ctx, emitEffects),
-            this.createEditProposalTool(ctx, emitEffects),
-            this.createStageEntryTool(ctx, emitEffects)
+            this.createWriteFileTool(ctx, emitEffects),
+            this.createEditFileTool(ctx, emitEffects),
+            this.createDeleteFileTool(ctx, emitEffects)
         ];
     }
 
@@ -255,6 +284,253 @@ export class ForgePiToolBridge {
         return this.deps.workspaces ?? shellWorkspaceService;
     }
 
+    private async readWritableProjectFile(path: string, ctx: ForgePiToolContext): Promise<ForgeWritableProjectFileResult> {
+        const resolved = await this.resolvePath(path, ctx);
+        const writableError = this.resolveDirectWriteError(resolved);
+        if (writableError) {
+            return {
+                ok: false,
+                path: resolved.displayPath,
+                error: writableError
+            };
+        }
+        if (resolved.kind !== 'workspace') {
+            return {
+                ok: false,
+                path: resolved.displayPath,
+                error: `read-only Forge semantic path: ${resolved.displayPath}`
+            };
+        }
+        const fs = await this.workspaces.getFileSystem({
+            projectId: ctx.forgeProjectId,
+            conversationId: ctx.conversationId
+        });
+        try {
+            return {
+                ok: true,
+                path: resolved.displayPath,
+                workspacePath: resolved.workspacePath,
+                content: String(await fs.readFile(this.workspaceLocalPath(resolved.workspacePath)) ?? '')
+            };
+        } catch {
+            return {
+                ok: false,
+                path: resolved.displayPath,
+                error: `File not found: ${resolved.displayPath}`
+            };
+        }
+    }
+
+    private async applyDirectWorkspaceChange(input: ForgeDirectWorkspaceChangeInput): Promise<ForgeDirectWorkspaceChangeResult> {
+        const resolved = await this.resolvePath(input.path, input.ctx);
+        const writableError = this.resolveDirectWriteError(resolved);
+        if (writableError) {
+            return {
+                path: resolved.displayPath,
+                applied: false,
+                error: writableError,
+                command: input.command
+            };
+        }
+        if (resolved.kind !== 'workspace') {
+            return {
+                path: resolved.displayPath,
+                applied: false,
+                error: `read-only Forge semantic path: ${resolved.displayPath}`,
+                command: input.command
+            };
+        }
+
+        const fs = await this.workspaces.getFileSystem({
+            projectId: input.ctx.forgeProjectId,
+            conversationId: input.ctx.conversationId
+        });
+        const localPath = this.workspaceLocalPath(resolved.workspacePath);
+        const contentBefore = await fs.readFile(localPath)
+            .then(content => String(content ?? ''))
+            .catch(() => null);
+        if (input.contentAfter === null && contentBefore === null) {
+            return {
+                path: resolved.displayPath,
+                workspacePath: resolved.workspacePath,
+                applied: false,
+                error: `File not found: ${resolved.displayPath}`,
+                command: input.command
+            };
+        }
+
+        if (input.contentAfter === null) {
+            await fs.rm(localPath);
+        } else {
+            await fs.mkdir(this.parentLocalPath(localPath), { recursive: true });
+            await fs.writeFile(localPath, input.contentAfter);
+        }
+        await this.workspaces.persist();
+
+        const patch = forgeWorkspaceVersionManager.createPatch({
+            nodeId: `tool:${input.toolCallId}`,
+            beforeFiles: contentBefore === null ? {} : { [resolved.displayPath]: contentBefore },
+            afterFiles: input.contentAfter === null ? {} : { [resolved.displayPath]: input.contentAfter },
+            sourceToolCallId: input.toolCallId
+        });
+        const stateEffects = this.createDirectWriteStateEffects(resolved.displayPath, input.contentAfter, input.ctx);
+        if (stateEffects.length > 0) {
+            input.emitEffects?.(stateEffects);
+        }
+
+        return {
+            path: resolved.displayPath,
+            workspacePath: resolved.workspacePath,
+            applied: true,
+            workspacePatch: patch,
+            command: input.command
+        };
+    }
+
+    private resolveDirectWriteError(resolved: ForgeSemanticPathResolution): string | null {
+        if (resolved.kind === 'resource-vfs') {
+            return 'resource VFS is read-only from Forge direct write tools; fork or import it into the project first.';
+        }
+        if (resolved.kind === 'virtual') {
+            return 'virtual Forge runtime files are read-only from Forge direct write tools.';
+        }
+        if (resolved.displayPath === './' || resolved.displayPath.endsWith('/')) {
+            return 'directory writes are not supported by Forge direct write tools.';
+        }
+        if (
+            resolved.displayPath === './AGENTS.md'
+            || resolved.displayPath.startsWith('./.forge/')
+            || resolved.displayPath.startsWith('./agent/skills/')
+            || resolved.displayPath.startsWith('./threads/')
+            || resolved.displayPath.startsWith('./review/')
+        ) {
+            return `read-only Forge semantic path: ${resolved.displayPath}`;
+        }
+        return null;
+    }
+
+    private parentLocalPath(path: string): string {
+        const normalized = path.replace(/\\/g, '/').replace(/\/+/g, '/');
+        const index = normalized.lastIndexOf('/');
+        return index <= 0 ? '/' : normalized.slice(0, index);
+    }
+
+    private createDirectWriteStateEffects(
+        displayPath: string,
+        contentAfter: string | null,
+        ctx: ForgePiToolContext
+    ): ForgeRuntimeEffect[] {
+        const memoryPath = this.resolveMemorySemanticPath(displayPath, ctx);
+        if (memoryPath) {
+            if (contentAfter === null) {
+                return [{ type: 'memory_remove', path: memoryPath }];
+            }
+            const parsed = this.parseMarkdownDocument(contentAfter);
+            return [{
+                type: 'memory_upsert',
+                path: memoryPath,
+                title: parsed.title || memoryPath,
+                content: parsed.body,
+                summary: parsed.body.slice(0, 120),
+                source: 'planner'
+            }];
+        }
+
+        const lorebookId = this.resolveLorebookEntryId(displayPath, ctx);
+        if (lorebookId) {
+            if (contentAfter === null) {
+                return [{ type: 'virtual_lorebook_remove', id: lorebookId }];
+            }
+            return [{
+                type: 'virtual_lorebook_upsert',
+                id: lorebookId,
+                entry: this.buildLorebookEntryFromMarkdown(lorebookId, contentAfter, ctx)
+            }];
+        }
+
+        return [];
+    }
+
+    private resolveMemorySemanticPath(displayPath: string, ctx: ForgePiToolContext): string | null {
+        const match = displayPath.match(/^\.\/memory\/(.+)\.md$/);
+        if (!match) return null;
+        const candidate = match[1].replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
+        const existing = ctx.runtimeContext.forgeMemoryTree.entries.find(entry =>
+            entry.path === candidate || this.safePathSegment(entry.path) === candidate
+        );
+        return existing?.path ?? candidate;
+    }
+
+    private resolveLorebookEntryId(displayPath: string, ctx: ForgePiToolContext): string | null {
+        const match = displayPath.match(/^\.\/lorebook\/entries\/([^/]+)\.md$/);
+        if (!match) return null;
+        const candidate = match[1];
+        const existing = ctx.runtimeContext.virtualLorebookEntries.find(entry =>
+            entry.id === candidate || this.safePathSegment(entry.id) === candidate
+        );
+        return existing?.id ?? candidate;
+    }
+
+    private parseMarkdownDocument(content: string): { title: string; body: string } {
+        const lines = content.replace(/\r\n/g, '\n').split('\n');
+        let title = '';
+        if (lines[0]?.startsWith('# ')) {
+            title = lines.shift()?.replace(/^#\s+/, '').trim() ?? '';
+            if (lines[0] === '') lines.shift();
+        }
+        const footerIndex = lines.findIndex(line => line.startsWith('> 来源：'));
+        const bodyLines = footerIndex >= 0 ? lines.slice(0, footerIndex) : lines;
+        return {
+            title,
+            body: bodyLines.join('\n').trim()
+        };
+    }
+
+    private buildLorebookEntryFromMarkdown(
+        id: string,
+        content: string,
+        ctx: ForgePiToolContext
+    ): LuminaLorebookEntry {
+        const parsed = this.parseMarkdownDocument(content);
+        const existing = ctx.runtimeContext.virtualLorebookEntries.find(entry => entry.id === id)?.entry;
+        return {
+            ...(existing ?? {}),
+            uid: existing?.uid ?? id,
+            comment: parsed.title || existing?.comment || id,
+            key: existing?.key ?? [],
+            keysecondary: existing?.keysecondary ?? [],
+            content: parsed.body,
+            constant: existing?.constant ?? false,
+            selective: existing?.selective ?? false,
+            selectiveLogic: existing?.selectiveLogic ?? 0,
+            disable: existing?.disable ?? false,
+            enabled: existing?.enabled ?? true,
+            position: existing?.position ?? 0,
+            role: existing?.role,
+            depth: existing?.depth ?? 4,
+            order: existing?.order ?? 100,
+            probability: existing?.probability ?? 100,
+            useProbability: existing?.useProbability ?? false,
+            scan_depth: existing?.scan_depth ?? 4,
+            caseSensitive: existing?.caseSensitive ?? false,
+            matchWholeWords: existing?.matchWholeWords ?? false,
+            useRegex: existing?.useRegex ?? false,
+            excludeRecursion: existing?.excludeRecursion ?? false,
+            preventRecursion: existing?.preventRecursion ?? false,
+            delayUntilRecursion: existing?.delayUntilRecursion ?? false
+        };
+    }
+
+    private safePathSegment(value: string): string {
+        const normalized = value
+            .trim()
+            .replace(/[\\/:*?"<>|]/g, '-')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+        return normalized || 'untitled';
+    }
+
     private async resolvePath(path: string, ctx: ForgePiToolContext): Promise<ForgeSemanticPathResolution> {
         return this.semanticVfs.resolveAgentPath({
             path,
@@ -302,12 +578,6 @@ export class ForgePiToolBridge {
                 };
             }));
         return threads;
-    }
-
-    private emitWriteLog(writeLog: ForgeShellWriteLogEntry[], emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgeRuntimeEffect[] {
-        const intercepted = forgeShellWriteInterceptor.intercept(writeLog);
-        emitEffects(intercepted.effects);
-        return intercepted.effects;
     }
 
     private createCapabilitySearchTool(ctx: ForgePiToolContext): ForgePiAgentTool {
@@ -471,7 +741,7 @@ export class ForgePiToolBridge {
         };
     }
 
-    private createBashTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
+    private createBashTool(ctx: ForgePiToolContext, _emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
         const parameters = Type.Object({
             command: Type.String({ description: '要执行的 bash 命令' }),
             accessMode: Type.Optional(Type.Union([
@@ -484,13 +754,12 @@ export class ForgePiToolBridge {
             label: '项目 Shell',
             description: [
                 '在 Forge 项目沙箱中执行 bash 命令。',
-                '默认 project-readonly；写入模式必须显式请求，并且只会创建审阅暂存。',
+                '默认 project-readonly；写入模式必须显式请求，并会直接写入项目 VFS 与生成 workspace_patch。',
                 '禁止：命令替换 $()、反引号、curl、eval、chmod。',
                 '当前工作目录：./'
             ].join('\n'),
             parameters,
-            needsApproval: (params: any) => params?.accessMode === 'project-write-request',
-            execute: async (_toolCallId, params: any) => {
+            execute: async (toolCallId, params: any) => {
                 const { command, accessMode } = params;
                 const mode = (accessMode ?? 'project-readonly') as ForgeShellAccessMode;
                 const stableThreads = await this.listStableThreads(ctx);
@@ -502,9 +771,16 @@ export class ForgePiToolBridge {
                     accessMode: mode,
                     runtimeContext: ctx.runtimeContext
                 });
-                if (result.writeLog.length > 0) {
-                    this.emitWriteLog(result.writeLog, emitEffects);
-                }
+                const workspaceWrites = await Promise.all(result.writeLog.map(entry =>
+                    this.applyDirectWorkspaceChange({
+                        toolCallId,
+                        path: entry.path,
+                        contentAfter: entry.contentAfter,
+                        command: entry.command,
+                        ctx,
+                        emitEffects: _emitEffects
+                    })
+                ));
                 const details = {
                     stdout: this.semanticVfs.rewriteTextToAgentDisplay({
                         text: result.result.stdout,
@@ -520,7 +796,13 @@ export class ForgePiToolBridge {
                     }),
                     exitCode: result.result.exitCode,
                     diagnostics: result.diagnostics,
-                    writeCount: result.writeLog.length
+                    writeCount: workspaceWrites.filter(write => write.applied).length,
+                    workspacePatches: workspaceWrites
+                        .map(write => write.workspacePatch)
+                        .filter((patch): patch is ForgePiWorkspacePatchPayload => Boolean(patch)),
+                    writeErrors: workspaceWrites
+                        .filter(write => !write.applied)
+                        .map(write => ({ path: write.path, error: write.error }))
                 };
                 return textResult(details.stdout || details.stderr || `exitCode=${result.result.exitCode}`, details);
             }
@@ -592,151 +874,105 @@ export class ForgePiToolBridge {
         };
     }
 
-    private createWriteProposalTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
+    private createWriteFileTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
         const parameters = Type.Object({
             path: Type.String({ description: '相对项目工作区的文件路径' }),
-            content: Type.String({ description: '要写入的内容。结构化条目请使用 JSON。' })
+            content: Type.String({ description: '要直接写入 Forge 项目 VFS 的完整内容。' })
         });
         return {
-            name: 'writeProposal',
-            label: '写入建议',
-            description: '生成文件写入建议。变更只进入人工审阅暂存，不直接发布或写真实 ST 世界书。',
+            name: 'writeFile',
+            label: '写入文件',
+            description: '直接写入 Forge 项目 VFS，并返回可撤回的 workspace_patch；不会发布或改写真实 ST 世界书。',
             parameters,
-            needsApproval: true,
-            execute: async (_toolCallId, params: any) => {
+            execute: async (toolCallId, params: any) => {
                 const { path, content } = params;
-                const resolved = await this.resolvePath(path, ctx);
-                if (resolved.kind === 'virtual') {
-                    const patchPath = this.skillOverridePatchPath(resolved.displayPath);
-                    return textResult(`已生成内置/运行时文件增量覆盖建议：${patchPath}`, {
-                        path: resolved.displayPath,
-                        patchPath,
-                        staged: true,
-                        effectCount: 0,
-                        overlay: true
-                    });
-                }
-                if (resolved.kind !== 'workspace') {
-                    return textResult('resource VFS writes must be forked or imported through a dedicated workflow', {
-                        path: resolved.displayPath,
-                        staged: false,
-                        error: 'resource VFS writes are not supported by writeProposal'
-                    });
-                }
-                let before = '';
-                let fileExists = true;
-                try {
-                    before = await (await this.workspaces.getFileSystem({
-                        projectId: ctx.forgeProjectId,
-                        conversationId: ctx.conversationId
-                    })).readFile(this.workspaceLocalPath(resolved.workspacePath)) ?? '';
-                } catch {
-                    fileExists = false;
-                }
-                const skillName = this.skillNameFromDisplayPath(resolved.displayPath);
-                if (skillName && !fileExists) {
-                    const patchPath = this.skillOverridePatchPath(resolved.displayPath);
-                    return textResult(`已生成内置技能增量覆盖建议：${patchPath}`, {
-                        path: resolved.displayPath,
-                        patchPath,
-                        staged: true,
-                        effectCount: 0,
-                        overlay: true
-                    });
-                }
-                const effects = this.emitWriteLog([{
-                    command: `writeProposal ${path}`,
-                    path: resolved.workspacePath,
-                    contentBefore: before,
-                    contentAfter: content
-                }], emitEffects);
-                return textResult(`已生成写入审阅建议：${resolved.displayPath}`, {
-                    path: resolved.displayPath,
-                    staged: true,
-                    effectCount: effects.length
+                const applied = await this.applyDirectWorkspaceChange({
+                    toolCallId,
+                    path,
+                    contentAfter: String(content ?? ''),
+                    command: `writeFile ${path}`,
+                    ctx,
+                    emitEffects
                 });
+                return textResult(applied.applied
+                    ? `已写入项目文件：${applied.path}`
+                    : `无法写入项目文件：${applied.path}`,
+                applied);
             }
         };
     }
 
-    private createEditProposalTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
+    private createEditFileTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
         const parameters = Type.Object({
             path: Type.String({ description: '相对项目工作区的文件路径' }),
             old_string: Type.String({ description: '要替换的精确文本' }),
             new_string: Type.String({ description: '替换后的文本' })
         });
         return {
-            name: 'editProposal',
-            label: '编辑建议',
-            description: '生成精准替换建议。变更只进入人工审阅暂存，不直接发布或写真实 ST 世界书。',
+            name: 'editFile',
+            label: '编辑文件',
+            description: '对 Forge 项目 VFS 文件执行精确替换，并返回可撤回的 workspace_patch。',
             parameters,
-            needsApproval: true,
-            execute: async (_toolCallId, params: any) => {
+            execute: async (toolCallId, params: any) => {
                 const { path, old_string, new_string } = params;
-                const resolved = await this.resolvePath(path, ctx);
-                if (resolved.kind === 'virtual') {
-                    const patchPath = this.skillOverridePatchPath(resolved.displayPath);
-                    return textResult(`已生成内置/运行时文件增量覆盖建议：${patchPath}`, {
-                        path: resolved.displayPath,
-                        patchPath,
-                        replaced: true,
-                        staged: true,
-                        effectCount: 0,
-                        overlay: true
-                    });
-                }
-                if (resolved.kind !== 'workspace') {
-                    return textResult('resource VFS edits must be forked or imported through a dedicated workflow', {
-                        path: resolved.displayPath,
+                const before = await this.readWritableProjectFile(path, ctx);
+                if (!before.ok) {
+                    return textResult(before.error, {
+                        path: before.path,
+                        applied: false,
                         replaced: false,
-                        error: 'resource VFS edits are not supported by editProposal'
+                        error: before.error
                     });
                 }
-                let before: string;
-                try {
-                    before = await (await this.workspaces.getFileSystem({
-                        projectId: ctx.forgeProjectId,
-                        conversationId: ctx.conversationId
-                    })).readFile(this.workspaceLocalPath(resolved.workspacePath)) ?? '';
-                } catch {
-                    const skillName = this.skillNameFromDisplayPath(resolved.displayPath);
-                    if (skillName) {
-                        const patchPath = this.skillOverridePatchPath(resolved.displayPath);
-                        return textResult(`已生成内置技能增量覆盖建议：${patchPath}`, {
-                            path: resolved.displayPath,
-                            patchPath,
-                            replaced: true,
-                            staged: true,
-                            effectCount: 0,
-                            overlay: true
-                        });
-                    }
-                    throw new Error(`File not found: ${resolved.displayPath}`);
+                if (!before.content.includes(old_string)) {
+                    return textResult('old_string not found in file', {
+                        path: before.path,
+                        applied: false,
+                        replaced: false,
+                        error: 'old_string not found in file'
+                    });
                 }
-                if (!before.includes(old_string)) {
-                    return textResult('old_string not found in file', { path: resolved.displayPath, replaced: false, error: 'old_string not found in file' });
-                }
-                const after = before.replace(old_string, new_string);
-                const effects = this.emitWriteLog([{
-                    command: `editProposal ${path}`,
-                    path: resolved.workspacePath,
-                    contentBefore: before,
-                    contentAfter: after
-                }], emitEffects);
-                return textResult(`已生成编辑审阅建议：${resolved.displayPath}`, {
-                    path: resolved.displayPath,
-                    replaced: true,
-                    staged: true,
-                    effectCount: effects.length
+                const applied = await this.applyDirectWorkspaceChange({
+                    toolCallId,
+                    path,
+                    contentAfter: before.content.replace(old_string, new_string),
+                    command: `editFile ${path}`,
+                    ctx,
+                    emitEffects
                 });
+                return textResult(applied.applied
+                    ? `已编辑项目文件：${applied.path}`
+                    : `无法编辑项目文件：${applied.path}`,
+                { ...applied, replaced: applied.applied });
             }
         };
     }
 
-    private skillOverridePatchPath(displayPath: string): string {
-        const skillName = this.skillNameFromDisplayPath(displayPath);
-        if (!skillName) return './.pi/agent/overrides/patch.diff';
-        return `./.pi/agent/skill-overrides/${skillName}/SKILL.patch`;
+    private createDeleteFileTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
+        const parameters = Type.Object({
+            path: Type.String({ description: '相对项目工作区的文件路径' })
+        });
+        return {
+            name: 'deleteFile',
+            label: '删除文件',
+            description: '删除 Forge 项目 VFS 文件，并返回可撤回的 workspace_patch。',
+            parameters,
+            execute: async (toolCallId, params: any) => {
+                const { path } = params;
+                const applied = await this.applyDirectWorkspaceChange({
+                    toolCallId,
+                    path,
+                    contentAfter: null,
+                    command: `deleteFile ${path}`,
+                    ctx,
+                    emitEffects
+                });
+                return textResult(applied.applied
+                    ? `已删除项目文件：${applied.path}`
+                    : `无法删除项目文件：${applied.path}`,
+                applied);
+            }
+        };
     }
 
     private async resolveSkillNameAlias(skillName: string, ctx: ForgePiToolContext): Promise<string> {
@@ -843,38 +1079,6 @@ export class ForgePiToolBridge {
         if (!normalized || normalized === '.' || normalized === './') return './';
         const prefixed = normalized.startsWith('./') ? normalized : `./${normalized.replace(/^\//, '')}`;
         return prefixed === './' ? './' : `${prefixed}/`;
-    }
-
-    private createStageEntryTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
-        const parameters = Type.Object({
-            targetEntryId: Type.String({ description: '要暂存的条目 ID，例如 "character.concept"' }),
-            title: Type.String({ description: '变更的中文可读标题' }),
-            content: Type.String({ description: '候选内容' })
-        });
-        return {
-            name: 'stageEntry',
-            label: '暂存条目',
-            description: '直接把内容送入 Forge Review 面板等待人工审阅。',
-            parameters,
-            needsApproval: true,
-            execute: async (_toolCallId, params: any) => {
-                const { targetEntryId, title, content } = params;
-                emitEffects([{
-                    type: 'upsert_staging_entry',
-                    entry: {
-                        targetEntryId,
-                        proposedContent: content,
-                        description: title,
-                        originalContent: '',
-                        layer: null,
-                        sourceTag: 'tool:stageEntry',
-                        sourceMessageId: null,
-                        sourceSessionId: ctx.conversationId
-                    }
-                }]);
-                return textResult(`已进入审阅暂存：${targetEntryId}`, { staged: true, targetEntryId, title });
-            }
-        };
     }
 
     private createToolErrorEvent(input: ForgePiToolCallInput, message: string): ForgeRuntimeEvent {

@@ -1,6 +1,6 @@
 import type { ForgeVirtualLorebookEntry } from '../../../../types/SessionTypes.js';
 import type { ForgeMemoryEntry } from '../../../../types/ForgeMemoryTypes.js';
-import type { ForgeRuntimeContext, StagingEntry } from '../../../../types/ForgeRuntimeTypes.js';
+import type { ForgeRuntimeContext } from '../../../../types/ForgeRuntimeTypes.js';
 import {
     shellWorkspaceService,
     type ForgeProjectVfsEntry,
@@ -17,7 +17,11 @@ import {
 } from '../agent-app/vfs/ForgeSemanticVfsMapper.js';
 import {
     buildForgeAgentsFile,
+    buildForgeReasoningPrompt,
     buildForgeSystemPrompt,
+    buildForgeUiDslPrompt,
+    FORGE_AGENT_REASONING_PROMPT_PATH,
+    FORGE_AGENT_UI_DSL_PROMPT_PATH,
     FORGE_AGENT_PROMPTS_ROOT,
     resolveForgeModePrompt
 } from '../agent-app/vfs/ForgePiVirtualProjectFiles.js';
@@ -32,7 +36,7 @@ import type {
 
 export type ForgeProjectSemanticVfsEntryKind = 'directory' | 'file';
 export type ForgeProjectSemanticVfsEntrySource = 'virtual' | 'context' | 'session' | 'workspace' | 'resource';
-export type ForgeProjectSemanticVfsWritePolicy = 'read-only' | 'review-required' | 'pass-through';
+export type ForgeProjectSemanticVfsWritePolicy = 'read-only' | 'protected' | 'direct-write' | 'pass-through';
 
 export interface ForgeProjectSemanticVfsEntry {
     path: string;
@@ -55,6 +59,7 @@ const INTERNAL_STORAGE_ROOTS = [
     './chat/',
     './drafts/',
     './memory/',
+    './review/',
     './.pi/agent/prompts/'
 ];
 
@@ -84,7 +89,7 @@ const addDirectory = (
     entries: EntryMap,
     path: string,
     source: ForgeProjectSemanticVfsEntrySource = 'virtual',
-    writePolicy: ForgeProjectSemanticVfsWritePolicy = 'review-required'
+    writePolicy: ForgeProjectSemanticVfsWritePolicy = 'direct-write'
 ): void => {
     const normalized = normalizeDirectoryPath(path);
     if (entries.has(normalized)) return;
@@ -102,7 +107,7 @@ const addFile = (
     path: string,
     content: string,
     source: ForgeProjectSemanticVfsEntrySource = 'workspace',
-    writePolicy: ForgeProjectSemanticVfsWritePolicy = 'review-required'
+    writePolicy: ForgeProjectSemanticVfsWritePolicy = 'direct-write'
 ): void => {
     const normalized = normalizeSemanticPath(path).replace(/\/$/, '');
     if (entries.has(normalized)) return;
@@ -166,23 +171,6 @@ const memoryEntryToMarkdown = (entry: ForgeMemoryEntry): string => [
     entry.content,
     '',
     `> 来源：${entry.source}；摘要：${entry.summary || '无'}`
-].join('\n');
-
-const stagingEntriesToMarkdown = (entries: StagingEntry[], title: string): string => [
-    `# ${title}`,
-    '',
-    entries.length === 0
-        ? '暂无条目。'
-        : entries.map(entry => [
-            `## ${entry.description || entry.targetEntryId}`,
-            '',
-            `- Target：${entry.targetEntryId}`,
-            `- Operation：${entry.operation ?? 'upsert'}`,
-            '',
-            '```text',
-            entry.proposedContent,
-            '```'
-        ].join('\n')).join('\n\n')
 ].join('\n');
 
 const lorebookEntryToMarkdown = (entry: ForgeVirtualLorebookEntry): string => {
@@ -266,7 +254,6 @@ export class ForgeProjectSemanticVfsService {
         this.addMemoryEntries(entries, context);
         await this.addThreadEntries(entries, context);
         this.addLorebookEntries(entries, context);
-        this.addReviewEntries(entries, context);
 
         return [...entries.values()].sort((left, right) =>
             left.path.localeCompare(right.path, 'zh-Hans-CN')
@@ -282,8 +269,7 @@ export class ForgeProjectSemanticVfsService {
             './agent/skills/',
             './memory/AUTO/',
             './threads/目前/',
-            './lorebook/',
-            './review/'
+            './lorebook/'
         ].forEach(path => addDirectory(entries, path));
     }
 
@@ -298,17 +284,19 @@ export class ForgeProjectSemanticVfsService {
             .filter(entry => !entry.path.startsWith('./agent/skills/'))
             .forEach(entry => {
                 if (entry.kind === 'directory') {
-                    addDirectory(entries, entry.path, 'workspace', 'review-required');
+                    addDirectory(entries, entry.path, 'workspace', 'direct-write');
                 } else {
-                    addFile(entries, entry.path, entry.content, 'workspace', 'review-required');
+                    addFile(entries, entry.path, entry.content, 'workspace', 'direct-write');
                 }
             });
     }
 
     private async addPromptEntries(entries: EntryMap, context: ForgeRuntimeContext): Promise<void> {
         const presetResources = this.resolvePresetResources(context);
-        addFile(entries, './AGENTS.md', presetResources?.contract.content ?? buildForgeAgentsFile(), 'virtual', 'review-required');
-        addFile(entries, './.forge/agent/SYSTEM.md', presetResources?.system.content ?? buildForgeSystemPrompt(), 'virtual', 'review-required');
+        addFile(entries, './AGENTS.md', presetResources?.contract.content ?? buildForgeAgentsFile(), 'virtual', 'protected');
+        addFile(entries, './.forge/agent/SYSTEM.md', presetResources?.system.content ?? buildForgeSystemPrompt(), 'virtual', 'protected');
+        addFile(entries, FORGE_AGENT_UI_DSL_PROMPT_PATH, buildForgeUiDslPrompt(), 'virtual', 'protected');
+        addFile(entries, FORGE_AGENT_REASONING_PROMPT_PATH, buildForgeReasoningPrompt(), 'virtual', 'protected');
         PROMPT_FILE_NAMES.forEach((fileName) => {
             const mode = fileName.replace(/\.md$/, '').toLowerCase() as ForgeAgentPromptMode;
             addFile(
@@ -316,7 +304,7 @@ export class ForgeProjectSemanticVfsService {
                 `${FORGE_AGENT_PROMPTS_ROOT}/${fileName}`,
                 presetResources?.modes[mode]?.content ?? resolveForgeModePrompt(fileName) ?? '',
                 'virtual',
-                'review-required'
+                'protected'
             );
         });
     }
@@ -371,15 +359,15 @@ export class ForgeProjectSemanticVfsService {
             }
         }));
 
-        builtInSkills.forEach(metadata => addDirectory(entries, `./agent/skills/${metadata.name}/`, 'virtual', 'review-required'));
+        builtInSkills.forEach(metadata => addDirectory(entries, `./agent/skills/${metadata.name}/`, 'virtual', 'protected'));
         for (const skill of byName.values()) {
-            addDirectory(entries, `./agent/skills/${skill.name}/`, skill.source, 'review-required');
+            addDirectory(entries, `./agent/skills/${skill.name}/`, skill.source, 'protected');
             addFile(
                 entries,
                 skill.path,
                 skill.content,
                 skill.source,
-                'review-required'
+                'protected'
             );
         }
     }
@@ -395,19 +383,19 @@ export class ForgeProjectSemanticVfsService {
             './memory/AUTO/Checklist.md',
             checklist ? memoryEntryToMarkdown(checklist) : '# Checklist\n\n暂无自动清单记录。',
             'workspace',
-            'review-required'
+            'direct-write'
         );
         addFile(
             entries,
             './memory/用户偏好.md',
             userPreference ? memoryEntryToMarkdown(userPreference) : '# 用户偏好\n\n暂无用户偏好记录。',
             'workspace',
-            'review-required'
+            'direct-write'
         );
 
         context.forgeMemoryTree.entries.forEach((entry) => {
             if (entry.path === 'AUTO/Checklist' || entry === userPreference) return;
-            addFile(entries, `./memory/${safePathSegment(entry.path)}.md`, memoryEntryToMarkdown(entry), 'workspace', 'review-required');
+            addFile(entries, `./memory/${safePathSegment(entry.path)}.md`, memoryEntryToMarkdown(entry), 'workspace', 'direct-write');
         });
     }
 
@@ -502,33 +490,9 @@ export class ForgeProjectSemanticVfsService {
                 `./lorebook/entries/${safePathSegment(entry.id)}.md`,
                 lorebookEntryToMarkdown(entry),
                 'workspace',
-                'review-required'
+                'direct-write'
             );
         });
-    }
-
-    private addReviewEntries(entries: EntryMap, context: ForgeRuntimeContext): void {
-        addFile(
-            entries,
-            './review/staging.json',
-            stringifyJson(context.stagingEntries),
-            'workspace',
-            'review-required'
-        );
-        addFile(
-            entries,
-            './review/staging.md',
-            stagingEntriesToMarkdown(context.stagingEntries, 'Review Staging'),
-            'workspace',
-            'review-required'
-        );
-        addFile(
-            entries,
-            './review/commit-ready.json',
-            stringifyJson(context.commitReadyEntries),
-            'workspace',
-            'review-required'
-        );
     }
 }
 

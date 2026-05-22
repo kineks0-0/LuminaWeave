@@ -1,4 +1,3 @@
-import { PromptBuilder } from '../../hal/prompt/PromptBuilder.js';
 import { PromptAssemblyRouter } from '../../hal/prompt/PromptAssemblyRouter.js';
 import { PromptPresetComposer } from '../../hal/prompt/PromptPresetComposer.js';
 import { promptPresetRegistry } from '../../hal/prompt/PromptPresetRegistry.js';
@@ -121,8 +120,8 @@ export class ForgePromptContextService {
         ].join('\n');
 
         const stagingContent = [
-            '## Review Gate staging target',
-            'Use stageEntry / writeProposal style output. Do not write the real ST lorebook directly.',
+            '## Forge project write target',
+            'Use writeFile / editFile / deleteFile for Forge project VFS writes. Do not publish or overwrite the real ST lorebook directly.',
             `targetEntryId: "${options.entryId}"`,
             'originalContent:',
             options.originalContent
@@ -207,8 +206,8 @@ export class ForgePromptContextService {
                 id: 'forge-executor-staging',
                 kind: 'control',
                 sourceKind: 'forge',
-                sourcePath: './review/staging.md',
-                label: 'Review Gate staging target',
+                sourcePath: './lorebook/entries/target.md',
+                label: 'Forge project write target',
                 roleHint: 'user',
                 priority: 90,
                 rawContent: messages[2]?.content ?? '',
@@ -282,14 +281,14 @@ export class ForgePromptContextService {
         const fmt = lwStorage.get('lumina-forge.entryContentFormat', 'json', 'Global');
         switch (fmt) {
             case 'yaml':
-                return '### 写入提案内容格式约定\n- 通过 `stageEntry` / `writeFile` / `editFile` 生成可审阅提案时，条目正文建议使用 **YAML** 格式。\n- 示例：\n```yaml\ntitle: "角色名"\ncontent: "角色描述"\ntags:\n  - 标签1\n  - 标签2\n```';
+                return '### 项目写入内容格式约定\n- 通过 `writeFile` / `editFile` 写入条目时，正文建议使用 **YAML** 格式。\n- 示例：\n```yaml\ntitle: "角色名"\ncontent: "角色描述"\ntags:\n  - 标签1\n  - 标签2\n```';
             case 'toml':
-                return '### 写入提案内容格式约定\n- 通过 `stageEntry` / `writeFile` / `editFile` 生成可审阅提案时，条目正文建议使用 **TOML** 格式。\n- 示例：\n```toml\ntitle = "角色名"\ncontent = "角色描述"\ntags = ["标签1", "标签2"]\n```';
+                return '### 项目写入内容格式约定\n- 通过 `writeFile` / `editFile` 写入条目时，正文建议使用 **TOML** 格式。\n- 示例：\n```toml\ntitle = "角色名"\ncontent = "角色描述"\ntags = ["标签1", "标签2"]\n```';
             case 'free':
-                return '### 写入提案内容格式约定\n- 写入提案内容格式不限，可以是纯文本、Markdown 或任意结构。请确保 `stageEntry.title` 清晰描述该条目名称。';
+                return '### 项目写入内容格式约定\n- 写入内容格式不限，可以是纯文本、Markdown 或任意结构。请确保文件标题清晰描述该条目名称。';
             case 'json':
             default:
-                return '### 写入提案内容格式约定\n- 通过 `stageEntry` / `writeFile` / `editFile` 生成可审阅提案时，条目正文建议使用 **JSON** 格式。\n- JSON 对象必须包含 `title` 字段作为条目名称，以及 `content` 字段作为正文内容。\n- 示例：\n```json\n{\n  "title": "角色名",\n  "content": "角色描述",\n  "tags": ["标签1", "标签2"]\n}\n```';
+                return '### 项目写入内容格式约定\n- 通过 `writeFile` / `editFile` 写入条目时，正文建议使用 **JSON** 格式。\n- JSON 对象必须包含 `title` 字段作为条目名称，以及 `content` 字段作为正文内容。\n- 示例：\n```json\n{\n  "title": "角色名",\n  "content": "角色描述",\n  "tags": ["标签1", "标签2"]\n}\n```';
         }
     }
 
@@ -350,8 +349,8 @@ export class ForgePromptContextService {
         });
 
         note += '\n**指令 (Shared Order)**：\n';
-        note += '1. 所有模型共享上述进度。如果你是 Planner/Analyst，请在补全槽位后，通过能力/技能加载与 `stageEntry` 生成 `AUTO/Checklist` 的可审阅更新提案。\n';
-        note += '2. 补全条目时请在 `stageEntry.title` 或文件内容中标明 slot_id；展示进度优先用自然语言摘要或 `<V>` 组件。';
+        note += '1. 所有模型共享上述进度。如果你是 Planner/Analyst，请在补全槽位后，通过能力/技能加载与 `writeFile` / `editFile` 更新 `./memory/AUTO/Checklist.md`。\n';
+        note += '2. 补全条目时请在文件路径、标题或内容中标明 slot_id；展示进度优先用自然语言摘要或 `<V>` 组件。';
 
         return note;
     }
@@ -429,7 +428,7 @@ export class ForgePromptContextService {
             draftTree: options.draftTree,
             workflowSnapshot: options.workflowSnapshot,
             forgeAgentSourceUnits: options.forgeAgentSourceUnits,
-            systemProtocolText: PromptBuilder.buildCombinedProtocolBlock('forge'),
+            systemProtocolText: null,
             macroContext: {
                 [specialKey]: this.resolveForgeMainSystemPrompt(specialKey, options)
             }
@@ -459,7 +458,7 @@ export class ForgePromptContextService {
                 : resources.modes.planner;
         if (!modeResource) return null;
 
-        const protocolBlock = PromptBuilder.buildCombinedProtocolBlock('forge') ?? '';
+        const protocolBlock = '';
         const sourceUnits: PromptSourceUnit[] = [
             {
                 id: 'forge-main-contract',
@@ -711,31 +710,9 @@ export class ForgePromptContextService {
         /** 覆盖默认的历史截断窗口（默认读取 lumina-forge.maxHistoryMessages）。0 = 不限制。 */
         maxHistoryMessages?: number;
     }): ForgeExecutionRequestBase {
-        const buildSharedOptions = {
-            presetData: params.presetData,
-            // 优先使用 mes（已清洗，剥离 XML 标签），减少 Forge 消息中已处理标签的 token 浪费
-            // 过滤内容为空的消息（如流式占位节点 prepareAssistantStream 创建的空 assistant 消息）
-            messages: params.context.messages
-                .filter((m) => (m.mes || m.mesRaw || '').trim() !== '')
-                .map((message) => ({
-                    role: message.role as CleanedMessage['role'],
-                    content: message.mes || message.mesRaw || '',
-                    name: message.name
-                })),
-            maxHistoryMessages: params.maxHistoryMessages,
-            resolvedLorebookEntries: params.resolvedLorebookEntries,
-            memorySnapshot: params.memorySnapshot,
-            forgeMemoryTree: params.context.forgeMemoryTree,
-            structuredState: params.context.structuredState,
-            draftTree: params.context.draftTree,
-            workflowSnapshot: params.context.workflowSnapshot,
-            forgeAgentSourceUnits: params.forgeAgentSourceUnits
-        };
-        const messages = this.buildPlannerPrompt(buildSharedOptions);
-
         return {
             mode: 'planner',
-            messages,
+            messages: [],
             sessionChatId: params.context.sessionChatId,
             charName: params.charName || 'Forge Assistant',
             presetId: params.context.selectedPresetId,
@@ -753,28 +730,9 @@ export class ForgePromptContextService {
         /** 覆盖默认的历史截断窗口（默认读取 lumina-forge.maxHistoryMessages）。0 = 不限制。 */
         maxHistoryMessages?: number;
     }): ForgeExecutionRequestBase {
-        const messages = this.buildConversationPrompt({
-            presetData: params.presetData,
-            messages: params.context.messages
-                .filter((m) => (m.mes || m.mesRaw || '').trim() !== '')
-                .map((message) => ({
-                    role: message.role as CleanedMessage['role'],
-                    content: message.mes || message.mesRaw || '',
-                    name: message.name
-                })),
-            resolvedLorebookEntries: params.resolvedLorebookEntries,
-            memorySnapshot: params.memorySnapshot,
-            forgeMemoryTree: params.context.forgeMemoryTree,
-            structuredState: params.context.structuredState,
-            draftTree: params.context.draftTree,
-            workflowSnapshot: params.context.workflowSnapshot,
-            forgeAgentSourceUnits: params.forgeAgentSourceUnits,
-            maxHistoryMessages: params.maxHistoryMessages
-        });
-
         return {
             mode: 'conversation',
-            messages,
+            messages: [],
             sessionChatId: params.context.sessionChatId,
             charName: params.charName || 'Forge Assistant',
             presetId: params.context.selectedPresetId,
@@ -792,28 +750,9 @@ export class ForgePromptContextService {
         /** 覆盖默认的历史截断窗口（默认 10）。 */
         maxRecentMessages?: number;
     }): ForgeExecutionRequestBase {
-        const messages = this.buildAnalystPrompt({
-            presetData: params.presetData,
-            messages: params.context.messages
-                .filter((m) => (m.mes || m.mesRaw || '').trim() !== '')
-                .map((message) => ({
-                    role: message.role as CleanedMessage['role'],
-                    content: message.mes || message.mesRaw || '',
-                    name: message.name
-                })),
-            resolvedLorebookEntries: params.resolvedLorebookEntries,
-            memorySnapshot: params.memorySnapshot,
-            forgeMemoryTree: params.context.forgeMemoryTree,
-            structuredState: params.context.structuredState,
-            draftTree: params.context.draftTree,
-            workflowSnapshot: params.context.workflowSnapshot,
-            forgeAgentSourceUnits: params.forgeAgentSourceUnits,
-            maxRecentMessages: params.maxRecentMessages
-        });
-
         return {
             mode: 'analyst',
-            messages,
+            messages: [],
             sessionChatId: params.context.sessionChatId,
             charName: params.charName || 'Forge Assistant',
             presetId: params.context.selectedPresetId,
@@ -822,29 +761,9 @@ export class ForgePromptContextService {
     }
 
     static buildExecutorExecutionRequest(options: BuildExecutorPromptOptions): ForgeExecutionRequestBase {
-        const preset = this.resolveExecutorPreset(options.presetId);
-        const composedMessages = PromptPresetComposer.compose(
-            'forge-executor',
-            preset,
-            {
-                baseSystemPromptKey: 'executorSystemPrompt',
-                executorTask: {
-                    instruction: options.instruction,
-                    entryId: options.entryId,
-                    originalContent: options.originalContent
-                },
-                macroContext: {
-                    executorSystemPrompt: this.resolveMacros(FORGE_EXECUTOR_SYSTEM_PROMPT)
-                }
-            }
-        ).messages;
-        const messages = composedMessages.length > 0
-            ? composedMessages
-            : this.buildExecutorResourceMessages(options, preset);
-
         return {
             mode: 'executor',
-            messages,
+            messages: [],
             sessionChatId: options.sessionChatId,
             charName: options.charName,
             presetId: options.presetId,
@@ -853,7 +772,7 @@ export class ForgePromptContextService {
     }
 
     static buildExecutorPreviewPayload(options: BuildExecutorPromptOptions): CleanedMessage[] {
-        return this.buildExecutorExecutionRequest(options).messages;
+        return this.buildExecutorPreviewMessages(options);
     }
 
     static buildExecutorPreviewAssembly(options: BuildExecutorPromptOptions): PromptAssemblyResult {
@@ -894,5 +813,27 @@ export class ForgePromptContextService {
             ? assembly
             : this.buildExecutorResourceAssembly(options, preset);
         return PromptAssemblyRouter.attachRoute(resourceAssembly ?? assembly, route);
+    }
+
+    private static buildExecutorPreviewMessages(options: BuildExecutorPromptOptions): CleanedMessage[] {
+        const preset = this.resolveExecutorPreset(options.presetId);
+        const composedMessages = PromptPresetComposer.compose(
+            'forge-executor',
+            preset,
+            {
+                baseSystemPromptKey: 'executorSystemPrompt',
+                executorTask: {
+                    instruction: options.instruction,
+                    entryId: options.entryId,
+                    originalContent: options.originalContent
+                },
+                macroContext: {
+                    executorSystemPrompt: this.resolveMacros(FORGE_EXECUTOR_SYSTEM_PROMPT)
+                }
+            }
+        ).messages;
+        return composedMessages.length > 0
+            ? composedMessages
+            : this.buildExecutorResourceMessages(options, preset);
     }
 }

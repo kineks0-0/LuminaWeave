@@ -111,24 +111,24 @@ Forge 是制卡工坊和 Agent 工作台。
 应提供：
 
 - 以 `forgeProjectId` 为长期容器的项目模型。
-- 多协作线程共享同一项目资源、项目记忆、草稿和审阅区。
+  - 多协作线程共享同一项目资源、项目记忆、草稿和文件版本审计记录。
 - Planner / Analyst / Executor 等分工明确的 Agent 流程。
-- pi-agent-core Agent Runtime 试验路径：前端可内嵌浏览器可打包的 pi core，并由 Forge browser adapters 维护 tree-structured session history、上下文包、技能/能力资源、工具桥接和 Review Gate 边界。
-- Forge Agent 使用项目相对语义 VFS：`./AGENTS.md` 是 Agent 工作契约，不是系统提示词；默认系统提示词位于 `./.forge/agent/SYSTEM.md`，模式提示词位于 `./.forge/agent/<MODE>.md`，技能位于 `./agent/skills/<skill-name>/SKILL.md`，当前协作线程通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 动态访问。
-- Forge 预设提供 Agent 资源包与提示词编排，而不是面向模型暴露 slot 拼接概念；编排顺序固定为 Contract、System、Mode Prompt、Skills、Capabilities、Context Files、Branch Messages。默认主预设提供参考提炼类 preset skills，默认按需加载，可在自定义预设中改为常驻。
+  - pi-agent-core Agent Runtime 试验路径：前端可内嵌浏览器可打包的 pi core，并由 Forge browser adapters 维护 tree-structured session history、上下文包、技能/能力资源、工具桥接、direct workspace patch 审计和真实 ST 发布边界。
+- Forge Agent 使用项目相对语义 VFS：`./AGENTS.md` 是 Agent 工作契约，不是系统提示词；默认系统提示词位于 `./.forge/agent/SYSTEM.md`，模式提示词位于 `./.forge/agent/<MODE>.md`，Forge `<V>` DSL 位于 `./.forge/agent/UI_DSL.md`，可见推理边界位于 `./.forge/agent/REASONING.md`，技能位于 `./agent/skills/<skill-name>/SKILL.md`，当前协作线程通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 动态访问。
+- Forge 预设提供 Agent 资源包与提示词编排，而不是面向模型暴露 slot 拼接概念；编排顺序固定为 Contract、System、Mode Prompt、UI DSL、Reasoning Boundary、Skills、Capabilities、Context Files、Branch Messages。默认主预设提供参考提炼类 preset skills，默认按需加载，可在自定义预设中改为常驻。
 - 项目 VFS 面板浏览 Agent 可见的语义 VFS 投影，而不是 raw workspace storage 树；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构只作为映射源，不进入模型长期上下文。
 - Forge shell、`readFile` 工具、Prompt/Skill loader 和项目 VFS 面板必须共用 Forge Semantic VFS provider；HAL Bash 只提供通用 mount 扩展，不理解 Forge 业务语义。
 - 制卡聊天内的 fork / 回滚 / 切换应基于同一协作线程内的 pi session tree 分支；Forge timeline 是用户可见投影，必须保留可操作的用户输入节点映射。
-- 项目文件、staging 和虚拟世界书的版本恢复由 Forge workspace version manager 负责，切换对话分支时默认询问用户是否同时恢复文件版本。
-- 虚拟世界书、Forge memory tree、draft tree、review staging 和发布/导出。
-- Forge 专属 `<V>` 交互块和 Prompt Preset 组合。
+  - 项目文件和虚拟世界书的版本恢复由 Forge workspace version manager 生成反向或重放 `workspace_patch`，切换对话分支时默认询问用户是否同时恢复文件版本。
+  - 虚拟世界书、Forge memory tree、draft tree、workspace patch 审计记录和发布/导出。
+- Forge 专属 `<V>` 交互块由 `./.forge/agent/UI_DSL.md` 作为 pi prompt 固定资源承载；旧 `PromptBuilder` 不再作为 Forge Agent prompt 构建 API。
 
 边界：
 
 - Forge 默认写入项目 VFS，不静默改写真实 ST 世界书。
 - 发布到 ST 或导出必须是用户确认后的后置动作。
-- 项目资源写入走 typed effects 或明确的 workspace 写入策略。
-- pi-agent-core runtime 只替换 Forge Agent kernel；ST 宿主适配、Vue UI、VFS、Review Gate 和真实发布边界仍属于 LuminaWeave。
+  - Forge 项目资源写入走 direct workspace patch reducer 或 typed runtime effects；每次 AI 写入必须留下可撤回的 `workspace_patch`。
+  - pi-agent-core runtime 只替换 Forge Agent kernel；ST 宿主适配、Vue UI、VFS、workspace_patch 审计和真实发布边界仍属于 LuminaWeave。
 
 ### 4.5 Resource / VFS / Terminal
 

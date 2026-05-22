@@ -19,7 +19,7 @@ export {
 
 /**
  * ForgeAgentController now only exposes explicit user/control intents.
- * Forge Agent execution, tool trace, Review Gate and staging proposals are owned
+ * Forge Agent execution, tool trace and direct workspace patch auditing are owned
  * by the pi runtime path; XML action events are no longer consumed here.
  */
 export class ForgeAgentController extends LuminaWeaveAPIBase {

@@ -134,7 +134,17 @@ export class ForgeRuntimeOrchestrator {
             originalContent,
             sourceCommand: command
         });
-        await this.runPiRequest(command, undefined, context, request);
+        await this.runPiRequest(command, this.buildExecutorCommandInput(instruction, entryId, originalContent), context, request);
+    }
+
+    private buildExecutorCommandInput(instruction: string, entryId: string, originalContent: string): string {
+        return [
+            'Executor rewrite request',
+            `instruction: ${instruction}`,
+            `targetEntryId: "${entryId}"`,
+            'originalContent:',
+            originalContent
+        ].join('\n');
     }
 
     private async runPlanner(command: ForgeUserCommand): Promise<void> {

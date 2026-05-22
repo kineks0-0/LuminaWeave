@@ -72,7 +72,7 @@ export const useForgeStore = defineStore('forge', {
         // Forge 模型请求调试 trace（瞬态，不持久化）
         modelRequestTraces: [] as ForgeModelRequestTrace[],
         activeModelRequestTraceId: null as string | null,
-        // Tool calling 写入授权队列（瞬态，由 Review Gate 展示）
+  // Legacy staging queues for manual export/publish flows; AI project writes now use workspace_patch directly.
         toolApprovals: [] as ForgeToolApprovalRequest[],
         // Forge pi-core runtime tree/context state（由前端 pi-agent-core 浏览器适配层派生）
         piSessionTree: [] as ForgePiTreeNode[],

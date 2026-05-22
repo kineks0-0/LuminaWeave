@@ -43,3 +43,4 @@ NNNN-short-title.md
 ## 已记录决策
 
 - [ADR-0001: 采用 overall/current/archive 三层文档结构](./0001-docs-overall-current-archive.md)
+- [ADR-0002: Forge 项目 VFS 采用 direct workspace patch 写入](./0002-forge-direct-project-vfs-write.md)

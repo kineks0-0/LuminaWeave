@@ -4,7 +4,6 @@ import type {
     ForgePiWorkspacePatchChange,
     ForgePiWorkspacePatchPayload
 } from '@shared/ForgePiTypes.js';
-import type { StagingEntry } from '../../../types/ForgeRuntimeTypes.js';
 
 export interface PatchVersionRow {
     kind: 'patch';
@@ -35,7 +34,6 @@ export interface CheckpointVersionRow {
 
 export type WorkspaceVersionRow = PatchVersionRow | CheckpointVersionRow;
 export type WorkspaceVersionRestoreDirection = 'before' | 'after';
-export type WorkspaceVersionStagingEntryInput = Omit<StagingEntry, 'id' | 'timestamp'>;
 
 export const buildWorkspaceVersionRows = (
     entries: ForgePiSessionEntry[],
@@ -48,13 +46,19 @@ export const buildWorkspaceVersionRows = (
         .sort((left, right) => right.createdAt - left.createdAt || right.id.localeCompare(left.id));
 };
 
-export const createRestoreStagingEntries = (
+export const createWorkspaceVersionRestorePatch = (
     row: PatchVersionRow,
-    direction: WorkspaceVersionRestoreDirection
-): WorkspaceVersionStagingEntryInput[] =>
-    row.changes
-        .map(change => createRestoreEntry(row, change, direction))
-        .filter((entry): entry is WorkspaceVersionStagingEntryInput => entry !== null);
+    direction: WorkspaceVersionRestoreDirection,
+    nodeId: string
+): ForgePiWorkspacePatchPayload => ({
+    nodeId,
+    sourceToolCallId: `workspace-version-restore:${row.nodeId}:${direction}`,
+    restoresEntryId: row.id,
+    restoreDirection: direction,
+    changes: row.changes
+        .map(change => createRestorePatchChange(change, direction))
+        .filter((change): change is ForgePiWorkspacePatchChange => change !== null)
+});
 
 export const countBranchDiffChanges = (rows: WorkspaceVersionRow[]): {
     activeBranchChanges: number;
@@ -72,7 +76,7 @@ export const countBranchDiffChanges = (rows: WorkspaceVersionRow[]): {
 export const canRestorePatchRow = (
     row: PatchVersionRow,
     direction: WorkspaceVersionRestoreDirection
-): boolean => createRestoreStagingEntries(row, direction).length > 0;
+): boolean => createWorkspaceVersionRestorePatch(row, direction, `restore-preview:${row.nodeId}:${direction}`).changes.length > 0;
 
 export const resolvePatchChangeContents = (change: ForgePiWorkspacePatchChange): {
     before: string | null;
@@ -119,31 +123,36 @@ const toVersionRow = (
     return null;
 };
 
-const createRestoreEntry = (
-    row: PatchVersionRow,
+const createRestorePatchChange = (
     change: ForgePiWorkspacePatchChange,
     direction: WorkspaceVersionRestoreDirection
-): WorkspaceVersionStagingEntryInput | null => {
-    const proposedContent = resolveInlineContentRef(direction === 'before'
-        ? change.beforeContentRef
-        : change.afterContentRef);
-    const originalContent = resolveInlineContentRef(direction === 'before'
-        ? change.afterContentRef
-        : change.beforeContentRef);
-    const isDelete = proposedContent === null;
+): ForgePiWorkspacePatchChange | null => {
+    const beforeContentRef = direction === 'before'
+        ? change.afterContentRef ?? null
+        : change.beforeContentRef ?? null;
+    const afterContentRef = direction === 'before'
+        ? change.beforeContentRef ?? null
+        : change.afterContentRef ?? null;
+    const beforeHash = direction === 'before' ? change.afterHash : change.beforeHash;
+    const afterHash = direction === 'before' ? change.beforeHash : change.afterHash;
+    if (beforeHash === afterHash && beforeContentRef === afterContentRef) return null;
     return {
-        operation: isDelete ? 'delete' : 'upsert',
-        targetEntryId: change.path,
-        originalContent: originalContent ?? '',
-        proposedContent: proposedContent ?? '',
-        description: direction === 'before'
-            ? `文件版本恢复：回到 ${compactId(row.nodeId)} 变更前`
-            : `文件版本恢复：应用 ${compactId(row.nodeId)} 变更后`,
-        layer: null,
-        sourceTag: 'workspace-version-restore',
-        sourceMessageId: null,
-        sourceSessionId: row.nodeId
+        path: change.path,
+        kind: resolvePatchKind(beforeContentRef, afterContentRef),
+        beforeHash,
+        afterHash,
+        beforeContentRef,
+        afterContentRef
     };
+};
+
+const resolvePatchKind = (
+    beforeContentRef: string | null,
+    afterContentRef: string | null
+): ForgePiWorkspacePatchChange['kind'] => {
+    if (beforeContentRef === null && afterContentRef !== null) return 'create';
+    if (beforeContentRef !== null && afterContentRef === null) return 'delete';
+    return 'update';
 };
 
 const resolveBranchEntryIds = (

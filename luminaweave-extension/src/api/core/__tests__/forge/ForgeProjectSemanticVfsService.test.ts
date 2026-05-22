@@ -173,13 +173,14 @@ describe('ForgeProjectSemanticVfsService', () => {
             './.forge/agent/CONVERSATION.md',
             './.forge/agent/ANALYST.md',
             './.forge/agent/EXECUTOR.md',
+            './.forge/agent/UI_DSL.md',
+            './.forge/agent/REASONING.md',
             './agent/skills/virtual-lorebook-editor/SKILL.md',
             './memory/AUTO/Checklist.md',
             './memory/用户偏好.md',
             './threads/目前/thread.md',
             './threads/目前/messages.md',
             './lorebook/entries/city.md',
-            './review/staging.json',
             './material.txt'
         ]));
         expect(paths.some(path => path.startsWith('./chat/'))).toBe(false);
@@ -187,19 +188,36 @@ describe('ForgeProjectSemanticVfsService', () => {
         expect(paths).not.toContain('./memory/tree.json');
         expect(paths).not.toContain('./drafts/tree.json');
         expect(paths).not.toContain('./lorebook/entries/raw-city.json');
+        expect(paths).not.toContain('./review/');
+        expect(paths).not.toContain('./review/staging.json');
         expect(JSON.stringify(entries)).not.toContain('conversation_alpha');
         expect(JSON.stringify(entries)).not.toContain('forge_project_alpha');
         expect(paths.some(path => path.startsWith('./.pi/agent/prompts/'))).toBe(false);
         expect(paths.some(path => /^\.\/\.forge\/(PLANNER|CONVERSATION|ANALYST|EXECUTOR)\.md$/.test(path))).toBe(false);
         const agentsContent = entries.find(entry => entry.path === './AGENTS.md')?.content ?? '';
         expect(agentsContent).toContain('工作契约');
-        expect(agentsContent).toContain('Review Gate');
+        expect(agentsContent).toContain('workspace_patch');
         expect(agentsContent).not.toContain('基础身份');
         expect(entries.find(entry => entry.path === './.forge/agent/SYSTEM.md')?.content).toContain('Forge');
         expect(entries.find(entry => entry.path === './.forge/agent/CONVERSATION.md')?.content).toContain('Forge');
+        expect(entries.find(entry => entry.path === './.forge/agent/UI_DSL.md')).toEqual(expect.objectContaining({
+            writePolicy: 'protected',
+            content: expect.stringContaining('ForgeChoiceGroup(')
+        }));
+        expect(entries.find(entry => entry.path === './.forge/agent/REASONING.md')).toEqual(expect.objectContaining({
+            writePolicy: 'protected',
+            content: expect.stringContaining('隐藏思维链')
+        }));
         expect(entries.find(entry => entry.path === './threads/目前/thread.md')?.content).toContain('Alpha Project');
         expect(entries.find(entry => entry.path === './threads/目前/messages.md')?.content).toContain('民俗的城市设定');
-        expect(entries.find(entry => entry.path === './review/staging.json')?.content).toContain('候选世界书内容');
+        expect(entries.find(entry => entry.path === './material.txt')).toEqual(expect.objectContaining({
+            writePolicy: 'direct-write',
+            content: '民俗素材'
+        }));
+        expect(entries.find(entry => entry.path === './lorebook/entries/city.md')).toEqual(expect.objectContaining({
+            writePolicy: 'direct-write',
+            content: expect.stringContaining('电梯神龛')
+        }));
     });
 
     it('exposes preset reference skills through semantic VFS', async () => {

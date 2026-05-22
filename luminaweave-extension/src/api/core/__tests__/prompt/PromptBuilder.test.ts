@@ -220,51 +220,16 @@ describe('PromptBuilder', () => {
         expect(result[0].content).toContain('recommended_action=继续与用户确认 staging 条目。');
     });
 
-    it('应为 forge 上下文注入专属 system protocol，且不混入 Chat_Reply', () => {
-        const result = PromptBuilder.buildForgePrompt({
-            systemPrompt: 'Forge Start.',
+    it('不再通过 PromptBuilder 构建 Forge Agent 协议', () => {
+        const result = PromptBuilder.buildChatPrompt({
+            systemPrompt: 'Chat Start.',
             messages: [],
             includeSystemProtocol: true
         });
 
-        expect(result[0].content).toContain('[System Protocol]');
-        expect(result[0].content).toContain('<thinking>');
-        expect(result[0].content).toContain('原生 tool calling');
-        expect(result[0].content).toContain('capabilitySearch');
-        expect(result[0].content).toContain('skillLoad');
-        expect(result[0].content).toContain('stageEntry');
-        expect(result[0].content).toContain('<V>');
-        expect(result[0].content).not.toContain('<Chat_Reply>');
-        expect(result[0].content).toContain('Forge <V> DSL 结构化收集规范');
-        expect(result[0].content).toContain('Forge 协议分层');
-        expect(result[0].content).not.toContain('<forge_skill>');
-        expect(result[0].content).not.toContain('<draft_plan>');
-        expect(result[0].content).not.toContain('<entry_update>');
-        expect(result[0].content).toContain('ForgeInput("role_core_profile/name", "角色姓名", "例如：林雾")');
-        expect(result[0].content).toContain('ForgeFacetChecklist("kickoff_intent/facets"');
-        expect(result[0].content).toContain('ForgeMissingFields("role_core_profile", "name,identity,background")');
-        expect(result[0].content).not.toContain('<ForgeSelect');
-        expect(result[0].content).not.toContain('<forge_choice_group');
-        expect(result[0].content).not.toContain('ForgeMissingFields(formId=');
-        expect(result[0].content).not.toContain('ForgeFacetChecklist(formId=');
-    });
-
-    it('当设置为管道式时，提示词文档应只暴露管道语法', () => {
-        vi.spyOn(lwStorage, 'get').mockImplementation((key: string, defaultValue: any, scope?: any) => {
-            if (key === 'lumina-settings.luminaViewSyntaxStyle') {
-                return 'pipe';
-            }
-            return originalGet(key, defaultValue, scope);
-        });
-
-        const result = PromptBuilder.buildForgePrompt({
-            systemPrompt: 'Forge Start.',
-            messages: [],
-            includeSystemProtocol: true
-        });
-
-        expect(result[0].content).toContain('Forge 当前设置为管道式 DSL');
-        expect(result[0].content).toContain('FI|role_core_profile/name|角色姓名|例如：林雾');
-        expect(result[0].content).not.toContain('ForgeInput("role_core_profile/name", "角色姓名", "例如：林雾")');
+        expect(result[0].content).toContain('<Chat_Reply>');
+        expect(result[0].content).not.toContain('Forge <V> DSL');
+        expect(result[0].content).not.toContain('writeFile');
+        expect(result[0].content).not.toContain('workspace_patch');
     });
 });

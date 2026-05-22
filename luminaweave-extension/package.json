@@ -60,5 +60,8 @@
     "vite-bundle-analyzer": "^1.3.8",
     "vitest": "^4.1.5",
     "vue-tsc": "^3.2.7"
+  },
+  "overrides": {
+    "@mistralai/mistralai": "2.2.0"
   }
 }

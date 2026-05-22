@@ -5,7 +5,12 @@ import { llmEngine } from '../../api/llmEngine.js';
 import { lwStorage } from '../../api/storage.js';
 import { useForgeStore } from '../../stores/useForgeStore.js';
 import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
-import type { ForgePiPersistedSessionState } from '@shared/ForgePiTypes.js';
+import type {
+    ForgePiPersistedSessionState,
+    ForgePiSessionEntry,
+    ForgePiWorkspacePatchChange,
+    ForgePiWorkspacePatchPayload
+} from '@shared/ForgePiTypes.js';
 import type { CleanedMessage } from '../../types/nexus.js';
 import { WorldlineStore } from '../../api/core/storage/WorldlineStore.js';
 import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
@@ -36,6 +41,7 @@ import {
 } from '../../api/core/forge/forms/ForgeFormController.js';
 import { ForgeWorkflowGraph } from '../../api/core/forge/graph/ForgeWorkflowGraph.js';
 import { HALContext } from '../../api/core/hal/HALContext.js';
+import { shellWorkspaceService } from '../../api/core/hal/shell/ShellWorkspaceService.js';
 import type { ForgeAuxPanelKind, ForgeWorkflowSnapshot } from '../../types/ForgeWorkflowTypes.js';
 import {
     FORGE_FORM_RESULT_SUBMITTED,
@@ -721,6 +727,139 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         void persistWorkspaceSession();
     };
 
+    const resolveInlineContentRef = (ref: string | null | undefined): string | null => {
+        if (!ref?.startsWith('inline:')) return null;
+        return decodeURIComponent(ref.slice('inline:'.length));
+    };
+
+    const workspacePatchLocalPath = (path: string): string => {
+        const normalized = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/');
+        const relative = normalized.startsWith('./')
+            ? normalized.slice(2)
+            : normalized.replace(/^\/+/, '');
+        return `/${relative}`.replace(/\/+/g, '/');
+    };
+
+    const workspacePatchParentPath = (path: string): string => {
+        const normalized = path.replace(/\\/g, '/').replace(/\/+/g, '/');
+        const index = normalized.lastIndexOf('/');
+        return index <= 0 ? '/' : normalized.slice(0, index);
+    };
+
+    const parseMarkdownDocument = (content: string): { title: string; body: string } => {
+        const lines = content.replace(/\r\n/g, '\n').split('\n');
+        let title = '';
+        if (lines[0]?.startsWith('# ')) {
+            title = lines.shift()?.replace(/^#\s+/, '').trim() ?? '';
+            if (lines[0] === '') lines.shift();
+        }
+        const footerIndex = lines.findIndex(line => line.startsWith('> 来源：'));
+        const bodyLines = footerIndex >= 0 ? lines.slice(0, footerIndex) : lines;
+        return {
+            title,
+            body: bodyLines.join('\n').trim()
+        };
+    };
+
+    const applyWorkspacePatchStateChange = (change: ForgePiWorkspacePatchChange): void => {
+        const after = resolveInlineContentRef(change.afterContentRef);
+        const memoryMatch = change.path.match(/^\.?\/?memory\/(.+)\.md$/);
+        if (memoryMatch) {
+            const memoryPath = memoryMatch[1].replace(/\\/g, '/').replace(/\/+/g, '/');
+            if (after === null) {
+                removeForgeMemory(memoryPath);
+                return;
+            }
+            const parsed = parseMarkdownDocument(after);
+            upsertForgeMemory(memoryPath, parsed.title || memoryPath, parsed.body, 'planner', parsed.body.slice(0, 120));
+            return;
+        }
+
+        const lorebookMatch = change.path.match(/^\.?\/?lorebook\/entries\/([^/]+)\.md$/);
+        if (!lorebookMatch) return;
+        const entryId = lorebookMatch[1];
+        if (after === null) {
+            removeVirtualLorebookEntry(entryId);
+            return;
+        }
+        const parsed = parseMarkdownDocument(after);
+        const existing = findVirtualLorebookEntry(virtualLorebookEntries.value, entryId)?.entry;
+        upsertVirtualLorebookEntry({
+            id: entryId,
+            entry: {
+                ...(existing ?? {}),
+                uid: existing?.uid ?? entryId,
+                comment: parsed.title || existing?.comment || entryId,
+                key: existing?.key ?? [],
+                keysecondary: existing?.keysecondary ?? [],
+                content: parsed.body,
+                constant: existing?.constant ?? false,
+                selective: existing?.selective ?? false,
+                selectiveLogic: existing?.selectiveLogic ?? 0,
+                disable: existing?.disable ?? false,
+                enabled: existing?.enabled ?? true,
+                position: existing?.position ?? 0,
+                role: existing?.role,
+                depth: existing?.depth ?? 4,
+                order: existing?.order ?? 100,
+                probability: existing?.probability ?? 100,
+                useProbability: existing?.useProbability ?? false,
+                scan_depth: existing?.scan_depth ?? 4
+            }
+        });
+    };
+
+    const appendWorkspacePatchEntry = (patch: ForgePiWorkspacePatchPayload): void => {
+        const entry: ForgePiSessionEntry = {
+            id: patch.nodeId,
+            sessionId: `${activeForgeProjectId.value || workspaceSessionId.value}__${sessionChatId.value}`,
+            parentId: forgeStore.activePiNodeId,
+            kind: 'workspace_patch',
+            title: 'Workspace patch',
+            summary: `${patch.changes.length} file change(s)`,
+            createdAt: Date.now(),
+            payload: patch
+        };
+        forgeStore.setForgePiPersistedSessionState({
+            sessionId: entry.sessionId,
+            activeNodeId: entry.id,
+            entries: [...forgeStore.piSessionEntries, entry],
+            contextBundleSummary: forgeStore.piContextBundleSummary,
+            loadedExtensions: forgeStore.piLoadedExtensions,
+            version: 1
+        });
+    };
+
+    const applyWorkspacePatch = async (patch: ForgePiWorkspacePatchPayload): Promise<boolean> => {
+        const missingInline = patch.changes.find(change =>
+            change.afterContentRef !== null && resolveInlineContentRef(change.afterContentRef) === null
+        );
+        if (missingInline) {
+            lastError.value = `无法恢复 ${missingInline.path}：缺少 inline 内容引用。`;
+            return false;
+        }
+
+        const fs = await shellWorkspaceService.getFileSystem({
+            projectId: activeForgeProjectId.value,
+            conversationId: sessionChatId.value
+        });
+        for (const change of patch.changes) {
+            const localPath = workspacePatchLocalPath(change.path);
+            const after = resolveInlineContentRef(change.afterContentRef);
+            if (after === null) {
+                await fs.rm(localPath).catch(() => undefined);
+            } else {
+                await fs.mkdir(workspacePatchParentPath(localPath), { recursive: true });
+                await fs.writeFile(localPath, after);
+            }
+            applyWorkspacePatchStateChange(change);
+        }
+        await shellWorkspaceService.persist();
+        appendWorkspacePatchEntry(patch);
+        await persistWorkspaceSession();
+        return true;
+    };
+
     const summarizeFormValues = (formId: string): string => getFormController().summarizeFormValues(formId);
     const buildSubmittedFormUserInput = (formId: string): string => getFormController().buildSubmittedFormUserInput(formId);
 
@@ -1066,6 +1205,8 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             applySubmittedFormResult,
             upsertForgeMemory,
             removeForgeMemory,
+            upsertVirtualLorebookEntry: (payload) => upsertVirtualLorebookEntry(payload),
+            removeVirtualLorebookEntry: (id) => removeVirtualLorebookEntry(id),
             upsertStagingEntry: (entry) => forgeStore.upsertStagingEntry(entry),
             autoMergeEntryToVirtualLorebook(entry) {
                 const entryId = entry.targetEntryId;
@@ -1895,6 +2036,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         buildPromptPreviewPayload,
         persistWorkspaceSession,
         flushWorkspaceSession,
+        applyWorkspacePatch,
         ensureWorkspaceSession,
         createWorkspaceSession,
         createWorkspaceThread,
