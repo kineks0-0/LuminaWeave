@@ -10,6 +10,7 @@ export interface ForgeAuxPanelMeta {
 export const FORGE_AUX_PANEL_ORDER: ForgeAuxPanelKind[] = [
     'lorebook',
     'memory',
+    'review',
     'export',
     'post_tracks',
     'test_chat',
