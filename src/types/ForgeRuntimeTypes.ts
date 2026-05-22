@@ -31,6 +31,8 @@ export interface StagingEntry {
     targetEntryId: string;
     timestamp: number;
     category?: string; // e.g. "interaction_paradigm", "aesthetic_program"
+    suspicious?: boolean;
+    suspiciousReason?: string;
     layer: ForgeLayer | null;
     sourceTag: string | null;
     sourceMessageId: string | null;
