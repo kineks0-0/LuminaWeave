@@ -10,6 +10,8 @@
 
 2026-05-15：项目中心开始按“项目 / 协作线程”边界收敛，执行记录见 `steps/2026-05-15-forge-project-thread-boundary-plan.md`。当前已覆盖新建线程、删除线程、删除项目的 repository / store / UI 链路。
 
+2026-05-22：Forge pi agent 补齐 reasoning artifact 与工具契约边界。provider-native reasoning artifact 只进入同 provider / 同模型的 replay-safe 通道；raw thinking 不进入普通历史、Review/Staging、Forge memory 或虚拟世界书。`skillLoad` 支持标题/path alias 到 canonical slug，prompt 工具名对齐 `writeProposal` / `editProposal`，`readFile` 对语义目录返回目录提示，疑似 prompt/protocol staging 污染会被标记供 Review Gate 清理。
+
 ## 下一步
 
 优先执行 Agent Runtime 与 Skill 系统迁移计划：

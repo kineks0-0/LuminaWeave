@@ -17,6 +17,7 @@ import type {
     ForgePiContextBundleSummary,
     ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
+import { annotateSuspiciousStagingEntry } from './ForgeStagingSafety.js';
 import type {
     ForgeTimelineOperationKind,
     ForgeTimelineOperationStatus
@@ -324,12 +325,12 @@ export async function applyForgeEffects(
             }
             break;
         case 'upsert_staging_entry':
-            target.upsertStagingEntry(effect.entry);
+            target.upsertStagingEntry(annotateSuspiciousStagingEntry(effect.entry));
             markProjectResourceWrite();
             break;
         case 'stage_from_shell_write':
             for (const entry of effect.entries) {
-                target.upsertStagingEntry({
+                target.upsertStagingEntry(annotateSuspiciousStagingEntry({
                     targetEntryId: entry.path,
                     proposedContent: entry.content,
                     description: `Shell: ${entry.command.slice(0, 80)}`,
@@ -338,7 +339,7 @@ export async function applyForgeEffects(
                     sourceTag: 'shell-write',
                     sourceMessageId: null,
                     sourceSessionId: null
-                });
+                }));
             }
             markProjectResourceWrite();
             target.syncDraftTree();

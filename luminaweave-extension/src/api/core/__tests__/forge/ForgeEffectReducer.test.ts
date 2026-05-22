@@ -148,4 +148,36 @@ describe('ForgeEffectReducer', () => {
         expect(target.resolveToolApproval).toHaveBeenCalledWith('call_1', false, '本轮不写入');
         expect(target.persistSession).not.toHaveBeenCalled();
     });
+
+    it('marks prompt/protocol staging content as suspicious without auto-promoting it', async () => {
+        const { target } = createTarget();
+
+        await applyForgeEffects([
+            {
+                type: 'upsert_staging_entry',
+                entry: {
+                    originalContent: '',
+                    proposedContent: [
+                        '### 原生 tool calling 写入协议',
+                        '- 典型产出：`<entry_update type="角色设定/characters">`',
+                        '- `<memory_update path="AUTO/Checklist">` 写入 Forge 文件化记忆'
+                    ].join('\n'),
+                    description: '旧提示词污染',
+                    targetEntryId: 'forge_entry_polluted',
+                    category: 'protocol',
+                    layer: 'concept',
+                    sourceTag: 'legacy-parser',
+                    sourceMessageId: null,
+                    sourceSessionId: 'conversation_alpha'
+                }
+            }
+        ], target);
+
+        expect(target.upsertStagingEntry).toHaveBeenCalledWith(expect.objectContaining({
+            targetEntryId: 'forge_entry_polluted',
+            suspicious: true,
+            suspiciousReason: expect.stringContaining('prompt/protocol')
+        }));
+        expect(target.moveStagingToCommitReady).not.toHaveBeenCalled();
+    });
 });

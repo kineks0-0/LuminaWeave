@@ -71,7 +71,16 @@ const commitAll = async () => {
             <div v-for="entry in forgeStore.commitReadyEntries" :key="`commit-${entry.id}`" class="staging-card commit-ready">
                 <div class="card-header">
                     <span class="desc">{{ entry.description }}</span>
-                    <span class="target">{{ entry.operation === 'delete' ? '删除' : '写入' }} · {{ entry.targetEntryId }}</span>
+                    <div class="entry-badges">
+                        <span
+                            v-if="entry.suspicious"
+                            class="risk-pill"
+                            :title="entry.suspiciousReason || '疑似 prompt/protocol 污染'"
+                        >
+                            疑似协议污染
+                        </span>
+                        <span class="target">{{ entry.operation === 'delete' ? '删除' : '写入' }} · {{ entry.targetEntryId }}</span>
+                    </div>
                 </div>
 
                 <div v-if="isDeleteEntry(entry)" class="diff-container delete-preview">
@@ -93,7 +102,16 @@ const commitAll = async () => {
             <div v-for="entry in forgeStore.stagingArea" :key="entry.id" class="staging-card">
                 <div class="card-header">
                     <span class="desc">{{ entry.description }}</span>
-                    <span class="target">{{ entry.operation === 'delete' ? '删除' : '写入' }} · {{ entry.targetEntryId }}</span>
+                    <div class="entry-badges">
+                        <span
+                            v-if="entry.suspicious"
+                            class="risk-pill"
+                            :title="entry.suspiciousReason || '疑似 prompt/protocol 污染'"
+                        >
+                            疑似协议污染
+                        </span>
+                        <span class="target">{{ entry.operation === 'delete' ? '删除' : '写入' }} · {{ entry.targetEntryId }}</span>
+                    </div>
                 </div>
                 
                 <div v-if="isDeleteEntry(entry)" class="diff-container delete-preview">
@@ -255,6 +273,25 @@ const commitAll = async () => {
     background: var(--lw-bg-subtle);
     padding: 3px 8px;
     border-radius: 999px;
+}
+
+.entry-badges {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+}
+
+.risk-pill {
+    font-size: var(--lw-type-label-small-size);
+    color: var(--lw-warning);
+    background: color-mix(in srgb, var(--lw-warning) 13%, var(--lw-bg-subtle));
+    border: 1px solid color-mix(in srgb, var(--lw-warning) 28%, var(--lw-border-base));
+    padding: 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
 }
 
 .diff-container {
