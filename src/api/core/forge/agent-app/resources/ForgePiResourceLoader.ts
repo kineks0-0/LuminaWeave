@@ -10,7 +10,11 @@ import {
 } from '../../skills/ForgeSkillRegistry.js';
 import {
     buildForgeAgentsFile,
+    buildForgeReasoningPrompt,
     buildForgeSystemPrompt,
+    buildForgeUiDslPrompt,
+    FORGE_AGENT_REASONING_PROMPT_PATH,
+    FORGE_AGENT_UI_DSL_PROMPT_PATH,
     resolveForgeModePrompt,
     resolveForgeModePromptPath
 } from '../vfs/ForgePiVirtualProjectFiles.js';
@@ -44,6 +48,8 @@ export class ForgePiResourceLoader {
         const systemPrompt = await this.readSemanticFile(context, './.forge/agent/SYSTEM.md', () => this.buildSystemPromptFile());
         const modePromptPath = resolveForgeModePromptPath(context);
         const modePrompt = await this.readSemanticFile(context, modePromptPath, () => this.resolveModePrompt(context));
+        const uiDslPrompt = await this.readSemanticFile(context, FORGE_AGENT_UI_DSL_PROMPT_PATH, () => buildForgeUiDslPrompt());
+        const reasoningPrompt = await this.readSemanticFile(context, FORGE_AGENT_REASONING_PROMPT_PATH, () => buildForgeReasoningPrompt());
         const projectSkills = await this.skills.listProjectSkills(context.workspaceSessionId, context.sessionChatId)
             .catch(() => []);
         const presetSkills = listForgePresetSkillResources(context);
@@ -82,9 +88,11 @@ export class ForgePiResourceLoader {
                     title: '当前模式提示词',
                     content: modePrompt
                 },
+                { path: FORGE_AGENT_UI_DSL_PROMPT_PATH, title: 'Forge <V> DSL', content: uiDslPrompt },
+                { path: FORGE_AGENT_REASONING_PROMPT_PATH, title: '推理与可见工作笔记边界', content: reasoningPrompt },
                 { path: './.pi/agent/context/project.md', title: '项目概况', content: this.buildProjectFile(context) },
                 { path: './.pi/agent/context/workflow.md', title: '阶段状态', content: this.buildWorkflowFile(context) },
-                { path: './.pi/agent/context/review-gate.md', title: 'Review Gate 状态', content: this.buildReviewGateFile(context) },
+                { path: './.pi/agent/context/write-boundary.md', title: '写入边界', content: this.buildWriteBoundaryFile(context) },
                 { path: './.pi/agent/context/capability-index.md', title: '能力索引', content: this.buildCapabilityIndexFile() },
                 { path: './.pi/agent/context/project-resources.md', title: '项目资源索引', content: this.buildProjectResourcesFile(context) },
                 ...alwaysSkillFiles,
@@ -145,13 +153,14 @@ export class ForgePiResourceLoader {
         ].join('\n');
     }
 
-    private buildReviewGateFile(context: ForgeRuntimeContext): string {
+    private buildWriteBoundaryFile(context: ForgeRuntimeContext): string {
         return [
-            '# Review Gate 状态',
+            '# Forge 写入边界',
             '',
             `- 待审阅：${context.stagingEntries.length}`,
             `- Commit-ready：${context.commitReadyEntries.length}`,
-            '- 写入边界：工具只能生成 proposal 或 staging effect，不能静默写真实 ST 世界书。'
+            '- 项目 VFS：writeFile / editFile / deleteFile 默认直接应用，并生成可撤回 workspace_patch。',
+            '- 宿主边界：真实 ST 世界书发布、导出或覆盖宿主数据仍需要用户确认。'
         ].join('\n');
     }
 

@@ -76,7 +76,7 @@ describe('ForgePiToolBridge', () => {
         });
     });
 
-    it('exposes browser pi AgentTool definitions with approval metadata', () => {
+    it('exposes direct workspace write tools without Review Gate metadata', () => {
         const bridge = new ForgePiToolBridge({
             skills: createEmptySkills(),
             capabilities: createEmptyCapabilities()
@@ -91,73 +91,97 @@ describe('ForgePiToolBridge', () => {
             'skillLoad',
             'bash',
             'readFile',
-            'writeProposal',
-            'editProposal',
-            'stageEntry'
+            'writeFile',
+            'editFile',
+            'deleteFile'
         ]);
-        expect(tools.find(tool => tool.name === 'stageEntry')?.needsApproval).toBe(true);
-        expect(tools.find(tool => tool.name === 'readFile')?.needsApproval).toBeUndefined();
+        expect(tools.find(tool => tool.name === 'writeFile')?.needsApproval).toBeUndefined();
+        expect(tools.find(tool => tool.name === 'editFile')?.needsApproval).toBeUndefined();
+        expect(tools.find(tool => tool.name === 'deleteFile')?.needsApproval).toBeUndefined();
     });
 
-    it('executes approved pending write tools and captures review effects', async () => {
+    it('applies writeFile directly to the Forge project workspace and returns a workspace patch', async () => {
+        const workspaces = new ShellWorkspaceService();
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            workspaces
+        });
+        const writeFile = bridge.getTools(createContext()).find(tool => tool.name === 'writeFile');
+
+        const result = await writeFile?.execute('call_write', {
+            path: './card.md',
+            content: '# Card\n\nUpdated.'
+        });
+        const fs = await workspaces.getFileSystem({
+            projectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha'
+        });
+        const persisted = await fs.readFile('/forge/forge_project_alpha/card.md');
+
+        expect(String(persisted)).toBe('# Card\n\nUpdated.');
+        expect(result?.details).toMatchObject({
+            path: './card.md',
+            applied: true,
+            workspacePatch: {
+                sourceToolCallId: 'call_write',
+                changes: [expect.objectContaining({
+                    path: './card.md',
+                    kind: 'create',
+                    beforeContentRef: null,
+                    afterContentRef: expect.stringContaining('inline:')
+                })]
+            }
+        });
+    });
+
+    it('applies editFile and deleteFile directly without staging effects', async () => {
         const effects: ForgeRuntimeEffect[] = [];
-        const bridge = new ForgePiToolBridge();
-        const context = createContext();
-        bridge.registerPendingApproval({
-            requestId: 'req_1',
-            toolCallId: 'call_stage',
-            toolName: 'stageEntry',
-            args: { targetEntryId: 'entry.1', title: '候选', content: 'new' },
-            context,
-            source: 'conversation'
+        const workspaces = new ShellWorkspaceService();
+        const fs = await workspaces.getFileSystem({
+            projectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha'
+        });
+        await fs.mkdir('/forge/forge_project_alpha', { recursive: true });
+        await fs.writeFile('/forge/forge_project_alpha/card.md', 'old content');
+
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            workspaces,
+            onEffects: next => effects.push(...next)
+        });
+        const tools = bridge.getTools(createContext());
+        const editFile = tools.find(tool => tool.name === 'editFile');
+        const deleteFile = tools.find(tool => tool.name === 'deleteFile');
+
+        const edited = await editFile?.execute('call_edit', {
+            path: './card.md',
+            old_string: 'old',
+            new_string: 'new'
+        });
+        const deleted = await deleteFile?.execute('call_delete', {
+            path: './card.md'
         });
 
-        const resolved = await new ForgePiToolBridge({ onEffects: next => effects.push(...next) })
-            .resolveToolApproval('missing', true);
-        expect(resolved.resolved).toBe(false);
-
-        const activeBridge = new ForgePiToolBridge({ onEffects: next => effects.push(...next) });
-        activeBridge.registerPendingApproval({
-            requestId: 'req_1',
-            toolCallId: 'call_stage',
-            toolName: 'stageEntry',
-            args: { targetEntryId: 'entry.1', title: '候选', content: 'new' },
-            context,
-            source: 'conversation'
+        await expect(fs.readFile('/forge/forge_project_alpha/card.md')).rejects.toThrow();
+        expect(effects).toEqual([]);
+        expect(edited?.details).toMatchObject({
+            path: './card.md',
+            applied: true,
+            workspacePatch: {
+                sourceToolCallId: 'call_edit',
+                changes: [expect.objectContaining({ kind: 'update' })]
+            }
         });
-        const approved = await activeBridge.resolveToolApproval('call_stage', true, '允许进入暂存');
-
-        expect(approved.resolved).toBe(true);
-        expect(approved.events).toEqual(expect.arrayContaining([
-            expect.objectContaining({ type: 'tool_approval_resolved', approved: true }),
-            expect.objectContaining({ type: 'tool_result', toolName: 'stageEntry', result: expect.objectContaining({ staged: true }) })
-        ]));
-        expect(approved.effects).toEqual([
-            expect.objectContaining({
-                type: 'upsert_staging_entry',
-                entry: expect.objectContaining({ targetEntryId: 'entry.1', proposedContent: 'new' })
-            })
-        ]);
-    });
-
-    it('rejects pending write tools without producing staging effects', async () => {
-        const bridge = new ForgePiToolBridge();
-        bridge.registerPendingApproval({
-            requestId: 'req_1',
-            toolCallId: 'call_stage',
-            toolName: 'stageEntry',
-            args: { targetEntryId: 'entry.1', title: '候选', content: 'new' },
-            context: createContext(),
-            source: 'conversation'
+        expect(deleted?.details).toMatchObject({
+            path: './card.md',
+            applied: true,
+            workspacePatch: {
+                sourceToolCallId: 'call_delete',
+                changes: [expect.objectContaining({ kind: 'delete' })]
+            }
         });
-
-        const rejected = await bridge.resolveToolApproval('call_stage', false, '拒绝写入');
-
-        expect(rejected.resolved).toBe(true);
-        expect(rejected.events).toEqual([
-            expect.objectContaining({ type: 'tool_approval_resolved', approved: false, toolName: 'stageEntry' })
-        ]);
-        expect(rejected.effects).toEqual([]);
     });
 
     it('returns semantic skill paths from skill tools', async () => {
@@ -289,23 +313,22 @@ describe('ForgePiToolBridge', () => {
         });
     });
 
-    it('turns built-in skill writes into overlay patch proposals', async () => {
+    it('rejects writes to built-in skill resources instead of creating overlay proposals', async () => {
         const bridge = new ForgePiToolBridge({
             skills: createEmptySkills(),
             capabilities: createEmptyCapabilities()
         });
-        const writeProposal = bridge.getTools(createContext()).find(tool => tool.name === 'writeProposal');
+        const writeFile = bridge.getTools(createContext()).find(tool => tool.name === 'writeFile');
 
-        const result = await writeProposal?.execute('call_write', {
+        const result = await writeFile?.execute('call_write', {
             path: './agent/skills/memory-curator/SKILL.md',
             content: '# patched skill'
         });
 
         expect(result?.details).toMatchObject({
             path: './agent/skills/memory-curator/SKILL.md',
-            patchPath: './.pi/agent/skill-overrides/memory-curator/SKILL.patch',
-            overlay: true,
-            staged: true
+            applied: false,
+            error: expect.stringContaining('read-only')
         });
     });
 

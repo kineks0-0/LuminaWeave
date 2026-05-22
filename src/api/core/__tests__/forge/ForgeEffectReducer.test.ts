@@ -34,6 +34,14 @@ const createTarget = () => {
         applySubmittedFormResult: vi.fn(() => record('applySubmittedFormResult')),
         upsertForgeMemory: vi.fn(() => record('upsertForgeMemory')),
         removeForgeMemory: vi.fn(() => record('removeForgeMemory')),
+        upsertVirtualLorebookEntry: vi.fn(() => {
+            record('upsertVirtualLorebookEntry');
+            return 'entry-1';
+        }),
+        removeVirtualLorebookEntry: vi.fn(() => {
+            record('removeVirtualLorebookEntry');
+            return true;
+        }),
         upsertStagingEntry: vi.fn(() => record('upsertStagingEntry')),
         autoMergeEntryToVirtualLorebook: vi.fn(() => record('autoMergeEntryToVirtualLorebook')),
         moveStagingToCommitReady: vi.fn(() => record('moveStagingToCommitReady')),

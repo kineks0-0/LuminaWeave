@@ -112,7 +112,7 @@ describe('ForgePromptContextService', () => {
         expect(messages[0].role).toBe('system');
         expect(messages[0].content).toContain('你是 Lumina Forge 的“协作助手”');
         expect(messages[0].content).toContain('组件内容必须根据用户当前输入动态生成');
-        expect(messages[0].content).toContain('<V>ForgeChoiceGroup("path", "label", "option1|option2")</V>');
+        expect(messages[0].content).toContain('./.forge/agent/UI_DSL.md');
         expect(messages[0].content).not.toContain('<forge_choice_group');
         expect(messages[0].content).not.toContain('<ForgeSelect');
         expect(messages[0].content).not.toContain('ForgeFacetChecklist(formId=');
@@ -138,11 +138,9 @@ describe('ForgePromptContextService', () => {
             workflowSnapshot: null
         });
 
-        expect(messages[0].content).toContain('协议边界固定为两层');
-        expect(messages[0].content).toContain('原生 tool calling 层');
-        expect(messages[0].content).toContain('`<V>` 内 DSL 层');
-        expect(messages[0].content).toContain('<V>ForgeSelect("role_profile/faction", "选择阵营", "教会|帝国")</V>');
-        expect(messages[0].content).toContain('<V>ForgeChoiceGroup("branch_direction", "请选择你想继续深入的分支方向：", "选项A|选项B|选项C")</V>');
+        expect(messages[0].content).toContain('./.forge/agent/UI_DSL.md');
+        expect(messages[0].content).toContain('原生 tool calling');
+        expect(messages[0].content).toContain('<V>');
         expect(messages[0].content).not.toContain('<ForgeSelect');
         expect(messages[0].content).not.toContain('<forge_choice_group');
         expect(messages[0].content).not.toContain('ForgeMissingFields(formId=');
@@ -160,7 +158,7 @@ describe('ForgePromptContextService', () => {
         expect(request.presetId).toBe('forge_preset_alpha');
     });
 
-    it('应在 planner 真实执行请求中注入 Agent source units', () => {
+    it('planner 真实执行请求不再携带旧 prompt assembly 载荷', () => {
         const request = ForgePromptContextService.buildPlannerExecutionRequest({
             context: createRuntimeContext(),
             presetData: null,
@@ -170,10 +168,10 @@ describe('ForgePromptContextService', () => {
             forgeAgentSourceUnits: [createAgentSourceUnit()]
         });
 
-        expect(request.messages.some(message => message.content.includes('Runtime statement for real generation'))).toBe(true);
+        expect(request.messages).toEqual([]);
     });
 
-    it('应在 conversation 真实执行请求中注入 Agent source units', () => {
+    it('conversation 真实执行请求不再携带旧 prompt assembly 载荷', () => {
         const request = ForgePromptContextService.buildConversationExecutionRequest({
             context: createRuntimeContext(),
             presetData: null,
@@ -183,7 +181,7 @@ describe('ForgePromptContextService', () => {
             forgeAgentSourceUnits: [createAgentSourceUnit()]
         });
 
-        expect(request.messages.some(message => message.content.includes('Runtime statement for real generation'))).toBe(true);
+        expect(request.messages).toEqual([]);
     });
 
     it('应为 Forge 主模型预览生成来源 trace', () => {
@@ -250,13 +248,16 @@ describe('ForgePromptContextService', () => {
         expect(messages[0].role).toBe('system');
         expect(messages[0].content).toContain('你是 Lumina Forge 的“执行者 (Executor)”');
         expect(messages[0].content).toContain('原生 tool calling 写入协议');
-        expect(messages[0].content).toContain('stageEntry');
-        expect(messages[0].content).toContain('writeProposal');
-        expect(messages[0].content).toContain('Review Gate');
+        expect(messages[0].content).toContain('writeFile');
+        expect(messages[0].content).toContain('editFile');
+        expect(messages[0].content).toContain('workspace_patch');
+        expect(messages[0].content).not.toContain('stageEntry');
+        expect(messages[0].content).not.toContain('writeProposal');
+        expect(messages[0].content).not.toContain('Review Gate');
         expect(messages[0].content).not.toContain('<entry_update id="条目ID">完整内容</entry_update>');
         expect(messages[1].content).toContain('重写性格描述，使其更冷静克制');
         expect(messages[2].content).toContain('targetEntryId: "character.alpha"');
-        expect(messages[2].content).toContain('stageEntry');
+        expect(messages[2].content).toContain('writeFile');
         expect(messages[2].content).toContain('原始条目内容');
     });
 
@@ -272,6 +273,7 @@ describe('ForgePromptContextService', () => {
         });
 
         expect(request.presetId).toBe('forge_preset_alpha');
+        expect(request.messages).toEqual([]);
     });
 
     it('应为 executor 预览生成控制来源 trace', () => {

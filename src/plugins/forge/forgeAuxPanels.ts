@@ -10,7 +10,6 @@ export interface ForgeAuxPanelMeta {
 export const FORGE_AUX_PANEL_ORDER: ForgeAuxPanelKind[] = [
     'lorebook',
     'memory',
-    'review',
     'export',
     'post_tracks',
     'test_chat',
@@ -35,8 +34,8 @@ export const FORGE_AUX_PANEL_META: Record<ForgeAuxPanelKind, ForgeAuxPanelMeta> 
     },
     review: {
         id: 'forge_review',
-        title: '审阅与暂存',
-        shortLabel: '审阅',
+        title: '历史暂存',
+        shortLabel: '暂存',
         icon: '⚖️'
     },
     export: {

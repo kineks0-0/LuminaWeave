@@ -171,8 +171,9 @@ const sourceLabel = (source: ForgeSemanticVfsSource): string => {
 };
 
 const policyLabel = (policy: ForgeSemanticVfsWritePolicy): string => {
-  if (policy === 'review-required') return 'Review Gate';
-  if (policy === 'pass-through') return '底层 VFS';
+  if (policy === 'direct-write') return '直接写入';
+  if (policy === 'protected') return '受保护';
+  if (policy === 'pass-through') return '资源只读';
   return '只读';
 };
 </script>

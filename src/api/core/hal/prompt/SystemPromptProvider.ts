@@ -10,7 +10,6 @@ export class SystemPromptProvider {
     public static registerAll(): void {
         this.registerXMLMetadata();
         this.registerLuminaViewDSL();
-        this.registerForgeLuminaViewDSL();
     }
 
     /**
@@ -122,84 +121,6 @@ export class SystemPromptProvider {
                     ? '<V> S|好感度|88|100 </V>\n'
                     : '<V> Stat("好感度", 88, 100) </V>\n';
                 output += '随后她露出了少见的羞涩微笑。\n\n';
-
-                output += viewComponentRegistry.getDocumentation(syntaxStyle);
-                return output;
-            }
-        });
-    }
-
-    /**
-     * 注册 Forge 专属 LuminaView DSL 说明
-     */
-    private static registerForgeLuminaViewDSL(): void {
-        globalPromptRegistry.register({
-            id: 'forge-luminaview-dsl-docs',
-            contexts: ['forge'],
-            slot: PromptSlot.ST_MAIN,
-            type: PromptType.CONSTRAINTS,
-            targetIdentifier: STIdentifier.WORLD_INFO_BEFORE,
-            label: 'Forge DSL 指令',
-            priority: 115,
-            getFragment: () => {
-                const syntaxStyle = this.getLuminaViewSyntaxStyle();
-                let output = '# [协议] Forge <V> DSL 结构化收集规范\n\n';
-                output += '## 0. Forge 协议分层\n';
-                output += '- Forge 主路径使用原生 tool calling：`capabilitySearch`、`capabilityLoad`、`skillList`、`skillLoad`、`readFile`、`bash`、`writeFile`、`editFile`、`stageEntry`。\n';
-                output += '- XML 只保留 `<thinking>` 与 `<V>` 容器；不要再用旧 Forge action XML 标签模拟工具调用。\n';
-                output += '- 写入必须进入 Review Gate；`writeFile`、`editFile`、`stageEntry` 只生成可审阅提案，不代表已发布真实 ST 世界书。\n';
-                output += '- `<V>` 内部才是 DSL 组件层；组件必须写成真实 DSL 调用，而不是 XML 标签。\n';
-                output += '- `ForgeFacetChecklist`、`ForgeChoiceGroup`、`ForgeInput`、`ForgeSelect` 等都不是 XML 标签，也不是 `key=value` 函数。\n\n';
-
-                output += '## 1. Forge 中的 <V> 不是装饰，而是工作流输入协议\n';
-                output += '当你需要收集缺失字段、展示摘要、提示缺口或给出层导航时，优先输出 `<V> ... </V>`，而不是大段自然语言问卷。\n\n';
-
-                output += '## 2. 基础语法\n';
-                if (syntaxStyle === 'pipe') {
-                    output += 'Forge 当前设置为管道式 DSL：`Code|参数1|参数2`。\n';
-                    output += '不要输出函数式，也不要写成 XML 属性式伪语法。\n';
-                    output += '例如：`FI|role_core_profile|name|角色姓名|例如：林雾`。\n\n';
-                } else {
-                    output += 'Forge 当前设置为函数式 DSL：`ComponentName("参数1", "参数2")`。\n';
-                    output += '参数按位置顺序传入，不得使用任何 XML 标签式或 `key=value` 属性式写法。\n';
-                    output += '例如：`ForgeMissingFields("power_system", "name,origin")` 是合法写法。\n\n';
-                }
-
-                output += '## 3. Forge 组件使用原则\n';
-                output += '- 以下示例只是语法示例，不是启动阶段固定模板；真实组件内容必须根据用户当前输入动态生成。\n';
-                output += '- 启动阶段默认先对话摸清方向；需要结构化时优先用 `ForgeChoiceGroup` + `ForgeFacetChecklist` 等临时组件，持久表单后置。\n';
-                output += '- 信息不足时，先自然语言追问；只有字段缺口稳定时才切 `ForgeForm` 或输入组件。\n';
-                output += '- `ForgeMissingFields` 用于明确还缺哪些关键字段。\n';
-                output += '- `ForgeSummaryCard` 用于汇总当前已收集结果，不替代正式条目写回。\n';
-                output += '- 如需引导层推进，可输出 `ForgeLayerNavigator`。\n\n';
-                output += '- 若同时需要工具调用和组件，先完成必要的 tool calling，再把组件放在最后的 `<V>...</V>` 中。\n';
-                output += '- 不允许把 `ForgeChoiceGroup`、`ForgeFacetChecklist`、`ForgeInput`、`ForgeSelect` 放进工具参数正文里冒充写入内容。\n\n';
-
-                output += '## 4. Forge 推荐示例\n';
-                output += '<V>\n';
-                if (syntaxStyle === 'pipe') {
-                    output += 'FSC|启动模式|我会先确认方向和偏好，再进入最小角色骨架。|细致共创\n';
-                    output += 'FCG|kickoff_intent/direction|这次更想从哪种旅行感切入？|["正文1|邂逅人物","正文2|沿途风景"]\n';
-                    output += 'FFC|kickoff_intent/facets|你现在更在意哪些维度？|["人物关系","空间变化","情绪流动","节奏起伏"]\n';
-                    output += 'FMS|kickoff_intent|提交启动偏好并继续\n';
-                    output += 'FF|role_core_profile|角色基元采集|先补齐角色的最小可运行骨架。|concept\n';
-                    output += 'FI|role_core_profile/name|角色姓名|例如：林雾\n';
-                    output += 'FI|role_core_profile/identity|一句话核心设定|例如：失忆的教会审讯官\n';
-                    output += 'FS|role_core_profile/faction|阵营 / 立场|["教会","帝国","雇佣兵","中立","未定"]\n';
-                    output += 'FT|role_core_profile/background|背景故事|描述成长经历、重大创伤、当前处境\n';
-                    output += 'FM|role_core_profile|name,identity,background\n';
-                } else {
-                    output += 'ForgeSummaryCard("启动模式", "我会先确认方向和偏好，再进入最小角色骨架。", "细致共创")\n';
-                    output += 'ForgeChoiceGroup("kickoff_intent/direction", "这次更想从哪种旅行感切入？", "角色先行、以相遇带动设定|邂逅人物", "风景与旅途氛围先立住|沿途风景")\n';
-                    output += 'ForgeFacetChecklist("kickoff_intent/facets", "你现在更在意哪些维度？", "人物关系如何牵动剧情|人物关系", "空间变化如何制造旅行感|空间变化")\n';
-                    output += 'ForgeForm("role_core_profile", "角色基元采集", "先补齐角色的最小可运行骨架。", "concept")\n';
-                    output += 'ForgeInput("role_core_profile/name", "角色姓名", "例如：林雾")\n';
-                    output += 'ForgeInput("role_core_profile/identity", "一句话核心设定", "例如：失忆的教会审讯官")\n';
-                    output += 'ForgeSelect("role_core_profile/faction", "阵营 / 立场", "教会|帝国|雇佣兵|中立|未定")\n';
-                    output += 'ForgeTextarea("role_core_profile/background", "背景故事", "描述成长经历、重大创伤、当前处境")\n';
-                    output += 'ForgeMissingFields("role_core_profile", "name,identity,background")\n';
-                }
-                output += '</V>\n\n';
 
                 output += viewComponentRegistry.getDocumentation(syntaxStyle);
                 return output;

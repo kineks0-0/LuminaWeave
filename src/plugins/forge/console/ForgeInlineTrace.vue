@@ -38,10 +38,7 @@
         </button>
       </div>
 
-      <div v-if="previewEntry" class="inline-preview-container">
-        <ForgeLorebookPreview :entry="previewEntry" minimal />
-      </div>
-      <pre v-else-if="operation.detail" class="trace-detail-content">{{ operation.detail }}</pre>
+      <pre v-if="operation.detail" class="trace-detail-content">{{ operation.detail }}</pre>
     </article>
   </div>
 </template>
@@ -49,8 +46,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
 import type { ForgeTimelineOperationItem } from '../../../types/ForgeTimelineTypes.js';
-import { parseEntryUpdateXml } from '../../../api/core/utils/forgeVirtualLorebook.js';
-import ForgeLorebookPreview from '../project/ForgeLorebookPreview.vue';
 
 const props = defineProps<{
   operation: ForgeTimelineOperationItem;
@@ -90,12 +85,6 @@ watch(() => props.operation.status, (status) => {
 
 onUnmounted(() => {
   stopTimer();
-});
-
-const previewEntry = computed(() => {
-  if (props.operation.operationKind !== 'workspace_write') return null;
-  if (!props.operation.detail || !props.operation.detail.includes('<entry_update')) return null;
-  return parseEntryUpdateXml(props.operation.detail);
 });
 
 const piOrigin = computed(() => {
@@ -380,10 +369,6 @@ const emitOpenWorkspaceVersions = () => {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--lw-font-mono), ui-monospace, Consolas, monospace;
-}
-
-.inline-preview-container {
-  margin-top: 12px;
 }
 
 @media (max-width: 640px) {

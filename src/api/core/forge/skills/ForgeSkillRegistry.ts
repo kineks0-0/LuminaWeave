@@ -46,28 +46,27 @@ const BUILT_IN_SKILLS = [
     builtInSkill({
         name: 'forge-project-writer',
         title: 'Forge 项目写入员',
-        description: '通过 typed effects 与 VFS 快照维护 project.json、草稿、审阅状态和记忆。',
+        description: '通过 direct write tools 与 VFS 快照维护 project.json、草稿、项目补丁和记忆。',
         defaultWriteScope: '/workspaces/forge/<projectId>/',
         instructions: [
             '# Forge 项目写入员',
             '',
-            '使用 typed effects 更新项目资源。',
-            '不要用 shell 直接写 Forge 业务文件。',
-            '项目元数据、草稿树、审阅状态和记忆都必须限定在当前 forgeProjectId。',
-            '如需写入，准备可审阅的结构化 effect，由 Review Gate 接管。'
+            '使用 writeFile / editFile / deleteFile 更新项目资源。',
+            '项目元数据、草稿树、workspace_patch 和记忆都必须限定在当前 forgeProjectId。',
+            '项目 VFS 写入会直接应用并生成可撤回审计记录；不要发布或覆盖真实 ST 世界书。'
         ].join('\n')
     }),
     builtInSkill({
         name: 'virtual-lorebook-editor',
         title: '虚拟世界书编辑器',
-        description: '在 Forge 项目工作区内创建、拆分、合并、重写并暂存虚拟世界书条目。',
+        description: '在 Forge 项目工作区内创建、拆分、合并、重写虚拟世界书条目。',
         defaultWriteScope: '/workspaces/forge/<projectId>/lorebook/entries/',
         instructions: [
             '# 虚拟世界书编辑器',
             '',
             '只操作 Forge 虚拟世界书条目。',
             '不要直接发布到真实 ST 世界书。',
-            '保留条目来源，并产出可审阅的 lorebook.entry effects。',
+            '保留条目来源，并通过 ./lorebook/entries/*.md 写入项目工作区。',
             '只用 project-readonly shell 做搜索和检查。'
         ].join('\n')
     }),
@@ -82,20 +81,20 @@ const BUILT_IN_SKILLS = [
             '把稳定偏好、约束、禁忌和已确认设定决议写入项目记忆。',
             '不要把临时聊天措辞当作记忆保存。',
             '优先使用稳定路径和简洁摘要。',
-            '发出可审阅的 memory typed effects，而不是直接写文件。'
+            '通过 ./memory/**/*.md 写入项目记忆，保持路径和摘要稳定。'
         ].join('\n')
     }),
     builtInSkill({
-        name: 'review-stager',
-        title: '审阅暂存员',
-        description: '把草稿和生成变更转换为暂存或 commit-ready 的审阅状态。',
-        defaultWriteScope: '/workspaces/forge/<projectId>/review/staging.json',
+        name: 'workspace-patch-auditor',
+        title: '工作区补丁审计员',
+        description: '把草稿和生成变更转换为可 diff、可撤回的 workspace_patch 审计记录。',
+        defaultWriteScope: '/workspaces/forge/<projectId>/',
         instructions: [
-            '# 审阅暂存员',
+            '# 工作区补丁审计员',
             '',
-            '把候选变更转换为带来源 metadata 的 staging entries。',
-            'commit-ready 与 export-prepared 状态必须经过人工 Review Gate。',
-            '保持 proposedContent 与 originalContent 适合 diff 审阅。'
+            '把候选变更转换为带来源 metadata 的项目文件写入。',
+            '项目 VFS 写入默认直接应用；真实 ST 发布和导出仍需人工确认。',
+            '保持 workspace_patch 的 before/after 内容适合 diff 与撤回。'
         ].join('\n')
     }),
     builtInSkill({
@@ -121,7 +120,7 @@ const BUILT_IN_SKILLS = [
             '',
             '只准备导出检查清单和候选包。',
             '本阶段不要写真实 ST 世界书。',
-            '发布和导出决策必须经过人工 Review Gate。'
+            '发布和导出决策必须经过人工确认。'
         ].join('\n')
     }),
     builtInSkill({

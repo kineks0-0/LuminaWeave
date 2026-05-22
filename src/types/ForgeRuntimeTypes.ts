@@ -290,6 +290,8 @@ export type ForgeRuntimeEffect =
     | { type: 'submit_form_result'; formId: string }
     | { type: 'memory_upsert'; path: string; title: string; content: string; summary?: string; source?: 'user' | 'planner' | 'analyst' | 'system'; dedupeKey?: string }
     | { type: 'memory_remove'; path: string; dedupeKey?: string }
+    | { type: 'virtual_lorebook_upsert'; id: string; entry: LuminaLorebookEntry; sourceBookId?: string | null }
+    | { type: 'virtual_lorebook_remove'; id: string }
     | { type: 'memory_read'; path: string; summary: string; dedupeKey?: string }
     | { type: 'history_read'; target: string; summary: string; dedupeKey?: string }
     | { type: 'lorebook_read'; target: string; summary: string; dedupeKey?: string }

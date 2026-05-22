@@ -47,16 +47,16 @@
             <button
               class="version-action-btn"
               type="button"
-              :disabled="!canRestorePatchRow(row, 'before')"
-              @click="stageRestore(row, 'before')"
+              :disabled="!canRestorePatchRow(row, 'before') || isRestoreApplied(row, 'before')"
+              @click="applyRestore(row, 'before')"
             >
-              恢复变更前
+              撤回变更
             </button>
             <button
               class="version-action-btn"
               type="button"
-              :disabled="!canRestorePatchRow(row, 'after')"
-              @click="stageRestore(row, 'after')"
+              :disabled="!canRestorePatchRow(row, 'after') || isRestoreApplied(row, 'after')"
+              @click="applyRestore(row, 'after')"
             >
               恢复变更后
             </button>
@@ -126,7 +126,7 @@ import {
   canRestorePatchRow,
   compactId,
   countBranchDiffChanges,
-  createRestoreStagingEntries,
+  createWorkspaceVersionRestorePatch,
   resolvePatchChangeContents,
   type PatchVersionRow,
   type WorkspaceVersionRestoreDirection,
@@ -146,6 +146,17 @@ const activeNodeLabel = computed(() =>
   forgeStore.activePiNodeId ? `active ${compactId(forgeStore.activePiNodeId)}` : ''
 );
 
+const restoredPatchKeys = computed(() => new Set(
+  forgeStore.piSessionEntries
+    .map((entry) => {
+      const payload = entry.payload as { restoresEntryId?: unknown; restoreDirection?: unknown };
+      return typeof payload.restoresEntryId === 'string' && typeof payload.restoreDirection === 'string'
+        ? `${payload.restoresEntryId}:${payload.restoreDirection}`
+        : null;
+    })
+    .filter((key): key is string => Boolean(key))
+));
+
 const formatTime = (value: number): string => new Date(value).toLocaleString([], {
   month: '2-digit',
   day: '2-digit',
@@ -164,18 +175,20 @@ const hasInlineDiff = (change: ForgePiWorkspacePatchChange): boolean => {
   return contents.before !== null || contents.after !== null;
 };
 
-const stageRestore = async (row: PatchVersionRow, direction: WorkspaceVersionRestoreDirection): Promise<void> => {
-  const entries = createRestoreStagingEntries(row, direction);
-  if (entries.length === 0) return;
+const isRestoreApplied = (row: PatchVersionRow, direction: WorkspaceVersionRestoreDirection): boolean =>
+  restoredPatchKeys.value.has(`${row.id}:${direction}`);
+
+const applyRestore = async (row: PatchVersionRow, direction: WorkspaceVersionRestoreDirection): Promise<void> => {
+  const patch = createWorkspaceVersionRestorePatch(row, direction, `workspace-restore-${Date.now().toString(36)}-${row.id}-${direction}`);
+  if (patch.changes.length === 0 || isRestoreApplied(row, direction)) return;
   const confirmed = await luminaWeaveApi.confirm({
-    title: '生成文件恢复暂存',
-    message: `将为 ${entries.length} 个文件生成 Review/Staging 恢复条目。\n\n此操作不会直接写项目 VFS，也不会发布到真实 ST 世界书。`,
-    confirmText: '生成暂存',
+    title: direction === 'before' ? '撤回文件变更' : '恢复文件变更',
+    message: `将直接写入 ${patch.changes.length} 个项目文件，并生成一条反向 workspace_patch。\n\n此操作不会发布或覆盖真实 ST 世界书。`,
+    confirmText: direction === 'before' ? '撤回' : '恢复',
     cancelText: '取消'
   });
   if (!confirmed) return;
-  entries.forEach(entry => cardMakerStore.upsertStagingEntry(entry));
-  cardMakerStore.setActiveAuxPanel('review');
+  await cardMakerStore.applyWorkspacePatch(patch);
 };
 </script>
 

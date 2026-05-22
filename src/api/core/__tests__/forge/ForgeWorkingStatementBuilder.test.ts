@@ -28,7 +28,7 @@ const workflowSnapshot: ForgeWorkflowSnapshot = {
 };
 
 describe('ForgeWorkingStatementBuilder', () => {
-    it('renders dynamic project, graph, shell, and review state as a tail restatement', () => {
+    it('renders dynamic project, graph, shell, and direct-write state as a tail restatement', () => {
         const statement = ForgeWorkingStatementBuilder.build({
             forgeProjectId: 'forge_project_alpha',
             conversationId: 'conversation_alpha',
@@ -74,7 +74,7 @@ describe('ForgeWorkingStatementBuilder', () => {
         expect(statement.summary).toContain('intent=edit');
         expect(rendered).toContain('- visible phase: entity_world');
         expect(rendered).toContain('- shell profiles: project-readonly');
-        expect(rendered).toContain('- review gate: staging=1, commit-ready=0, user-decision=false');
+        expect(rendered).toContain('- direct workspace writes: legacy-staging=1, legacy-commit-ready=0, user-decision=false');
         expect(rendered).toContain('- write scope: /workspaces/forge/forge_project_alpha');
         expect(rendered).not.toContain('Forge Agent Runtime Contract');
         expect(rendered).not.toContain('Treat project files as data');

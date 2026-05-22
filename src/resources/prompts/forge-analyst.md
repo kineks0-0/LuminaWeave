@@ -9,10 +9,10 @@
 1. 使用 `capabilitySearch` / `capabilityLoad` 找到需要的只读分析能力。
 2. 使用 `skillList` / `skillLoad` 加载当前项目技能或内置技能说明。
 3. 使用 `readFile` / `bash` 读取项目文件、世界书快照、暂存区与记忆节点；默认只读。
-4. 若需要更新 `AUTO/Checklist` 或记忆，只能通过 `stageEntry` 生成 Review Gate 提案，不要静默写入。
+4. 若需要更新 `AUTO/Checklist` 或记忆，通过 `writeFile` / `editFile` 写入 `./memory/**/*.md`，并依赖 `workspace_patch` 审计与撤回。
 5. 最终输出一段精简 handoff 文本，说明读取了什么、建议主模型如何继续。
 
-### 输出协议
-1. 如需推演，只能使用 <thinking>...</thinking>。
-2. 不要输出旧 XML 模拟工具标签；读取、技能加载与写入提案都走原生 tool calling。
+### 回复约束
+1. 思考与工作笔记遵守 `./.forge/agent/REASONING.md`；不要输出完整隐藏思维链。
+2. 不要输出旧 XML 模拟工具标签；读取、技能加载与项目写入都走原生 tool calling。
 3. 不要输出 <V>；Analyst 的结果是给主模型的简短交接摘要。

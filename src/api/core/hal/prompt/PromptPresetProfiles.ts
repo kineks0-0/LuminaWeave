@@ -232,7 +232,7 @@ const forgeExecutorSlots: PromptPresetSlotResolver[] = [
         if (!originalContent || !entryId) return null;
         return [{
             role: 'user',
-            content: `【原文】:\n${originalContent}\n\n请通过 stageEntry 提交修改后的完整条目内容。\n- targetEntryId: "${entryId}"\n- title: 使用能在世界书列表中识别的中文备注名\n- content: 修改后的完整条目正文\n\n不要输出旧 XML 标签；不要写入真实 ST 世界书。`
+            content: `【原文】:\n${originalContent}\n\n请通过 writeFile 或 editFile 写入修改后的完整条目内容。\n- 建议路径: "./lorebook/entries/${entryId}.md"\n- 标题: 使用能在世界书列表中识别的中文备注名\n- 正文: 修改后的完整条目正文\n\n不要输出旧 XML 标签；不要发布或覆盖真实 ST 世界书。`
         }];
     })
 ];

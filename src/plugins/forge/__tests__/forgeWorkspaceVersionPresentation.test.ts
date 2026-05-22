@@ -3,7 +3,7 @@ import type { ForgePiSessionEntry } from '@shared/ForgePiTypes.js';
 import {
     buildWorkspaceVersionRows,
     countBranchDiffChanges,
-    createRestoreStagingEntries,
+    createWorkspaceVersionRestorePatch,
     resolvePatchChangeContents
 } from '../project/forgeWorkspaceVersionPresentation.js';
 
@@ -63,7 +63,7 @@ describe('forgeWorkspaceVersionPresentation', () => {
         });
     });
 
-    it('creates reviewable staging restore entries from inline patch content', () => {
+    it('creates direct restore patches from inline patch content', () => {
         const [row] = buildWorkspaceVersionRows([
             entry('n1', null, 'workspace_patch', {
                 nodeId: 'n1',
@@ -88,35 +88,46 @@ describe('forgeWorkspaceVersionPresentation', () => {
         expect(row?.kind).toBe('patch');
         if (!row || row.kind !== 'patch') return;
 
-        expect(createRestoreStagingEntries(row, 'before')).toEqual([
+        expect(createWorkspaceVersionRestorePatch(row, 'before', 'restore-before')).toEqual({
+            nodeId: 'restore-before',
+            sourceToolCallId: 'workspace-version-restore:n1:before',
+            restoresEntryId: 'n1',
+            restoreDirection: 'before',
+            changes: [
             expect.objectContaining({
-                operation: 'upsert',
-                targetEntryId: 'review/staging.json',
-                originalContent: '{"new":true}',
-                proposedContent: '{"old":true}',
-                sourceTag: 'workspace-version-restore'
+                    path: 'review/staging.json',
+                    kind: 'update',
+                    beforeContentRef: 'inline:%7B%22new%22%3Atrue%7D',
+                    afterContentRef: 'inline:%7B%22old%22%3Atrue%7D'
             }),
             expect.objectContaining({
-                operation: 'delete',
-                targetEntryId: 'created.json',
-                originalContent: 'created',
-                proposedContent: ''
+                    path: 'created.json',
+                    kind: 'delete',
+                    beforeContentRef: 'inline:created',
+                    afterContentRef: null
             })
-        ]);
-        expect(createRestoreStagingEntries(row, 'after')).toEqual([
+            ]
+        });
+        expect(createWorkspaceVersionRestorePatch(row, 'after', 'restore-after')).toEqual({
+            nodeId: 'restore-after',
+            sourceToolCallId: 'workspace-version-restore:n1:after',
+            restoresEntryId: 'n1',
+            restoreDirection: 'after',
+            changes: [
             expect.objectContaining({
-                operation: 'upsert',
-                targetEntryId: 'review/staging.json',
-                originalContent: '{"old":true}',
-                proposedContent: '{"new":true}'
+                    path: 'review/staging.json',
+                    kind: 'update',
+                    beforeContentRef: 'inline:%7B%22old%22%3Atrue%7D',
+                    afterContentRef: 'inline:%7B%22new%22%3Atrue%7D'
             }),
             expect.objectContaining({
-                operation: 'upsert',
-                targetEntryId: 'created.json',
-                originalContent: '',
-                proposedContent: 'created'
+                    path: 'created.json',
+                    kind: 'create',
+                    beforeContentRef: null,
+                    afterContentRef: 'inline:created'
             })
-        ]);
+            ]
+        });
         expect(resolvePatchChangeContents(row.changes[0])).toEqual({
             before: '{"old":true}',
             after: '{"new":true}'

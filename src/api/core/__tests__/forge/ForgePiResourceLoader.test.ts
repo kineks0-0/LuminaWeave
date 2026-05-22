@@ -102,21 +102,27 @@ describe('ForgePiResourceLoader', () => {
             './AGENTS.md',
             './.forge/agent/SYSTEM.md',
             './.forge/agent/CONVERSATION.md',
+            './.forge/agent/UI_DSL.md',
+            './.forge/agent/REASONING.md',
             './.pi/agent/context/project.md',
             './.pi/agent/context/workflow.md',
-            './.pi/agent/context/review-gate.md',
+            './.pi/agent/context/write-boundary.md',
             './.pi/agent/context/capability-index.md',
             './.pi/agent/context/project-resources.md',
             './threads/目前/messages.md'
         ]));
         expect(bundle.files.find(file => file.path === './.pi/agent/context/project.md')?.content)
             .not.toContain('forge_project_alpha');
-        expect(bundle.files.find(file => file.path === './.pi/agent/context/review-gate.md')?.content).toContain('待审阅：1');
+        expect(bundle.files.find(file => file.path === './.pi/agent/context/write-boundary.md')?.content).toContain('默认直接应用');
+        expect(bundle.files.find(file => file.path === './.pi/agent/context/write-boundary.md')?.content).toContain('workspace_patch');
         expect(bundle.files.find(file => file.path === './.pi/agent/context/capability-index.md')?.content)
             .toContain('./agent/skills/virtual-lorebook-editor/SKILL.md');
         expect(bundle.files.find(file => file.path === './AGENTS.md')?.title).toContain('工作契约');
         expect(bundle.files.find(file => file.path === './.forge/agent/SYSTEM.md')?.title).toContain('默认系统提示词');
         expect(bundle.files.find(file => file.path === './.forge/agent/CONVERSATION.md')?.title).toContain('模式提示词');
-        expect(JSON.stringify(bundle)).not.toContain('不要直接发布到真实 ST 世界书');
+        expect(bundle.files.find(file => file.path === './.forge/agent/UI_DSL.md')?.content).toContain('Forge <V> DSL');
+        expect(bundle.files.find(file => file.path === './.forge/agent/UI_DSL.md')?.content).toContain('ForgeChoiceGroup(');
+        expect(bundle.files.find(file => file.path === './.forge/agent/REASONING.md')?.content).toContain('隐藏思维链');
+        expect(JSON.stringify(bundle)).toContain('真实 ST 世界书');
     });
 });
