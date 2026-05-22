@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { SeedHandler, type Snippet } from '../../api/core/SeedHandler';
+import { SeedHandler, type Snippet } from '../../api/core/runtime-utils/SeedHandler.js';
 
 const buildSeedPrompt = (snippets: Snippet[]): string => {
     const combinedText = snippets

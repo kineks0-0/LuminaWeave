@@ -110,21 +110,21 @@ const confirm = () => {
 
 .title-group h3 {
     margin: 0;
-    font-size: 20px;
-    font-weight: 800;
+    font-size: var(--lw-type-title-large-size);
+    font-weight: var(--lw-type-title-small-weight);
     color: #111827;
 }
 
 .subtitle {
     margin: 4px 0 0;
-    font-size: 14px;
+    font-size: var(--lw-type-title-small-size);
     color: #6b7280;
 }
 
 .close-btn {
     background: #f3f4f6;
     border: none;
-    font-size: 24px;
+    font-size: var(--lw-type-headline-small-size);
     width: 32px;
     height: 32px;
     display: flex;
@@ -197,8 +197,8 @@ const confirm = () => {
     display: flex;
     justify-content: space-between;
     margin-bottom: 12px;
-    font-size: 10px;
-    font-weight: 700;
+    font-size: var(--lw-type-label-small-size);
+    font-weight: var(--lw-type-title-small-weight);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -216,7 +216,7 @@ const confirm = () => {
 }
 
 .text {
-    font-size: 13px;
+    font-size: var(--lw-type-body-medium-size);
     line-height: 1.6;
     color: #374151;
     margin: 0;
@@ -237,8 +237,8 @@ const confirm = () => {
 }
 
 .selection-info {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--lw-type-title-small-size);
+    font-weight: var(--lw-type-label-medium-weight);
     color: #4b5563;
 }
 
@@ -250,8 +250,8 @@ const confirm = () => {
 .btn {
     padding: 10px 24px;
     border-radius: 10px;
-    font-size: 14px;
-    font-weight: 700;
+    font-size: var(--lw-type-title-small-size);
+    font-weight: var(--lw-type-title-small-weight);
     cursor: pointer;
     transition: all 0.2s;
 }

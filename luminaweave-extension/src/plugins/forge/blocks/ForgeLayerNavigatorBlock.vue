@@ -1,17 +1,16 @@
 <template>
-  <div class="forge-layer-nav">
+  <div class="tw:flex tw:flex-col tw:gap-0.5">
     <div
       v-for="(layerName, index) in layers"
       :key="layerName"
-      class="forge-layer-step"
-      :class="{ 'is-active': layerName === currentLayer, 'is-complete': completedSet.has(layerName) }"
+      class="tw:relative tw:pl-2"
     >
-      <div v-if="index < layers.length - 1" class="forge-layer-line"></div>
-      <button class="forge-layer-trigger" @click="luminaWeaveApi.forgeAgent.requestLayerAdvance(layerName)">
-        <span class="forge-layer-node">{{ index + 1 }}</span>
-        <span class="forge-layer-copy">
-          <span class="forge-layer-name">{{ displayLabel(layerName) }}</span>
-          <span class="forge-layer-status">
+      <div v-if="index < layers.length - 1" :class="layerLineClass(layerName)"></div>
+      <button type="button" class="tw:flex tw:w-full tw:items-center tw:gap-3 tw:border-0 tw:bg-transparent tw:px-0 tw:py-2 tw:text-left tw:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-lw-primary" @click="luminaWeaveApi.forgeAgent.requestLayerAdvance(layerName)">
+        <span :class="layerNodeClass(layerName)">{{ index + 1 }}</span>
+        <span class="tw:flex tw:min-w-0 tw:flex-col tw:gap-0.5">
+          <span class="tw:text-xs tw:font-bold tw:text-lw-text tw:truncate">{{ displayLabel(layerName) }}</span>
+          <span :class="layerStatusClass(layerName)">
             {{ layerName === currentLayer ? '当前阶段' : completedSet.has(layerName) ? '已完成' : '后续阶段' }}
           </span>
         </span>
@@ -24,6 +23,7 @@
 import { computed } from 'vue';
 import { luminaWeaveApi } from '../../../api';
 import type { ForgeLayer } from '../../../types/ForgeStructuredTypes.js';
+import { cn } from '../../../ui/cn.js';
 
 const props = defineProps<{
     currentLayer: string;
@@ -54,91 +54,20 @@ const displayLabel = (layerName: ForgeLayer): string => {
         return layerName;
     }
 };
+
+const layerNodeClass = (layerName: ForgeLayer) => cn(
+    'tw:inline-flex tw:size-7 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-lw-pill tw:border tw:border-lw-border tw:bg-lw-elevated tw:text-xs tw:font-bold tw:text-lw-text-secondary',
+    layerName === props.currentLayer && 'tw:border-lw-text tw:bg-lw-text tw:text-lw-text-inverse',
+    completedSet.value.has(layerName) && layerName !== props.currentLayer && 'tw:border-lw-primary tw:bg-lw-subtle tw:text-lw-primary'
+);
+
+const layerStatusClass = (layerName: ForgeLayer) => cn(
+    'tw:text-xs tw:text-lw-text-muted',
+    layerName === props.currentLayer && 'tw:text-lw-primary'
+);
+
+const layerLineClass = (layerName: ForgeLayer) => cn(
+    'tw:absolute tw:left-[22px] tw:top-[34px] tw:bottom-[-10px] tw:w-px tw:bg-lw-border',
+    completedSet.value.has(layerName) && 'tw:bg-lw-primary'
+);
 </script>
-
-<style scoped>
-.forge-layer-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.forge-layer-step {
-  position: relative;
-  padding-left: 8px;
-}
-
-.forge-layer-line {
-  position: absolute;
-  left: 22px;
-  top: 34px;
-  bottom: -10px;
-  width: 1px;
-  background: color-mix(in srgb, var(--lw-border-base) 90%, transparent);
-}
-
-.forge-layer-trigger {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.forge-layer-node {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid var(--lw-border-base);
-  background: var(--lw-bg-elevated);
-  color: var(--lw-text-secondary);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.forge-layer-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.forge-layer-name {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-}
-
-.forge-layer-status {
-  font-size: 11px;
-  color: var(--lw-text-muted);
-}
-
-.forge-layer-step.is-active .forge-layer-node {
-  background: #111111;
-  border-color: #111111;
-  color: var(--lw-text-inverse);
-}
-
-.forge-layer-step.is-active .forge-layer-status {
-  color: var(--lw-primary);
-}
-
-.forge-layer-step.is-complete .forge-layer-node {
-  border-color: rgba(var(--lw-primary-rgb), 0.18);
-  color: var(--lw-primary);
-  background: rgba(var(--lw-primary-rgb), 0.08);
-}
-
-.forge-layer-step.is-complete .forge-layer-line {
-  background: rgba(var(--lw-primary-rgb), 0.22);
-}
-</style>

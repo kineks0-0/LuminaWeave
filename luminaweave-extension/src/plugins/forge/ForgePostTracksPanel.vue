@@ -18,9 +18,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useCardMakerStore } from './CardMakerStore';
-import { useForgeStore } from '../../stores/useForgeStore';
-import ForgeAuxPanelShell from './ForgeAuxPanelShell.vue';
+import { useCardMakerStore } from './CardMakerStore.js';
+import { useForgeStore } from '../../stores/useForgeStore.js';
+import ForgeAuxPanelShell from './app/ForgeAuxPanelShell.vue';
 
 const store = useCardMakerStore();
 const forgeStore = useForgeStore();
@@ -84,22 +84,22 @@ const trackCards = computed(() => {
 }
 
 .post-track-card__header strong {
-  font-size: 14px;
+  font-size: var(--lw-type-title-small-size);
   color: var(--lw-text-main);
 }
 
 .post-track-card__status {
   border-radius: 999px;
   padding: 4px 9px;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .post-track-card p {
   margin: 10px 0 0;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   line-height: 1.6;
   color: var(--lw-text-secondary);
 }

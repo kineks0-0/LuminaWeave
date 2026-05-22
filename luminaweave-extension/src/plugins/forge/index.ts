@@ -1,13 +1,12 @@
 import { defineAsyncComponent } from 'vue';
-import { LuminaPlugin } from '../../types/plugin';
-import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from './forgeAuxPanels';
-import type { PluginManifestV2 } from '../../platform/plugin/types';
-import { forgeConversationGateway } from '../../api/core/ForgeConversationGateway';
-import { setForgeIsolatedRewriteRunner } from '../../api/core/ForgeAgentController';
-import { useCardMakerStore } from './CardMakerStore';
+import { LuminaPlugin } from '../../types/plugin.js';
+import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from './forgeAuxPanels.js';
+import type { PluginManifestV2 } from '../../platform/plugin/types.js';
+import { forgeConversationGateway } from '../../api/core/forge/project/ForgeConversationGateway.js';
+import { useCardMakerStore } from './CardMakerStore.js';
 
-const CardMakerPanel = defineAsyncComponent(() => import('./CardMakerPanel.vue'));
-const ForgeAuxPanelView = defineAsyncComponent(() => import('./ForgeAuxPanelView.vue'));
+const CardMakerPanel = defineAsyncComponent(() => import('./app/CardMakerPanel.vue'));
+const ForgeAuxPanelView = defineAsyncComponent(() => import('./app/ForgeAuxPanelView.vue'));
 const ForgePromptPresetInlineSummary = defineAsyncComponent(() => import('./ForgePromptPresetInlineSummary.vue'));
 const ForgePromptPresetWorkbench = defineAsyncComponent(() => import('./ForgePromptPresetWorkbench.vue'));
 
@@ -47,7 +46,7 @@ const settingsSchema = {
     entryContentFormat: {
         default: 'json',
         label: '条目内容格式',
-        description: '指定模型在 <entry_update> 内输出条目正文时使用的数据格式。JSON 最易被系统解析；YAML 更易阅读；TOML 适合键值配置；自由格式则不限制结构。',
+        description: '指定模型通过 tool calling 生成写入提案时使用的数据格式。JSON 最易被系统解析；YAML 更易阅读；TOML 适合键值配置；自由格式则不限制结构。',
         common: true,
         type: 'options',
         options: [
@@ -56,6 +55,105 @@ const settingsSchema = {
             { value: 'toml', label: 'TOML' },
             { value: 'free', label: '自由格式' }
         ],
+        allowedScopes: ['Global']
+    },
+    aiReplyFontSize: {
+        default: 14,
+        label: 'AI 回复字号',
+        description: '仅影响 Forge 工作台中 AI 回复正文，不影响主聊天或其他桌面模式。',
+        common: true,
+        type: 'slider',
+        min: 11,
+        max: 20,
+        step: 0.5,
+        allowedScopes: ['Global']
+    },
+    aiReplyLineHeight: {
+        default: 1.7,
+        label: 'AI 回复行距',
+        description: '控制 Forge AI 回复正文行高。长文本建议保持 1.55 以上。',
+        common: true,
+        type: 'slider',
+        min: 1.2,
+        max: 2.2,
+        step: 0.05,
+        allowedScopes: ['Global']
+    },
+    aiReplyLetterSpacing: {
+        default: 0,
+        label: 'AI 回复字距',
+        description: '控制 Forge AI 回复正文的字距，单位 px。中文正文通常保持 0。',
+        common: true,
+        type: 'slider',
+        min: 0,
+        max: 1.2,
+        step: 0.05,
+        allowedScopes: ['Global']
+    },
+    userInputFontSize: {
+        default: 14,
+        label: '用户输入字号',
+        description: '影响 Forge 用户消息与底部输入框文字。',
+        common: true,
+        type: 'slider',
+        min: 11,
+        max: 20,
+        step: 0.5,
+        allowedScopes: ['Global']
+    },
+    userInputLineHeight: {
+        default: 1.5,
+        label: '用户输入行距',
+        description: '影响 Forge 用户消息与底部输入框行高。',
+        common: true,
+        type: 'slider',
+        min: 1.2,
+        max: 2,
+        step: 0.05,
+        allowedScopes: ['Global']
+    },
+    userInputLetterSpacing: {
+        default: 0,
+        label: '用户输入字距',
+        description: '控制 Forge 用户消息与输入框字距，单位 px。',
+        common: true,
+        type: 'slider',
+        min: 0,
+        max: 1.2,
+        step: 0.05,
+        allowedScopes: ['Global']
+    },
+    componentFontSize: {
+        default: 12,
+        label: '组件字号',
+        description: '影响 Forge 消息内表单、选项、提案等组件文本。',
+        common: true,
+        type: 'slider',
+        min: 10,
+        max: 18,
+        step: 0.5,
+        allowedScopes: ['Global']
+    },
+    componentLineHeight: {
+        default: 1.45,
+        label: '组件行距',
+        description: '影响 Forge 消息内组件文本行高。',
+        common: true,
+        type: 'slider',
+        min: 1.15,
+        max: 2,
+        step: 0.05,
+        allowedScopes: ['Global']
+    },
+    componentLetterSpacing: {
+        default: 0,
+        label: '组件字距',
+        description: '影响 Forge 消息内组件文本字距，单位 px。',
+        common: true,
+        type: 'slider',
+        min: 0,
+        max: 1.2,
+        step: 0.05,
         allowedScopes: ['Global']
     }
 } satisfies LuminaPlugin['settingsManifest'];
@@ -96,9 +194,6 @@ const plugin: LuminaPlugin = {
     platformManifest,
     init() {
         forgeConversationGateway.setStoreProvider(() => useCardMakerStore());
-        setForgeIsolatedRewriteRunner((instruction, entryId, originalContent) =>
-            useCardMakerStore().runExecutorRewrite(instruction, entryId, originalContent)
-        );
 
         // 在微内核中注册面板，以便通过 ID 唤起 (兼容旧有 Tab/Window 调度)
         const lw = (window as any).LuminaWeave;

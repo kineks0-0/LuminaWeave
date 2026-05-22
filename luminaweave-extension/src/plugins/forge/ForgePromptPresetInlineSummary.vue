@@ -2,8 +2,8 @@
   <div class="forge-preset-summary">
     <div class="summary-header">
       <div>
-        <div class="summary-title">预设提示词绑定</div>
-        <div class="summary-subtitle">主模型、执行模型、测试聊天各自绑定独立预设，底层共用统一合成 API。</div>
+        <div class="summary-title">Agent 预设绑定</div>
+        <div class="summary-subtitle">主模型、执行模型、测试聊天各自绑定独立预设；Forge Agent 使用资源包与提示词编排。</div>
       </div>
       <button class="summary-open-btn" type="button" @click="openDetail">
         打开完整工作台
@@ -20,8 +20,8 @@
         </div>
         <div class="summary-card-name">{{ row.preset?.name || '未绑定' }}</div>
         <div class="summary-card-meta">
-          <span>{{ row.preset?.engine === 'st_preset' ? 'ST 预设直通' : '组合预设' }}</span>
-          <span v-if="row.preset?.entries?.length">{{ row.preset.entries.filter(entry => entry.enabled).length }} 项</span>
+          <span>{{ row.summary.primary }}</span>
+          <span v-for="detail in row.summary.details" :key="detail">{{ detail }}</span>
         </div>
       </div>
     </div>
@@ -30,9 +30,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { promptPresetRegistry } from '../../api/core/PromptPresetRegistry.js';
+import { promptPresetRegistry } from '../../api/core/hal/prompt/PromptPresetRegistry.js';
 import { lwStorage } from '../../api/storage.js';
 import { currentDetailedView } from '../settings/useSettings.js';
+import { summarizeForgePromptPreset } from './store/forgePromptPresetPresentation.js';
 import type { PromptPresetDefinition, PromptPresetProfileId } from '../../types/PromptPresetTypes.js';
 
 const version = ref(0);
@@ -60,6 +61,9 @@ const rows = computed(() => {
         profileId,
         label,
         preset: promptPresetRegistry.getActivePreset(profileId) as PromptPresetDefinition | null
+    })).map(row => ({
+        ...row,
+        summary: summarizeForgePromptPreset(row.preset)
     }));
 });
 
@@ -92,14 +96,14 @@ onUnmounted(() => {
 }
 
 .summary-title {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
 }
 
 .summary-subtitle {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   line-height: 1.55;
   color: var(--lw-text-muted);
 }
@@ -110,8 +114,8 @@ onUnmounted(() => {
   color: var(--lw-text-main);
   border-radius: 999px;
   padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -140,16 +144,16 @@ onUnmounted(() => {
 }
 
 .summary-card-title {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-secondary);
 }
 
 .summary-badge {
   border-radius: 999px;
   padding: 3px 8px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-primary);
   background: rgba(var(--lw-primary-rgb), 0.1);
 }
@@ -160,8 +164,8 @@ onUnmounted(() => {
 }
 
 .summary-card-name {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
 }
 
@@ -169,7 +173,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-muted);
 }
 

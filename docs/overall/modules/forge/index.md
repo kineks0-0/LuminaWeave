@@ -12,6 +12,8 @@
   - 面向参考预设的能力拆解、可迁移模块与 Forge 主/执行/测试预设落位建议。
 - [架构重构设计](./refactoring.md)
   - 面向 CardMakerStore 拆分、三角色上下文隔离、世界线快照回滚的架构设计与实施计划。
+- [pi session 分支与工作区版本设计](../../../current/tasks/forge/steps/2026-05-20-forge-pi-session-branch-and-workspace-version-design.md)
+  - 面向 Forge 协作线程内 fork / 回滚 / 切换、timeline 投影、workspace patch/checkpoint 和文件版本恢复边界。
 - [进度看板](../../../current/tasks/forge/steps/progress-board.md)
   - 面向已完成事项、剩余待办、阶段性结论与短期推进顺序。
 
@@ -23,10 +25,19 @@
 - 需要了解架构重构方向和实施计划：看 `refactoring.md`
 - 需要继续推进或盘点缺口：看 `../../../current/tasks/forge/steps/progress-board.md`
 
-## 当前代码状态（2026-04-13）
+## 当前代码状态（2026-05-15）
 
+- 项目中心按“项目 / 协作线程”组织：项目是 `forgeProjectId` 对应的长期资源容器，协作线程是项目内独立 ConversationDocument。
+- 项目中心支持新建协作线程、删除协作线程和删除项目；删除线程保留项目 VFS，删除项目会清理该项目所有线程与项目资源。
 - Forge 前台阶段已改为按 `detailMode` 分流：`detailed` 使用 6 段可见阶段，`quick` 压缩为 `kickoff / build / finalize`。
 - 自由工作台下，Forge 主窗支持 `内嵌右栏 / 拆出小窗` 双态切换，并按工作会话记住当前辅助区呈现模式；拆出态时 `虚拟世界书 / 记忆管理 / 审阅中心 / 导出发布 / 后置轨` 以独立 workspace window 打开。
 - 传统桌面下，辅助能力不再漂浮到全局 Shell，而是在 Forge 前台内部切换单一辅助区。
-- 拆出态下主聊天区会去掉内部 hero/topbar 与额外边距，原顶部动作迁移到 `WorkspaceWindow` 顶栏，低频操作收进二级菜单。
+- 自由工作台拆出态下主聊天区会去掉内部 hero/topbar 与额外边距，原顶部动作迁移到 `WorkspaceWindow` 顶栏；传统桌面展开态也会取消重复 hero 与聊天区顶栏，并在重置会话左侧提供“工作区”二级菜单。
 - 聊天与 Forge 共用思考折叠块，默认只在“有思考、无正文”时展开，正文或 `<V>` 一出现即自动收起。
+- Forge 拥有独立排版设置：AI 回复、用户输入、消息内组件分别提供字号、行距、字距配置。设置写入 `lumina-forge.*` 命名空间，只在 Forge 工作台根节点输出 CSS 变量，不影响主聊天、桌面模式消息矩阵或核心生成链路。
+- Forge Agent runtime 已转向前端 pi-style runtime：制卡聊天的长期事实源将收敛为同一协作线程内的 pi session tree，Forge timeline 作为 UI 投影保留用户可操作节点的 pi origin。
+- Forge 插件内 fork / 回滚 / 切换语义为当前协作线程内分支，不创建新 Forge thread；文件、VFS、staging 和虚拟世界书版本恢复由 Forge workspace version manager 询问用户后执行。
+- Forge Agent 现在通过项目相对语义 VFS 与项目交互：`./AGENTS.md` 是 Agent 工作契约，不是系统提示词；默认系统提示词位于 `./.forge/agent/SYSTEM.md`，模式提示词位于 `./.forge/agent/<MODE>.md`，技能统一映射为 `./agent/skills/<skill-name>/SKILL.md`，当前协作线程可通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 访问；`/library/...` 与 `/sources/...` 仍作为底层 Resource VFS 绝对路径直通。
+- Forge 预设已资源化：预设提供 `AGENTS.md`、`.forge/agent/SYSTEM.md`、`.forge/agent/<MODE>.md`、自定义技能、生成参数与 Agent 提示词编排；项目覆盖优先于 active preset，active preset 优先于 bundled fallback。
+- “项目 VFS”辅助面板浏览 Agent 可见的 Forge 语义 VFS 投影，显示 `./...` 项目相对路径、写入边界、目录子项清单和文件内容；raw workspace storage 只作为内部映射源，`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构不得暴露给模型或主视图。
+- Forge Semantic VFS 已挂载到 HAL Bash：`BashTerminalRuntime` 提供通用 `extraMounts`，Forge runtime 注入 `ForgeSemanticBashFs`，使 shell、`readFile`、Prompt/Skill loader 和项目 VFS 面板使用同一份语义 VFS 内容。

@@ -1,8 +1,19 @@
 import type { ForgeDraftTree, ForgeStructuredState } from './ForgeStructuredTypes.js';
 import type { ForgeMemoryTree } from './ForgeMemoryTypes.js';
-import type { CleanedMessage } from './nexus';
-import type { MemorySnapshot } from './MemorySnapshotTypes';
-import type { ForgeWorkflowPromptMode, ForgeWorkflowSnapshot } from './ForgeWorkflowTypes';
+import type { CleanedMessage } from './nexus.js';
+import type { MemorySnapshot } from './MemorySnapshotTypes.js';
+import type { ForgeWorkflowPromptMode, ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
+import type { PromptAssemblyResult } from './PromptAssemblyTypes.js';
+import type { ForgePromptPreviewAgentContext } from './ForgeAgentTypes.js';
+import type {
+    ForgeExecutionRequest,
+    ForgeModelRequestToolSummary,
+    ForgeRuntimeContext
+} from './ForgeRuntimeTypes.js';
+import type {
+    ForgePiContextBundleSummary,
+    ForgePiTreeNode
+} from '@shared/ForgePiTypes.js';
 
 export interface ForgeMemorySnapshotTemplateInput {
     sourceId: string;
@@ -93,6 +104,9 @@ export interface ForgePromptPreviewTab {
     title: string;
     subtitle: string;
     payload: CleanedMessage[];
+    assembly?: PromptAssemblyResult | null;
+    agent?: ForgePromptPreviewAgentContext | null;
+    pi?: ForgePromptPreviewPiContext | null;
     sourceLabel?: string | null;
     targetEntryId?: string | null;
 }
@@ -100,4 +114,34 @@ export interface ForgePromptPreviewTab {
 export interface ForgePromptPreviewBundle {
     primary: ForgePromptPreviewTab;
     executor: ForgePromptPreviewTab;
+}
+
+export interface ForgePromptPreviewPiContext {
+    requestId: string;
+    systemPrompt: string;
+    contextBundleSummary: ForgePiContextBundleSummary;
+    loadedExtensions: string[];
+    activeTools: ForgeModelRequestToolSummary[];
+    piSessionState: {
+        tree: ForgePiTreeNode[];
+        activeNodeId: string | null;
+        contextBundleSummary?: ForgePiContextBundleSummary | null;
+        loadedExtensions?: string[];
+    };
+}
+
+export interface ForgePromptPreviewPiInput {
+    command: { type: 'send_user_input'; input: string };
+    commandInput: string;
+    context: ForgeRuntimeContext;
+    request: ForgeExecutionRequest;
+}
+
+export interface ForgePromptPreviewPiResult extends ForgePromptPreviewPiContext {
+    prompt: Array<{
+        role: string;
+        content?: unknown;
+        name?: string;
+    }>;
+    branchMessages: unknown[];
 }

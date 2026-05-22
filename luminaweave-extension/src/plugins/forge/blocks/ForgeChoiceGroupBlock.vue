@@ -1,35 +1,32 @@
 <template>
-  <div class="forge-choice-card">
-    <div class="forge-choice-label">{{ label }}</div>
-    <div class="forge-choice-options">
+  <LuminaPanel variant="elevated" padding="sm" class="tw:flex tw:flex-col tw:gap-2.5">
+    <div class="tw:text-xs tw:font-bold tw:text-lw-text tw:text-balance">{{ label }}</div>
+    <div class="tw:flex tw:flex-wrap tw:gap-2">
       <button
         v-for="option in parsedOptions"
         :key="option.raw"
         type="button"
-        class="forge-choice-option"
-        :class="{
-          'is-active': localValue === option.body,
-          'is-disabled': disabledDueToClick,
-          'is-recommended': assistRecommendedSet.has(option.body)
-        }"
+        :class="choiceOptionClass(option.body)"
         :disabled="disabledDueToClick"
         @click.stop="selectOption(option)"
       >
-        <span class="forge-choice-body">{{ option.body }}</span>
-        <span class="forge-choice-action">
+        <span class="tw:text-xs tw:leading-5 tw:text-lw-text tw:text-pretty">{{ option.body }}</span>
+        <span class="tw:inline-flex tw:min-h-7 tw:items-center tw:justify-center tw:rounded-lw-pill tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-2.5 tw:text-xs tw:font-bold tw:text-lw-text-secondary">
           {{ option.actionLabel }}
-          <span v-if="assistRecommendedSet.has(option.body)" class="forge-choice-assist-badge">⭐</span>
+          <span v-if="assistRecommendedSet.has(option.body)" class="tw:ml-1 tw:text-xs tw:opacity-70">⭐</span>
         </span>
       </button>
     </div>
-  </div>
+  </LuminaPanel>
 </template>
 
 
 <script setup lang="ts">
 import { computed, ref, watch, watchEffect, onMounted } from 'vue';
-import { useCardMakerStore } from '../CardMakerStore';
-import { parseForgeRichOptions, type ForgeRichOptionItem, parseCompositePath } from '../../../api/core/utils/forgeDslUtils';
+import { useCardMakerStore } from '../CardMakerStore.js';
+import { parseForgeRichOptions, type ForgeRichOptionItem, parseCompositePath } from '../../../api/core/utils/forgeDslUtils.js';
+import { cn } from '../../../ui/cn.js';
+import { LuminaPanel } from '../../../ui/primitives';
 
 const props = defineProps<{
     fieldKey: string;
@@ -102,6 +99,12 @@ const assistRecommendedSet = computed((): Set<string> => {
     return new Set(assistCandidates.value.map(c => c.value));
 });
 
+const choiceOptionClass = (body: string) => cn(
+    'tw:flex tw:min-w-[min(260px,100%)] tw:flex-col tw:items-start tw:gap-1.5 tw:rounded-lw-md tw:border tw:border-lw-border tw:bg-lw-surface tw:p-3 tw:text-left tw:text-lw-text-secondary tw:outline-none tw:transition-[background-color,border-color,box-shadow,opacity] tw:duration-150 tw:ease-out tw:hover:bg-lw-hover tw:focus-visible:border-lw-primary tw:focus-visible:shadow-[0_0_0_3px_rgba(var(--lw-primary-rgb),0.12)] tw:disabled:cursor-not-allowed tw:disabled:opacity-50',
+    localValue.value === body && 'tw:border-lw-primary tw:bg-lw-subtle tw:text-lw-text',
+    assistRecommendedSet.value.has(body) && 'tw:border-lw-primary tw:shadow-[0_0_0_2px_rgba(var(--lw-primary-rgb),0.06)]'
+);
+
 /** prefill 模式：assistPool 注入后自动触发首个推荐选项的点击 */
 onMounted(() => {
     if (store.formAssistanceMode !== 'prefill') return;
@@ -143,92 +146,3 @@ const selectOption = (option: ForgeRichOptionItem) => {
     store.setStructuredFieldValue(resolvedFormId.value!, resolvedFieldKey.value, option.body);
 };
 </script>
-
-<style scoped>
-.forge-choice-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(var(--lw-primary-rgb), 0.14);
-  background: linear-gradient(180deg, rgba(var(--lw-primary-rgb), 0.07), rgba(var(--lw-primary-rgb), 0.02));
-}
-
-.forge-choice-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-}
-
-.forge-choice-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.forge-choice-option {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: min(260px, 100%);
-  border-radius: 18px;
-  border: 1px solid var(--lw-border-base);
-  background: var(--lw-bg-surface);
-  color: var(--lw-text-secondary);
-  padding: 12px 14px;
-  font-size: 12px;
-  cursor: pointer;
-  text-align: left;
-}
-
-.forge-choice-option.is-disabled {
-  opacity: 0.52;
-  cursor: not-allowed;
-}
-
-.forge-choice-option.is-active {
-  border-color: rgba(var(--lw-primary-rgb), 0.35);
-  background: rgba(var(--lw-primary-rgb), 0.14);
-  color: var(--lw-text-main);
-}
-
-.forge-choice-body {
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--lw-text-main);
-}
-
-.forge-choice-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(var(--lw-primary-rgb), 0.16);
-  background: rgba(var(--lw-primary-rgb), 0.08);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--lw-text-secondary);
-}
-
-.forge-choice-warning {
-  font-size: 11px;
-  line-height: 1.5;
-  color: #b45309;
-}
-
-/* suggestion 模式：推荐选项的微弱光晕边框 */
-.forge-choice-option.is-recommended {
-  border-color: rgba(var(--lw-primary-rgb), 0.22);
-  box-shadow: 0 0 0 2px rgba(var(--lw-primary-rgb), 0.06);
-}
-
-.forge-choice-assist-badge {
-  font-size: 10px;
-  margin-left: 4px;
-  opacity: 0.7;
-}
-</style>
