@@ -4,21 +4,89 @@
     "profileId": "forge-main",
     "builtIn": true,
     "engine": "composed",
-    "entries": [
-        { "id": "slot:base_system_prompt", "type": "slot", "enabled": true, "slotId": "base_system_prompt" },
-        { "id": "slot:workspace_lorebook", "type": "slot", "enabled": true, "slotId": "workspace_lorebook" },
-        { "id": "slot:memory_snapshot", "type": "slot", "enabled": true, "slotId": "memory_snapshot" },
-        { "id": "slot:forge_memory_tree", "type": "slot", "enabled": true, "slotId": "forge_memory_tree" },
-        { "id": "slot:structured_state", "type": "slot", "enabled": true, "slotId": "structured_state" },
-        { "id": "slot:draft_tree", "type": "slot", "enabled": true, "slotId": "draft_tree" },
-        { "id": "slot:workflow_snapshot", "type": "slot", "enabled": true, "slotId": "workflow_snapshot" },
-        { "id": "slot:system_protocol", "type": "slot", "enabled": true, "slotId": "system_protocol" },
-        { "id": "slot:chat_history", "type": "slot", "enabled": true, "slotId": "chat_history" }
-    ],
+    "entries": [],
     "specials": {
         "plannerSystemPrompt": "@FORGE_PLANNER_PROMPT",
         "conversationSystemPrompt": "@FORGE_CONVERSATION_PROMPT",
         "analystSystemPrompt": "@FORGE_ANALYST_PROMPT"
+    },
+    "forgeAgentResources": {
+        "contract": {
+            "path": "./AGENTS.md",
+            "kind": "contract",
+            "title": "Forge Agent 工作契约",
+            "content": "@FORGE_AGENT_CONTRACT"
+        },
+        "system": {
+            "path": "./.forge/agent/SYSTEM.md",
+            "kind": "system",
+            "title": "默认系统提示词",
+            "content": "@FORGE_AGENT_SYSTEM_PROMPT"
+        },
+        "modes": {
+            "planner": {
+                "path": "./.forge/agent/PLANNER.md",
+                "kind": "mode_prompt",
+                "title": "Planner 模式提示词",
+                "content": "@FORGE_PLANNER_PROMPT"
+            },
+            "conversation": {
+                "path": "./.forge/agent/CONVERSATION.md",
+                "kind": "mode_prompt",
+                "title": "Conversation 模式提示词",
+                "content": "@FORGE_CONVERSATION_PROMPT"
+            },
+            "analyst": {
+                "path": "./.forge/agent/ANALYST.md",
+                "kind": "mode_prompt",
+                "title": "Analyst 模式提示词",
+                "content": "@FORGE_ANALYST_PROMPT"
+            },
+            "executor": {
+                "path": "./.forge/agent/EXECUTOR.md",
+                "kind": "mode_prompt",
+                "title": "Executor 模式提示词",
+                "content": "@FORGE_EXECUTOR_SYSTEM_PROMPT"
+            }
+        },
+        "skills": [
+            {
+                "name": "reference-needs-capture",
+                "path": "./agent/skills/reference-needs-capture/SKILL.md",
+                "title": "需求捕捉与支撑点识别",
+                "description": "识别用户显性需求、隐性偏好、支撑点和最影响制卡方向的缺口。",
+                "loadPolicy": "on_demand",
+                "content": "@FORGE_MAIN_REFERENCE_NEEDS_CAPTURE"
+            },
+            {
+                "name": "reference-anti-cliche",
+                "path": "./agent/skills/reference-anti-cliche/SKILL.md",
+                "title": "反八股与偏向强化",
+                "description": "压低模板化总结，强化用户已经显露的偏好、体验目标和鲜明取向。",
+                "loadPolicy": "on_demand",
+                "content": "@FORGE_MAIN_REFERENCE_ANTI_CLICHE"
+            },
+            {
+                "name": "reference-xp-capture",
+                "path": "./agent/skills/reference-xp-capture/SKILL.md",
+                "title": "XP 捕捉附加条目",
+                "description": "在用户明显追求特殊偏好、禁忌、羞耻感或权力关系时，按机制化维度捕捉。",
+                "loadPolicy": "on_demand",
+                "content": "@FORGE_MAIN_REFERENCE_XP"
+            }
+        ]
+    },
+    "forgeAgentOrchestration": {
+        "label": "Agent 提示词编排",
+        "steps": [
+            { "kind": "contract", "enabled": true, "path": "./AGENTS.md", "title": "Contract" },
+            { "kind": "system", "enabled": true, "path": "./.forge/agent/SYSTEM.md", "title": "System" },
+            { "kind": "mode_prompt", "enabled": true, "path": "./.forge/agent/<MODE>.md", "title": "Mode Prompt" },
+            { "kind": "skills", "enabled": true, "title": "Skills" },
+            { "kind": "capabilities", "enabled": true, "title": "Capabilities" },
+            { "kind": "context_files", "enabled": true, "title": "Context Files" },
+            { "kind": "branch_messages", "enabled": true, "title": "Branch Messages" }
+        ]
     },
     "generationSettings": {}
 }

@@ -9,6 +9,11 @@ import {
     type ForgeTestChatPreset as LegacyForgeTestChatPreset
 } from '../../../../types/ForgeTestChatTypes.js';
 import type {
+    ForgeAgentPromptMode,
+    ForgeAgentPromptOrchestration,
+    ForgeAgentPromptResource,
+    ForgeAgentPromptResourceSet,
+    ForgeAgentSkillResource,
     PromptPresetBindingMap,
     PromptPresetDefinition,
     PromptPresetEntry,
@@ -22,6 +27,14 @@ const LEGACY_TEST_CHAT_PRESETS_KEY = 'lumina-forge.testChatPresets';
 const LEGACY_TEST_CHAT_ACTIVE_KEY = 'lumina-forge.testChatActivePreset';
 
 type PromptPresetBuiltInOverrideMap = Record<string, Record<string, boolean>>;
+type RawPresetModule = PromptPresetDefinition & {
+    forgeAgentResources?: Omit<ForgeAgentPromptResourceSet, 'contract' | 'system' | 'modes' | 'skills'> & {
+        contract?: ForgeAgentPromptResource;
+        system?: ForgeAgentPromptResource;
+        modes?: Partial<Record<ForgeAgentPromptMode, ForgeAgentPromptResource>>;
+        skills?: ForgeAgentSkillResource[];
+    };
+};
 
 // ── 预设加载与解析 ───────────────────────────────────────────────────
 
@@ -34,17 +47,76 @@ const resolvePromptText = (text: string | undefined): string | undefined => {
     return typeof value === 'string' ? value : text;
 };
 
+const cloneForgeAgentResource = (resource: ForgeAgentPromptResource): ForgeAgentPromptResource => ({
+    ...resource
+});
+
+const cloneForgeAgentSkillResource = (resource: ForgeAgentSkillResource): ForgeAgentSkillResource => ({
+    ...resource,
+    loadPolicy: resource.loadPolicy === 'always' ? 'always' : 'on_demand'
+});
+
+const cloneForgeAgentResources = (resources: ForgeAgentPromptResourceSet | undefined): ForgeAgentPromptResourceSet | undefined => {
+    if (!resources) return undefined;
+    return {
+        contract: cloneForgeAgentResource(resources.contract),
+        system: cloneForgeAgentResource(resources.system),
+        modes: {
+            planner: cloneForgeAgentResource(resources.modes.planner),
+            conversation: cloneForgeAgentResource(resources.modes.conversation),
+            analyst: cloneForgeAgentResource(resources.modes.analyst),
+            executor: cloneForgeAgentResource(resources.modes.executor)
+        },
+        skills: resources.skills?.map(cloneForgeAgentSkillResource)
+    };
+};
+
+const cloneForgeAgentOrchestration = (orchestration: ForgeAgentPromptOrchestration | undefined): ForgeAgentPromptOrchestration | undefined =>
+    orchestration
+        ? {
+            label: orchestration.label,
+            steps: orchestration.steps.map(step => ({ ...step }))
+        }
+        : undefined;
+
+const resolveForgeAgentResource = (resource: ForgeAgentPromptResource | undefined): ForgeAgentPromptResource | undefined =>
+    resource
+        ? {
+            ...resource,
+            content: resolvePromptText(resource.content) ?? resource.content
+        }
+        : undefined;
+
+const resolveForgeAgentResources = (resources: RawPresetModule['forgeAgentResources'] | undefined): ForgeAgentPromptResourceSet | undefined => {
+    if (!resources?.contract || !resources.system || !resources.modes) return undefined;
+    const planner = resolveForgeAgentResource(resources.modes.planner);
+    const conversation = resolveForgeAgentResource(resources.modes.conversation);
+    const analyst = resolveForgeAgentResource(resources.modes.analyst);
+    const executor = resolveForgeAgentResource(resources.modes.executor);
+    if (!planner || !conversation || !analyst || !executor) return undefined;
+    return {
+        contract: resolveForgeAgentResource(resources.contract) ?? resources.contract,
+        system: resolveForgeAgentResource(resources.system) ?? resources.system,
+        modes: { planner, conversation, analyst, executor },
+        skills: resources.skills?.map(skill => ({
+            ...skill,
+            content: resolvePromptText(skill.content) ?? skill.content,
+            loadPolicy: skill.loadPolicy === 'always' ? 'always' : 'on_demand'
+        }))
+    };
+};
+
 const createBuiltInDefinitions = (): PromptPresetDefinition[] => {
     const current = now();
     const builtIns: PromptPresetDefinition[] = [];
 
     for (const path in presetModules) {
-        const preset = (presetModules[path] as { default: any }).default;
+        const preset = (presetModules[path] as { default: RawPresetModule }).default;
         
         // 解析 specials 中的提示词引用
         const specials: Record<string, string> = {};
         if (preset.specials) {
-            for (const key in preset.specials) {
+            for (const key of Object.keys(preset.specials) as Array<keyof typeof preset.specials>) {
                 specials[key] = resolvePromptText(preset.specials[key]) || '';
             }
         }
@@ -60,6 +132,10 @@ const createBuiltInDefinitions = (): PromptPresetDefinition[] => {
             builtIn: true,
             specials,
             entries,
+            forgeAgentResources: resolveForgeAgentResources(preset.forgeAgentResources),
+            forgeAgentOrchestration: preset.forgeAgentOrchestration
+                ? cloneForgeAgentOrchestration(preset.forgeAgentOrchestration)
+                : undefined,
             createdAt: current,
             updatedAt: current
         });
@@ -96,6 +172,8 @@ const clonePreset = (preset: PromptPresetDefinition): PromptPresetDefinition => 
     ...preset,
     entries: preset.entries.map(entry => ({ ...entry })),
     specials: { ...preset.specials },
+    forgeAgentResources: cloneForgeAgentResources(preset.forgeAgentResources),
+    forgeAgentOrchestration: cloneForgeAgentOrchestration(preset.forgeAgentOrchestration),
     generationSettings: clonePromptPresetGenerationSettings(preset.generationSettings),
     customCharCard: preset.customCharCard ? { ...preset.customCharCard } : undefined
 });
@@ -183,6 +261,8 @@ export class PromptPresetRegistry {
             customCharCard: seed?.customCharCard ? { ...seed.customCharCard } : (defaultPreset.customCharCard ? { ...defaultPreset.customCharCard } : undefined),
             entries: (seed?.entries || defaultPreset.entries).map(entry => ({ ...entry })),
             specials: { ...defaultPreset.specials, ...seed?.specials },
+            forgeAgentResources: cloneForgeAgentResources(seed?.forgeAgentResources ?? defaultPreset.forgeAgentResources),
+            forgeAgentOrchestration: cloneForgeAgentOrchestration(seed?.forgeAgentOrchestration ?? defaultPreset.forgeAgentOrchestration),
             generationSettings: clonePromptPresetGenerationSettings(seed?.generationSettings ?? defaultPreset.generationSettings),
             createdAt: current,
             updatedAt: current
@@ -202,6 +282,8 @@ export class PromptPresetRegistry {
             customCharCard: preset.customCharCard,
             entries: preset.entries,
             specials: preset.specials,
+            forgeAgentResources: preset.forgeAgentResources,
+            forgeAgentOrchestration: preset.forgeAgentOrchestration,
             generationSettings: preset.generationSettings
         });
     }
@@ -218,6 +300,12 @@ export class PromptPresetRegistry {
                 : (this.presets[index].customCharCard ? { ...this.presets[index].customCharCard } : undefined),
             entries: changes.entries ? changes.entries.map(entry => ({ ...entry })) : this.presets[index].entries.map(entry => ({ ...entry })),
             specials: changes.specials ? { ...changes.specials } : { ...this.presets[index].specials },
+            forgeAgentResources: changes.forgeAgentResources
+                ? cloneForgeAgentResources(changes.forgeAgentResources)
+                : cloneForgeAgentResources(this.presets[index].forgeAgentResources),
+            forgeAgentOrchestration: changes.forgeAgentOrchestration
+                ? cloneForgeAgentOrchestration(changes.forgeAgentOrchestration)
+                : cloneForgeAgentOrchestration(this.presets[index].forgeAgentOrchestration),
             generationSettings: changes.generationSettings
                 ? clonePromptPresetGenerationSettings(changes.generationSettings)
                 : clonePromptPresetGenerationSettings(this.presets[index].generationSettings),
@@ -309,6 +397,8 @@ export class PromptPresetRegistry {
                     entries: Array.isArray(preset.entries) ? preset.entries.map(entry => ({ ...entry })) : [],
                     specials: { ...(preset.specials || {}) },
                     generationSettings: sanitizePromptPresetGenerationSettings(preset.generationSettings),
+                    forgeAgentResources: cloneForgeAgentResources(preset.forgeAgentResources),
+                    forgeAgentOrchestration: cloneForgeAgentOrchestration(preset.forgeAgentOrchestration),
                     customCharCard: preset.customCharCard ? { ...preset.customCharCard } : undefined
                 }))
             : [];
@@ -381,6 +471,8 @@ export class PromptPresetRegistry {
                                 entry.prompt.content
                             )),
                         specials: {},
+                        forgeAgentResources: undefined,
+                        forgeAgentOrchestration: undefined,
                         generationSettings: {},
                         createdAt: preset.createdAt,
                         updatedAt: preset.updatedAt

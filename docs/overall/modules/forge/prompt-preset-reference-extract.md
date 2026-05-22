@@ -6,6 +6,14 @@
 - `D:\LuminaWeave\A.U.T.O制卡思路\参考预设\A.U.T.O.预设 v2.0.json`
 - `D:\LuminaWeave\A.U.T.O制卡思路\参考预设\夏瑾 Pro 比邻星 2.1.json`
 
+当前状态（2026-05-22）：
+
+- 参考提炼不再作为独立内置预设暴露。
+- `built-in:forge-main-reference-extract`、`built-in:forge-executor-reference-extract`、`built-in:forge-test-chat-reference-extract` 已移除。
+- 可迁移内容已迁入默认主模型预设 `built-in:forge-main-default` 的 preset-provided skills，统一通过 `./agent/skills/<skill-name>/SKILL.md` 加载。
+- 参考提炼技能默认 `on_demand`，不常驻 prompt；复制为自定义预设后可改为 `always`。
+- Forge Agent 预设工作台不再把这类能力表达为 slot 条目，而是表达为 Agent 资源包、技能和 Agent 提示词编排。
+
 ## 1. 来源映射
 
 ### 珠玑
@@ -129,78 +137,49 @@
 - 执行模型在不改变目标的前提下提升质感
 - 主模型只吸收其“判断标准”，不让制卡说明文案过度文学化
 
-## 3. 三类 Profile 的接入建议
+## 3. 当前接入方式
 
-### 主模型
+### 默认主模型预设
 
-定位：
+`built-in:forge-main-default` 提供以下三条 preset skills：
 
-- 偏“需求拆解 + 制卡方向判断 + 设计支撑点”
+- `./agent/skills/reference-needs-capture/SKILL.md`
+  - 标题：`需求捕捉与支撑点识别`
+  - 加载策略：`on_demand`
+- `./agent/skills/reference-anti-cliche/SKILL.md`
+  - 标题：`反八股与偏向强化`
+  - 加载策略：`on_demand`
+- `./agent/skills/reference-xp-capture/SKILL.md`
+  - 标题：`XP 捕捉附加条目`
+  - 加载策略：`on_demand`
 
-接入策略：
+这三条技能只作为 Agent 可发现、可加载的资源存在，不自动塞入每轮最终系统提示词。Agent 可以通过 `skill.list` / `skill.load` 或语义 VFS 路径按需加载。
 
-- 保留原有 slot 顺序
-- 在 `base_system_prompt` 后追加 2 个默认启用的自定义 system 条目：
-  - `需求捕捉与支撑点识别`
-  - `反八股与偏向强化`
-- 追加 1 个默认关闭的 XP 附加条目
+### 执行模型与测试聊天
 
-说明：
+执行模型不再拥有独立“参考提炼执行预设”。如需要把相关能力用于 executor，应通过技能加载或自定义预设资源包显式配置。
 
-- 该组条目只强化上层行为，不覆盖 Forge 既有协议
-
-### 执行模型
-
-定位：
-
-- 偏“重写时保留核心意图 + 提升质感 + 去套话”
-
-接入策略：
-
-- 保留原有 slot 顺序
-- 在 `base_system_prompt` 后追加 2 个默认启用的自定义 system 条目：
-  - `保意图重写规则`
-  - `去套话 / 去空泛 / 提高清晰度`
-- 追加 1 个默认关闭的 XP 质感强化附加条目
-
-说明：
-
-- 执行模型只负责重写，不负责任务扩写
-
-### 测试聊天
-
-定位：
-
-- 偏“对戏可玩性 + 对白活人感 + 偏好显化”
-
-接入策略：
-
-- 继续使用 `composed` engine
-- 不改角色卡来源逻辑，保持 `from_st`
-- 在角色卡与世界书 slots 之前插入 2 个默认启用的 system 条目：
-  - `测试聊天行为导向`
-  - `反八股 / 活人感对白`
-- 追加 1 个默认关闭的 XP / 性癖捕捉附加条目
+测试聊天 composed 兼容链路暂不参与本次删除范围，但 `built-in:forge-test-chat-reference-extract` 已不再注册为内置预设。
 
 ## 4. 使用说明
 
-- 这组“参考提炼”预设是新增内置预设，不会替换当前默认绑定
-- XP 向条目默认关闭
-- 因为内置预设不可直接编辑，如需启用 XP 条目：
-  - 先在 Prompt 预设工作台中复制该内置预设
-  - 再在副本中开启对应条目
+- 默认情况下，参考提炼技能不会常驻 prompt，避免污染普通制卡协作风格。
+- 如需常驻某项能力，先复制默认 Forge 主模型预设为自定义预设，再在技能管理中把对应技能从 `按需加载` 切换为 `常驻`。
+- 技能解析优先级固定为 project skill > active preset skill > built-in skill。
+- 项目侧可通过同名 `./agent/skills/<skill-name>/SKILL.md` 覆盖 preset skill。
 
-## 5. 本次实现边界
+## 5. 当前实现边界
 
 已做：
 
-- 新增参考提炼文档
-- 新增主模型 / 执行模型 / 测试聊天 3 个内置预设
-- 保持现有 profile、slot、binding、工作台交互模型不变
+- 默认主模型预设新增三条参考提炼 preset skills。
+- 删除三份参考提炼 built-in preset。
+- 旧 active binding 指向已删除参考提炼 preset 时回落默认预设。
+- Semantic VFS、`skill.list`、`skill.load` 统一识别 preset-provided skills。
+- Forge Agent 预设工作台不再向主模型 / 执行模型暴露旧版 slot 添加或编辑入口。
 
 未做：
 
-- 不修改当前 active preset binding
-- 不改默认 preset id
-- 不新增新的 PromptPreset 数据结构
-- 不把参考预设中的完整外部流程、正则锚点、强 NSFW 细则直接内置为默认行为
+- 不删除通用 `PromptPresetComposer` 的 slot 机制。
+- 不删除测试聊天 composed 兼容预设的条目顺序编辑能力。
+- 不把参考预设中的完整外部流程、正则锚点、强 NSFW 细则直接内置为默认行为。
