@@ -19,22 +19,25 @@
       <div class="label-row">
         <label class="setting-label">{{ config.label }}</label>
         <div v-if="hasScopeSelector" class="setting-meta-control setting-scope">
-          <select class="scope-select compact-scope" v-model="currentScope" @change="onScopeChange" aria-label="设置作用域" title="作用域">
+          <LuminaSelect class="scope-select compact-scope" size="sm" :modelValue="currentScope" @update:modelValue="onScopeValueChange" aria-label="设置作用域" title="作用域">
             <option v-for="scope in config.allowedScopes" :key="scope" :value="scope">
               {{ scopeLabels[scope] || scope }}
             </option>
-          </select>
+          </LuminaSelect>
         </div>
       </div>
       <div class="setting-description" v-if="config.description">{{ config.description }}</div>
     </div>
 
-    <div class="setting-options" :class="controlClass">
+    <div
+      class="setting-options"
+      :class="[controlClass, !isVerticalLayout && 'tw:max-[720px]:w-full tw:max-[720px]:justify-start']"
+    >
       <div class="setting-control-body" :class="controlBodyClass">
         <!-- Theme Color Buttons -->
         <template v-if="config.type === 'theme'">
-          <button v-for="theme in themes" :key="theme.value" class="color-btn"
-            :class="{ active: currentValue === theme.value }" :style="{ background: theme.color }"
+          <button v-for="theme in themes" :key="theme.value" :class="getThemeColorButtonClass(theme.value)"
+            :style="{ background: theme.color }" :aria-label="`切换到 ${theme.value} 主题`"
             @click="updateValue(theme.value)">
             <!-- 深色主题用白色勾，浅色主题用深色勾 -->
             <svg v-if="currentValue === theme.value" viewBox="0 0 24 24" width="13" height="13"
@@ -48,24 +51,24 @@
         <template v-else-if="config.type === 'options'">
           <template v-if="settingKey === 'fontFamily'">
             <div class="font-selector-wrap">
-              <select class="lw-select font-preset-select" :value="isRemoteOrCustom ? 'remote' : currentValue"
-                @change="handleFontPresetChange">
+              <LuminaSelect class="lw-select font-preset-select" :modelValue="isRemoteOrCustom ? 'remote' : currentValue"
+                @update:modelValue="handleFontPresetChange">
                 <option v-for="opt in resolvedOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                 <option value="remote">★ 探索远端字体</option>
-              </select>
+              </LuminaSelect>
 
-              <div v-if="isRemoteOrCustom" class="remote-font-picker slide-down">
-                <select class="lw-select" :value="currentValue" @change="handleRemoteFontChange">
+              <div v-if="isRemoteOrCustom" class="remote-font-picker tw:animate-[setting-slide-down_200ms_ease-out]">
+                <LuminaSelect class="lw-select" :modelValue="currentValue" @update:modelValue="handleRemoteFontChange">
                   <option value="" disabled>请选择一个远端字体...</option>
                   <option v-for="font in remoteFonts" :key="font.id" :value="font.family">
                     {{ font.label }}
                   </option>
                   <option value="__custom__">-- 手动输入其他字体 --</option>
-                </select>
+                </LuminaSelect>
 
                 <div v-if="currentValue === '__custom__' || isTrulyCustom" class="font-custom-input">
-                  <input type="text" class="lw-input" :value="isTrulyCustom ? currentValue : ''"
-                    placeholder="输入字体名称 (如 MiSans)..." @input="handleInput" />
+                  <LuminaInput type="text" class="lw-input" :modelValue="isTrulyCustom ? currentValue : ''"
+                    placeholder="输入字体名称 (如 MiSans)..." @update:modelValue="updateValue" />
                 </div>
 
                 <div class="font-preview-card" :style="{ fontFamily: currentValue }">
@@ -83,8 +86,13 @@
                 </button>
               </div>
               <!-- 展现选中项的详细描述 -->
-              <transition name="fade-slide">
-                <div v-if="activeOptionDescription" class="option-description-tip">
+              <transition
+                enter-active-class="tw:transition-[opacity,transform] tw:duration-200 tw:ease-out"
+                leave-active-class="tw:transition-[opacity,transform] tw:duration-200 tw:ease-out"
+                enter-from-class="tw:-translate-y-1 tw:opacity-0"
+                leave-to-class="tw:-translate-y-1 tw:opacity-0"
+              >
+                <div v-if="activeOptionDescription" class="option-description-tip tw:animate-[setting-slide-in-top_200ms_ease-out]">
                   <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
                     <circle cx="12" cy="12" r="10"></circle>
                     <line x1="12" y1="16" x2="12" y2="12"></line>
@@ -99,10 +107,7 @@
 
         <!-- Boolean (Toggle Switch) -->
         <template v-else-if="config.type === 'boolean'">
-          <label class="lw-toggle">
-            <input type="checkbox" :checked="currentValue" @change="handleCheckbox">
-            <span class="lw-toggle-slider"></span>
-          </label>
+          <LuminaToggle class="lw-toggle" :modelValue="Boolean(currentValue)" @update:modelValue="updateValue" />
         </template>
 
         <!-- Stepper (LuminaStepper) 通用步进器 -->
@@ -114,26 +119,26 @@
         <!-- Slider -->
         <template v-else-if="config.type === 'slider'">
           <div class="slider-wrapper">
-            <input type="range" :min="config.min" :max="config.max" :step="config.step" :value="currentValue"
-              @input="handleRange" class="lw-slider-input" />
-            <input type="number" :min="config.min" :max="config.max" :step="config.step" :value="currentValue"
-              @input="handleNumberInput" class="slider-number-input" />
+            <LuminaSlider :min="config.min" :max="config.max" :step="config.step" :modelValue="Number(currentValue)"
+              @update:modelValue="updateValue" class="lw-slider-input" />
+            <LuminaInput type="number" :min="config.min" :max="config.max" :step="config.step" :modelValue="currentValue"
+              @update:modelValue="handleNumberInput" class="slider-number-input" />
           </div>
         </template>
 
         <!-- Nexus Select -->
         <template v-else-if="config.type === 'nexus-select'">
-          <select class="lw-select" :value="currentValue" @change="handleSelect">
+          <LuminaSelect class="lw-select" :modelValue="currentValue" @update:modelValue="updateValue">
             <option value="">未指定 (使用 ST 全局模型)</option>
             <option v-for="preset in availableNexusPresets" :key="preset.id" :value="preset.id">
               ★ {{ preset.name }}
             </option>
-          </select>
+          </LuminaSelect>
         </template>
 
         <!-- Text Input -->
         <template v-else-if="config.type === 'text'">
-          <input type="text" class="lw-input" :value="currentValue" @input="handleInput"
+          <LuminaInput type="text" class="lw-input" :modelValue="currentValue" @update:modelValue="updateValue"
             :placeholder="config.default || '请输入...'" />
         </template>
       </div>
@@ -143,10 +148,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { activeSettings, activeScopes, useSettings } from './useSettings';
-import { lwStorage } from '../../api/storage';
+import { activeSettings, activeScopes, useSettings } from './useSettings.js';
+import { lwStorage } from '../../api/storage.js';
 import LuminaStepper from './LuminaStepper.vue';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { LuminaInput, LuminaSelect, LuminaSlider, LuminaToggle } from '../../ui/primitives';
+import { cn } from '../../ui/cn.js';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 import {
   clampSettingNumber,
   getActiveSettingOptionDescription,
@@ -162,7 +169,7 @@ import {
   settingScopeLabels,
   shouldUseVerticalSettingLayout,
   type SettingControlConfig
-} from './settingControlModel';
+} from './settingControlModel.js';
 
 const { updateSetting, updateScope } = useSettings();
 const { cssVars: settingsControlSkinVars, variant: settingsControlVariant } = useComponentSkin('settings.control');
@@ -214,6 +221,12 @@ const themes = [
   { value: 'dark', color: '#1e293b' }
 ];
 
+const getThemeColorButtonClass = (themeValue: string): string => cn(
+  'color-btn tw:flex tw:size-9 tw:shrink-0 tw:cursor-pointer tw:items-center tw:justify-center tw:rounded-full tw:border-2 tw:border-[rgba(0,0,0,0.08)] tw:p-0 tw:transition-[border-color,box-shadow,scale] tw:duration-150 tw:ease-out tw:hover:scale-110 tw:hover:border-[rgba(0,0,0,0.18)]',
+  currentValue.value === themeValue
+  && 'active tw:scale-[1.08] tw:border-transparent tw:shadow-[0_0_0_2px_var(--lw-bg-surface),0_0_0_4px_rgba(0,0,0,0.25)] tw:hover:scale-[1.08] tw:hover:border-transparent'
+);
+
 const remoteFonts = computed(() => {
   return (window as any).LuminaWeave?.fontManager?.getFontCatalog() || [];
 });
@@ -229,8 +242,7 @@ const isTrulyCustom = computed(() => {
   return !remoteFonts.value.some((f: any) => f.family === currentValue.value);
 });
 
-const handleFontPresetChange = (e: Event) => {
-  const val = (e.target as HTMLSelectElement).value;
+const handleFontPresetChange = (val: string) => {
   if (val === 'remote') {
     // 默认切到列表第一个，或者保持原样
     if (!isRemoteOrCustom.value) updateValue(remoteFonts.value[0]?.family || '');
@@ -239,8 +251,7 @@ const handleFontPresetChange = (e: Event) => {
   }
 };
 
-const handleRemoteFontChange = (e: Event) => {
-  const val = (e.target as HTMLSelectElement).value;
+const handleRemoteFontChange = (val: string) => {
   if (val === '__custom__') {
     updateValue('');
   } else {
@@ -252,22 +263,11 @@ const updateValue = (val: any) => {
   updateSetting(storageKey.value, val);
 };
 
-const handleInput = (e: Event) => {
-  const target = e.target as HTMLInputElement;
-  updateValue(target.value);
-};
-
-const handleNumberInput = (e: Event) => {
-  const target = e.target as HTMLInputElement;
-  const clamped = clampSettingNumber(target.value, props.config);
+const handleNumberInput = (rawValue: string | number) => {
+  const clamped = clampSettingNumber(String(rawValue), props.config);
   if (clamped !== null) {
     updateValue(clamped);
   }
-};
-
-const handleCheckbox = (e: Event) => {
-  const target = e.target as HTMLInputElement;
-  updateValue(target.checked);
 };
 
 const toggleBooleanSetting = () => {
@@ -283,16 +283,6 @@ const handleRowToggle = (e: Event) => {
   toggleBooleanSetting();
 };
 
-const handleRange = (e: Event) => {
-  const target = e.target as HTMLInputElement;
-  updateValue(parseFloat(target.value));
-};
-
-const handleSelect = (e: Event) => {
-  const target = e.target as HTMLSelectElement;
-  updateValue(target.value);
-};
-
 // 专用于 nexus-select 类型的预设拉取
 const availableNexusPresets = computed(() => {
   if (props.config.type === 'nexus-select') {
@@ -301,9 +291,9 @@ const availableNexusPresets = computed(() => {
   return [];
 });
 
-const onScopeChange = (e: Event) => {
-  const target = e.target as HTMLSelectElement;
-  updateScope(storageKey.value, target.value);
+const onScopeValueChange = (value: string) => {
+  currentScope.value = value;
+  updateScope(storageKey.value, value);
 };
 
 const settingControlStyle = computed(() => settingsControlSkinVars.value);
@@ -381,27 +371,30 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
 
 /* 水平布局：正常标签样式 */
 .setting-label {
-  font-size: 13px;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-text-main);
-  font-weight: 500;
-  line-height: 1.5;
-  letter-spacing: -0.01em;
   min-width: 120px; /* 防止在窄屏下被挤压导致文字垂直堆叠 */
 }
 
 /* 垂直布局：高对比度小标题样式（取消大写，提高可读性） */
 .layout-vertical .setting-label {
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
-  font-weight: 600;
+  font-weight: var(--lw-type-label-small-weight);
   text-transform: uppercase;
 }
 
 .setting-description {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
-  line-height: 1.6;
 }
 
 /* 控件容器 */
@@ -453,8 +446,10 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   max-width: 88px;
   padding: 0 32px 0 12px;
   border-radius: 16px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-secondary);
   outline: none;
   cursor: pointer;
@@ -536,8 +531,10 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   min-height: 32px;
   border-radius: 16px;
   color: var(--lw-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   cursor: pointer;
   transition: var(--lw-transition);
   white-space: nowrap;
@@ -556,7 +553,10 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
 }
 
 .option-description-tip {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
   background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
   padding: 6px 10px;
@@ -564,62 +564,7 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   display: flex;
   align-items: center;
   gap: 6px;
-  line-height: 1.4;
   border: 1px solid color-mix(in srgb, var(--lw-setting-tip-border, var(--lw-primary)) 22%, var(--lw-border-subtle));
-  animation: slide-in-top 0.2s ease-out;
-}
-
-@keyframes slide-in-top {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.2s ease;
-}
-
-.fade-slide-enter-from,
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-/* ---- Theme Color Swatches ---- */
-.theme-options {
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.color-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 2px solid rgba(0, 0, 0, 0.08);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--lw-transition);
-  padding: 0;
-  flex-shrink: 0;
-}
-
-.color-btn:hover {
-  transform: scale(1.1);
-  border-color: rgba(0, 0, 0, 0.18);
-}
-
-.color-btn.active {
-  transform: scale(1.08);
-  box-shadow: 0 0 0 2px var(--lw-bg-surface), 0 0 0 4px rgba(0, 0, 0, 0.25);
-  border-color: transparent;
 }
 
 .stepper-control {
@@ -641,15 +586,19 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
 .setting-control-body :deep(.lw-select) {
   width: 100%;
   padding: 0 40px 0 14px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
 }
 
 .setting-control-body :deep(.lw-input) {
   width: 100%;
   padding: 0 14px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .font-preset-select {
@@ -695,8 +644,10 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   padding: 6px 8px;
   border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
   border-radius: var(--lw-radius-sm);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-text-main);
   text-align: center;
   background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
@@ -734,7 +685,10 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   background: var(--lw-setting-control-active-bg, var(--lw-bg-surface));
   border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
   border-radius: var(--lw-radius-sm);
-  font-size: 15px;
+  font-size: var(--lw-type-body-large-size);
+  line-height: var(--lw-type-body-large-line-height);
+  font-weight: var(--lw-type-body-large-weight);
+  letter-spacing: var(--lw-type-body-large-tracking);
   color: var(--lw-text-main);
   min-height: 56px;
   display: flex;
@@ -794,31 +748,4 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   box-shadow: var(--lw-setting-control-active-shadow, 0 8px 18px rgba(44, 92, 130, 0.1));
 }
 
-/* ---- Animations ---- */
-.slide-down {
-  animation: slide-down 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (max-width: 720px) {
-  .layout-horizontal .setting-options {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .stepper-control .setting-control-body {
-    justify-content: flex-start;
-  }
-}
 </style>

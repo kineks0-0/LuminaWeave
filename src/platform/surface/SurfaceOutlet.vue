@@ -6,7 +6,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useAttrs } from 'vue';
+import { computed, provide, useAttrs } from 'vue';
 import { lwStorage } from '../../api/storage.js';
 import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
 import { activeSettings } from '../../plugins/settings/useSettings.js';
@@ -82,14 +82,11 @@ const runtimeContext = computed<SurfaceRuntimeContext>(() => ({
   theme: themeContext.value
 }));
 
+provide('lwSurfaceRuntimeContext', runtimeContext);
+
 const componentProps = computed(() => ({
   ...attrs,
-  contractId: props.contractId,
-  state: runtimeContext.value.state,
-  intents: runtimeContext.value.intents,
-  theme: themeContext.value,
-  runtimeContext: runtimeContext.value,
-  rendererSource: resolved.value.source,
+  ...(resolved.value.source === 'empty' ? { contractId: props.contractId } : {}),
   ...(props.containerProps || {})
 }));
 </script>

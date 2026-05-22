@@ -110,10 +110,7 @@
       </div>
     </div>
 
-    <div class="widget-container-body" :class="{ 'has-nexus': showNexus }">
-      <div v-if="showNexus" class="widget-nexus-sidebar">
-        <LuminaNexus @close="emit('updateShowNexus', false)" />
-      </div>
+    <div class="widget-container-body">
       <div class="widget-main-content">
         <SurfaceOutlet
           v-if="activeWidgetPlugin"
@@ -143,13 +140,12 @@
 
 <script setup lang="ts">
 import type { CSSProperties } from 'vue';
-import LuminaNexus from '../../components/LuminaNexus.vue';
-import type { LuminaPlugin } from '../../types/plugin';
-import type { CharacterChannelState, CreateChatConversationInput } from '../../types/ConversationContextTypes';
-import type { RegisteredPanelEntry, WidgetPanelGroup } from '../types';
+import type { LuminaPlugin } from '../../types/plugin.js';
+import type { CharacterChannelState, CreateChatConversationInput } from '../../types/ConversationContextTypes.js';
+import type { RegisteredPanelEntry, WidgetPanelGroup } from '../types.js';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
-import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces';
-import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces';
+import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
+import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
 
 defineProps<{
   activeRightPanel: string;
@@ -168,7 +164,6 @@ defineProps<{
   activeRegisteredPanel: RegisteredPanelEntry | null;
   widgetGroups: WidgetPanelGroup[];
   showWidgetDropdown: boolean;
-  showNexus: boolean;
   getPluginName: (pluginId: string | null) => string;
   onCreateChatSession?: (payload: CreateChatConversationInput) => void;
   onOpenSession?: (sessionId: string) => void;
@@ -181,7 +176,6 @@ const emit = defineEmits<{
   (e: 'switchRightPanel', panelId: string): void;
   (e: 'restoreSidebarLeft'): void;
   (e: 'closePanel'): void;
-  (e: 'updateShowNexus', value: boolean): void;
 }>();
 </script>
 
@@ -287,8 +281,10 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-text-main, #111827);
   padding: 6px 10px;
   border-radius: 999px;
@@ -323,8 +319,10 @@ const emit = defineEmits<{
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-text-secondary);
   cursor: pointer;
   transition: background 0.2s;
@@ -343,9 +341,10 @@ const emit = defineEmits<{
 
 .dropdown-label {
   padding: 6px 10px 4px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
   color: var(--lw-text-muted);
 }
@@ -381,18 +380,6 @@ const emit = defineEmits<{
   overflow: hidden;
 }
 
-.widget-container-body.has-nexus {
-  flex-direction: row;
-}
-
-.widget-nexus-sidebar {
-  width: 280px;
-  min-width: 280px;
-  height: 100%;
-  border-right: 1px solid var(--lw-glass-border);
-  background: color-mix(in srgb, var(--lw-bg-surface) 40%, transparent);
-}
-
 .widget-main-content {
   flex: 1;
   min-width: 0;
@@ -408,16 +395,20 @@ const emit = defineEmits<{
 }
 
 .widget-sub-title {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-text-main);
 }
 
 .header-sync-status {
   padding: 6px 10px;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
 }
 
 .header-sync-status.saving,

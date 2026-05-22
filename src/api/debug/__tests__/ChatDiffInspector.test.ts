@@ -70,6 +70,20 @@ describe('ChatDiffInspector', () => {
         expect(report.summary.writeTextMismatchCount).toBe(0);
     });
 
+    it('should summarize ST-only messages as structural differences', () => {
+        const report = ChatDiffInspector.analyze([], [
+            makeMsg({ id: 'st-id', mesRaw: 'Only in ST', mes: 'Only in ST', mesST: 'Only in ST', fingerprint: 'fp_st' })
+        ]);
+
+        expect(report.summary.luminaCount).toBe(0);
+        expect(report.summary.stCount).toBe(1);
+        expect(report.summary.localOnlyCount).toBe(0);
+        expect(report.summary.stOnlyCount).toBe(1);
+        expect(report.divergenceIndex).toBe(0);
+        expect(report.firstMismatchIndex).toBe(0);
+        expect(report.items[0].diffTypes).toEqual(['st_only']);
+    });
+
     it('should fall back to index matching and mark low confidence when id/fingerprint cannot match', () => {
         const local: LuminaChatMessage[] = [
             makeMsg({ id: 'a', mesRaw: 'A', mes: 'A', fingerprint: '' })

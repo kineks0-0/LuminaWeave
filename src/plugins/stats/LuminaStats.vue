@@ -49,8 +49,8 @@
 
 <script setup lang="ts">
 import { computed, inject, type CSSProperties } from 'vue';
-import { LuminaWeaveAPI } from '../../api/index';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { LuminaWeaveAPI } from '../../api/index.js';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 
 const props = withDefaults(defineProps<{
   mode?: 'large' | 'small';
@@ -134,8 +134,8 @@ const getStatValue = (key: string, fallback: number): number => {
 .stats-kicker {
   display: inline-block;
   margin-bottom: 4px;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--lw-text-muted);
@@ -143,10 +143,10 @@ const getStatValue = (key: string, fallback: number): number => {
 
 .stats-head h3 {
   font-family: var(--lw-font-display);
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-large-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .stats-badge {
@@ -158,8 +158,8 @@ const getStatValue = (key: string, fallback: number): number => {
   background: var(--lw-bg-subtle);
   border: 1px solid var(--lw-border-subtle);
   color: var(--lw-text-secondary);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -196,8 +196,8 @@ const getStatValue = (key: string, fallback: number): number => {
 }
 
 .metric-label {
-  font-size: 10px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--lw-text-muted);
@@ -205,10 +205,10 @@ const getStatValue = (key: string, fallback: number): number => {
 
 .metric-value {
   font-family: var(--lw-font-display);
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--lw-type-headline-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
-  letter-spacing: -0.04em;
+  letter-spacing: 0;
 }
 
 .metric-rail {
@@ -249,8 +249,8 @@ const getStatValue = (key: string, fallback: number): number => {
   background: var(--lw-bg-subtle);
   border: 1px solid var(--lw-border-subtle);
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-secondary);
 }
 
@@ -263,7 +263,7 @@ const getStatValue = (key: string, fallback: number): number => {
 .helper-info {
   padding-top: 8px;
   border-top: 1px solid var(--lw-border-subtle);
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-muted);
   line-height: 1.6;
 }

@@ -14,7 +14,8 @@ const SURFACE_NAVIGATION_SLOTS: Partial<Record<SurfaceContractId, PluginNavigati
     'stats.panel': ['widget'],
     'director.panel': ['widget'],
     'lorebook.workspace': ['widget', 'mainView'],
-    'dev.tools': ['widget']
+    'dev.tools': ['widget'],
+    'terminal.root': ['widget']
 };
 
 export const getDefaultNavigationSlotsForSurface = (

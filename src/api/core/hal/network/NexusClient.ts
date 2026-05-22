@@ -3,7 +3,7 @@ import {
     NexusStatusResponse, 
     CleanedMessage 
 } from '../../../../types/nexus.js';
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import { HALContext } from '../HALContext.js';
 
 export interface StreamCallbacks {
     onChunk?: (chunk: string, fullText: string) => void;
@@ -48,7 +48,7 @@ export class NexusClient {
     }, callbacks: StreamCallbacks, signal?: AbortSignal): Promise<void> {
         let localFullText = '';
         
-        const stream = BridgeDispatcher.nexus.generateStream(payload);
+        const stream = HALContext.instance.runtime.generation.generateStream(payload);
         
         // 处理外部信号中止
         if (signal) {
@@ -85,7 +85,7 @@ export class NexusClient {
      */
     async attachStream(params: { chatId: string; generationId: string; from: number; initialText?: string }, callbacks: StreamCallbacks, signal?: AbortSignal): Promise<void> {
         let localFullText = params.initialText || '';
-        const stream = BridgeDispatcher.nexus.attachStream(params);
+        const stream = HALContext.instance.runtime.generation.attachStream(params);
 
         if (signal) {
             signal.addEventListener('abort', () => stream.abort());
@@ -120,14 +120,14 @@ export class NexusClient {
      * 获取节点模型列表
      */
     async fetchModels(providerId: string): Promise<string[]> {
-        return BridgeDispatcher.nexus.fetchModels(providerId);
+        return HALContext.instance.runtime.generation.fetchModels(providerId);
     }
 
     async fetchStatus(chatId: string): Promise<NexusStatusResponse> {
-        return BridgeDispatcher.nexus.getStatus(chatId);
+        return HALContext.instance.runtime.generation.getStatus(chatId);
     }
 
     async stopGeneration(chatId: string): Promise<void> {
-        await BridgeDispatcher.nexus.stop(chatId);
+        await HALContext.instance.runtime.generation.stop(chatId);
     }
 }

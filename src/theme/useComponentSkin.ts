@@ -1,13 +1,13 @@
 import { computed } from 'vue';
-import { activeSettings, useSettings } from '../plugins/settings/useSettings';
+import { activeSettings, useSettings } from '../plugins/settings/useSettings.js';
 import {
     DEFAULT_THEME_PACK_ID,
     getActiveDesktopModeIdFromSettings,
     getDesktopModeSettingStorageKey,
     getThemePackOrDefault,
     resolveComponentSkin
-} from './themeRegistry';
-import type { ResolvedThemeAppearance } from './types';
+} from './themeRegistry.js';
+import type { ResolvedThemeAppearance } from './types.js';
 
 const mediaQuery = typeof window !== 'undefined'
     ? window.matchMedia('(prefers-color-scheme: dark)')

@@ -2,7 +2,7 @@ import { lwStorage } from '../../storage.js';
 import type { PersistenceService } from '../storage/PersistenceService.js';
 import type { WorldlineStore } from '../storage/WorldlineStore.js';
 import { LuminaWeaveAPIBase } from '../facade/LuminaWeaveAPIBase.js';
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+import { HALContext } from '../hal/HALContext.js';
 import { createEmptyConversationDocument } from '@shared/ConversationTypes.js';
 import { buildTitleAndSummary } from './ChatSessionIndexService.js';
 import {
@@ -44,7 +44,7 @@ export class ChatConversationGateway {
 
     private async deleteConversationDocumentIfPresent(id: string): Promise<void> {
         try {
-            await BridgeDispatcher.conversation.deleteConversation(id);
+            await HALContext.instance.runtime.conversation.deleteConversation(id);
         } catch (error) {
             if (!this.isIgnorableConversationDeleteError(error)) {
                 throw error;
@@ -97,7 +97,7 @@ export class ChatConversationGateway {
             }
         });
 
-        await BridgeDispatcher.conversation.saveConversation(creation.resolvedChatFile, document);
+        await HALContext.instance.runtime.conversation.saveConversation(creation.resolvedChatFile, document);
 
         return {
             sessionId: creation.resolvedChatFile,
@@ -115,7 +115,7 @@ export class ChatConversationGateway {
             throw new Error(renamed.reason || 'chat_session_rename_failed');
         }
 
-        const current = await BridgeDispatcher.conversation.getConversation(input.sessionId);
+        const current = await HALContext.instance.runtime.conversation.getConversation(input.sessionId);
         const fallbackTitle = buildTitleAndSummary(renamed.resolvedChatFile, '').title;
         const previous = current.document || createEmptyConversationDocument({
             id: input.sessionId,
@@ -138,7 +138,7 @@ export class ChatConversationGateway {
             }
         };
 
-        await BridgeDispatcher.conversation.saveConversation(renamed.resolvedChatFile, nextDocument);
+        await HALContext.instance.runtime.conversation.saveConversation(renamed.resolvedChatFile, nextDocument);
         if (renamed.resolvedChatFile !== input.sessionId) {
             await this.deleteConversationDocumentIfPresent(input.sessionId);
         }

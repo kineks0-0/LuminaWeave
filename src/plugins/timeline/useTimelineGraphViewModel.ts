@@ -1,8 +1,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, type Ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
-import { luminaWeaveApi as lwApi } from '../../api/index';
-import type { TimelineNode } from '../../api/index';
-import { useTimelineStore } from '../../stores/useTimelineStore';
+import { luminaWeaveApi as lwApi } from '../../api/index.js';
+import type { TimelineNode } from '../../api/index.js';
+import { useTimelineStore } from '../../stores/useTimelineStore.js';
 
 export interface TimelineViewNode extends TimelineNode {
   children: TimelineViewNode[];

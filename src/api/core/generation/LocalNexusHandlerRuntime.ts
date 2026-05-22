@@ -1,7 +1,10 @@
 import { streamText } from 'ai';
 import { globalNexusOrchestrator, mapSTSettingsToAISdk } from '@shared/api/llm/NexusOrchestrator.js';
 import { NexusGenerationFlow, PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
-import { IStreamingHandle, IStreamingCallbacks } from '@shared/api/IBridge.js';
+import type {
+    RuntimeStreamingCallbacks,
+    RuntimeStreamingHandle
+} from '@shared/api/HALRuntimePorts.js';
 import { lwStorage } from '../../storage.js';
 import { globalXMLInterceptor } from '../xml-view/XMLInterceptor.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
@@ -9,12 +12,12 @@ import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 /**
  * LocalNexusHandler
  * 在前端直接运行的生成引擎 (Fallback 模式)
- * 实现 IStreamingHandle 接口以兼容桥接层
+ * 实现 runtime streaming handle 接口
  */
-export class LocalNexusHandler implements IStreamingHandle {
+export class LocalNexusHandler implements RuntimeStreamingHandle {
     private isAborted = false;
     private _isBusy = true;
-    private callbacks: IStreamingCallbacks = {};
+    private callbacks: RuntimeStreamingCallbacks = {};
     private abortController = new AbortController();
 
     constructor(

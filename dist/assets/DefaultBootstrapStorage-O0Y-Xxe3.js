@@ -1,0 +1,1 @@
+var e=class{getItem(e){try{return localStorage.getItem(`lw_bootstrap_${e}`)}catch{return null}}setItem(e,t){try{localStorage.setItem(`lw_bootstrap_${e}`,t)}catch{}}getJson(e){let t=this.getItem(e);if(!t)return null;try{return JSON.parse(t)}catch{return null}}setJson(e,t){this.setItem(e,JSON.stringify(t))}};export{e as t};

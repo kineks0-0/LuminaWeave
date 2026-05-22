@@ -222,7 +222,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 
 const props = defineProps<{
   entry: LuminaLorebookEntry,
@@ -370,14 +370,14 @@ const save = async () => {
 }
 
 .editor-title {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-large-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .editor-subtitle {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   font-family: var(--lw-font-mono);
   color: var(--lw-text-muted);
   text-transform: uppercase;
@@ -412,8 +412,8 @@ const save = async () => {
 
 .editor-section label {
   font-family: var(--lw-font-main);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
   letter-spacing: 0.02em;
   margin-bottom: 8px;
@@ -491,8 +491,8 @@ textarea:focus {
   color: var(--lw-text-secondary);
   padding: 6px 14px;
   border-radius: var(--lw-radius-sm);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -513,7 +513,7 @@ textarea:focus {
   color: currentColor;
   padding: 0;
   cursor: pointer;
-  font-size: 18px;
+  font-size: var(--lw-type-title-large-size);
   line-height: 1;
   opacity: 0.5;
 }
@@ -528,8 +528,8 @@ textarea:focus {
 }
 
 .section-subtitle {
-  font-size: 15px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   font-family: var(--lw-font-main);
   color: var(--lw-text-main);
   margin-bottom: 24px;
@@ -542,8 +542,8 @@ textarea:focus {
 
 .section-subtitle::after {
   content: "ADVANCED";
-  font-size: 9px;
-  font-weight: 900;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-primary);
   background: var(--lw-bg-selection);
   padding: 2px 6px;
@@ -583,12 +583,12 @@ textarea:focus {
 }
 
 .field-hint {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   font-family: var(--lw-font-main);
   color: var(--lw-text-muted);
   font-style: italic;
   opacity: 0.7;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .locked-status {
@@ -601,8 +601,8 @@ textarea:focus {
   border: 1px dashed var(--lw-border-base);
   border-radius: var(--lw-radius-xl);
   color: var(--lw-text-muted);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-label-medium-weight);
   opacity: 0.6;
 }
 
@@ -629,8 +629,8 @@ textarea:focus {
 }
 
 .toggle-title {
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   font-family: var(--lw-font-main);
   color: var(--lw-text-main);
 }
@@ -646,18 +646,18 @@ textarea:focus {
 }
 
 .version-badge-title {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-primary);
 }
 
 .version-badge-hint {
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-muted);
 }
 
 .toggle-desc {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
   color: var(--lw-text-muted);
 }
 
@@ -703,8 +703,8 @@ textarea:focus {
 
 .probability-val {
   font-family: var(--lw-font-mono);
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-primary);
   background: var(--lw-bg-selection);
   padding: 2px 8px;
@@ -743,7 +743,7 @@ textarea:focus {
 }
 
 .range-labels span {
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
   font-family: var(--lw-font-mono);
   color: var(--lw-text-muted);
 }
@@ -756,8 +756,8 @@ textarea:focus {
   background: var(--lw-tertiary-fixed);
   color: var(--lw-on-tertiary-fixed);
   border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-label-medium-weight);
   line-height: 1.4;
 }
 
@@ -787,8 +787,8 @@ textarea:focus {
   border: none;
   border-radius: var(--lw-radius);
   padding: 10px 20px;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: var(--lw-type-body-medium-size);
+  font-weight: var(--lw-type-title-small-weight);
   font-family: var(--lw-font-main);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -801,7 +801,7 @@ textarea:focus {
 }
 
 .icon-sync {
-  font-size: 18px !important;
+  font-size: var(--lw-type-title-large-size) !important;
   transition: transform 0.3s ease;
 }
 

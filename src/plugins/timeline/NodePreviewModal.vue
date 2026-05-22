@@ -164,8 +164,8 @@ const renderedContent = computed(() => {
   background: rgba(139, 92, 246, 0.1);
   color: var(--lw-purple);
   border-radius: 8px;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   width: fit-content;
@@ -173,8 +173,8 @@ const renderedContent = computed(() => {
 
 .l-modal-id {
   font-family: monospace;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
 }
 
@@ -205,8 +205,8 @@ const renderedContent = computed(() => {
   background: transparent;
   padding: 6px 16px;
   border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--lw-type-body-medium-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-dim);
   cursor: pointer;
   transition: var(--lw-transition);
@@ -257,7 +257,7 @@ const renderedContent = computed(() => {
 }
 
 .prose {
-  font-size: 16px;
+  font-size: var(--lw-type-title-medium-size);
   line-height: 1.8;
   color: var(--lw-text-main);
 }
@@ -283,7 +283,7 @@ const renderedContent = computed(() => {
   padding: 24px;
   border-radius: 12px;
   font-family: var(--lw-font-mono, monospace);
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
   overflow-x: auto;
 }
 
@@ -315,9 +315,9 @@ pre {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
   color: var(--lw-text-dim);
-  font-weight: 600;
+  font-weight: var(--lw-type-label-medium-weight);
 }
 
 .l-footer-meta .divider {
@@ -332,8 +332,8 @@ pre {
 .l-modal-action-btn {
   padding: 10px 24px;
   border-radius: 10px;
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: var(--lw-type-title-small-weight);
+  font-size: var(--lw-type-title-small-size);
   cursor: pointer;
   transition: 0.2s;
   border: none;
@@ -343,7 +343,7 @@ pre {
   .l-modal-action-btn {
     flex: 1;
     padding: 12px;
-    font-size: 13px;
+    font-size: var(--lw-type-body-medium-size);
   }
 }
 

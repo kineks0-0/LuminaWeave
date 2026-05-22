@@ -1,22 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock dependencies before importing the engine
-vi.mock('../../api/core/XMLInterceptor', () => ({
+vi.mock('../../../api/core/xml-view/XMLInterceptor.js', () => ({
     globalXMLInterceptor: {
         registerXMLParser: vi.fn(),
+        registerPatternParser: vi.fn(),
     },
 }));
 
-vi.mock('../../api/core/PromptRegistry', () => ({
+vi.mock('../../../api/core/hal/prompt/PromptRegistry.js', () => ({
     globalPromptRegistry: {
         register: vi.fn(),
     },
     PromptSlot: {
         POST_CONTEXT: 'POST_CONTEXT',
+        ST_MAIN: 'ST_MAIN',
+    },
+    STIdentifier: {
+        MAIN: 'MAIN',
     },
 }));
 
-import { IncrementalMutationEngine } from '../MutationEngine';
+import { IncrementalMutationEngine } from '../MutationEngine.js';
 
 describe('IncrementalMutationEngine JS Execution', () => {
     let engine: IncrementalMutationEngine;

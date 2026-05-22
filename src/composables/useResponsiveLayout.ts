@@ -1,5 +1,5 @@
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue';
-import { lwStorage } from '../api/storage';
+import { lwStorage } from '../api/storage.js';
 
 const MOBILE_BREAKPOINT = 768;
 const SIDEBAR_MIN_CONTENT_WIDTH = 960;

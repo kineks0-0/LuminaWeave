@@ -1,19 +1,19 @@
 <template>
-  <div class="lw-stepper">
-    <button 
-      class="stepper-btn minus" 
+  <div class="tw:inline-flex tw:min-h-9 tw:items-center tw:overflow-hidden tw:rounded-lw-pill tw:border tw:border-lw-border tw:bg-lw-subtle tw:focus-within:border-lw-primary tw:focus-within:bg-lw-surface tw:focus-within:shadow-[0_0_0_3px_rgba(92,139,246,0.12)]">
+    <LuminaIconButton
+      class="tw:rounded-none tw:border-r tw:border-lw-border-subtle"
+      ariaLabel="减少数值"
       @click="decrement" 
       :disabled="modelValue <= (min ?? -Infinity)"
-      type="button"
     >
       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="3" fill="none">
         <line x1="5" y1="12" x2="19" y2="12"></line>
       </svg>
-    </button>
+    </LuminaIconButton>
     
     <input 
       type="number" 
-      class="stepper-input" 
+      class="tw:h-full tw:w-[74px] tw:min-w-[74px] tw:border-0 tw:bg-transparent tw:px-2 tw:text-center tw:font-lw-main tw:text-sm tw:font-bold tw:leading-5 tw:tabular-nums tw:text-lw-text tw:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:tw:m-0 [&::-webkit-inner-spin-button]:tw:appearance-none [&::-webkit-outer-spin-button]:tw:m-0 [&::-webkit-outer-spin-button]:tw:appearance-none"
       :value="modelValue" 
       :min="min" 
       :max="max" 
@@ -22,21 +22,23 @@
       @blur="handleBlur"
     />
     
-    <button 
-      class="stepper-btn plus" 
+    <LuminaIconButton
+      class="tw:rounded-none tw:border-l tw:border-lw-border-subtle"
+      ariaLabel="增加数值"
       @click="increment" 
       :disabled="modelValue >= (max ?? Infinity)"
-      type="button"
     >
       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="3" fill="none">
         <line x1="12" y1="5" x2="12" y2="19"></line>
         <line x1="5" y1="12" x2="19" y2="12"></line>
       </svg>
-    </button>
+    </LuminaIconButton>
   </div>
 </template>
 
 <script setup lang="ts">
+import { LuminaIconButton } from '../../ui/primitives';
+
 const props = defineProps<{
   modelValue: number;
   min?: number;
@@ -81,85 +83,3 @@ const updateValue = (val: number) => {
   emit('change', clamped);
 };
 </script>
-
-<style scoped>
-.lw-stepper {
-  display: inline-flex;
-  align-items: center;
-  background: var(--lw-bg-subtle);
-  border-radius: 100px;
-  border: 1px solid var(--lw-border-base);
-  overflow: hidden;
-  min-height: 36px;
-  transition: var(--lw-transition);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.lw-stepper:focus-within {
-  border-color: var(--lw-primary);
-  box-shadow: 0 0 0 3px rgba(92, 139, 246, 0.12);
-  background: var(--lw-bg-surface);
-}
-
-.stepper-btn {
-  width: 40px;
-  height: 100%;
-  border: none;
-  background: transparent;
-  color: var(--lw-text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: var(--lw-transition);
-  padding: 0;
-  flex: 0 0 auto;
-}
-
-.stepper-btn:hover:not(:disabled) {
-  background: var(--lw-bg-active);
-  color: var(--lw-text-main);
-}
-
-.stepper-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-.stepper-input {
-  width: 74px;
-  min-width: 74px;
-  height: 100%;
-  border: none;
-  background: transparent;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-  outline: none;
-  font-family: inherit;
-  font-variant-numeric: tabular-nums;
-  -moz-appearance: textfield;
-  appearance: none;
-  padding: 0 8px;
-}
-
-.stepper-input::-webkit-outer-spin-button,
-.stepper-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.minus,
-.plus {
-  border-color: var(--lw-border-subtle);
-}
-
-.minus {
-  border-right: 1px solid var(--lw-border-subtle);
-}
-
-.plus {
-  border-left: 1px solid var(--lw-border-subtle);
-}
-</style>

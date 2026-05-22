@@ -1,6 +1,6 @@
 import { defineComponent } from 'vue';
 import { describe, expect, it } from 'vitest';
-import { resolveDynamicTabTarget } from '../dynamicTabResolver';
+import { resolveDynamicTabTarget } from '../dynamicTabResolver.js';
 
 const LegacyComponent = defineComponent({ name: 'LegacyComponent', template: '<div />' });
 const InlineComponent = defineComponent({ name: 'InlineComponent', template: '<div />' });

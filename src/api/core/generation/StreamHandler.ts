@@ -4,7 +4,6 @@ import { globalXMLInterceptor, StreamSemanticState } from '../xml-view/XMLInterc
 import { llmEngine } from '../../llmEngine.js';
 import { NexusClient } from '../hal/network/NexusClient.js';
 import type { NexusStatusResponse } from '../../../types/nexus.js';
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 import { HALContext } from '../hal/HALContext.js';
 
 /**
@@ -288,7 +287,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
 
     private async fetchServerState(chatId: string, signal?: AbortSignal): Promise<NexusStatusResponse | null> {
         try {
-            return await BridgeDispatcher.nexus.getStatus(chatId);
+            return await HALContext.instance.runtime.generation.getStatus(chatId);
         } catch {
             return null;
         }

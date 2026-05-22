@@ -4,9 +4,9 @@ import type {
   CreateChatConversationInput,
   DeleteChatConversationInput,
   RenameChatConversationInput
-} from '../types/ConversationContextTypes';
-import type { LuminaPlugin } from '../types/plugin';
-import type { SurfaceContractId } from '../platform/surface/types';
+} from '../types/ConversationContextTypes.js';
+import type { LuminaPlugin } from '../types/plugin.js';
+import type { SurfaceContractId } from '../platform/surface/types.js';
 
 export interface DynamicTabConfig {
   id: string;
@@ -45,6 +45,27 @@ export interface TelegramRailToolEntry {
   label: string;
   description: string;
   icon: string;
+}
+
+export type TelegramConversationListMode = 'groupedByRole' | 'conversationFiles';
+export type TelegramDesktopLeftRoute = 'conversationList' | 'roleList';
+export type TelegramMobileTabId = 'conversations' | 'roles' | 'settings' | 'profile';
+export type TelegramStackRouteName =
+  | 'conversationList'
+  | 'roleList'
+  | 'characterOverview'
+  | 'roleProfile'
+  | 'chat'
+  | 'tool'
+  | 'settings'
+  | 'profile';
+
+export interface TelegramStackRoute {
+  name: TelegramStackRouteName;
+  groupKey?: string | null;
+  sessionId?: string;
+  panelId?: string;
+  toolId?: TelegramRailToolEntry['id'];
 }
 
 export type WidgetPluginEntry = LuminaPlugin;
@@ -123,6 +144,10 @@ export interface ShellRuntimeContext {
     telegramSelectedCharacterKey: string | null;
     telegramToolEntries: TelegramRailToolEntry[];
     activeTelegramToolId: string | null;
+    telegramConversationListMode: TelegramConversationListMode;
+    telegramDesktopLeftRoute: TelegramDesktopLeftRoute;
+    telegramMobileActiveTab: TelegramMobileTabId;
+    telegramMobileCurrentRoute: TelegramStackRoute;
     isTimelineLoadedOnce: boolean;
     isForgeActiveInTraditional: boolean;
     sidebarMode: 'left' | 'right' | 'widget' | 'hidden';
@@ -195,6 +220,10 @@ export interface ShellRuntimeActions {
     updateShowDiscordMobileCharacterRail: (value: boolean) => void;
     selectTelegramCharacterOverview: (groupKey: string | null) => void;
     openTelegramToolEntry: (toolId: TelegramRailToolEntry['id']) => void;
+    setTelegramConversationListMode: (mode: TelegramConversationListMode) => void;
+    setTelegramDesktopLeftRoute: (route: TelegramDesktopLeftRoute) => void;
+    pushTelegramMobileRoute: (route: TelegramStackRoute) => void;
+    popTelegramMobileRoute: () => void;
     resizeStart: (event?: MouseEvent) => void;
     telegramLeftRailResizeStart: (event?: MouseEvent) => void;
     backFromDetailedSettings: () => void;

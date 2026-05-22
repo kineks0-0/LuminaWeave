@@ -10,7 +10,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import LorebookWorkspace from './components/LorebookWorkspace.vue';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 
 const props = defineProps<{
   mode?: 'large' | 'small',

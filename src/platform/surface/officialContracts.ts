@@ -1,4 +1,4 @@
-import type { SurfaceContractId } from './types';
+import type { SurfaceContractId } from './types.js';
 
 export const OFFICIAL_SURFACE_CONTRACTS = [
     'chat.main',
@@ -15,6 +15,7 @@ export const OFFICIAL_SURFACE_CONTRACTS = [
     'forge.settings.workbench',
     'launcher.root',
     'dev.tools',
+    'terminal.root',
     'telegram.infoPanel'
 ] as const satisfies readonly SurfaceContractId[];
 

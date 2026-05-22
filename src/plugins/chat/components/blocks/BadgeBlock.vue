@@ -50,10 +50,10 @@ const variantClass = computed(() => {
   display: inline-flex;
   align-items: center;
   border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.3px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   border: 1px solid transparent;
   overflow: hidden;
   height: 20px;

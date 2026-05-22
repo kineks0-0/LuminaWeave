@@ -10,8 +10,7 @@
   >
     <div v-if="isTelegramVariant" class="lw-telegram-rail__toolbar">
       <div class="lw-telegram-rail__brand">
-        <span class="telegram-logo">↗</span>
-        <strong>LuminaWeave</strong>
+        <strong>Telegram</strong>
       </div>
       <div class="lw-telegram-rail__create">
       <button
@@ -20,10 +19,7 @@
         :aria-expanded="isTelegramCreateMenuOpen"
         @click="toggleTelegramCreateMenu"
       >
-        <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
-          <path d="M12 5v14"></path>
-          <path d="M5 12h14"></path>
-        </svg>
+        <component :is="getTelegramIconComponent('plus')" :size="22" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
       </button>
         <div v-if="isTelegramCreateMenuOpen" class="lw-telegram-create-menu">
           <button
@@ -51,11 +47,8 @@
     </div>
 
     <label v-if="isTelegramVariant" class="lw-telegram-search">
-      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-        <circle cx="11" cy="11" r="8"></circle>
-        <path d="m21 21-4.35-4.35"></path>
-      </svg>
-      <input v-model="telegramSearchQuery" type="search" placeholder="搜索角色、会话或最近内容">
+      <component :is="getTelegramIconComponent('search')" :size="23" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
+      <input v-model="telegramSearchQuery" type="search" placeholder="搜索聊天">
     </label>
 
     <div v-if="isTelegramVariant" class="lw-telegram-tabs" aria-label="Telegram chat filters">
@@ -71,17 +64,13 @@
           @click="handleTelegramFilterTabClick(tab.id)"
         >
           {{ tab.label }}
-          <svg
+          <component
             v-if="tab.id === 'filter'"
-            viewBox="0 0 24 24"
-            width="12"
-            height="12"
-            stroke="currentColor"
-            stroke-width="2.4"
-            fill="none"
-          >
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
+            :is="getTelegramIconComponent('chevronDown')"
+            :size="15"
+            :stroke-width="TELEGRAM_ICON_STROKE_WIDTH"
+            aria-hidden="true"
+          />
         </button>
 
         <div v-if="tab.id === 'filter' && isTelegramFilterMenuOpen" class="lw-telegram-filter-menu">
@@ -98,6 +87,23 @@
       </div>
     </div>
 
+    <div v-if="isTelegramVariant" class="lw-telegram-list-mode" aria-label="Telegram conversation list mode">
+      <button
+        type="button"
+        :class="{ active: telegramListMode === 'groupedByRole' }"
+        @click="setTelegramListMode('groupedByRole')"
+      >
+        角色聚合
+      </button>
+      <button
+        type="button"
+        :class="{ active: telegramListMode === 'conversationFiles' }"
+        @click="setTelegramListMode('conversationFiles')"
+      >
+        对话文件
+      </button>
+    </div>
+
     <button
       v-if="isTelegramVariant"
       class="lw-telegram-saved"
@@ -106,10 +112,7 @@
       @click="openMostRecentSession"
     >
       <span class="saved-icon">
-        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-          <path d="M5 12h14"></path>
-          <path d="m12 5 7 7-7 7"></path>
-        </svg>
+        <component :is="getTelegramIconComponent('chat')" :size="22" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
       </span>
       <span class="saved-copy">
         <strong>{{ mostRecentGroup ? mostRecentGroup.characterName : '还没有最近对话' }}</strong>
@@ -129,7 +132,7 @@
       <span>开始一段聊天后，这里会聚合角色卡和最近对话。</span>
     </div>
 
-    <div v-else-if="isTelegramVariant && filteredCharacterGroups.length === 0 && displayedTelegramTools.length === 0" class="lw-discord-rail__empty">
+    <div v-else-if="isTelegramVariant && displayedCharacterGroups.length === 0 && displayedConversationSessions.length === 0 && displayedTelegramTools.length === 0" class="lw-discord-rail__empty">
       <strong>无匹配聊天</strong>
       <span>换个关键词或切回全部，不会自动新建会话。</span>
     </div>
@@ -149,8 +152,9 @@
           <span
             class="lw-discord-card__avatar lw-telegram-tool-card__icon"
             aria-hidden="true"
-            v-html="tool.icon"
-          ></span>
+          >
+            <component :is="getTelegramIconComponent(getTelegramToolIconName(tool.id))" :size="24" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" />
+          </span>
 
           <span class="lw-discord-card__body">
             <span class="lw-discord-card__title-row">
@@ -162,6 +166,42 @@
               :style="{ WebkitLineClamp: String(previewLines) }"
             >
               {{ tool.description }}
+            </span>
+          </span>
+        </button>
+      </article>
+
+      <article
+        v-for="session in displayedConversationSessions"
+        :key="session.id"
+        class="lw-discord-card lw-telegram-session-file-card"
+        :class="{
+          'is-active': activeSessionId === session.id,
+          'is-compact': cardDensity === 'compact'
+        }"
+        :style="cardStyle"
+      >
+        <button class="lw-discord-card__main" type="button" @click="onOpenSession?.(session.id)">
+          <span class="lw-discord-card__avatar" :style="getTelegramAvatarStyle(session.characterName || session.title)">
+            <img
+              v-if="session.characterAvatarUrl"
+              :src="session.characterAvatarUrl"
+              :alt="session.characterName || session.title"
+              @error="hideBrokenTelegramAvatar"
+            >
+            <span v-else>{{ getSessionInitial(session) }}</span>
+          </span>
+
+          <span class="lw-discord-card__body">
+            <span class="lw-discord-card__title-row">
+              <strong>{{ session.title }}</strong>
+              <span>{{ formatSessionTime(session.updatedAt) }}</span>
+            </span>
+            <span
+              class="lw-discord-card__preview"
+              :style="{ WebkitLineClamp: String(previewLines) }"
+            >
+              {{ getSessionPreview(session) }}
             </span>
           </span>
         </button>
@@ -181,6 +221,7 @@
         <div class="lw-discord-card__main" @click="handleCardMainClick(group)">
           <button
             class="lw-discord-card__avatar"
+            :style="getTelegramAvatarStyle(group.characterName)"
             type="button"
             :title="isTelegramVariant ? `查看 ${group.characterName} 概览` : (group.recentSession ? `打开 ${group.characterName} 最近一次对话` : `${group.characterName} 暂无对话`)"
             :disabled="!isTelegramVariant && !group.recentSession"
@@ -190,8 +231,9 @@
               v-if="group.characterAvatarUrl"
               :src="group.characterAvatarUrl"
               :alt="group.characterName"
+              @error="hideBrokenTelegramAvatar"
             >
-            <span v-else>{{ group.characterInitial }}</span>
+            <span v-else>{{ getTelegramInitial(group.characterName) }}</span>
           </button>
 
           <div class="lw-discord-card__body">
@@ -210,18 +252,17 @@
           <button
             class="lw-discord-card__chevron"
             type="button"
+            :disabled="isTelegramVariant && group.sessions.length === 0"
             :tabindex="isTelegramVariant ? 0 : -1"
             :aria-hidden="!isTelegramVariant"
             :title="`展开 ${group.characterName} 的历史会话`"
             @click.stop="toggleGroup(group.key)"
           >
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.4" fill="none">
-              <polyline points="9 6 15 12 9 18"></polyline>
-            </svg>
+            <component :is="getTelegramIconComponent('chevronRight')" :size="17" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
           </button>
         </div>
 
-        <div v-if="expandedCharacterKey === group.key" class="lw-discord-card__sessions">
+        <div v-if="expandedCharacterKey === group.key && group.sessions.length > 0" class="lw-discord-card__sessions">
           <button
             class="lw-discord-card__session lw-discord-card__session-create"
             type="button"
@@ -260,11 +301,7 @@
                   :title="`管理 ${session.title}`"
                   @click.stop="toggleSessionMenu(session.id)"
                 >
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
-                    <circle cx="5" cy="12" r="1.7"></circle>
-                    <circle cx="12" cy="12" r="1.7"></circle>
-                    <circle cx="19" cy="12" r="1.7"></circle>
-                  </svg>
+                  <component :is="getTelegramIconComponent('more')" :size="17" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
                 </button>
               </div>
 
@@ -364,9 +401,17 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, type CSSProperties } from 'vue';
-import { activeSettings, useSettings } from '../plugins/settings/useSettings';
-import { getThemeSettingValue } from '../theme/themeRegistry';
-import { useComponentSkin } from '../theme/useComponentSkin';
+import { activeSettings, useSettings } from '../plugins/settings/useSettings.js';
+import { getThemeSettingValue } from '../theme/themeRegistry.js';
+import { useComponentSkin } from '../theme/useComponentSkin.js';
+import {
+  TELEGRAM_ICON_STROKE_WIDTH,
+  getTelegramAvatarStyle,
+  getTelegramIconComponent,
+  getTelegramInitial,
+  getTelegramToolIconName,
+  hideBrokenTelegramAvatar
+} from '../shell/traditional/telegramVisual.js';
 import type {
   CharacterChannelGroup,
   CharacterChannelSessionItem,
@@ -374,7 +419,7 @@ import type {
   CreateChatConversationInput,
   DeleteChatConversationInput,
   RenameChatConversationInput
-} from '../types/ConversationContextTypes';
+} from '../types/ConversationContextTypes.js';
 
 const DEFAULT_VISIBLE_SESSION_COUNT = 5;
 type TelegramRailToolEntry = {
@@ -383,6 +428,7 @@ type TelegramRailToolEntry = {
   description: string;
   icon: string;
 };
+type TelegramConversationListMode = 'groupedByRole' | 'conversationFiles';
 
 const props = withDefaults(defineProps<{
   state: CharacterChannelState;
@@ -399,6 +445,8 @@ const props = withDefaults(defineProps<{
   telegramToolEntries?: TelegramRailToolEntry[];
   activeTelegramToolId?: string | null;
   onOpenTelegramToolEntry?: (toolId: TelegramRailToolEntry['id']) => void;
+  telegramListMode?: TelegramConversationListMode;
+  onTelegramListModeChange?: (mode: TelegramConversationListMode) => void;
 }>(), {
   isMobile: false,
   mobilePlacement: 'bottom',
@@ -412,7 +460,9 @@ const props = withDefaults(defineProps<{
   onToggleSessionExpansion: undefined,
   telegramToolEntries: () => [],
   activeTelegramToolId: null,
-  onOpenTelegramToolEntry: undefined
+  onOpenTelegramToolEntry: undefined,
+  telegramListMode: 'groupedByRole',
+  onTelegramListModeChange: undefined
 });
 
 useSettings();
@@ -482,7 +532,7 @@ const recentGroups = computed<CharacterChannelGroup[]>(() => (
 ));
 const telegramFilterTabs = computed<Array<{ id: TelegramFilterTabId; label: string; count: number | null }>>(() => [
   { id: 'all', label: '所有', count: characterGroups.value.length },
-  { id: 'characters', label: '角色', count: characterGroups.value.length },
+  { id: 'characters', label: '联系人', count: characterGroups.value.length },
   { id: 'tools', label: '工具', count: null },
   { id: 'filter', label: '筛选', count: recentGroups.value.length }
 ]);
@@ -518,10 +568,22 @@ const filteredCharacterGroups = computed<CharacterChannelGroup[]>(() => {
   });
 });
 const displayedCharacterGroups = computed<CharacterChannelGroup[]>(() => (
-  isTelegramVariant.value ? filteredCharacterGroups.value : characterGroups.value
+  isTelegramVariant.value && props.telegramListMode === 'conversationFiles'
+    ? []
+    : (isTelegramVariant.value ? filteredCharacterGroups.value : characterGroups.value)
+));
+const flattenedConversationSessions = computed<CharacterChannelSessionItem[]>(() => (
+  filteredCharacterGroups.value
+    .flatMap((group) => group.sessions)
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+));
+const displayedConversationSessions = computed<CharacterChannelSessionItem[]>(() => (
+  isTelegramVariant.value && props.telegramListMode === 'conversationFiles'
+    ? flattenedConversationSessions.value
+    : []
 ));
 const displayedTelegramTools = computed<TelegramRailToolEntry[]>(() => {
-  if (!isTelegramVariant.value || telegramActiveFilter.value === 'characters' || telegramActiveFilter.value === 'filter') {
+  if (!isTelegramVariant.value || telegramActiveFilter.value !== 'tools') {
     return [];
   }
 
@@ -535,7 +597,15 @@ const displayedTelegramTools = computed<TelegramRailToolEntry[]>(() => {
   ));
 });
 
+const telegramListMode = computed(() => props.telegramListMode);
+const setTelegramListMode = (mode: TelegramConversationListMode) => {
+  props.onTelegramListModeChange?.(mode);
+};
+
 watch(activeCharacterKey, (nextKey) => {
+  if (isTelegramVariant.value) {
+    return;
+  }
   if (!nextKey || props.state.expandedCharacterKey === nextKey) {
     return;
   }
@@ -599,6 +669,14 @@ const openTelegramTool = (toolId: TelegramRailToolEntry['id']) => {
   isTelegramCreateMenuOpen.value = false;
   isTelegramFilterMenuOpen.value = false;
 };
+
+const getSessionInitial = (session: CharacterChannelSessionItem) => (
+  (session.characterName || session.title || '?').slice(0, 1).toUpperCase()
+);
+
+const getSessionPreview = (session: CharacterChannelSessionItem) => (
+  session.previewMessage || session.summary || session.recentHistoryPreview || session.characterName || '暂无预览'
+);
 
 const openRecentSession = (group: CharacterChannelGroup) => {
   if (!group.recentSession) return;
@@ -829,27 +907,35 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-discord-card__session-empty {
   padding: 10px 12px;
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted, rgba(255, 255, 255, 0.56));
 }
 
 .lw-discord-rail__eyebrow {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
   color: var(--lw-text-muted);
 }
 
 .lw-discord-rail__header strong {
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-text-main);
 }
 
 .lw-discord-rail__header span:last-child {
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
 }
 
@@ -865,13 +951,18 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .lw-discord-rail__empty strong {
-  font-size: 13px;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-text-main);
 }
 
 .lw-discord-rail__empty span {
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
 }
 
@@ -920,8 +1011,10 @@ const formatSessionTime = (timestamp: number) => {
   justify-content: center;
   overflow: hidden;
   cursor: pointer;
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
 }
 
 .lw-discord-card__avatar img {
@@ -946,22 +1039,28 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-discord-card__title-row strong {
   min-width: 0;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-text-main);
 }
 
 .lw-discord-card__title-row span {
   flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
 }
 
 .lw-discord-card__preview {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -1049,8 +1148,10 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-discord-card__session-title {
   min-width: 0;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1058,7 +1159,10 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-discord-card__session-meta {
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
 }
 
@@ -1085,8 +1189,10 @@ const formatSessionTime = (timestamp: number) => {
   border-radius: 12px;
   background: color-mix(in srgb, var(--lw-bg-elevated) 82%, transparent);
   color: var(--lw-text-secondary);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
 }
 
 .lw-discord-card__session-menu-item {
@@ -1111,8 +1217,10 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-discord-card__session-delete-confirm p {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
 }
 
@@ -1124,7 +1232,10 @@ const formatSessionTime = (timestamp: number) => {
   border-radius: 12px;
   background: var(--lw-bg-surface, rgba(255, 255, 255, 0.04));
   color: var(--lw-text-main);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-discord-card__session-editor-actions {
@@ -1211,8 +1322,8 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .lw-discord-rail[data-skin-variant='telegram'] {
-  gap: 8px;
-  padding: 10px;
+  gap: 12px;
+  padding: 22px 14px 14px;
   border-right-color: var(--lw-character-rail-border, var(--lw-border-subtle));
   background: var(--lw-telegram-chat-list-bg, var(--lw-character-rail-bg));
   backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
@@ -1223,8 +1334,8 @@ const formatSessionTime = (timestamp: number) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 36px;
-  padding: 0 4px 4px;
+  min-height: 52px;
+  padding: 0 10px;
 }
 
 .lw-telegram-rail__create {
@@ -1239,30 +1350,20 @@ const formatSessionTime = (timestamp: number) => {
   gap: 8px;
 }
 
-.telegram-logo {
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  background: var(--lw-character-rail-logo-bg, linear-gradient(135deg, #58c4ff, #168bd4));
-  font-size: 12px;
-}
-
 .lw-telegram-rail__brand strong {
-  font-size: 13px;
-  font-weight: 800;
+  font-size: var(--lw-type-headline-small-size);
+  line-height: var(--lw-type-headline-small-line-height);
+  font-weight: 700;
+  letter-spacing: var(--lw-type-headline-small-tracking);
   color: var(--lw-text-main);
 }
 
 .lw-telegram-rail__toolbar button {
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   border: none;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 62%, transparent);
+  background: var(--lw-telegram-glass-bg, color-mix(in srgb, var(--lw-surface-container-highest) 62%, transparent));
   color: var(--lw-text-secondary);
   display: inline-flex;
   align-items: center;
@@ -1276,10 +1377,13 @@ const formatSessionTime = (timestamp: number) => {
   z-index: 12;
   width: 224px;
   padding: 6px;
-  border: 1px solid var(--lw-border-subtle);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 94%, transparent);
-  box-shadow: var(--lw-character-card-menu-shadow, 0 18px 34px rgba(44, 92, 130, 0.16));
+  border: 0;
+  border-radius: 22px;
+  background: var(--lw-telegram-glass-bg-strong, color-mix(in srgb, var(--lw-surface-container-highest) 94%, transparent));
+  box-shadow:
+    var(--lw-character-card-menu-shadow, 0 18px 34px rgba(44, 92, 130, 0.16));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
 }
 
 .lw-telegram-create-menu button {
@@ -1306,7 +1410,10 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .lw-telegram-create-menu strong {
-  font-size: 12px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-text-main);
 }
 
@@ -1315,22 +1422,31 @@ const formatSessionTime = (timestamp: number) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
 }
 
 .lw-telegram-search {
-  min-height: 34px;
+  min-height: 54px;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 2px;
-  padding: 0 12px;
+  margin: 0;
+  padding: 0 20px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 58%, transparent);
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 80%, transparent);
+  background: var(--lw-telegram-glass-bg, color-mix(in srgb, var(--lw-surface-container-highest) 58%, transparent));
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
   color: var(--lw-text-muted);
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-telegram-search input {
@@ -1348,41 +1464,48 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .lw-telegram-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  margin: 2px 4px 4px;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 5px;
+  border: 0.5px solid var(--lw-telegram-tab-rim, color-mix(in srgb, var(--lw-border-base) 42%, transparent));
+  border-radius: 999px;
+  background: var(--lw-telegram-tab-bg, color-mix(in srgb, var(--lw-surface-container-highest) 48%, transparent));
+  box-shadow: none;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .lw-telegram-tab-wrap {
   position: relative;
-  min-width: 0;
+  min-width: max-content;
 }
 
 .lw-telegram-tabs button {
   width: 100%;
-  height: 34px;
+  height: 38px;
   min-width: 0;
   border: none;
-  border-radius: 0;
+  border-radius: 999px;
   background: transparent;
   color: var(--lw-text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 6px 4px;
-  font-size: 11px;
-  font-weight: 800;
+  padding: 6px 14px;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 650;
+  letter-spacing: 0;
   position: relative;
 }
 
 .lw-telegram-tab-wrap > button.active {
   color: var(--lw-primary);
-  box-shadow: inset 0 -2px 0 var(--lw-primary);
+  background: var(--lw-telegram-active-pill, color-mix(in srgb, var(--lw-primary) 16%, transparent));
+  box-shadow: none;
 }
 
 .lw-telegram-tabs span {
@@ -1393,7 +1516,41 @@ const formatSessionTime = (timestamp: number) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
+}
+
+.lw-telegram-list-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 4px;
+  border: 0.5px solid var(--lw-telegram-tab-rim, color-mix(in srgb, var(--lw-border-base) 42%, transparent));
+  border-radius: 999px;
+  background: var(--lw-telegram-tab-bg, color-mix(in srgb, var(--lw-surface-container-highest) 52%, transparent));
+  box-shadow: none;
+}
+
+.lw-telegram-list-mode button {
+  min-width: 0;
+  min-height: 30px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
+}
+
+.lw-telegram-list-mode button.active,
+.lw-telegram-list-mode button:hover {
+  background: var(--lw-telegram-active-pill, color-mix(in srgb, var(--lw-primary) 14%, transparent));
+  color: var(--lw-primary);
 }
 
 .lw-telegram-filter-menu {
@@ -1403,10 +1560,13 @@ const formatSessionTime = (timestamp: number) => {
   z-index: 14;
   width: 160px;
   padding: 10px 0;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 74%, transparent);
+  border: 0;
   border-radius: 22px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 96%, transparent);
-  box-shadow: var(--lw-character-card-menu-shadow, 0 20px 42px rgba(44, 92, 130, 0.16));
+  background: var(--lw-telegram-glass-bg-strong, color-mix(in srgb, var(--lw-surface-container-highest) 96%, transparent));
+  box-shadow:
+    var(--lw-character-card-menu-shadow, 0 20px 42px rgba(44, 92, 130, 0.16));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
 }
 
 .lw-telegram-filter-menu button {
@@ -1416,8 +1576,10 @@ const formatSessionTime = (timestamp: number) => {
   border-radius: 0;
   box-shadow: none;
   color: var(--lw-text-secondary);
-  font-size: 12px;
-  font-weight: 760;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
 }
 
 .lw-telegram-filter-menu button:hover,
@@ -1465,14 +1627,19 @@ const formatSessionTime = (timestamp: number) => {
 }
 
 .saved-copy strong {
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
 }
 
 .saved-copy small,
 .saved-meta {
   color: var(--lw-text-muted);
-  font-size: 10px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
 }
 
 .lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card {
@@ -1515,8 +1682,10 @@ const formatSessionTime = (timestamp: number) => {
   align-items: center;
   justify-content: center;
   color: var(--lw-primary);
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
   overflow: hidden;
 }
 
@@ -1549,32 +1718,43 @@ const formatSessionTime = (timestamp: number) => {
   overflow: hidden;
 }
 
+.lw-discord-rail[data-skin-variant='telegram'] .lw-telegram-session-file-card .lw-discord-card__main {
+  min-height: 64px;
+}
+
 .lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__avatar {
   width: 42px;
   height: 42px;
   border-radius: var(--lw-character-card-avatar-radius, 999px);
-  background: color-mix(in srgb, var(--lw-primary) 18%, var(--lw-surface-container-high));
+  background: var(--lw-telegram-avatar-bg, color-mix(in srgb, var(--lw-primary) 18%, var(--lw-surface-container-high)));
   border: 2px solid color-mix(in srgb, var(--lw-surface-container-highest) 92%, transparent);
   box-shadow: var(--lw-character-card-avatar-shadow, 0 8px 18px rgba(44, 92, 130, 0.10));
 }
 
 .lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__title-row strong {
-  font-size: 12px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
 }
 
 .lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__title-row span {
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
 }
 
 .lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__preview {
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
 }
 
 .lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__chevron {
   pointer-events: auto;
   border-radius: 999px;
   cursor: pointer;
+}
+
+.lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__chevron:disabled {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__sessions {
@@ -1606,6 +1786,59 @@ const formatSessionTime = (timestamp: number) => {
 .lw-discord-rail[data-skin-variant='telegram'] .lw-discord-card__session-input {
   background: color-mix(in srgb, var(--lw-surface-container-high) 82%, transparent);
   border-color: var(--lw-border-subtle);
+}
+
+.lw-discord-rail.is-mobile[data-skin-variant='telegram'] {
+  flex: 1 1 auto;
+  height: 100%;
+  max-height: none;
+  padding: calc(14px + var(--lw-safe-top, 0px)) 14px 18px;
+  border-radius: 0;
+  border-right: none;
+  box-shadow: none;
+}
+
+.lw-discord-rail.is-mobile[data-skin-variant='telegram'] .lw-discord-rail__list {
+  gap: 6px;
+  padding-right: 0;
+}
+
+.lw-discord-rail.is-mobile[data-skin-variant='telegram'] .lw-discord-card {
+  border-radius: 16px;
+  overflow: visible;
+}
+
+.lw-discord-rail.is-mobile[data-skin-variant='telegram'] .lw-discord-card__main {
+  min-height: 62px;
+  padding: 8px 10px;
+  grid-template-columns: 56px minmax(0, 1fr) 32px;
+  gap: 10px;
+}
+
+.lw-discord-rail.is-mobile[data-skin-variant='telegram'] .lw-discord-card__avatar {
+  width: 48px;
+  height: 48px;
+  justify-self: center;
+}
+
+.lw-discord-rail.is-mobile[data-skin-variant='telegram'] .lw-discord-card__title-row strong {
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+}
+
+.lw-discord-rail.is-mobile[data-skin-variant='telegram'] .lw-discord-card__title-row span {
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+}
+
+.lw-discord-rail.is-mobile[data-skin-variant='telegram'] .lw-discord-card__preview {
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+}
+
+.lw-discord-rail.is-mobile[data-skin-variant='telegram'] .lw-discord-card__sessions {
+  margin: 2px 8px 8px 74px;
+  padding: 0;
 }
 
 .lw-discord-rail.is-mobile {

@@ -1,5 +1,5 @@
-import { pluginManager } from '../../core/PluginManager';
-import type { SettingDefinition } from '../../types/plugin';
+import { pluginManager } from '../../core/PluginManager.js';
+import type { SettingDefinition } from '../../types/plugin.js';
 import {
     getDesktopModeIdFromSettingsPluginId,
     getDesktopModeSettingsPluginId,
@@ -7,7 +7,7 @@ import {
     getDesktopModeSettingsManifest,
     isThemeSettingsPluginId,
     listDesktopModes
-} from '../../theme/themeRegistry';
+} from '../../theme/themeRegistry.js';
 
 export interface SettingsSourceEntry {
     pluginId: string;

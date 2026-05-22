@@ -293,9 +293,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, type CSSProperties } from 'vue';
+import { computed, inject, ref, onMounted, onUnmounted, type CSSProperties } from 'vue';
+import { LuminaWeaveAPI } from '@/api';
 import { pluginManager } from '@/core/PluginManager';
-import { useComponentSkin } from '../theme/useComponentSkin';
+import { useComponentSkin } from '../theme/useComponentSkin.js';
 
 const props = withDefaults(defineProps<{
   activeMainTab?: string;
@@ -339,9 +340,10 @@ const headerRightPlugins = computed(() => pluginManager.getPluginsInSlot('header
 const { cssVars: headerSkinVars } = useComponentSkin('shell.header');
 const headerSkinStyle = computed<CSSProperties>(() => headerSkinVars.value as CSSProperties);
 
-const activeUserName = computed(() => (window as any).LuminaWeave?.getUserName() || 'User');
-const activeUserAvatar = computed(() => (window as any).LuminaWeave?.getUserAvatar());
-const defaultAvatar = computed(() => (window as any).LuminaWeave?.DEFAULT_AVATAR);
+const lwApi = inject<LuminaWeaveAPI>('lwApi');
+const activeUserName = computed(() => lwApi?.getUserName?.() || 'User');
+const activeUserAvatar = computed(() => lwApi?.getUserAvatar?.() || '');
+const defaultAvatar = computed(() => lwApi?.DEFAULT_AVATAR || '');
 const activeDesktopModeOption = computed(
   () => props.desktopModes.find((mode) => mode.value === props.activeDesktopModeId) || props.desktopModes[0] || null
 );
@@ -519,11 +521,11 @@ function onDocPointerDown(e: PointerEvent) {
 
 .lw-title-main {
   font-family: 'Abhaya Libre', var(--lw-font-display);
-  font-weight: 800;
-  font-size: 18px;
+  font-size: var(--lw-type-title-large-size);
+  line-height: var(--lw-type-title-large-line-height);
+  font-weight: var(--lw-type-title-large-weight);
+  letter-spacing: var(--lw-type-title-large-tracking);
   color: #111827;
-  line-height: 1;
-  letter-spacing: -0.01em;
 }
 
 .discord-channel-bar {
@@ -543,8 +545,10 @@ function onDocPointerDown(e: PointerEvent) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -572,8 +576,10 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .discord-channel-copy strong {
-  font-size: 15px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
   color: var(--lw-text-main);
   white-space: nowrap;
   overflow: hidden;
@@ -581,7 +587,10 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .discord-channel-copy span {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -624,8 +633,10 @@ function onDocPointerDown(e: PointerEvent) {
 .lw-tab {
   background: transparent;
   border: none;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   color: #64748b;
   padding: 6px 12px;
   border-radius: 12px;
@@ -686,8 +697,9 @@ function onDocPointerDown(e: PointerEvent) {
 
 .lw-tab--more {
   color: #64748b;
-  font-size: 12px;
-  letter-spacing: 0.04em;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  letter-spacing: var(--lw-type-label-medium-tracking);
 }
 
 .lw-tab-dropdown {
@@ -707,8 +719,10 @@ function onDocPointerDown(e: PointerEvent) {
   width: 100%;
   background: transparent;
   border: none;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: #64748b;
   padding: 7px 10px;
   border-radius: 8px;
@@ -749,8 +763,10 @@ function onDocPointerDown(e: PointerEvent) {
   width: 100%;
   background: transparent;
   border: none;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: #64748b;
   padding: 7px 10px;
   border-radius: 8px;
@@ -781,9 +797,10 @@ function onDocPointerDown(e: PointerEvent) {
 
 .widget-dropdown-label {
   padding: 6px 10px 4px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
   color: #94a3b8;
 }
@@ -818,8 +835,10 @@ function onDocPointerDown(e: PointerEvent) {
   gap: 5px;
   padding: 4px 6px 6px;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   border-bottom: 1px solid #e2e8f0;
   width: 100%;
   margin-bottom: 4px;
@@ -929,16 +948,18 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .profile-trigger-copy strong {
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.1;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-text-main);
 }
 
 .profile-trigger-copy small {
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.1;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-muted);
 }
 
@@ -977,24 +998,29 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .profile-menu-kicker {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
   color: var(--lw-text-muted);
 }
 
 .profile-menu-copy strong {
   font-family: 'Abhaya Libre', var(--lw-font-display);
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
   color: var(--lw-text-main);
 }
 
 .profile-menu-copy span:last-child {
-  font-size: 12px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
-  line-height: 1.6;
 }
 
 .profile-menu-item {
@@ -1035,13 +1061,18 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .profile-menu-label {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   color: var(--lw-text-main);
 }
 
 .profile-menu-value {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
   justify-self: start;
 }
@@ -1060,8 +1091,10 @@ function onDocPointerDown(e: PointerEvent) {
   gap: 6px;
   padding: 2px 4px 0;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
 }
 
 .profile-menu-back:hover {
@@ -1094,15 +1127,19 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .profile-menu-choice-title {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   color: var(--lw-text-main);
 }
 
 .profile-menu-choice-copy {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
-  line-height: 1.5;
 }
 
 .avatar-sm {
@@ -1139,8 +1176,10 @@ function onDocPointerDown(e: PointerEvent) {
   justify-content: center;
   overflow: hidden;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   box-shadow: var(--lw-header-avatar-shadow, 0 10px 24px rgba(44, 92, 130, 0.12));
 }
 
@@ -1162,8 +1201,10 @@ function onDocPointerDown(e: PointerEvent) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
   color: var(--lw-text-main);
 }
 
@@ -1172,7 +1213,10 @@ function onDocPointerDown(e: PointerEvent) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
 }
 
@@ -1373,7 +1417,7 @@ function onDocPointerDown(e: PointerEvent) {
 
   .lw-tab {
     padding: 6px 8px !important;
-    font-size: 12px !important;
+    font-size: var(--lw-type-label-medium-size) !important;
     flex-direction: row !important;
     gap: 4px !important;
   }
@@ -1387,12 +1431,12 @@ function onDocPointerDown(e: PointerEvent) {
 
   .widget-dropdown-item {
     padding: 10px 12px;
-    font-size: 14px;
+    font-size: var(--lw-type-label-large-size);
     border-radius: 10px;
   }
 
   .widget-dropdown-label {
-    font-size: 11px;
+    font-size: var(--lw-type-label-small-size);
     padding: 8px 12px 4px;
   }
 

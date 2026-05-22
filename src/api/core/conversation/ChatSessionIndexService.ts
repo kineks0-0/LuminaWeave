@@ -1,7 +1,6 @@
 import type { ChatSessionRef } from '../../../types/SessionTypes.js';
 import { lwStorage } from '../../storage.js';
 import { HALContext } from '../hal/HALContext.js';
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 
 type ServerChatSessionItem = {
     id: string;
@@ -60,7 +59,7 @@ export class ChatSessionIndexService {
 
     async listChatSessions(): Promise<ChatSessionRef[]> {
         try {
-            const data = await BridgeDispatcher.conversation.listConversations() as { conversations?: ServerChatSessionItem[] };
+            const data = await HALContext.instance.runtime.conversation.listConversations() as { conversations?: ServerChatSessionItem[] };
             const chats = Array.isArray(data.conversations) ? data.conversations : [];
 
             return chats

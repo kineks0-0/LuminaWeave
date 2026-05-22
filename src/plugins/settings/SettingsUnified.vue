@@ -1,44 +1,42 @@
 <template>
-  <div class="settings-unified" :data-skin-variant="unifiedVariant || 'default'" :style="unifiedSkinStyle">
+  <div class="settings-unified tw:grid tw:grid-cols-[repeat(auto-fit,minmax(min(100%,380px),1fr))] tw:gap-[var(--lw-settings-grid-gap,var(--lw-item-gap))] tw:bg-transparent tw:p-[var(--lw-settings-unified-padding,var(--lw-panel-padding))]" :data-skin-variant="unifiedVariant || 'default'" :style="unifiedSkinStyle">
     <!-- 对话同步与系统权限管理 -->
-    <div class="plugin-settings-block permissions-block lw-card">
-      <div class="block-header">
-        <div class="block-title">
+    <SettingsSectionPanel class="permissions-block">
+      <SettingsBlockHeader title="权限与系统同步">
+        <template #icon>
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
           </svg>
-          <span>权限与系统同步</span>
-        </div>
-        <div class="sync-badges">
-          <span class="badge" :class="syncInfo.status">{{ syncLabel }}</span>
-        </div>
-      </div>
-      <div class="sync-content">
-        <div class="sync-meta">
-          <div class="meta-item">
-            <span class="label">存储策略:</span>
-            <span class="value">{{ syncInfo.policy === 'st' ? 'ST 原生' : '独立 JSON' }}</span>
-          </div>
-          <div class="status-detail">
+        </template>
+        <template #actions>
+          <SettingsStatusBadge :status="syncInfo.status">{{ syncLabel }}</SettingsStatusBadge>
+        </template>
+      </SettingsBlockHeader>
+      <div class="sync-content tw:flex tw:flex-col tw:gap-[18px]">
+        <SettingsInsetPanel class="sync-meta tw:grid tw:grid-cols-2 tw:gap-3 tw:p-3.5 tw:max-[920px]:grid-cols-1">
+          <SettingsMetaItem label="存储策略:">
+            {{ syncInfo.policy === 'st' ? 'ST 原生' : '独立 JSON' }}
+          </SettingsMetaItem>
+          <div class="status-detail tw:col-span-full tw:mt-0.5 tw:border-t tw:border-lw-border-subtle tw:pt-2.5 tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:tabular-nums">
             <span>消息总数: <b>{{ syncInfo.details.messageCount }}</b></span>
             <span v-if="syncInfo.details.stCount"> (ST: {{ syncInfo.details.stCount }})</span>
             <span> | 耗时: {{ syncInfo.details.duration }}ms</span>
           </div>
-          <div class="status-detail">
+          <div class="status-detail tw:col-span-full tw:mt-0.5 tw:border-t tw:border-lw-border-subtle tw:pt-2.5 tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:tabular-nums">
             <span>存储模式: <b style="color:var(--lw-primary)">{{ syncInfo.details.storageType || 'JSONL' }}</b></span>
             <span> | 差异: <b :style="{ color: syncInfo.details.diffCount > 0 ? '#f97316' : '#22c55e' }">{{
               syncInfo.details.diffCount }}</b> 项</span>
           </div>
-        </div>
-        <div class="sync-actions">
-          <button class="lw-btn lw-btn-primary" :disabled="syncInfo.status === 'syncing'" @click="handleForceSync">
-            <svg :class="{ 'spin': syncInfo.status === 'syncing' }" viewBox="0 0 24 24" width="14" height="14"
+        </SettingsInsetPanel>
+        <div class="sync-actions tw:flex tw:gap-3 tw:max-[720px]:flex-wrap">
+          <LuminaButton class="settings-action-button" tone="primary" :disabled="syncInfo.status === 'syncing'" @click="handleForceSync">
+            <svg :class="syncInfo.status === 'syncing' ? 'tw:animate-spin' : undefined" viewBox="0 0 24 24" width="14" height="14"
               stroke="currentColor" stroke-width="2" fill="none">
               <path d="M23 4v6h-6"></path>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
             </svg>
             {{ syncInfo.status === 'syncing' ? '正在同步...' : '立即强制全量同步' }}
-          </button>
+          </LuminaButton>
         </div>
         <div v-if="syncInfo.error" class="sync-error">
           <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
@@ -50,35 +48,36 @@
         </div>
 
         <!-- 权限控制项 -->
-        <div class="permissions-list">
-          <div class="permission-item" v-for="p in pluginPermissionsList" :key="p.id">
-            <div class="perm-info">
-              <span class="plugin-icon" v-html="p.icon"></span>
-              <span class="perm-name">{{ p.name }} 提示词注入</span>
+        <div class="permissions-list tw:flex tw:flex-col tw:gap-2">
+          <SettingsInsetPanel v-for="p in pluginPermissionsList" :key="p.id" interactive class="permission-item tw:flex tw:items-center tw:justify-between tw:gap-3 tw:px-3.5 tw:py-2.5">
+            <div class="perm-info tw:flex tw:min-w-0 tw:items-center tw:gap-2.5">
+              <span class="plugin-icon tw:flex tw:shrink-0 tw:items-center tw:justify-center tw:text-lw-text-muted" v-html="p.icon"></span>
+              <span class="perm-name tw:min-w-0 tw:truncate tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text">{{ p.name }} 提示词注入</span>
             </div>
-            <label class="lw-toggle">
-              <input type="checkbox" v-model="p.enabled" @change="togglePluginPermission(p)" />
-              <span class="lw-toggle-slider"></span>
-            </label>
-          </div>
+            <LuminaToggle
+              :modelValue="Boolean(p.enabled)"
+              :aria-label="`${p.name} 提示词注入`"
+              @update:modelValue="value => updatePluginPermission(p, value)"
+            />
+          </SettingsInsetPanel>
         </div>
 
         <!-- 差异详情查看器 -->
-        <div v-if="syncDiff && syncDiff.diffCount > 0" class="sync-diff-viewer">
-          <div class="diff-header">检测到数据差异 ({{ syncDiff.diffCount }} 项)</div>
-          <div class="diff-actions">
-            <button class="lw-btn lw-btn-ghost lw-btn-small" @click="openDetailedDiff">详细差异</button>
-            <button class="lw-btn lw-btn-ghost lw-btn-small" @click="overwriteToIndependent">覆盖独立存储</button>
-            <button class="lw-btn lw-btn-ghost lw-btn-small" @click="overwriteToST">回写至 ST</button>
+        <div v-if="syncDiff && syncDiff.diffCount > 0" class="sync-diff-viewer tw:mt-2 tw:rounded-lw tw:border tw:border-[rgba(245,158,11,0.18)] tw:bg-[rgba(245,158,11,0.08)] tw:p-4">
+          <div class="diff-header tw:mb-3.5 tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-warning tw:uppercase">检测到数据差异 ({{ syncDiff.diffCount }} 项)</div>
+          <div class="diff-actions tw:flex tw:flex-wrap tw:gap-2">
+            <LuminaButton class="settings-action-button" variant="ghost" size="sm" @click="openDetailedDiff">详细差异</LuminaButton>
+            <LuminaButton class="settings-action-button" variant="ghost" size="sm" @click="overwriteToIndependent">覆盖独立存储</LuminaButton>
+            <LuminaButton class="settings-action-button" variant="ghost" size="sm" @click="overwriteToST">回写至 ST</LuminaButton>
           </div>
         </div>
       </div>
-    </div>
+    </SettingsSectionPanel>
 
     <!-- 顶级：存储引擎设置 -->
-    <div class="plugin-settings-block engine-block lw-card">
-      <div class="block-header">
-        <div class="block-title">
+    <SettingsSectionPanel class="engine-block">
+      <SettingsBlockHeader title="全局流式与存储策略">
+        <template #icon>
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
             <path
               d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
@@ -86,212 +85,207 @@
             <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
             <line x1="12" y1="22.08" x2="12" y2="12"></line>
           </svg>
-          <span>全局流式与存储策略</span>
+        </template>
+      </SettingsBlockHeader>
+      <div class="engine-content tw:flex tw:flex-col">
+        <div class="setting-item tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-x-6 tw:gap-y-3 tw:border-b tw:border-lw-border-subtle tw:py-4 tw:last:border-b-0">
+          <div class="setting-copy tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1">
+            <span class="label-text tw:min-w-[120px] tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text">仅输出 Chat_Reply 内容 (流式过滤)</span>
+            <span class="label-desc tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:text-pretty">开启后，将屏蔽预思考与动作标签（如 Character_Action），仅展示回复主体。</span>
+          </div>
+          <LuminaToggle
+            v-model="filterChatReply"
+            aria-label="仅输出 Chat_Reply 内容"
+            @update:modelValue="onFilterChatReplyChange"
+          />
         </div>
-      </div>
-      <div class="engine-content">
-        <div class="setting-item">
-          <label class="lw-toggle-label">
-            <span class="label-text">仅输出 Chat_Reply 内容 (流式过滤)</span>
-            <span class="label-desc">开启后，将屏蔽预思考与动作标签（如 Character_Action），仅展示回复主体。</span>
-          </label>
-          <label class="lw-toggle">
-            <input type="checkbox" v-model="filterChatReply" @change="onFilterChatReplyChange" />
-            <span class="lw-toggle-slider"></span>
-          </label>
+        <div class="setting-item tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-x-6 tw:gap-y-3 tw:border-b tw:border-lw-border-subtle tw:py-4 tw:last:border-b-0" v-if="filterChatReply">
+          <div class="setting-copy tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1 tw:border-l-2 tw:border-[var(--lw-primary-bg)] tw:pl-5">
+            <span class="label-text tw:min-w-[120px] tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text">展示非标签正文 (顶层文本保护)</span>
+            <span class="label-desc tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:text-pretty">开启后，如果模型输出了不带任何标签的文本，将予以显示。关闭则强制仅显示指定标签内容。</span>
+          </div>
+          <LuminaToggle
+            v-model="allowTopLevelInFilter"
+            aria-label="展示非标签正文"
+            @update:modelValue="onAllowTopLevelChange"
+          />
         </div>
-        <div class="setting-item" v-if="filterChatReply">
-          <label class="lw-toggle-label" style="padding-left: 20px; border-left: 2px solid var(--lw-primary-bg);">
-            <span class="label-text">展示非标签正文 (顶层文本保护)</span>
-            <span class="label-desc">开启后，如果模型输出了不带任何标签的文本，将予以显示。关闭则强制仅显示指定标签内容。</span>
-          </label>
-          <label class="lw-toggle">
-            <input type="checkbox" v-model="allowTopLevelInFilter" @change="onAllowTopLevelChange" />
-            <span class="lw-toggle-slider"></span>
-          </label>
+        <div class="setting-item tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-x-6 tw:gap-y-3 tw:border-b tw:border-lw-border-subtle tw:py-4 tw:last:border-b-0" v-if="filterChatReply">
+          <div class="setting-copy tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1 tw:border-l-2 tw:border-[var(--lw-primary-bg)] tw:pl-5">
+            <span class="label-text tw:min-w-[120px] tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text">起始非标签内容视为思考 (thinking)</span>
+            <span class="label-desc tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:text-pretty">开启后，如果消息开头是普通文本而非标签，将自动被视为思考过程并予以隐藏（直到遇到下一个标签）。</span>
+          </div>
+          <LuminaToggle
+            v-model="implicitThinkingInFilter"
+            aria-label="起始非标签内容视为思考"
+            @update:modelValue="onImplicitThinkingChange"
+          />
         </div>
-        <div class="setting-item" v-if="filterChatReply">
-          <label class="lw-toggle-label" style="padding-left: 20px; border-left: 2px solid var(--lw-primary-bg);">
-            <span class="label-text">起始非标签内容视为思考 (thinking)</span>
-            <span class="label-desc">开启后，如果消息开头是普通文本而非标签，将自动被视为思考过程并予以隐藏（直到遇到下一个标签）。</span>
-          </label>
-          <label class="lw-toggle">
-            <input type="checkbox" v-model="implicitThinkingInFilter" @change="onImplicitThinkingChange" />
-            <span class="lw-toggle-slider"></span>
-          </label>
+        <div class="setting-item tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-x-6 tw:gap-y-3 tw:border-b tw:border-lw-border-subtle tw:py-4 tw:last:border-b-0" v-if="filterChatReply && implicitThinkingInFilter">
+          <div class="setting-copy tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1 tw:border-l-2 tw:border-[var(--lw-primary-bg)] tw:pl-10">
+            <span class="label-text tw:min-w-[120px] tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text">激进模式 (强制过滤直到 &lt;/thinking&gt;)</span>
+            <span class="label-desc tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:text-pretty">开启后，首个 &lt;/thinking&gt; 标签及其之前的所有内容都将被视为思考过程而予以隐藏。</span>
+          </div>
+          <LuminaToggle
+            v-model="aggressiveThinking"
+            aria-label="激进模式"
+            @update:modelValue="onAggressiveThinkingChange"
+          />
         </div>
-        <div class="setting-item" v-if="filterChatReply && implicitThinkingInFilter">
-          <label class="lw-toggle-label" style="padding-left: 40px; border-left: 2px solid var(--lw-primary-bg);">
-            <span class="label-text">激进模式 (强制过滤直到 &lt;/thinking&gt;)</span>
-            <span class="label-desc">开启后，首个 &lt;/thinking&gt; 标签及其之前的所有内容都将被视为思考过程而予以隐藏。</span>
-          </label>
-          <label class="lw-toggle">
-            <input type="checkbox" v-model="aggressiveThinking" @change="onAggressiveThinkingChange" />
-            <span class="lw-toggle-slider"></span>
-          </label>
+        <div class="setting-item tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-x-6 tw:gap-y-3 tw:border-b tw:border-lw-border-subtle tw:py-4 tw:last:border-b-0">
+          <div class="setting-copy tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1">
+            <span class="label-text tw:min-w-[120px] tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text">流式无限输出 (不限制 max_tokens)</span>
+            <span class="label-desc tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:text-pretty">开启后，将不向后端传递 max_tokens，由大模型自行决定输出长度。</span>
+          </div>
+          <LuminaToggle
+            v-model="unlimitedResponse"
+            aria-label="流式无限输出"
+            @update:modelValue="onUnlimitedResponseChange"
+          />
         </div>
-        <div class="setting-item">
-          <label class="lw-toggle-label">
-            <span class="label-text">流式无限输出 (不限制 max_tokens)</span>
-            <span class="label-desc">开启后，将不向后端传递 max_tokens，由大模型自行决定输出长度。</span>
-          </label>
-          <label class="lw-toggle">
-            <input type="checkbox" v-model="unlimitedResponse" @change="onUnlimitedResponseChange" />
-            <span class="lw-toggle-slider"></span>
-          </label>
-        </div>
-        <div class="setting-item">
-          <label class="lw-toggle-label">
-            <span class="label-text">思维链显示模式</span>
-            <span class="label-desc">同时作用于聊天面板和 Forge 工作台。正文保持独立显示，思维链仅作为单独折叠区出现。</span>
-          </label>
-          <select class="lw-select thinking-mode-select" v-model="thinkingDisplayMode" @change="onThinkingDisplayModeChange">
+        <div class="setting-item tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-x-6 tw:gap-y-3 tw:border-b tw:border-lw-border-subtle tw:py-4 tw:last:border-b-0">
+          <div class="setting-copy tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1">
+            <span class="label-text tw:min-w-[120px] tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text">思维链显示模式</span>
+            <span class="label-desc tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:text-pretty">同时作用于聊天面板和 Forge 工作台。正文保持独立显示，思维链仅作为单独折叠区出现。</span>
+          </div>
+          <LuminaSelect class="thinking-mode-select tw:mt-1 tw:min-w-40 tw:shrink-0" v-model="thinkingDisplayMode" size="sm" aria-label="思维链显示模式" @update:modelValue="onThinkingDisplayModeChange">
             <option value="collapsible">可折叠显示</option>
             <option value="hidden">隐藏思维链</option>
-          </select>
+          </LuminaSelect>
         </div>
-        <div class="setting-item" v-if="thinkingDisplayMode === 'collapsible'">
-          <label class="lw-toggle-label">
-            <span class="label-text">无输出时自动展开思维链</span>
-            <span class="label-desc">开启后，当消息只有思维链内容、没有正文输出时，自动展开思维链区域；一旦出现正文则自动收起。</span>
-          </label>
-          <label class="lw-toggle">
-            <input type="checkbox" v-model="thinkingAutoExpand" @change="onThinkingAutoExpandChange" />
-            <span class="lw-toggle-slider"></span>
-          </label>
+        <div class="setting-item tw:flex tw:flex-wrap tw:items-start tw:justify-between tw:gap-x-6 tw:gap-y-3 tw:border-b tw:border-lw-border-subtle tw:py-4 tw:last:border-b-0" v-if="thinkingDisplayMode === 'collapsible'">
+          <div class="setting-copy tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1">
+            <span class="label-text tw:min-w-[120px] tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text">无输出时自动展开思维链</span>
+            <span class="label-desc tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:text-pretty">开启后，当消息只有思维链内容、没有正文输出时，自动展开思维链区域；一旦出现正文则自动收起。</span>
+          </div>
+          <LuminaToggle
+            v-model="thinkingAutoExpand"
+            aria-label="无输出时自动展开思维链"
+            @update:modelValue="onThinkingAutoExpandChange"
+          />
         </div>
-        <div class="engine-desc" style="margin-top: 16px;">
+        <SettingsDescription class="tw:mt-4">
           选择【全局】作用域配置项的物理持久化位置。切换引擎后将重新拉取该区域的数据。
-        </div>
-        <div class="radio-group">
-          <label class="radio-label active">
+        </SettingsDescription>
+        <div class="radio-group tw:mt-3.5">
+          <SettingsInsetPanel as="label" class="radio-label active tw:flex tw:cursor-default tw:gap-3 tw:border-lw-border tw:p-3.5">
             <input type="radio" :checked="true" disabled />
-            <div class="radio-text">
-              <span class="radio-title">{{ storageState.title }}</span>
-              <span class="radio-sub">{{ storageState.sub }}</span>
+            <div class="radio-text tw:min-w-0 tw:flex-1">
+              <span class="radio-title tw:mb-1 tw:block tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text tw:text-balance">{{ storageState.title }}</span>
+              <span class="radio-sub tw:block tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-muted tw:text-pretty">{{ storageState.sub }}</span>
             </div>
-          </label>
+          </SettingsInsetPanel>
         </div>
       </div>
-    </div>
+    </SettingsSectionPanel>
 
     <!-- 备份与迁移控制台 -->
-    <div class="plugin-settings-block migration-block lw-card">
-      <div class="block-header">
-        <div class="block-title">
+    <SettingsSectionPanel class="migration-block">
+      <SettingsBlockHeader title="备份与迁移">
+        <template #icon>
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="17 8 12 3 7 8"></polyline>
             <line x1="12" y1="3" x2="12" y2="15"></line>
           </svg>
-          <span>备份与迁移</span>
-        </div>
-      </div>
-      <div class="block-content migration-content">
-        <div class="scope-selector">
-          <div class="scope-item">
-            <label class="lw-checkbox-label">
-              <input type="checkbox" v-model="migrationScope.apis" />
-              <span>API 接口配置</span>
-            </label>
-          </div>
-          <div class="scope-item">
-            <label class="lw-checkbox-label">
-              <input type="checkbox" v-model="migrationScope.presets" />
-              <span>Nexus 编排预设</span>
-            </label>
-          </div>
-          <div class="scope-item">
-            <label class="lw-checkbox-label">
-              <input type="checkbox" v-model="migrationScope.chat" />
-              <span>对话/流式过滤设置</span>
-            </label>
-          </div>
-          <div class="scope-item">
-            <label class="lw-checkbox-label">
-              <input type="checkbox" v-model="migrationScope.general" />
-              <span>系统常规偏好</span>
-            </label>
-          </div>
-        </div>
+        </template>
+      </SettingsBlockHeader>
+      <div class="block-content migration-content tw:flex tw:flex-col tw:gap-4 tw:pt-1">
+        <SettingsInsetPanel class="scope-selector tw:grid tw:grid-cols-2 tw:gap-2.5 tw:p-3 tw:max-[920px]:grid-cols-1">
+          <LuminaCheckbox v-model="migrationScope.apis">
+            API 接口配置
+          </LuminaCheckbox>
+          <LuminaCheckbox v-model="migrationScope.presets">
+            Nexus 编排预设
+          </LuminaCheckbox>
+          <LuminaCheckbox v-model="migrationScope.chat">
+            对话/流式过滤设置
+          </LuminaCheckbox>
+          <LuminaCheckbox v-model="migrationScope.general">
+            系统常规偏好
+          </LuminaCheckbox>
+        </SettingsInsetPanel>
 
-        <div class="migration-actions">
-          <button class="lw-btn lw-btn-primary lw-btn-small" @click="handleExport">
+        <div class="migration-actions tw:flex tw:gap-3 tw:max-[720px]:flex-wrap">
+          <LuminaButton class="settings-action-button" tone="primary" size="sm" @click="handleExport">
             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
             导出选定范围
-          </button>
-          <div class="import-wrapper">
-            <button class="lw-btn lw-btn-secondary lw-btn-small" @click="triggerImport">
+          </LuminaButton>
+          <div class="import-wrapper tw:relative">
+            <LuminaButton class="settings-action-button" variant="soft" size="sm" @click="triggerImport">
               <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                 <polyline points="17 8 12 3 7 8"></polyline>
                 <line x1="12" y1="3" x2="12" y2="15"></line>
               </svg>
               导入配置
-            </button>
+            </LuminaButton>
             <input type="file" ref="importFileInput" style="display: none" accept=".json" @change="handleImportFile" />
           </div>
         </div>
-        <div class="migration-hint">
+        <SettingsDescription class="migration-hint tw:italic">
           * 导入操作将根据选定范围覆盖当前配置，请谨慎操作。
-        </div>
+        </SettingsDescription>
       </div>
-    </div>
+    </SettingsSectionPanel>
 
     <!-- LLM 模型与生成系统 -->
-    <div class="plugin-settings-block llm-block lw-card">
-      <div class="block-header">
-        <div class="block-title">
+    <SettingsSectionPanel class="llm-block">
+      <SettingsBlockHeader title="大模型编排枢纽">
+        <template #icon>
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
             <path
               d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6">
             </path>
             <line x1="2" y1="20" x2="2.01" y2="20"></line>
           </svg>
-          <span>大模型编排枢纽</span>
-        </div>
-        <button class="icon-only-btn" @click="refreshLlmData" title="重新拉取">
+        </template>
+        <template #actions>
+        <LuminaIconButton class="settings-action-button" ariaLabel="重新拉取大模型数据" title="重新拉取" size="sm" @click="refreshLlmData">
           <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
             <polyline points="23 4 23 10 17 10"></polyline>
             <polyline points="1 20 1 14 7 14"></polyline>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
           </svg>
-        </button>
-      </div>
-      <div class="block-content">
+        </LuminaIconButton>
+        </template>
+      </SettingsBlockHeader>
+      <div class="block-content tw:flex tw:flex-col tw:pt-1">
         <NexusPresetManager />
 
-        <div class="preset-row" v-if="genPresets.length > 0">
-          <label>全局生成参数设定</label>
-          <select v-model="activeGenPreset" @change="onGenPresetChange" class="lw-select">
+        <div class="preset-row tw:mt-5 tw:flex tw:flex-col tw:gap-2.5 tw:border-t tw:border-lw-border-subtle tw:pt-5" v-if="genPresets.length > 0">
+          <label class="tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">全局生成参数设定</label>
+          <LuminaSelect v-model="activeGenPreset" size="sm" aria-label="全局生成参数设定" @update:modelValue="onGenPresetChange">
             <option v-for="p in genPresets" :key="p" :value="p">{{ p }}</option>
-          </select>
+          </LuminaSelect>
         </div>
       </div>
-    </div>
+    </SettingsSectionPanel>
     
     <!-- 上下文窗口与概览控制 (DCC) -->
-    <div class="plugin-settings-block context-block lw-card">
-      <div class="block-header">
-        <div class="block-title">
+    <SettingsSectionPanel class="context-block">
+      <SettingsBlockHeader title="上下文窗口与概览控制 (DCC)">
+        <template #icon>
           <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
           </svg>
-          <span>上下文窗口与概览控制 (DCC)</span>
-        </div>
-      </div>
-      <div class="block-content">
-        <div class="engine-desc" style="margin-bottom: 12px;">
+        </template>
+      </SettingsBlockHeader>
+      <div class="block-content tw:flex tw:flex-col tw:pt-1">
+        <SettingsDescription class="tw:mb-3">
           动态管理长对话历史的发送策略。超出全量范围的消息将以“概览标签”形式发送以节省 Context。
-        </div>
+        </SettingsDescription>
 
         <!-- 1. 全量区设置 -->
-        <div class="dcc-section">
-          <div class="dcc-section-label">全量发送范围 (Full Content)</div>
+        <div class="dcc-section tw:flex tw:flex-col tw:gap-1">
+          <div class="dcc-section-label tw:mb-2.5 tw:flex tw:items-center tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">
+            <span class="tw:shrink-0">全量发送范围 (Full Content)</span>
+            <span aria-hidden="true" class="tw:ml-2.5 tw:h-px tw:flex-1 tw:bg-lw-border-subtle tw:opacity-50"></span>
+          </div>
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullMode']"
             pluginId="lumina-chat" settingKey="contextControl.fullMode" :config="chatManifest['contextControl.fullMode']" />
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullValueCount']"
@@ -303,8 +297,11 @@
         </div>
         
         <!-- 2. 概览区设置 -->
-        <div class="dcc-section dcc-section-summary">
-          <div class="dcc-section-label">概览发送范围 (Summary/Overview)</div>
+        <div class="dcc-section dcc-section-summary tw:mt-4 tw:flex tw:flex-col tw:gap-1 tw:border-t tw:border-dashed tw:border-lw-border-subtle tw:pt-4">
+          <div class="dcc-section-label tw:mb-2.5 tw:flex tw:items-center tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">
+            <span class="tw:shrink-0">概览发送范围 (Summary/Overview)</span>
+            <span aria-hidden="true" class="tw:ml-2.5 tw:h-px tw:flex-1 tw:bg-lw-border-subtle tw:opacity-50"></span>
+          </div>
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryMode']"
             pluginId="lumina-chat" settingKey="contextControl.summaryMode" :config="chatManifest['contextControl.summaryMode']" />
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryValueCount']"
@@ -316,10 +313,10 @@
         </div>
         
         <!-- 3. 进阶参数 -->
-        <div class="dcc-section dcc-section-advanced">
+        <div class="dcc-section dcc-section-advanced tw:mt-[18px] tw:flex tw:flex-col tw:gap-1 tw:rounded-[18px] tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-4 tw:py-3.5">
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.tokenMaxFloat']"
             pluginId="lumina-chat" settingKey="contextControl.tokenMaxFloat" :config="chatManifest['contextControl.tokenMaxFloat']" />
-          <div class="dcc-paired-settings">
+          <div class="dcc-paired-settings tw:mt-2.5 tw:grid tw:grid-cols-2 tw:gap-x-[18px] tw:gap-y-3 tw:border-t tw:border-dashed tw:border-lw-border-subtle tw:pt-3 tw:max-[920px]:grid-cols-1">
             <SurfaceOutlet contract-id="settings.control" v-if="directorManifest['fullSplit']"
               pluginId="lumina-director" settingKey="fullSplit" :config="directorManifest['fullSplit']" />
             <SurfaceOutlet contract-id="settings.control" v-if="directorManifest['fullFloating']"
@@ -327,32 +324,33 @@
           </div>
         </div>
       </div>
-    </div>
+    </SettingsSectionPanel>
 
-    <div v-if="activeDesktopModeBlock" class="plugin-settings-block lw-card core-block desktop-mode-block">
-      <div class="block-header">
-        <div class="block-title">
-          <span class="plugin-icon-wrap" v-html="activeDesktopModeBlock.pluginIcon"></span>
-          <span>{{ activeDesktopModeBlock.pluginName }} - 桌面模式</span>
-        </div>
-        <button class="lw-btn lw-btn-ghost lw-btn-small" @click="$emit('open-detail', activeDesktopModeBlock.pluginId)">
+    <SettingsSectionPanel v-if="activeDesktopModeBlock" core class="desktop-mode-block">
+      <SettingsBlockHeader :title="`${activeDesktopModeBlock.pluginName} - 桌面模式`">
+        <template #icon>
+          <span class="plugin-icon-wrap tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:p-1.5 tw:text-lw-text" v-html="activeDesktopModeBlock.pluginIcon"></span>
+        </template>
+        <template #actions>
+        <LuminaButton class="settings-action-button" variant="ghost" size="sm" @click="$emit('open-detail', activeDesktopModeBlock.pluginId)">
           模式详情
           <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-        </button>
-      </div>
+        </LuminaButton>
+        </template>
+      </SettingsBlockHeader>
 
-      <div class="block-content">
-        <div class="engine-desc">
+      <div class="block-content tw:flex tw:flex-col tw:pt-1">
+        <SettingsDescription>
           当前桌面模式提供的附加设置。这里的选项会直接影响当前桌面模式下的聊天流、侧栏、设置面板和时间线表现。
-        </div>
-        <div class="desktop-mode-shell-label">
+        </SettingsDescription>
+        <div class="desktop-mode-shell-label tw:mb-2.5 tw:w-fit tw:rounded-lw-pill tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-2.5 tw:py-1.5 tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:text-lw-text-secondary">
           当前壳层：{{ activeDesktopModeShellLabel }}
         </div>
-        <div v-if="activeDesktopModeDescription" class="desktop-mode-summary">
+        <SettingsInsetPanel v-if="activeDesktopModeDescription" class="desktop-mode-summary tw:mb-3.5 tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:text-lw-text-secondary tw:text-pretty">
           {{ activeDesktopModeDescription }}
-        </div>
+        </SettingsInsetPanel>
         <SurfaceOutlet contract-id="settings.control"
           v-for="key in activeDesktopModeBlock.commonKeys"
           :key="key"
@@ -361,49 +359,51 @@
           :config="activeDesktopModeBlock.manifest[key]"
         />
       </div>
-    </div>
+    </SettingsSectionPanel>
 
     <!-- 各子插件的常用设置 -->
-    <div v-for="block in unifiedBlocks" :key="block.pluginId" class="plugin-settings-block lw-card"
-      :class="{ 'core-block': block.pluginId === 'lumina-settings' }">
-      <div class="block-header">
-        <div class="block-title">
-          <span class="plugin-icon-wrap" v-html="block.pluginIcon"></span>
-          <span>{{ block.pluginName }} - 常用偏好</span>
-        </div>
-        <button v-if="block.hasMore" class="lw-btn lw-btn-ghost lw-btn-small"
+    <SettingsSectionPanel v-for="block in unifiedBlocks" :key="block.pluginId" :core="block.pluginId === 'lumina-settings'">
+      <SettingsBlockHeader :title="`${block.pluginName} - 常用偏好`">
+        <template #icon>
+          <span class="plugin-icon-wrap tw:inline-flex tw:size-7 tw:items-center tw:justify-center tw:rounded-xl tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:p-1.5 tw:text-lw-text" v-html="block.pluginIcon"></span>
+        </template>
+        <template #actions>
+        <LuminaButton v-if="block.hasMore" class="settings-action-button" variant="ghost" size="sm"
           @click="$emit('open-detail', block.pluginId)">
           更详细
           <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-        </button>
-      </div>
+        </LuminaButton>
+        </template>
+      </SettingsBlockHeader>
 
-      <div class="block-content">
+      <div class="block-content tw:flex tw:flex-col tw:pt-1">
         <SurfaceOutlet contract-id="settings.control" v-for="key in block.commonKeys" :key="key" :pluginId="block.pluginId" :settingKey="key"
           :config="block.manifest[key]" />
         <component
           v-if="block.inlineComponent"
           :is="block.inlineComponent"
-          style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--lw-border-subtle);"
+          class="tw:mt-4 tw:border-t tw:border-lw-border-subtle tw:pt-4"
         />
       </div>
-    </div>
+    </SettingsSectionPanel>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
-import { pluginManager } from '../../core/PluginManager';
+import { pluginManager } from '../../core/PluginManager.js';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 import NexusPresetManager from './NexusPresetManager.vue';
-import { activeSettings, useSettings } from './useSettings';
-import { settingsDomainService } from '../../api/services/SettingsDomainService';
-import { LuminaWeaveAPI } from '../../api/index';
-import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry';
-import { useComponentSkin } from '../../theme/useComponentSkin';
-import { getActiveDesktopModeIdFromSettings, getDesktopModeOrDefault, getDesktopModeSettingsPluginId } from '../../theme/themeRegistry';
+import { SettingsBlockHeader, SettingsDescription, SettingsInsetPanel, SettingsMetaItem, SettingsSectionPanel, SettingsStatusBadge } from './components';
+import { activeSettings, useSettings } from './useSettings.js';
+import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
+import { LuminaWeaveAPI } from '../../api/index.js';
+import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry.js';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { getActiveDesktopModeIdFromSettings, getDesktopModeOrDefault, getDesktopModeSettingsPluginId } from '../../theme/themeRegistry.js';
+import { LuminaButton, LuminaCheckbox, LuminaIconButton, LuminaSelect, LuminaToggle } from '../../ui/primitives';
 
 const { initSettings } = useSettings();
 const { cssVars, variant: unifiedVariant } = useComponentSkin('settings.unified');
@@ -411,7 +411,13 @@ const unifiedSkinStyle = computed(() => cssVars.value);
 const activeThemeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings));
 
 const openDetailedDiff = () => {
-  (window as any).LuminaWeave?.openConflictViewer();
+  const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
+  const diff = lw?.getSyncDiff?.();
+  if (diff?.hasDivergence && diff?.diffCount) {
+    lw?.openConflictViewer?.();
+    return;
+  }
+  lw?.openSyncReportViewer?.();
 };
 
 defineEmits<{
@@ -630,6 +636,11 @@ const togglePluginPermission = (p: any) => {
   void settingsDomainService.setGlobalValue(`lumina-settings.plugins.${p.id}.promptEnabled`, p.enabled);
 };
 
+const updatePluginPermission = (p: any, enabled: boolean) => {
+  p.enabled = enabled;
+  togglePluginPermission(p);
+};
+
 
 // ==== 同步状态响应式 ====
 interface SyncInfo {
@@ -682,16 +693,16 @@ const overwriteToIndependent = async () => {
   const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
   if (lw?.syncFromST) {
     console.log('[Settings] 手动触发：覆盖至独立存储...');
-    await lw.syncFromST();
+    await lw.syncFromST({ resolveIntent: 'st' });
     refreshSyncState();
   }
 };
 
 const overwriteToST = async () => {
   const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-  if (lw?.commitToST) {
+  if (lw?.syncFromST) {
     if (confirm('确定要将独立存储的数据回写并替换 ST 消息列表吗？此操作不可逆。')) {
-      await lw.commitToST();
+      await lw.syncFromST({ resolveIntent: 'lumina' });
       alert('回写完成。');
       refreshSyncState();
     }
@@ -792,494 +803,15 @@ const unifiedBlocks = computed(() => {
 </script>
 
 <style scoped>
-.settings-unified {
-  padding: var(--lw-settings-unified-padding, var(--lw-panel-padding));
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
-  gap: var(--lw-settings-grid-gap, var(--lw-item-gap));
-  background: transparent;
-}
-
-.core-block {
-  grid-column: 1 / -1;
-}
-
-/* 让 block-content 以纵向 flex 排列，使 SettingControl 正确换行 */
-.block-content {
-  display: flex;
-  flex-direction: column;
-  padding-top: 4px;
-}
-
-.migration-content {
-  gap: 16px;
-}
-
-.scope-selector {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  background: var(--lw-bg-subtle);
-  padding: 12px;
-  border-radius: var(--lw-radius-sm);
-  border: 1px solid var(--lw-border-subtle);
-}
-
-.lw-checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--lw-text-main);
-  cursor: pointer;
-}
-
-.lw-checkbox-label input {
-  width: 14px;
-  height: 14px;
-  accent-color: var(--lw-primary);
-}
-
-.migration-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.import-wrapper {
-  position: relative;
-}
-
-.migration-hint {
-  font-size: 11px;
-  color: var(--lw-text-muted);
-  font-style: italic;
-}
-
-/* 设置项 card 不需要跟交互卡片一样的悬浮抬升 */
-.plugin-settings-block.lw-card:hover {
-  box-shadow: none;
-  border-color: var(--lw-border-base);
-}
-
 .desktop-mode-block {
   background: var(--lw-settings-block-bg, color-mix(in srgb, var(--lw-bg-elevated) 96%, transparent));
   border-color: var(--lw-settings-block-border, var(--lw-border-base));
-}
-
-.desktop-mode-shell-label {
-  width: fit-content;
-  margin-bottom: 10px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--lw-border-subtle);
-  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
-  color: var(--lw-text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.desktop-mode-summary {
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--lw-bg-subtle) 94%, transparent);
-  border: 1px solid var(--lw-border-subtle);
-  color: var(--lw-text-secondary);
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--lw-border-subtle);
-  margin-bottom: 4px;
-}
-
-.block-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  letter-spacing: -0.01em;
-}
-
-.plugin-icon-wrap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--lw-text-main);
-  background: var(--lw-bg-subtle);
-  padding: 6px;
-  border-radius: 12px;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--lw-border-subtle);
-}
-
-.sync-badges {
-  display: flex;
-  gap: 8px;
-}
-
-.badge {
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.badge.idle {
-  background: var(--lw-bg-active);
-  color: var(--lw-text-secondary);
-}
-
-.badge.syncing {
-  background: var(--lw-primary-soft);
-  color: var(--lw-primary);
-  animation: pulse 2s infinite;
-}
-
-.badge.success {
-  background: rgba(34, 197, 94, 0.12);
-  color: #15803d;
-}
-
-.badge.error {
-  background: rgba(239, 68, 68, 0.12);
-  color: #b91c1c;
-}
-
-@keyframes pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.7;
-  }
-}
-
-.sync-content {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.sync-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 14px;
-  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
-  border-radius: var(--lw-radius-sm);
-  border: 1px solid var(--lw-border-subtle);
-}
-
-.meta-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.meta-item .label {
-  color: var(--lw-text-muted);
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.meta-item .value {
-  color: var(--lw-text-main);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status-detail {
-  grid-column: 1 / -1;
-  font-size: 11px;
-  color: var(--lw-text-muted);
-  border-top: 1px solid var(--lw-border-subtle);
-  padding-top: 10px;
-  margin-top: 2px;
-}
-
-.sync-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.spin {
-  animation: spin-anim 2s linear infinite;
-}
-
-@keyframes spin-anim {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Permissions List */
-.permissions-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.permission-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--lw-bg-subtle);
-  border: 1px solid var(--lw-border-subtle);
-  border-radius: 14px;
-  transition: var(--lw-transition);
-}
-
-.permission-item:hover {
-  border-color: var(--lw-border-base);
-  background: var(--lw-bg-hover);
-}
-
-.perm-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.perm-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--lw-text-main);
 }
 
 .perm-info .plugin-icon :deep(svg) {
   width: 14px;
   height: 14px;
   color: var(--lw-text-muted);
-}
-
-/* Engine Settings */
-.engine-desc {
-  font-size: 12px;
-  color: var(--lw-text-muted);
-  margin-bottom: 16px;
-  line-height: 1.6;
-}
-
-.radio-label {
-  display: flex;
-  gap: 12px;
-  padding: 14px;
-  background: var(--lw-bg-subtle);
-  border: 1px solid var(--lw-border-base);
-  border-radius: var(--lw-radius);
-  cursor: default;
-}
-
-.radio-title {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--lw-text-main);
-  margin-bottom: 4px;
-}
-
-.radio-sub {
-  display: block;
-  font-size: 11px;
-  color: var(--lw-text-muted);
-  line-height: 1.5;
-}
-
-.backup-actions {
-  margin-top: 16px;
-}
-
-/* LLM Block */
-.preset-row {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--lw-border-subtle);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.preset-row label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--lw-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.icon-only-btn {
-  padding: 8px;
-  color: var(--lw-text-muted);
-  background: transparent;
-  border: none;
-  border-radius: var(--lw-radius-sm);
-  cursor: pointer;
-  transition: var(--lw-transition);
-}
-
-.icon-only-btn:hover {
-  background: var(--lw-bg-active);
-  color: var(--lw-primary);
-}
-
-/* Sync Diff */
-.sync-diff-viewer {
-  margin-top: 8px;
-  padding: 16px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.18);
-  border-radius: var(--lw-radius);
-}
-
-.diff-header {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--lw-warning);
-  margin-bottom: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.diff-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.lw-btn-small {
-  padding: 4px 10px;
-  font-size: 11px;
-}
-
-/* ---- Engine Settings Configuration Items (Fixed) ---- */
-/* ---- Engine Settings Configuration Items (Fixed) ---- */
-.engine-content {
-  display: flex;
-  flex-direction: column;
-}
-
-.setting-item {
-  display: flex;
-  flex-wrap: wrap; /* 允许在空间极窄时换行 */
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--lw-border-subtle);
-  gap: 12px 24px; /* 纵向和横向间距 */
-}
-
-.setting-item:last-child {
-  border-bottom: none;
-}
-
-.lw-toggle-label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1 1 auto; /* 恢复自由缩放 */
-  min-width: 0;
-  cursor: pointer;
-}
-
-.label-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--lw-text-main);
-  line-height: 1.5;
-  min-width: 120px; /* 防止在窄屏下被挤压导致文字垂直堆叠 */
-}
-
-.label-desc {
-  font-size: 11px;
-  color: var(--lw-text-muted);
-  line-height: 1.6;
-}
-
-.lw-toggle {
-  margin-top: 4px; /* 垂直微调，对齐首行文字 */
-  cursor: pointer;
-}
-
-.thinking-mode-select {
-  min-width: 160px;
-  margin-top: 4px;
-  flex-shrink: 0; /* 禁止下拉框被压缩 */
-}
-
-/* Radio Group styling */
-.radio-group {
-  margin-top: 14px;
-}
-
-.radio-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.dcc-section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.dcc-section-summary {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px dashed var(--lw-border-subtle);
-}
-
-.dcc-section-advanced {
-  margin-top: 18px;
-  padding: 14px 16px;
-  background: color-mix(in srgb, var(--lw-bg-subtle) 92%, transparent);
-  border: 1px solid var(--lw-border-subtle);
-  border-radius: 18px;
-}
-
-.dcc-paired-settings {
-  margin-top: 10px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--lw-border-subtle);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 18px;
-}
-
-.dcc-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--lw-text-muted);
-  text-transform: uppercase;
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  letter-spacing: 0.05em;
-}
-
-.dcc-section-label::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--lw-border-subtle);
-  margin-left: 10px;
-  opacity: 0.5;
 }
 
 .settings-unified[data-skin-variant='telegram'] {
@@ -1313,8 +845,7 @@ const unifiedBlocks = computed(() => {
   box-shadow: none;
 }
 
-.settings-unified[data-skin-variant='telegram'] .lw-btn,
-.settings-unified[data-skin-variant='telegram'] .icon-only-btn {
+.settings-unified[data-skin-variant='telegram'] .settings-action-button {
   min-height: 40px;
   border-radius: 999px;
 }
@@ -1323,23 +854,4 @@ const unifiedBlocks = computed(() => {
   min-height: 44px;
 }
 
-@media (max-width: 920px) {
-  .sync-meta,
-  .scope-selector,
-  .dcc-paired-settings {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 720px) {
-  .migration-actions,
-  .sync-actions {
-    flex-wrap: wrap;
-  }
-
-  .block-header {
-    align-items: flex-start;
-    gap: 12px;
-  }
-}
 </style>

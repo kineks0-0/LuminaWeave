@@ -1,1 +1,1 @@
-export { legacyTabComponentRegistry } from './legacyPanelRegistry';
+export { legacyTabComponentRegistry } from './legacyPanelRegistry.js';

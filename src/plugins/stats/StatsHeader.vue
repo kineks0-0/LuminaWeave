@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import { inject } from 'vue';
-import { LuminaWeaveAPI } from '../../api/index';
+import { LuminaWeaveAPI } from '../../api/index.js';
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 
@@ -48,8 +48,8 @@ const getStatValue = (key: string, fallback: number): number => {
   background: #ffffff;
   padding: 6px 16px;
   border-radius: 16px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   color: #475569;
   border: 1px solid #e2e8f0;
 }

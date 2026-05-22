@@ -110,8 +110,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted, reactive, watch, nextTick } from 'vue';
-import { activeSettings } from '../settings/useSettings';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { activeSettings } from '../settings/useSettings.js';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 
 const isCollapsed = ref(false);
 const activeTab = ref<'typography' | 'streaming'>('typography');
@@ -283,8 +283,10 @@ onUnmounted(stopSimulation);
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: #475569;
 }
 
@@ -293,7 +295,10 @@ onUnmounted(stopSimulation);
   border: 1px solid #e2e8f0;
   padding: 4px 10px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: #64748b;
   cursor: pointer;
   display: flex;
@@ -319,8 +324,10 @@ onUnmounted(stopSimulation);
   border: none;
   background: transparent;
   padding: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   color: #64748b;
   cursor: pointer;
   border-radius: 6px;
@@ -365,11 +372,17 @@ onUnmounted(stopSimulation);
 }
 
 .preview-topbar-copy strong {
-  font-size: 12px;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .preview-topbar-copy small {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-secondary);
 }
 
@@ -381,8 +394,10 @@ onUnmounted(stopSimulation);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-primary);
   background: color-mix(in srgb, var(--lw-primary) 14%, var(--lw-chat-preview-bubble-bg, var(--lw-bg-surface)));
   flex-shrink: 0;
@@ -413,22 +428,36 @@ onUnmounted(stopSimulation);
   border-radius: var(--lw-chat-preview-bubble-radius, 12px);
   font-family: var(--lw-chat-preview-font, var(--lw-font-main)), sans-serif;
   font-weight: var(--lw-chat-preview-font-weight, 400);
-  font-size: var(--lw-chat-preview-font-size, 16px);
-  line-height: var(--lw-chat-preview-line-height, 1.6);
-  letter-spacing: var(--lw-chat-preview-letter-spacing, 0px);
+  font-size: var(--lw-current-preview-font-size, var(--lw-chat-preview-font-size, 16px));
+  line-height: var(--lw-current-preview-line-height, var(--lw-chat-preview-line-height, 1.6));
+  letter-spacing: var(--lw-current-preview-letter-spacing, var(--lw-chat-preview-letter-spacing, 0px));
   color: var(--lw-chat-preview-text-color, var(--lw-text-main));
   background: var(--lw-chat-preview-bubble-bg, var(--lw-bg-surface));
   border: 1px solid rgba(0,0,0,0.05);
   box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
 
-.preview-bubble.ai { align-self: flex-start; }
-.preview-bubble.user { align-self: flex-end; background: var(--lw-chat-preview-user-bubble-bg, #f1f5f9); }
+.preview-bubble.ai {
+  --lw-current-preview-font-size: var(--lw-chat-preview-assistant-font-size, var(--lw-chat-preview-font-size, 16px));
+  --lw-current-preview-line-height: var(--lw-chat-preview-assistant-line-height, var(--lw-chat-preview-line-height, 1.6));
+  --lw-current-preview-letter-spacing: var(--lw-chat-preview-assistant-letter-spacing, var(--lw-chat-preview-letter-spacing, 0px));
+  align-self: flex-start;
+}
+
+.preview-bubble.user {
+  --lw-current-preview-font-size: var(--lw-chat-preview-user-font-size, var(--lw-chat-preview-font-size, 16px));
+  --lw-current-preview-line-height: var(--lw-chat-preview-user-line-height, var(--lw-chat-preview-line-height, 1.6));
+  --lw-current-preview-letter-spacing: var(--lw-chat-preview-user-letter-spacing, var(--lw-chat-preview-letter-spacing, 0px));
+  align-self: flex-end;
+  background: var(--lw-chat-preview-user-bubble-bg, #f1f5f9);
+}
 
 .preview-meta {
   margin-bottom: 6px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: var(--lw-text-secondary);
 }
 
@@ -477,11 +506,14 @@ onUnmounted(stopSimulation);
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: #64748b;
 }
 
-.sim-param label { width: 85px; font-weight: 600; }
+.sim-param label { width: 85px; font-weight: var(--lw-type-label-medium-weight); }
 .sim-param input[type="range"] { flex: 1; accent-color: var(--lw-primary); height: 4px; }
 .sim-param span { min-width: 35px; text-align: right; font-family: monospace; }
 .sim-param.flex-row { justify-content: space-between; margin-top: 4px; border-top: 1px dashed #e2e8f0; padding-top: 8px; }
@@ -494,8 +526,10 @@ onUnmounted(stopSimulation);
   border: none;
   padding: 5px 14px;
   border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   cursor: pointer;
   transition: 0.2s;
 }
@@ -505,7 +539,10 @@ onUnmounted(stopSimulation);
 .sim-live-stats {
   margin-top: 8px;
   font-family: monospace;
-  font-size: 10px;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   color: #94a3b8;
   display: flex;
   gap: 16px;
@@ -527,7 +564,10 @@ onUnmounted(stopSimulation);
 .placeholder-text {
   color: #cbd5e1;
   font-style: italic;
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   text-align: center;
   padding: 20px 0;
 }

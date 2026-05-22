@@ -1,6 +1,6 @@
 import type { Component } from 'vue';
-import type { SurfaceContractId } from '../platform/surface/types';
-import type { DynamicTabConfig } from './types';
+import type { SurfaceContractId } from '../platform/surface/types.js';
+import type { DynamicTabConfig } from './types.js';
 
 export interface DynamicTabResolution {
   surfaceContractId: SurfaceContractId | null;

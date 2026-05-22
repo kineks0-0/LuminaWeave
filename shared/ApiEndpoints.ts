@@ -20,23 +20,6 @@ export const API_ROUTES = {
     PROMPT: {
         COMPILE: '/prompt/compile'
     },
-    CHAT: {
-        LIST: '/chat',
-        GET: (chatId: string) => `/chat/${chatId}`,
-        SYNC_STATUS: (chatId: string) => `/chat/${chatId}/sync-status`,
-        TRANSACTIONS: (chatId: string) => `/chat/${chatId}/transactions`,
-        ROLLBACK_TRANSACTION: (chatId: string, txId: string) => `/chat/${chatId}/transactions/${txId}/rollback`,
-        SAVE: (chatId: string) => `/chat/save/${chatId}`,
-        PATCH: (chatId: string) => `/chat/${chatId}`,
-        SAVE_MESSAGE: (chatId: string, nodeId: string) => `/chat/${chatId}/messages/${nodeId}`,
-        DELETE_MESSAGE: (chatId: string, nodeId: string) => `/chat/${chatId}/messages/${nodeId}`
-    },
-    FORGE: {
-        LIST: '/forge/sessions',
-        GET: (sessionId: string) => `/forge/sessions/${sessionId}`,
-        SAVE: '/forge/sessions',
-        UPDATE: (sessionId: string) => `/forge/sessions/${sessionId}`
-    },
     CONVERSATION: {
         LIST: '/conversations',
         GET: (id: string) => `/conversations/${id}`,

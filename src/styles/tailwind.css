@@ -1,0 +1,78 @@
+/* LuminaWeave Tailwind Utility Layer */
+/* @license LuminaWeave Style */
+
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw);
+
+@theme inline {
+  --font-lw-main: var(--lw-font-main);
+  --font-lw-display: var(--lw-font-display);
+  --font-lw-mono: var(--lw-font-mono);
+
+  --color-lw-primary: var(--lw-primary);
+  --color-lw-primary-strong: var(--lw-primary-strong);
+  --color-lw-surface: var(--lw-bg-surface);
+  --color-lw-elevated: var(--lw-bg-elevated);
+  --color-lw-subtle: var(--lw-bg-subtle);
+  --color-lw-hover: var(--lw-bg-hover);
+  --color-lw-active: var(--lw-bg-active);
+  --color-lw-text: var(--lw-text-main);
+  --color-lw-text-secondary: var(--lw-text-secondary);
+  --color-lw-text-muted: var(--lw-text-muted);
+  --color-lw-text-dim: var(--lw-text-dim);
+  --color-lw-text-inverse: var(--lw-text-inverse);
+  --color-lw-border: var(--lw-border-base);
+  --color-lw-border-subtle: var(--lw-border-subtle);
+  --color-lw-border-hover: var(--lw-border-hover);
+  --color-lw-border-active: var(--lw-border-active);
+  --color-lw-selection: var(--lw-bg-selection);
+  --color-lw-danger: var(--lw-danger);
+
+  --radius-lw-xs: var(--lw-radius-xs);
+  --radius-lw-sm: var(--lw-radius-sm);
+  --radius-lw-md: var(--lw-radius);
+  --radius-lw-lg: var(--lw-radius-lg);
+  --radius-lw-xl: var(--lw-radius-xl);
+  --radius-lw-pill: var(--lw-radius-pill);
+
+  --shadow-lw: var(--lw-shadow);
+  --shadow-lw-card: var(--lw-shadow-card);
+  --shadow-lw-hover: var(--lw-shadow-hover);
+  --shadow-lw-xl: var(--lw-shadow-xl);
+}
+
+@keyframes dropdown-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes setting-slide-in-top {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes setting-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,6 +1,6 @@
 import type { Component } from 'vue';
-import type { SettingDefinition } from '../../types/plugin';
-import type { SurfaceContractId, SurfaceRendererDefinition } from '../surface/types';
+import type { SettingDefinition } from '../../types/plugin.js';
+import type { SurfaceContractId, SurfaceRendererDefinition } from '../surface/types.js';
 
 export type DesktopShellKind = 'traditional' | 'freeform' | (string & {});
 

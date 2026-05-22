@@ -176,13 +176,19 @@ watch(() => props.isStreaming, () => void nextTick(scrollToBottom));
 }
 
 .scv-empty-icon {
-  font-size: 28px;
+  font-size: var(--lw-type-headline-large-size);
+  line-height: var(--lw-type-headline-large-line-height);
+  font-weight: var(--lw-type-headline-large-weight);
+  letter-spacing: var(--lw-type-headline-large-tracking);
   margin-bottom: 4px;
 }
 
 .scv-empty p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   color: var(--lw-text-secondary);
 }
 
@@ -202,8 +208,10 @@ watch(() => props.isStreaming, () => void nextTick(scrollToBottom));
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   flex-shrink: 0;
   background: color-mix(in srgb, var(--lw-primary) 12%, var(--lw-bg-elevated));
   color: var(--lw-primary);
@@ -224,8 +232,10 @@ watch(() => props.isStreaming, () => void nextTick(scrollToBottom));
   border: 1px solid var(--lw-border-base);
   border-radius: 8px 0 8px 8px;
   padding: 8px 12px;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   color: var(--lw-text-main);
   white-space: pre-wrap;
   word-break: break-word;
@@ -271,8 +281,10 @@ watch(() => props.isStreaming, () => void nextTick(scrollToBottom));
   border-radius: 8px;
   background: var(--lw-bg-input, var(--lw-bg-subtle));
   color: var(--lw-text-main);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   padding: 8px 10px;
   outline: none;
   font-family: inherit;
@@ -299,9 +311,11 @@ watch(() => props.isStreaming, () => void nextTick(scrollToBottom));
   padding: 6px 16px;
   border-radius: 6px;
   border: none;
-  font-size: 13px;
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-label-large-tracking);
   cursor: pointer;
-  font-weight: 500;
   transition: background 120ms, opacity 120ms;
 }
 

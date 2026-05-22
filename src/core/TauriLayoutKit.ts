@@ -1,3 +1,5 @@
+import { HostDetector } from '../api/core/host-drivers/HostDetector.js';
+
 export type LayoutKitSurfaceMap = {
   Backdrop: 'backdrop';
   FullscreenWindow: 'fullscreen-window';
@@ -25,6 +27,10 @@ let layoutKitPromise: Promise<TauriLayoutKitModule | null> | null = null;
 
 export const loadTauriLayoutKit = async (): Promise<TauriLayoutKitModule | null> => {
   if (typeof window === 'undefined') {
+    return null;
+  }
+
+  if (!HostDetector.isTauriTavern) {
     return null;
   }
 

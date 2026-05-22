@@ -1,10 +1,10 @@
 <template>
-    <div class="nexus-preset-manager">
+    <div class="nexus-preset-manager tw:flex tw:flex-col tw:gap-6">
         <!-- 模块 1: 自定义 API 配置台 -->
-        <div class="section-container lw-card">
-            <div class="section-header">
-                <div class="section-title">
-                    <div class="icon-wrap">
+        <div class="section-container lw-card tw:flex tw:flex-col tw:gap-5 tw:p-5">
+            <div class="section-header tw:flex tw:items-center tw:justify-between tw:border-b tw:border-lw-border-subtle tw:pb-4">
+                <div class="section-title tw:flex tw:items-center tw:gap-3">
+                    <div class="icon-wrap tw:flex tw:size-8 tw:items-center tw:justify-center tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-lw-surface tw:text-lw-text-muted">
                         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2"
                             fill="none">
                             <circle cx="12" cy="12" r="10"></circle>
@@ -14,27 +14,32 @@
                             </path>
                         </svg>
                     </div>
-                    <div class="title-meta">
-                        <span class="main-title">自定义 API 接口</span>
-                        <span class="sub-hint">配置跨域直连端点以突破 ST 限制</span>
+                    <div class="title-meta tw:flex tw:flex-col">
+                        <span class="main-title tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:tracking-[var(--lw-type-title-small-tracking)] tw:text-lw-text tw:text-balance">自定义 API 接口</span>
+                        <span class="sub-hint tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:tracking-[var(--lw-type-body-small-tracking)] tw:text-lw-text-muted tw:text-pretty">配置跨域直连端点以突破 ST 限制</span>
                     </div>
                 </div>
-                <button class="lw-btn lw-btn-secondary lw-btn-small" @click="createApi">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5"
-                        fill="none">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
+                <LuminaButton variant="soft" tone="neutral" size="sm" @click="createApi">
+                    <Plus class="tw:size-3.5" aria-hidden="true" />
                     添加接口
-                </button>
+                </LuminaButton>
             </div>
 
-            <div class="api-list" v-if="customApis.length > 0">
-                <div class="api-item" v-for="(api, aIndex) in customApis" :key="api.id">
-                    <div class="item-header">
-                        <input type="text" v-model="api.name" class="name-edit-input" @change="saveApis"
+            <div v-if="customApis.length > 0" class="api-list tw:flex tw:flex-col tw:gap-4">
+                <div
+                    v-for="(api, aIndex) in customApis"
+                    :key="api.id"
+                    class="api-item tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:p-3.5 tw:transition-[background-color,border-color] tw:hover:border-lw-border tw:hover:bg-lw-hover"
+                >
+                    <div class="item-header tw:mb-3 tw:flex tw:items-center tw:justify-between tw:gap-3 tw:border-b tw:border-dashed tw:border-lw-border-subtle tw:pb-2">
+                        <input type="text" v-model="api.name" class="name-edit-input tw:flex-1 tw:rounded tw:border tw:border-transparent tw:bg-transparent tw:px-2 tw:py-1 tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:tracking-[var(--lw-type-title-small-tracking)] tw:text-lw-text tw:outline-none tw:transition-[background-color,border-color] tw:hover:border-lw-border-subtle tw:hover:bg-lw-surface tw:focus:border-lw-accent tw:focus:bg-lw-surface" @change="saveApis"
                             placeholder="接口简称 (如: DeepSeek-V3)" />
-                        <button class="icon-btn delete" @click="deleteApi(aIndex)" title="删除">
+                        <button
+                            class="icon-btn delete tw:inline-flex tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-1.5 tw:text-lw-text-muted tw:transition-[background-color,color] tw:hover:bg-red-50 tw:hover:text-red-600"
+                            @click="deleteApi(aIndex)"
+                            title="删除"
+                            aria-label="删除接口"
+                        >
                             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
                                 fill="none">
                                 <polyline points="3 6 5 6 21 6"></polyline>
@@ -44,9 +49,9 @@
                             </svg>
                         </button>
                     </div>
-                    <div class="item-fields">
-                        <div class="field-item">
-                            <label>Provider</label>
+                    <div class="item-fields tw:grid tw:grid-cols-2 tw:gap-3">
+                        <div class="field-item tw:flex tw:flex-col tw:gap-1.5">
+                            <label class="tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">Provider</label>
                             <select v-model="api.type" class="lw-select" @change="saveApis">
                                 <option value="openai_compatible">OpenAI 兼容</option>
                                 <option value="openai">OpenAI 官方</option>
@@ -54,15 +59,15 @@
                                 <option value="google">Google</option>
                             </select>
                         </div>
-                        <div class="field-item">
-                            <label>Base URL</label>
+                        <div class="field-item tw:flex tw:flex-col tw:gap-1.5">
+                            <label class="tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">Base URL</label>
                             <input v-if="api.type === 'openai' || api.type === 'openai_compatible'" type="text"
                                 v-model="api.url" class="lw-input" @change="saveApis"
                                 placeholder="https://api.deepseek.com/v1" />
-                            <div v-else class="st-indicator">该 Provider 无需 Base URL</div>
+                            <div v-else class="st-indicator tw:flex tw:h-9 tw:items-center tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-[var(--lw-bg-app)] tw:px-3 tw:py-2 tw:text-xs tw:text-lw-text-muted">该 Provider 无需 Base URL</div>
                         </div>
-                        <div class="field-item">
-                            <label>API Key</label>
+                        <div class="field-item tw:flex tw:flex-col tw:gap-1.5">
+                            <label class="tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">API Key</label>
                             <input type="password" v-model="api.key" class="lw-input" @change="saveApis"
                                 placeholder="sk-..." />
                         </div>
@@ -72,11 +77,11 @@
         </div>
 
         <!-- 模块 2: Nexus 路由编排 -->
-        <div class="section-container lw-card">
-            <div class="section-header vertical">
-                <div class="header-main">
-                    <div class="section-title">
-                        <div class="icon-wrap accent">
+        <div class="section-container lw-card tw:flex tw:flex-col tw:gap-5 tw:p-5">
+            <div class="section-header vertical tw:flex tw:flex-col tw:items-start tw:gap-4 tw:border-b tw:border-lw-border-subtle tw:pb-4">
+                <div class="header-main tw:flex tw:w-full tw:items-center tw:justify-between">
+                    <div class="section-title tw:flex tw:items-center tw:gap-3">
+                        <div class="icon-wrap tw:flex tw:size-8 tw:items-center tw:justify-center tw:rounded-lw-sm tw:border tw:border-[#5c8bf633] tw:bg-[#5c73f614] tw:text-lw-primary">
                             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2"
                                 fill="none">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -85,38 +90,43 @@
                                 </path>
                             </svg>
                         </div>
-                        <div class="title-meta">
-                            <span class="main-title">Nexus 路由编排</span>
-                            <span class="sub-hint">组合多个 API 实现高可用备用方案</span>
+                        <div class="title-meta tw:flex tw:flex-col">
+                            <span class="main-title tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:tracking-[var(--lw-type-title-small-tracking)] tw:text-lw-text tw:text-balance">Nexus 路由编排</span>
+                            <span class="sub-hint tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:tracking-[var(--lw-type-body-small-tracking)] tw:text-lw-text-muted tw:text-pretty">组合多个 API 实现高可用备用方案</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="header-controls">
-                    <div class="control-item">
-                        <span class="control-label">传输模式:</span>
-                        <select v-model="useSSE" @change="saveFlags" class="lw-select compact">
+                <div class="header-controls tw:flex tw:w-full tw:items-center tw:gap-5 tw:rounded-lw-md tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-3.5 tw:py-2.5">
+                    <div class="control-item tw:flex tw:items-center tw:gap-2">
+                        <span class="control-label tw:whitespace-nowrap tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">传输模式:</span>
+                        <select v-model="useSSE" @change="saveFlags" class="lw-select tw:h-7 tw:w-auto tw:min-w-[120px] tw:px-2 tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)]">
                             <option :value="true">SSE 流式 (推荐)</option>
                             <option :value="false">轮询 (兼容模式)</option>
                         </select>
                     </div>
-                    <button class="lw-btn lw-btn-primary lw-btn-small" @click="createPreset">
-                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5"
-                            fill="none">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
+                    <LuminaButton variant="solid" tone="primary" size="sm" @click="createPreset">
+                        <Plus class="tw:size-3.5" aria-hidden="true" />
                         新建编排
-                    </button>
+                    </LuminaButton>
                 </div>
             </div>
 
-            <div class="preset-list" v-if="presets.length > 0">
-                <div class="preset-group" v-for="(preset, pIndex) in presets" :key="preset.id">
-                    <div class="group-header">
-                        <input type="text" v-model="preset.name" class="name-edit-input" @change="save"
+            <div v-if="presets.length > 0" class="preset-list tw:flex tw:flex-col tw:gap-4">
+                <div
+                    v-for="(preset, pIndex) in presets"
+                    :key="preset.id"
+                    class="preset-group tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:p-3.5 tw:transition-[background-color,border-color] tw:hover:border-lw-border tw:hover:bg-lw-hover"
+                >
+                    <div class="group-header tw:mb-3 tw:flex tw:items-center tw:justify-between tw:gap-3 tw:border-b tw:border-dashed tw:border-lw-border-subtle tw:pb-2">
+                        <input type="text" v-model="preset.name" class="name-edit-input tw:flex-1 tw:rounded tw:border tw:border-transparent tw:bg-transparent tw:px-2 tw:py-1 tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:tracking-[var(--lw-type-title-small-tracking)] tw:text-lw-text tw:outline-none tw:transition-[background-color,border-color] tw:hover:border-lw-border-subtle tw:hover:bg-lw-surface tw:focus:border-lw-accent tw:focus:bg-lw-surface" @change="save"
                             placeholder="预设名称..." />
-                        <button class="icon-btn delete" @click="deletePreset(pIndex)" title="删除预设">
+                        <button
+                            class="icon-btn delete tw:inline-flex tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-1.5 tw:text-lw-text-muted tw:transition-[background-color,color] tw:hover:bg-red-50 tw:hover:text-red-600"
+                            @click="deletePreset(pIndex)"
+                            title="删除预设"
+                            aria-label="删除预设"
+                        >
                             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
                                 fill="none">
                                 <polyline points="3 6 5 6 21 6"></polyline>
@@ -127,21 +137,24 @@
                         </button>
                     </div>
 
-                    <div class="node-stack">
-                        <TransitionGroup name="node-list">
-                            <div 
-                                v-for="(node, nIndex) in preset.nodes" 
-                                :key="node.id" 
-                                class="node-item"
-                                :class="{ 
-                                    'is-dragging': draggingNodeId === node.id,
-                                    'is-placeholder': draggingNodeId && draggingNodeId !== node.id && dragCurrentIndex === nIndex
-                                }"
+                    <div class="node-stack tw:flex tw:flex-col tw:gap-2">
+                        <TransitionGroup
+                            name="node-list"
+                            move-class="tw:transition-transform tw:duration-200 tw:ease-out"
+                            enter-active-class="tw:transition-[opacity,transform] tw:duration-200 tw:ease-out"
+                            leave-active-class="tw:transition-[opacity,transform] tw:duration-200 tw:ease-out"
+                            enter-from-class="tw:translate-x-2.5 tw:opacity-0"
+                            leave-to-class="tw:translate-x-2.5 tw:opacity-0"
+                        >
+                            <div
+                                v-for="(node, nIndex) in preset.nodes"
+                                :key="node.id"
+                                :class="getNodeItemClass(node, nIndex)"
                             >
-                                <div class="node-main">
-                                    <div class="node-field-group">
-                                        <div class="field-item">
-                                            <label>逻辑节点 (API 来源)</label>
+                                <div class="node-main tw:flex tw:w-full tw:flex-1 tw:flex-col tw:gap-3 tw:p-4">
+                                    <div class="node-field-group tw:flex tw:flex-col tw:gap-3.5 tw:py-0.5">
+                                        <div class="field-item tw:flex tw:flex-col tw:gap-1.5">
+                                            <label class="tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">逻辑节点 (API 来源)</label>
                                             <select v-model="node.provider" class="lw-select" @change="save">
                                                 <option value="st_current">【ST 当前界面模型】(原生后端)</option>
                                                 <optgroup label="前端直连 (自定义 API)">
@@ -151,18 +164,19 @@
                                                 </optgroup>
                                             </select>
                                         </div>
-                                        <div class="field-item" v-if="node.provider !== 'st_current'">
-                                            <label>具体模型名称</label>
-                                            <div class="model-picker-wrap" :class="{ 'is-open': openDropdownId === node.id }">
-                                                <div class="picker-trigger">
+                                        <div v-if="node.provider !== 'st_current'" class="field-item tw:flex tw:flex-col tw:gap-1.5">
+                                            <label class="tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">具体模型名称</label>
+                                            <div class="model-picker-wrap tw:relative tw:w-full" :class="{ 'is-open': openDropdownId === node.id }">
+                                                <div class="picker-trigger tw:flex tw:items-center tw:gap-0.5 tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-[var(--lw-bg-app)] tw:p-px tw:transition-[border-color,box-shadow] tw:focus-within:border-lw-primary tw:focus-within:[box-shadow:0_0_0_3px_rgba(var(--lw-primary-rgb),0.1)]">
                                                     <input type="text" v-model="node.model"
-                                                        class="lw-input" @change="save" placeholder="手动输入或点击选择..." />
-                                                    <button class="picker-expand-btn" @click.stop="e => toggleDropdown(node.id, e)">
+                                                        class="lw-input tw:h-8 tw:flex-1 tw:border-0 tw:bg-transparent" @change="save" placeholder="手动输入或点击选择..." />
+                                                    <button class="picker-expand-btn tw:flex tw:size-7 tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:text-lw-text-muted tw:transition-[background-color,color] tw:hover:bg-lw-hover tw:hover:text-lw-text" @click.stop="e => toggleDropdown(node.id, e)" aria-label="展开模型列表">
                                                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none">
                                                             <polyline points="6 9 12 15 18 9"></polyline>
                                                         </svg>
                                                     </button>
-                                                    <button class="icon-btn refresh" :title="fetchedModels[node.id] ? '刷新列表' : '拉取列表'"
+                                                    <button class="icon-btn refresh tw:mr-1 tw:inline-flex tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-1.5 tw:text-lw-text-muted tw:transition-[background-color,color] tw:hover:bg-lw-active tw:hover:text-lw-text" :title="fetchedModels[node.id] ? '刷新列表' : '拉取列表'"
+                                                        :aria-label="fetchedModels[node.id] ? '刷新模型列表' : '拉取模型列表'"
                                                         @click.stop="fetchModels(node)">
                                                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor"
                                                             stroke-width="2" fill="none">
@@ -173,19 +187,21 @@
                                                 </div>
 
                                                 <!-- 自定义下拉视图 -->
-                                                <div v-if="openDropdownId === node.id" 
-                                                    class="model-dropdown-portal"
-                                                    :class="{ 'is-flipped': dropdownFlipped }"
-                                                >
-                                                    <div class="dropdown-header">
-                                                        <div class="search-box">
+                                            <div v-if="openDropdownId === node.id"
+                                                :class="[
+                                                    'model-dropdown-portal tw:absolute tw:left-0 tw:top-[calc(100%+4px)] tw:z-50 tw:flex tw:w-full tw:min-w-[280px] tw:max-w-[450px] tw:max-h-[400px] tw:flex-col tw:overflow-hidden tw:rounded-lw-md tw:border tw:border-lw-border tw:bg-lw-surface tw:shadow-2xl tw:animate-[dropdown-fade-in_200ms_ease-out] tw:max-[600px]:fixed tw:max-[600px]:left-1/2 tw:max-[600px]:top-1/2 tw:max-[600px]:w-[calc(100vw-32px)] tw:max-[600px]:max-h-[70vh] tw:max-[600px]:-translate-x-1/2 tw:max-[600px]:-translate-y-1/2 tw:max-[600px]:shadow-[0_0_0_100vh_rgba(0,0,0,0.5)]',
+                                                    dropdownFlipped ? 'is-flipped tw:max-[600px]:bottom-auto' : ''
+                                                ]"
+                                            >
+                                                    <div class="dropdown-header tw:flex tw:items-center tw:gap-2 tw:border-b tw:border-lw-border-subtle tw:bg-lw-subtle tw:p-3">
+                                                        <div class="search-box tw:flex tw:flex-1 tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-lw-border-subtle tw:bg-[var(--lw-bg-app)] tw:px-2.5">
                                                             <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="3" fill="none">
                                                                 <circle cx="11" cy="11" r="8"></circle>
                                                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                                                             </svg>
-                                                            <input type="text" v-model="modelSearchQuery" placeholder="搜索模型..." autofocus @click.stop />
+                                                            <input type="text" v-model="modelSearchQuery" class="tw:h-8 tw:w-full tw:border-0 tw:bg-transparent tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:tracking-[var(--lw-type-body-small-tracking)] tw:text-lw-text tw:outline-none" placeholder="搜索模型..." autofocus @click.stop />
                                                         </div>
-                                                        <button class="sort-toggle" @click.stop="modelSortAlpha = !modelSortAlpha" :title="modelSortAlpha ? '取消排序' : '字母排序'">
+                                                        <button class="sort-toggle tw:flex tw:size-8 tw:items-center tw:justify-center tw:rounded-md tw:border tw:border-lw-border-subtle tw:bg-[var(--lw-bg-app)] tw:text-lw-text-muted tw:transition-[border-color] tw:hover:border-lw-primary" @click.stop="modelSortAlpha = !modelSortAlpha" :title="modelSortAlpha ? '取消排序' : '字母排序'" :aria-label="modelSortAlpha ? '取消模型排序' : '按字母排序模型'">
                                                             <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" :style="{ color: modelSortAlpha ? 'var(--lw-primary)' : '' }">
                                                                 <line x1="4" y1="6" x2="20" y2="6"></line>
                                                                 <line x1="4" y1="12" x2="14" y2="12"></line>
@@ -194,39 +210,39 @@
                                                         </button>
                                                     </div>
 
-                                                    <div class="dropdown-list">
-                                                        <div v-if="Object.keys(getFilteredModels(node.id)).length === 0" class="no-results">
+                                                    <div class="dropdown-list tw:flex-1 tw:overflow-y-auto tw:py-2">
+                                                        <div v-if="Object.keys(getFilteredModels(node.id)).length === 0" class="no-results tw:p-8 tw:text-center tw:text-[length:var(--lw-type-body-medium-size)] tw:font-[var(--lw-type-body-medium-weight)] tw:leading-[var(--lw-type-body-medium-line-height)] tw:tracking-[var(--lw-type-body-medium-tracking)] tw:text-lw-text-muted">
                                                             未找到匹配模型
                                                         </div>
-                                                        <div v-for="(models, group) in getFilteredModels(node.id)" :key="group" class="model-group">
-                                                            <div class="group-label">{{ group }}</div>
-                                                            <div v-for="m in models" :key="String(m.value)" 
-                                                                class="model-option"
-                                                                :class="{ 'is-selected': node.model === String(m.value) }"
+                                                        <div v-for="(models, group) in getFilteredModels(node.id)" :key="group" class="model-group tw:mb-2">
+                                                            <div class="group-label tw:sticky tw:top-[-8px] tw:z-10 tw:bg-lw-subtle tw:px-4 tw:py-1.5 tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">{{ group }}</div>
+                                                            <div v-for="m in models" :key="String(m.value)"
+                                                                class="model-option tw:flex tw:cursor-pointer tw:flex-col tw:px-4 tw:py-2 tw:transition-[background-color]"
+                                                                :class="node.model === String(m.value) ? 'tw:bg-lw-primary-bg' : 'tw:hover:bg-lw-hover'"
                                                                 @click="selectModel(node, String(m.value))"
                                                             >
-                                                                <span class="opt-text">{{ m.text }}</span>
-                                                                <span class="opt-val">{{ String(m.value) }}</span>
+                                                                <span class="opt-text tw:mb-0.5 tw:text-[length:var(--lw-type-title-small-size)] tw:font-[var(--lw-type-title-small-weight)] tw:leading-[var(--lw-type-title-small-line-height)] tw:tracking-[var(--lw-type-title-small-tracking)]" :class="node.model === String(m.value) ? 'tw:text-lw-primary' : 'tw:text-lw-text'">{{ m.text }}</span>
+                                                                <span class="opt-val tw:font-mono tw:text-[length:var(--lw-type-body-small-size)] tw:font-[var(--lw-type-body-small-weight)] tw:leading-[var(--lw-type-body-small-line-height)] tw:tracking-[var(--lw-type-body-small-tracking)] tw:text-lw-text-muted">{{ String(m.value) }}</span>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="field-item" v-else>
-                                            <label>模型状态</label>
-                                            <div class="st-indicator">跟随原生 ST 动态选择</div>
+                                        <div v-else class="field-item tw:flex tw:flex-col tw:gap-1.5">
+                                            <label class="tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:uppercase">模型状态</label>
+                                            <div class="st-indicator tw:flex tw:h-9 tw:items-center tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-[var(--lw-bg-app)] tw:px-3 tw:py-2 tw:text-xs tw:text-lw-text-muted">跟随原生 ST 动态选择</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div class="node-footer">
-                                    <div class="footer-left">
-                                        <div class="node-index">#{{ nIndex + 1 }}</div>
+                                <div class="node-footer tw:flex tw:h-[42px] tw:select-none tw:items-center tw:justify-between tw:rounded-b-lw-md tw:border-t tw:border-dashed tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-3">
+                                    <div class="footer-left tw:flex tw:items-center tw:gap-3">
+                                        <div class="node-index tw:flex tw:h-[18px] tw:w-7 tw:items-center tw:justify-center tw:rounded tw:border tw:border-lw-border-subtle tw:bg-lw-surface tw:text-[length:var(--lw-type-label-small-size)] tw:font-[var(--lw-type-label-small-weight)] tw:leading-[var(--lw-type-label-small-line-height)] tw:tracking-[var(--lw-type-label-small-tracking)] tw:text-lw-text-muted tw:opacity-80">#{{ nIndex + 1 }}</div>
                                     </div>
-                                    
-                                    <div 
-                                        class="node-drag-handle" 
+
+                                    <div
+                                        class="node-drag-handle tw:mx-auto tw:flex tw:h-8 tw:w-12 tw:cursor-grab tw:touch-none tw:items-center tw:justify-center tw:rounded-md tw:text-lw-text-muted tw:transition-[background-color,color] tw:hover:bg-lw-active tw:hover:text-lw-primary tw:active:cursor-grabbing tw:active:bg-lw-primary tw:active:text-white"
                                         @pointerdown="e => startDrag(e, preset, nIndex)"
                                         title="拖拽排序"
                                     >
@@ -240,21 +256,38 @@
                                         </svg>
                                     </div>
 
-                                    <div class="footer-right">
-                                        <div class="node-sort-actions">
-                                            <button @click="moveNode(preset, nIndex, 'up')" :disabled="nIndex === 0" title="上移">
+                                    <div class="footer-right tw:flex tw:items-center tw:gap-3">
+                                        <div class="node-sort-actions tw:flex tw:flex-col tw:gap-1">
+                                            <button
+                                                class="tw:flex tw:h-3.5 tw:w-6 tw:items-center tw:justify-center tw:border-0 tw:bg-transparent tw:p-0 tw:text-lw-text-muted tw:transition-[color,transform,opacity] tw:duration-150 tw:ease-out tw:disabled:cursor-not-allowed tw:disabled:opacity-10 tw:enabled:hover:-translate-y-px tw:enabled:hover:text-lw-primary"
+                                                @click="moveNode(preset, nIndex, 'up')"
+                                                :disabled="nIndex === 0"
+                                                title="上移"
+                                                aria-label="上移节点"
+                                            >
                                                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="3" fill="none">
                                                     <polyline points="18 15 12 9 6 15"></polyline>
                                                 </svg>
                                             </button>
-                                            <button @click="moveNode(preset, nIndex, 'down')" :disabled="nIndex === preset.nodes.length - 1" title="下移">
+                                            <button
+                                                class="tw:flex tw:h-3.5 tw:w-6 tw:items-center tw:justify-center tw:border-0 tw:bg-transparent tw:p-0 tw:text-lw-text-muted tw:transition-[color,transform,opacity] tw:duration-150 tw:ease-out tw:disabled:cursor-not-allowed tw:disabled:opacity-10 tw:enabled:hover:translate-y-px tw:enabled:hover:text-lw-primary"
+                                                @click="moveNode(preset, nIndex, 'down')"
+                                                :disabled="nIndex === preset.nodes.length - 1"
+                                                title="下移"
+                                                aria-label="下移节点"
+                                            >
                                                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="3" fill="none">
                                                     <polyline points="6 9 12 15 18 9"></polyline>
                                                 </svg>
                                             </button>
                                         </div>
-                                        <div class="footer-divider"></div>
-                                        <button class="icon-btn delete" @click="deleteNode(preset, nIndex)" title="移除节点">
+                                        <div class="footer-divider tw:mx-1 tw:h-4 tw:w-px tw:bg-lw-border-subtle"></div>
+                                        <button
+                                            class="icon-btn delete tw:inline-flex tw:items-center tw:justify-center tw:rounded-md tw:border-0 tw:bg-transparent tw:p-1.5 tw:text-lw-text-muted tw:transition-[background-color,color] tw:hover:bg-red-50 tw:hover:text-red-600"
+                                            @click="deleteNode(preset, nIndex)"
+                                            title="移除节点"
+                                            aria-label="移除节点"
+                                        >
                                             <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
                                                 <polyline points="3 6 5 6 21 6"></polyline>
                                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -266,19 +299,15 @@
                         </TransitionGroup>
                     </div>
 
-                    <button class="lw-btn lw-btn-ghost lw-btn-small add-node-btn" @click="addNode(preset)">
-                        <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5"
-                            fill="none">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
+                    <LuminaButton variant="outline" tone="neutral" size="sm" block class="tw:mt-3 tw:border-dashed tw:text-lw-text-secondary" @click="addNode(preset)">
+                        <Plus class="tw:size-3" aria-hidden="true" />
                         添加备用节点 (Fallback)
-                    </button>
+                    </LuminaButton>
                 </div>
             </div>
 
-            <div class="empty-state" v-else>
-                <div class="empty-icon">
+            <div v-else class="empty-state tw:p-10 tw:text-center tw:text-lw-text-muted">
+                <div class="empty-icon tw:mb-3 tw:opacity-50">
                     <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" stroke-width="1.5"
                         fill="none">
                         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
@@ -291,13 +320,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { settingsDomainService } from '../../api/services/SettingsDomainService';
-import { llmEngine } from '../../api/llmEngine';
-import { LuminaWeaveAPI } from '../../api/index';
-import { gsap } from 'gsap';
+import { ref, onMounted, inject } from 'vue';
+import { Plus } from 'lucide-vue-next';
+import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
+import { llmEngine } from '../../api/llmEngine.js';
+import { LuminaWeaveAPI } from '../../api/index.js';
+import LuminaButton from '../../ui/primitives/LuminaButton.vue';
+import { cn } from '../../ui/cn.js';
 
-const lwApi = (window as any).LuminaWeave as LuminaWeaveAPI;
+
+const lwApi = inject<LuminaWeaveAPI>('lwApi');
 
 interface NexusApi {
     id: string;
@@ -427,6 +459,12 @@ let nodeOffsets: number[] = [];
 let activePreset: NexusPreset | null = null;
 let currentPointerId: number | null = null;
 
+const getNodeItemClass = (node: NexusNode, index: number) => cn(
+    'node-item tw:relative tw:flex tw:flex-col tw:overflow-visible tw:rounded-lw-md tw:border tw:border-lw-border-subtle tw:bg-lw-surface tw:p-0 tw:transition-[background-color,border-color,box-shadow,transform,opacity] tw:duration-200 tw:ease-out',
+    draggingNodeId.value === node.id && 'is-dragging tw:z-10 tw:scale-[1.02] tw:border-lw-primary tw:bg-lw-hover tw:shadow-[0_8px_24px_rgba(var(--lw-primary-rgb),0.15)]',
+    draggingNodeId.value && draggingNodeId.value !== node.id && dragCurrentIndex.value === index && 'is-placeholder tw:border-dashed tw:opacity-40'
+);
+
 const startDrag = (event: PointerEvent, preset: NexusPreset, index: number) => {
     // 捕获指针，确保在容器外部也能响应
     const target = event.currentTarget as HTMLElement;
@@ -464,11 +502,11 @@ const handlePointerMove = (event: PointerEvent) => {
     // 确定目标索引
     let targetIndex = currentIndex;
     const itemHeight = nodeHeights[currentIndex] || 60;
-    
+
     // 向下移动探测
     if (dy > itemHeight * 0.6 && currentIndex < activePreset.nodes.length - 1) {
         targetIndex = currentIndex + 1;
-    } 
+    }
     // 向上移动探测
     else if (dy < -itemHeight * 0.6 && currentIndex > 0) {
         targetIndex = currentIndex - 1;
@@ -479,7 +517,7 @@ const handlePointerMove = (event: PointerEvent) => {
         // 执行交换
         const item = nodes.splice(currentIndex, 1)[0];
         nodes.splice(targetIndex, 0, item);
-        
+
         // 重置起点，实现连续平滑滑动
         dragStartClientY = event.clientY;
         dragCurrentIndex.value = targetIndex;
@@ -488,7 +526,7 @@ const handlePointerMove = (event: PointerEvent) => {
 
 const stopDrag = (event: PointerEvent) => {
     if (currentPointerId !== null && event.pointerId !== currentPointerId) return;
-    
+
     // 释放捕获
     if (draggingNodeId.value) {
         const el = document.querySelector(`[key="${draggingNodeId.value}"]`) as HTMLElement;
@@ -500,7 +538,7 @@ const stopDrag = (event: PointerEvent) => {
     activePreset = null;
     currentPointerId = null;
     document.body.style.userSelect = '';
-    
+
     save();
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', stopDrag);
@@ -521,7 +559,7 @@ const toggleDropdown = (nodeId: string, event: MouseEvent) => {
     } else {
         openDropdownId.value = nodeId;
         modelSearchQuery.value = ""; // 开启时清空搜索
-        
+
         // 智能定位：检测底部空间
         const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
         const spaceBelow = window.innerHeight - rect.bottom;
@@ -545,8 +583,8 @@ const getFilteredModels = (nodeId: string) => {
     for (const [groupName, models] of Object.entries(rawGroups)) {
         let filtered = models;
         if (query) {
-            filtered = models.filter(m => 
-                m.text.toLowerCase().includes(query) || 
+            filtered = models.filter(m =>
+                m.text.toLowerCase().includes(query) ||
                 String(m.value).toLowerCase().includes(query)
             );
         }
@@ -566,7 +604,7 @@ const getFilteredModels = (nodeId: string) => {
 onMounted(() => {
     window.addEventListener('click', (e: MouseEvent) => {
         const path = e.composedPath();
-        const isInternal = path.some(el => 
+        const isInternal = path.some(el =>
             (el as HTMLElement).classList?.contains('model-picker-wrap') ||
             (el as HTMLElement).classList?.contains('model-dropdown-portal')
         );
@@ -583,33 +621,28 @@ onMounted(() => {
 
 const fetchModels = async (node: NexusNode) => {
     if (node.provider === 'st_current') {
-        const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.services.host.showToast('选择原生 ST 后无需手动拉取模型。', 'warning');
+        lwApi?.services.host.showToast('选择原生 ST 后无需手动拉取模型。', 'warning');
         return;
     }
 
     const targetApi = customApis.value.find(a => a.id === node.provider);
     if (!targetApi) {
-        const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.services.host.showToast('所选接口不存在，请先配置！', 'error');
+        lwApi?.services.host.showToast('所选接口不存在，请先配置！', 'error');
         return;
     }
 
     if (!targetApi.key) {
-        const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.services.host.showToast('该接口的地址或密钥为空！', 'warning');
+        lwApi?.services.host.showToast('该接口的地址或密钥为空！', 'warning');
         return;
     }
 
     if (targetApi.type !== 'openai' && targetApi.type !== 'openai_compatible') {
-        const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.services.host.showToast('该 Provider 暂不支持自动拉取模型列表，请手动填写模型名。', 'warning');
+        lwApi?.services.host.showToast('该 Provider 暂不支持自动拉取模型列表，请手动填写模型名。', 'warning');
         return;
     }
 
     if (!targetApi.url) {
-        const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.services.host.showToast('该接口的地址为空！', 'warning');
+        lwApi?.services.host.showToast('该接口的地址为空！', 'warning');
         return;
     }
 
@@ -617,8 +650,7 @@ const fetchModels = async (node: NexusNode) => {
 
     if (Object.keys(models).length > 0) {
         fetchedModels.value[node.id] = models;
-        const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.services.host.showToast(`成功为您拉取 [${targetApi.name}] 模型列表！`, 'success');
+        lwApi?.services.host.showToast(`成功为您拉取 [${targetApi.name}] 模型列表！`, 'success');
 
         if (!node.model) {
             const firstGroup = Object.values(models)[0];
@@ -629,627 +661,7 @@ const fetchModels = async (node: NexusNode) => {
         }
     } else {
         const errMsg = '拉取大模型失败，跨域报错或密钥不正确。请按 F12 检查控制台网络拦截。';
-        const lw = (window as any).LuminaWeave as LuminaWeaveAPI | undefined;
-        lw?.services.host.showToast(errMsg, 'error', '获取失败', 5000);
+        lwApi?.services.host.showToast(errMsg, 'error', '获取失败', 5000);
     }
 };
 </script>
-
-<style scoped>
-.nexus-preset-manager {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-}
-
-.section-container {
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    gap: 20px;
-}
-
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--lw-border-subtle);
-}
-
-.section-header.vertical {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-}
-
-.header-main {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-}
-
-.header-controls {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    width: 100%;
-    padding: 10px 14px;
-    background: var(--lw-bg-subtle);
-    border-radius: var(--lw-radius-md);
-    border: 1px solid var(--lw-border-subtle);
-}
-
-.control-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.control-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--lw-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    white-space: nowrap;
-}
-
-.lw-select.compact {
-    height: 28px;
-    font-size: 11px;
-    padding: 0 8px;
-    width: auto;
-    min-width: 120px;
-}
-
-.section-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.icon-wrap {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    background: var(--lw-bg-app);
-    color: var(--lw-text-muted);
-    border-radius: var(--lw-radius-sm);
-    border: 1px solid var(--lw-border-subtle);
-}
-
-.icon-wrap.accent {
-    border-color: #5c8bf633;
-    color: var(--lw-primary);
-    border-radius: var(--lw-radius-sm);
-    background: #5c73f614;
-}
-
-.title-meta {
-    display: flex;
-    flex-direction: column;
-}
-
-.main-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--lw-text-main);
-}
-
-.sub-hint {
-    font-size: 11px;
-    color: var(--lw-text-muted);
-}
-
-/* 列表样式 */
-.api-list,
-.preset-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.api-item,
-.preset-group {
-    background: var(--lw-bg-subtle);
-    border: 1px solid var(--lw-border-subtle);
-    border-radius: var(--lw-radius-sm);
-    padding: 14px;
-    transition: var(--lw-transition);
-}
-
-.api-item:hover,
-.preset-group:hover {
-    border-color: var(--lw-border-base);
-    background: var(--lw-bg-hover);
-}
-
-.item-header,
-.group-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px dashed var(--lw-border-subtle);
-}
-
-.name-edit-input {
-    flex: 1;
-    background: transparent;
-    border: 1px solid transparent;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 4px 8px;
-    border-radius: 4px;
-    color: var(--lw-text-main);
-    outline: none;
-    transition: var(--lw-transition);
-}
-
-.name-edit-input:hover {
-    background: var(--lw-bg-surface);
-    border-color: var(--lw-border-subtle);
-}
-
-.name-edit-input:focus {
-    background: var(--lw-bg-surface);
-    border-color: var(--lw-accent);
-}
-
-.item-fields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-.field-item {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.field-item label {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--lw-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.node-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.node-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    padding: 0;
-    background: var(--lw-bg-surface);
-    border: 1px solid var(--lw-border-subtle);
-    border-radius: var(--lw-radius-md);
-    transition: all 0.25s cubic-bezier(0.2, 0, 0.2, 1);
-    cursor: default;
-    position: relative;
-    overflow: visible; /* 为了让下拉框不被截断 */
-}
-
-.node-item.is-dragging {
-    z-index: 10;
-    border-color: var(--lw-primary);
-    box-shadow: 0 8px 24px rgba(var(--lw-primary-rgb), 0.15);
-    background: var(--lw-bg-hover);
-    transform: scale(1.02);
-}
-
-.node-item.is-placeholder {
-    opacity: 0.4;
-    border-style: dashed;
-}
-
-/* TransitionGroup FLIP 动画 */
-.node-list-move {
-    transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1);
-}
-
-.node-list-enter-active,
-.node-list-leave-active {
-    transition: all 0.25s ease;
-}
-
-.node-list-enter-from,
-.node-list-leave-to {
-    opacity: 0;
-    transform: translateX(10px);
-}
-
-.node-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px;
-    width: 100%;
-}
-
-.node-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 42px;
-    padding: 0 12px;
-    background: var(--lw-bg-subtle);
-    border-top: 1px dashed var(--lw-border-subtle);
-    border-bottom-left-radius: var(--lw-radius-md);
-    border-bottom-right-radius: var(--lw-radius-md);
-    user-select: none;
-}
-
-.footer-left, .footer-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.footer-divider {
-    width: 1px;
-    height: 16px;
-    background: var(--lw-border-subtle);
-    margin: 0 4px;
-}
-
-.node-drag-handle {
-    cursor: grab;
-    color: var(--lw-text-muted);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 32px;
-    border-radius: 6px;
-    transition: var(--lw-transition);
-    touch-action: none;
-    margin: 0 auto; /* 居中 */
-}
-
-.node-drag-handle:hover {
-    background: var(--lw-bg-active);
-    color: var(--lw-primary);
-}
-
-.node-drag-handle:active {
-    cursor: grabbing;
-    background: var(--lw-primary);
-    color: white;
-}
-
-.node-index {
-    font-size: 9px;
-    font-weight: 900;
-    color: var(--lw-text-muted);
-    background: var(--lw-bg-surface);
-    width: 28px;
-    height: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    border: 1px solid var(--lw-border-subtle);
-    opacity: 0.8;
-}
-
-.node-sort-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.node-sort-actions button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 14px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    color: var(--lw-text-muted);
-    cursor: pointer;
-    transition: var(--lw-transition);
-}
-
-.node-sort-actions button:hover:not(:disabled) {
-    color: var(--lw-primary);
-    transform: translateY(-1px);
-}
-
-.node-sort-actions button:hover:not(:disabled):last-child {
-    transform: translateY(1px);
-}
-
-.node-sort-actions button:disabled {
-    opacity: 0.1;
-    cursor: not-allowed;
-}
-
-.model-picker-wrap {
-    position: relative;
-    width: 100%;
-}
-
-.picker-trigger {
-    display: flex;
-    gap: 2px;
-    align-items: center;
-    background: var(--lw-bg-app);
-    border-radius: var(--lw-radius-sm);
-    border: 1px solid var(--lw-border-subtle);
-    padding: 1px;
-    transition: var(--lw-transition);
-}
-
-.picker-trigger:focus-within {
-    border-color: var(--lw-primary);
-    box-shadow: 0 0 0 3px rgba(var(--lw-primary-rgb), 0.1);
-}
-
-.picker-trigger .lw-input {
-    border: none;
-    background: transparent;
-    height: 32px;
-    flex: 1;
-}
-
-.picker-expand-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
-    background: transparent;
-    color: var(--lw-text-muted);
-    cursor: pointer;
-    border-radius: 6px;
-    transition: var(--lw-transition);
-}
-
-.picker-expand-btn:hover {
-    background: var(--lw-bg-hover);
-    color: var(--lw-text-main);
-}
-
-.picker-trigger .refresh {
-    margin-right: 4px;
-}
-
-/* 下拉菜单门户 */
-.model-dropdown-portal {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    width: 100%;
-    min-width: 280px;
-    max-width: 450px;
-    max-height: 400px;
-    background: var(--lw-bg-surface);
-    border: 1px solid var(--lw-border-base);
-    border-radius: var(--lw-radius-md);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    animation: dropdown-fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@media (max-width: 600px) {
-    .model-dropdown-portal {
-        position: fixed;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        width: calc(100vw - 32px);
-        max-height: 70vh;
-        box-shadow: 0 0 0 100vh rgba(0,0,0,0.5); /* 遮罩效果 */
-    }
-    
-    .model-dropdown-portal.is-flipped {
-        bottom: auto;
-    }
-}
-
-@keyframes dropdown-fade-in {
-    from { opacity: 0; transform: translateY(10px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.dropdown-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px;
-    border-bottom: 1px solid var(--lw-border-subtle);
-    background: var(--lw-bg-subtle);
-}
-
-.search-box {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--lw-bg-app);
-    border: 1px solid var(--lw-border-subtle);
-    border-radius: 6px;
-    padding: 0 10px;
-}
-
-.search-box input {
-    width: 100%;
-    height: 32px;
-    border: none;
-    background: transparent;
-    font-size: 13px;
-    color: var(--lw-text-main);
-    outline: none;
-}
-
-.sort-toggle {
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--lw-border-subtle);
-    background: var(--lw-bg-app);
-    border-radius: 6px;
-    cursor: pointer;
-    color: var(--lw-text-muted);
-    transition: var(--lw-transition);
-}
-
-.sort-toggle:hover {
-    border-color: var(--lw-primary);
-}
-
-.dropdown-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px 0;
-}
-
-.no-results {
-    padding: 32px;
-    text-align: center;
-    color: var(--lw-text-muted);
-    font-size: 13px;
-}
-
-.model-group {
-    margin-bottom: 8px;
-}
-
-.group-label {
-    padding: 6px 16px;
-    font-size: 10px;
-    font-weight: 800;
-    color: var(--lw-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: var(--lw-bg-subtle);
-    position: sticky;
-    top: -8px;
-    z-index: 10;
-}
-
-.model-option {
-    display: flex;
-    flex-direction: column;
-    padding: 8px 16px;
-    cursor: pointer;
-    transition: var(--lw-transition);
-}
-
-.model-option:hover {
-    background: var(--lw-bg-hover);
-}
-
-.model-option.is-selected {
-    background: var(--lw-primary-bg);
-}
-
-.model-option.is-selected .opt-text {
-    color: var(--lw-primary);
-    font-weight: 700;
-}
-
-.opt-text {
-    font-size: 13px;
-    color: var(--lw-text-main);
-    margin-bottom: 2px;
-}
-
-.opt-val {
-    font-size: 11px;
-    color: var(--lw-text-muted);
-    font-family: monospace;
-}
-.node-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.node-field-group {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 2px 0;
-}
-
-.node-footer-actions {
-    display: flex;
-    justify-content: center;
-    padding-top: 10px;
-    margin-top: 4px;
-    border-top: 1px dashed var(--lw-border-subtle);
-}
-
-.st-indicator {
-    padding: 8px 12px;
-    background: var(--lw-bg-app);
-    border: 1px solid var(--lw-border-subtle);
-    border-radius: var(--lw-radius-sm);
-    font-size: 11px;
-    color: var(--lw-text-muted);
-    height: 36px;
-    display: flex;
-    align-items: center;
-}
-
-.icon-btn {
-    padding: 6px;
-    border-radius: 6px;
-    color: var(--lw-text-muted);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    transition: var(--lw-transition);
-}
-
-.icon-btn:hover {
-    background: var(--lw-bg-active);
-    color: var(--lw-text-main);
-}
-
-.icon-btn.delete:hover {
-    color: #ef4444;
-    background: #fef2f2;
-}
-
-.add-node-btn {
-    margin-top: 12px;
-    width: 100%;
-    border: 1px dashed var(--lw-border-base) !important;
-}
-
-.empty-state {
-    padding: 40px;
-    text-align: center;
-    color: var(--lw-text-muted);
-}
-
-.empty-icon {
-    margin-bottom: 12px;
-    opacity: 0.5;
-}
-</style>

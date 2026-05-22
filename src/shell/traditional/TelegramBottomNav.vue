@@ -8,18 +8,41 @@
       type="button"
       @click="emit('select', item.id)"
     >
-      <span class="lw-telegram-bottom-nav__icon" v-html="item.icon"></span>
+      <span class="lw-telegram-bottom-nav__icon">
+        <span
+          v-if="item.id === 'profile' && userAvatar"
+          class="lw-telegram-bottom-nav__avatar"
+          :style="avatarStyle"
+        >
+          <img :src="userAvatar" :alt="userName" @error="hideBrokenTelegramAvatar">
+        </span>
+        <component
+          :is="item.icon"
+          v-else
+          :size="24"
+          :stroke-width="TELEGRAM_ICON_STROKE_WIDTH"
+          aria-hidden="true"
+        />
+      </span>
       <span>{{ item.label }}</span>
     </button>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, inject } from 'vue';
+import { LuminaWeaveAPI } from '@/api';
+import {
+  TELEGRAM_ICON_STROKE_WIDTH,
+  getTelegramAvatarStyle,
+  getTelegramIconComponent,
+  hideBrokenTelegramAvatar
+} from './telegramVisual.js';
 
 const props = defineProps<{
   activeMainTab: string;
   characterSheetOpen: boolean;
+  settingsPanelOpen: boolean;
   profilePanelOpen: boolean;
 }>();
 
@@ -27,30 +50,36 @@ const emit = defineEmits<{
   (e: 'select', itemId: 'chat' | 'characters' | 'settings' | 'profile'): void;
 }>();
 
+const lwApi = inject<LuminaWeaveAPI>('lwApi');
+const userName = computed(() => lwApi?.getUserName?.() || 'User');
+const rawUserAvatar = computed(() => lwApi?.getUserAvatar?.() || '');
+const userAvatar = computed(() => rawUserAvatar.value);
+const avatarStyle = computed(() => getTelegramAvatarStyle(userName.value));
+
 const items = computed(() => [
   {
     id: 'chat' as const,
-    label: '聊天',
-    active: props.activeMainTab === 'lumina-chat' && !props.characterSheetOpen && !props.profilePanelOpen,
-    icon: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg>'
+    label: '对话',
+    active: props.activeMainTab === 'lumina-chat' && !props.characterSheetOpen && !props.settingsPanelOpen && !props.profilePanelOpen,
+    icon: getTelegramIconComponent('chat')
   },
   {
     id: 'characters' as const,
-    label: '角色',
+    label: '联系人',
     active: props.characterSheetOpen,
-    icon: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="8" r="4"></circle><path d="M4 22a8 8 0 0 1 16 0"></path></svg>'
+    icon: getTelegramIconComponent('contacts')
   },
   {
     id: 'settings' as const,
     label: '设置',
-    active: props.activeMainTab === 'lumina-settings' || props.activeMainTab === 'mobile-widget:lumina-settings',
-    icon: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.22.65.22 1H21a2 2 0 1 1 0 4h-1.38c0 .35-.08.69-.22 1z"></path></svg>'
+    active: props.settingsPanelOpen || props.activeMainTab === 'lumina-settings' || props.activeMainTab === 'mobile-widget:lumina-settings',
+    icon: getTelegramIconComponent('settings')
   },
   {
     id: 'profile' as const,
     label: '个人资料',
     active: props.profilePanelOpen,
-    icon: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="7" r="4"></circle><path d="M5.5 21a7.5 7.5 0 0 1 13 0"></path></svg>'
+    icon: getTelegramIconComponent('user')
   }
 ]);
 </script>
@@ -66,10 +95,10 @@ const items = computed(() => [
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   padding: 8px;
-  border: 1px solid var(--lw-border-base);
+  border: 0.5px solid var(--lw-telegram-tab-rim, color-mix(in srgb, var(--lw-border-base) 42%, transparent));
   border-radius: 24px;
-  background: var(--lw-surface-container-high);
-  box-shadow: var(--lw-telegram-panel-shadow, 0 18px 38px rgba(44, 92, 130, 0.18));
+  background: var(--lw-telegram-tab-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent));
+  box-shadow: none;
   backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
   -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
 }
@@ -86,19 +115,41 @@ const items = computed(() => [
   align-items: center;
   justify-content: center;
   gap: 4px;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
 }
 
 .lw-telegram-bottom-nav__item.active,
 .lw-telegram-bottom-nav__item:hover {
-  background: color-mix(in srgb, var(--lw-primary) 14%, transparent);
+  background: var(--lw-telegram-active-pill, color-mix(in srgb, var(--lw-primary) 17%, transparent));
   color: var(--lw-primary);
+  box-shadow: none;
 }
 
 .lw-telegram-bottom-nav__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  height: 25px;
+}
+
+.lw-telegram-bottom-nav__avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--lw-telegram-avatar-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.lw-telegram-bottom-nav__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 </style>

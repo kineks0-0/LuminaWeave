@@ -14,9 +14,9 @@
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue';
 import SurfaceOutlet from '../platform/surface/SurfaceOutlet.vue';
-import type { DynamicTabConfig } from './types';
-import { resolveDynamicTabTarget } from './dynamicTabResolver';
-import { legacyTabComponentRegistry } from './legacyTabComponents';
+import type { DynamicTabConfig } from './types.js';
+import { resolveDynamicTabTarget } from './dynamicTabResolver.js';
+import { legacyTabComponentRegistry } from './legacyTabComponents.js';
 
 defineOptions({
   inheritAttrs: false

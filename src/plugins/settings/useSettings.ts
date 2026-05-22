@@ -1,7 +1,7 @@
 import { reactive, ref, onUnmounted } from 'vue';
-import type { StorageScope } from '../../api/storage';
-import { settingsDomainService, type SettingsStorageChange } from '../../api/services/SettingsDomainService';
-import { getRegisteredSettingsCatalog } from './settingsRegistry';
+import type { StorageScope } from '../../api/storage.js';
+import { settingsDomainService, type SettingsStorageChange } from '../../api/services/SettingsDomainService.js';
+import { getRegisteredSettingsCatalog } from './settingsRegistry.js';
 
 // 全局响应式状态存放配置的当前值
 export const activeSettings = reactive<Record<string, any>>({});

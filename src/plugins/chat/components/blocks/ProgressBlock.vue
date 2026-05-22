@@ -57,14 +57,18 @@ const barColor = computed(() => {
 }
 
 .progress-label {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-color, #334155);
 }
 
 .progress-percentage {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  letter-spacing: var(--lw-type-label-medium-tracking);
   font-family: tabular-nums, sans-serif;
   color: var(--lw-primary, #8b5cf6);
 }

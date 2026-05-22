@@ -15,7 +15,6 @@ import {
     TransactionQueryResponse,
     TransactionErrorPayload
 } from '@shared/api/TransactionTypes.js';
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
 import { ConversationDocument, ConversationMutation, createEmptyConversationDocument } from '@shared/ConversationTypes.js';
 
 /**
@@ -114,7 +113,7 @@ export class PersistenceService {
 
     private async _queryLatestTransaction(chatId: string, scope: TransactionScope, idempotencyKey: string): Promise<TransactionQueryResponse | null> {
         try {
-            return await BridgeDispatcher.conversation.getTransactions(chatId, { scope, idempotencyKey });
+            return await HALContext.instance.runtime.conversation.getTransactions(chatId, { scope, idempotencyKey });
         } catch (e) {
             console.warn(`[PersistenceService] 查询最新事务失败`, e);
             return null;
@@ -123,7 +122,7 @@ export class PersistenceService {
 
     private async _queryTransactionsAfterSeq(chatId: string, afterSeq: number, scope: TransactionScope): Promise<TransactionQueryResponse | null> {
         try {
-            return await BridgeDispatcher.conversation.getTransactions(chatId, { afterSeq: String(afterSeq), scope });
+            return await HALContext.instance.runtime.conversation.getTransactions(chatId, { afterSeq: String(afterSeq), scope });
         } catch (e) {
             console.warn(`[PersistenceService] 查询增量事务失败`, e);
             return null;
@@ -162,7 +161,7 @@ export class PersistenceService {
         }
         if (!tx) return;
         try {
-            const rollbackPayload = await BridgeDispatcher.conversation.rollbackTransaction(chatId, tx.id) as TransactionMutationResponse;
+            const rollbackPayload = await HALContext.instance.runtime.conversation.rollbackTransaction(chatId, tx.id) as TransactionMutationResponse;
             const rollbackSeq = typeof rollbackPayload.lastCommittedSeq === 'number'
                 ? rollbackPayload.lastCommittedSeq
                 : null;
@@ -202,7 +201,7 @@ export class PersistenceService {
         const start = Date.now();
         while (Date.now() - start < maxWaitMs) {
             try {
-                const data = await BridgeDispatcher.conversation.getTransactions(chatId);
+                const data = await HALContext.instance.runtime.conversation.getTransactions(chatId);
                 const transactions = Array.isArray(data.transactions) ? data.transactions : [];
                 if (!transactions.some((item) => item.status === 'pending' || item.status === 'running')) {
                     return true;
@@ -226,7 +225,7 @@ export class PersistenceService {
 
             try {
                 // 2. 请求当前最新的事务状态
-                const data = await BridgeDispatcher.conversation.getTransactions(chatId);
+                const data = await HALContext.instance.runtime.conversation.getTransactions(chatId);
                 const transactions = Array.isArray(data.transactions) ? data.transactions : [];
                 const latest = [...transactions].sort((a, b) => b.seq - a.seq)[0];
                 const remoteSeq = typeof data.lastCommittedSeq === 'number' ? data.lastCommittedSeq : 0;
@@ -249,7 +248,7 @@ export class PersistenceService {
         await this._waitForTransactions(chatId);
 
         try {
-            const data = await BridgeDispatcher.conversation.getConversation(chatId);
+            const data = await HALContext.instance.runtime.conversation.getConversation(chatId);
             if (data?.document) {
                 const metadata = {
                     activeLeafId: data.document.activeLeafId,
@@ -305,7 +304,7 @@ export class PersistenceService {
     }
 
     private async _prepareConversationDocument(chatId: string): Promise<ConversationDocument> {
-        const existing = (await BridgeDispatcher.conversation.getConversation(chatId)).document;
+        const existing = (await HALContext.instance.runtime.conversation.getConversation(chatId)).document;
         const pluginMetadata: Record<string, any> = {};
         pluginManager.callHooks('onMetadataExport', pluginMetadata);
 
@@ -421,7 +420,7 @@ export class PersistenceService {
                 // 1. 获取后端当前状态 (快照对比)
                 let remoteDocument: ConversationDocument | null = null;
                 try {
-                    const data = await BridgeDispatcher.conversation.getConversation(chatId);
+                    const data = await HALContext.instance.runtime.conversation.getConversation(chatId);
                     remoteDocument = data.document;
                 } catch (e) {
                     // ignore error, assume empty
@@ -457,7 +456,7 @@ export class PersistenceService {
                     const payload = await this._prepareConversationDocument(chatId);
                     const payloadDigest = TransactionEngine.digest(payload);
                     await this._mutateWithCompensation(chatId, 'chat.save', payloadDigest, async (transactionContext) => {
-                        return await BridgeDispatcher.conversation.saveConversation(chatId, {
+                        return await HALContext.instance.runtime.conversation.saveConversation(chatId, {
                             ...payload,
                             transaction: {
                                 ...payload.transaction,
@@ -496,7 +495,7 @@ export class PersistenceService {
                     };
                     const payloadDigest = TransactionEngine.digest(patchPayload);
                     await this._mutateWithCompensation(chatId, 'chat.patch', payloadDigest, async (_transactionContext) => {
-                        const payload = await BridgeDispatcher.conversation.mutateConversation(chatId, patchPayload) as any;
+                        const payload = await HALContext.instance.runtime.conversation.mutateConversation(chatId, patchPayload) as any;
                         
                         // 标记成功同步
                         [...diff.added, ...diff.updated].forEach(n => {

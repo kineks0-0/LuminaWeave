@@ -1,7 +1,27 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue';
-import { getThemeSettingValue } from '../../theme/themeRegistry';
-import type { DynamicTabConfig } from '../../shell/types';
-import type { CharacterChannelState, CreateChatConversationInput } from '../../types/ConversationContextTypes';
+import { lwStorage } from '../../api/storage.js';
+import { getThemeSettingValue } from '../../theme/themeRegistry.js';
+import type {
+  TelegramConversationListMode,
+  TelegramDesktopLeftRoute,
+  TelegramMobileTabId,
+  TelegramStackRoute
+} from '../../shell/types.js';
+
+const TELEGRAM_LIST_MODE_STORAGE_KEY = 'luminaWeave.telegram.conversationListMode';
+
+const getStoredConversationListMode = (): TelegramConversationListMode => {
+  return lwStorage.get(TELEGRAM_LIST_MODE_STORAGE_KEY, 'groupedByRole', 'Global') === 'conversationFiles'
+    ? 'conversationFiles'
+    : 'groupedByRole';
+};
+
+const rootRouteForMobileTab = (tabId: TelegramMobileTabId): TelegramStackRoute => {
+  if (tabId === 'roles') return { name: 'roleList' };
+  if (tabId === 'settings') return { name: 'settings' };
+  if (tabId === 'profile') return { name: 'profile' };
+  return { name: 'conversationList' };
+};
 
 export const useTelegramShell = ({
   activeDesktopModeId,
@@ -12,13 +32,7 @@ export const useTelegramShell = ({
   widgetWidth,
   showNexus,
   activeRightPanel,
-  characterChannelState,
   showCharacterRail,
-  handleOpenTab,
-  switchRightPanel,
-  createMobileChatSession,
-  openMobileChatSession,
-  openSettingsPanel,
   switchMainView
 }: {
   activeDesktopModeId: Ref<string> | ComputedRef<string>;
@@ -29,13 +43,7 @@ export const useTelegramShell = ({
   widgetWidth: Ref<number>;
   showNexus: Ref<boolean>;
   activeRightPanel: Ref<string>;
-  characterChannelState: Ref<CharacterChannelState> | ComputedRef<CharacterChannelState>;
   showCharacterRail: Ref<boolean>;
-  handleOpenTab: (tabConfig: DynamicTabConfig) => void;
-  switchRightPanel: (panelId: string) => void;
-  createMobileChatSession: (payload: CreateChatConversationInput) => void;
-  openMobileChatSession: (sessionId: string) => void;
-  openSettingsPanel: () => void;
   switchMainView: (tabId: string) => void;
 }) => {
   const isTelegramMobileMode = computed(() =>
@@ -46,6 +54,20 @@ export const useTelegramShell = ({
     getThemeSettingValue(activeSettings, activeDesktopModeId.value, 'rightInfoPanel', 'auto')
   ));
   const isRightPanelExplicitlyOpened = ref(false);
+  const telegramConversationListMode = ref<TelegramConversationListMode>(getStoredConversationListMode());
+  const telegramDesktopLeftRoute = ref<TelegramDesktopLeftRoute>('conversationList');
+  const telegramMobileActiveTab = ref<TelegramMobileTabId>('conversations');
+  const telegramMobileStacks = ref<Record<TelegramMobileTabId, TelegramStackRoute[]>>({
+    conversations: [{ name: 'conversationList' }],
+    roles: [{ name: 'roleList' }],
+    settings: [{ name: 'settings' }],
+    profile: [{ name: 'profile' }]
+  });
+
+  const telegramMobileCurrentRoute = computed<TelegramStackRoute>(() => {
+    const stack = telegramMobileStacks.value[telegramMobileActiveTab.value];
+    return stack[stack.length - 1] || rootRouteForMobileTab(telegramMobileActiveTab.value);
+  });
 
   const shouldShowRightPanel = computed(() => {
     if (layoutMode.value !== 'traditional' || activeDesktopModeId.value !== 'telegram' || isMobile.value) {
@@ -84,42 +106,59 @@ export const useTelegramShell = ({
     activeDesktopModeId.value === 'telegram' ? false : showNexus.value
   ));
 
-  const openMobileContextTool = (panelId: string) => {
-    const toolMap: Record<string, { name: string; icon: string; surfaceContractId: DynamicTabConfig['surfaceContractId'] }> = {
-      'lumina-timeline': { name: '时间线', icon: '□', surfaceContractId: 'timeline.navigator' },
-      'lumina-stats': { name: '状态', icon: '☺', surfaceContractId: 'stats.panel' },
-      'lumina-director': { name: '导演', icon: '▣', surfaceContractId: 'director.panel' },
-      'lumina-lorebook': { name: '世界书', icon: '▤', surfaceContractId: 'lorebook.workspace' },
-      'lumina-settings': { name: '设置', icon: '⚙', surfaceContractId: 'settings.root' }
-    };
-    const tool = toolMap[panelId];
-    if (!tool) {
-      switchRightPanel(panelId);
+  const setTelegramConversationListMode = (mode: TelegramConversationListMode) => {
+    telegramConversationListMode.value = mode;
+    void lwStorage.set(TELEGRAM_LIST_MODE_STORAGE_KEY, mode, 'Global');
+  };
+
+  const setTelegramDesktopLeftRoute = (route: TelegramDesktopLeftRoute) => {
+    telegramDesktopLeftRoute.value = route;
+  };
+
+  const pushTelegramMobileRoute = (route: TelegramStackRoute) => {
+    const tabId = telegramMobileActiveTab.value;
+    const stack = telegramMobileStacks.value[tabId] || [rootRouteForMobileTab(tabId)];
+    const current = stack[stack.length - 1];
+    if (
+      current?.name === route.name
+      && current.groupKey === route.groupKey
+      && current.sessionId === route.sessionId
+      && current.panelId === route.panelId
+      && current.toolId === route.toolId
+    ) {
       return;
     }
-    handleOpenTab({
-      id: `mobile-widget:${panelId}`,
-      name: tool.name,
-      icon: tool.icon,
-      surfaceContractId: tool.surfaceContractId
-    });
+    telegramMobileStacks.value = {
+      ...telegramMobileStacks.value,
+      [tabId]: [...stack, route]
+    };
+  };
+
+  const replaceTelegramMobileRoot = (tabId: TelegramMobileTabId) => {
+    telegramMobileStacks.value = {
+      ...telegramMobileStacks.value,
+      [tabId]: telegramMobileStacks.value[tabId]?.length
+        ? telegramMobileStacks.value[tabId]
+        : [rootRouteForMobileTab(tabId)]
+    };
+  };
+
+  const popTelegramMobileRoute = () => {
+    const tabId = telegramMobileActiveTab.value;
+    const stack = telegramMobileStacks.value[tabId] || [rootRouteForMobileTab(tabId)];
+    if (stack.length <= 1) {
+      return;
+    }
+    telegramMobileStacks.value = {
+      ...telegramMobileStacks.value,
+      [tabId]: stack.slice(0, -1)
+    };
   };
 
   const openProfilePanel = () => {
     if (isMobile.value) {
-      handleOpenTab({
-        id: 'mobile-widget:telegram-profile',
-        name: '个人资料',
-        icon: '👤',
-        surfaceContractId: 'telegram.infoPanel',
-        props: {
-          state: characterChannelState.value,
-          isMobile: true,
-          onOpenTool: openMobileContextTool,
-          onCreateSession: createMobileChatSession,
-          onOpenSession: openMobileChatSession
-        }
-      });
+      telegramMobileActiveTab.value = 'profile';
+      replaceTelegramMobileRoot('profile');
       return;
     }
 
@@ -128,26 +167,35 @@ export const useTelegramShell = ({
   };
 
   const openCharacters = () => {
-    showCharacterRail.value = true;
-    switchMainView('lumina-chat');
+    if (isMobile.value) {
+      telegramMobileActiveTab.value = 'roles';
+      replaceTelegramMobileRoot('roles');
+      return;
+    }
+    telegramDesktopLeftRoute.value = 'roleList';
   };
 
   const selectBottomNav = (itemId: 'chat' | 'characters' | 'settings' | 'profile') => {
     if (itemId === 'chat') {
       showCharacterRail.value = false;
+      telegramMobileActiveTab.value = 'conversations';
+      replaceTelegramMobileRoot('conversations');
       switchMainView('lumina-chat');
       return;
     }
 
     if (itemId === 'characters') {
-      showCharacterRail.value = !showCharacterRail.value;
+      showCharacterRail.value = false;
+      telegramMobileActiveTab.value = 'roles';
+      replaceTelegramMobileRoot('roles');
       return;
     }
 
     showCharacterRail.value = false;
 
     if (itemId === 'settings') {
-      openSettingsPanel();
+      telegramMobileActiveTab.value = 'settings';
+      replaceTelegramMobileRoot('settings');
       return;
     }
 
@@ -178,8 +226,16 @@ export const useTelegramShell = ({
     visibleRightPanel,
     visibleWidgetWidth,
     visibleShowNexus,
+    telegramConversationListMode,
+    telegramDesktopLeftRoute,
+    telegramMobileActiveTab,
+    telegramMobileCurrentRoute,
     openProfilePanel,
     openCharacters,
-    selectBottomNav
+    selectBottomNav,
+    setTelegramConversationListMode,
+    setTelegramDesktopLeftRoute,
+    pushTelegramMobileRoute,
+    popTelegramMobileRoute
   };
 };

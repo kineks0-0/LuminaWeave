@@ -1,5 +1,5 @@
 import { onMounted, onUnmounted, ref, watch, type Ref } from 'vue';
-import { loadTauriLayoutKit, type TauriLayoutKitModule } from '../../core/TauriLayoutKit';
+import { loadTauriLayoutKit, type TauriLayoutKitModule } from '../../core/TauriLayoutKit.js';
 
 type LayoutSnapshotLike = {
   viewport?: Partial<{

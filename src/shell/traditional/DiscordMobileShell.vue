@@ -62,13 +62,13 @@
 import { computed, type CSSProperties } from 'vue';
 import DiscordCharacterRail from '../../components/DiscordCharacterRail.vue';
 import DiscordGuildRail from '../../components/DiscordGuildRail.vue';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 import type {
   CharacterChannelState,
   CreateChatConversationInput,
   DeleteChatConversationInput,
   RenameChatConversationInput
-} from '../../types/ConversationContextTypes';
+} from '../../types/ConversationContextTypes.js';
 
 defineProps<{
   isDiscordMobileMode: boolean;
@@ -213,8 +213,10 @@ const emitCreateMobileSession = (payload: CreateChatConversationInput) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .lw-discord-mobile-rail-toggle-copy {
@@ -232,13 +234,18 @@ const emitCreateMobileSession = (payload: CreateChatConversationInput) => {
 }
 
 .lw-discord-mobile-rail-toggle-copy strong {
-  font-size: 13px;
-  font-weight: 800;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+  letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-text-main);
 }
 
 .lw-discord-mobile-rail-toggle-copy small {
-  font-size: 11px;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
   color: var(--lw-text-muted);
 }
 

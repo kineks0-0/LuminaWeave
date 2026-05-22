@@ -1,29 +1,17 @@
 <template>
-  <div
-    ref="rootRef"
-    class="lw-workspace-window"
-    role="region"
-    :aria-labelledby="`window-title-${title}`"
-    :class="{
-      'is-main': kind === 'main',
-      'is-active': isActive,
-      'is-closing': isClosingLocal,
-      'is-moving': interactionMode === 'move',
-      'is-resizing': interactionMode === 'resize',
-      'is-interacting': interactionMode !== null,
-      'is-compact': isCompact
-    }"
-    :style="rootStyle"
-    @pointerdown="emit('focus')"
-  >
+  <div ref="rootRef" class="lw-workspace-window" role="region" :aria-labelledby="`window-title-${title}`" :class="{
+    'is-main': kind === 'main',
+    'is-active': isActive,
+    'is-closing': isClosingLocal,
+    'is-moving': interactionMode === 'move',
+    'is-resizing': interactionMode === 'resize',
+    'is-interacting': interactionMode !== null,
+    'is-compact': isCompact
+  }" :style="rootStyle" @pointerdown="emit('focus')">
     <div ref="shellRef" class="lw-workspace-window-shell" :style="shellStyle">
       <div class="window-topbar">
-        <button
-          class="window-drag-handle window-drag-handle-top"
-          type="button"
-          aria-label="拖拽窗口"
-          @pointerdown.stop.prevent="startMove"
-        >
+        <button class="window-drag-handle window-drag-handle-top" type="button" aria-label="拖拽窗口"
+          @pointerdown.stop.prevent="startMove">
           <span class="window-drag-pill"></span>
         </button>
         <div class="window-heading" @pointerdown.stop.prevent="startMove">
@@ -38,14 +26,8 @@
             <div v-if="$slots.actions" class="window-actions" @pointerdown.stop>
               <slot name="actions" />
             </div>
-            <button
-              v-if="closable"
-              class="window-close"
-              type="button"
-              aria-label="关闭窗口"
-              @pointerdown.stop
-              @click.stop="handleCloseClick"
-            >
+            <button v-if="closable" class="window-close" type="button" aria-label="关闭窗口" @pointerdown.stop
+              @click.stop="handleCloseClick">
               <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -59,12 +41,7 @@
         <slot />
       </div>
 
-      <div
-        v-if="resizable"
-        class="window-resizer"
-        aria-label="调整大小"
-        @pointerdown.stop.prevent="startResize"
-      ></div>
+      <div v-if="resizable" class="window-resizer" aria-label="调整大小" @pointerdown.stop.prevent="startResize"></div>
     </div>
   </div>
 </template>
@@ -377,14 +354,14 @@ const handlePointerMove = (event: PointerEvent) => {
         right: window.innerWidth - props.sceneRight,
         bottom: window.innerHeight - props.sceneBottom
       };
-      
+
       const targetX = startLeft + dx;
       const targetY = startTop + dy;
-      
+
       // 本地弹性边界计算 (Elastic Bounds)
       const maxX = Math.max(bounds.left, bounds.right - props.width);
       const maxY = Math.max(bounds.top, bounds.bottom - props.height);
-      
+
       const applyElastic = (val: number, min: number, max: number) => {
         if (val < min) return min - (min - val) * 0.16;
         if (val > max) return max + (val - max) * 0.16;
@@ -714,9 +691,10 @@ onUnmounted(() => {
 }
 
 .window-eyebrow {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  font-weight: var(--lw-type-label-small-weight);
+  letter-spacing: var(--lw-type-label-small-tracking);
   text-transform: uppercase;
   color: var(--lw-text-muted);
 }
@@ -742,10 +720,11 @@ onUnmounted(() => {
 
 .window-title {
   font-family: var(--lw-font-display);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
   color: var(--lw-text-main);
-  letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

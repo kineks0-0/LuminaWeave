@@ -139,15 +139,6 @@ export class XMLInterceptor extends BaseXMLInterceptor {
             state.statusText = state.activeTag ? resolvedStatusText : (state.statusText || resolvedStatusText);
         }
 
-        const forgeTags = ['forge_skill', 'draft_plan', 'entry_update'];
-        if (state.activeTag && forgeTags.includes(state.activeTag.toLowerCase())) {
-            (window as any).LuminaWeave?.emit('FORGE_TRACE', {
-                tag: state.activeTag,
-                status: state.statusText,
-                timestamp: Date.now()
-            });
-        }
-
         return state;
     }
 
@@ -322,16 +313,13 @@ export class XMLInterceptor extends BaseXMLInterceptor {
         this.registerXMLParser(BuiltinXMLTags.STORY_SUMMARY, 'persistent', (content) => content, 'core-story-summary-handler');
         this.registerXMLParser(BuiltinXMLTags.VIEW, 'presentational', () => '', 'core-view-handler');
 
-        this.registerXMLParser(BuiltinXMLTags.FORGE_SKILL, 'transient', (content, fullMatch) => {
-            (window as any).LuminaWeave?.emit('FORGE_ACTION_COMPLETED', { type: 'skill', content, raw: fullMatch });
+        this.registerXMLParser(BuiltinXMLTags.FORGE_SKILL, 'transient', () => {
             return '';
         }, 'core-forge-skill-handler');
-        this.registerXMLParser(BuiltinXMLTags.DRAFT_PLAN, 'ephemeral', (content, fullMatch) => {
-            (window as any).LuminaWeave?.emit('FORGE_ACTION_COMPLETED', { type: 'plan', content, raw: fullMatch });
+        this.registerXMLParser(BuiltinXMLTags.DRAFT_PLAN, 'ephemeral', () => {
             return '';
         }, 'core-draft-plan-handler');
         this.registerXMLParser(BuiltinXMLTags.ENTRY_UPDATE, 'persistent', (content, fullMatch) => {
-            (window as any).LuminaWeave?.emit('FORGE_ACTION_COMPLETED', { type: 'update', content, raw: fullMatch });
             const attrs = this.parseAttributes(fullMatch);
             const id = attrs.id || attrs.entry_id || `new_entry_${Date.now().toString(36)}`;
             const category = attrs.type || attrs.category || '';
@@ -347,7 +335,6 @@ export class XMLInterceptor extends BaseXMLInterceptor {
         }, 'core-forge-auto-list-handler');
 
         this.registerXMLParser(BuiltinXMLTags.MEMORY_UPDATE, 'ephemeral', (content, fullMatch) => {
-            (window as any).LuminaWeave?.emit('FORGE_ACTION_COMPLETED', { type: 'memory', content, raw: fullMatch });
             const attrs = this.parseAttributes(fullMatch);
             const path = attrs.path || 'Forge Memory';
             const title = attrs.title || path.split('/').slice(-1)[0] || 'Memory Update';

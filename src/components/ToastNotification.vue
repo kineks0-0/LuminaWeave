@@ -1,18 +1,38 @@
 <template>
-    <div class="lw-toast-container">
+    <div class="tw:fixed tw:right-[calc(24px+var(--lw-safe-right,0px))] tw:bottom-[calc(24px+var(--lw-safe-bottom,0px))] tw:z-50 tw:flex tw:pointer-events-none tw:flex-col tw:gap-3">
         <transition-group name="toast-list">
-            <div v-for="toast in toasts" :key="toast.id" class="lw-toast" :class="`toast-${toast.type}`">
-                <div class="toast-icon" v-html="icons[toast.type] || icons.info"></div>
-                <div class="toast-content">
-                    <div class="toast-title" v-if="toast.title">{{ toast.title }}</div>
-                    <div class="toast-message">{{ toast.message }}</div>
+            <div v-for="toast in toasts" :key="toast.id" :class="toastClass(toast.type)">
+                <div :class="iconClass(toast.type)" aria-hidden="true">
+                    <svg v-if="toast.type === 'success'" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <svg v-else-if="toast.type === 'error'" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                    <svg v-else-if="toast.type === 'warning'" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
                 </div>
-                <button class="toast-close" @click="removeToast(toast.id)">
+                <div class="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col tw:gap-1">
+                    <div v-if="toast.title" class="tw:text-[length:var(--lw-type-title-small-size)] tw:font-bold tw:leading-[var(--lw-type-title-small-line-height)] tw:text-lw-text tw:text-balance">{{ toast.title }}</div>
+                    <div class="tw:text-xs tw:leading-4 tw:text-lw-text-secondary tw:text-pretty">{{ toast.message }}</div>
+                </div>
+                <LuminaIconButton ariaLabel="关闭通知" size="sm" variant="ghost" @click="removeToast(toast.id)">
                     <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                     </svg>
-                </button>
+                </LuminaIconButton>
             </div>
         </transition-group>
     </div>
@@ -20,6 +40,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
+import { LuminaIconButton } from '../ui/primitives';
+import { cn } from '../ui/cn.js';
 
 interface Toast {
     id: number;
@@ -32,12 +54,29 @@ interface Toast {
 const toasts = ref<Toast[]>([]);
 let toastIdCounter = 0;
 
-const icons: Record<string, string> = {
-    success: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>',
-    error: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
-    warning: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
-    info: '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>'
+const toneClass: Record<Toast['type'], string> = {
+    success: 'tw:border-l-emerald-500',
+    error: 'tw:border-l-red-500',
+    warning: 'tw:border-l-amber-500',
+    info: 'tw:border-l-lw-primary'
 };
+
+const toneIconClass: Record<Toast['type'], string> = {
+    success: 'tw:text-emerald-500',
+    error: 'tw:text-red-500',
+    warning: 'tw:text-amber-500',
+    info: 'tw:text-lw-primary'
+};
+
+const toastClass = (type: Toast['type']) => cn(
+    'tw:pointer-events-auto tw:relative tw:flex tw:w-80 tw:items-start tw:gap-3 tw:overflow-hidden tw:rounded-lw-sm tw:border tw:border-l-4 tw:border-lw-border tw:bg-lw-elevated tw:p-4 tw:shadow-lw-card',
+    toneClass[type] || toneClass.info
+);
+
+const iconClass = (type: Toast['type']) => cn(
+    'tw:mt-0.5 tw:flex tw:shrink-0 tw:items-center tw:justify-center',
+    toneIconClass[type] || toneIconClass.info
+);
 
 const showToast = (event: Event) => {
     const customEvent = event as CustomEvent;
@@ -77,127 +116,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.lw-toast-container {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    z-index: 100000;
-    pointer-events: none;
-}
-
-.lw-toast {
-    pointer-events: auto;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    width: 320px;
-    padding: 16px;
-    border-radius: 12px;
-    background: white;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    position: relative;
-    overflow: hidden;
-}
-
-.lw-toast::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: 4px;
-}
-
-.toast-success::before {
-    background: #10b981;
-}
-
-.toast-success .toast-icon {
-    color: #10b981;
-}
-
-.toast-error::before {
-    background: #ef4444;
-}
-
-.toast-error .toast-icon {
-    color: #ef4444;
-}
-
-.toast-warning::before {
-    background: #f59e0b;
-}
-
-.toast-warning .toast-icon {
-    color: #f59e0b;
-}
-
-.toast-info::before {
-    background: var(--lw-blue);
-}
-
-.toast-info .toast-icon {
-    color: var(--lw-blue);
-}
-
-.toast-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
-.toast-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.toast-title {
-    font-weight: 600;
-    color: #111827;
-    font-size: 14px;
-}
-
-.toast-message {
-    color: #4b5563;
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.toast-close {
-    background: transparent;
-    border: none;
-    color: #9ca3af;
-    cursor: pointer;
-    padding: 4px;
-    margin: -4px;
-    border-radius: 4px;
-    display: flex;
-    transition: 0.2s;
-}
-
-.toast-close:hover {
-    background: #f3f4f6;
-    color: #4b5563;
-}
-
-/* Transitions */
 .toast-list-enter-active,
 .toast-list-leave-active {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 160ms ease-out, transform 160ms ease-out;
 }
 
 .toast-list-enter-from,
 .toast-list-leave-to {
     opacity: 0;
-    transform: translateX(30px) scale(0.95);
+    transform: translateX(20px) scale(0.98);
 }
 
 .toast-list-leave-active {

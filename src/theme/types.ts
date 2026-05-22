@@ -1,4 +1,4 @@
-import type { SettingDefinition } from '../types/plugin';
+import type { SettingDefinition } from '../types/plugin.js';
 
 export type ThemePackAppearance = 'light' | 'dark' | 'follow-setting';
 export type ResolvedThemeAppearance = 'light' | 'dark';

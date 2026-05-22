@@ -5,7 +5,7 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent } from 'vue';
-import { useComponentSkin } from '../../theme/useComponentSkin';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
 import TimelineSmallList from './TimelineSmallList.vue';
 
 const TimelineLargeCanvas = defineAsyncComponent(() => import('./TimelineLargeCanvas.vue'));
@@ -185,7 +185,7 @@ const isMobile = computed(() => props.isMobile);
   background: var(--lw-success);
   border-radius: 50%;
   box-shadow: 0 0 0 6px rgba(19, 137, 92, 0.08);
-  animation: pulse-ring 2s infinite;
+  /* animation: pulse-ring 2s infinite; */
 }
 
 @keyframes pulse-ring {

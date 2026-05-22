@@ -1,5 +1,5 @@
 import { Component } from 'vue';
-import type { PluginManifestV2 } from '../platform/plugin/types';
+import type { PluginManifestV2 } from '../platform/plugin/types.js';
 
 export interface SettingOption {
     value: string | number;

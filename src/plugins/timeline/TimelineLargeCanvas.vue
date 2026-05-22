@@ -119,8 +119,8 @@
 
 <script setup lang="ts">
 import { ref, onUnmounted, nextTick, markRaw, watch, computed } from 'vue';
-import { luminaWeaveApi as lwApi } from '../../api/index';
-import type { TimelineNode } from '../../api/index';
+import { luminaWeaveApi as lwApi } from '../../api/index.js';
+import type { TimelineNode } from '../../api/index.js';
 import LogicFlow, { HtmlNodeModel, PolylineEdgeModel } from '@logicflow/core';
 //import { Menu } from '@logicflow/extension';
 import { register, getTeleport } from '@logicflow/vue-node-registry';
@@ -134,8 +134,8 @@ import HistoryNode from './HistoryNode.vue';
 import NodePreviewModal from './NodePreviewModal.vue';
 
 import gsap from 'gsap';
-import { useComponentSkin } from '../../theme/useComponentSkin';
-import { useTimelineGraphViewModel, type TimelineViewNode } from './useTimelineGraphViewModel';
+import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useTimelineGraphViewModel, type TimelineViewNode } from './useTimelineGraphViewModel.js';
 
 // LogicFlow 节点属性定义
 export interface HistoryNodeProperties {

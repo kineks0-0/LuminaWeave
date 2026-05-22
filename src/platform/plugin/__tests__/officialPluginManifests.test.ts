@@ -20,8 +20,8 @@ vi.mock('../../../plugins/lorebook/components/LorebookWorkspace.vue', () => ({ d
 vi.mock('../../../plugins/director/components/DirectorPanel.vue', () => ({ default: StubComponent }));
 vi.mock('../../../plugins/launcher/LauncherRoot.vue', () => ({ default: StubComponent }));
 vi.mock('../../../plugins/dev/DevSettings.vue', () => ({ default: StubComponent }));
-vi.mock('../../../plugins/forge/CardMakerPanel.vue', () => ({ default: StubComponent }));
-vi.mock('../../../plugins/forge/ForgeAuxPanelView.vue', () => ({ default: StubComponent }));
+vi.mock('../../../plugins/forge/app/CardMakerPanel.vue', () => ({ default: StubComponent }));
+vi.mock('../../../plugins/forge/app/ForgeAuxPanelView.vue', () => ({ default: StubComponent }));
 vi.mock('../../../plugins/forge/ForgePromptPresetInlineSummary.vue', () => ({ default: StubComponent }));
 vi.mock('../../../plugins/forge/ForgePromptPresetWorkbench.vue', () => ({ default: StubComponent }));
 
@@ -43,7 +43,7 @@ describe('official plugin platform manifests', () => {
 
         const module = await import('../../../plugins/officialPlugins.js');
         officialPlugins = module.officialPlugins;
-    });
+    }, 30000);
 
     it('declares manifest v2 for every official plugin', () => {
         expect(officialPlugins.map(plugin => plugin.id).sort()).toEqual([
@@ -55,6 +55,7 @@ describe('official plugin platform manifests', () => {
             'lumina-lorebook',
             'lumina-settings',
             'lumina-stats',
+            'lumina-terminal',
             'lumina-timeline'
         ].sort());
 
@@ -88,7 +89,8 @@ describe('official plugin platform manifests', () => {
             'lumina-stats': ['widget'],
             'lumina-director': ['widget'],
             'lumina-lorebook': ['widget', 'mainView'],
-            'lumina-dev': ['widget']
+            'lumina-dev': ['widget'],
+            'lumina-terminal': ['widget']
         };
 
         officialPlugins.forEach(plugin => {

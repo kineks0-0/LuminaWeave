@@ -1,10 +1,10 @@
-import { listDesktopModes } from '../../theme/themeRegistry';
-import type { DesktopModeManifest } from '../../theme/types';
+import { listDesktopModes } from '../../theme/themeRegistry.js';
+import type { DesktopModeManifest } from '../../theme/types.js';
 import FreeformShell from '../../shell/freeform/FreeformShell.vue';
 import TraditionalShell from '../../shell/traditional/TraditionalShell.vue';
 import TelegramUserInfoPanel from '../../shell/traditional/TelegramUserInfoPanel.vue';
-import { desktopModeRuntimeRegistry } from './DesktopModeRuntimeRegistry';
-import type { DesktopModeManifestV2 } from './types';
+import { desktopModeRuntimeRegistry } from './DesktopModeRuntimeRegistry.js';
+import type { DesktopModeManifestV2 } from './types.js';
 
 const toDesktopModeManifestV2 = (mode: DesktopModeManifest): DesktopModeManifestV2 => {
     const shellKind = mode.shell?.kind || mode.workspacePreset?.defaultMode || 'traditional';

@@ -143,7 +143,7 @@ import WorkspaceDock from '../../components/WorkspaceDock.vue';
 import WorkspaceStageStrip from '../../components/WorkspaceStageStrip.vue';
 import WorkspaceWindow from '../../components/WorkspaceWindow.vue';
 import ForgeWorkspaceWindowActions from '../../plugins/forge/ForgeWorkspaceWindowActions.vue';
-import type { ShellRuntimeActions, ShellRuntimeContext, ShellRuntimeSurfaces } from '../types';
+import type { ShellRuntimeActions, ShellRuntimeContext, ShellRuntimeSurfaces } from '../types.js';
 import WorkspaceMenu from './WorkspaceMenu.vue';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 
@@ -388,14 +388,19 @@ watch(stageElement, (element) => {
 
 .lw-freeform-empty-stage strong {
   font-family: var(--lw-font-display);
-  font-size: 18px;
+  font-size: var(--lw-type-title-large-size);
+  line-height: var(--lw-type-title-large-line-height);
+  font-weight: var(--lw-type-title-large-weight);
+  letter-spacing: var(--lw-type-title-large-tracking);
   color: var(--lw-text-main);
 }
 
 .lw-freeform-empty-stage span:last-child {
-  font-size: 13px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   color: var(--lw-text-secondary);
-  line-height: 1.65;
 }
 
 .luminaweave-app-root[data-motion='full'] {

@@ -1,6 +1,6 @@
 import { shallowReactive } from 'vue';
-import type { SettingDefinition } from '../types/plugin';
-import { builtinDesktopModes } from './builtinThemePacks';
+import type { SettingDefinition } from '../types/plugin.js';
+import { builtinDesktopModes } from './builtinThemePacks.js';
 import type {
     ComponentSkinDefinition,
     ComponentThemeContext,
@@ -13,7 +13,7 @@ import type {
     ThemeValueResolver,
     ThemeWorkspaceMode,
     ThemeWorkspacePreset,
-} from './types';
+} from './types.js';
 
 export const DEFAULT_THEME_PACK_ID = 'classic';
 export const DEFAULT_DESKTOP_MODE_ID = DEFAULT_THEME_PACK_ID;

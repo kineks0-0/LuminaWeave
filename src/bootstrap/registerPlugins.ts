@@ -1,7 +1,7 @@
-import { pluginManager } from '../core/PluginManager';
-import { officialPlugins } from '../plugins/officialPlugins';
-import { initializeDesktopModeRuntime } from '../platform/desktop/initializeDesktopModeRuntime';
-import { initializeSurfaceRuntime } from '../platform/surface/initializeSurfaceRuntime';
+import { pluginManager } from '../core/PluginManager.js';
+import { officialPlugins } from '../plugins/officialPlugins.js';
+import { initializeDesktopModeRuntime } from '../platform/desktop/initializeDesktopModeRuntime.js';
+import { initializeSurfaceRuntime } from '../platform/surface/initializeSurfaceRuntime.js';
 
 let hasRegisteredPlugins = false;
 
