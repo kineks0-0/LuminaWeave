@@ -1,68 +1,59 @@
 <template>
-  <div class="entry-proposal" :class="[processedState, category]">
+  <LuminaPanel variant="elevated" padding="sm" :class="proposalClass">
     <!-- Header -->
-    <div class="proposal-header">
-      <div class="header-left">
-        <span class="kicker-dot"></span>
-        <span class="kicker-label">{{ categoryLabel }}</span>
+    <div class="tw:flex tw:items-center tw:justify-between tw:gap-2">
+      <div class="tw:flex tw:items-center tw:gap-1.5">
+        <span class="tw:size-1.5 tw:shrink-0 tw:rounded-lw-pill tw:bg-lw-primary"></span>
+        <span class="tw:text-xs tw:font-bold tw:uppercase tw:text-lw-primary">{{ categoryLabel }}</span>
       </div>
       <!-- View toggle -->
-      <div class="view-toggle">
-        <button
-          class="toggle-btn"
-          :class="{ active: viewMode === 'raw' }"
-          @click="viewMode = 'raw'"
-        >原文</button>
-        <button
-          class="toggle-btn"
-          :class="{ active: viewMode === 'preview' }"
-          @click="viewMode = 'preview'"
-        >预览</button>
-      </div>
+      <LuminaSegmentedControl :modelValue="viewMode" :options="viewOptions" @update:modelValue="setViewMode" />
     </div>
 
     <!-- Title row -->
-    <div class="proposal-title">
+    <div class="tw:flex tw:flex-wrap tw:items-baseline tw:gap-1.5 tw:text-[length:var(--lw-type-title-small-size)] tw:font-bold tw:leading-snug tw:text-lw-text tw:text-balance">
       {{ displayTitle }}
-      <span v-if="isIdTitle" class="title-hint">（标题未提供）</span>
+      <span v-if="isIdTitle" class="tw:text-xs tw:font-normal tw:text-lw-text-muted">（标题未提供）</span>
     </div>
 
     <!-- Raw view -->
-    <div v-if="viewMode === 'raw'" class="proposal-body">
+    <div v-if="viewMode === 'raw'" class="tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-3 tw:py-2.5 tw:text-xs tw:leading-5 tw:text-lw-text-secondary tw:text-pretty">
       <template v-if="isJson && displayFields">
-        <div v-for="(value, key) in displayFields" :key="key" class="field-row">
-          <span class="field-key">{{ key }}</span>
-          <span class="field-val">{{ value }}</span>
+        <div v-for="(value, key) in displayFields" :key="key" class="tw:grid tw:grid-cols-[minmax(40px,auto)_1fr] tw:items-baseline tw:gap-2 tw:border-b tw:border-lw-border-subtle tw:py-1 tw:last:border-b-0 tw:last:pb-0">
+          <span class="tw:text-xs tw:font-bold tw:uppercase tw:text-lw-text-muted">{{ key }}</span>
+          <span class="tw:break-words tw:text-xs tw:text-lw-text">{{ value }}</span>
         </div>
       </template>
-      <span v-else class="text-preview">{{ previewText }}</span>
+      <span v-else class="tw:whitespace-pre-wrap tw:break-words">{{ previewText }}</span>
     </div>
 
     <!-- Preview view -->
-    <div v-else class="proposal-preview">
+    <div v-else class="tw:overflow-hidden tw:rounded-lw-sm">
       <ForgeLorebookPreview :entry="previewEntry" :minimal="true" />
     </div>
 
     <!-- Footer: pending -->
-    <div v-if="processedState === 'pending'" class="proposal-footer pending">
-      <button class="btn btn-approve" @click="handleApprove">加入工作区</button>
-      <button class="btn btn-reject" @click="handleReject">舍弃</button>
+    <div v-if="processedState === 'pending'" class="tw:mt-0.5 tw:flex tw:items-center tw:gap-2">
+      <LuminaButton variant="soft" tone="primary" size="sm" @click="handleApprove">加入工作区</LuminaButton>
+      <LuminaButton variant="ghost" size="sm" @click="handleReject">舍弃</LuminaButton>
     </div>
 
     <!-- Footer: processed -->
-    <div v-else class="proposal-footer processed">
-      <span class="state-badge" :class="processedState">
+    <div v-else class="tw:flex tw:items-center tw:gap-2">
+      <span :class="stateBadgeClass">
         {{ processedState === 'approved' ? '已加入工作区' : '已舍弃' }}
       </span>
-      <button v-if="processedState === 'approved'" class="btn-text" @click="handleUndo">撤回</button>
+      <LuminaButton v-if="processedState === 'approved'" class="tw:ml-auto" variant="ghost" size="sm" @click="handleUndo">撤回</LuminaButton>
     </div>
-  </div>
+  </LuminaPanel>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useCardMakerStore } from '../CardMakerStore';
-import ForgeLorebookPreview from '../ForgeLorebookPreview.vue';
+import { useCardMakerStore } from '../CardMakerStore.js';
+import ForgeLorebookPreview from '../project/ForgeLorebookPreview.vue';
+import { cn } from '../../../ui/cn.js';
+import { LuminaButton, LuminaPanel, LuminaSegmentedControl } from '../../../ui/primitives';
 
 const props = defineProps<{
     id: string;
@@ -75,6 +66,10 @@ const props = defineProps<{
 const cardMakerStore = useCardMakerStore();
 const internalState = ref<'pending' | 'approved' | 'rejected'>('pending');
 const viewMode = ref<'raw' | 'preview'>('raw');
+const viewOptions = [
+    { label: '原文', value: 'raw' },
+    { label: '预览', value: 'preview' }
+];
 
 const processedState = computed(() => {
     const isCommitted = cardMakerStore.commitReadyEntries.some(
@@ -100,6 +95,24 @@ const categoryMap: Record<string, string> = {
 const categoryLabel = computed(() =>
     (props.category && categoryMap[props.category]) || '条目建议'
 );
+
+const proposalClass = computed(() => cn(
+    'tw:my-1.5 tw:flex tw:max-w-[440px] tw:flex-col tw:gap-2.5 tw:transition-[border-color,opacity] tw:duration-150 tw:ease-out tw:hover:border-lw-primary',
+    processedState.value === 'approved' && 'tw:border-lw-primary',
+    processedState.value === 'rejected' && 'tw:opacity-60'
+));
+
+const stateBadgeClass = computed(() => cn(
+    'tw:text-xs tw:font-bold tw:text-lw-text-muted',
+    processedState.value === 'approved' && 'tw:text-emerald-600',
+    processedState.value === 'rejected' && 'tw:opacity-60'
+));
+
+const setViewMode = (nextValue: string) => {
+    if (nextValue === 'raw' || nextValue === 'preview') {
+        viewMode.value = nextValue;
+    }
+};
 
 /** 将 content 规范化为字符串（模型有时直接传入对象） */
 const contentStr = computed(() =>
@@ -231,226 +244,3 @@ const handleUndo = () => {
     internalState.value = 'pending';
 };
 </script>
-
-<style scoped>
-.entry-proposal {
-  --accent: var(--lw-primary);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--lw-border-base);
-  background: var(--lw-bg-elevated);
-  margin: 6px 0;
-  max-width: 440px;
-  transition: border-color 0.15s ease;
-}
-
-.entry-proposal:hover {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--lw-border-base));
-}
-
-/* Category accent colors */
-.interaction_paradigm { --accent: #f59e0b; }
-.aesthetic_program    { --accent: #ec4899; }
-.creation_blueprint   { --accent: #3b82f6; }
-.factions             { --accent: #8b5cf6; }
-.characters           { --accent: #10b981; }
-
-/* Header row */
-.proposal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.kicker-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-}
-
-.kicker-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--accent);
-}
-
-/* View toggle */
-.view-toggle {
-  display: flex;
-  gap: 2px;
-  background: var(--lw-bg-base);
-  border: 1px solid var(--lw-border-base);
-  border-radius: 8px;
-  padding: 2px;
-}
-
-.toggle-btn {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--lw-text-tertiary);
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-  line-height: 1;
-}
-
-.toggle-btn.active {
-  background: var(--lw-bg-elevated);
-  color: var(--lw-text-main);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-
-.toggle-btn:not(.active):hover {
-  color: var(--lw-text-secondary);
-}
-
-/* Title */
-.proposal-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-  line-height: 1.3;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.title-hint {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--lw-text-muted);
-}
-
-/* Raw body */
-.proposal-body {
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--lw-text-secondary);
-  background: color-mix(in srgb, var(--lw-bg-base) 60%, transparent);
-  border-radius: 8px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 40%, transparent);
-}
-
-.field-row {
-  display: grid;
-  grid-template-columns: minmax(40px, auto) 1fr;
-  gap: 8px;
-  align-items: baseline;
-  padding: 3px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--lw-border-base) 20%, transparent);
-}
-
-.field-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.field-key {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--lw-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.field-val {
-  color: var(--lw-text-main);
-  font-size: 12px;
-  word-break: break-word;
-}
-
-.text-preview {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* Preview view */
-.proposal-preview {
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-/* Footer */
-.proposal-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.proposal-footer.processed {
-  padding-top: 0;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-  border: 1px solid var(--lw-border-base);
-  background: var(--lw-bg-base);
-  color: var(--lw-text-secondary);
-  line-height: 1;
-}
-
-.btn-approve:hover {
-  background: color-mix(in srgb, #10b981 12%, transparent);
-  border-color: #10b981;
-  color: #10b981;
-}
-
-.btn-reject:hover {
-  background: color-mix(in srgb, var(--lw-text-muted) 10%, transparent);
-  border-color: var(--lw-text-muted);
-}
-
-.state-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--lw-text-muted);
-}
-
-.state-badge.approved { color: #10b981; }
-.state-badge.rejected { opacity: 0.5; }
-
-.btn-text {
-  background: none;
-  border: none;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-left: auto;
-  transition: background 0.15s ease;
-}
-
-.btn-text:hover {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-</style>

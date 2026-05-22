@@ -1,27 +1,28 @@
 <template>
-  <div class="memory-proposal">
+  <LuminaPanel variant="elevated" padding="sm" class="tw:my-1.5 tw:flex tw:max-w-[420px] tw:flex-col tw:gap-2.5">
     <!-- Kicker -->
-    <div class="kicker">
-      <span class="kicker-dot"></span>
-      <span class="kicker-label">记忆整理</span>
-      <span class="kicker-path">{{ path }}</span>
+    <div class="tw:flex tw:items-center tw:gap-1.5">
+      <span class="tw:size-1.5 tw:shrink-0 tw:rounded-lw-pill tw:bg-lw-primary"></span>
+      <span class="tw:text-xs tw:font-bold tw:uppercase tw:text-lw-primary">记忆整理</span>
+      <span class="tw:ml-auto tw:max-w-40 tw:truncate tw:font-lw-mono tw:text-xs tw:text-lw-text-muted">{{ path }}</span>
     </div>
 
     <!-- Title -->
-    <div class="proposal-title">{{ title }}</div>
+    <div class="tw:text-[length:var(--lw-type-title-small-size)] tw:font-bold tw:leading-snug tw:text-lw-text tw:text-balance">{{ title }}</div>
 
     <!-- Content preview -->
-    <div class="proposal-body">{{ previewText }}</div>
+    <div class="tw:whitespace-pre-wrap tw:break-words tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-3 tw:py-2.5 tw:text-xs tw:italic tw:leading-5 tw:text-lw-text-secondary tw:text-pretty">{{ previewText }}</div>
 
     <!-- Footer -->
-    <div class="proposal-footer">
-      <span class="state-badge">已更新 Forge 记忆</span>
+    <div class="tw:flex tw:items-center">
+      <span class="tw:text-xs tw:font-bold tw:text-lw-primary tw:opacity-80">已更新 Forge 记忆</span>
     </div>
-  </div>
+  </LuminaPanel>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { LuminaPanel } from '../../../ui/primitives';
 
 const props = defineProps<{
     path: string;
@@ -33,83 +34,3 @@ const previewText = computed(() =>
     props.content.slice(0, 140) + (props.content.length > 140 ? '…' : '')
 );
 </script>
-
-<style scoped>
-.memory-proposal {
-  --accent: var(--lw-blue, #3b82f6);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--lw-border-base);
-  background: var(--lw-bg-elevated);
-  margin: 6px 0;
-  max-width: 420px;
-}
-
-.kicker {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.kicker-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-}
-
-.kicker-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--accent);
-}
-
-.kicker-path {
-  font-size: 10px;
-  color: var(--lw-text-muted);
-  font-family: var(--lw-font-mono, monospace);
-  margin-left: auto;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.proposal-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-  line-height: 1.3;
-}
-
-.proposal-body {
-  font-size: 12px;
-  line-height: 1.55;
-  color: var(--lw-text-secondary);
-  background: color-mix(in srgb, var(--lw-bg-base) 60%, transparent);
-  border-radius: 8px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 40%, transparent);
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-style: italic;
-}
-
-.proposal-footer {
-  display: flex;
-  align-items: center;
-}
-
-.state-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
-  opacity: 0.8;
-}
-</style>

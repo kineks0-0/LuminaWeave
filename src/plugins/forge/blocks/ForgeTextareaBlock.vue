@@ -1,32 +1,32 @@
 <template>
-  <label class="forge-field-card">
-    <span class="forge-field-label">{{ label }}</span>
-    <textarea
-      :value="value"
-      class="forge-field-textarea"
-      rows="4"
+  <LuminaPanel as="label" variant="elevated" padding="sm" class="tw:flex tw:flex-col tw:gap-2">
+    <span class="tw:text-xs tw:font-bold tw:text-lw-text tw:text-balance">{{ label }}</span>
+    <LuminaTextarea
+      :modelValue="value"
+      :rows="4"
       :placeholder="placeholder || ''"
       :disabled="store.isBusy"
-      @input="handleInput"
+      @update:modelValue="handleInput"
     />
-    <div v-if="splitSuggestions.length > 0" class="forge-suggestions">
-      <button
+    <div v-if="splitSuggestions.length > 0" class="tw:mt-1 tw:flex tw:flex-wrap tw:gap-1.5">
+      <LuminaButton
         v-for="sug in splitSuggestions"
         :key="sug"
-        class="forge-suggestion-chip"
-        type="button"
+        variant="soft"
+        size="sm"
         @click="applySuggestion(sug)"
       >
         {{ sug }}
-      </button>
+      </LuminaButton>
     </div>
-  </label>
+  </LuminaPanel>
 </template>
 
 <script setup lang="ts">
 import { computed, watch } from 'vue';
-import { useCardMakerStore } from '../CardMakerStore';
-import { parseCompositePath } from '../../../api/core/utils/forgeDslUtils';
+import { LuminaButton, LuminaPanel, LuminaTextarea } from '../../../ui/primitives';
+import { useCardMakerStore } from '../CardMakerStore.js';
+import { parseCompositePath } from '../../../api/core/utils/forgeDslUtils.js';
 
 const props = defineProps<{
     fieldKey: string;
@@ -76,8 +76,7 @@ watch(assistCandidates, (candidates) => {
     applySuggestion(firstVal);
 }, { immediate: true });
 
-const handleInput = (event: Event) => {
-    const nextValue = (event.target as HTMLTextAreaElement).value;
+const handleInput = (nextValue: string) => {
     if (isBound.value) {
         store.setStructuredFieldValue(resolvedFormId.value!, resolvedFieldKey.value, nextValue);
         return;
@@ -95,80 +94,3 @@ const applySuggestion = (sug: string) => {
 };
 
 </script>
-
-<style scoped>
-.forge-field-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--lw-border-base);
-  background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
-}
-
-.forge-field-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-}
-
-.forge-field-textarea {
-  appearance: none;
-  border: 1px solid var(--lw-border-base) !important;
-  border-radius: 12px;
-  background: var(--lw-bg-surface) !important;
-  color: var(--lw-text-main) !important;
-  -webkit-text-fill-color: var(--lw-text-main);
-  padding: 10px 12px;
-  font-size: 13px;
-  line-height: 1.6;
-  resize: vertical;
-  font: inherit;
-  outline: none;
-  box-shadow: none;
-}
-
-.forge-field-textarea::placeholder {
-  color: var(--lw-text-muted);
-  -webkit-text-fill-color: var(--lw-text-muted);
-}
-
-.forge-field-textarea:focus {
-  border-color: var(--lw-border-active) !important;
-  box-shadow: 0 0 0 4px rgba(var(--lw-primary-rgb), 0.08);
-}
-
-.forge-field-textarea:disabled {
-  background: color-mix(in srgb, var(--lw-bg-muted) 94%, white) !important;
-  color: var(--lw-text-muted) !important;
-  -webkit-text-fill-color: var(--lw-text-muted);
-  border-color: var(--lw-border-subtle) !important;
-  opacity: 1;
-  cursor: not-allowed;
-}
-
-.forge-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.forge-suggestion-chip {
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: var(--lw-bg-subtle);
-  border: 1px solid var(--lw-border-base);
-  color: var(--lw-text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.forge-suggestion-chip:hover {
-  background: var(--lw-primary);
-  color: white;
-  border-color: var(--lw-primary);
-}
-</style>

@@ -1,19 +1,20 @@
 <template>
-  <label class="forge-field-card">
-    <span class="forge-field-label">{{ label }}</span>
-    <select :value="value" class="forge-field-select" :disabled="store.isBusy" @change="handleChange">
+  <LuminaPanel as="label" variant="elevated" padding="sm" class="tw:flex tw:flex-col tw:gap-2">
+    <span class="tw:text-xs tw:font-bold tw:text-lw-text tw:text-balance">{{ label }}</span>
+    <LuminaSelect :modelValue="value" :disabled="store.isBusy" @update:modelValue="updateValue">
       <option value="">请选择</option>
       <option v-for="option in parsedOptions" :key="option.raw" :value="option.body">
         {{ option.actionLabel }}{{ assistRecommendedSet.has(option.body) ? ' ⭐' : '' }}
       </option>
-    </select>
-  </label>
+    </LuminaSelect>
+  </LuminaPanel>
 </template>
 
 <script setup lang="ts">
 import { computed, watchEffect, onMounted } from 'vue';
-import { useCardMakerStore } from '../CardMakerStore';
-import { parseForgeRichOptions, parseCompositePath } from '../../../api/core/utils/forgeDslUtils';
+import { LuminaPanel, LuminaSelect } from '../../../ui/primitives';
+import { useCardMakerStore } from '../CardMakerStore.js';
+import { parseForgeRichOptions, parseCompositePath } from '../../../api/core/utils/forgeDslUtils.js';
 
 const props = defineProps<{
     fieldKey: string;
@@ -51,11 +52,6 @@ watchEffect(() => {
     }
 });
 
-const handleChange = (event: Event) => {
-    const nextValue = (event.target as HTMLSelectElement).value;
-    updateValue(nextValue);
-};
-
 const updateValue = (nextValue: string) => {
     if (isBound.value) {
         store.setStructuredFieldValue(resolvedFormId.value!, resolvedFieldKey.value, nextValue);
@@ -91,55 +87,3 @@ onMounted(() => {
     }
 });
 </script>
-
-<style scoped>
-.forge-field-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--lw-border-base);
-  background: color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent);
-}
-
-.forge-field-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--lw-text-main);
-}
-
-.forge-field-select {
-  appearance: none;
-  border: 1px solid var(--lw-border-base) !important;
-  border-radius: 12px;
-  background: var(--lw-bg-surface) !important;
-  color: var(--lw-text-main) !important;
-  -webkit-text-fill-color: var(--lw-text-main);
-  padding: 10px 12px;
-  font-size: 13px;
-  font: inherit;
-  outline: none;
-  box-shadow: none;
-}
-
-.forge-field-select:focus {
-  border-color: var(--lw-border-active) !important;
-  box-shadow: 0 0 0 4px rgba(var(--lw-primary-rgb), 0.08);
-}
-
-.forge-field-select:disabled {
-  background: color-mix(in srgb, var(--lw-bg-muted) 94%, white) !important;
-  color: var(--lw-text-muted) !important;
-  -webkit-text-fill-color: var(--lw-text-muted);
-  border-color: var(--lw-border-subtle) !important;
-  opacity: 1;
-  cursor: not-allowed;
-}
-
-.forge-field-warning {
-  font-size: 11px;
-  line-height: 1.5;
-  color: #b45309;
-}
-</style>

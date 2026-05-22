@@ -1,42 +1,44 @@
 <template>
-  <div class="forge-auto-list-card">
-    <div class="card-header">
-      <div class="card-kicker">
-        <span class="icon">📋</span>
+  <LuminaPanel variant="elevated" padding="md" class="tw:my-2 tw:flex tw:max-w-[400px] tw:flex-col tw:gap-3">
+    <div class="tw:flex tw:flex-col tw:gap-1">
+      <div class="tw:flex tw:items-center tw:gap-1 tw:text-xs tw:font-bold tw:uppercase tw:text-lw-primary">
+        <span aria-hidden="true">📋</span>
         A.U.T.O 制卡进度全景
       </div>
-      <div class="card-title">当前任务清单</div>
+      <div class="tw:text-[length:var(--lw-type-title-medium-size)] tw:font-bold tw:text-lw-text tw:text-balance">当前任务清单</div>
     </div>
     
-    <div class="card-body">
-      <div class="checklist-tree">
-        <div v-for="item in parsedItems" :key="item.id" class="checklist-item" :class="[item.status]" :style="{ marginLeft: (item.indent * 8) + 'px' }">
-          <div class="item-status">
-            <span v-if="item.status === 'completed'" class="status-icon completed">✅</span>
-            <span v-else-if="item.status === 'partial'" class="status-icon partial">✔️</span>
-            <span v-else-if="item.status === 'pending'" class="status-icon pending">❎</span>
-            <span v-else-if="item.status === 'blocked'" class="status-icon blocked">🚫</span>
-            <span v-else class="status-icon pending">❎</span>
+    <div class="tw:rounded-lw-sm tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:p-2">
+      <div class="tw:flex tw:flex-col tw:gap-0.5">
+        <div v-for="item in parsedItems" :key="item.id" :class="checklistItemClass(item.status)" :style="{ marginLeft: `${item.indent * 8}px` }">
+          <div class="tw:flex tw:w-5 tw:justify-center tw:text-sm">
+            <span v-if="item.status === 'completed'" class="tw:text-emerald-500">✅</span>
+            <span v-else-if="item.status === 'partial'" class="tw:text-amber-500">✔️</span>
+            <span v-else-if="item.status === 'pending'" class="tw:text-lw-text-dim tw:opacity-50">❎</span>
+            <span v-else-if="item.status === 'blocked'" class="tw:text-red-500">🚫</span>
+            <span v-else class="tw:text-lw-text-dim tw:opacity-50">❎</span>
           </div>
-          <div class="item-content">
-            <span class="item-label">{{ item.label }}</span>
-            <span class="item-id">{{ item.id }}</span>
+          <div class="tw:flex tw:min-w-0 tw:flex-col">
+            <span :class="itemLabelClass(item.status)">{{ item.label }}</span>
+            <span class="tw:font-lw-mono tw:text-xs tw:text-lw-text-dim tw:opacity-70 tw:truncate">{{ item.id }}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="card-footer">
-      <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+    <div class="tw:mt-1 tw:flex tw:flex-col tw:gap-1.5">
+      <div class="tw:h-1 tw:overflow-hidden tw:rounded-lw-pill tw:bg-lw-border">
+        <div class="tw:h-full tw:bg-lw-primary" :style="{ width: `${progressPercent}%` }"></div>
       </div>
-      <div class="progress-text">{{ completedCount }} / {{ totalCount }} 已填毕</div>
+      <div class="tw:text-right tw:text-xs tw:font-bold tw:text-lw-text-dim tw:tabular-nums">{{ completedCount }} / {{ totalCount }} 已填毕</div>
     </div>
-  </div>
+  </LuminaPanel>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { cn } from '../../../ui/cn.js';
+import { LuminaPanel } from '../../../ui/primitives';
 
 const props = defineProps<{
     content: string;
@@ -84,133 +86,14 @@ const parsedItems = computed(() => {
 const totalCount = computed(() => parsedItems.value.length);
 const completedCount = computed(() => parsedItems.value.filter(i => i.status === 'completed').length);
 const progressPercent = computed(() => totalCount.value > 0 ? (completedCount.value / totalCount.value) * 100 : 0);
+
+const checklistItemClass = (status: ListItem['status']) => cn(
+    'tw:flex tw:items-center tw:gap-2.5 tw:rounded-lw-sm tw:px-2 tw:py-1.5 tw:hover:bg-lw-hover',
+    status === 'completed' && 'tw:opacity-80'
+);
+
+const itemLabelClass = (status: ListItem['status']) => cn(
+    'tw:text-sm tw:font-bold tw:text-lw-text tw:truncate',
+    status === 'completed' && 'tw:text-lw-text-secondary tw:line-through'
+);
 </script>
-
-<style scoped>
-.forge-auto-list-card {
-  --accent-color: var(--lw-primary);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 16px;
-  border: 1px solid var(--lw-border-base);
-  background: color-mix(in srgb, var(--lw-bg-elevated) 96%, black);
-  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.1);
-  margin: 8px 0;
-  max-width: 400px;
-}
-
-.card-header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.card-kicker {
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--accent-color);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.card-title {
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--lw-text-main);
-}
-
-.card-body {
-  background: color-mix(in srgb, var(--lw-bg-base) 40%, transparent);
-  border-radius: 10px;
-  padding: 8px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 30%, transparent);
-}
-
-.checklist-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.checklist-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  transition: background 0.2s ease;
-}
-
-.checklist-item:hover {
-  background: color-mix(in srgb, var(--lw-bg-base) 80%, transparent);
-}
-
-.item-status {
-  font-size: 14px;
-  width: 20px;
-  display: flex;
-  justify-content: center;
-}
-
-.status-icon.completed { color: #10b981; }
-.status-icon.partial { color: #f59e0b; }
-.status-icon.pending { color: var(--lw-text-tertiary); opacity: 0.5; }
-.status-icon.blocked { color: #ef4444; }
-
-.item-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.item-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--lw-text-main);
-}
-
-.item-id {
-  font-size: 10px;
-  color: var(--lw-text-tertiary);
-  font-family: var(--lw-font-mono, monospace);
-  opacity: 0.7;
-}
-
-.checklist-item.completed .item-label {
-  color: var(--lw-text-secondary);
-  text-decoration: line-through;
-  opacity: 0.8;
-}
-
-.card-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.progress-bar {
-  height: 4px;
-  background: var(--lw-border-base);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: var(--accent-color);
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.progress-text {
-  font-size: 10px;
-  color: var(--lw-text-tertiary);
-  text-align: right;
-  font-weight: 600;
-}
-</style>

@@ -1,0 +1,121 @@
+import { describe, expect, it, vi } from 'vitest';
+import { ForgePiResourceLoader } from '@/api/core/forge/agent-app/resources/ForgePiResourceLoader.js';
+import type { ForgeSemanticVfsReader } from '@/api/core/forge/agent-app/vfs/ForgeSemanticVfsProvider.js';
+import type { ForgeRuntimeContext } from '@/types/ForgeRuntimeTypes.js';
+
+const createContext = (): ForgeRuntimeContext => ({
+    workspaceSessionId: 'forge_project_alpha',
+    sessionChatId: 'conversation_alpha',
+    workspaceTitle: 'Forge Alpha',
+    selectedPresetId: 'forge-main',
+    selectedChatSessionId: null,
+    selectedChatSnapshotId: null,
+    detailMode: 'quick',
+    collectionMode: 'conversation',
+    entryMode: null,
+    activeLayer: 'concept',
+    completedLayers: ['concept'],
+    workflowSnapshot: {
+        currentStage: 'narrative',
+        promptMode: 'conversation',
+        reason: '用户继续细化角色',
+        completedStages: ['kickoff', 'skeleton']
+    } as any,
+    publishState: 'drafting',
+    activeLeafId: 'leaf_1',
+    worldlineNodes: [],
+    messages: [],
+    timelineItems: [],
+    structuredState: {} as any,
+    draftTree: { nodes: [], lastUpdatedAt: 1 } as any,
+    forgeMemoryTree: { entries: [{ path: '偏好/禁忌', title: '禁忌', content: '避免俗套', summary: '避免俗套', updatedAt: 1, source: 'user' }], lastUpdatedAt: 1 },
+    stagingEntries: [{ id: 'stage_1', targetEntryId: 'entry.1', originalContent: '', proposedContent: 'new', description: '候选条目', timestamp: 1, layer: 'concept', sourceTag: null, sourceMessageId: null, sourceSessionId: null }],
+    commitReadyEntries: [],
+    virtualLorebookEntries: [{ id: 'entry.1', entry: { comment: '角色概念', content: '旧内容' } as any, createdAt: 1, updatedAt: 1, sourceBookId: null }],
+    latestUserInput: '继续',
+    latestUserCommand: { type: 'send_user_input', input: '继续' }
+});
+
+describe('ForgePiResourceLoader', () => {
+    it('reads AGENTS and mode prompt content from the semantic VFS reader', async () => {
+        const semanticVfs: ForgeSemanticVfsReader = {
+            readFile: vi.fn(async (_context, path) => {
+                if (path === './AGENTS.md') return '# Custom Contract';
+                if (path === './.forge/agent/SYSTEM.md') return '# Custom System Prompt';
+                if (path === './.forge/agent/CONVERSATION.md') return '# Custom Conversation Prompt';
+                throw new Error(`Unexpected path: ${path}`);
+            }),
+            listEntries: vi.fn(async () => [])
+        };
+        const loader = new ForgePiResourceLoader({
+            semanticVfs,
+            capabilities: { listCapabilities: vi.fn(() => []) } as any,
+            skills: {
+                listBuiltInSkills: vi.fn(() => []),
+                listProjectSkills: vi.fn(async () => [])
+            } as any
+        });
+
+        const bundle = await loader.buildContextBundle(createContext());
+        const systemPrompt = loader.buildSystemPrompt({ systemFragments: [], contextBundle: bundle });
+
+        expect(semanticVfs.readFile).toHaveBeenCalledWith(createContext(), './AGENTS.md');
+        expect(semanticVfs.readFile).toHaveBeenCalledWith(createContext(), './.forge/agent/SYSTEM.md');
+        expect(semanticVfs.readFile).toHaveBeenCalledWith(createContext(), './.forge/agent/CONVERSATION.md');
+        expect(systemPrompt).toContain('# Custom Contract');
+        expect(systemPrompt).toContain('# Custom System Prompt');
+        expect(systemPrompt).toContain('# Custom Conversation Prompt');
+    });
+
+    it('builds Chinese context files and capability index without loading full skill text', async () => {
+        const loader = new ForgePiResourceLoader({
+            capabilities: {
+                listCapabilities: vi.fn(() => [{
+                    id: 'virtual-lorebook-editor',
+                    title: '虚拟世界书编辑器',
+                    summary: '编辑虚拟世界书。',
+                    triggers: ['世界书'],
+                    loadAs: 'skill',
+                    namespace: 'forge.lorebook',
+                    skillName: 'virtual-lorebook-editor',
+                    risk: 'medium'
+                }])
+            } as any,
+            skills: {
+                listBuiltInSkills: vi.fn(() => [{
+                    name: 'virtual-lorebook-editor',
+                    title: '虚拟世界书编辑器',
+                    description: '编辑虚拟世界书。',
+                    defaultWriteScope: '/workspaces/forge/<projectId>/lorebook/entries/',
+                    builtIn: true
+                }]),
+                listProjectSkills: vi.fn(async () => [])
+            } as any
+        });
+
+        const bundle = await loader.buildContextBundle(createContext());
+
+        expect(bundle.loadedExtensions).toEqual(['@luminaweave/pi-forge-browser']);
+        expect(bundle.activeSkills).toContain('虚拟世界书编辑器');
+        expect(bundle.files.map(file => file.path)).toEqual(expect.arrayContaining([
+            './AGENTS.md',
+            './.forge/agent/SYSTEM.md',
+            './.forge/agent/CONVERSATION.md',
+            './.pi/agent/context/project.md',
+            './.pi/agent/context/workflow.md',
+            './.pi/agent/context/review-gate.md',
+            './.pi/agent/context/capability-index.md',
+            './.pi/agent/context/project-resources.md',
+            './threads/目前/messages.md'
+        ]));
+        expect(bundle.files.find(file => file.path === './.pi/agent/context/project.md')?.content)
+            .not.toContain('forge_project_alpha');
+        expect(bundle.files.find(file => file.path === './.pi/agent/context/review-gate.md')?.content).toContain('待审阅：1');
+        expect(bundle.files.find(file => file.path === './.pi/agent/context/capability-index.md')?.content)
+            .toContain('./agent/skills/virtual-lorebook-editor/SKILL.md');
+        expect(bundle.files.find(file => file.path === './AGENTS.md')?.title).toContain('工作契约');
+        expect(bundle.files.find(file => file.path === './.forge/agent/SYSTEM.md')?.title).toContain('默认系统提示词');
+        expect(bundle.files.find(file => file.path === './.forge/agent/CONVERSATION.md')?.title).toContain('模式提示词');
+        expect(JSON.stringify(bundle)).not.toContain('不要直接发布到真实 ST 世界书');
+    });
+});

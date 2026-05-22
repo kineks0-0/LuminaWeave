@@ -3,46 +3,53 @@ import { computed, ref, onMounted, shallowRef } from 'vue';
 import { luminaWeaveApi } from '../../api';
 import { llmEngine } from '../../api/llmEngine.js';
 import { lwStorage } from '../../api/storage.js';
-import { useForgeStore } from '../../stores/useForgeStore';
+import { useForgeStore } from '../../stores/useForgeStore.js';
 import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
-import { CleanedMessage } from '../../types/nexus';
-import { WorldlineStore } from '../../api/core/WorldlineStore.js';
+import type { ForgePiPersistedSessionState } from '@shared/ForgePiTypes.js';
+import type { CleanedMessage } from '../../types/nexus.js';
+import { WorldlineStore } from '../../api/core/storage/WorldlineStore.js';
 import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { globalXMLInterceptor } from '../../api/core/XMLInterceptor.js';
+import { globalXMLInterceptor } from '../../api/core/xml-view/XMLInterceptor.js';
 import type { ForgeVirtualLorebookEntry, ForgeWorkspaceSession } from '../../types/SessionTypes.js';
-import { LorebookTimelineResolver } from '../../api/core/LorebookTimelineResolver.js';
-import { MemoryViewResolver } from '../../api/core/MemoryViewResolver.js';
-import { promptPresetRegistry } from '../../api/core/PromptPresetRegistry.js';
-import type { TimelineNode } from '../../api/core/TimelineManager.js';
+import { LorebookTimelineResolver } from '../../api/core/lorebook/LorebookTimelineResolver.js';
+import { MemoryViewResolver } from '../../api/core/runtime-utils/MemoryViewResolver.js';
+import type { TimelineNode } from '../../api/core/storage/TimelineManager.js';
 import type { MemorySnapshot } from '../../types/MemorySnapshotTypes.js';
 import type { ResolvedLorebookViewState } from '../../types/LorebookViewTypes.js';
 import type { ForgeMemoryTree } from '../../types/ForgeMemoryTypes.js';
 import { FORGE_PLANNER_PROMPT, FORGE_EXECUTOR_SYSTEM_PROMPT } from '../../resources/prompts/forgePrompts.js';
-import { ForgePromptContextService } from '../../api/core/ForgePromptContextService.js';
-import { ForgeRuntimeOrchestrator } from '../../api/core/ForgeRuntimeOrchestrator.js';
+import { ForgePromptContextService } from '../../api/core/forge/prompt/ForgePromptContextService.js';
+import {
+    forgeAgentGraphRuntime,
+    type ForgeAgentGraphResult
+} from '../../api/core/forge/graph/ForgeAgentGraphRuntime.js';
+import { ForgeRuntimeOrchestrator } from '../../api/core/forge/runtime/ForgeRuntimeOrchestrator.js';
+import { forgePiRuntimeClient } from '../../api/core/forge/runtime/ForgePiRuntimeClient.js';
 import { clonePromptPresetGenerationSettings } from '../../api/core/utils/promptPresetGenerationSettings.js';
-import { applyForgeEffects, type ForgeEffectTarget } from '../../api/core/ForgeEffectReducer.js';
-import { ForgeSessionController } from '../../api/core/ForgeSessionController.js';
-import { ForgeWorldlineManager } from '../../api/core/ForgeWorldlineManager.js';
-import { resolveOriginalContent as _resolveOriginalContent } from '../../api/core/ForgeContextBroker.js';
+import { applyForgeEffects, type ForgeEffectTarget } from '../../api/core/forge/effects/ForgeEffectReducer.js';
+import { ForgeSessionController } from '../../api/core/forge/project/ForgeSessionController.js';
+import { ForgeWorldlineManager } from '../../api/core/forge/project/ForgeWorldlineManager.js';
+import { resolveOriginalContent as _resolveOriginalContent } from '../../api/core/forge/project/ForgeContextBroker.js';
 import {
     ForgeFormController,
     kickoffBlueprint
-} from '../../api/core/ForgeFormController.js';
-import { ForgeWorkflowGraph } from '../../api/core/ForgeWorkflowGraph.js';
-import { BridgeDispatcher } from '@shared/api/BridgeDispatcher.js';
+} from '../../api/core/forge/forms/ForgeFormController.js';
+import { ForgeWorkflowGraph } from '../../api/core/forge/graph/ForgeWorkflowGraph.js';
+import { HALContext } from '../../api/core/hal/HALContext.js';
 import type { ForgeAuxPanelKind, ForgeWorkflowSnapshot } from '../../types/ForgeWorkflowTypes.js';
 import {
     FORGE_FORM_RESULT_SUBMITTED,
     FORGE_LAYER_ADVANCE_REQUESTED,
+    FORGE_RUNTIME_EFFECTS_REQUESTED,
     FORGE_WORKSPACE_FREEZE_REQUESTED
-} from '../../api/core/forgeConstants.js';
+} from '../../api/core/forge/forgeConstants.js';
 import type {
     ForgeExecutionRequest,
     ForgeModelRequestTrace,
     ForgeRequestContextSnapshot,
     ForgeRequestLorebookEntrySummary,
     ForgeRequestNodeSummaryItem,
+    ForgeRuntimeDecision,
     ForgeRuntimeContext,
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
@@ -50,6 +57,7 @@ import type {
     StagingEntry
 } from '../../types/ForgeRuntimeTypes.js';
 import type { ForgePromptPreviewBundle } from '../../types/ForgePromptTypes.js';
+import type { ForgePromptPreviewAgentContext } from '../../types/ForgeAgentTypes.js';
 import type {
     ForgeCollectionMode,
     ForgeDraftTree,
@@ -60,10 +68,8 @@ import type {
     ForgeStructuredFormState,
     ForgeStructuredState
 } from '../../types/ForgeStructuredTypes.js';
-import type { PromptPresetProfileId } from '../../types/PromptPresetTypes.js';
 import type {
     ForgeTimelineItem,
-    ForgeTimelineMessageItem,
     ForgeTimelineOperationItem
 } from '../../types/ForgeTimelineTypes.js';
 import {
@@ -77,129 +83,50 @@ import {
     findVirtualLorebookEntry,
     findVirtualLorebookEntryIndex
 } from '../../api/core/utils/forgeVirtualLorebook.js';
-import { ForgeTestChatService } from '../../api/core/ForgeTestChatService.js';
+import { ForgeTestChatService } from '../../api/core/forge/test-chat/ForgeTestChatService.js';
+import {
+    forgeProjectSemanticVfsService,
+    type ForgeProjectSemanticVfsEntry
+} from '../../api/core/forge/project/ForgeProjectSemanticVfsService.js';
+import {
+    PromptResourceBindingService,
+    promptResourceBindingService
+} from '../../api/core/hal/resource/index.js';
+import {
+    generateDraftNodeId,
+    generateForgeRequestTraceId,
+    generateSessionChatId,
+    generateVirtualLorebookEntryId,
+    resolvePromptPresetGenerationSettings,
+    resolveRuntimePresetId,
+    sanitizeHistoryMessages,
+    summarizeLorebookEntries,
+    summarizeRequestNodeSummary,
+    type BackendPresetDetail,
+    type BackendPresetMeta,
+    type ForgeTimelineFeedItem,
+    createAssistantStreamMessageUpdate,
+    createForgeMessageNode
+} from './store/forgeStoreHelpers.js';
+import { ForgeTransientSelectionController } from './store/ForgeTransientSelectionController.js';
+import { ForgeRuntimeActionController } from './store/ForgeRuntimeActionController.js';
+import { buildPromptPreviewAgentContext } from './store/forgePromptPreviewAgentContext.js';
+import { ForgeStagingActionController } from './store/ForgeStagingActionController.js';
+import { ForgeFreezePublishController } from './store/ForgeFreezePublishController.js';
+import { ForgeFormSubmissionController } from './store/ForgeFormSubmissionController.js';
+import { ForgePromptPreviewPayloadBuilder } from './store/ForgePromptPreviewPayloadBuilder.js';
+import { ForgeAgentInspectorActions, type ForgeAgentInspectorMode } from './store/ForgeAgentInspectorActions.js';
 export const DEFAULT_PLANNER_PROMPT = FORGE_PLANNER_PROMPT;
 export const DEFAULT_EXECUTOR_PROMPT = FORGE_EXECUTOR_SYSTEM_PROMPT;
 let forgeControllerBridgeBound = false;
-
-type BackendPresetMeta = {
-    id: string;
-    name: string;
-    isDefault: boolean;
-    createdAt: number;
-    updatedAt: number;
-};
-
-type BackendPresetDetail = {
-    preset?: {
-        blob?: {
-            prompts?: Array<{
-                content?: string;
-            }>;
-        };
-    };
-};
-
-export type ForgeTimelineFeedItem =
-    | {
-        id: string;
-        kind: 'message';
-        timestamp: number;
-        item: ForgeTimelineMessageItem;
-        message: LuminaChatMessage;
-    }
-    | {
-        id: string;
-        kind: 'operation';
-        timestamp: number;
-        item: ForgeTimelineOperationItem;
-    };
-
-const generateSessionChatId = (): string => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `lw_card_${crypto.randomUUID()}`;
-    }
-    return `lw_card_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-};
-
-const generateVirtualLorebookEntryId = (): string => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `forge_lore_${crypto.randomUUID()}`;
-    }
-    return `forge_lore_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-};
-
-const generateDraftNodeId = (): string => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `forge_draft_${crypto.randomUUID()}`;
-    }
-    return `forge_draft_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-};
-
-const generateForgeRequestTraceId = (): string => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `forge_req_${crypto.randomUUID()}`;
-    }
-    return `forge_req_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-};
-
-const resolveRuntimePresetId = (preferredPresetId?: string | null): string => (
-    preferredPresetId ||
-    lwStorage.get('lumina-forge.nexusPreset', '', 'Global') ||
-    lwStorage.get('lumina-chat.nexusPreset', 'Global', 'Global')
-);
-
-const summarizeRequestNodeSummary = (presetId: string): ForgeRequestNodeSummaryItem[] =>
-    llmEngine.resolveNodesFromPreset(presetId).map((node: any) => {
-        const provider = String(node?.provider || 'unknown');
-        const model = typeof node?.model === 'string' && node.model.trim() ? node.model.trim() : null;
-        return {
-            provider,
-            model,
-            label: provider === 'st_current'
-                ? '宿主当前模型'
-                : [provider, model].filter(Boolean).join(' / ')
-        };
-    });
-
-const sanitizeHistoryMessages = (input: Array<Pick<LuminaChatMessage, 'role' | 'mes' | 'mesRaw' | 'name'>>): CleanedMessage[] =>
-    input
-        .filter((message) => (message.mes || message.mesRaw || '').trim() !== '')
-        .map((message) => ({
-            role: message.role as CleanedMessage['role'],
-            content: message.mes || message.mesRaw || '',
-            name: message.name
-        }));
-
-const summarizeLorebookEntries = (entries: LuminaLorebookEntry[]): ForgeRequestLorebookEntrySummary[] =>
-    entries.map((entry: any) => {
-        const keywords = Array.isArray(entry?.key)
-            ? entry.key
-            : Array.isArray(entry?.keywords)
-                ? entry.keywords
-                : Array.isArray(entry?.keys)
-                    ? entry.keys
-                    : [];
-        return {
-            id: String(entry?.uid || entry?.comment || keywords[0] || 'forge_lorebook_entry'),
-            title: String(entry?.comment || entry?.uid || keywords[0] || '未命名条目'),
-            comment: String(entry?.comment || ''),
-            keywords: keywords.map((keyword: unknown) => String(keyword)),
-            disabled: Boolean(entry?.disable)
-        };
-    });
-
-const resolvePromptPresetGenerationSettings = (profileId: PromptPresetProfileId) => (
-    clonePromptPresetGenerationSettings(
-        promptPresetRegistry.getActivePreset(profileId).generationSettings
-    )
-);
 
 export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const forgeStore = useForgeStore();
     const sessionChatId = ref<string>(generateSessionChatId());
     const workspaceSessionId = ref<string>('');
-    const workspaceTitle = ref<string>('Forge Workspace');
+    const forgeProjectId = ref<string | null>(null);
+    const workspacePath = ref<string | null>(null);
+    const workspaceTitle = ref<string>('Forge Project');
     const workspaceCreatedAt = ref<number>(Date.now());
     const workspaceUpdatedAt = ref<number>(Date.now());
     const selectedChatSessionId = ref<string | null>(null);
@@ -250,91 +177,51 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const virtualLorebookEntries = ref<ForgeVirtualLorebookEntry[]>([]);
     const importedLorebookId = ref<string | null>(null);
 
-    /**
-     * 瞬态交互存储：用于收集非表单绑定的零散点击/输入值（即“临时表单”数据）。
-     * 键为 fieldKey 或唯一标识，值为用户的选择。
-     */
-    const transientSelections = ref<Map<string, Map<string, string | string[]>>>(new Map());
-    const LEGACY_TRANSIENT_SCOPE = '__legacy__';
-
-    const normalizeTransientScopeId = (scopeId?: string | null): string => {
-        const normalized = String(scopeId || '').trim();
-        return normalized || LEGACY_TRANSIENT_SCOPE;
-    };
-
-    const ensureTransientScope = (scopeId?: string | null): Map<string, string | string[]> => {
-        const normalizedScopeId = normalizeTransientScopeId(scopeId);
-        const existing = transientSelections.value.get(normalizedScopeId);
-        if (existing) {
-            return existing;
-        }
-        const nextScope = new Map<string, string | string[]>();
-        transientSelections.value.set(normalizedScopeId, nextScope);
-        return nextScope;
-    };
+    const transientSelectionController = new ForgeTransientSelectionController({
+        getStructuredState: () => structuredState.value,
+        persistWorkspaceSession: () => persistWorkspaceSession()
+    });
 
     /**
      * 更新瞬态选择值
      */
     const upsertTransientSelection = (key: string, value: string | string[], scopeId?: string | null) => {
-        const normalizedScopeId = normalizeTransientScopeId(scopeId);
-        console.log(`[Forge-Store] 记入瞬态选值 "${normalizedScopeId}:${key}" ->`, value);
-        ensureTransientScope(normalizedScopeId).set(key, value);
-        delete structuredState.value.submittedScopes[normalizedScopeId];
-        structuredState.value.lastUpdatedAt = Date.now();
+        console.log(`[Forge-Store] 记入瞬态选值 "${String(scopeId || '').trim() || '__legacy__'}:${key}" ->`, value);
+        transientSelectionController.upsertTransientSelection(key, value, scopeId);
     };
 
     const getTransientSelections = (scopeId?: string | null): Map<string, string | string[]> => (
-        transientSelections.value.get(normalizeTransientScopeId(scopeId)) || new Map()
+        transientSelectionController.getTransientSelections(scopeId)
     );
 
-    const getTransientFieldText = (scopeId: string | null | undefined, fieldKey: string): string => {
-        const value = getTransientSelections(scopeId).get(fieldKey);
-        if (value === undefined) return '';
-        return Array.isArray(value) ? value.join(', ') : String(value || '');
-    };
+    const getTransientFieldText = (scopeId: string | null | undefined, fieldKey: string): string =>
+        transientSelectionController.getTransientFieldText(scopeId, fieldKey);
 
-    const getTransientFieldList = (scopeId: string | null | undefined, fieldKey: string): string[] => {
-        const value = getTransientSelections(scopeId).get(fieldKey);
-        if (value === undefined) return [];
-        return Array.isArray(value) ? value : (value ? [String(value)] : []);
-    };
+    const getTransientFieldList = (scopeId: string | null | undefined, fieldKey: string): string[] =>
+        transientSelectionController.getTransientFieldList(scopeId, fieldKey);
 
     const clearTransientSelections = (scopeId?: string | null): void => {
-        transientSelections.value.delete(normalizeTransientScopeId(scopeId));
+        transientSelectionController.clearTransientSelections(scopeId);
     };
 
     const hasPendingTransientSelections = (scopeId?: string | null): boolean => (
-        getTransientSelections(scopeId).size > 0
+        transientSelectionController.hasPendingTransientSelections(scopeId)
     );
 
     const rememberSubmitConfig = (scopeId: string, label?: string | null): void => {
-        const normalizedScopeId = normalizeTransientScopeId(scopeId);
-        const normalizedLabel = String(label || '').trim();
-        if (!normalizedLabel) return;
-        const existing = structuredState.value.submitConfigs[normalizedScopeId];
-        if (existing?.label === normalizedLabel) return;
-        structuredState.value.submitConfigs[normalizedScopeId] = {
-            label: normalizedLabel,
-            updatedAt: Date.now()
-        };
-        structuredState.value.lastUpdatedAt = Date.now();
-        void persistWorkspaceSession();
+        transientSelectionController.rememberSubmitConfig(scopeId, label);
     };
 
     const resolveSubmitLabel = (scopeId: string, fallbackLabel = '提交并继续'): string => {
-        const normalizedScopeId = normalizeTransientScopeId(scopeId);
-        return structuredState.value.submitConfigs[normalizedScopeId]?.label || fallbackLabel;
+        return transientSelectionController.resolveSubmitLabel(scopeId, fallbackLabel);
     };
 
     const markScopeSubmitted = (scopeId: string): void => {
-        structuredState.value.submittedScopes[normalizeTransientScopeId(scopeId)] = Date.now();
-        structuredState.value.lastUpdatedAt = Date.now();
-        void persistWorkspaceSession();
+        transientSelectionController.markScopeSubmitted(scopeId);
     };
 
     const isScopeSubmitted = (scopeId: string): boolean => Boolean(
-        structuredState.value.submittedScopes[normalizeTransientScopeId(scopeId)]
+        transientSelectionController.isScopeSubmitted(scopeId)
     );
 
     let _formController: ForgeFormController | null = null;
@@ -365,6 +252,10 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             setSessionChatId: (id) => { sessionChatId.value = id; },
             getWorkspaceSessionId: () => workspaceSessionId.value,
             setWorkspaceSessionId: (id) => { workspaceSessionId.value = id; },
+            getForgeProjectId: () => forgeProjectId.value,
+            setForgeProjectId: (id) => { forgeProjectId.value = id; },
+            getWorkspacePath: () => workspacePath.value,
+            setWorkspacePath: (path) => { workspacePath.value = path; },
             getWorkspaceTitle: () => workspaceTitle.value,
             setWorkspaceTitle: (title) => { workspaceTitle.value = title; },
             getWorkspaceCreatedAt: () => workspaceCreatedAt.value,
@@ -391,6 +282,23 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             getActiveLeafId: () => worldlineStore.value.activeLeafId,
             getTimelineItems: () => forgeStore.timelineItems,
             replaceTimelineItems: (items) => forgeStore.replaceTimelineItems(items),
+            getPiSessionState: (): ForgePiPersistedSessionState | null => forgeStore.piSessionEntries.length > 0
+                ? {
+                    sessionId: `${activeForgeProjectId.value || workspaceSessionId.value}__${sessionChatId.value}`,
+                    activeNodeId: forgeStore.activePiNodeId,
+                    entries: forgeStore.piSessionEntries.map(entry => ({ ...entry, payload: { ...entry.payload } })),
+                    contextBundleSummary: forgeStore.piContextBundleSummary
+                        ? {
+                            files: forgeStore.piContextBundleSummary.files.map(file => ({ ...file })),
+                            activeSkills: [...forgeStore.piContextBundleSummary.activeSkills],
+                            loadedExtensions: [...forgeStore.piContextBundleSummary.loadedExtensions]
+                        }
+                        : null,
+                    loadedExtensions: [...forgeStore.piLoadedExtensions],
+                    version: 1
+                }
+                : null,
+            setPiSessionState: (state) => forgeStore.setForgePiPersistedSessionState(state),
             getStagingEntries: () => forgeStore.stagingArea,
             setStagingEntries: (entries) => { forgeStore.stagingArea = entries; },
             getCommitReadyEntries: () => forgeStore.commitReadyEntries,
@@ -431,6 +339,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             syncDraftTree: () => syncDraftTree(),
             bumpTimelineRevision: () => bumpTimelineRevision(),
             generateSessionChatId,
+            onProjectHydrated: () => migratePromptResourceBindingsToProject(),
             getWorldlineSnapshotMap: () => getWorldlineManager().getSnapshotMap(),
             setWorldlineSnapshotMap: (map) => getWorldlineManager().setSnapshotMap(map)
         });
@@ -472,19 +381,51 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     };
 
     let runtimeOrchestrator: ForgeRuntimeOrchestrator | null = null;
+    const lastAgentGraphResult = ref<ForgeAgentGraphResult | null>(null);
+
+    const activeForgeProjectId = computed(() => (
+        forgeProjectId.value || workspaceSessionId.value || sessionChatId.value
+    ));
+
+    const listProjectVfsEntries = async (): Promise<ForgeProjectSemanticVfsEntry[]> => (
+        forgeProjectSemanticVfsService.listEntries(getRuntimeContext({ type: 'noop' }))
+    );
+
+    const listProjectVfsFiles = async (): Promise<ForgeProjectSemanticVfsEntry[]> => (
+        (await listProjectVfsEntries()).filter((entry): entry is ForgeProjectSemanticVfsEntry & { kind: 'file' } =>
+            entry.kind === 'file'
+        )
+    );
+
+    const getProjectPromptBindingOwner = () => (
+        PromptResourceBindingService.forgeWorkspaceOwner(activeForgeProjectId.value)
+    );
+
+    const migratePromptResourceBindingsToProject = (): void => {
+        const projectId = forgeProjectId.value;
+        if (!projectId) return;
+        [workspaceSessionId.value, sessionChatId.value]
+            .filter((id): id is string => Boolean(id && id !== projectId))
+            .forEach((legacyId) => {
+                promptResourceBindingService.migrateForgeWorkspaceOwner(legacyId, projectId);
+            });
+    };
 
     const testChatService = new ForgeTestChatService({
         getVirtualLorebookEntries: () => virtualLorebookEntries.value,
         getNexusPresetId: () => selectedPresetId.value,
         getWorkspaceTitle: () => workspaceTitle.value || 'Forge Test',
-        getWorkspaceSessionId: () => workspaceSessionId.value || sessionChatId.value,
+        getWorkspaceSessionId: () => activeForgeProjectId.value,
+        getPromptResourceBindingResolution: () => promptResourceBindingService.resolveBindings(
+            getProjectPromptBindingOwner()
+        ),
         createModelRequestTrace: (trace) => forgeStore.createModelRequestTrace(trace),
         markModelRequestFirstResponse: (requestId, firstResponseAt) => forgeStore.markModelRequestFirstResponse(requestId, firstResponseAt),
         updateModelRequestStream: (payload) => forgeStore.updateModelRequestStream(payload),
         completeModelRequestTrace: (payload) => forgeStore.completeModelRequestTrace(payload),
         failModelRequestTrace: (requestId, message) => forgeStore.failModelRequestTrace(requestId, message),
         abortModelRequestTrace: (requestId) => forgeStore.abortModelRequestTrace(requestId),
-        setActiveModelRequestTrace: (requestId) => forgeStore.setActiveModelRequestTrace(requestId)
+        setActiveModelRequestTrace: (requestId) => forgeStore.setActiveModelRequestTrace(requestId),
     });
 
 
@@ -578,6 +519,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const flushWorkspaceSession = (): Promise<void> => getSessionController().flushWorkspaceSession();
     const hydrateFromSession = (session: ForgeWorkspaceSession): void => getSessionController().hydrateFromSession(session);
     const createWorkspaceSession = (title?: string): Promise<ForgeWorkspaceSession> => getSessionController().createWorkspaceSession(title);
+    const createWorkspaceThread = (projectId: string, title?: string): Promise<ForgeWorkspaceSession> => getSessionController().createWorkspaceThread(projectId, title);
     const renameWorkspaceSession = (title: string): boolean => getSessionController().renameWorkspaceSession(title);
     const openWorkspaceSession = (id: string): Promise<boolean> => getSessionController().openWorkspaceSession(id);
 
@@ -586,32 +528,12 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     };
 
     const createMessageNode = (role: 'user' | 'assistant', content: string, parentId: string | null): LuminaChatMessage => {
-        const isUser = role === 'user';
-        const timestamp = Date.now();
-
-        return {
-            id: MessageUtils.generateNodeId(),
-            parentId,
-            name: isUser ? 'You' : 'Forge Assistant',
+        return createForgeMessageNode({
             role,
-            is_user: isUser,
-            conversationType: 'forge',
-            conversationId: sessionChatId.value,
-            nodeKind: 'message',
-            mesRaw: content,
-            mes: content,
-            thinkingText: null,
-            pluginRaw: isUser ? null : content,
-            fingerprint: MessageUtils.getFingerprint(content),
-            extra: {
-                send_date: timestamp,
-                conversationType: 'forge',
-                conversationId: sessionChatId.value,
-                nodeKind: 'message'
-            },
-            createdAt: timestamp,
-            syncStatus: 'local'
-        };
+            content,
+            parentId,
+            sessionChatId: sessionChatId.value
+        });
     };
 
     const upsertMessage = (node: LuminaChatMessage): void => {
@@ -622,7 +544,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     };
 
     const refreshPresets = async (): Promise<void> => {
-        const data = await BridgeDispatcher.presets.listPresets() as { presets: BackendPresetMeta[] };
+        const data = await HALContext.instance.runtime.presets.listPresets() as { presets: BackendPresetMeta[] };
         presets.value = Array.isArray(data.presets) ? data.presets : [];
         if (!selectedPresetId.value) {
             const def = presets.value.find(p => p.isDefault) || presets.value[0];
@@ -633,17 +555,17 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const importPreset = async (text: string, name?: string): Promise<void> => {
         let blob: unknown = text;
         try { blob = JSON.parse(text); } catch { blob = text; }
-        await BridgeDispatcher.presets.importPreset({ name, blob });
+        await HALContext.instance.runtime.presets.importPreset({ name, blob });
         await refreshPresets();
     };
 
     const exportPreset = async (presetId: string): Promise<string> => {
-        const data = await BridgeDispatcher.presets.exportPreset(presetId) as { blob: unknown };
+        const data = await HALContext.instance.runtime.presets.exportPreset(presetId) as { blob: unknown };
         return JSON.stringify(data.blob, null, 2);
     };
 
     const restoreDefaultPresets = async (): Promise<void> => {
-        await BridgeDispatcher.presets.restoreDefaults();
+        await HALContext.instance.runtime.presets.restoreDefaults();
         await refreshPresets();
     };
 
@@ -668,7 +590,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 bookId: selectedBookId,
                 sourceId: 'forge',
                 activeLeafId: activeLeafId.value,
-                sessionId: workspaceSessionId.value || sessionChatId.value || null
+                sessionId: activeForgeProjectId.value || null
             },
             // 核心修复：Forge 的 liveEntries 应严格使用虚拟工作区条目，而非全局同步的 manager.entries
             // 这能防止 ST 激活的世界书（如思维链准则）在没有快照时污染 Forge 提示词
@@ -685,7 +607,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
 
         return MemoryViewResolver.buildSnapshot({
             sourceId: 'forge',
-            sessionId: workspaceSessionId.value || sessionChatId.value || null,
+            sessionId: activeForgeProjectId.value || null,
             activeLeafId: activeLeafId.value,
             messageCount: messages.value.length,
             lorebook: {
@@ -730,12 +652,13 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         requestParameters: ForgeModelRequestTrace['requestParameters'];
         presetId: string | null;
         nodeSummary: ForgeRequestNodeSummaryItem[];
+        agentContext?: ForgePromptPreviewAgentContext | null;
     }): void => {
         forgeStore.createModelRequestTrace({
             id: payload.requestId,
             source: payload.source,
             status: 'queued',
-            workspaceSessionId: workspaceSessionId.value || sessionChatId.value,
+            workspaceSessionId: activeForgeProjectId.value,
             requestPrompt: payload.requestPrompt.map((message) => ({ ...message })),
             requestParameters: clonePromptPresetGenerationSettings(payload.requestParameters),
             contextSnapshot: {
@@ -751,7 +674,9 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             completedAt: null,
             errorMessage: null,
             presetId: payload.presetId,
-            nodeSummary: payload.nodeSummary.map((item) => ({ ...item }))
+            nodeSummary: payload.nodeSummary.map((item) => ({ ...item })),
+            agentContext: payload.agentContext ?? null,
+            toolEvents: []
         });
     };
 
@@ -781,6 +706,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             entries: nextEntries,
             lastUpdatedAt: nextEntry.updatedAt
         };
+        void persistWorkspaceSession();
     };
 
     const removeForgeMemory = (path: string): void => {
@@ -792,6 +718,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             entries: nextEntries,
             lastUpdatedAt: Date.now()
         };
+        void persistWorkspaceSession();
     };
 
     const summarizeFormValues = (formId: string): string => getFormController().summarizeFormValues(formId);
@@ -948,7 +875,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 sourceMessageId: entry.sourceMessageId || null,
                 sourceEntryId: entry.targetEntryId,
                 sourceTag: entry.sourceTag || null,
-                sourceSessionId: entry.sourceSessionId || workspaceSessionId.value || null,
+                sourceSessionId: entry.sourceSessionId || activeForgeProjectId.value || null,
                 updatedAt: entry.timestamp
             })),
             ...forgeStore.commitReadyEntries.map(entry => ({
@@ -960,7 +887,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 sourceMessageId: entry.sourceMessageId || null,
                 sourceEntryId: entry.targetEntryId,
                 sourceTag: entry.sourceTag || null,
-                sourceSessionId: entry.sourceSessionId || workspaceSessionId.value || null,
+                sourceSessionId: entry.sourceSessionId || activeForgeProjectId.value || null,
                 updatedAt: entry.timestamp
             })),
             ...virtualLorebookEntries.value.map(item => ({
@@ -972,7 +899,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 sourceMessageId: null,
                 sourceEntryId: typeof item.entry.uid === 'string' ? item.entry.uid : null,
                 sourceTag: 'virtual_lorebook',
-                sourceSessionId: workspaceSessionId.value || null,
+                sourceSessionId: activeForgeProjectId.value || null,
                 updatedAt: item.updatedAt
             }))
         ];
@@ -996,7 +923,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         });
 
     const getRuntimeContext = (command: ForgeUserCommand, latestUserInput?: string): ForgeRuntimeContext => ({
-        workspaceSessionId: workspaceSessionId.value || `forge_ws_${Date.now().toString(36)}`,
+        workspaceSessionId: activeForgeProjectId.value || `forge_ws_${Date.now().toString(36)}`,
         sessionChatId: sessionChatId.value,
         workspaceTitle: workspaceTitle.value,
         selectedPresetId: selectedPresetId.value,
@@ -1023,7 +950,23 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             entry: JSON.parse(JSON.stringify(entry.entry))
         })),
         latestUserInput: latestUserInput ?? input.value.trim(),
-        latestUserCommand: command
+        latestUserCommand: command,
+        piSession: forgeStore.piSessionEntries.length > 0
+            ? {
+                sessionId: `${activeForgeProjectId.value || workspaceSessionId.value}__${sessionChatId.value}`,
+                activeNodeId: forgeStore.activePiNodeId,
+                entries: forgeStore.piSessionEntries.map(entry => ({ ...entry, payload: { ...entry.payload } })),
+                contextBundleSummary: forgeStore.piContextBundleSummary
+                    ? {
+                        files: forgeStore.piContextBundleSummary.files.map(file => ({ ...file })),
+                        activeSkills: [...forgeStore.piContextBundleSummary.activeSkills],
+                        loadedExtensions: [...forgeStore.piContextBundleSummary.loadedExtensions]
+                    }
+                    : null,
+                loadedExtensions: [...forgeStore.piLoadedExtensions],
+                version: 1
+            }
+            : null
     });
 
     const handleRuntimeEvent = (event: ForgeRuntimeEvent): void => {
@@ -1040,35 +983,18 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         if (!assistantNode) return;
 
         if (event.type === 'stream_chunk') {
-            streamText.value = event.displayText;
-            streamThinkingText.value = event.thinkingText;
-            upsertMessage({
-                ...assistantNode,
-                pluginRaw: event.rawText,
-                fingerprint: MessageUtils.getFingerprint(event.rawText),
-                syncStatus: 'streaming',
-                extra: {
-                    ...assistantNode.extra,
-                    send_date: assistantNode.extra?.send_date,
-                    lastChunkAt: Date.now()
-                }
-            });
+            const update = createAssistantStreamMessageUpdate(event, assistantNode);
+            streamText.value = update.streamText;
+            streamThinkingText.value = update.streamThinkingText;
+            upsertMessage(update.message);
             return;
         }
 
         if (event.type === 'stream_done') {
-            streamText.value = event.displayText;
-            streamThinkingText.value = event.thinkingText;
-            upsertMessage({
-                ...assistantNode,
-                pluginRaw: event.rawText,
-                fingerprint: MessageUtils.getFingerprint(event.rawText),
-                syncStatus: 'local',
-                extra: {
-                    ...assistantNode.extra,
-                    completedAt: Date.now()
-                }
-            });
+            const update = createAssistantStreamMessageUpdate(event, assistantNode);
+            streamText.value = update.streamText;
+            streamThinkingText.value = update.streamThinkingText;
+            upsertMessage(update.message);
             worldlineStore.value.activeLeafId = assistantNode.id;
             bumpTimelineRevision();
             isGenerating.value = false;
@@ -1076,7 +1002,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             return;
         }
 
-        if (event.type === 'stream_error' || event.type === 'action_completed') {
+        if (event.type === 'stream_error') {
             isGenerating.value = false;
             if (event.type === 'stream_error') {
                 streamThinkingText.value = '';
@@ -1116,6 +1042,12 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             updateModelRequestStream: (payload) => forgeStore.updateModelRequestStream(payload),
             completeModelRequestTrace: (payload) => forgeStore.completeModelRequestTrace(payload),
             failModelRequestTrace: (requestId, message) => forgeStore.failModelRequestTrace(requestId, message),
+            appendModelRequestToolEvent: (requestId, event) => forgeStore.appendModelRequestToolEvent(requestId, event),
+            setModelRequestToolSetSummary: (requestId, tools) => forgeStore.setModelRequestToolSetSummary(requestId, tools),
+            setModelRequestPiTrace: (requestId, trace) => forgeStore.setModelRequestPiTrace(requestId, trace),
+            setForgePiSessionState: (payload) => forgeStore.setForgePiSessionState(payload),
+            upsertToolApproval: (approval) => forgeStore.upsertToolApproval(approval),
+            resolveToolApproval: (toolCallId, approved, message) => forgeStore.resolveToolApproval(toolCallId, approved, message),
             setEntryMode(mode) {
                 entryMode.value = mode;
                 publishState.value = 'drafting';
@@ -1134,6 +1066,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             applySubmittedFormResult,
             upsertForgeMemory,
             removeForgeMemory,
+            upsertStagingEntry: (entry) => forgeStore.upsertStagingEntry(entry),
             autoMergeEntryToVirtualLorebook(entry) {
                 const entryId = entry.targetEntryId;
                 const existingVirtualEntry = findVirtualLorebookEntry(virtualLorebookEntries.value, entryId);
@@ -1180,31 +1113,133 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                     const entry = findVirtualLorebookEntry(virtualLorebookEntries.value, targetEntryId);
                     return entry?.entry.comment || null;
                 }
+            }, undefined, undefined, {
+                runPiTurn: (input) => forgePiRuntimeClient.runTurn(input),
+                resolvePiToolApproval: (toolCallId, approved, message) =>
+                    forgePiRuntimeClient.resolveToolApproval(toolCallId, approved, message)
             });
         }
         return runtimeOrchestrator;
     };
 
-    const dispatchWorkspaceCommand = async (command: import('../../types/ForgeRuntimeTypes').ForgeUserCommand): Promise<any> => {
-        console.log(`[Forge-Store] 开始调度命令：${command.type}`, { command, isBusy: isBusy.value });
-        forgeStore.isProcessing = true;
-        try {
-            const result = await ensureRuntimeOrchestrator().dispatch(command);
-            console.log(`[Forge-Store] 命令 ${command.type} 执行圆满结束。`);
-            return result;
-        } finally {
-            console.log(`[Forge-Store] 正在清理命令 ${command.type} 的生命周期。`);
-            forgeStore.isProcessing = false;
-            // 兜底：确保生成标志也被清除
-            if (isGenerating.value) {
-                console.warn('[Forge-Store] 严重警告：命令调度结束但 isGenerating 仍为 true，正在强制回收。');
-                isGenerating.value = false;
-            }
-            // 兜底：将所有仍处于 running 状态的操作条目标记为 failed，
-            // 防止超时或报错时操作状态永远卡在"进行中"
-            forgeStore.failRunningOperations();
-        }
-    };
+    const runtimeActionController = new ForgeRuntimeActionController({
+        getRuntimeOrchestrator: () => ensureRuntimeOrchestrator(),
+        setProcessing: (value) => { forgeStore.isProcessing = value; },
+        getIsGenerating: () => isGenerating.value,
+        setIsGenerating: (value) => { isGenerating.value = value; },
+        failRunningOperations: () => forgeStore.failRunningOperations(),
+        fallbackResolveToolApproval: (toolCallId, approved, message) =>
+            forgeStore.resolveToolApproval(toolCallId, approved, message)
+    });
+
+    const dispatchWorkspaceCommand = (command: ForgeUserCommand): Promise<ForgeRuntimeDecision> =>
+        runtimeActionController.dispatchWorkspaceCommand(command);
+
+    const stagingActionController = new ForgeStagingActionController({
+        applyRuntimeEffects
+    });
+
+    const freezePublishController = new ForgeFreezePublishController({
+        getIsCommitting: () => isCommitting.value,
+        setIsCommitting: (value) => { isCommitting.value = value; },
+        getCommitReadyEntries: () => forgeStore.commitReadyEntries,
+        getExistingVirtualEntry: (targetEntryId) => findVirtualLorebookEntry(virtualLorebookEntries.value, targetEntryId) ?? null,
+        buildFrozenContent: (entry, existingEntry) => buildFrozenVirtualLorebookContent(entry, existingEntry),
+        upsertVirtualLorebookEntry: (payload) => upsertVirtualLorebookEntry(payload),
+        removeVirtualLorebookEntry: (id) => removeVirtualLorebookEntry(id),
+        removeCommitReadyEntry: (id) => forgeStore.removeFromCommitReady(id),
+        setPublishState: (value) => { publishState.value = value; },
+        addWorkspaceWriteOperation: (successCount) => addOperation({
+            operationKind: 'workspace_write',
+            status: 'completed',
+            title: '已冻结到项目 VFS',
+            summary: `共冻结 ${successCount} 个条目`,
+            sourceTag: 'freeze_workspace',
+            layer: activeLayer.value
+        }),
+        syncDraftTree,
+        refreshWorkflowSnapshot: async () => { await refreshWorkflowSnapshot(); },
+        persistWorkspaceSession: () => persistWorkspaceSession(),
+        setLastError: (message) => { lastError.value = message; },
+        dispatchWorkspaceCommand: (command) => dispatchWorkspaceCommand(command)
+    });
+
+    const formSubmissionController = new ForgeFormSubmissionController({
+        hasStructuredForm: (formId) => Boolean(structuredState.value.forms[formId]),
+        buildSubmittedFormUserInput: (formId) => buildSubmittedFormUserInput(formId),
+        getTransientSelections: (scopeId) => getTransientSelections(scopeId),
+        addUserViewMessage: (content) => addUserViewMessage(content),
+        dispatchWorkspaceCommand: (command) => dispatchWorkspaceCommand(command),
+        clearTransientSelections: (scopeId) => clearTransientSelections(scopeId),
+        markScopeSubmitted: (scopeId) => markScopeSubmitted(scopeId),
+        setLastError: (message) => { lastError.value = message; },
+        showToast: (message, type) => luminaWeaveApi.showToast(message, type)
+    });
+
+    const promptPreviewPayloadBuilder = new ForgePromptPreviewPayloadBuilder({
+        getSelectedPresetId: () => selectedPresetId.value,
+        syncAutoChecklistToMemory: () => syncAutoChecklistToMemory(),
+        fetchPresetDetail: (presetId) => fetchPresetDetail(presetId),
+        resolveActiveLorebookView: () => resolveActiveLorebookView(),
+        buildMemorySnapshot: () => buildMemorySnapshot(),
+        getPrimaryMode: () => workflowSnapshot.value?.promptMode === 'conversation'
+            ? 'conversation'
+            : workflowSnapshot.value?.promptMode === 'analyst'
+                ? 'analyst'
+                : 'planner',
+        getMessages: () => messages.value,
+        runAgentGraph: async () => forgeAgentGraphRuntime.run({
+            session: serializeSession(),
+            userInput: input.value.trim() || workflowSnapshot.value?.recommendedAction || 'Prompt preview',
+            workflowSnapshot: workflowSnapshot.value
+        }),
+        getForgeMemoryTree: () => forgeMemoryTree.value,
+        getStructuredState: () => structuredState.value,
+        getDraftTree: () => draftTree.value,
+        getWorkflowSnapshot: () => workflowSnapshot.value,
+        getCommitReadyEntries: () => forgeStore.commitReadyEntries,
+        getStagingEntries: () => forgeStore.stagingArea,
+        resolveOriginalContent: (targetEntryId) => resolveOriginalContent(targetEntryId),
+        getSessionChatId: () => sessionChatId.value,
+        getRuntimeContext: (command, latestUserInput) => getRuntimeContext(command, latestUserInput),
+        resolveRuntimePresetId: (presetId) => resolveRuntimePresetId(presetId),
+        buildRuntimeContextSnapshot: (context, lorebookView, memorySnapshot, presetId) =>
+            buildRuntimeContextSnapshot(context, lorebookView, memorySnapshot, presetId),
+        summarizeRequestNodeSummary: (presetId) => summarizeRequestNodeSummary(presetId),
+        resolvePromptPresetGenerationSettings: (profileId) => resolvePromptPresetGenerationSettings(profileId),
+        generateRequestId: () => generateForgeRequestTraceId(),
+        previewPiPrompt: (payload) => forgePiRuntimeClient.previewPrompt(payload),
+        promptContextService: ForgePromptContextService
+    });
+
+    const agentInspectorActions = new ForgeAgentInspectorActions({
+        runAgentGraph: (payload) => forgeAgentGraphRuntime.run(payload as any),
+        setLastAgentGraphResult: (graph) => { lastAgentGraphResult.value = graph; },
+        getAgentInspectorInput: () => input.value,
+        getWorkflowSnapshot: () => workflowSnapshot.value,
+        serializeSession: () => serializeSession(),
+        getRuntimeContext: (testInput) => getRuntimeContext({ type: 'send_user_input', input: testInput }),
+        buildExecutorExecutionRequest: (payload) => ForgePromptContextService.buildExecutorExecutionRequest(payload as any),
+        fetchPresetDetail: (presetId) => fetchPresetDetail(presetId || ''),
+        resolveActiveLorebookView: () => resolveActiveLorebookView(),
+        buildMemorySnapshot: () => buildMemorySnapshot(),
+        getLastAgentGraphSourceUnits: () => lastAgentGraphResult.value?.promptSourceUnits ?? [],
+        getForgeMemoryTree: () => cloneForgeMemoryTree(forgeMemoryTree.value),
+        getStructuredState: () => structuredState.value,
+        getDraftTree: () => draftTree.value,
+        buildPlannerPrompt: (payload) => ForgePromptContextService.buildPlannerPrompt(payload as any),
+        buildAnalystPrompt: (payload) => ForgePromptContextService.buildAnalystPrompt(payload as any),
+        buildConversationPrompt: (payload) => ForgePromptContextService.buildConversationPrompt(payload as any),
+        cleanMessages: (messages) => llmEngine.cleanMessages(messages),
+        resolvePromptPresetGenerationSettings: (profileId) => resolvePromptPresetGenerationSettings(profileId),
+        resolveRuntimePresetId: (presetId) => resolveRuntimePresetId(presetId),
+        buildRuntimeContextSnapshot: (context, lorebookView, memorySnapshot, presetId) =>
+            buildRuntimeContextSnapshot(context, lorebookView, memorySnapshot, presetId),
+        summarizeRequestNodeSummary: (presetId) => summarizeRequestNodeSummary(presetId),
+        generateRequestId: () => generateForgeRequestTraceId(),
+        getSessionChatId: () => sessionChatId.value,
+        runPiTurn: (payload) => forgePiRuntimeClient.runTurn(payload)
+    });
 
     const chooseEntryMode = async (mode: ForgeEntryMode): Promise<void> => {
         lastError.value = null;
@@ -1231,51 +1266,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     };
 
     const submitStructuredForm = async (formId: string): Promise<void> => {
-        const form = structuredState.value.forms[formId];
-        const scopeId = form ? null : formId;
-        lastError.value = null;
-
-        try {
-            const transientEntries = scopeId ? Array.from(getTransientSelections(scopeId).entries()) : [];
-            const transientSummary = transientEntries
-                .map(([key, val]) => {
-                    const displayVal = Array.isArray(val) ? val.join('、') : val;
-                    return displayVal ? `${key}: ${displayVal}` : null;
-                })
-                .filter(Boolean)
-                .join('\n');
-
-            if (scopeId && transientSummary) {
-                console.log(`[Forge-Store] 将临时选项转化为对话记录:\n${transientSummary}`);
-                addUserViewMessage(`【用户选择与意图收集】:\n${transientSummary}`);
-            }
-
-            const formResultXml = form ? buildSubmittedFormUserInput(formId) : '';
-            const finalUserInput = formResultXml || transientSummary;
-
-            if (!finalUserInput) {
-                console.warn('[Forge-Store] 提交中止：没有任何有效数据。');
-                return;
-            }
-
-            await dispatchWorkspaceCommand({
-                type: 'submit_form',
-                formId,
-                userInput: finalUserInput
-            });
-
-            if (scopeId) {
-                console.log(`[Forge-Store] 提交完成，清空消息作用域 ${scopeId} 的瞬态选值。`);
-                clearTransientSelections(scopeId);
-                markScopeSubmitted(scopeId);
-            }
-
-        } catch (e: any) {
-            const msg = e?.message || '提交表单失败';
-            lastError.value = msg;
-            luminaWeaveApi.showToast(msg, 'error');
-            console.error('[Forge-Store] submitStructuredForm failed:', e);
-        }
+        await formSubmissionController.submitStructuredForm(formId);
     };
 
 
@@ -1338,15 +1329,62 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         luminaWeaveApi.on(FORGE_WORKSPACE_FREEZE_REQUESTED, async () => {
             await freezeCommitReadyEntriesToWorkspace();
         });
+
+        luminaWeaveApi.on(FORGE_RUNTIME_EFFECTS_REQUESTED, (effects: ForgeRuntimeEffect[]) => {
+            if (!Array.isArray(effects) || effects.length === 0) return;
+            void applyRuntimeEffects(effects);
+        });
     };
 
     const fetchPresetDetail = async (presetId: string): Promise<BackendPresetDetail | null> => {
         if (!presetId) return null;
         try {
-            return await BridgeDispatcher.presets.exportPreset(presetId) as BackendPresetDetail;
+            return await HALContext.instance.runtime.presets.exportPreset(presetId) as BackendPresetDetail;
         } catch {
             return null;
         }
+    };
+
+    const buildRuntimeAgentGraph = async (
+        context: ForgeRuntimeContext
+    ): Promise<{ graph: ForgeAgentGraphResult | null; agentContext: ForgePromptPreviewAgentContext | null }> => {
+        try {
+            const graph = await forgeAgentGraphRuntime.run({
+                session: serializeSession(),
+                userInput: context.latestUserInput.trim() || context.workflowSnapshot?.recommendedAction || context.latestUserCommand.type,
+                workflowSnapshot: context.workflowSnapshot
+            });
+            // 缓存最新图谱结果供 Agent Inspector 面板使用
+            lastAgentGraphResult.value = graph;
+            return {
+                graph,
+                agentContext: buildPromptPreviewAgentContext(graph)
+            };
+        } catch (error) {
+            console.warn('[Forge-Runtime] Agent graph context failed:', error);
+            return {
+                graph: null,
+                agentContext: null
+            };
+        }
+    };
+
+    /** Agent Inspector: 手动刷新 Agent 图谱快照 */
+    const captureAgentGraphSnapshot = async (): Promise<void> => {
+        await agentInspectorActions.captureAgentGraphSnapshot();
+    };
+
+    /** Agent Inspector: 独立测试某个 agent 模型 */
+    const runAgentTest = async (
+        mode: ForgeAgentInspectorMode,
+        testInput: string,
+        onChunk?: (chunk: string, fullText: string) => void
+    ): Promise<{ rawText: string }> => {
+        return agentInspectorActions.runAgentTest(mode, testInput, onChunk);
+    };
+
+    const abortAgentTest = (): void => {
+        // Agent Inspector requests are owned by the pi runtime.
     };
 
     const buildPlannerExecutionRequest = async (context: ForgeRuntimeContext): Promise<ForgeExecutionRequest> => {
@@ -1357,11 +1395,13 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         const resolvedPresetId = resolveRuntimePresetId(context.selectedPresetId);
         const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
         const generationSettings = resolvePromptPresetGenerationSettings('forge-main');
+        const agentGraph = await buildRuntimeAgentGraph(context);
         const request = ForgePromptContextService.buildPlannerExecutionRequest({
             context,
             presetData,
             memorySnapshot,
             resolvedLorebookEntries: resolvedLorebookView.entries,
+            forgeAgentSourceUnits: agentGraph.graph?.promptSourceUnits ?? [],
             charName: 'Forge Assistant'
         });
         registerRuntimeRequestTrace({
@@ -1371,7 +1411,8 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             requestPrompt: request.messages,
             requestParameters: generationSettings,
             presetId: resolvedPresetId,
-            nodeSummary
+            nodeSummary,
+            agentContext: agentGraph.agentContext
         });
         return {
             ...request,
@@ -1393,11 +1434,13 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
         const contextSnapshot = buildRuntimeContextSnapshot(context, resolvedLorebookView, memorySnapshot, resolvedPresetId);
         const generationSettings = resolvePromptPresetGenerationSettings('forge-main');
+        const agentGraph = await buildRuntimeAgentGraph(context);
         const request = ForgePromptContextService.buildConversationExecutionRequest({
             context,
             presetData,
             memorySnapshot,
             resolvedLorebookEntries: resolvedLorebookView.entries,
+            forgeAgentSourceUnits: agentGraph.graph?.promptSourceUnits ?? [],
             charName: 'Forge Assistant'
         });
         registerRuntimeRequestTrace({
@@ -1407,7 +1450,8 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             requestPrompt: request.messages,
             requestParameters: generationSettings,
             presetId: resolvedPresetId,
-            nodeSummary
+            nodeSummary,
+            agentContext: agentGraph.agentContext
         });
         return {
             ...request,
@@ -1429,11 +1473,13 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
         const contextSnapshot = buildRuntimeContextSnapshot(context, resolvedLorebookView, memorySnapshot, resolvedPresetId);
         const generationSettings = resolvePromptPresetGenerationSettings('forge-main');
+        const agentGraph = await buildRuntimeAgentGraph(context);
         const request = ForgePromptContextService.buildAnalystExecutionRequest({
             context,
             presetData,
             memorySnapshot,
             resolvedLorebookEntries: resolvedLorebookView.entries,
+            forgeAgentSourceUnits: agentGraph.graph?.promptSourceUnits ?? [],
             charName: 'Forge Assistant'
         });
         registerRuntimeRequestTrace({
@@ -1443,7 +1489,8 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             requestPrompt: request.messages,
             requestParameters: generationSettings,
             presetId: resolvedPresetId,
-            nodeSummary
+            nodeSummary,
+            agentContext: agentGraph.agentContext
         });
         return {
             ...request,
@@ -1511,110 +1558,8 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         };
     };
 
-    const buildPromptPreviewPayload = async (): Promise<ForgePromptPreviewBundle> => {
-        if (!selectedPresetId.value) {
-            return {
-                primary: {
-                    key: 'primary',
-                    mode: 'planner',
-                    title: '主模型 / Planner',
-                    subtitle: '当前未选择预设，无法生成主模型提示词预览',
-                    payload: [],
-                    sourceLabel: null,
-                    targetEntryId: null
-                },
-                executor: {
-                    key: 'executor',
-                    mode: 'executor',
-                    title: '子模型 / Executor',
-                    subtitle: '当前未选择预设，执行模型仅能显示空预览',
-                    payload: [],
-                    sourceLabel: null,
-                    targetEntryId: null
-                }
-            };
-        }
-
-        // 核心修复：预览时也尝试初始化 A.U.T.O 清单，确保预览与真实运行一致
-        syncAutoChecklistToMemory();
-
-        const presetData = await fetchPresetDetail(selectedPresetId.value);
-        const resolvedLorebookView = resolveActiveLorebookView();
-        const memorySnapshot = buildMemorySnapshot();
-        const primaryMode = workflowSnapshot.value?.promptMode === 'conversation'
-            ? 'conversation'
-            : workflowSnapshot.value?.promptMode === 'analyst'
-                ? 'analyst'
-                : 'planner';
-        const primaryPayload = ForgePromptContextService.buildPromptPreviewPayload({
-            presetData,
-            messages: messages.value.map((message) => ({
-                role: message.role as CleanedMessage['role'],
-                content: message.mesRaw || message.mes || '',
-                name: message.name
-            })),
-            resolvedLorebookEntries: resolvedLorebookView.entries,
-            memorySnapshot,
-            forgeMemoryTree: forgeMemoryTree.value,
-            structuredState: structuredState.value,
-            draftTree: draftTree.value,
-            workflowSnapshot: workflowSnapshot.value,
-            mode: primaryMode
-        });
-
-        const latestCommitReady = forgeStore.commitReadyEntries[forgeStore.commitReadyEntries.length - 1] || null;
-        const latestStaging = forgeStore.stagingArea[forgeStore.stagingArea.length - 1] || null;
-        const executorSeed = latestCommitReady || latestStaging;
-        const executorSourceLabel = latestCommitReady
-            ? '写回准备条目'
-            : latestStaging
-                ? '待审修改条目'
-                : '模板示例';
-        const executorInstruction = executorSeed?.description?.trim()
-            || '根据已批准的局部任务重写该条目，保持当前层目标一致。';
-        const executorEntryId = executorSeed?.targetEntryId || 'preview.entry';
-        const executorOriginalContent = executorSeed?.originalContent?.trim()
-            || resolveOriginalContent(executorSeed?.targetEntryId || null)
-            || '当前还没有待执行的真实条目。这里展示的是执行模型模板，实际运行时会替换为目标条目原文。';
-        const executorPayload = ForgePromptContextService.buildExecutorPreviewPayload({
-            instruction: executorInstruction,
-            entryId: executorEntryId,
-            originalContent: executorOriginalContent,
-            sessionChatId: sessionChatId.value,
-            charName: 'Forge Assistant',
-            presetId: selectedPresetId.value,
-            sourceCommand: { type: 'noop' }
-        });
-
-        return {
-            primary: {
-                key: 'primary',
-                mode: primaryMode,
-                title: primaryMode === 'conversation'
-                    ? '主模型 / Conversation'
-                    : primaryMode === 'analyst'
-                        ? '主模型 / Analyst'
-                        : '主模型 / Planner',
-                subtitle: primaryMode === 'conversation'
-                    ? '展示当前协作对话模式下主模型会收到的完整消息载荷'
-                    : primaryMode === 'analyst'
-                        ? '展示当前中间态分析模型会收到的隔离上下文载荷'
-                        : '展示当前规划模式下主模型会收到的完整消息载荷',
-                payload: primaryPayload,
-                sourceLabel: workflowSnapshot.value?.reason || '当前工作流快照',
-                targetEntryId: null
-            },
-            executor: {
-                key: 'executor',
-                mode: 'executor',
-                title: '子模型 / Executor',
-                subtitle: `展示执行模型的隔离重写载荷。来源：${executorSourceLabel}`,
-                payload: executorPayload,
-                sourceLabel: executorSourceLabel,
-                targetEntryId: executorSeed?.targetEntryId || null
-            }
-        };
-    };
+    const buildPromptPreviewPayload = async (): Promise<ForgePromptPreviewBundle> =>
+        promptPreviewPayloadBuilder.buildPromptPreviewPayload();
 
     const syncAutoChecklistToMemory = (): void => {
         const hasChecklist = forgeMemoryTree.value.entries.some(e => e.path === 'AUTO/Checklist');
@@ -1685,11 +1630,33 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         }
     };
 
+    const runBatchCreativeGeneration = async (tasks: Array<{ entryId: string; instruction: string }>): Promise<void> => {
+        lastError.value = null;
+        streamText.value = '';
+        streamThinkingText.value = '';
+        forgeStore.isProcessing = true;
+        try {
+            for (const task of tasks) {
+                await ensureRuntimeOrchestrator().runExecutorRewrite(
+                    task.instruction,
+                    task.entryId,
+                    resolveOriginalContent(task.entryId)
+                );
+            }
+            await applyRuntimeEffects([
+                { type: 'refresh_workflow' },
+                { type: 'persist_session' }
+            ]);
+        } finally {
+            forgeStore.isProcessing = false;
+        }
+    };
+
     const abort = async (): Promise<void> => {
         if (!isGenerating.value) return;
         try {
             ensureRuntimeOrchestrator().abortActiveGeneration();
-            await BridgeDispatcher.nexus.stop(sessionChatId.value);
+            await HALContext.instance.runtime.generation.stop(sessionChatId.value);
         } finally {
             const activeTrace = forgeStore.modelRequestTraces.find(trace => trace.id === forgeStore.activeModelRequestTraceId);
             if (activeTrace && activeTrace.source !== 'test_chat' && (activeTrace.status === 'queued' || activeTrace.status === 'streaming')) {
@@ -1787,63 +1754,48 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     };
 
     const freezeCommitReadyEntriesToWorkspaceInternal = async (): Promise<boolean> => {
-        if (isCommitting.value || forgeStore.commitReadyEntries.length === 0) {
-            return false;
-        }
-
-        isCommitting.value = true;
-        lastError.value = null;
-
-        try {
-            const pendingEntries = [...forgeStore.commitReadyEntries];
-            let successCount = 0;
-
-            for (const stagedEntry of pendingEntries) {
-                const existingVirtualEntry = findVirtualLorebookEntry(virtualLorebookEntries.value, stagedEntry.targetEntryId);
-                const nextEntry = buildFrozenVirtualLorebookContent(stagedEntry, existingVirtualEntry?.entry);
-
-                upsertVirtualLorebookEntry({ id: stagedEntry.targetEntryId, entry: nextEntry });
-                forgeStore.removeFromCommitReady(stagedEntry.id);
-                successCount += 1;
-            }
-
-            if (successCount > 0) {
-                publishState.value = 'workspace_frozen';
-                addOperation({
-                    operationKind: 'workspace_write',
-                    status: 'completed',
-                    title: '已冻结到虚拟工作区',
-                    summary: `共冻结 ${successCount} 个条目`,
-                    sourceTag: 'freeze_workspace',
-                    layer: activeLayer.value
-                });
-            }
-
-            syncDraftTree();
-            lastError.value = null;
-            await refreshWorkflowSnapshot();
-            persistWorkspaceSession();
-            return successCount > 0;
-        } catch (error: any) {
-            lastError.value = error?.message || '冻结到虚拟工作区失败';
-            return false;
-        } finally {
-            isCommitting.value = false;
-        }
+        return freezePublishController.freezeCommitReadyEntriesToWorkspaceInternal();
     };
 
     const freezeCommitReadyEntriesToWorkspace = async (): Promise<boolean> => {
-        if (forgeStore.commitReadyEntries.length === 0) {
-            return false;
-        }
-        await dispatchWorkspaceCommand({ type: 'freeze_workspace' });
-        return true;
+        return freezePublishController.freezeCommitReadyEntriesToWorkspace();
     };
 
-    const upsertStagingEntry = (entry: Parameters<typeof forgeStore.upsertStagingEntry>[0]) => forgeStore.upsertStagingEntry(entry);
-    const removeStagingEntry = (id: string) => forgeStore.removeFromStaging(id);
-    const moveStagingToCommitReady = (id: string) => forgeStore.moveToCommitReady(id);
-    const moveCommitReadyToStaging = (id: string) => forgeStore.moveBackToStaging(id);
+    const upsertStagingEntry = (entry: Parameters<typeof forgeStore.upsertStagingEntry>[0]): void => {
+        stagingActionController.upsertStagingEntry(entry);
+    };
+    const removeStagingEntry = (id: string): void => {
+        stagingActionController.removeStagingEntry(id);
+    };
+    const moveStagingToCommitReady = (id: string): void => {
+        stagingActionController.moveStagingToCommitReady(id);
+    };
+    const moveCommitReadyToStaging = (id: string): void => {
+        stagingActionController.moveCommitReadyToStaging(id);
+    };
+
+    const resolveToolApproval = async (toolCallId: string, approved: boolean, message?: string): Promise<boolean> => {
+        return runtimeActionController.resolveToolApproval(toolCallId, approved, message);
+    };
+
+    const checkoutPiNode = async (nodeId: string | null): Promise<void> => {
+        const result = forgePiRuntimeClient.checkout({
+            context: getRuntimeContext({ type: 'noop' }),
+            nodeId
+        });
+        forgeStore.setForgePiSessionState(result.piSessionState);
+        await persistWorkspaceSession();
+    };
+
+    const branchFromPiUserNode = async (userNodeId: string): Promise<void> => {
+        const result = forgePiRuntimeClient.branchFromUserNode({
+            context: getRuntimeContext({ type: 'noop' }),
+            userNodeId
+        });
+        forgeStore.setForgePiSessionState(result.piSessionState);
+        input.value = result.input;
+        await persistWorkspaceSession();
+    };
 
     const commitReadyEntriesToLorebook = async (): Promise<boolean> => freezeCommitReadyEntriesToWorkspace();
 
@@ -1868,6 +1820,9 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     return {
         sessionChatId,
         workspaceSessionId,
+        forgeProjectId,
+        workspacePath,
+        activeForgeProjectId,
         workspaceTitle,
         workspaceCreatedAt,
         workspaceUpdatedAt,
@@ -1890,6 +1845,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         workflowSnapshot,
         isCommitting,
         detailMode,
+        collectionMode,
         entryMode,
         activeLayer,
         completedLayers,
@@ -1941,6 +1897,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         flushWorkspaceSession,
         ensureWorkspaceSession,
         createWorkspaceSession,
+        createWorkspaceThread,
         renameWorkspaceSession,
         openWorkspaceSession,
         attachChatSessionReference,
@@ -1949,6 +1906,11 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         generate,
         isBusy,
         runExecutorRewrite,
+        runBatchCreativeGeneration,
+        lastAgentGraphResult,
+        captureAgentGraphSnapshot,
+        runAgentTest,
+        abortAgentTest,
         abort,
         resetSession,
         approveStagingEntry,
@@ -1975,6 +1937,11 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         removeStagingEntry,
         moveStagingToCommitReady,
         moveCommitReadyToStaging,
+        resolveToolApproval,
+        checkoutPiNode,
+        branchFromPiUserNode,
+        listProjectVfsFiles,
+        listProjectVfsEntries,
 
         testChatService
     };
