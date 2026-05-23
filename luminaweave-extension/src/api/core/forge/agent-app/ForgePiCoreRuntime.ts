@@ -22,6 +22,7 @@ export interface ForgePiCoreRuntimeTurnInput {
     commandInput?: string;
     context: ForgeRuntimeContext;
     request: ForgeExecutionRequest;
+    onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
 }
 
 export interface ForgePiCoreRuntimeTurnResult {

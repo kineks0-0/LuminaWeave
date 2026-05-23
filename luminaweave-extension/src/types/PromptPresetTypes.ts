@@ -40,8 +40,11 @@ export type ForgeAgentPromptOrchestrationStepKind =
     | 'contract'
     | 'system'
     | 'mode_prompt'
+    | 'ui_dsl'
+    | 'reasoning_boundary'
     | 'skills'
     | 'capabilities'
+    | 'memory_index'
     | 'context_files'
     | 'branch_messages';
 

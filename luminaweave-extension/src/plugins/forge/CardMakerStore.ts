@@ -112,7 +112,8 @@ import {
     type BackendPresetMeta,
     type ForgeTimelineFeedItem,
     createAssistantStreamMessageUpdate,
-    createForgeMessageNode
+    createForgeMessageNode,
+    resolveAssistantStreamCommitPolicy
 } from './store/forgeStoreHelpers.js';
 import { ForgeTransientSelectionController } from './store/ForgeTransientSelectionController.js';
 import { ForgeRuntimeActionController } from './store/ForgeRuntimeActionController.js';
@@ -160,6 +161,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const input = ref<string>('');
     const worldlineStore = shallowRef<WorldlineStore>(new WorldlineStore());
     const timelineRevision = ref(0);
+    const streamRevision = ref(0);
 
     const isGenerating = ref(false);
     const streamText = ref<string>('');
@@ -448,6 +450,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const activeLeafId = computed(() => {
         // 显式引用修订号以驱动反应性
         timelineRevision.value;
+        streamRevision.value;
         return worldlineStore.value.activeLeafId;
     });
     
@@ -455,15 +458,18 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const isBusy = computed(() => isGenerating.value || forgeStore.isProcessing);
     const messages = computed<LuminaChatMessage[]>(() => {
         timelineRevision.value;
+        streamRevision.value;
         return worldlineStore.value.getTrace(worldlineStore.value.activeLeafId);
     });
     const messageCount = computed(() => {
         timelineRevision.value;
+        streamRevision.value;
         return worldlineStore.value.nodePool.length;
     });
     const timelineFeed = computed<ForgeTimelineFeedItem[]>(() => {
         // 显式引用修订号以驱动反应性
         timelineRevision.value;
+        streamRevision.value;
 
         // 获取当前活跃路径的所有消息 ID
         const activePath = worldlineStore.value.getTrace(worldlineStore.value.activeLeafId);
@@ -508,6 +514,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     });
     const timelineGraph = computed<Record<string, TimelineNode>>(() => {
         timelineRevision.value;
+        streamRevision.value;
         return worldlineStore.value.nodePool.reduce<Record<string, TimelineNode>>((acc, node) => {
             acc[node.id] = {
                 ...node,
@@ -521,6 +528,10 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
 
     const bumpTimelineRevision = (): void => {
         timelineRevision.value += 1;
+    };
+
+    const bumpStreamRevision = (): void => {
+        streamRevision.value += 1;
     };
 
     /**
@@ -551,11 +562,19 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         });
     };
 
-    const upsertMessage = (node: LuminaChatMessage): void => {
+    const upsertMessage = (node: LuminaChatMessage, options: { bumpTimelineRevision?: boolean } = {}): void => {
         MessageUtils.syncCore(node, globalXMLInterceptor, { force: true });
         worldlineStore.value.upsertNode(node, { silent: false, source: 'local' });
         forgeStore.ensureMessageTimelineItem(node.id, Number(node.createdAt || node.extra?.send_date || Date.now()));
-        bumpTimelineRevision();
+        if (options.bumpTimelineRevision !== false) {
+            bumpTimelineRevision();
+        }
+    };
+
+    const upsertStreamingMessage = (node: LuminaChatMessage): void => {
+        MessageUtils.syncCore(node, globalXMLInterceptor, { force: true });
+        worldlineStore.value.upsertNode(node, { silent: true, source: 'local' });
+        bumpStreamRevision();
     };
 
     const refreshPresets = async (): Promise<void> => {
@@ -1132,19 +1151,28 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
 
         if (event.type === 'stream_chunk') {
             const update = createAssistantStreamMessageUpdate(event, assistantNode);
+            const policy = resolveAssistantStreamCommitPolicy(event);
             streamText.value = update.streamText;
             streamThinkingText.value = update.streamThinkingText;
-            upsertMessage(update.message);
+            if (policy.silentWorldlineUpdate) {
+                upsertStreamingMessage(update.message);
+            } else {
+                upsertMessage(update.message, { bumpTimelineRevision: policy.bumpTimelineRevision });
+            }
             return;
         }
 
         if (event.type === 'stream_done') {
             const update = createAssistantStreamMessageUpdate(event, assistantNode);
+            const policy = resolveAssistantStreamCommitPolicy(event);
             streamText.value = update.streamText;
             streamThinkingText.value = update.streamThinkingText;
-            upsertMessage(update.message);
+            if (policy.silentWorldlineUpdate) {
+                upsertStreamingMessage(update.message);
+            } else {
+                upsertMessage(update.message, { bumpTimelineRevision: policy.bumpTimelineRevision });
+            }
             worldlineStore.value.activeLeafId = assistantNode.id;
-            bumpTimelineRevision();
             isGenerating.value = false;
             streamingAssistantNodeId.value = null;
             return;

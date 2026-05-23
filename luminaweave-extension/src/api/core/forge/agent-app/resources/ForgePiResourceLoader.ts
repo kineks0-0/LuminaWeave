@@ -26,6 +26,15 @@ import {
     type ForgeSemanticVfsReader
 } from '../vfs/ForgeSemanticVfsProvider.js';
 
+const safeMemoryPathSegment = (value: string): string => {
+    const normalized = value
+        .replace(/[<>:"|?*\u0000-\u001F]/g, '-')
+        .replace(/\s+/g, '-')
+        .replace(/^\.+$/, '')
+        .trim();
+    return normalized || 'untitled';
+};
+
 export interface ForgePiResourceLoaderDeps {
     capabilities?: ForgeCapabilityRegistry;
     skills?: ForgeSkillRegistry;
@@ -94,9 +103,9 @@ export class ForgePiResourceLoader {
                 { path: './.pi/agent/context/workflow.md', title: '阶段状态', content: this.buildWorkflowFile(context) },
                 { path: './.pi/agent/context/write-boundary.md', title: '写入边界', content: this.buildWriteBoundaryFile(context) },
                 { path: './.pi/agent/context/capability-index.md', title: '能力索引', content: this.buildCapabilityIndexFile() },
+                { path: './.pi/agent/context/memory-index.md', title: '项目长期记忆索引', content: this.buildMemoryIndexFile(context) },
                 { path: './.pi/agent/context/project-resources.md', title: '项目资源索引', content: this.buildProjectResourcesFile(context) },
-                ...alwaysSkillFiles,
-                { path: './threads/目前/messages.md', title: '当前协作线程', content: this.buildCurrentThreadFile(context) }
+                ...alwaysSkillFiles
             ],
             activeSkills,
             loadedExtensions: ['@luminaweave/pi-forge-browser']
@@ -107,7 +116,7 @@ export class ForgePiResourceLoader {
         systemFragments: string[];
         contextBundle: ForgePiContextBundleSummary;
     }): string {
-        const contextFiles = input.contextBundle.files.map(file => [
+        const renderContextFiles = (files: ForgePiContextBundleSummary['files']): string => files.map(file => [
             `<pi_context_file path="${this.escapeAttribute(file.path)}" title="${this.escapeAttribute(file.title)}">`,
             file.content,
             '</pi_context_file>'
@@ -115,10 +124,18 @@ export class ForgePiResourceLoader {
         const skills = input.contextBundle.activeSkills.length > 0
             ? `当前可用中文技能：${input.contextBundle.activeSkills.join('、')}`
             : '';
+        const dynamicContextStart = input.contextBundle.files.findIndex(file => file.path === './.pi/agent/context/project.md');
+        const coreFiles = dynamicContextStart >= 0
+            ? input.contextBundle.files.slice(0, dynamicContextStart)
+            : input.contextBundle.files;
+        const contextFiles = dynamicContextStart >= 0
+            ? input.contextBundle.files.slice(dynamicContextStart)
+            : [];
         return [
             ...input.systemFragments,
+            renderContextFiles(coreFiles),
             skills,
-            contextFiles
+            renderContextFiles(contextFiles)
         ].filter(Boolean).join('\n\n');
     }
 
@@ -178,6 +195,45 @@ export class ForgePiResourceLoader {
         return ['# 能力索引', '', ...rows].join('\n\n');
     }
 
+    private buildMemoryIndexFile(context: ForgeRuntimeContext): string {
+        const entries = context.forgeMemoryTree.entries.slice(0, 80);
+        const rows = entries.map(entry => {
+            const path = this.formatMemoryPath(entry.path);
+            return [
+                `## ${entry.title || path}`,
+                `- Path：${path}`,
+                `- Source：${entry.source}`,
+                `- Updated：${entry.updatedAt}`,
+                `- Summary：${entry.summary || '无摘要'}`
+            ].join('\n');
+        });
+
+        return [
+            '# 项目长期记忆索引',
+            '',
+            '这些是 Forge 项目的长期记忆索引。需要正文时读取对应 ./memory/**/*.md 文件，不要假设索引包含完整内容。',
+            '',
+            `- 总数：${context.forgeMemoryTree.entries.length}`,
+            entries.length < context.forgeMemoryTree.entries.length ? `- 已显示：${entries.length}` : '',
+            '',
+            ...rows
+        ].filter(Boolean).join('\n\n');
+    }
+
+    private formatMemoryPath(path: string): string {
+        const normalized = path
+            .trim()
+            .replace(/\\/g, '/')
+            .replace(/^\.?\/*/, '')
+            .replace(/^memory\//, '')
+            .replace(/\.md$/i, '');
+        const segments = normalized
+            .split('/')
+            .map(safeMemoryPathSegment)
+            .filter(Boolean);
+        return `./memory/${(segments.length > 0 ? segments : ['untitled']).join('/')}.md`;
+    }
+
     private buildAgentsFile(): string {
         return buildForgeAgentsFile();
     }
@@ -197,30 +253,6 @@ export class ForgePiResourceLoader {
     private resolveModePrompt(context: ForgeRuntimeContext): string {
         const mode = context.workflowSnapshot?.promptMode ?? 'conversation';
         return resolveForgeModePrompt(mode) ?? '';
-    }
-
-    private buildCurrentThreadFile(context: ForgeRuntimeContext): string {
-        const lines = context.messages.slice(-30).map((message, index) => {
-            const value = message as { role?: unknown; name?: unknown; content?: unknown; mes?: unknown };
-            const role = typeof value.role === 'string'
-                ? value.role
-                : typeof value.name === 'string'
-                    ? value.name
-                    : `message-${index + 1}`;
-            const text = typeof value.content === 'string'
-                ? value.content
-                : typeof value.mes === 'string'
-                    ? value.mes
-                    : JSON.stringify(message);
-            return `## ${role}\n\n${text}`;
-        });
-        return [
-            '# 当前协作线程',
-            '',
-            '动态别名：`./threads/目前/`。切换协作线程后，此路径自动指向新的当前线程。',
-            '',
-            ...lines
-        ].join('\n');
     }
 
     private buildProjectResourcesFile(context: ForgeRuntimeContext): string {

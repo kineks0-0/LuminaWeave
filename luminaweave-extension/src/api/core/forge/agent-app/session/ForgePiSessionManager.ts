@@ -43,6 +43,8 @@ export interface ForgePiSessionManagerDeps {
 
 export interface ForgePiBranchMessageOptions extends ForgePiReplayTarget {
     nodeId?: string | null;
+    maxMessages?: number;
+    preserveToolPairs?: boolean;
 }
 
 export class ForgePiSessionManager {
@@ -137,9 +139,13 @@ export class ForgePiSessionManager {
             : { nodeId: input };
         const nodeId = options.nodeId === undefined ? this.activeNodeId : options.nodeId;
         const branch = this.getBranch(nodeId);
-        return branch
+        const messages = branch
             .map(entry => this.extractAgentMessage(entry.payload, options))
             .filter((message): message is AgentMessage => Boolean(message));
+        return this.selectReplaySafeBranchMessages(messages, {
+            maxMessages: options.maxMessages ?? 30,
+            preserveToolPairs: options.preserveToolPairs ?? true
+        });
     }
 
     getSnapshot(): ForgePiSessionSnapshot {
@@ -256,6 +262,24 @@ export class ForgePiSessionManager {
                 ? payload.agentMessage
                 : null;
         return candidate ? sanitizeForgePiAgentMessageForReplay(candidate, target) : null;
+    }
+
+    private selectReplaySafeBranchMessages(
+        messages: AgentMessage[],
+        options: { maxMessages: number; preserveToolPairs: boolean }
+    ): AgentMessage[] {
+        if (options.maxMessages <= 0 || messages.length <= options.maxMessages) return messages;
+        let startIndex = Math.max(0, messages.length - options.maxMessages);
+        if (options.preserveToolPairs) {
+            while (startIndex > 0 && this.isToolResultMessage(messages[startIndex])) {
+                startIndex -= 1;
+            }
+        }
+        return messages.slice(startIndex);
+    }
+
+    private isToolResultMessage(message: AgentMessage): boolean {
+        return message.role === 'toolResult';
     }
 
     private isAgentMessage(value: unknown): value is AgentMessage {

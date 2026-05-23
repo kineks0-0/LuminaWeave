@@ -141,6 +141,20 @@ const safePathSegment = (value: string): string => {
     return normalized || 'untitled';
 };
 
+const memoryPathToSemanticPath = (path: string): string => {
+    const normalized = path
+        .trim()
+        .replace(/\\/g, '/')
+        .replace(/^\.?\/*/, '')
+        .replace(/^memory\//, '')
+        .replace(/\.md$/i, '');
+    const segments = normalized
+        .split('/')
+        .map(safePathSegment)
+        .filter(Boolean);
+    return `./memory/${(segments.length > 0 ? segments : ['untitled']).join('/')}.md`;
+};
+
 const markdownEscapeHeading = (value: string): string =>
     value.replace(/\r?\n/g, ' ').trim();
 
@@ -395,7 +409,7 @@ export class ForgeProjectSemanticVfsService {
 
         context.forgeMemoryTree.entries.forEach((entry) => {
             if (entry.path === 'AUTO/Checklist' || entry === userPreference) return;
-            addFile(entries, `./memory/${safePathSegment(entry.path)}.md`, memoryEntryToMarkdown(entry), 'workspace', 'direct-write');
+            addFile(entries, memoryPathToSemanticPath(entry.path), memoryEntryToMarkdown(entry), 'workspace', 'direct-write');
         });
     }
 

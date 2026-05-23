@@ -313,6 +313,35 @@ describe('ForgePiToolBridge', () => {
         });
     });
 
+    it('reads long-term memory bodies through the readFile tool', async () => {
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities()
+        });
+        const context: ForgeRuntimeContext = {
+            ...createContext(),
+            forgeMemoryTree: {
+                entries: [{
+                    path: '偏好/禁忌',
+                    title: '禁忌',
+                    content: '完整正文中才会出现的长句',
+                    summary: '避免俗套',
+                    updatedAt: 1,
+                    source: 'user'
+                }],
+                lastUpdatedAt: 1
+            }
+        };
+        const readFile = bridge.getTools(context).find(tool => tool.name === 'readFile');
+
+        const result = await readFile?.execute('call_memory', { path: './memory/偏好/禁忌.md' });
+
+        expect(result?.details).toMatchObject({
+            path: './memory/偏好/禁忌.md',
+            content: expect.stringContaining('完整正文中才会出现的长句')
+        });
+    });
+
     it('rejects writes to built-in skill resources instead of creating overlay proposals', async () => {
         const bridge = new ForgePiToolBridge({
             skills: createEmptySkills(),

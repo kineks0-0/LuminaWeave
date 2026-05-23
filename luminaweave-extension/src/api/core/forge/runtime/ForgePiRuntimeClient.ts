@@ -28,6 +28,7 @@ export interface ForgePiRuntimeClientTurnInput {
     commandInput?: string;
     context: ForgeRuntimeContext;
     request: ForgeExecutionRequest;
+    onRuntimeEvent?: (event: ForgeRuntimeEventType) => void;
 }
 
 export interface ForgePiRuntimeClientTurnResult {

@@ -117,6 +117,14 @@
     - Semantic VFS、`skill.list`、`skill.load` 统一按 project skill > active preset skill > built-in skill 解析。
     - Forge Agent 预设工作台不再向主模型 / 执行模型展示“添加 Slot / SLOT”旧入口；测试聊天 composed 兼容链路仍保留。
 29. 运行真实宿主 walkthrough，并补齐 session tree / semantic VFS / 项目 VFS 面板 / 文件版本恢复的宿主级验证。
+30. [x] 修正 Forge Agent prompt 编排、缓存稳定性与记忆注入边界。
+    - 计划见 `steps/2026-05-23-forge-agent-prompt-cache-memory-plan.md`。
+    - 重点：让 orchestration schema / 预设工作台 / `ForgePiResourceLoader` 真实顺序一致；移除当前线程完整消息的默认 system prompt 注入；传递 pi agent `sessionId`；补 cache usage trace；明确短期 branch messages 与长期 memory VFS 的边界。
+    - 真实宿主 walkthrough 仍由第 29 项单独保留，不并入本次 prompt/cache 修正。
+31. [x] 增强长期记忆 VFS 的提示词编排发现性。
+    - 计划见 `steps/2026-05-23-forge-memory-vfs-orchestration-plan.md`。
+    - 重点：将 `./memory/**/*.md` 作为长期项目记忆的一等上下文资源进入编排；默认 prompt 注入 `Memory Index`，列出路径、标题、来源、更新时间和摘要；记忆正文继续通过 Semantic VFS / `readFile` 按需读取，不默认全量灌入 system prompt。
+    - 第 30 项的 cache / 短期对话边界保持不变；真实宿主 walkthrough 仍由第 29 项单独保留。
 
 完成后归档到 `archive/completed-tasks/forge/`。
 
@@ -132,3 +140,5 @@
 - [Forge Runtime pi-style 架构拆分记录](./steps/2026-05-20-forge-pi-style-architecture-split.md)
 - [Forge pi session 分支与工作区版本设计](./steps/2026-05-20-forge-pi-session-branch-and-workspace-version-design.md)
 - [Forge 项目 / 协作线程边界重塑](./steps/2026-05-15-forge-project-thread-boundary-plan.md)
+- [Forge Agent 提示词编排、缓存与记忆管理调整计划](./steps/2026-05-23-forge-agent-prompt-cache-memory-plan.md)
+- [Forge Memory VFS 提示词编排增强计划](./steps/2026-05-23-forge-memory-vfs-orchestration-plan.md)

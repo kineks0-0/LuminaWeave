@@ -142,6 +142,7 @@ export class ForgePiNexusProvider {
             }
             if (finalMessage) {
                 trace.finalText = this.extractAssistantText(finalMessage);
+                this.captureCacheUsage(trace, finalMessage, options);
                 this.appendTraceEvent(trace, 'stream_done', 'pi-ai provider stream completed.', {
                     finalText: trace.finalText,
                     stopReason: finalMessage.stopReason
@@ -205,6 +206,20 @@ export class ForgePiNexusProvider {
             return event.error;
         }
         return null;
+    }
+
+    private captureCacheUsage(
+        trace: ForgePiModelRequestTrace,
+        message: AssistantMessage,
+        options: SimpleStreamOptions | undefined
+    ): void {
+        trace.cache = {
+            sessionId: options?.sessionId,
+            cacheRead: message.usage.cacheRead,
+            cacheWrite: message.usage.cacheWrite,
+            totalTokens: message.usage.totalTokens,
+            providerUsage: this.toJsonSafe(message.usage)
+        };
     }
 
     private resolvePiModelConfig(node: NexusNode, apiConfig: NexusAPI | null): ResolvedPiModelConfig {

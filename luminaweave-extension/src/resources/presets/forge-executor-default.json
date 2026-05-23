@@ -55,8 +55,11 @@
             { "kind": "contract", "enabled": true, "path": "./AGENTS.md", "title": "Contract" },
             { "kind": "system", "enabled": true, "path": "./.forge/agent/SYSTEM.md", "title": "System" },
             { "kind": "mode_prompt", "enabled": true, "path": "./.forge/agent/<MODE>.md", "title": "Mode Prompt" },
+            { "kind": "ui_dsl", "enabled": true, "path": "./.forge/agent/UI_DSL.md", "title": "UI DSL" },
+            { "kind": "reasoning_boundary", "enabled": true, "path": "./.forge/agent/REASONING.md", "title": "Reasoning Boundary" },
             { "kind": "skills", "enabled": true, "title": "Skills" },
             { "kind": "capabilities", "enabled": true, "title": "Capabilities" },
+            { "kind": "memory_index", "enabled": true, "path": "./.pi/agent/context/memory-index.md", "title": "Memory Index" },
             { "kind": "context_files", "enabled": true, "title": "Context Files" },
             { "kind": "branch_messages", "enabled": true, "title": "Branch Messages" }
         ]
