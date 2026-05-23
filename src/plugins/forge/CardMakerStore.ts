@@ -182,6 +182,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const workspacePage = ref<'workspace' | 'session-browser'>('workspace');
     const virtualLorebookEntries = ref<ForgeVirtualLorebookEntry[]>([]);
     const importedLorebookId = ref<string | null>(null);
+    const transientSelectionRevision = ref(0);
 
     const transientSelectionController = new ForgeTransientSelectionController({
         getStructuredState: () => structuredState.value,
@@ -194,25 +195,33 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const upsertTransientSelection = (key: string, value: string | string[], scopeId?: string | null) => {
         console.log(`[Forge-Store] 记入瞬态选值 "${String(scopeId || '').trim() || '__legacy__'}:${key}" ->`, value);
         transientSelectionController.upsertTransientSelection(key, value, scopeId);
+        transientSelectionRevision.value += 1;
     };
 
-    const getTransientSelections = (scopeId?: string | null): Map<string, string | string[]> => (
-        transientSelectionController.getTransientSelections(scopeId)
-    );
+    const getTransientSelections = (scopeId?: string | null): Map<string, string | string[]> => {
+        transientSelectionRevision.value;
+        return transientSelectionController.getTransientSelections(scopeId);
+    };
 
-    const getTransientFieldText = (scopeId: string | null | undefined, fieldKey: string): string =>
-        transientSelectionController.getTransientFieldText(scopeId, fieldKey);
+    const getTransientFieldText = (scopeId: string | null | undefined, fieldKey: string): string => {
+        transientSelectionRevision.value;
+        return transientSelectionController.getTransientFieldText(scopeId, fieldKey);
+    };
 
-    const getTransientFieldList = (scopeId: string | null | undefined, fieldKey: string): string[] =>
-        transientSelectionController.getTransientFieldList(scopeId, fieldKey);
+    const getTransientFieldList = (scopeId: string | null | undefined, fieldKey: string): string[] => {
+        transientSelectionRevision.value;
+        return transientSelectionController.getTransientFieldList(scopeId, fieldKey);
+    };
 
     const clearTransientSelections = (scopeId?: string | null): void => {
         transientSelectionController.clearTransientSelections(scopeId);
+        transientSelectionRevision.value += 1;
     };
 
-    const hasPendingTransientSelections = (scopeId?: string | null): boolean => (
-        transientSelectionController.hasPendingTransientSelections(scopeId)
-    );
+    const hasPendingTransientSelections = (scopeId?: string | null): boolean => {
+        transientSelectionRevision.value;
+        return transientSelectionController.hasPendingTransientSelections(scopeId);
+    };
 
     const rememberSubmitConfig = (scopeId: string, label?: string | null): void => {
         transientSelectionController.rememberSubmitConfig(scopeId, label);
