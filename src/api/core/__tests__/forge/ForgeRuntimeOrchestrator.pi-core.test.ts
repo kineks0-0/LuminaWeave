@@ -144,6 +144,129 @@ describe('ForgeRuntimeOrchestrator pi runtime', () => {
         ]));
     });
 
+    it('forwards pi stream chunks to the UI before the turn completes', async () => {
+        vi.spyOn(ForgeWorkflowGraph, 'resolveDecision').mockResolvedValue({
+            workflowSnapshot: {} as any,
+            executionRequest: createRequest('conversation'),
+            effects: [],
+            requiresGeneration: true,
+            requiresUserDecision: false
+        } satisfies ForgeRuntimeDecision);
+        const { port, events } = createPort();
+        const turnGate: { resolve: () => void } = { resolve: () => {} };
+        const turnCanFinish = new Promise<void>((resolve) => {
+            turnGate.resolve = resolve;
+        });
+        const runPiTurn = vi.fn(async (input: any) => {
+            input.onRuntimeEvent?.({
+                type: 'stream_chunk',
+                requestId: 'req_conversation',
+                rawText: 'partial',
+                displayText: 'partial',
+                thinkingText: ''
+            });
+            await turnCanFinish;
+            return {
+                events: [{
+                    type: 'stream_done' as const,
+                    requestId: 'req_conversation',
+                    rawText: 'final',
+                    displayText: 'final',
+                    thinkingText: '',
+                    completedAt: 1
+                }],
+                piSessionState: {
+                    tree: [],
+                    entries: [],
+                    activeNodeId: null,
+                    contextBundleSummary: {
+                        files: [],
+                        activeSkills: [],
+                        loadedExtensions: []
+                    },
+                    loadedExtensions: []
+                }
+            };
+        });
+
+        const orchestrator = new ForgeRuntimeOrchestrator(port, undefined, undefined, { runPiTurn });
+        const dispatchPromise = orchestrator.dispatch({ type: 'send_user_input', input: 'hello' });
+
+        await vi.waitFor(() => expect(runPiTurn).toHaveBeenCalledOnce());
+        expect(events).toEqual([expect.objectContaining({
+            type: 'stream_chunk',
+            displayText: 'partial'
+        })]);
+
+        turnGate.resolve();
+        await dispatchPromise;
+    });
+
+    it('applies pi tool-call effects before the turn completes', async () => {
+        vi.spyOn(ForgeWorkflowGraph, 'resolveDecision').mockResolvedValue({
+            workflowSnapshot: {} as any,
+            executionRequest: createRequest('conversation'),
+            effects: [],
+            requiresGeneration: true,
+            requiresUserDecision: false
+        } satisfies ForgeRuntimeDecision);
+        const { port, effects } = createPort();
+        const turnGate: { resolve: () => void } = { resolve: () => {} };
+        const turnCanFinish = new Promise<void>((resolve) => {
+            turnGate.resolve = resolve;
+        });
+        const runPiTurn = vi.fn(async (input: any) => {
+            input.onRuntimeEvent?.({
+                type: 'tool_call',
+                requestId: 'req_conversation',
+                toolCallId: 'call_read',
+                toolName: 'readFile',
+                args: { path: './AGENTS.md' },
+                source: 'conversation'
+            });
+            await turnCanFinish;
+            return {
+                events: [{
+                    type: 'tool_result' as const,
+                    requestId: 'req_conversation',
+                    toolCallId: 'call_read',
+                    toolName: 'readFile',
+                    result: { content: 'ok' },
+                    isError: false,
+                    source: 'conversation' as const
+                }],
+                piSessionState: {
+                    tree: [],
+                    entries: [],
+                    activeNodeId: null,
+                    contextBundleSummary: {
+                        files: [],
+                        activeSkills: [],
+                        loadedExtensions: []
+                    },
+                    loadedExtensions: []
+                }
+            };
+        });
+
+        const orchestrator = new ForgeRuntimeOrchestrator(port, undefined, undefined, { runPiTurn });
+        const dispatchPromise = orchestrator.dispatch({ type: 'send_user_input', input: 'hello' });
+
+        await vi.waitFor(() => expect(effects.flat()).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                type: 'upsert_running_operation',
+                dedupeKey: 'forge-operation:tool:call_read',
+                title: '正在调用工具 · readFile'
+            })
+        ])));
+        expect(effects.flat()).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({ type: 'complete_operation', dedupeKey: 'forge-operation:tool:call_read' })
+        ]));
+
+        turnGate.resolve();
+        await dispatchPromise;
+    });
+
     it('resolves tool approvals through the pi runtime and applies returned events/effects', async () => {
         const { port, effects, events } = createPort();
         const resolvePiToolApproval = vi.fn(async () => ({

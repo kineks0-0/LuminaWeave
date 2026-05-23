@@ -161,6 +161,21 @@ export interface ForgeAssistantStreamMessageUpdate {
     message: LuminaChatMessage;
 }
 
+export interface ForgeAssistantStreamCommitPolicy {
+    silentWorldlineUpdate: boolean;
+    bumpTimelineRevision: boolean;
+}
+
+export const resolveAssistantStreamCommitPolicy = (
+    event: ForgeAssistantStreamEvent
+): ForgeAssistantStreamCommitPolicy => {
+    const isDone = event.type === 'stream_done';
+    return {
+        silentWorldlineUpdate: !isDone,
+        bumpTimelineRevision: isDone
+    };
+};
+
 export const createAssistantStreamMessageUpdate = (
     event: ForgeAssistantStreamEvent,
     assistantNode: LuminaChatMessage,

@@ -39,6 +39,7 @@ export interface ForgeRuntimeOrchestratorOptions {
         commandInput?: string;
         context: ForgeRuntimeContext;
         request: ForgeExecutionRequest;
+        onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
     }) => Promise<{
         events?: ForgeRuntimeEvent[];
         effects?: ForgeRuntimeEffect[];
@@ -181,7 +182,31 @@ export class ForgeRuntimeOrchestrator {
             throw new Error('Forge pi runtime client is not configured.');
         }
         try {
-            const result = await this.options.runPiTurn({ command, commandInput, context, request });
+            const liveEvents = new Set<ForgeRuntimeEvent>();
+            let liveEffectQueue = Promise.resolve();
+            let liveEffectError: unknown = null;
+            const applyLiveEvent = (event: ForgeRuntimeEvent): void => {
+                liveEvents.add(event);
+                this.port.handleRuntimeEvent(event);
+                const effects = this.buildEventEffects(event, context);
+                if (effects.length === 0) return;
+                liveEffectQueue = liveEffectQueue
+                    .then(() => this.port.applyRuntimeEffects(effects))
+                    .catch((error) => {
+                        liveEffectError = error;
+                    });
+            };
+            const result = await this.options.runPiTurn({
+                command,
+                commandInput,
+                context,
+                request,
+                onRuntimeEvent: applyLiveEvent
+            });
+            await liveEffectQueue;
+            if (liveEffectError) {
+                throw liveEffectError;
+            }
             const effects: ForgeRuntimeEffect[] = [];
             if (result.piSessionState) {
                 effects.push({
@@ -194,6 +219,9 @@ export class ForgeRuntimeOrchestrator {
                 });
             }
             for (const event of result.events ?? []) {
+                if (liveEvents.has(event)) {
+                    continue;
+                }
                 this.port.handleRuntimeEvent(event);
                 effects.push(...this.buildEventEffects(event, context));
             }

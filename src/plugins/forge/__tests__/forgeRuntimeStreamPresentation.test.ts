@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { createAssistantStreamMessageUpdate } from '../store/forgeStoreHelpers.js';
+import {
+    createAssistantStreamMessageUpdate,
+    resolveAssistantStreamCommitPolicy
+} from '../store/forgeStoreHelpers.js';
 import type { ForgeRuntimeEvent } from '../../../types/ForgeRuntimeTypes.js';
 
 const createAssistantNode = (): LuminaChatMessage => ({
@@ -49,6 +52,21 @@ describe('forge runtime stream presentation', () => {
         });
     });
 
+    it('treats intermediate chunks as transient UI updates', () => {
+        const event: ForgeRuntimeEvent = {
+            type: 'stream_chunk',
+            requestId: 'request-1',
+            displayText: '增量文本',
+            thinkingText: '',
+            rawText: '增量文本'
+        };
+
+        expect(resolveAssistantStreamCommitPolicy(event)).toEqual({
+            silentWorldlineUpdate: true,
+            bumpTimelineRevision: false
+        });
+    });
+
     it('marks assistant message local when the stream is done', () => {
         const event: ForgeRuntimeEvent = {
             type: 'stream_done',
@@ -69,6 +87,22 @@ describe('forge runtime stream presentation', () => {
         expect(update.message.extra).toMatchObject({
             conversationType: 'forge',
             completedAt: 789
+        });
+    });
+
+    it('commits the final stream update to the conversation timeline', () => {
+        const event: ForgeRuntimeEvent = {
+            type: 'stream_done',
+            requestId: 'request-1',
+            displayText: '最终文本',
+            thinkingText: '',
+            rawText: '最终文本',
+            completedAt: 456
+        };
+
+        expect(resolveAssistantStreamCommitPolicy(event)).toEqual({
+            silentWorldlineUpdate: false,
+            bumpTimelineRevision: true
         });
     });
 });

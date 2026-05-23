@@ -100,13 +100,13 @@ const createRequest = (): ForgeExecutionRequest => ({
     sourceCommand: { type: 'send_user_input', input: 'hello' }
 });
 
-const createAssistant = (text: string): AssistantMessage => ({
+const createAssistant = (text: string, assistantUsage: Usage = usage): AssistantMessage => ({
     role: 'assistant',
     content: [{ type: 'text', text }],
     api: 'openai-completions',
     provider: 'test',
     model: 'test-model',
-    usage,
+    usage: assistantUsage,
     stopReason: 'stop',
     timestamp: 123
 });
@@ -202,6 +202,55 @@ describe('ForgePiNexusProvider', () => {
             providerPayload: expect.objectContaining({
                 messages: branchMessages
             })
+        });
+    });
+
+    it('records cache read and write usage in pi request traces', async () => {
+        const cachedUsage: Usage = {
+            input: 100,
+            output: 20,
+            cacheRead: 64,
+            cacheWrite: 16,
+            totalTokens: 200,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+        };
+        const runSimple = vi.fn<ForgePiRunSimple>(() => {
+            const output = createAssistantMessageEventStream();
+            queueMicrotask(() => {
+                const assistant = createAssistant('缓存命中。', cachedUsage);
+                output.push({ type: 'text_delta', contentIndex: 0, delta: '缓存命中。', partial: assistant });
+                output.push({ type: 'done', reason: 'stop', message: assistant });
+                output.end(assistant);
+            });
+            return output;
+        });
+        const provider = new ForgePiNexusProvider({
+            resolveNodesFromPreset: vi.fn(() => [{
+                provider: 'test',
+                model: 'test-model',
+                url: 'https://example.test/v1',
+                key: 'test-key'
+            }]),
+            readApiConfigs: vi.fn(() => []),
+            runSimple,
+            now: () => 321
+        });
+        const request = createRequest();
+        const model = provider.createModelForRequest(request, createContext());
+        const output = provider.streamSimple(model, {
+            systemPrompt: 'system',
+            messages: [{ role: 'user', content: '继续', timestamp: 1 }],
+            tools: []
+        });
+
+        for await (const _event of output) {
+            // drain stream
+        }
+
+        expect(provider.getTrace(request.requestId)?.cache).toMatchObject({
+            cacheRead: 64,
+            cacheWrite: 16,
+            totalTokens: 200
         });
     });
 

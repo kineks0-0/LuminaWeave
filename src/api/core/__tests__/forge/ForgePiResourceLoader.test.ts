@@ -28,7 +28,7 @@ const createContext = (): ForgeRuntimeContext => ({
     timelineItems: [],
     structuredState: {} as any,
     draftTree: { nodes: [], lastUpdatedAt: 1 } as any,
-    forgeMemoryTree: { entries: [{ path: '偏好/禁忌', title: '禁忌', content: '避免俗套', summary: '避免俗套', updatedAt: 1, source: 'user' }], lastUpdatedAt: 1 },
+    forgeMemoryTree: { entries: [{ path: '偏好/禁忌', title: '禁忌', content: '完整正文中才会出现的长句', summary: '避免俗套', updatedAt: 1, source: 'user' }], lastUpdatedAt: 1 },
     stagingEntries: [{ id: 'stage_1', targetEntryId: 'entry.1', originalContent: '', proposedContent: 'new', description: '候选条目', timestamp: 1, layer: 'concept', sourceTag: null, sourceMessageId: null, sourceSessionId: null }],
     commitReadyEntries: [],
     virtualLorebookEntries: [{ id: 'entry.1', entry: { comment: '角色概念', content: '旧内容' } as any, createdAt: 1, updatedAt: 1, sourceBookId: null }],
@@ -108,8 +108,7 @@ describe('ForgePiResourceLoader', () => {
             './.pi/agent/context/workflow.md',
             './.pi/agent/context/write-boundary.md',
             './.pi/agent/context/capability-index.md',
-            './.pi/agent/context/project-resources.md',
-            './threads/目前/messages.md'
+            './.pi/agent/context/project-resources.md'
         ]));
         expect(bundle.files.find(file => file.path === './.pi/agent/context/project.md')?.content)
             .not.toContain('forge_project_alpha');
@@ -124,5 +123,107 @@ describe('ForgePiResourceLoader', () => {
         expect(bundle.files.find(file => file.path === './.forge/agent/UI_DSL.md')?.content).toContain('ForgeChoiceGroup(');
         expect(bundle.files.find(file => file.path === './.forge/agent/REASONING.md')?.content).toContain('隐藏思维链');
         expect(JSON.stringify(bundle)).toContain('真实 ST 世界书');
+    });
+
+    it('does not inject current thread messages into the default system prompt', async () => {
+        const loader = new ForgePiResourceLoader({
+            capabilities: { listCapabilities: vi.fn(() => []) } as any,
+            skills: {
+                listBuiltInSkills: vi.fn(() => []),
+                listProjectSkills: vi.fn(async () => [])
+            } as any
+        });
+        const context = createContext();
+        context.messages = [{ role: 'user', content: '这句话只能出现在 branch messages 或 VFS 文件里' }] as any;
+
+        const bundle = await loader.buildContextBundle(context);
+        const systemPrompt = loader.buildSystemPrompt({ systemFragments: [], contextBundle: bundle });
+
+        expect(systemPrompt).not.toContain('这句话只能出现在 branch messages 或 VFS 文件里');
+        expect(bundle.files.map(file => file.path)).not.toContain('./threads/目前/messages.md');
+    });
+
+    it('keeps the default system prompt stable when only runtime messages change', async () => {
+        const loader = new ForgePiResourceLoader({
+            capabilities: { listCapabilities: vi.fn(() => []) } as any,
+            skills: {
+                listBuiltInSkills: vi.fn(() => []),
+                listProjectSkills: vi.fn(async () => [])
+            } as any
+        });
+
+        const first = await loader.buildContextBundle({ ...createContext(), messages: [] as any });
+        const second = await loader.buildContextBundle({
+            ...createContext(),
+            messages: [{ role: 'user', content: '新消息' }] as any
+        });
+
+        expect(loader.buildSystemPrompt({ systemFragments: [], contextBundle: first }))
+            .toBe(loader.buildSystemPrompt({ systemFragments: [], contextBundle: second }));
+    });
+
+    it('exposes a memory index without injecting full memory text', async () => {
+        const loader = new ForgePiResourceLoader({
+            capabilities: { listCapabilities: vi.fn(() => []) } as any,
+            skills: {
+                listBuiltInSkills: vi.fn(() => []),
+                listProjectSkills: vi.fn(async () => [])
+            } as any
+        });
+
+        const bundle = await loader.buildContextBundle(createContext());
+        const memoryIndex = bundle.files.find(file => file.path === './.pi/agent/context/memory-index.md');
+        const systemPrompt = loader.buildSystemPrompt({ systemFragments: [], contextBundle: bundle });
+
+        expect(memoryIndex?.content).toContain('# 项目长期记忆索引');
+        expect(memoryIndex?.content).toContain('./memory/偏好/禁忌.md');
+        expect(memoryIndex?.content).toContain('禁忌');
+        expect(memoryIndex?.content).toContain('Source：user');
+        expect(memoryIndex?.content).toContain('Updated：1');
+        expect(memoryIndex?.content).toContain('避免俗套');
+        expect(systemPrompt).toContain('./.pi/agent/context/memory-index.md');
+        expect(systemPrompt).not.toContain('完整正文中才会出现的长句');
+    });
+
+    it('keeps long-term memory readable through resources without injecting full memory body', async () => {
+        const loader = new ForgePiResourceLoader({
+            capabilities: { listCapabilities: vi.fn(() => []) } as any,
+            skills: {
+                listBuiltInSkills: vi.fn(() => []),
+                listProjectSkills: vi.fn(async () => [])
+            } as any
+        });
+
+        const bundle = await loader.buildContextBundle(createContext());
+        const systemPrompt = loader.buildSystemPrompt({ systemFragments: [], contextBundle: bundle });
+
+        expect(systemPrompt).not.toContain('完整正文中才会出现的长句');
+        expect(bundle.files.find(file => file.path === './.pi/agent/context/project-resources.md')?.content)
+            .toContain('项目记忆');
+    });
+
+    it('normalizes memory index paths to readable semantic VFS paths', async () => {
+        const loader = new ForgePiResourceLoader({
+            capabilities: { listCapabilities: vi.fn(() => []) } as any,
+            skills: {
+                listBuiltInSkills: vi.fn(() => []),
+                listProjectSkills: vi.fn(async () => [])
+            } as any
+        });
+        const context = createContext();
+        context.forgeMemoryTree = {
+            entries: [
+                { path: '.\\偏好\\禁忌.md', title: '禁忌', content: '正文', summary: '摘要', updatedAt: 1, source: 'user' },
+                { path: '', title: '空路径', content: '正文', summary: '摘要', updatedAt: 2, source: 'system' }
+            ],
+            lastUpdatedAt: 2
+        };
+
+        const bundle = await loader.buildContextBundle(context);
+        const memoryIndex = bundle.files.find(file => file.path === './.pi/agent/context/memory-index.md');
+
+        expect(memoryIndex?.content).toContain('./memory/偏好/禁忌.md');
+        expect(memoryIndex?.content).toContain('./memory/untitled.md');
+        expect(memoryIndex?.content).not.toContain('./memory/.md');
     });
 });

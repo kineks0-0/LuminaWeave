@@ -101,6 +101,14 @@ export interface ForgePiModelTraceTool {
     description?: string | null;
 }
 
+export interface ForgePiModelTraceCache {
+    sessionId?: string;
+    cacheRead?: number;
+    cacheWrite?: number;
+    totalTokens?: number;
+    providerUsage?: unknown;
+}
+
 export interface ForgePiModelTraceEvent {
     type: 'request_prepared' | 'stream_start' | 'text_delta' | 'tool_call' | 'stream_done' | 'stream_error';
     message: string;
@@ -120,6 +128,7 @@ export interface ForgePiModelRequestTrace {
     transformedPiMessages: ForgePiTraceMessage[];
     providerPayload?: unknown;
     providerResponse?: unknown;
+    cache?: ForgePiModelTraceCache;
     tools: ForgePiModelTraceTool[];
     generationSettings: PromptPresetGenerationSettings;
     contextBundleSummary: ForgePiContextBundleSummary | null;

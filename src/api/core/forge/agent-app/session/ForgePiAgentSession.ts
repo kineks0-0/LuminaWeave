@@ -48,6 +48,7 @@ export interface ForgePiAgentSessionTurnInput {
     commandInput?: string;
     context: ForgeRuntimeContext;
     request: ForgeExecutionRequest;
+    onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
 }
 
 export interface ForgePiAgentSessionTurnResult {
@@ -109,6 +110,7 @@ interface ForgePiEventSink {
     request: ForgeExecutionRequest;
     emitFirstResponse: boolean;
     firstResponseMarked: boolean;
+    onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
 }
 
 interface ForgePiPreparedPrompt {
@@ -166,14 +168,18 @@ export class ForgePiAgentSession {
         const prepared = await this.preparePromptState(input, effects);
         this.latestContextBundle = prepared.contextBundle;
         const userInput = input.commandInput ?? this.resolveCommandInput(input.command);
-        const events: ForgeRuntimeEvent[] = [
-            {
-                type: 'request_started',
-                requestId: input.request.requestId,
-                requestedAt: Date.now(),
-                nodeSummary: input.request.nodeSummary ?? []
-            }
-        ];
+        const events: ForgeRuntimeEvent[] = [];
+        const emitEvent = (event: ForgeRuntimeEvent): void => {
+            events.push(event);
+            input.onRuntimeEvent?.(event);
+        };
+
+        emitEvent({
+            type: 'request_started',
+            requestId: input.request.requestId,
+            requestedAt: Date.now(),
+            nodeSummary: input.request.nodeSummary ?? []
+        });
 
         this.sessionManager.ensureMetadata();
         this.sessionManager.append('context_bundle', 'Context bundle', `${prepared.contextBundle.files.length} files`, {
@@ -188,7 +194,7 @@ export class ForgePiAgentSession {
         });
         this.agent = agent;
 
-        events.push({
+        emitEvent({
             type: 'prompt_ready',
             requestId: input.request.requestId,
             prompt: prepared.prompt
@@ -206,19 +212,20 @@ export class ForgePiAgentSession {
             events,
             request: input.request,
             emitFirstResponse: true,
-            firstResponseMarked: false
+            firstResponseMarked: false,
+            onRuntimeEvent: input.onRuntimeEvent
         };
         await agent.prompt(userMessage);
 
         const finalText = this.resolveLastAssistantText(agent.state.messages);
         for (const modelTrace of this.resolveModelTraces(input.request.requestId)) {
-            events.push({
+            emitEvent({
                 type: 'model_request_trace',
                 requestId: input.request.requestId,
                 trace: modelTrace
             });
         }
-        events.push({
+        emitEvent({
             type: 'stream_done',
             requestId: input.request.requestId,
             rawText: finalText,
@@ -405,6 +412,7 @@ export class ForgePiAgentSession {
                 thinkingLevel: 'off'
             },
             streamFn: input.modelConfig.streamFn,
+            sessionId: this.sessionId,
             toolExecution: 'sequential'
         });
 
@@ -414,11 +422,13 @@ export class ForgePiAgentSession {
             this.handleAgentEvent(event, sink, () => {
                 if (!sink.emitFirstResponse || sink.firstResponseMarked) return;
                 sink.firstResponseMarked = true;
-                sink.events.push({
+                const runtimeEvent: ForgeRuntimeEvent = {
                     type: 'first_response',
                     requestId: sink.request.requestId,
                     firstResponseAt: Date.now()
-                });
+                };
+                sink.events.push(runtimeEvent);
+                sink.onRuntimeEvent?.(runtimeEvent);
             });
         });
         return agent;
@@ -450,19 +460,22 @@ export class ForgePiAgentSession {
             source: ForgeRuntimeEventSource;
             events: ForgeRuntimeEvent[];
             request: ForgeExecutionRequest;
+            onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
         },
         markFirstResponse: () => void
     ): void {
         if (event.type === 'message_update') {
             markFirstResponse();
             const text = this.extractAssistantText(event.message);
-            input.events.push({
+            const runtimeEvent: ForgeRuntimeEvent = {
                 type: 'stream_chunk',
                 requestId: input.request.requestId,
                 displayText: text,
                 thinkingText: '',
                 rawText: text
-            });
+            };
+            input.events.push(runtimeEvent);
+            input.onRuntimeEvent?.(runtimeEvent);
         }
         if (event.type === 'message_end' && event.message.role === 'assistant') {
             const text = this.extractAssistantText(event.message);
@@ -494,6 +507,7 @@ export class ForgePiAgentSession {
                 source: input.source
             };
             input.events.push(runtimeEvent);
+            input.onRuntimeEvent?.(runtimeEvent);
             this.sessionManager.append('tool_call', `Tool call · ${event.toolName}`, JSON.stringify(event.args).slice(0, 160), runtimeEvent);
         }
         if (event.type === 'tool_execution_end') {
@@ -507,6 +521,7 @@ export class ForgePiAgentSession {
                 source: input.source
             };
             input.events.push(runtimeEvent);
+            input.onRuntimeEvent?.(runtimeEvent);
             this.sessionManager.append('tool_result', `Tool result · ${event.toolName}`, JSON.stringify(runtimeEvent.result).slice(0, 160), runtimeEvent);
             this.appendWorkspacePatchesFromToolResult(runtimeEvent.result);
         }

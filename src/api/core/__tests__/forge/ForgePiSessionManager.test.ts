@@ -152,4 +152,65 @@ describe('ForgePiSessionManager', () => {
         });
         expect(JSON.stringify(crossProviderReplay)).not.toContain('provider signed reasoning');
     });
+
+    it('trims branch messages while preserving assistant tool calls with their tool results', () => {
+        const manager = createManager();
+        manager.ensureMetadata();
+        manager.append('user', 'User', '旧请求', {
+            agentMessage: { role: 'user', content: '旧请求', timestamp: 1 }
+        } as any);
+        manager.append('assistant', 'Assistant', '需要读文件', {
+            agentMessage: {
+                role: 'assistant',
+                content: [{
+                    type: 'toolCall',
+                    id: 'call_read',
+                    name: 'readFile',
+                    arguments: { path: './AGENTS.md' }
+                }],
+                api: 'openai-completions',
+                provider: 'openai',
+                model: 'gpt-5',
+                usage: {
+                    input: 0,
+                    output: 0,
+                    cacheRead: 0,
+                    cacheWrite: 0,
+                    totalTokens: 0,
+                    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+                },
+                stopReason: 'toolUse',
+                timestamp: 2
+            }
+        } as any);
+        manager.append('tool_result', 'Tool result · readFile', '结果', {
+            agentMessage: {
+                role: 'toolResult',
+                toolCallId: 'call_read',
+                toolName: 'readFile',
+                content: [{ type: 'text', text: 'AGENTS' }],
+                isError: false,
+                timestamp: 3
+            }
+        } as any);
+        manager.append('user', 'User', '继续', {
+            agentMessage: { role: 'user', content: '继续', timestamp: 4 }
+        } as any);
+
+        const messages = manager.getBranchMessages({
+            providerId: 'openai',
+            modelId: 'gpt-5',
+            maxMessages: 2
+        });
+
+        expect(messages.map(message => message.role)).toEqual(['assistant', 'toolResult', 'user']);
+        expect(messages[0]).toMatchObject({
+            role: 'assistant',
+            content: [expect.objectContaining({ type: 'toolCall', id: 'call_read' })]
+        });
+        expect(messages[1]).toMatchObject({
+            role: 'toolResult',
+            toolCallId: 'call_read'
+        });
+    });
 });

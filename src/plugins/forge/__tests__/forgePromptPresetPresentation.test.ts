@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PromptPresetDefinition } from '../../../types/PromptPresetTypes.js';
+import forgeExecutorDefault from '../../../resources/presets/forge-executor-default.json';
+import forgeMainDefault from '../../../resources/presets/forge-main-default.json';
 import {
     buildForgePromptPresetResourceGroups,
     buildForgePromptPresetWorkbenchOverview,
@@ -70,8 +72,11 @@ const preset: PromptPresetDefinition = {
             { kind: 'contract', enabled: true, path: './AGENTS.md', title: 'Contract' },
             { kind: 'system', enabled: true, path: './.forge/agent/SYSTEM.md', title: 'System' },
             { kind: 'mode_prompt', enabled: true, path: './.forge/agent/<MODE>.md', title: 'Mode Prompt' },
+            { kind: 'ui_dsl', enabled: true, path: './.forge/agent/UI_DSL.md', title: 'UI DSL' },
+            { kind: 'reasoning_boundary', enabled: true, path: './.forge/agent/REASONING.md', title: 'Reasoning Boundary' },
             { kind: 'skills', enabled: true, title: 'Skills' },
             { kind: 'capabilities', enabled: true, title: 'Capabilities' },
+            { kind: 'memory_index', enabled: true, path: './.pi/agent/context/memory-index.md', title: 'Memory Index' },
             { kind: 'context_files', enabled: true, title: 'Context Files' },
             { kind: 'branch_messages', enabled: true, title: 'Branch Messages' }
         ]
@@ -82,6 +87,24 @@ const preset: PromptPresetDefinition = {
 };
 
 describe('forgePromptPresetPresentation', () => {
+    it('keeps built-in Forge agent orchestration aligned with prompt resources', () => {
+        const expectedKinds = [
+            'contract',
+            'system',
+            'mode_prompt',
+            'ui_dsl',
+            'reasoning_boundary',
+            'skills',
+            'capabilities',
+            'memory_index',
+            'context_files',
+            'branch_messages'
+        ];
+
+        expect(forgeMainDefault.forgeAgentOrchestration.steps.map(step => step.kind)).toEqual(expectedKinds);
+        expect(forgeExecutorDefault.forgeAgentOrchestration.steps.map(step => step.kind)).toEqual(expectedKinds);
+    });
+
     it('projects Forge agent preset resources into user-facing rows', () => {
         expect(hasForgeAgentResourcePreset(preset)).toBe(true);
 
@@ -109,8 +132,11 @@ describe('forgePromptPresetPresentation', () => {
             'contract',
             'system',
             'mode_prompt',
+            'ui_dsl',
+            'reasoning_boundary',
             'skills',
             'capabilities',
+            'memory_index',
             'context_files',
             'branch_messages'
         ]);
@@ -118,8 +144,11 @@ describe('forgePromptPresetPresentation', () => {
             'Contract',
             'System',
             'Mode Prompt',
+            'UI DSL',
+            'Reasoning Boundary',
             'Skills',
             'Capabilities',
+            'Memory Index',
             'Context Files',
             'Branch Messages'
         ]);
@@ -128,7 +157,7 @@ describe('forgePromptPresetPresentation', () => {
     it('summarizes resource presets separately from legacy composed entries', () => {
         expect(summarizeForgePromptPreset(preset)).toEqual({
             primary: 'Agent 资源包',
-            details: ['7 步编排', '1 技能']
+            details: ['10 步编排', '1 技能']
         });
 
         expect(summarizeForgePromptPreset({
@@ -152,7 +181,7 @@ describe('forgePromptPresetPresentation', () => {
             primaryActionLabel: '复制为自定义预设',
             sourcePriority: '项目覆盖 > 当前预设 > 内置 fallback',
             resourceCount: 7,
-            orchestrationCount: 7,
+            orchestrationCount: 10,
             skillCount: 1
         });
     });

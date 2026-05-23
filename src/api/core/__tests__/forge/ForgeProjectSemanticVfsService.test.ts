@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
 import { ForgeProjectSemanticVfsService } from '@/api/core/forge/project/ForgeProjectSemanticVfsService.js';
+import { ForgeSemanticVfsProvider } from '@/api/core/forge/agent-app/vfs/ForgeSemanticVfsProvider.js';
 import { ShellWorkspaceService } from '@/api/core/hal/shell/ShellWorkspaceService.js';
 import { ForgeSkillRegistry } from '@/api/core/forge/skills/ForgeSkillRegistry.js';
 import type { ForgeRuntimeContext } from '@/types/ForgeRuntimeTypes.js';
@@ -218,6 +219,13 @@ describe('ForgeProjectSemanticVfsService', () => {
             writePolicy: 'direct-write',
             content: expect.stringContaining('电梯神龛')
         }));
+    });
+
+    it('reads long-term memory bodies through semantic VFS paths', async () => {
+        const provider = new ForgeSemanticVfsProvider({ service });
+
+        await expect(provider.readFile(createContext(), './memory/用户偏好.md'))
+            .resolves.toContain('偏好：克制、民俗、低解释密度。');
     });
 
     it('exposes preset reference skills through semantic VFS', async () => {

@@ -65,8 +65,11 @@ const ORCHESTRATION_LABELS: Record<ForgeAgentPromptOrchestrationStep['kind'], st
     contract: 'Contract',
     system: 'System',
     mode_prompt: 'Mode Prompt',
+    ui_dsl: 'UI DSL',
+    reasoning_boundary: 'Reasoning Boundary',
     skills: 'Skills',
     capabilities: 'Capabilities',
+    memory_index: 'Memory Index',
     context_files: 'Context Files',
     branch_messages: 'Branch Messages'
 };
