@@ -45,6 +45,7 @@ Host Drivers 只负责宿主物理交互。
 职责：
 
 - 探测和访问 SillyTavern、TauriTavern、Standalone 等运行环境。
+- 宿主探测按两层分类表达：`runtimeEnvelope` 区分 `plugin-hosted` 与 `standalone-app`，`physicalHost` 区分 `sillytavern`、`tauritavern`、`generic-tauri` 与 `web`。普通 Tauri 客户端不得被归入 TauriTavern 插件宿主。
 - 读写宿主资源、事件、网络和基础存储。
 - 封装宿主全局对象、TavernHelper、Tauri ABI、local fallback。
 - ST 世界书、会话目录、物理消息列表、角色资料、Forge 测试聊天宿主资料、环境就绪、生成函数定位等宿主物理操作必须通过 `host-drivers/st/*Driver` 或 HAL ST provider 暴露给 Core / Facade。
@@ -81,6 +82,8 @@ Runtime port 模式：
 - `st-plugin-enhanced`：SillyTavern 插件宿主下的 HTTP 增强 runtime，访问 `/api/plugins/luminaweave`。
 - `tauri-native`：TauriTavern 原生 runtime，访问 Tauri invoke、原生扩展存储和本地生成能力。
 - `standalone-local`：纯前端本地 runtime，用 localStorage / in-memory 能力维持可运行状态。
+
+普通 Tauri App 在专属 runtime port 落地前按 `standalone-app + generic-tauri` 归类，并继续走 `standalone-local`。TauriTavern 仍是 `plugin-hosted + tauritavern`，因为它承载 ST Web 内容并暴露 TauriTavern 专属宿主 ABI。
 
 生产代码不得再通过 `BridgeDispatcher` 或 `ILuminaBridge` 获取运行时能力；Core、插件和 UI 统一消费 `HALContext.instance.runtime`。
 

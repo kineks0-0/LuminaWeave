@@ -5,7 +5,11 @@ import { HALContext } from '@/api/core/hal/HALContext.js';
 const state = vi.hoisted(() => ({
     host: {
         isTauriTavern: false,
-        isSillyTavern: false
+        isSillyTavern: false,
+        isGenericTauriApp: false,
+        isStandaloneApp: true,
+        runtimeEnvelope: 'standalone-app',
+        physicalHost: 'web'
     },
     stProbeFails: false,
     bindHostEvents: vi.fn(),
@@ -118,6 +122,10 @@ describe('HALBootstrap runtime port selection', () => {
     beforeEach(() => {
         state.host.isTauriTavern = false;
         state.host.isSillyTavern = false;
+        state.host.isGenericTauriApp = false;
+        state.host.isStandaloneApp = true;
+        state.host.runtimeEnvelope = 'standalone-app';
+        state.host.physicalHost = 'web';
         state.stProbeFails = false;
         state.bindHostEvents.mockClear();
         state.waitForReady.mockClear();
@@ -129,6 +137,9 @@ describe('HALBootstrap runtime port selection', () => {
 
     it('uses tauri-native runtime in TauriTavern', async () => {
         state.host.isTauriTavern = true;
+        state.host.isStandaloneApp = false;
+        state.host.runtimeEnvelope = 'plugin-hosted';
+        state.host.physicalHost = 'tauritavern';
 
         await HALBootstrap.init();
 
@@ -139,6 +150,9 @@ describe('HALBootstrap runtime port selection', () => {
 
     it('uses st-plugin-enhanced runtime when ST backend probe succeeds', async () => {
         state.host.isSillyTavern = true;
+        state.host.isStandaloneApp = false;
+        state.host.runtimeEnvelope = 'plugin-hosted';
+        state.host.physicalHost = 'sillytavern';
 
         await HALBootstrap.init();
 
@@ -148,11 +162,26 @@ describe('HALBootstrap runtime port selection', () => {
 
     it('falls back to standalone-local runtime when ST backend probe fails', async () => {
         state.host.isSillyTavern = true;
+        state.host.isStandaloneApp = false;
+        state.host.runtimeEnvelope = 'plugin-hosted';
+        state.host.physicalHost = 'sillytavern';
         state.stProbeFails = true;
 
         await HALBootstrap.init();
 
         expect(HALContext.instance.runtime.mode).toBe('standalone-local');
+    });
+
+    it('uses standalone-local runtime in a generic Tauri app until a dedicated client runtime is registered', async () => {
+        state.host.isGenericTauriApp = true;
+        state.host.isStandaloneApp = true;
+        state.host.runtimeEnvelope = 'standalone-app';
+        state.host.physicalHost = 'generic-tauri';
+
+        await HALBootstrap.init();
+
+        expect(HALContext.instance.runtime.mode).toBe('standalone-local');
+        expect(state.waitForReady).not.toHaveBeenCalled();
     });
 
     it('uses standalone-local runtime outside known hosts', async () => {

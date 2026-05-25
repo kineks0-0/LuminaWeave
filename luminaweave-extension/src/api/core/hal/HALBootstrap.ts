@@ -39,7 +39,10 @@ export class HALBootstrap {
             reportProgress('探测宿主环境...');
 
             // 1. 探测宿主环境
-            // 探测优先级：TauriTavern (Native) > SillyTavern (Plugin) > Standalone
+            // 探测优先级：TauriTavern 插件宿主 > SillyTavern 插件宿主 > 独立客户端
+            console.log(
+                `[HALBootstrap] Host detected: ${HostDetector.physicalHost} (${HostDetector.runtimeEnvelope}).`
+            );
             const childOptions = { onProgress: reportProgress };
             if (HostDetector.isTauriTavern) {
                 console.log('[HALBootstrap] TauriTavern detected. Injecting Tauri providers.');
@@ -49,10 +52,12 @@ export class HALBootstrap {
                 console.log('[HALBootstrap] SillyTavern detected. Injecting ST providers.');
                 await this.initSTHost(childOptions);
                 await this.initSTPluginRuntime(childOptions);
-            } else {
+            } else if (HostDetector.isStandaloneApp) {
                 console.log('[HALBootstrap] Standalone mode detected. Injecting default providers.');
                 await this.initStandaloneHost(childOptions);
                 await this.initStandaloneRuntime(childOptions);
+            } else {
+                throw new Error(`[HALBootstrap] Unsupported runtime host: ${HostDetector.physicalHost}`);
             }
 
         this._initialized = true;
