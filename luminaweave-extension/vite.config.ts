@@ -25,12 +25,20 @@ const vendorChunkName = (id: string) => {
   if (normalizedId.includes('/node_modules/openai/')) return 'vendor-openai';
 };
 
+const chunkFileNames = 'assets/[name]-[hash].js';
+
+const assetFileNames = (assetInfo: { name?: string }) => {
+  if (assetInfo.name?.endsWith('.css')) return 'style.css';
+  return 'assets/[name]-[hash][extname]';
+};
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const isWatchBuild = process.argv.includes('--watch');
   const isAnalyzeBuild = mode === 'analyze' || process.env.LW_ANALYZE === 'true';
   const runtimeBuildMode = mode === 'analyze' ? 'github' : mode;
-  const inlineSourceMap = runtimeBuildMode !== 'github';
+  const isClientBuild = runtimeBuildMode === 'client';
+  const inlineSourceMap = runtimeBuildMode !== 'github' && runtimeBuildMode !== 'client';
 
   return {
     base: './',
@@ -61,7 +69,7 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
-      outDir: 'dist',
+      outDir: isClientBuild ? 'dist-client' : 'dist',
       emptyOutDir: true,
       cssCodeSplit: false,
       minify: 'oxc',
@@ -77,29 +85,39 @@ export default defineConfig(({ mode }) => {
             ]
           }
         : null,
-      rollupOptions: {
-        input: resolve(__dirname, 'src/index.ts'),
-        external: [
-          '/scripts/slash-commands.js',
-          '/scripts/custom-request.js',
-          '/scripts/preset-manager.js',
-          '/script.js'
-        ],
-        output: {
-          format: 'es',
-          entryFileNames: 'index.js',
-          chunkFileNames: 'assets/[name]-[hash].js',
-          manualChunks: vendorChunkName,
-          assetFileNames: (assetInfo) => {
-            if (assetInfo.name?.endsWith('.css')) return 'style.css';
-            return 'assets/[name]-[hash][extname]';
+      rollupOptions: isClientBuild
+        ? {
+            input: resolve(__dirname, 'index.html'),
+            output: {
+              chunkFileNames,
+              manualChunks: vendorChunkName,
+              assetFileNames
+            },
+            onwarn(warning, warn) {
+              if (warning.code === 'FILE_NAME_CONFLICT') return;
+              warn(warning);
+            }
           }
-        },
-        onwarn(warning, warn) {
-          if (warning.code === 'FILE_NAME_CONFLICT') return;
-          warn(warning);
-        }
-      }
+        : {
+            input: resolve(__dirname, 'src/index.ts'),
+            external: [
+              '/scripts/slash-commands.js',
+              '/scripts/custom-request.js',
+              '/scripts/preset-manager.js',
+              '/script.js'
+            ],
+            output: {
+              format: 'es',
+              entryFileNames: 'index.js',
+              chunkFileNames,
+              manualChunks: vendorChunkName,
+              assetFileNames
+            },
+            onwarn(warning, warn) {
+              if (warning.code === 'FILE_NAME_CONFLICT') return;
+              warn(warning);
+            }
+          }
     }
   };
 })

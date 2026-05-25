@@ -7,11 +7,17 @@
     "dev": "vite",
     "build": "vite build --mode github",
     "build:debug": "vite build --mode debug",
+    "build:client": "vite build --mode client",
     "analyze": "vite build --mode analyze",
     "watch": "vite build --watch --mode debug",
+    "dev:client": "vite --mode client",
     "preview": "vite preview",
     "test": "vitest run",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:info": "tauri info"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.74",
@@ -28,6 +34,7 @@
     "@logicflow/vue-node-registry": "^1.2.1",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@tailwindcss/vite": "^4.2.4",
+    "@tauri-apps/api": "^2.11.0",
     "@wterm/core": "^0.3.0",
     "@wterm/dom": "^0.3.0",
     "@wterm/just-bash": "^0.3.0",
@@ -51,6 +58,7 @@
     "zod": "^4.4.2"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2",
     "@types/jquery": "^4.0.0",
     "@types/node": "^25.6.0",
     "@types/shell-quote": "^1.7.5",

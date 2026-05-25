@@ -21,13 +21,30 @@ enableServerPlugins: true
 | `npm run dev` | 启动 Vite 开发服务 |
 | `npm run build` | 使用 `github` mode 构建正式分发产物 |
 | `npm run build:debug` | 使用 `debug` mode 构建，便于排查 |
+| `npm run build:client` | 使用 `client` mode 构建 Tauri 客户端 Web 产物到 `dist-client/` |
 | `npm run analyze` | 使用 `analyze` mode 构建并生成体积分析报告 |
 | `npm run watch` | 使用 `debug` mode 持续构建 |
+| `npm run dev:client` | 启动 Tauri 客户端使用的 Vite 开发服务 |
 | `npm run preview` | 启动 Vite preview |
 | `npm run test` | 运行 Vitest |
 | `npm run type-check` | 运行 `vue-tsc --noEmit` |
+| `npm run tauri` | 调用 Tauri CLI |
+| `npm run tauri:dev` | 启动 Windows/Web Tauri 开发客户端 |
+| `npm run tauri:build` | 构建 Windows/Web Tauri 客户端 |
+| `npm run tauri:info` | 输出 Tauri 环境诊断信息 |
 
 分发时必须携带完整 `dist/` 目录。`dist/index.js` 是入口，异步 chunk 位于 `dist/assets/`。
+
+Tauri 客户端不复用 ST 扩展分发产物，而是通过 `build:client` 生成完整 HTML 应用到 `luminaweave-extension/dist-client/`。该目录是 Tauri 的中间构建产物，不作为 ST 扩展发布目录。
+
+Tauri Rust 工程位于 `luminaweave-extension/src-tauri/`，`tauri.conf.json` 使用：
+
+- `frontendDist: ../dist-client`
+- `beforeDevCommand: npm run dev:client`
+- `beforeBuildCommand: npm run build:client`
+- `app.withGlobalTauri: true`
+
+Windows Tauri 开发/构建需要本机安装 Rust MSVC toolchain、Microsoft C++ Build Tools 和 WebView2 Runtime。缺少 `cargo` / `rustc` 时，`tauri:dev` 与 `tauri:build` 不能完成。
 
 ## 3. server 构建模式
 
@@ -47,6 +64,7 @@ enableServerPlugins: true
 | `luminaweave-server/data/` | 后端本地数据目录 | 禁止提交用户数据 |
 | `luminaweave-extension/dist/` | 前端分发产物 | 本项目可能保留用于分发，不默认删除 |
 | `luminaweave-extension/dist/assets/` | 异步 chunk 目录 | 发布和同步时需与入口一同携带 |
+| `luminaweave-extension/dist-client/` | Tauri 客户端 Web 中间产物 | 不提交，由 `npm run build:client` 或 Tauri CLI 生成 |
 
 ## 5. Nexus 与模型配置
 
