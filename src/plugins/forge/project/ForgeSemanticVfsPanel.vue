@@ -69,6 +69,40 @@
             </div>
           </dl>
 
+          <div v-if="canEditSelectedOverride" class="vfs-override-editor">
+            <div class="vfs-override-editor__head">
+              <div>
+                <strong>{{ selectedRow.source === 'workspace' ? '项目覆盖' : '创建项目覆盖' }}</strong>
+                <span>{{ selectedRow.source === 'workspace' ? '保存后继续写入当前项目 VFS。' : '保存后只影响当前 Forge 项目，不回写预设或内置资源。' }}</span>
+              </div>
+              <div class="vfs-override-editor__actions">
+                <button
+                  v-if="!overrideEditorOpen"
+                  class="vfs-action-btn"
+                  type="button"
+                  @click="beginOverrideEdit"
+                >
+                  {{ selectedRow.source === 'workspace' ? '编辑' : '创建覆盖' }}
+                </button>
+                <template v-else>
+                  <button class="vfs-action-btn" type="button" :disabled="isSavingOverride" @click="saveOverride">
+                    {{ isSavingOverride ? '保存中' : '保存' }}
+                  </button>
+                  <button class="vfs-action-btn subtle" type="button" :disabled="isSavingOverride" @click="cancelOverrideEdit">
+                    取消
+                  </button>
+                </template>
+              </div>
+            </div>
+            <textarea
+              v-if="overrideEditorOpen"
+              v-model="overrideDraft"
+              class="vfs-override-textarea"
+              rows="10"
+            />
+            <p v-if="overrideError" class="vfs-error">{{ overrideError }}</p>
+          </div>
+
           <div class="vfs-content-header">
             <strong>{{ selectedRow.kind === 'directory' ? '目录内容' : '文件内容' }}</strong>
             <span>{{ selectedRow.content ? '完整内容' : '预览' }}</span>
@@ -89,6 +123,7 @@ import ForgeAuxPanelShell from '../app/ForgeAuxPanelShell.vue';
 import {
   buildForgeSemanticVfsTree,
   flattenForgeSemanticVfsTree,
+  isForgeAgentResourceOverridePath,
   type ForgeSemanticVfsNode,
   type ForgeSemanticVfsNodeKind,
   type ForgeSemanticVfsProjectEntry,
@@ -103,6 +138,10 @@ const selectedPath = ref('./');
 const projectEntries = ref<ForgeSemanticVfsProjectEntry[]>([]);
 const isLoading = ref(false);
 const loadError = ref<string | null>(null);
+const overrideEditorOpen = ref(false);
+const overrideDraft = ref('');
+const overrideError = ref<string | null>(null);
+const isSavingOverride = ref(false);
 
 const tree = computed<ForgeSemanticVfsNode[]>(() => buildForgeSemanticVfsTree({
   contextBundle: null,
@@ -121,6 +160,12 @@ const selectedRow = computed<ForgeSemanticVfsNode | null>(() =>
 watch(treeRows, (rows) => {
   if (rows.some(row => row.path === selectedPath.value)) return;
   selectedPath.value = rows[0]?.path ?? './';
+});
+
+watch(selectedPath, () => {
+  overrideEditorOpen.value = false;
+  overrideDraft.value = '';
+  overrideError.value = null;
 });
 
 const refreshProjectFiles = async (): Promise<void> => {
@@ -154,6 +199,41 @@ const projectEntryCount = computed(() => projectEntries.value.length);
 const projectFileCount = computed(() => projectEntries.value.filter(entry => entry.kind !== 'directory').length);
 const directoryCount = computed(() => treeRows.value.filter(row => row.kind === 'directory' && row.path !== './').length);
 const aliasCount = computed(() => treeRows.value.filter(row => row.kind === 'alias').length);
+const canEditSelectedOverride = computed(() =>
+  selectedRow.value?.kind === 'file' && isForgeAgentResourceOverridePath(selectedRow.value.path)
+);
+
+const beginOverrideEdit = (): void => {
+  if (!selectedRow.value || !canEditSelectedOverride.value) return;
+  overrideDraft.value = selectedRow.value.content || selectedRow.value.preview || '';
+  overrideError.value = null;
+  overrideEditorOpen.value = true;
+};
+
+const cancelOverrideEdit = (): void => {
+  overrideEditorOpen.value = false;
+  overrideDraft.value = '';
+  overrideError.value = null;
+};
+
+const saveOverride = async (): Promise<void> => {
+  if (!selectedRow.value || !canEditSelectedOverride.value) return;
+  isSavingOverride.value = true;
+  overrideError.value = null;
+  try {
+    const saved = await cardMakerStore.saveProjectVfsOverride(selectedRow.value.path, overrideDraft.value);
+    if (!saved) {
+      overrideError.value = '项目覆盖保存失败。';
+      return;
+    }
+    await refreshProjectFiles();
+    overrideEditorOpen.value = false;
+  } catch (error) {
+    overrideError.value = error instanceof Error ? error.message : '项目覆盖保存失败';
+  } finally {
+    isSavingOverride.value = false;
+  }
+};
 
 const kindLabel = (kind: ForgeSemanticVfsNodeKind): string => {
   if (kind === 'alias') return 'alias';
@@ -399,6 +479,93 @@ const policyLabel = (policy: ForgeSemanticVfsWritePolicy): string => {
   overflow-wrap: anywhere;
 }
 
+.vfs-override-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 11px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--lw-primary) 28%, var(--lw-border-base));
+  background: color-mix(in srgb, var(--lw-primary) 6%, var(--lw-bg-subtle));
+}
+
+.vfs-override-editor__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vfs-override-editor__head strong,
+.vfs-override-editor__head span {
+  display: block;
+}
+
+.vfs-override-editor__head strong {
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-body-small-size);
+}
+
+.vfs-override-editor__head span {
+  margin-top: 3px;
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-label-small-size);
+  line-height: 1.5;
+}
+
+.vfs-override-editor__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vfs-action-btn {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--lw-primary) 28%, var(--lw-border-base));
+  background: color-mix(in srgb, var(--lw-primary) 10%, var(--lw-bg-elevated));
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-label-small-size);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vfs-action-btn.subtle {
+  border-color: color-mix(in srgb, var(--lw-border-base) 82%, transparent);
+  background: color-mix(in srgb, var(--lw-bg-subtle) 88%, white);
+  color: var(--lw-text-secondary);
+}
+
+.vfs-action-btn:disabled {
+  color: var(--lw-text-muted);
+  cursor: wait;
+}
+
+.vfs-override-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 180px;
+  resize: vertical;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--lw-border-base);
+  background: var(--lw-bg-app);
+  color: var(--lw-text-main);
+  font-family: var(--lw-font-mono), ui-monospace, Consolas, monospace;
+  font-size: var(--lw-type-body-small-size);
+  line-height: 1.6;
+  outline: none;
+}
+
+.vfs-override-textarea:focus {
+  border-color: var(--lw-border-active);
+  box-shadow: 0 0 0 4px rgba(var(--lw-primary-rgb), 0.08);
+}
+
 .vfs-content-header {
   display: flex;
   align-items: center;
@@ -427,6 +594,14 @@ const policyLabel = (policy: ForgeSemanticVfsWritePolicy): string => {
   .vfs-summary,
   .vfs-layout {
     grid-template-columns: 1fr;
+  }
+
+  .vfs-override-editor__head {
+    flex-direction: column;
+  }
+
+  .vfs-override-editor__actions {
+    justify-content: flex-start;
   }
 }
 </style>

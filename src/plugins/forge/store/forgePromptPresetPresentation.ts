@@ -16,6 +16,7 @@ export interface ForgePromptPresetResourceRow {
     title: string;
     content: string;
     skillName?: string;
+    description?: string;
     loadPolicy?: NonNullable<ForgeAgentSkillResource['loadPolicy']>;
     loadPolicyLabel?: string;
 }
@@ -74,6 +75,19 @@ const ORCHESTRATION_LABELS: Record<ForgeAgentPromptOrchestrationStep['kind'], st
     branch_messages: 'Branch Messages'
 };
 
+export const normalizeForgeAgentSkillName = (input: string): string => {
+    const normalized = input
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    return normalized || 'custom-skill';
+};
+
+export const buildForgeAgentSkillPath = (skillName: string): string =>
+    `./agent/skills/${normalizeForgeAgentSkillName(skillName)}/SKILL.md`;
+
 export const hasForgeAgentResourcePreset = (preset: PromptPresetDefinition | null | undefined): boolean =>
     Boolean(preset?.forgeAgentResources);
 
@@ -99,6 +113,7 @@ const buildSkillResourceRow = (skill: ForgeAgentSkillResource): ForgePromptPrese
     title: skill.title || skill.name,
     content: skill.content,
     skillName: skill.name,
+    description: skill.description,
     loadPolicy: skill.loadPolicy === 'always' ? 'always' : 'on_demand',
     loadPolicyLabel: skill.loadPolicy === 'always' ? '常驻' : '按需'
 });

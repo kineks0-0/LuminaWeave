@@ -167,6 +167,38 @@
                   <span>{{ row.path }}</span>
                 </div>
               </div>
+              <div v-if="row.kind === 'skill'" class="skill-metadata-grid">
+                <label class="field-label">
+                  <span>技能名</span>
+                  <input
+                    class="field-input"
+                    type="text"
+                    :value="row.skillName || ''"
+                    :disabled="!resourceEditable"
+                    @change="updateSkillName(row.skillName || '', $event)"
+                  />
+                </label>
+                <label class="field-label">
+                  <span>标题</span>
+                  <input
+                    class="field-input"
+                    type="text"
+                    :value="row.title"
+                    :disabled="!resourceEditable"
+                    @input="updateSkillTitle(row.skillName || '', $event)"
+                  />
+                </label>
+                <label class="field-label">
+                  <span>说明</span>
+                  <input
+                    class="field-input"
+                    type="text"
+                    :value="row.description || ''"
+                    :disabled="!resourceEditable"
+                    @input="updateSkillDescription(row.skillName || '', $event)"
+                  />
+                </label>
+              </div>
               <div v-if="row.kind === 'skill'" class="skill-resource-controls">
                 <label class="field-label compact">
                   <span>加载策略</span>
@@ -432,11 +464,13 @@ import { promptPresetRegistry } from '../../api/core/hal/prompt/PromptPresetRegi
 import { clonePromptPresetGenerationSettings } from '../../api/core/utils/promptPresetGenerationSettings.js';
 import { lwStorage } from '../../api/storage.js';
 import {
+    buildForgeAgentSkillPath,
     buildForgePromptPresetOrchestrationRows,
     buildForgePromptPresetResourceGroups,
     buildForgePromptPresetResourceRows,
     buildForgePromptPresetWorkbenchOverview,
-    hasForgeAgentResourcePreset
+    hasForgeAgentResourcePreset,
+    normalizeForgeAgentSkillName
 } from './store/forgePromptPresetPresentation.js';
 import type { ForgePromptPresetResourceGroupId } from './store/forgePromptPresetPresentation.js';
 import type {
@@ -780,6 +814,50 @@ const updateSkillLoadPolicy = (skillName: string, event: Event) => {
     }
 };
 
+const resolveUniqueSkillName = (rawName: string, currentName?: string): string => {
+    const resources = draft.forgeAgentResources;
+    const baseName = normalizeForgeAgentSkillName(rawName);
+    const existingNames = new Set((resources?.skills || [])
+        .map(skill => skill.name)
+        .filter(name => name !== currentName));
+    let nextName = baseName;
+    let suffix = 2;
+    while (existingNames.has(nextName)) {
+        nextName = `${baseName}-${suffix}`;
+        suffix += 1;
+    }
+    return nextName;
+};
+
+const updateSkillName = (skillName: string, event: Event) => {
+    const resources = draft.forgeAgentResources;
+    if (!resources?.skills || !skillName) return;
+    const skill = resources.skills.find(item => item.name === skillName);
+    if (!skill) return;
+    const nextName = resolveUniqueSkillName((event.target as HTMLInputElement).value, skillName);
+    skill.name = nextName;
+    skill.path = buildForgeAgentSkillPath(nextName);
+    (event.target as HTMLInputElement).value = nextName;
+};
+
+const updateSkillTitle = (skillName: string, event: Event) => {
+    const resources = draft.forgeAgentResources;
+    if (!resources?.skills || !skillName) return;
+    const skill = resources.skills.find(item => item.name === skillName);
+    if (skill) {
+        skill.title = (event.target as HTMLInputElement).value;
+    }
+};
+
+const updateSkillDescription = (skillName: string, event: Event) => {
+    const resources = draft.forgeAgentResources;
+    if (!resources?.skills || !skillName) return;
+    const skill = resources.skills.find(item => item.name === skillName);
+    if (skill) {
+        skill.description = (event.target as HTMLInputElement).value;
+    }
+};
+
 const addSkillResource = () => {
     const resources = draft.forgeAgentResources;
     if (!resources) return;
@@ -793,7 +871,7 @@ const addSkillResource = () => {
     }
     resources.skills.push({
         name,
-        path: `./agent/skills/${name}/SKILL.md`,
+        path: buildForgeAgentSkillPath(name),
         title: '自定义技能',
         description: '预设提供的自定义技能。',
         loadPolicy: 'on_demand',
@@ -1136,6 +1214,13 @@ onUnmounted(() => {
   min-height: 148px;
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
   font-size: var(--lw-type-body-small-size);
+}
+
+.skill-metadata-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(220px, 1.4fr);
+  gap: 10px;
+  min-width: 0;
 }
 
 .slot-select {
@@ -1550,6 +1635,10 @@ onUnmounted(() => {
   .section-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .skill-metadata-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
