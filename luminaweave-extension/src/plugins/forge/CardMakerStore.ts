@@ -94,6 +94,7 @@ import {
     forgeProjectSemanticVfsService,
     type ForgeProjectSemanticVfsEntry
 } from '../../api/core/forge/project/ForgeProjectSemanticVfsService.js';
+import { forgeWorkspaceVersionManager } from '../../api/core/forge/project/ForgeWorkspaceVersionManager.js';
 import {
     PromptResourceBindingService,
     promptResourceBindingService
@@ -774,6 +775,27 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         return index <= 0 ? '/' : normalized.slice(0, index);
     };
 
+    const normalizeAgentResourceOverridePath = (path: string): string => {
+        const normalized = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
+        if (!normalized || normalized === '.') return './';
+        if (normalized.startsWith('./')) return normalized;
+        if (normalized.startsWith('/')) return normalized;
+        return `./${normalized}`;
+    };
+
+    const isManagedAgentResourceOverridePath = (path: string): boolean => {
+        const normalized = normalizeAgentResourceOverridePath(path);
+        return normalized === './AGENTS.md'
+            || /^\.\/\.forge\/agent\/(?:SYSTEM|PLANNER|CONVERSATION|ANALYST|EXECUTOR)\.md$/.test(normalized)
+            || /^\.\/agent\/skills\/[a-z0-9][a-z0-9-]*\/SKILL\.md$/.test(normalized);
+    };
+
+    const agentResourceOverrideLocalPath = (path: string): string => {
+        const semanticPath = normalizeAgentResourceOverridePath(path);
+        const relative = semanticPath.startsWith('./') ? semanticPath.slice(2) : semanticPath.replace(/^\/+/, '');
+        return `/forge/${encodeURIComponent(activeForgeProjectId.value)}/${relative}`.replace(/\/+/g, '/');
+    };
+
     const parseMarkdownDocument = (content: string): { title: string; body: string } => {
         const lines = content.replace(/\r\n/g, '\n').split('\n');
         let title = '';
@@ -885,6 +907,40 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         await shellWorkspaceService.persist();
         appendWorkspacePatchEntry(patch);
         await persistWorkspaceSession();
+        return true;
+    };
+
+    const saveProjectVfsOverride = async (path: string, content: string): Promise<boolean> => {
+        const semanticPath = normalizeAgentResourceOverridePath(path);
+        if (!isManagedAgentResourceOverridePath(semanticPath)) {
+            lastError.value = `不允许从项目 VFS 面板覆盖 ${path}。`;
+            return false;
+        }
+
+        const fs = await shellWorkspaceService.getFileSystem({
+            projectId: activeForgeProjectId.value,
+            conversationId: sessionChatId.value
+        });
+        const localPath = agentResourceOverrideLocalPath(semanticPath);
+        const before = await fs.readFile(localPath)
+            .then(value => String(value ?? ''))
+            .catch(() => null);
+        if (before === content) return true;
+
+        await fs.mkdir(workspacePatchParentPath(localPath), { recursive: true });
+        await fs.writeFile(localPath, content);
+        await shellWorkspaceService.persist();
+
+        const patch = forgeWorkspaceVersionManager.createPatch({
+            nodeId: `manual-agent-resource-override:${Date.now().toString(36)}`,
+            beforeFiles: before === null ? {} : { [semanticPath]: before },
+            afterFiles: { [semanticPath]: content },
+            sourceToolCallId: 'manual-agent-resource-override'
+        });
+        if (patch.changes.length > 0) {
+            appendWorkspacePatchEntry(patch);
+            await persistWorkspaceSession();
+        }
         return true;
     };
 
@@ -2074,6 +2130,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         persistWorkspaceSession,
         flushWorkspaceSession,
         applyWorkspacePatch,
+        saveProjectVfsOverride,
         ensureWorkspaceSession,
         createWorkspaceSession,
         createWorkspaceThread,

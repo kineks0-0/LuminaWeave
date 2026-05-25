@@ -56,6 +56,24 @@ const DEFAULT_PROMPT_FILES = [
     './.forge/agent/EXECUTOR.md'
 ];
 
+const MANAGED_AGENT_PROMPT_PATH_PATTERN = /^\.\/\.forge\/agent\/(?:SYSTEM|PLANNER|CONVERSATION|ANALYST|EXECUTOR)\.md$/;
+const MANAGED_AGENT_SKILL_PATH_PATTERN = /^\.\/agent\/skills\/[a-z0-9][a-z0-9-]*\/SKILL\.md$/;
+
+const normalizeForgeProjectPath = (path: string): string => {
+    const normalized = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
+    if (!normalized || normalized === '.') return './';
+    if (normalized.startsWith('./')) return normalized;
+    if (normalized.startsWith('/')) return normalized;
+    return `./${normalized}`;
+};
+
+export const isForgeAgentResourceOverridePath = (path: string): boolean => {
+    const normalized = normalizeForgeProjectPath(path);
+    return normalized === './AGENTS.md'
+        || MANAGED_AGENT_PROMPT_PATH_PATTERN.test(normalized)
+        || MANAGED_AGENT_SKILL_PATH_PATTERN.test(normalized);
+};
+
 const DEFAULT_FILE_SEEDS: SemanticFileSeed[] = [
     {
         path: './AGENTS.md',

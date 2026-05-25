@@ -307,17 +307,30 @@ export class ForgeProjectSemanticVfsService {
 
     private async addPromptEntries(entries: EntryMap, context: ForgeRuntimeContext): Promise<void> {
         const presetResources = this.resolvePresetResources(context);
-        addFile(entries, './AGENTS.md', presetResources?.contract.content ?? buildForgeAgentsFile(), 'virtual', 'protected');
-        addFile(entries, './.forge/agent/SYSTEM.md', presetResources?.system.content ?? buildForgeSystemPrompt(), 'virtual', 'protected');
+        addFile(
+            entries,
+            './AGENTS.md',
+            presetResources?.contract.content ?? buildForgeAgentsFile(),
+            presetResources?.contract ? 'resource' : 'virtual',
+            'protected'
+        );
+        addFile(
+            entries,
+            './.forge/agent/SYSTEM.md',
+            presetResources?.system.content ?? buildForgeSystemPrompt(),
+            presetResources?.system ? 'resource' : 'virtual',
+            'protected'
+        );
         addFile(entries, FORGE_AGENT_UI_DSL_PROMPT_PATH, buildForgeUiDslPrompt(), 'virtual', 'protected');
         addFile(entries, FORGE_AGENT_REASONING_PROMPT_PATH, buildForgeReasoningPrompt(), 'virtual', 'protected');
         PROMPT_FILE_NAMES.forEach((fileName) => {
             const mode = fileName.replace(/\.md$/, '').toLowerCase() as ForgeAgentPromptMode;
+            const modeResource = presetResources?.modes[mode];
             addFile(
                 entries,
                 `${FORGE_AGENT_PROMPTS_ROOT}/${fileName}`,
-                presetResources?.modes[mode]?.content ?? resolveForgeModePrompt(fileName) ?? '',
-                'virtual',
+                modeResource?.content ?? resolveForgeModePrompt(fileName) ?? '',
+                modeResource ? 'resource' : 'virtual',
                 'protected'
             );
         });

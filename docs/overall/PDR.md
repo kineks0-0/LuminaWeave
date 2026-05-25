@@ -116,7 +116,8 @@ Forge 是制卡工坊和 Agent 工作台。
   - pi-agent-core Agent Runtime 试验路径：前端可内嵌浏览器可打包的 pi core，并由 Forge browser adapters 维护 tree-structured session history、上下文包、技能/能力资源、工具桥接、direct workspace patch 审计和真实 ST 发布边界。
 - Forge Agent 使用项目相对语义 VFS：`./AGENTS.md` 是 Agent 工作契约，不是系统提示词；默认系统提示词位于 `./.forge/agent/SYSTEM.md`，模式提示词位于 `./.forge/agent/<MODE>.md`，Forge `<V>` DSL 位于 `./.forge/agent/UI_DSL.md`，可见推理边界位于 `./.forge/agent/REASONING.md`，技能位于 `./agent/skills/<skill-name>/SKILL.md`，当前协作线程通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 动态访问。
 - Forge 预设提供 Agent 资源包与提示词编排，而不是面向模型暴露 slot 拼接概念；编排顺序固定为 Contract、System、Mode Prompt、UI DSL、Reasoning Boundary、Skills、Capabilities、Memory Index、Context Files、Branch Messages。默认主预设提供参考提炼类 preset skills，默认按需加载，可在自定义预设中改为常驻。
-- 项目 VFS 面板浏览 Agent 可见的语义 VFS 投影，而不是 raw workspace storage 树；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构只作为映射源，不进入模型长期上下文。
+- Forge Agent 预设工作台是提示词与预设技能的默认维护入口：内置预设只读，自定义副本可编辑 Contract、System、Mode Prompt、技能名称/标题/说明/加载策略/正文和编排检查信息。
+- 项目 VFS 面板浏览 Agent 可见的语义 VFS 投影，而不是 raw workspace storage 树；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构只作为映射源，不进入模型长期上下文。项目级 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/<MODE>.md` 与 `./agent/skills/*/SKILL.md` 覆盖从这里写入项目 VFS，并生成 `workspace_patch` 审计，不回写 active preset 或 bundled fallback；`UI_DSL.md` 与 `REASONING.md` 仍是固定运行时资源。
 - Forge shell、`readFile` 工具、Prompt/Skill loader 和项目 VFS 面板必须共用 Forge Semantic VFS provider；HAL Bash 只提供通用 mount 扩展，不理解 Forge 业务语义。
 - 制卡聊天内的 fork / 回滚 / 切换应基于同一协作线程内的 pi session tree 分支；Forge timeline 是用户可见投影，必须保留可操作的用户输入节点映射。
   - 项目文件和虚拟世界书的版本恢复由 Forge workspace version manager 生成反向或重放 `workspace_patch`，切换对话分支时默认询问用户是否同时恢复文件版本。

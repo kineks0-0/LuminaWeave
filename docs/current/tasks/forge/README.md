@@ -16,6 +16,8 @@
 
 2026-05-22：Forge `<V>` 组件与可见推理边界从旧 `PromptBuilder` / `PromptType.CONSTRAINTS` 接缝迁移到 pi runtime 资源：`./.forge/agent/UI_DSL.md` 固定承载完整 Forge `<V>` DSL 与“优先用组件收集用户意图”的规则，`./.forge/agent/REASONING.md` 固定承载隐藏思维链与可见工作笔记边界。`ForgePiAgentSession.preparePrompt()` 不再把旧 Forge Prompt Context messages 当 system fragment 追加到 pi system prompt；旧 `PromptBuilder` 仅保留 Chat / ST 世界书提示词挂载能力。
 
+2026-05-24：Forge 提示词与技能维护边界收敛到“预设资源包维护中心 + 项目 VFS 覆盖”。预设工作台可编辑自定义预设的 Contract / System / Mode Prompt、技能名称/标题/说明/加载策略/正文，并保持内置预设只读；项目 VFS 面板可对 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/<MODE>.md` 和 `./agent/skills/*/SKILL.md` 创建/编辑项目覆盖，写入项目 VFS 并生成 `workspace_patch` 审计；`UI_DSL.md` 与 `REASONING.md` 仍是固定运行时资源；内置 Forge skills 正文迁移到 `src/resources/forge-skills/*.md`。
+
 ## 下一步
 
 优先执行 Agent Runtime 与 Skill 系统迁移计划：
@@ -125,6 +127,11 @@
     - 计划见 `steps/2026-05-23-forge-memory-vfs-orchestration-plan.md`。
     - 重点：将 `./memory/**/*.md` 作为长期项目记忆的一等上下文资源进入编排；默认 prompt 注入 `Memory Index`，列出路径、标题、来源、更新时间和摘要；记忆正文继续通过 Semantic VFS / `readFile` 按需读取，不默认全量灌入 system prompt。
     - 第 30 项的 cache / 短期对话边界保持不变；真实宿主 walkthrough 仍由第 29 项单独保留。
+32. [x] 统一 Forge 提示词与技能维护入口。
+    - 预设工作台作为资源包维护中心：内置预设只读，自定义副本可编辑 Agent prompt、技能 metadata、加载策略和正文。
+    - 项目 VFS 面板支持受管理 Agent 资源的项目覆盖写入，覆盖内容进入项目 VFS 并追加 `workspace_patch`。
+    - Semantic VFS 对 prompt / skill 来源区分为 workspace、resource、virtual，保证项目 VFS 面板、`readFile`、Prompt Preview 与真实生成共享同一事实源。
+    - 内置 Forge skills 已资源化为 Markdown 文件，由 registry 读取并声明 metadata。
 
 完成后归档到 `archive/completed-tasks/forge/`。
 

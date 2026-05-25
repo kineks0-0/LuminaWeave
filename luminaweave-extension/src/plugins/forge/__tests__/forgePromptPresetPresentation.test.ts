@@ -3,11 +3,13 @@ import type { PromptPresetDefinition } from '../../../types/PromptPresetTypes.js
 import forgeExecutorDefault from '../../../resources/presets/forge-executor-default.json';
 import forgeMainDefault from '../../../resources/presets/forge-main-default.json';
 import {
+    buildForgeAgentSkillPath,
     buildForgePromptPresetResourceGroups,
     buildForgePromptPresetWorkbenchOverview,
     buildForgePromptPresetOrchestrationRows,
     buildForgePromptPresetResourceRows,
     hasForgeAgentResourcePreset,
+    normalizeForgeAgentSkillName,
     summarizeForgePromptPreset
 } from '../store/forgePromptPresetPresentation.js';
 
@@ -62,6 +64,7 @@ const preset: PromptPresetDefinition = {
             name: 'virtual-lorebook-editor',
             path: './agent/skills/virtual-lorebook-editor/SKILL.md',
             title: '虚拟世界书编辑',
+            description: '维护 Forge 项目虚拟世界书条目。',
             loadPolicy: 'always',
             content: 'Skill'
         }]
@@ -199,9 +202,16 @@ describe('forgePromptPresetPresentation', () => {
         expect(groups.find(group => group.id === 'skills')?.resources[0]).toEqual(expect.objectContaining({
             path: './agent/skills/virtual-lorebook-editor/SKILL.md',
             skillName: 'virtual-lorebook-editor',
+            description: '维护 Forge 项目虚拟世界书条目。',
             loadPolicy: 'always',
             loadPolicyLabel: '常驻'
         }));
+    });
+
+    it('normalizes editable skill names into the canonical semantic path', () => {
+        expect(normalizeForgeAgentSkillName(' Reference Needs Capture! ')).toBe('reference-needs-capture');
+        expect(normalizeForgeAgentSkillName('../')).toBe('custom-skill');
+        expect(buildForgeAgentSkillPath('Reference Needs Capture!')).toBe('./agent/skills/reference-needs-capture/SKILL.md');
     });
 
     it('keeps legacy composed presets visibly separate from resource presets', () => {
