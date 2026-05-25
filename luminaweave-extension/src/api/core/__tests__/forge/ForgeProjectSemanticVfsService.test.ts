@@ -250,6 +250,38 @@ describe('ForgeProjectSemanticVfsService', () => {
         ]));
     });
 
+    it('labels preset prompt resources as resources and lets project overrides win', async () => {
+        const fs = await workspaces.getFileSystem({
+            projectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha'
+        });
+        await fs.mkdir('/forge/forge_project_alpha/.forge/agent', { recursive: true });
+        await fs.writeFile(
+            '/forge/forge_project_alpha/.forge/agent/SYSTEM.md',
+            '# Project System Override\n\n项目级系统提示词覆盖。'
+        );
+
+        const entries = await service.listEntries(createContext());
+        const system = entries.find(entry => entry.path === './.forge/agent/SYSTEM.md');
+        const conversation = entries.find(entry => entry.path === './.forge/agent/CONVERSATION.md');
+        const uiDsl = entries.find(entry => entry.path === './.forge/agent/UI_DSL.md');
+
+        expect(system).toEqual(expect.objectContaining({
+            source: 'workspace',
+            writePolicy: 'direct-write',
+            content: expect.stringContaining('项目级系统提示词覆盖')
+        }));
+        expect(conversation).toEqual(expect.objectContaining({
+            source: 'resource',
+            writePolicy: 'protected',
+            content: expect.stringContaining('Forge')
+        }));
+        expect(uiDsl).toEqual(expect.objectContaining({
+            source: 'virtual',
+            writePolicy: 'protected'
+        }));
+    });
+
     it('lets project skills override preset-provided skills with the same semantic path', async () => {
         const fs = await workspaces.getFileSystem({
             projectId: 'forge_project_alpha',

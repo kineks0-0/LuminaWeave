@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { ForgePiContextBundleSummary, ForgePiSessionEntry } from '@shared/ForgePiTypes.js';
 import {
     buildForgeSemanticVfsTree,
-    flattenForgeSemanticVfsTree
+    flattenForgeSemanticVfsTree,
+    isForgeAgentResourceOverridePath
 } from '../project/forgeSemanticVfsPresentation.js';
 
 const contextBundle: ForgePiContextBundleSummary = {
@@ -186,5 +187,17 @@ describe('forgeSemanticVfsPresentation', () => {
             writePolicy: 'direct-write',
             label: 'card.md'
         }));
+    });
+
+    it('recognizes only managed Forge agent resources as project override paths', () => {
+        expect(isForgeAgentResourceOverridePath('./AGENTS.md')).toBe(true);
+        expect(isForgeAgentResourceOverridePath('./.forge/agent/SYSTEM.md')).toBe(true);
+        expect(isForgeAgentResourceOverridePath('./.forge/agent/CONVERSATION.md')).toBe(true);
+        expect(isForgeAgentResourceOverridePath('./agent/skills/reference-needs-capture/SKILL.md')).toBe(true);
+
+        expect(isForgeAgentResourceOverridePath('./.forge/agent/UI_DSL.md')).toBe(false);
+        expect(isForgeAgentResourceOverridePath('./.forge/agent/REASONING.md')).toBe(false);
+        expect(isForgeAgentResourceOverridePath('./memory/用户偏好.md')).toBe(false);
+        expect(isForgeAgentResourceOverridePath('./agent/skills/../escape/SKILL.md')).toBe(false);
     });
 });

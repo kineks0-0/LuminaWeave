@@ -211,6 +211,7 @@ describe('ForgePiToolBridge', () => {
                     title: '项目记忆整理员',
                     description: '整理记忆',
                     defaultWriteScope: './memory/',
+                    resourcePath: 'src/resources/forge-skills/memory-curator.md',
                     builtIn: true
                 }]),
                 loadSkill: vi.fn(async () => builtInSkill)
