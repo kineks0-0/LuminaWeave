@@ -5,7 +5,7 @@
   "identifier": "io.luminaweave.client",
   "build": {
     "frontendDist": "../dist-client",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev:client",
     "beforeBuildCommand": "npm run build:client"
   },
@@ -26,7 +26,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "nsis",
+    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
