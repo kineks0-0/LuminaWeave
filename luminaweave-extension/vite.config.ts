@@ -5,6 +5,7 @@ import { analyzer } from 'vite-bundle-analyzer'
 import { resolve } from 'path'
 
 const toNormalizedId = (id: string) => id.replace(/\\/g, '/');
+const tauriDevHost = process.env.TAURI_DEV_HOST;
 
 const vendorChunkName = (id: string) => {
   const normalizedId = toNormalizedId(id);
@@ -68,6 +69,24 @@ export default defineConfig(({ mode }) => {
         'node:zlib': resolve(__dirname, './src/shims/node-zlib.ts'),
       }
     },
+    clearScreen: isClientBuild ? false : undefined,
+    server: isClientBuild
+      ? {
+          port: 1420,
+          strictPort: true,
+          host: tauriDevHost || false,
+          hmr: tauriDevHost
+            ? {
+                protocol: 'ws',
+                host: tauriDevHost,
+                port: 1421
+              }
+            : undefined,
+          watch: {
+            ignored: ['**/src-tauri/**']
+          }
+        }
+      : undefined,
     build: {
       outDir: isClientBuild ? 'dist-client' : 'dist',
       emptyOutDir: true,

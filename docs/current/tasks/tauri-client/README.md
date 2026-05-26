@@ -19,6 +19,7 @@
 已确认约束：
 
 - 当前仓库仍使用 npm 和 `package-lock.json`，本阶段不迁移 pnpm。
+- 已在 `D:\toytools\luminaweave-client` 生成空白 Tauri v2 Vue TypeScript + bun 模板作为对照；本项目吸收其 `src-tauri` 结构、1420 固定端口、`TAURI_DEV_HOST` 支持、opener 插件和 capability 配置，但包管理器暂不从 npm 切换到 bun。
 - Windows Tauri 编译需要本机 Rust MSVC toolchain；缺少 `cargo` / `rustc` 时只能完成前端 client build 和 Tauri 配置检查。
 - Android 不在本阶段启用，等 Windows/Web MVP 确认后再添加移动端目标。
 

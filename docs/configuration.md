@@ -37,12 +37,15 @@ enableServerPlugins: true
 
 Tauri 客户端不复用 ST 扩展分发产物，而是通过 `build:client` 生成完整 HTML 应用到 `luminaweave-extension/dist-client/`。该目录是 Tauri 的中间构建产物，不作为 ST 扩展发布目录。
 
-Tauri Rust 工程位于 `luminaweave-extension/src-tauri/`，`tauri.conf.json` 使用：
+Tauri Rust 工程位于 `luminaweave-extension/src-tauri/`，当前结构参考 `D:\toytools\luminaweave-client` 的空白 Tauri v2 Vue TypeScript 模板。`tauri.conf.json` 使用：
 
 - `frontendDist: ../dist-client`
+- `devUrl: http://localhost:1420`
 - `beforeDevCommand: npm run dev:client`
 - `beforeBuildCommand: npm run build:client`
 - `app.withGlobalTauri: true`
+
+空白模板使用 bun；本仓库仍保留 npm 和 `package-lock.json` 作为当前包管理边界，避免在 Tauri MVP 阶段同时迁移包管理器。
 
 Windows Tauri 开发/构建需要本机安装 Rust MSVC toolchain、Microsoft C++ Build Tools 和 WebView2 Runtime。缺少 `cargo` / `rustc` 时，`tauri:dev` 与 `tauri:build` 不能完成。
 
