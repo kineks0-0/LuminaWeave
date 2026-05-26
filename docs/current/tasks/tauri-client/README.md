@@ -23,6 +23,11 @@
 - Windows Tauri 编译需要本机 Rust MSVC toolchain；缺少 `cargo` / `rustc` 时只能完成前端 client build 和 Tauri 配置检查。
 - Android 不在本阶段启用，等 Windows/Web MVP 确认后再添加移动端目标。
 
+验证记录：
+
+- 2026-05-26：`npm run tauri:info` 已通过，环境识别 WebView2、MSVC、Rust/Cargo 和 opener 插件。
+- 2026-05-26：`npm run tauri:build` 已通过，生成 `src-tauri/target/release/luminaweave-client.exe`、`bundle/msi/LuminaWeave_0.1.0_x64_en-US.msi` 与 `bundle/nsis/LuminaWeave_0.1.0_x64-setup.exe`。
+
 ## 后续阶段
 
 阶段 2：Windows + Android 可用客户端。
