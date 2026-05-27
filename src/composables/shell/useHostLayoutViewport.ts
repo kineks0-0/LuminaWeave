@@ -20,6 +20,7 @@ type LayoutSnapshotLike = {
 };
 
 const NATIVE_INSETS_CHANGE_EVENT = 'lw:native-insets-change';
+type SafeAreaCssSource = 'auto' | 'tauritavern' | 'lumina-native';
 
 const readRootCssPixel = (propertyName: string): number => {
   const parsed = Number.parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue(propertyName));
@@ -29,23 +30,46 @@ const readRootCssPixel = (propertyName: string): number => {
 const readLargestRootCssPixel = (...propertyNames: string[]): number =>
   Math.max(0, ...propertyNames.map((propertyName) => readRootCssPixel(propertyName)));
 
-const readRootSafeInsets = () => ({
-  top: readLargestRootCssPixel('--tt-inset-top', '--lw-native-safe-top'),
-  right: readLargestRootCssPixel('--tt-inset-right', '--lw-native-safe-right'),
-  bottom: readLargestRootCssPixel('--tt-inset-bottom', '--lw-native-safe-bottom'),
-  left: readLargestRootCssPixel('--tt-inset-left', '--lw-native-safe-left')
-});
+const hasLuminaNativeSafeInsets = (): boolean =>
+  readLargestRootCssPixel(
+    '--lw-native-safe-top',
+    '--lw-native-safe-right',
+    '--lw-native-safe-bottom',
+    '--lw-native-safe-left'
+  ) > 0;
+
+const resolveSafeAreaCssSource = (source: SafeAreaCssSource): Exclude<SafeAreaCssSource, 'auto'> => {
+  if (source !== 'auto') {
+    return source;
+  }
+
+  return hasLuminaNativeSafeInsets() ? 'lumina-native' : 'tauritavern';
+};
+
+const readRootSafeInsets = (source: SafeAreaCssSource) => {
+  const resolvedSource = resolveSafeAreaCssSource(source);
+  const prefix = resolvedSource === 'lumina-native' ? '--lw-native-safe' : '--tt-inset';
+
+  return {
+    top: readLargestRootCssPixel(`${prefix}-top`),
+    right: readLargestRootCssPixel(`${prefix}-right`),
+    bottom: readLargestRootCssPixel(`${prefix}-bottom`),
+    left: readLargestRootCssPixel(`${prefix}-left`)
+  };
+};
 
 export const useHostLayoutViewport = ({
   hostContainer,
   isExpanded,
   layoutMode,
-  reflowWorkspaceWindows
+  reflowWorkspaceWindows,
+  safeAreaCssSource = 'auto'
 }: {
   hostContainer: HTMLElement | null;
   isExpanded: Ref<boolean>;
   layoutMode: Ref<'traditional' | 'freeform'>;
   reflowWorkspaceWindows: () => void;
+  safeAreaCssSource?: SafeAreaCssSource;
 }) => {
   const viewportHeightPx = ref(window.innerHeight);
   const viewportWidthPx = ref(window.innerWidth);
@@ -71,7 +95,7 @@ export const useHostLayoutViewport = ({
     viewportWidthPx.value = Math.max(0, Math.round(snapshot.viewport?.width ?? window.innerWidth));
     viewportOffsetTopPx.value = Math.max(0, Math.round(snapshot.viewport?.top ?? 0));
     viewportOffsetLeftPx.value = Math.max(0, Math.round(snapshot.viewport?.left ?? 0));
-    const fallbackSafeInsets = readRootSafeInsets();
+    const fallbackSafeInsets = readRootSafeInsets(safeAreaCssSource);
     safeInsetTopPx.value = Math.max(0, Math.round(snapshot.safeInsets?.top ?? fallbackSafeInsets.top));
     safeInsetRightPx.value = Math.max(0, Math.round(snapshot.safeInsets?.right ?? fallbackSafeInsets.right));
     safeInsetBottomPx.value = Math.max(0, Math.round(snapshot.safeInsets?.bottom ?? fallbackSafeInsets.bottom));
@@ -89,7 +113,7 @@ export const useHostLayoutViewport = ({
         width: window.innerWidth,
         height: window.innerHeight
       },
-      safeInsets: readRootSafeInsets(),
+      safeInsets: readRootSafeInsets(safeAreaCssSource),
       ime: {
         keyboardOffset: readRootCssPixel('--lw-native-ime-bottom')
       }
