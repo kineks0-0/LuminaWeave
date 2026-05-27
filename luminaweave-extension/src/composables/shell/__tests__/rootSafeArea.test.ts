@@ -41,7 +41,7 @@ describe('resolveRootSafeAreaStyle', () => {
     });
   });
 
-  it('keeps the fullscreen panel full-bleed and consumes root safe area as padding', () => {
+  it('keeps the fullscreen panel full-bleed and consumes root safe area as padding without a backdrop layer', () => {
     const cssPath = resolve(
       dirname(fileURLToPath(import.meta.url)),
       '../../../styles/app-shell-base.css'
@@ -55,7 +55,7 @@ describe('resolveRootSafeAreaStyle', () => {
     expect(css).toContain(
       'padding: var(--lw-root-safe-top, 0px) var(--lw-root-safe-right, 0px) var(--lw-root-safe-bottom, 0px) var(--lw-root-safe-left, 0px);'
     );
-    expect(css).toContain('.lw-root-safe-area-backdrop');
+    expect(css).not.toContain('.lw-root-safe-area-backdrop');
     expect(css).not.toContain('top: calc(var(--lw-viewport-offset-top, 0px) + var(--lw-root-safe-top, 0px));');
     expect(css).not.toContain('height: calc(var(--lw-app-height, 100vh) - var(--lw-root-safe-top, 0px)');
   });

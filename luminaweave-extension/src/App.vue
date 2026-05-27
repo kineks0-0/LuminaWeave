@@ -9,8 +9,7 @@
   </transition>
   <AppRootContainer :isExpanded="isExpanded" :resolvedTheme="resolvedTheme" :activeDesktopModeId="activeDesktopModeId"
     :motionPerformanceSetting="motionPerformanceSetting" :layoutMode="layoutMode" :appRootStyle="appRootStyle"
-    :rootFrameStyle="rootFrameStyle" :rootSafeAreaBackdropStyle="rootSafeAreaBackdropStyle"
-    :shellAppVariant="shellAppVariant || 'default'" :showMiniSidebar="!isStandalone" @expand="toggleExpand">
+    :rootFrameStyle="rootFrameStyle" :shellAppVariant="shellAppVariant || 'default'" :showMiniSidebar="!isStandalone" @expand="toggleExpand">
     <LuminaShellRoot ref="shellRootRef" :layoutMode="layoutMode" :panelHeaderVariant="panelHeaderVariant"
       :traditionalHeaderPosition="traditionalHeaderPosition" :activeMainTab="activeMainTab" :dynamicTabs="dynamicTabs"
       :isMobile="isMobile" :activeDesktopModeId="activeDesktopModeId" :desktopModeOptions="desktopModeOptions"
@@ -98,7 +97,6 @@ import {
   resolveRootSafeAreaStyle,
   rootSafeAreaStyleConsumesInsets
 } from './composables/shell/rootSafeArea.js';
-import { provideRootSafeAreaBackdropController } from './composables/shell/rootSafeAreaBackdrop.js';
 import { useShellBootstrap } from './composables/shell/useShellBootstrap.js';
 import { useTelegramShell } from './composables/shell/useTelegramShell.js';
 import { useWidgetPanels } from './composables/shell/useWidgetPanels.js';
@@ -125,7 +123,6 @@ registerLuminaPlugins();
 
 const hostContainer = inject<HTMLElement | null>('lwHostContainer', null);
 const shellRootRef = ref<InstanceType<typeof LuminaShellRoot> | null>(null);
-const rootSafeAreaBackdropController = provideRootSafeAreaBackdropController();
 
 const { initSettings, saveStatus, activeSettings, updateSetting } = useSettings();
 
@@ -486,11 +483,6 @@ const rootFrameStyle = computed<CSSProperties>(() => {
     transform: existingTransform ? `${nextTransform} ${existingTransform}` : nextTransform
   };
 });
-
-const rootSafeAreaBackdropStyle = computed<CSSProperties>(() => ({
-  '--lw-root-safe-area-top-bg': rootSafeAreaBackdropController.snapshot.value.topBackground
-    || 'var(--lw-shell-statusbar-bg, var(--lw-shell-panel-bg))'
-}));
 
 const shellPanelBodyStyle = computed<CSSProperties>(() => shellPanelBodySkinVars.value as CSSProperties);
 const shellMainSurfaceStyle = computed<CSSProperties>(() => shellMainSurfaceSkinVars.value as CSSProperties);

@@ -236,8 +236,8 @@ describe('themeRegistry desktop mode model', () => {
         expect(mobileSkin.cssVars['--lw-discord-mobile-sheet-backdrop']).toBeDefined();
     });
 
-    it('exposes statusbar background through shell app skins', () => {
-        expect(getThemeableComponentContract('shell.app')?.exposedCssVars).toContain('--lw-shell-statusbar-bg');
+    it('does not expose a dedicated statusbar background without a root backdrop layer', () => {
+        expect(getThemeableComponentContract('shell.app')?.exposedCssVars).not.toContain('--lw-shell-statusbar-bg');
 
         for (const desktopModeId of ['classic', 'discord', 'telegram']) {
             const skin = resolveComponentSkin(desktopModeId, 'shell.app', {
@@ -247,7 +247,7 @@ describe('themeRegistry desktop mode model', () => {
                 desktopModeId
             });
 
-            expect(skin.cssVars['--lw-shell-statusbar-bg']).toBeDefined();
+            expect(skin.cssVars['--lw-shell-statusbar-bg']).toBeUndefined();
         }
     });
 
