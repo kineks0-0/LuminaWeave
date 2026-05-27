@@ -1,6 +1,7 @@
 package io.luminaweave.client
 
 import android.os.Bundle
+import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
@@ -8,6 +9,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+
+private const val LUMINA_INSETS_LOG_TAG = "LuminaWeaveInsets"
 
 class MainActivity : TauriActivity() {
   private val nativeInsetsBridge = LuminaNativeInsetsBridge()
@@ -30,6 +33,7 @@ class MainActivity : TauriActivity() {
       val safeInsets = windowInsets.getInsets(insetTypes)
       val imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
       val imeBottom = maxOf(0, imeInsets.bottom - safeInsets.bottom)
+      val topPxBefore = nativeInsetsBridge.topPx()
 
       nativeInsetsBridge.update(
         top = safeInsets.top,
@@ -37,6 +41,11 @@ class MainActivity : TauriActivity() {
         bottom = safeInsets.bottom,
         left = safeInsets.left,
         imeBottom = imeBottom
+      )
+      val topPxAfter = nativeInsetsBridge.topPx()
+      Log.d(
+        LUMINA_INSETS_LOG_TAG,
+        "WindowInsets topPx before=$topPxBefore after=$topPxAfter systemBarsTop=${safeInsets.top} layoutDirection=${view.layoutDirection}"
       )
       view.post {
         webView.evaluateJavascript(buildApplyNativeInsetsScript(nativeInsetsBridge.snapshotJson()), null)
@@ -67,6 +76,9 @@ class MainActivity : TauriActivity() {
     @Synchronized
     fun snapshotJson(): String =
       """{"top":$top,"right":$right,"bottom":$bottom,"left":$left,"imeBottom":$imeBottom}"""
+
+    @Synchronized
+    fun topPx(): Int = top
   }
 }
 
@@ -78,11 +90,19 @@ private fun buildApplyNativeInsetsScript(snapshotJson: String): String =
     if (!root) return;
 
     const toPx = (value) => Math.max(0, Math.round(Number(value) || 0)) + 'px';
+    const topPxBefore = root.style.getPropertyValue('--lw-native-safe-top') || getComputedStyle(root).getPropertyValue('--lw-native-safe-top') || 'unset';
     root.style.setProperty('--lw-native-safe-top', toPx(detail.top));
     root.style.setProperty('--lw-native-safe-right', toPx(detail.right));
     root.style.setProperty('--lw-native-safe-bottom', toPx(detail.bottom));
     root.style.setProperty('--lw-native-safe-left', toPx(detail.left));
     root.style.setProperty('--lw-native-ime-bottom', toPx(detail.imeBottom));
+    const topPxAfter = root.style.getPropertyValue('--lw-native-safe-top') || 'unset';
+    console.debug('[LuminaWeave][NativeInsets] topPx before/after', {
+      phase: 'apply',
+      topPxBefore,
+      topPxAfter,
+      nativeTopPx: detail.top
+    });
     window.dispatchEvent(new CustomEvent('lw:native-insets-change', { detail }));
   })();
   """.trimIndent()
@@ -99,11 +119,19 @@ private val nativeInsetsBootstrapScript = """
         if (!root) return;
 
         const toPx = (value) => Math.max(0, Math.round(Number(value) || 0)) + 'px';
+        const topPxBefore = root.style.getPropertyValue('--lw-native-safe-top') || getComputedStyle(root).getPropertyValue('--lw-native-safe-top') || 'unset';
         root.style.setProperty('--lw-native-safe-top', toPx(detail.top));
         root.style.setProperty('--lw-native-safe-right', toPx(detail.right));
         root.style.setProperty('--lw-native-safe-bottom', toPx(detail.bottom));
         root.style.setProperty('--lw-native-safe-left', toPx(detail.left));
         root.style.setProperty('--lw-native-ime-bottom', toPx(detail.imeBottom));
+        const topPxAfter = root.style.getPropertyValue('--lw-native-safe-top') || 'unset';
+        console.debug('[LuminaWeave][NativeInsets] topPx before/after', {
+          phase: 'bootstrap',
+          topPxBefore,
+          topPxAfter,
+          nativeTopPx: detail.top
+        });
         window.dispatchEvent(new CustomEvent('lw:native-insets-change', { detail }));
       } catch (_) {
       }

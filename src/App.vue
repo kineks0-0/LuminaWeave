@@ -412,6 +412,35 @@ const rootFrameSafeAreaStyle = computed<CSSProperties>(() =>
     : {}
 );
 
+const parseCssPixel = (value: unknown): number => {
+  const parsed = Number.parseFloat(String(value ?? '0'));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+watch([
+  viewportOffsetTopPx,
+  safeInsetTopPx,
+  layoutSource,
+  rootSafeAreaStyle
+], () => {
+  if (!HostDetector.isGenericTauriApp || !HostDetector.isAndroid) {
+    return;
+  }
+
+  const rootSafeTopPx = parseCssPixel(rootSafeAreaStyle.value['--lw-root-safe-top']);
+  const topPxBefore = viewportOffsetTopPx.value;
+  const topPxAfter = topPxBefore + rootSafeTopPx;
+
+  console.debug('[LuminaWeave][RootSafeArea] topPx before/after', {
+    layoutSource: layoutSource.value,
+    viewportTopPx: viewportOffsetTopPx.value,
+    safeInsetTopPx: safeInsetTopPx.value,
+    rootSafeTopPx,
+    topPxBefore,
+    topPxAfter
+  });
+}, { immediate: true });
+
 const appRootStyle = computed<CSSProperties>(() => ({
   pointerEvents: isExpanded.value ? 'auto' : 'none',
   '--lw-app-height': `${viewportHeightPx.value}px`,
