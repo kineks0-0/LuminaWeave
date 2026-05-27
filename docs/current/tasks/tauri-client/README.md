@@ -6,7 +6,9 @@
 
 ## 当前阶段
 
-阶段 1：Web / Windows Tauri 最小可跑版本。
+阶段 2：Windows + Android 可用客户端（进行中）。
+
+阶段 1：Web / Windows Tauri 最小可跑版本已完成。
 
 完成标准：
 
@@ -27,14 +29,16 @@
 
 - 2026-05-26：`npm run tauri:info` 已通过，环境识别 WebView2、MSVC、Rust/Cargo 和 opener 插件。
 - 2026-05-26：`npm run tauri:build` 已通过，生成 `src-tauri/target/release/luminaweave-client.exe`、`bundle/msi/LuminaWeave_0.1.0_x64_en-US.msi` 与 `bundle/nsis/LuminaWeave_0.1.0_x64-setup.exe`。
+- 2026-05-27：Android 初步可运行后发现 edge-to-edge WebView 与状态栏重叠；采用正式方案：`MainActivity` 监听 Android `WindowInsets`，向 WebView 注入 `--lw-native-safe-*` / `--lw-native-ime-bottom`，前端 root layout 继续通过 `--lw-safe-*` 统一消费。
 
 ## 后续阶段
 
 阶段 2：Windows + Android 可用客户端。
 
-- 添加 Android Tauri 目标和平台配置。
-- 验证 Android SDK、NDK、JDK、Rust Android targets。
-- 处理移动端 viewport、IME、触控和本地存储边界。
+- 已添加 Android Tauri 目标和平台配置。
+- 已补 Android status bar / display cutout 的 native safe-area 桥接。
+- 待继续验证 Android SDK、NDK、JDK、Rust Android targets 的 release build 路径。
+- 待继续处理移动端 IME、触控和本地存储边界。
 
 阶段 3：客户端能力优化。
 
