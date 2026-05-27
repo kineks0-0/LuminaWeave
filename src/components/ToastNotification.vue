@@ -1,5 +1,5 @@
 <template>
-    <div class="tw:fixed tw:right-[calc(24px+var(--lw-safe-right,0px))] tw:bottom-[calc(24px+var(--lw-safe-bottom,0px))] tw:z-50 tw:flex tw:pointer-events-none tw:flex-col tw:gap-3">
+    <div class="tw:fixed tw:right-[calc(24px+var(--lw-content-safe-right,var(--lw-safe-right,0px)))] tw:bottom-[calc(24px+var(--lw-content-safe-bottom,var(--lw-safe-bottom,0px)))] tw:z-50 tw:flex tw:pointer-events-none tw:flex-col tw:gap-3">
         <transition-group name="toast-list">
             <div v-for="toast in toasts" :key="toast.id" :class="toastClass(toast.type)">
                 <div :class="iconClass(toast.type)" aria-hidden="true">

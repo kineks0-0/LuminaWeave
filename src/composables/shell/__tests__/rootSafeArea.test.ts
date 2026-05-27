@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveRootSafeAreaStyle } from '../rootSafeArea.js';
+import {
+  resolveRootSafeAreaStyle,
+  resolveRootSafeAreaResidualStyle
+} from '../rootSafeArea.js';
 
 describe('resolveRootSafeAreaStyle', () => {
   it('applies native safe insets to the root frame only for Android generic Tauri window layout', () => {
@@ -41,6 +44,20 @@ describe('resolveRootSafeAreaStyle', () => {
     });
   });
 
+  it('keeps injected safe-area variables immutable when root consumes insets', () => {
+    expect(resolveRootSafeAreaResidualStyle({
+      '--lw-root-safe-top': '24px',
+      '--lw-root-safe-right': '2px',
+      '--lw-root-safe-bottom': '18px',
+      '--lw-root-safe-left': '4px'
+    })).toEqual({
+      '--lw-content-safe-top': '0px',
+      '--lw-content-safe-right': '0px',
+      '--lw-content-safe-bottom': '0px',
+      '--lw-content-safe-left': '0px'
+    });
+  });
+
   it('keeps the fullscreen panel full-bleed and consumes root safe area as padding without a backdrop layer', () => {
     const cssPath = resolve(
       dirname(fileURLToPath(import.meta.url)),
@@ -56,6 +73,7 @@ describe('resolveRootSafeAreaStyle', () => {
       'padding: var(--lw-root-safe-top, 0px) var(--lw-root-safe-right, 0px) var(--lw-root-safe-bottom, 0px) var(--lw-root-safe-left, 0px);'
     );
     expect(css).not.toContain('.lw-root-safe-area-backdrop');
+    expect(css).toContain('var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px))');
     expect(css).not.toContain('top: calc(var(--lw-viewport-offset-top, 0px) + var(--lw-root-safe-top, 0px));');
     expect(css).not.toContain('height: calc(var(--lw-app-height, 100vh) - var(--lw-root-safe-top, 0px)');
   });

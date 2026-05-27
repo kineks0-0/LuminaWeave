@@ -44,3 +44,13 @@ export const rootSafeAreaStyleConsumesInsets = (style: CSSProperties): boolean =
   style['--lw-root-safe-right'] !== '0px' ||
   style['--lw-root-safe-bottom'] !== '0px' ||
   style['--lw-root-safe-left'] !== '0px';
+
+export const resolveRootSafeAreaResidualStyle = (style: CSSProperties): CSSProperties =>
+  rootSafeAreaStyleConsumesInsets(style)
+    ? {
+        '--lw-content-safe-top': '0px',
+        '--lw-content-safe-right': '0px',
+        '--lw-content-safe-bottom': '0px',
+        '--lw-content-safe-left': '0px'
+      }
+    : {};

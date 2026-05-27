@@ -469,7 +469,7 @@ const formatSessionTime = (timestamp: number) => {
 @media (max-width: 760px) {
   .lw-telegram-character-overview,
   .lw-telegram-character-overview.is-mobile {
-    padding: 28px 18px calc(96px + var(--lw-safe-bottom, 0px));
+    padding: 28px 18px calc(96px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
   }
 
   .lw-telegram-character-overview__hero {

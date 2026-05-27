@@ -108,7 +108,7 @@ const displayedGroups = computed<CharacterChannelGroup[]>(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: calc(18px + var(--lw-safe-top, 0px)) 14px 18px;
+  padding: calc(18px + var(--lw-content-safe-top, var(--lw-safe-top, 0px))) 14px 18px;
   color: var(--lw-text-main);
   overflow: hidden;
 }

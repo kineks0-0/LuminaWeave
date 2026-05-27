@@ -672,7 +672,7 @@ const telegramLeftRailStyle = computed<CSSProperties>(() => ({
 }
 
 .lw-main-wrapper.has-telegram-mobile-nav {
-  padding-bottom: calc(78px + var(--lw-safe-bottom, 0px));
+  padding-bottom: calc(78px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
 }
 
 .lw-telegram-mobile-stack {
@@ -685,7 +685,7 @@ const telegramLeftRailStyle = computed<CSSProperties>(() => ({
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: calc(6px + var(--lw-safe-top, 0px)) 14px 6px;
+  padding: calc(6px + var(--lw-content-safe-top, var(--lw-safe-top, 0px))) 14px 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, transparent);
   background: color-mix(in srgb, var(--lw-surface-container-high) 76%, transparent);
 }

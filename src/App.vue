@@ -95,7 +95,7 @@ import { useWorkspaceManager } from './composables/useWorkspaceManager.js';
 import { useHostLayoutViewport } from './composables/shell/useHostLayoutViewport.js';
 import {
   resolveRootSafeAreaStyle,
-  rootSafeAreaStyleConsumesInsets
+  resolveRootSafeAreaResidualStyle
 } from './composables/shell/rootSafeArea.js';
 import { useShellBootstrap } from './composables/shell/useShellBootstrap.js';
 import { useTelegramShell } from './composables/shell/useTelegramShell.js';
@@ -403,14 +403,7 @@ const rootSafeAreaStyle = computed<CSSProperties>(() => resolveRootSafeAreaStyle
 }));
 
 const rootFrameSafeAreaStyle = computed<CSSProperties>(() =>
-  rootSafeAreaStyleConsumesInsets(rootSafeAreaStyle.value)
-    ? {
-        '--lw-safe-top': '0px',
-        '--lw-safe-right': '0px',
-        '--lw-safe-bottom': '0px',
-        '--lw-safe-left': '0px'
-      }
-    : {}
+  resolveRootSafeAreaResidualStyle(rootSafeAreaStyle.value)
 );
 
 const parseCssPixel = (value: unknown): number => {
