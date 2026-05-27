@@ -48,7 +48,7 @@ Host Drivers 只负责宿主物理交互。
 - 宿主探测按两层分类表达：`runtimeEnvelope` 区分 `plugin-hosted` 与 `standalone-app`，`physicalHost` 区分 `sillytavern`、`tauritavern`、`generic-tauri` 与 `web`。普通 Tauri 客户端不得被归入 TauriTavern 插件宿主。
 - 读写宿主资源、事件、网络和基础存储。
 - 封装宿主全局对象、TavernHelper、Tauri ABI、local fallback。
-- 普通 Tauri Android 客户端的 native layout bridge 只输出宿主布局契约：监听 Android `WindowInsets`，将 raw physical px 转为 Web CSS px 后注入 `--lw-native-safe-*` / `--lw-native-ime-bottom`，由 shell/root layout 消费；不得把 safe-area 修正散落到插件组件内部。
+- 普通 Tauri Android 客户端的 native layout bridge 只输出宿主布局契约：监听 Android `WindowInsets`，将 raw physical px 转为 Web CSS px 后注入 `--lw-native-safe-*` / `--lw-native-ime-bottom`，由 shell/root layout 消费；root fullscreen panel 保持 full-bleed，内容通过 `--lw-root-safe-*` padding 避让，状态栏区域背景由 root backdrop 层承载；不得把 safe-area 修正散落到插件组件内部。
 - ST 世界书、会话目录、物理消息列表、角色资料、Forge 测试聊天宿主资料、环境就绪、生成函数定位等宿主物理操作必须通过 `host-drivers/st/*Driver` 或 HAL ST provider 暴露给 Core / Facade。
 
 禁止：
@@ -139,6 +139,7 @@ Desktop Mode Runtime 定义完整工作方式。
 - interaction policy
 - tokens
 - settings schema
+- root safe-area padding 与状态栏背景契约。官方 shell / 子页面如需覆盖顶部 safe-area 背景，应通过内部 controller 写入 root backdrop override；未来公开给第三方时可整理为 `layout.safeArea.snapshot()` / `layout.safeArea.setBackdropOverride()`，但未稳定前不作为插件 API。
 
 约束：
 

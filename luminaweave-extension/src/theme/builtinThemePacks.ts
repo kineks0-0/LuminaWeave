@@ -678,7 +678,8 @@ const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifes
             '--lw-shell-panel-bg':
                 'radial-gradient(circle at 18% 10%, rgba(var(--lw-primary-rgb), 0.12), transparent 24%), radial-gradient(circle at 80% 14%, rgba(255, 255, 255, 0.72), transparent 20%), linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 98%, white), color-mix(in srgb, var(--lw-bg-app) 96%, white))',
             '--lw-shell-panel-overlay':
-                'linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 24%), radial-gradient(rgba(38, 52, 76, 0.055) 0.8px, transparent 0.8px)'
+                'linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 24%), radial-gradient(rgba(38, 52, 76, 0.055) 0.8px, transparent 0.8px)',
+            '--lw-shell-statusbar-bg': 'var(--lw-shell-panel-bg)'
         }
     },
     'shell.panelBody': {
@@ -1181,7 +1182,10 @@ const createDiscordSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => {
                     : 'linear-gradient(180deg, #e9ebee, #dfe3e8)',
                 '--lw-shell-panel-overlay': resolvedAppearance === 'dark'
                     ? 'linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 24%), radial-gradient(rgba(255, 255, 255, 0.03) 0.8px, transparent 0.8px)'
-                    : 'linear-gradient(180deg, rgba(255, 255, 255, 0.36), transparent 26%), radial-gradient(rgba(88, 101, 242, 0.05) 0.8px, transparent 0.8px)'
+                    : 'linear-gradient(180deg, rgba(255, 255, 255, 0.36), transparent 26%), radial-gradient(rgba(88, 101, 242, 0.05) 0.8px, transparent 0.8px)',
+                '--lw-shell-statusbar-bg': resolvedAppearance === 'dark'
+                    ? 'linear-gradient(180deg, #1e1f22, #1a1b1e)'
+                    : 'linear-gradient(180deg, #e9ebee, #dfe3e8)'
             }))
         },
         'shell.panelBody': {
@@ -1768,7 +1772,10 @@ const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => 
                 '--lw-shell-panel-bg': resolvedAppearance === 'dark'
                     ? 'var(--lw-telegram-diffuse-bg), linear-gradient(180deg, #102033 0%, #0d1824 100%)'
                     : 'var(--lw-telegram-diffuse-bg), linear-gradient(180deg, #c6e2fb 0%, #d7eafa 46%, #eef7fd 100%)',
-                '--lw-shell-panel-overlay': 'radial-gradient(rgba(255, 255, 255, 0.16) 0.8px, transparent 0.8px)'
+                '--lw-shell-panel-overlay': 'radial-gradient(rgba(255, 255, 255, 0.16) 0.8px, transparent 0.8px)',
+                '--lw-shell-statusbar-bg': resolvedAppearance === 'dark'
+                    ? 'var(--lw-telegram-diffuse-bg), linear-gradient(180deg, #102033 0%, #0d1824 100%)'
+                    : 'var(--lw-telegram-diffuse-bg), linear-gradient(180deg, #c6e2fb 0%, #d7eafa 46%, #eef7fd 100%)'
             }))
         },
         'shell.panelBody': {

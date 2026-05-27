@@ -201,7 +201,7 @@ LuminaWeave 至少支持三类运行形态：
 - SillyTavern 插件环境。
 - TauriTavern / 原生宿主环境。
 - Standalone / local fallback 路径。
-- 普通 Tauri Android 客户端的 safe area 由 native bridge 提供：Android `WindowInsets` 的物理像素必须转换为 Web CSS px 后写入 `--lw-native-safe-*`，再由 root shell 统一消费，避免组件级状态栏补丁。
+- 普通 Tauri Android 客户端的 safe area 由 native bridge 提供：Android `WindowInsets` 的物理像素必须转换为 Web CSS px 后写入 `--lw-native-safe-*`，再由 root shell 以 full-bleed panel padding 和状态栏背景层统一消费，避免组件级状态栏补丁。
 
 运行形态由 Runtime Host、host-drivers 与 HAL runtime ports 描述；资源来源由 Resource Source 描述。二者不应混为一谈。
 

@@ -133,14 +133,15 @@
 
 .lw-fullscreen-panel {
   position: fixed;
-  top: calc(var(--lw-viewport-offset-top, 0px) + var(--lw-root-safe-top, 0px));
-  left: calc(var(--lw-viewport-offset-left, 0px) + var(--lw-root-safe-left, 0px));
+  top: var(--lw-viewport-offset-top, 0px);
+  left: var(--lw-viewport-offset-left, 0px);
   display: flex;
   flex-direction: column;
   z-index: 10000;
   overflow: hidden;
-  width: calc(var(--lw-app-width, 100vw) - var(--lw-root-safe-left, 0px) - var(--lw-root-safe-right, 0px));
-  height: calc(var(--lw-app-height, 100vh) - var(--lw-root-safe-top, 0px) - var(--lw-root-safe-bottom, 0px));
+  width: var(--lw-app-width, 100vw);
+  height: var(--lw-app-height, 100vh);
+  padding: var(--lw-root-safe-top, 0px) var(--lw-root-safe-right, 0px) var(--lw-root-safe-bottom, 0px) var(--lw-root-safe-left, 0px);
   background: var(--lw-shell-panel-bg,
       radial-gradient(circle at 18% 10%, rgba(var(--lw-primary-rgb), 0.12), transparent 24%),
       radial-gradient(circle at 80% 14%, rgba(255, 255, 255, 0.72), transparent 20%),
@@ -157,7 +158,24 @@
   background-size: auto, 18px 18px;
   opacity: 0.34;
   pointer-events: none;
+  z-index: 0;
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.14));
+}
+
+.lw-root-safe-area-backdrop {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--lw-root-safe-top, 0px);
+  background: var(--lw-root-safe-area-top-bg, var(--lw-shell-statusbar-bg, var(--lw-shell-panel-bg)));
+  pointer-events: none;
+  z-index: 1;
+}
+
+.lw-fullscreen-panel > :not(.lw-root-safe-area-backdrop) {
+  position: relative;
+  z-index: 2;
 }
 
 .lw-fullscreen-panel[data-shell-variant='discord']::before {
