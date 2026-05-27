@@ -133,14 +133,14 @@
 
 .lw-fullscreen-panel {
   position: fixed;
-  top: var(--lw-viewport-offset-top, 0px);
-  left: var(--lw-viewport-offset-left, 0px);
+  top: calc(var(--lw-viewport-offset-top, 0px) + var(--lw-root-safe-top, 0px));
+  left: calc(var(--lw-viewport-offset-left, 0px) + var(--lw-root-safe-left, 0px));
   display: flex;
   flex-direction: column;
   z-index: 10000;
   overflow: hidden;
-  width: var(--lw-app-width, 100vw);
-  height: var(--lw-app-height, 100vh);
+  width: calc(var(--lw-app-width, 100vw) - var(--lw-root-safe-left, 0px) - var(--lw-root-safe-right, 0px));
+  height: calc(var(--lw-app-height, 100vh) - var(--lw-root-safe-top, 0px) - var(--lw-root-safe-bottom, 0px));
   background: var(--lw-shell-panel-bg,
       radial-gradient(circle at 18% 10%, rgba(var(--lw-primary-rgb), 0.12), transparent 24%),
       radial-gradient(circle at 80% 14%, rgba(255, 255, 255, 0.72), transparent 20%),
