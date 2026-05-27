@@ -30,6 +30,7 @@
 - 2026-05-26：`npm run tauri:info` 已通过，环境识别 WebView2、MSVC、Rust/Cargo 和 opener 插件。
 - 2026-05-26：`npm run tauri:build` 已通过，生成 `src-tauri/target/release/luminaweave-client.exe`、`bundle/msi/LuminaWeave_0.1.0_x64_en-US.msi` 与 `bundle/nsis/LuminaWeave_0.1.0_x64-setup.exe`。
 - 2026-05-27：Android 初步可运行后发现 edge-to-edge WebView 与状态栏重叠；采用正式方案：`MainActivity` 监听 Android `WindowInsets`，向 WebView 注入 `--lw-native-safe-*` / `--lw-native-ime-bottom`，前端 root layout 继续通过 `--lw-safe-*` 统一消费。
+- 2026-05-27：补充 root shell 消费逻辑：普通 Android Tauri App 在 `window` layout 路径下把 native safe inset 提升为 `--lw-root-safe-*`，由 `.lw-fullscreen-panel` 整体避让状态栏、导航栏和刘海区域；TauriTavern `layout-kit.js` 路径保持不变。
 
 ## 后续阶段
 

@@ -93,6 +93,10 @@ import { useSettings, currentDetailedView } from './plugins/settings/useSettings
 import { useResponsiveLayout } from './composables/useResponsiveLayout.js';
 import { useWorkspaceManager } from './composables/useWorkspaceManager.js';
 import { useHostLayoutViewport } from './composables/shell/useHostLayoutViewport.js';
+import {
+  resolveRootSafeAreaStyle,
+  rootSafeAreaStyleConsumesInsets
+} from './composables/shell/rootSafeArea.js';
 import { useShellBootstrap } from './composables/shell/useShellBootstrap.js';
 import { useTelegramShell } from './composables/shell/useTelegramShell.js';
 import { useWidgetPanels } from './composables/shell/useWidgetPanels.js';
@@ -386,6 +390,28 @@ const {
   reflowWorkspaceWindows
 });
 
+const rootSafeAreaStyle = computed<CSSProperties>(() => resolveRootSafeAreaStyle({
+  isAndroidGenericTauri: HostDetector.isGenericTauriApp && HostDetector.isAndroid,
+  layoutSource: layoutSource.value,
+  safeInsets: {
+    top: safeInsetTopPx.value,
+    right: safeInsetRightPx.value,
+    bottom: safeInsetBottomPx.value,
+    left: safeInsetLeftPx.value
+  }
+}));
+
+const rootFrameSafeAreaStyle = computed<CSSProperties>(() =>
+  rootSafeAreaStyleConsumesInsets(rootSafeAreaStyle.value)
+    ? {
+        '--lw-safe-top': '0px',
+        '--lw-safe-right': '0px',
+        '--lw-safe-bottom': '0px',
+        '--lw-safe-left': '0px'
+      }
+    : {}
+);
+
 const appRootStyle = computed<CSSProperties>(() => ({
   pointerEvents: isExpanded.value ? 'auto' : 'none',
   '--lw-app-height': `${viewportHeightPx.value}px`,
@@ -398,6 +424,7 @@ const appRootStyle = computed<CSSProperties>(() => ({
   '--lw-safe-right': `${safeInsetRightPx.value}px`,
   '--lw-safe-bottom': `${safeInsetBottomPx.value}px`,
   '--lw-safe-left': `${safeInsetLeftPx.value}px`,
+  ...rootSafeAreaStyle.value,
   ...resolveThemeValues(activeDesktopMode.value.designTokens, {
     activeSettings,
     resolvedAppearance: resolvedTheme.value,
@@ -408,8 +435,12 @@ const appRootStyle = computed<CSSProperties>(() => ({
 
 const rootFrameStyle = computed<CSSProperties>(() => {
   const baseStyle = shellAppSkinVars.value as CSSProperties;
+  const safeAreaStyle = rootFrameSafeAreaStyle.value;
   if (rootPanelShiftPx.value <= 0) {
-    return baseStyle;
+    return {
+      ...baseStyle,
+      ...safeAreaStyle
+    };
   }
 
   const existingTransform = typeof baseStyle.transform === 'string' ? baseStyle.transform : '';
@@ -417,6 +448,7 @@ const rootFrameStyle = computed<CSSProperties>(() => {
 
   return {
     ...baseStyle,
+    ...safeAreaStyle,
     '--lw-root-panel-shift': `${rootPanelShiftPx.value}px`,
     transform: existingTransform ? `${nextTransform} ${existingTransform}` : nextTransform
   };
