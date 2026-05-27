@@ -48,6 +48,7 @@ Host Drivers 只负责宿主物理交互。
 - 宿主探测按两层分类表达：`runtimeEnvelope` 区分 `plugin-hosted` 与 `standalone-app`，`physicalHost` 区分 `sillytavern`、`tauritavern`、`generic-tauri` 与 `web`。普通 Tauri 客户端不得被归入 TauriTavern 插件宿主。
 - 读写宿主资源、事件、网络和基础存储。
 - 封装宿主全局对象、TavernHelper、Tauri ABI、local fallback。
+- 普通 Tauri Android 客户端的 native layout bridge 只输出宿主布局契约：监听 Android `WindowInsets`，将 raw physical px 转为 Web CSS px 后注入 `--lw-native-safe-*` / `--lw-native-ime-bottom`，由 shell/root layout 消费；不得把 safe-area 修正散落到插件组件内部。
 - ST 世界书、会话目录、物理消息列表、角色资料、Forge 测试聊天宿主资料、环境就绪、生成函数定位等宿主物理操作必须通过 `host-drivers/st/*Driver` 或 HAL ST provider 暴露给 Core / Facade。
 
 禁止：

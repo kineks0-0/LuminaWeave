@@ -387,7 +387,8 @@ const {
   hostContainer,
   isExpanded,
   layoutMode,
-  reflowWorkspaceWindows
+  reflowWorkspaceWindows,
+  safeAreaCssSource: HostDetector.isGenericTauriApp && HostDetector.isAndroid ? 'lumina-native' : 'auto'
 });
 
 const rootSafeAreaStyle = computed<CSSProperties>(() => resolveRootSafeAreaStyle({

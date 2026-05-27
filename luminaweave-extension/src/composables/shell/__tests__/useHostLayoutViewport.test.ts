@@ -69,4 +69,32 @@ describe('useHostLayoutViewport', () => {
     expect(viewport.safeInsetBottomPx.value).toBe(18);
     expect(viewport.safeInsetLeftPx.value).toBe(5);
   });
+
+  it('uses the Lumina native safe-area source without mixing TauriTavern variables', () => {
+    installViewportGlobals({
+      '--tt-inset-top': '134px',
+      '--tt-inset-right': '10px',
+      '--tt-inset-bottom': '24px',
+      '--tt-inset-left': '10px',
+      '--lw-native-safe-top': '44.67px',
+      '--lw-native-safe-right': '0px',
+      '--lw-native-safe-bottom': '12.33px',
+      '--lw-native-safe-left': '0px'
+    });
+
+    const viewport = useHostLayoutViewport({
+      hostContainer: null,
+      isExpanded: ref(true),
+      layoutMode: ref('traditional'),
+      reflowWorkspaceWindows: () => undefined,
+      safeAreaCssSource: 'lumina-native'
+    });
+
+    viewport.syncViewportMetricsFromWindow();
+
+    expect(viewport.safeInsetTopPx.value).toBe(45);
+    expect(viewport.safeInsetRightPx.value).toBe(0);
+    expect(viewport.safeInsetBottomPx.value).toBe(12);
+    expect(viewport.safeInsetLeftPx.value).toBe(0);
+  });
 });
