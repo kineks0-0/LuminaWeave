@@ -867,7 +867,7 @@ const isMobile = computed(() => props.isMobile);
 
 @media (max-width: 720px) {
   .lw-timeline-container[data-skin-variant='telegram'] .small-timeline-wrapper {
-    padding: 12px 12px calc(92px + env(safe-area-inset-bottom, 0px));
+    padding: 12px 12px calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
   }
 
   .lw-timeline-container[data-skin-variant='telegram'] .l-modal-overlay {

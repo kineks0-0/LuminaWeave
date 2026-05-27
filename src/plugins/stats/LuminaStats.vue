@@ -100,7 +100,7 @@ const getStatValue = (key: string, fallback: number): number => {
 }
 
 .lw-widgets-pane[data-skin-variant='telegram'].is-mobile .widget-content {
-  padding: 12px 12px calc(92px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 12px calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
 }
 
 .stats-shell {

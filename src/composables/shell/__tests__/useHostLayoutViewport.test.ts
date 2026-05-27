@@ -97,4 +97,35 @@ describe('useHostLayoutViewport', () => {
     expect(viewport.safeInsetBottomPx.value).toBe(12);
     expect(viewport.safeInsetLeftPx.value).toBe(0);
   });
+
+  it('falls back to web safe-area CSS variables when host layout sources are unavailable', () => {
+    installViewportGlobals({
+      '--tt-inset-top': '0px',
+      '--tt-inset-right': '0px',
+      '--tt-inset-bottom': '0px',
+      '--tt-inset-left': '0px',
+      '--lw-native-safe-top': '0px',
+      '--lw-native-safe-right': '0px',
+      '--lw-native-safe-bottom': '0px',
+      '--lw-native-safe-left': '0px',
+      '--lw-web-safe-top': '33.25px',
+      '--lw-web-safe-right': '2px',
+      '--lw-web-safe-bottom': '21.75px',
+      '--lw-web-safe-left': '4px'
+    });
+
+    const viewport = useHostLayoutViewport({
+      hostContainer: null,
+      isExpanded: ref(true),
+      layoutMode: ref('traditional'),
+      reflowWorkspaceWindows: () => undefined
+    });
+
+    viewport.syncViewportMetricsFromWindow();
+
+    expect(viewport.safeInsetTopPx.value).toBe(33);
+    expect(viewport.safeInsetRightPx.value).toBe(2);
+    expect(viewport.safeInsetBottomPx.value).toBe(22);
+    expect(viewport.safeInsetLeftPx.value).toBe(4);
+  });
 });
