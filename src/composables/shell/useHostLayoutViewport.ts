@@ -19,10 +19,22 @@ type LayoutSnapshotLike = {
   };
 };
 
-const readRootSafeInset = (propertyName: string): number => {
+const NATIVE_INSETS_CHANGE_EVENT = 'lw:native-insets-change';
+
+const readRootCssPixel = (propertyName: string): number => {
   const parsed = Number.parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue(propertyName));
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const readLargestRootCssPixel = (...propertyNames: string[]): number =>
+  Math.max(0, ...propertyNames.map((propertyName) => readRootCssPixel(propertyName)));
+
+const readRootSafeInsets = () => ({
+  top: readLargestRootCssPixel('--tt-inset-top', '--lw-native-safe-top'),
+  right: readLargestRootCssPixel('--tt-inset-right', '--lw-native-safe-right'),
+  bottom: readLargestRootCssPixel('--tt-inset-bottom', '--lw-native-safe-bottom'),
+  left: readLargestRootCssPixel('--tt-inset-left', '--lw-native-safe-left')
+});
 
 export const useHostLayoutViewport = ({
   hostContainer,
@@ -59,11 +71,12 @@ export const useHostLayoutViewport = ({
     viewportWidthPx.value = Math.max(0, Math.round(snapshot.viewport?.width ?? window.innerWidth));
     viewportOffsetTopPx.value = Math.max(0, Math.round(snapshot.viewport?.top ?? 0));
     viewportOffsetLeftPx.value = Math.max(0, Math.round(snapshot.viewport?.left ?? 0));
-    safeInsetTopPx.value = Math.max(0, Math.round(snapshot.safeInsets?.top ?? readRootSafeInset('--tt-inset-top')));
-    safeInsetRightPx.value = Math.max(0, Math.round(snapshot.safeInsets?.right ?? readRootSafeInset('--tt-inset-right')));
-    safeInsetBottomPx.value = Math.max(0, Math.round(snapshot.safeInsets?.bottom ?? readRootSafeInset('--tt-inset-bottom')));
-    safeInsetLeftPx.value = Math.max(0, Math.round(snapshot.safeInsets?.left ?? readRootSafeInset('--tt-inset-left')));
-    keyboardOffsetPx.value = Math.max(0, Math.round(snapshot.ime?.keyboardOffset ?? 0));
+    const fallbackSafeInsets = readRootSafeInsets();
+    safeInsetTopPx.value = Math.max(0, Math.round(snapshot.safeInsets?.top ?? fallbackSafeInsets.top));
+    safeInsetRightPx.value = Math.max(0, Math.round(snapshot.safeInsets?.right ?? fallbackSafeInsets.right));
+    safeInsetBottomPx.value = Math.max(0, Math.round(snapshot.safeInsets?.bottom ?? fallbackSafeInsets.bottom));
+    safeInsetLeftPx.value = Math.max(0, Math.round(snapshot.safeInsets?.left ?? fallbackSafeInsets.left));
+    keyboardOffsetPx.value = Math.max(0, Math.round(snapshot.ime?.keyboardOffset ?? readRootCssPixel('--lw-native-ime-bottom')));
     layoutSource.value = source;
     rootPanelShiftPx.value = isExpanded.value && source === 'tauri-layout' ? Math.max(0, keyboardOffsetPx.value) : 0;
   };
@@ -76,14 +89,9 @@ export const useHostLayoutViewport = ({
         width: window.innerWidth,
         height: window.innerHeight
       },
-      safeInsets: {
-        top: readRootSafeInset('--tt-inset-top'),
-        right: readRootSafeInset('--tt-inset-right'),
-        bottom: readRootSafeInset('--tt-inset-bottom'),
-        left: readRootSafeInset('--tt-inset-left')
-      },
+      safeInsets: readRootSafeInsets(),
       ime: {
-        keyboardOffset: 0
+        keyboardOffset: readRootCssPixel('--lw-native-ime-bottom')
       }
     }, 'window');
   };
@@ -122,6 +130,12 @@ export const useHostLayoutViewport = ({
     }, 60);
   };
 
+  const handleNativeInsetsChange = () => {
+    if (layoutSource.value !== 'tauri-layout') {
+      syncViewportMetricsFromWindow();
+    }
+  };
+
   watch(isExpanded, (expanded) => {
     rootPanelShiftPx.value = expanded && layoutSource.value === 'tauri-layout' ? Math.max(0, keyboardOffsetPx.value) : 0;
     void applyHostSurface(expanded);
@@ -152,10 +166,12 @@ export const useHostLayoutViewport = ({
     }
 
     window.addEventListener('resize', handleResizeWindow);
+    window.addEventListener(NATIVE_INSETS_CHANGE_EVENT, handleNativeInsetsChange);
   });
 
   onUnmounted(() => {
     window.removeEventListener('resize', handleResizeWindow);
+    window.removeEventListener(NATIVE_INSETS_CHANGE_EVENT, handleNativeInsetsChange);
     if (resizeThrottleTimer) {
       clearTimeout(resizeThrottleTimer);
       resizeThrottleTimer = null;
