@@ -24,7 +24,7 @@ export const themeComponentRegistry = new ThemeComponentRegistry();
 [
     {
         componentId: 'shell.app',
-        exposedCssVars: ['--lw-shell-panel-bg', '--lw-shell-panel-overlay', '--lw-shell-statusbar-bg'],
+        exposedCssVars: ['--lw-shell-panel-bg', '--lw-shell-panel-overlay'],
         supportedVariants: ['default', 'discord', 'telegram']
     },
     {
