@@ -18,6 +18,11 @@
         :data-shell-variant="shellAppVariant || 'default'"
         :style="rootFrameStyle"
       >
+        <div
+          class="lw-root-safe-area-backdrop"
+          aria-hidden="true"
+          :style="rootSafeAreaBackdropStyle"
+        />
         <slot />
       </div>
     </transition>
@@ -42,6 +47,7 @@ defineProps<{
   layoutMode: 'traditional' | 'freeform';
   appRootStyle: CSSProperties;
   rootFrameStyle: CSSProperties;
+  rootSafeAreaBackdropStyle: CSSProperties;
   shellAppVariant: string;
   showMiniSidebar?: boolean;
 }>();

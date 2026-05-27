@@ -13,6 +13,7 @@ import {
     resolveComponentSkin,
     resolveThemeValues,
 } from '../themeRegistry.js';
+import { getThemeableComponentContract } from '../themeComponentRegistry.js';
 import type { DesktopModeManifest } from '../types.js';
 
 describe('themeRegistry desktop mode model', () => {
@@ -233,6 +234,21 @@ describe('themeRegistry desktop mode model', () => {
         expect(mobileSkin.cssVars['--lw-discord-mobile-toggle-shadow']).toBeDefined();
         expect(mobileSkin.cssVars['--lw-discord-mobile-sheet-bg']).toBeDefined();
         expect(mobileSkin.cssVars['--lw-discord-mobile-sheet-backdrop']).toBeDefined();
+    });
+
+    it('exposes statusbar background through shell app skins', () => {
+        expect(getThemeableComponentContract('shell.app')?.exposedCssVars).toContain('--lw-shell-statusbar-bg');
+
+        for (const desktopModeId of ['classic', 'discord', 'telegram']) {
+            const skin = resolveComponentSkin(desktopModeId, 'shell.app', {
+                activeSettings: {},
+                resolvedAppearance: 'light',
+                themePackId: desktopModeId,
+                desktopModeId
+            });
+
+            expect(skin.cssVars['--lw-shell-statusbar-bg']).toBeDefined();
+        }
     });
 
     it('resolves lorebook workspace and editor skins for discord variant', () => {
