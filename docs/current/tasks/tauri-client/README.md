@@ -33,6 +33,7 @@
 - 2026-05-27：补充 root shell 消费逻辑：普通 Android Tauri App 在 `window` layout 路径下把 native safe inset 提升为 `--lw-root-safe-*`；`.lw-fullscreen-panel` 保持 full-bleed 覆盖 WebView，内容通过 root padding 避让状态栏、导航栏和刘海区域；子内容改用 `--lw-content-safe-*` 表达剩余可消费 safe-area，TauriTavern `layout-kit.js` 路径保持不变。
 - 2026-05-27：参考 TauriTavern 的 native inset bridge 链路，将 `MainActivity` 收敛为生命周期接线；`LuminaAndroidInsetsBridge` 负责 content root `WindowInsets` 监听、ready 重注入和重复快照去重；`LuminaWebViewInsetsStyleApplier` 负责 CSS 变量契约注入。日志同时输出 `rawTopPx`、`cssTopPx` 和 `density`，用于排查物理 px / CSS px 混用。
 - 2026-05-27：取消独立 `.lw-root-safe-area-backdrop` 层；顶部 safe area 仍由 full-bleed `.lw-fullscreen-panel` 的 `--lw-shell-panel-bg` 覆盖，内容避让继续由 root padding 完成。本阶段不发布 safe-area 背景覆盖 API。
+- 2026-05-27：补齐 Web / PWA 末级 fallback：全局 `--lw-web-safe-*` 从 `env(safe-area-inset-*)` 派生，`useHostLayoutViewport` 的 `auto` 来源按 native -> TauriTavern -> Web fallback 顺序归一化到 `--lw-safe-*`。Director、Lorebook、Stats、Timeline 的 Telegram 移动端 padding 已改为消费 `--lw-content-safe-bottom`，不再直接读取浏览器 safe-area。
 
 ## 后续阶段
 
@@ -41,6 +42,7 @@
 - 已添加 Android Tauri 目标和平台配置。
 - 已补 Android status bar / display cutout 的 native safe-area 桥接。
 - Android safe-area 桥接已按 native raw px -> CSS px -> `:root` CSS 变量 -> root shell padding / `--lw-content-safe-*` residual 消费的契约收敛。
+- Web / PWA fallback 已通过 `--lw-web-safe-*` 接入同一归一化链路，插件目录已迁出直接 `env(safe-area-inset-*)` 消费。
 - 待继续验证 Android SDK、NDK、JDK、Rust Android targets 的 release build 路径。
 - 待继续处理移动端 IME、触控和本地存储边界。
 

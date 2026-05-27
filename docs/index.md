@@ -53,6 +53,7 @@
 - [Desktop Modes](./current/tasks/desktop-modes/)
 - [Forge](./current/tasks/forge/)
 - [Standalone Resource Runtime](./current/tasks/standalone-resource-runtime/)
+- [Tauri Client](./current/tasks/tauri-client/)
 - [Tailwind System Migration](./current/tasks/tailwind-system-migration/)
 
 ## 已完成归档

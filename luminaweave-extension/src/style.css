@@ -11,6 +11,11 @@
   --lw-font-main: 'Aptos', 'MiSans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --lw-font-mono: 'Cascadia Code', 'Sarasa Mono SC', 'Consolas', monospace;
 
+  --lw-web-safe-top: env(safe-area-inset-top, 0px);
+  --lw-web-safe-right: env(safe-area-inset-right, 0px);
+  --lw-web-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --lw-web-safe-left: env(safe-area-inset-left, 0px);
+
   --lw-type-display-large-size: 3.5625rem;
   --lw-type-display-large-line-height: 4rem;
   --lw-type-display-large-weight: 500;

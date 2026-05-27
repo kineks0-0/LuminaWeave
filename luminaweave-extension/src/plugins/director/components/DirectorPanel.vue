@@ -350,7 +350,7 @@ const saveTable = (tableId: string) => {
 }
 
 .director-panel[data-skin-variant='telegram'].is-mobile .panel-content-scroll {
-  padding: 12px 12px calc(92px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 12px calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
 }
 
 .director-panel[data-skin-variant='telegram'] .content-section {

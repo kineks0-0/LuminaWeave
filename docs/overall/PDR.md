@@ -202,6 +202,7 @@ LuminaWeave 至少支持三类运行形态：
 - TauriTavern / 原生宿主环境。
 - Standalone / local fallback 路径。
 - 普通 Tauri Android 客户端的 safe area 由 native bridge 提供：Android `WindowInsets` 的物理像素必须转换为 Web CSS px 后写入 `--lw-native-safe-*`，再归一化为不可覆盖的 `--lw-safe-*`。Root shell 以 full-bleed panel 背景和 `--lw-root-safe-*` padding 统一消费，并用 `--lw-content-safe-*` 表达子内容剩余可消费 safe-area，避免组件级状态栏补丁和重复 padding。
+- Web / PWA fallback 路径只通过全局 `--lw-web-safe-* = env(safe-area-inset-*)` 暴露浏览器 safe-area；前端 `auto` 来源优先使用 native / TauriTavern host layout，只有宿主布局源不可用时才落到 Web safe-area 变量。
 
 运行形态由 Runtime Host、host-drivers 与 HAL runtime ports 描述；资源来源由 Resource Source 描述。二者不应混为一谈。
 

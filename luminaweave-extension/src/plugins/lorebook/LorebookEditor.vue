@@ -890,6 +890,6 @@ textarea:focus {
 }
 
 .lore-editor[data-skin-variant='telegram'] .editor-body {
-  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
 }
 </style>

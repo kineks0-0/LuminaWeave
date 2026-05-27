@@ -21,4 +21,5 @@ docs/current/tasks/<task-name>/
 - [Forge](./tasks/forge/)
 - [HAL Architecture Migration](./tasks/hal-architecture-migration/)
 - [Standalone Resource Runtime](./tasks/standalone-resource-runtime/)
+- [Tauri Client](./tasks/tauri-client/)
 - [Tailwind System Migration](./tasks/tailwind-system-migration/)

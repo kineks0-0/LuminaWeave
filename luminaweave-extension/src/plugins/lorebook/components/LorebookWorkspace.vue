@@ -1584,6 +1584,6 @@ onUnmounted(() => {
 
 .lorebook-root[data-skin-variant='telegram'][data-mode='small'] .lore-list,
 .lorebook-root[data-skin-variant='telegram'].is-mobile .lore-list {
-  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
 }
 </style>

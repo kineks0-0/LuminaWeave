@@ -20,7 +20,7 @@ type LayoutSnapshotLike = {
 };
 
 const NATIVE_INSETS_CHANGE_EVENT = 'lw:native-insets-change';
-type SafeAreaCssSource = 'auto' | 'tauritavern' | 'lumina-native';
+type SafeAreaCssSource = 'auto' | 'tauritavern' | 'lumina-native' | 'web-env';
 
 const readRootCssPixel = (propertyName: string): number => {
   const parsed = Number.parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue(propertyName));
@@ -30,25 +30,34 @@ const readRootCssPixel = (propertyName: string): number => {
 const readLargestRootCssPixel = (...propertyNames: string[]): number =>
   Math.max(0, ...propertyNames.map((propertyName) => readRootCssPixel(propertyName)));
 
-const hasLuminaNativeSafeInsets = (): boolean =>
-  readLargestRootCssPixel(
-    '--lw-native-safe-top',
-    '--lw-native-safe-right',
-    '--lw-native-safe-bottom',
-    '--lw-native-safe-left'
-  ) > 0;
+const hasRootSafeInsets = (prefix: string): boolean =>
+  readLargestRootCssPixel(`${prefix}-top`, `${prefix}-right`, `${prefix}-bottom`, `${prefix}-left`) > 0;
+
+const hasLuminaNativeSafeInsets = (): boolean => hasRootSafeInsets('--lw-native-safe');
+const hasTauriTavernSafeInsets = (): boolean => hasRootSafeInsets('--tt-inset');
+const hasWebSafeInsets = (): boolean => hasRootSafeInsets('--lw-web-safe');
 
 const resolveSafeAreaCssSource = (source: SafeAreaCssSource): Exclude<SafeAreaCssSource, 'auto'> => {
   if (source !== 'auto') {
     return source;
   }
 
-  return hasLuminaNativeSafeInsets() ? 'lumina-native' : 'tauritavern';
+  if (hasLuminaNativeSafeInsets()) {
+    return 'lumina-native';
+  }
+  if (hasTauriTavernSafeInsets()) {
+    return 'tauritavern';
+  }
+  return hasWebSafeInsets() ? 'web-env' : 'tauritavern';
 };
 
 const readRootSafeInsets = (source: SafeAreaCssSource) => {
   const resolvedSource = resolveSafeAreaCssSource(source);
-  const prefix = resolvedSource === 'lumina-native' ? '--lw-native-safe' : '--tt-inset';
+  const prefix = resolvedSource === 'lumina-native'
+    ? '--lw-native-safe'
+    : resolvedSource === 'web-env'
+      ? '--lw-web-safe'
+      : '--tt-inset';
 
   return {
     top: readLargestRootCssPixel(`${prefix}-top`),
