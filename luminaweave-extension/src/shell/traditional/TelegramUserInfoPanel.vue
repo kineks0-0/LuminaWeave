@@ -706,7 +706,7 @@ const formatSessionTime = (timestamp: number) => {
 
 .lw-telegram-profile.is-mobile {
   gap: 22px;
-  padding: calc(24px + var(--lw-safe-top, 0px)) 22px calc(100px + var(--lw-safe-bottom, 0px));
+  padding: calc(24px + var(--lw-content-safe-top, var(--lw-safe-top, 0px))) 22px calc(100px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
 }
 
 .lw-telegram-profile.is-mobile .lw-telegram-profile__topbar {
@@ -788,7 +788,7 @@ const formatSessionTime = (timestamp: number) => {
   font-size: 14px;
   line-height: 20px;
   position: sticky;
-  bottom: calc(10px + var(--lw-safe-bottom, 0px));
+  bottom: calc(10px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
   z-index: 4;
 }
 

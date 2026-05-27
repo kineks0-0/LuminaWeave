@@ -89,7 +89,7 @@ const items = computed(() => [
   position: absolute;
   left: 12px;
   right: 12px;
-  bottom: calc(10px + var(--lw-safe-bottom, 0px));
+  bottom: calc(10px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
   z-index: 28;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

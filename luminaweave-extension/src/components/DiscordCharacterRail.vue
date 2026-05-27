@@ -1792,7 +1792,7 @@ const formatSessionTime = (timestamp: number) => {
   flex: 1 1 auto;
   height: 100%;
   max-height: none;
-  padding: calc(14px + var(--lw-safe-top, 0px)) 14px 18px;
+  padding: calc(14px + var(--lw-content-safe-top, var(--lw-safe-top, 0px))) 14px 18px;
   border-radius: 0;
   border-right: none;
   box-shadow: none;

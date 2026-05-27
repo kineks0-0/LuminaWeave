@@ -128,7 +128,7 @@
 }
 
 .luminaweave-app-root textarea {
-  scroll-margin-bottom: calc(var(--lw-safe-bottom, 0px) + 24px);
+  scroll-margin-bottom: calc(var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)) + 24px);
 }
 
 .lw-fullscreen-panel {

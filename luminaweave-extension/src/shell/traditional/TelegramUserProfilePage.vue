@@ -198,7 +198,7 @@ const selectDesktopMode = (modeId: string) => {
   flex-direction: column;
   gap: 20px;
   overflow: auto;
-  padding: calc(34px + var(--lw-safe-top, 0px)) 20px calc(98px + var(--lw-safe-bottom, 0px));
+  padding: calc(34px + var(--lw-content-safe-top, var(--lw-safe-top, 0px))) 20px calc(98px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
   color: var(--lw-text-main);
   background: var(--lw-telegram-conversation-bg, transparent);
 }

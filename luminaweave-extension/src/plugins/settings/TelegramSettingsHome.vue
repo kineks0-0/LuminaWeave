@@ -1,6 +1,6 @@
 <template>
   <section
-    class="lw-telegram-settings-home tw:flex tw:min-h-full tw:flex-col tw:gap-4 tw:px-3.5 tw:pb-[calc(98px+var(--lw-safe-bottom,0px))] tw:pt-[calc(24px+var(--lw-safe-top,0px))] tw:text-lw-text"
+    class="lw-telegram-settings-home tw:flex tw:min-h-full tw:flex-col tw:gap-4 tw:px-3.5 tw:pb-[calc(98px+var(--lw-content-safe-bottom,var(--lw-safe-bottom,0px)))] tw:pt-[calc(24px+var(--lw-content-safe-top,var(--lw-safe-top,0px)))] tw:text-lw-text"
     aria-label="Telegram settings"
   >
     <header class="lw-telegram-settings-home__hero tw:flex tw:flex-col tw:items-center tw:gap-2.5 tw:px-0 tw:pb-3.5 tw:pt-2.5 tw:text-center">
