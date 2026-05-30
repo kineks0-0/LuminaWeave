@@ -203,7 +203,7 @@ export const useWidgetPanels = ({
         icon: plugin.icon,
         surfaceContractId: getPrimarySurfaceContractIdForPlugin(plugin.id),
         props: {
-          mode: 'small',
+          activity: { size: 'small', pageType: 'nested' },
           isMobile: true,
           isTemporaryWidgetTab: true
         }
@@ -220,7 +220,7 @@ export const useWidgetPanels = ({
         icon: registered.config.icon || '',
         ...(surfaceContractId ? { surfaceContractId } : { component: registered.component }),
         props: {
-          mode: 'small',
+          activity: { size: 'small', pageType: 'nested' },
           isMobile: true,
           isTemporaryWidgetTab: true,
           ...createMobileWidgetTabProps(panelId)

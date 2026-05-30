@@ -173,7 +173,15 @@ export const useWorkspaceManager = ({
         title: '制卡工坊',
         icon: '🧩',
         component: SurfaceOutlet,
-        props: { contractId: 'forge.workspace', embeddedInWorkspaceWindow: true },
+        props: {
+          contractId: 'forge.workspace',
+          embeddedInWorkspaceWindow: true,
+          activity: {
+            size: 'small',
+            pageType: 'standalone',
+            titleBar: { title: '制卡工坊' }
+          }
+        },
         kind: 'panel',
         dockable: true,
         minWidth: 180,
@@ -217,7 +225,11 @@ export const useWorkspaceManager = ({
         title: plugin.name,
         icon: plugin.icon,
         component: SurfaceOutlet,
-        props: { contractId: getPrimarySurfaceContractIdForPlugin(plugin.id), mode: 'large', isMobile: isMobile.value },
+        props: {
+          contractId: getPrimarySurfaceContractIdForPlugin(plugin.id),
+          activity: { size: 'default', pageType: 'nested' },
+          isMobile: isMobile.value
+        },
         kind: 'main',
         dockable: true,
         minWidth: 180,
@@ -238,7 +250,11 @@ export const useWorkspaceManager = ({
         title: plugin.name,
         icon: plugin.icon,
         component: SurfaceOutlet,
-        props: { contractId: getPrimarySurfaceContractIdForPlugin(plugin.id), mode: 'small', isMobile: isMobile.value },
+        props: {
+          contractId: getPrimarySurfaceContractIdForPlugin(plugin.id),
+          activity: { size: 'small', pageType: 'nested' },
+          isMobile: isMobile.value
+        },
         kind: 'widget',
         dockable: true,
         minWidth: 360,

@@ -1,5 +1,12 @@
 import type { Component } from 'vue';
 import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
+import { activityFromLegacyMode, mergeActivityDescriptors } from '../../platform/activity/activityLaunchResolver.js';
+import type {
+    ActivityDescriptor,
+    ActivityLaunchIntent,
+    ActivityLaunchRole,
+    LegacyActivityMode
+} from '../../platform/activity/types.js';
 import { surfaceRegistry } from '../../platform/surface/SurfaceRegistry.js';
 import type { SurfaceContractId } from '../../platform/surface/types.js';
 import {
@@ -29,10 +36,13 @@ export interface DynamicTabConfig {
     component?: Component;
     surfaceContractId?: SurfaceContractId;
     props?: Record<string, unknown>;
+    activity?: ActivityDescriptor;
 }
 
 export interface OpenPanelOptions {
     mode?: 'tab' | 'modal';
+    role?: ActivityLaunchRole;
+    activity?: ActivityDescriptor;
 }
 
 export type DesktopSurfaceEventEmitter = (event: string, ...args: unknown[]) => void;
@@ -76,12 +86,19 @@ export class DesktopSurfaceService {
                 panel.config.surfaceContractId ||
                 getSurfaceContractIdForRegisteredPanel(panel.id) ||
                 (surfaceRegistry.getContract(inferredContractId) ? inferredContractId : null);
-            this.openTab({
+            const activity = mergeActivityDescriptors(options.activity, { size: 'default', pageType: 'nested' });
+            const role: ActivityLaunchRole = options.role || (activity.size === 'small' ? 'support' : 'primary');
+            this.launchActivity({
                 id: panel.id,
-                name: panel.config.title,
+                title: panel.config.title,
                 icon: panel.config.icon || '',
-                ...(surfaceContractId ? { surfaceContractId } : { component: panel.component }),
-                props: { ...props, isTabMode: true }
+                role,
+                target: surfaceContractId
+                    ? { kind: 'surface', contractId: surfaceContractId }
+                    : { kind: 'component', component: panel.component },
+                activity,
+                props: { ...props, isTabMode: true },
+                dedupeKey: `panel:${panel.id}`
             });
             return;
         }
@@ -89,8 +106,30 @@ export class DesktopSurfaceService {
         this.emit(`OPEN_PANEL_${id.toUpperCase()}`, props);
     }
 
+    launchActivity(intent: ActivityLaunchIntent) {
+        console.log(`[DesktopSurfaceService] 请求启动 Activity: ${intent.title} (${intent.id || intent.dedupeKey || intent.target.kind})`);
+        this.emit('LAUNCH_ACTIVITY', intent);
+    }
+
     openTab(tabConfig: DynamicTabConfig) {
         console.log(`[DesktopSurfaceService] 请求打开标签页: ${tabConfig.name} (${tabConfig.id})`);
-        this.emit('OPEN_TAB', tabConfig);
+        const props = tabConfig.props || {};
+        const legacyActivity = activityFromLegacyMode(props.mode as LegacyActivityMode | undefined);
+        const activity = mergeActivityDescriptors(tabConfig.activity || props.activity as ActivityDescriptor | undefined, legacyActivity);
+        const role: ActivityLaunchRole = activity.size === 'small' || props.isTemporaryWidgetTab ? 'support' : 'primary';
+        this.launchActivity({
+            id: tabConfig.id,
+            title: tabConfig.name,
+            icon: tabConfig.icon,
+            role,
+            target: tabConfig.surfaceContractId
+                ? { kind: 'surface', contractId: tabConfig.surfaceContractId }
+                : tabConfig.component
+                    ? { kind: 'component', component: tabConfig.component }
+                    : { kind: 'surface', contractId: tabConfig.id as SurfaceContractId },
+            activity,
+            props,
+            dedupeKey: `tab:${tabConfig.id}`
+        });
     }
 }

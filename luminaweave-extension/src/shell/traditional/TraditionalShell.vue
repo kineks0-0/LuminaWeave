@@ -166,7 +166,7 @@
           v-else-if="telegramMobileCurrentRoute.name === 'roleProfile'"
           contract-id="telegram.infoPanel"
           :state="characterChannelState"
-          :mode="'large'"
+          :activity="{ size: 'default', pageType: 'standalone' }"
           :isMobile="true"
           @openSession="onOpenTelegramMobileSession"
           @createSession="onCreateTelegramMobileSession"
@@ -175,7 +175,7 @@
         <SurfaceOutlet
           v-else-if="telegramMobileCurrentRoute.name === 'chat'"
           contract-id="chat.main"
-          :mode="'large'"
+          :activity="{ size: 'default', pageType: 'standalone' }"
           :isMobile="true"
           :onTelegramBack="onPopTelegramMobileRoute"
           :onTelegramOpenRoleProfile="onOpenTelegramMobileRoleProfile"
@@ -183,7 +183,7 @@
         <SurfaceOutlet
           v-else-if="telegramMobileCurrentRoute.name === 'settings'"
           contract-id="settings.root"
-          :mode="'small'"
+          :activity="{ size: 'small', pageType: 'standalone' }"
           :isMobile="true"
         />
         <TelegramUserProfilePage
@@ -199,7 +199,8 @@
         <SurfaceOutlet
           v-else-if="telegramMobileCurrentRoute.name === 'tool'"
           :contract-id="telegramMobileToolContractId"
-          :mode="'large'"
+          v-bind="telegramMobileToolProps"
+          :activity="telegramMobileToolActivity"
           :isMobile="true"
           :auxSidebarMode="telegramMobileToolAuxSidebarMode"
         />
@@ -232,7 +233,7 @@
             <SurfaceOutlet
               v-if="plugin.id !== 'lumina-timeline' || activeMainTab === 'lumina-timeline' || isTimelineLoadedOnce"
               :contract-id="getPrimarySurfaceContractIdForPlugin(plugin.id)"
-              :mode="'large'"
+              :activity="{ size: 'default', pageType: 'nested' }"
               :isMobile="isMobile"
               :auxSidebarMode="effectiveForgeAuxSidebarMode"
               :activeRightPanelId="isForgeActiveInTraditional ? activeRightPanel : undefined"
@@ -273,6 +274,7 @@
       :rawSidebarMode="rawSidebarMode"
       :activeWidgetPlugin="activeWidgetPlugin"
       :activeRegisteredPanel="activeRegisteredPanel"
+      :activeRightPanelActivity="activeRightPanelActivity"
       :widgetGroups="widgetGroups"
       :showWidgetDropdown="showWidgetDropdown"
       :getPluginName="getPluginName"
@@ -368,6 +370,7 @@ const activeForgeAuxKind = computed(() => props.runtimeContext.traditional.activ
 const rawSidebarMode = computed(() => props.runtimeContext.traditional.rawSidebarMode);
 const activeWidgetPlugin = computed(() => props.runtimeContext.traditional.activeWidgetPlugin);
 const activeRegisteredPanel = computed(() => props.runtimeContext.traditional.activeRegisteredPanel);
+const activeRightPanelActivity = computed(() => props.runtimeContext.traditional.activeRightPanelActivity);
 const showWidgetDropdown = computed(() => props.runtimeContext.traditional.showWidgetDropdown);
 const showNexus = computed(() => props.runtimeContext.traditional.showNexus);
 const effectiveForgeAuxSidebarMode = computed(() => {
@@ -449,14 +452,21 @@ const telegramMobileRouteTitle = computed(() => {
   if (telegramMobileCurrentRoute.value.name === 'characterOverview') return '角色概览';
   if (telegramMobileCurrentRoute.value.name === 'roleProfile') return '角色资料';
   if (telegramMobileCurrentRoute.value.name === 'chat') return '聊天';
-  if (telegramMobileCurrentRoute.value.name === 'tool') return '工具';
+  if (telegramMobileCurrentRoute.value.name === 'tool') return telegramMobileCurrentRoute.value.title || '工具';
   return '';
 });
 const telegramMobileToolContractId = computed(() => {
+  if (telegramMobileCurrentRoute.value.contractId) {
+    return telegramMobileCurrentRoute.value.contractId;
+  }
   const panelId = telegramMobileCurrentRoute.value.panelId || telegramMobileCurrentRoute.value.toolId || 'lumina-settings';
   return getSurfaceContractIdForRegisteredPanel(panelId)
     || getPrimarySurfaceContractIdForPlugin(panelId);
 });
+const telegramMobileToolActivity = computed(() => (
+  telegramMobileCurrentRoute.value.activity || { size: 'default', pageType: 'standalone' }
+));
+const telegramMobileToolProps = computed(() => telegramMobileCurrentRoute.value.props || {});
 const telegramMobileToolAuxSidebarMode = computed(() => (
   telegramMobileToolContractId.value === 'forge.workspace' ? 'hidden' : undefined
 ));

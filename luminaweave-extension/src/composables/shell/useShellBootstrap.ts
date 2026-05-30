@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted, type Ref } from 'vue';
 import { luminaWeaveApi as lwApi } from '../../api/index.js';
 import { registerLuminaPlugins } from '../../bootstrap/registerPlugins.js';
+import type { ActivityLaunchIntent } from '../../platform/activity/types.js';
 import type { DynamicTabConfig } from '../../shell/types.js';
 import { legacyPanelDefinitions } from '../../shell/legacyPanelRegistry.js';
 
@@ -9,6 +10,7 @@ export const useShellBootstrap = ({
   initStatusText,
   settingsRevision,
   handleOpenTab,
+  handleLaunchActivity,
   handleSwitchMainView,
   handleSwitchWidgetPanel,
   handleToggleWidgetPanel,
@@ -27,6 +29,7 @@ export const useShellBootstrap = ({
   initStatusText: Ref<string>;
   settingsRevision: Ref<number>;
   handleOpenTab: (tabConfig: DynamicTabConfig) => void;
+  handleLaunchActivity: (intent: ActivityLaunchIntent) => void;
   handleSwitchMainView: (tabId: string) => void;
   handleSwitchWidgetPanel: (panelId: string) => void;
   handleToggleWidgetPanel: (panelId: string) => void;
@@ -79,6 +82,7 @@ export const useShellBootstrap = ({
     });
 
     lwApi.on('OPEN_TAB', handleOpenTab);
+    lwApi.on('LAUNCH_ACTIVITY', handleLaunchActivity);
     lwApi.on('SWITCH_MAIN_VIEW', handleSwitchMainView);
     lwApi.on('SWITCH_WIDGET_PANEL', handleSwitchWidgetPanel);
     lwApi.on('TOGGLE_WIDGET_PANEL', handleToggleWidgetPanel);

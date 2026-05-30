@@ -1,7 +1,7 @@
 <template>
   <div
     class="lorebook-root"
-    :data-mode="props.mode"
+    :data-mode="resolvedMode"
     :data-view="displayMode"
     :data-skin-variant="props.skinVariant || 'default'"
     :style="props.skinStyle"
@@ -24,7 +24,7 @@
           <div class="version-status-copy">
             <span class="status-kicker">{{ versionModeLabel }}</span>
             <strong>{{ resolvedView.versionLabel }}</strong>
-            <p v-if="props.mode !== 'small'">{{ resolvedView.versionHint }}</p>
+            <p v-if="resolvedMode !== 'small'">{{ resolvedView.versionHint }}</p>
             <div class="version-origin-line">
               <span class="origin-chip">{{ currentSourceLabel }}</span>
               <span class="origin-chip">node {{ currentLeafLabel }}</span>
@@ -65,14 +65,14 @@
               <span>{{ availableSnapshots.length }} 个</span>
             </div>
             <button
-              v-if="props.mode === 'small'"
+              v-if="resolvedMode === 'small'"
               class="history-toggle-btn"
               @click="historyExpanded = !historyExpanded"
             >
               {{ historyExpanded ? '收起' : '展开' }}
             </button>
           </div>
-          <div v-if="props.mode !== 'small' || historyExpanded" class="version-history-list">
+          <div v-if="resolvedMode !== 'small' || historyExpanded" class="version-history-list">
             <button
               v-for="snapshot in visibleSnapshots"
               :key="snapshot.key"
@@ -92,7 +92,7 @@
             </button>
           </div>
           <select
-            v-if="(props.mode !== 'small' || historyExpanded) && lorebookManager.versionMode === 'manual'"
+            v-if="(resolvedMode !== 'small' || historyExpanded) && lorebookManager.versionMode === 'manual'"
             class="version-select"
             :value="lorebookManager.manualSnapshotKey || ''"
             @change="handleManualSnapshotChange"
@@ -242,11 +242,11 @@
 
     <transition name="editor-slide">
       <div v-if="editingEntry" class="lore-editor-overlay"
-        :class="{ 'is-sidebar': props.mode === 'small', 'is-full': isFullWindowActive }">
+        :class="{ 'is-sidebar': resolvedMode === 'small', 'is-full': isFullWindowActive }">
         <LorebookEditor
           :key="editingUid || 'new'"
           :entry="editingEntry"
-          :mode="props.mode"
+          :mode="resolvedMode"
           :is-mobile="props.isMobile"
           :version-label="props.showTimelineChrome ? resolvedView.versionLabel : ''"
           :version-hint="props.showTimelineChrome ? resolvedView.versionHint : ''"
@@ -269,10 +269,13 @@ import { useTimelineStore, type TimelineSourceId } from '../../../stores/useTime
 import { useConversationContextStore } from '../../../stores/useConversationContextStore.js';
 import { LorebookTimelineResolver } from '../../../api/core/lorebook/LorebookTimelineResolver.js';
 import type { LorebookVersionMode } from '../../../types/LorebookViewTypes.js';
+import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../../platform/activity/activityLaunchResolver.js';
+import type { ActivityDescriptor } from '../../../platform/activity/types.js';
 import LorebookEditor from '../LorebookEditor.vue';
 
 const props = defineProps<{
   mode?: 'large' | 'small',
+  activity?: ActivityDescriptor,
   isMobile?: boolean
   timelineSourceId?: TimelineSourceId
   showTimelineChrome?: boolean
@@ -286,7 +289,9 @@ const timelineStore = useTimelineStore();
 const contextStore = useConversationContextStore();
 const searchQuery = ref('');
 const snapshotRevision = ref(lorebookManager.snapshotRevision);
-const historyExpanded = ref(props.mode !== 'small');
+const normalizedActivity = computed(() => normalizeActivityDescriptor(props.activity, activityFromLegacyMode(props.mode)));
+const resolvedMode = computed<'large' | 'small'>(() => normalizedActivity.value.size === 'default' ? 'large' : 'small');
+const historyExpanded = ref(resolvedMode.value !== 'small');
 
 const editingUid = ref<string | number | null>(null);
 const editingEntry = ref<LuminaLorebookEntry | null>(null);
@@ -296,7 +301,7 @@ const globalEditingEntry = ref<LuminaLorebookEntry | null>(lorebookManager.activ
 const onEditingEntryChanged = (entry: LuminaLorebookEntry | null) => {
   editingUid.value = entry?.uid ?? null;
 
-  if (props.mode === 'small') {
+  if (resolvedMode.value === 'small') {
     globalEditingEntry.value = entry;
     editingEntry.value = entry ? JSON.parse(JSON.stringify(entry)) : null;
   }
@@ -344,7 +349,7 @@ const availableSnapshots = computed(() => {
   return lorebookManager.getSnapshotsForBook(currentSelectedBookName.value ?? lorebookManager.selectedBook);
 });
 
-const visibleSnapshots = computed(() => availableSnapshots.value.slice(0, props.mode === 'small' ? 4 : 8));
+const visibleSnapshots = computed(() => availableSnapshots.value.slice(0, resolvedMode.value === 'small' ? 4 : 8));
 
 const resolvedView = computed(() => LorebookTimelineResolver.resolve({
   mode: lorebookManager.versionMode,
@@ -492,7 +497,7 @@ const handleManualSnapshotChange = (event: Event) => {
 
 const selectEntry = (entry: LuminaLorebookEntry) => {
   const mode = interactMode.value;
-  const isLarge = props.mode === 'large';
+  const isLarge = resolvedMode.value === 'large';
 
   // 决定是否触发跨窗编辑
   const shouldGotoSidebar = isLarge && mode === 'large-to-sidebar';
@@ -511,7 +516,7 @@ const selectEntry = (entry: LuminaLorebookEntry) => {
   } else {
     editingEntry.value = JSON.parse(JSON.stringify(entry));
     editingUid.value = entry.uid !== undefined ? entry.uid : null;
-    if (props.mode === 'small') {
+    if (resolvedMode.value === 'small') {
       lorebookManager.setEditingEntry(entry);
     }
   }
@@ -521,7 +526,7 @@ const closeEditor = () => {
   editingEntry.value = null;
   editingUid.value = null;
   isFullWindowActive.value = false;
-  if (props.mode === 'small') {
+  if (resolvedMode.value === 'small') {
     lorebookManager.setEditingEntry(null);
   }
 };
@@ -591,7 +596,7 @@ const handleSwap = () => {
   if (!editingEntry.value) return;
   const entry = JSON.parse(JSON.stringify(editingEntry.value));
 
-  if (props.mode === 'large') {
+  if (resolvedMode.value === 'large') {
     lorebookManager.setEditingEntry(entry);
     closeEditor();
     lwApi.emit('SWITCH_WIDGET_PANEL', 'lumina-lorebook');
@@ -604,11 +609,11 @@ const handleSwap = () => {
 onMounted(async () => {
   lorebookManager.on('EDITING_ENTRY_CHANGED', onEditingEntryChanged);
 
-  if (props.mode === 'small' && lorebookManager.activeEditingEntry) {
+  if (resolvedMode.value === 'small' && lorebookManager.activeEditingEntry) {
     onEditingEntryChanged(lorebookManager.activeEditingEntry);
   }
 
-  if (props.mode === 'large') {
+  if (resolvedMode.value === 'large') {
     lwApi.on('OPEN_LOREBOOK_OVERLAY', (entry: LuminaLorebookEntry) => {
       editingEntry.value = entry;
       editingUid.value = entry.uid || null;

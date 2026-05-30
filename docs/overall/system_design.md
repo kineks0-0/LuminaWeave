@@ -138,9 +138,10 @@ Desktop Mode Runtime 定义完整工作方式。
 - surface map / overrides
 - component overrides
 - interaction policy
+- Activity LaunchIntent 解析：业务层只提交目标、角色、默认/小窗偏好、嵌套/独立页面和 Activity metadata；Desktop Mode Runtime 决定实际呈现为主区、右侧栏、移动临时页、Telegram 移动页面栈或自由工作台窗口。
 - tokens
 - settings schema
-- root safe-area padding 契约。普通 Tauri Android 的 safe-area 由 root shell 统一消费，`--lw-safe-*` 保持可观测原值，`--lw-content-safe-*` 表示 root 消费后的剩余量；第三方插件和子页面本阶段不获得单独覆盖状态栏背景的 API。
+- root safe-area padding 契约。普通 Tauri Android 的 safe-area 由 root shell 统一消费，`--lw-safe-*` 保持可观测原值，`--lw-content-safe-*` 表示 root 消费后的剩余量；Activity 可声明独立页面的状态栏背景和图标颜色，Lumina 原生 Android 客户端消费该 metadata，TauriTavern 不新增 ABI 且图标颜色 no-op。
 - Web / PWA safe-area fallback 同样先进入 `--lw-safe-*` 归一化层，再由 root / residual 变量分发；桌面模式和插件不得绕过该层直接读取浏览器 `env()`。
 
 约束：
@@ -165,7 +166,7 @@ Renderer 接收：
 - theme context
 - runtime bridge
 
-Renderer 不直接写 Core 内部状态。
+Renderer 不直接写 Core 内部状态。如需打开其他页面，必须通过 runtime bridge 发起 Activity LaunchIntent；不得直接决定 tab、右栏、workspace window 或移动页面栈。
 
 ## 3. 启动与运行流程
 

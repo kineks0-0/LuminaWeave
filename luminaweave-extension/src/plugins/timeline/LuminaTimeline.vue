@@ -5,6 +5,8 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent } from 'vue';
+import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../platform/activity/activityLaunchResolver.js';
+import type { ActivityDescriptor } from '../../platform/activity/types.js';
 import { useComponentSkin } from '../../theme/useComponentSkin.js';
 import TimelineSmallList from './TimelineSmallList.vue';
 
@@ -14,11 +16,13 @@ type TimelineMode = 'small' | 'large';
 
 const props = defineProps<{
   mode?: TimelineMode;
+  activity?: ActivityDescriptor;
   isMobile?: boolean;
 }>();
 
 const { variant: timelineVariant } = useComponentSkin('timeline.root');
-const resolvedMode = computed<TimelineMode>(() => props.mode ?? 'small');
+const normalizedActivity = computed(() => normalizeActivityDescriptor(props.activity, activityFromLegacyMode(props.mode)));
+const resolvedMode = computed<TimelineMode>(() => normalizedActivity.value.size === 'default' ? 'large' : 'small');
 const isMobileDevice = computed(() => {
   return props.isMobile || (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
 });

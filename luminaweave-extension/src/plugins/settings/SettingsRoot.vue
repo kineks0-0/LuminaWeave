@@ -83,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, type PropType } from 'vue';
 import { ChevronLeft, LayoutGrid } from 'lucide-vue-next';
 import SettingsUnified from './SettingsUnified.vue';
 import SettingsDetailed from './SettingsDetailed.vue';
@@ -91,6 +91,8 @@ import TelegramSettingsHome from './TelegramSettingsHome.vue';
 import { activeSettings, currentDetailedView } from './useSettings.js';
 import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry.js';
 import { getActiveDesktopModeIdFromSettings } from '../../theme/themeRegistry.js';
+import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../platform/activity/activityLaunchResolver.js';
+import type { ActivityDescriptor } from '../../platform/activity/types.js';
 import { useComponentSkin } from '../../theme/useComponentSkin.js';
 import { cn } from '../../ui/cn.js';
 import { LuminaButton } from '../../ui/primitives';
@@ -98,16 +100,25 @@ import { LuminaButton } from '../../ui/primitives';
 const props = defineProps({
   mode: {
     type: String,
-    default: 'small' // 'small' | 'large'
+    default: 'small'
+  },
+  activity: {
+    type: Object as PropType<ActivityDescriptor>,
+    default: undefined
   }
 });
 
 const { cssVars, variant: settingsVariant } = useComponentSkin('settings.root');
 const settingsSkinStyle = computed(() => cssVars.value);
 const activeThemeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings));
+const normalizedActivity = computed(() => normalizeActivityDescriptor(
+  props.activity,
+  activityFromLegacyMode(props.mode === 'large' || props.mode === 'small' ? props.mode : undefined)
+));
+const mode = computed(() => normalizedActivity.value.size === 'default' ? 'large' : 'small');
 const rootClass = computed(() => cn(
   'tw:flex tw:h-full tw:flex-row tw:overflow-hidden tw:font-lw-main',
-  props.mode === 'large' ? 'is-large' : 'is-small'
+  mode.value === 'large' ? 'is-large' : 'is-small'
 ));
 
 const openDetailedView = (pluginId: string) => {

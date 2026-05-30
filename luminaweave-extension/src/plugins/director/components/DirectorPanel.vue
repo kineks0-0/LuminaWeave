@@ -1,7 +1,7 @@
 <template>
   <div
     class="director-panel lw-widget-padding"
-    :class="{ 'is-mobile': props.isMobile, 'is-small': props.mode === 'small' }"
+    :class="{ 'is-mobile': props.isMobile, 'is-small': isSmallActivity }"
     :data-skin-variant="directorVariant || 'default'"
     :style="directorPanelStyle"
   >
@@ -186,10 +186,13 @@ import { useDirectorStore } from '../DirectorStore.js';
 import { useTier1Store } from '../Tier1Store.js';
 import { lwStorage } from '../../../api/storage.js';
 import { LuminaWeaveAPI } from '../../../api';
+import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../../platform/activity/activityLaunchResolver.js';
+import type { ActivityDescriptor } from '../../../platform/activity/types.js';
 import { useComponentSkin } from '../../../theme/useComponentSkin.js';
 
 const props = withDefaults(defineProps<{
   mode?: 'large' | 'small';
+  activity?: ActivityDescriptor;
   isMobile?: boolean;
 }>(), {
   mode: 'small',
@@ -199,6 +202,8 @@ const props = withDefaults(defineProps<{
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const { cssVars: directorCssVars, variant: directorVariant } = useComponentSkin('director.panel');
 const directorPanelStyle = computed<CSSProperties>(() => directorCssVars.value as CSSProperties);
+const normalizedActivity = computed(() => normalizeActivityDescriptor(props.activity, activityFromLegacyMode(props.mode)));
+const isSmallActivity = computed(() => normalizedActivity.value.size === 'small');
 
 const directorStore = useDirectorStore();
 const tier1Store = useTier1Store();

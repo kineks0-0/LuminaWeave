@@ -12,11 +12,16 @@ export const resolveDynamicTabTarget = (
   tab: DynamicTabConfig,
   componentRegistry: Record<string, Component>
 ): DynamicTabResolution => {
+  const resolvedProps = {
+    ...(tab.props || {}),
+    ...(tab.activity ? { activity: tab.activity } : {})
+  };
+
   if (tab.surfaceContractId) {
     return {
       surfaceContractId: tab.surfaceContractId,
       component: null,
-      props: tab.props || {}
+      props: resolvedProps
     };
   }
 
@@ -26,14 +31,14 @@ export const resolveDynamicTabTarget = (
       return {
         surfaceContractId: null,
         component: registeredComponent,
-        props: tab.props || {}
+        props: resolvedProps
       };
     }
 
     return {
       surfaceContractId: tab.component as SurfaceContractId,
       component: null,
-      props: tab.props || {}
+      props: resolvedProps
     };
   }
 
@@ -41,13 +46,13 @@ export const resolveDynamicTabTarget = (
     return {
       surfaceContractId: null,
       component: tab.component,
-      props: tab.props || {}
+      props: resolvedProps
     };
   }
 
   return {
     surfaceContractId: tab.id as SurfaceContractId,
     component: null,
-    props: tab.props || {}
+    props: resolvedProps
   };
 };

@@ -412,6 +412,7 @@ import type {
   ForgePiWorkspacePatchChange,
   ForgePiWorkspacePatchPayload
 } from '@shared/ForgePiTypes.js';
+import type { ActivityDescriptor } from '../../../platform/activity/types.js';
 import type { SidebarMode } from '../../../composables/useResponsiveLayout.js';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../forgeAuxPanels.js';
 
@@ -419,6 +420,7 @@ const ForgeAuxPanelView = defineAsyncComponent(() => import('./ForgeAuxPanelView
 
 const props = withDefaults(defineProps<{
   mode?: 'large' | 'small';
+  activity?: ActivityDescriptor;
   isMobile?: boolean;
   embeddedInWorkspaceWindow?: boolean;
   auxSidebarMode?: SidebarMode;
@@ -908,24 +910,42 @@ const handleClearChatReference = () => {
   store.attachChatSessionReference(null);
 };
 
+const launchForgeAuxActivity = (panel: ForgeAuxPanelKind) => {
+  const meta = FORGE_AUX_PANEL_META[panel];
+  luminaWeaveApi.services.desktopSurface.launchActivity({
+    id: meta.id,
+    title: meta.title,
+    icon: meta.icon,
+    role: 'auxiliary',
+    target: {
+      kind: 'registered-panel',
+      panelId: meta.id
+    },
+    activity: {
+      size: 'small',
+      pageType: 'nested',
+      titleBar: {
+        title: meta.title,
+        showBack: true
+      }
+    },
+    props: { kind: panel },
+    dedupeKey: `panel:${meta.id}`
+  });
+};
+
 const handleAuxPanelClick = (panel: ForgeAuxPanelKind) => {
   if (props.embeddedInWorkspaceWindow && store.auxPresentationMode === 'detached') {
     store.setActiveAuxPanel(panel);
-    const meta = FORGE_AUX_PANEL_META[panel];
-    if (workspaceActions?.openWorkspaceApp) {
-      workspaceActions.openWorkspaceApp(`panel:${meta.id}`);
-    } else {
-      luminaWeaveApi.services.desktopSurface.openPanel(meta.id, { kind: panel }, { mode: 'tab' });
-    }
+    launchForgeAuxActivity(panel);
     return;
   }
   if (props.auxSidebarMode === 'widget') {
-    const panelId = `forge_${panel}`;
-    luminaWeaveApi.emit('TOGGLE_WIDGET_PANEL', panelId);
+    launchForgeAuxActivity(panel);
     return;
   }
   if (props.auxSidebarMode === 'hidden') {
-    luminaWeaveApi.emit('SWITCH_WIDGET_PANEL', `forge_${panel}`);
+    launchForgeAuxActivity(panel);
     return;
   }
   store.setActiveAuxPanel(panel);

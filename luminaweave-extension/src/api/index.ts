@@ -26,6 +26,7 @@ import {
     type RegisteredPanelConfig,
     type RegisteredPanelEntry
 } from './services/DesktopSurfaceService.js';
+import type { ActivityLaunchIntent } from '../platform/activity/types.js';
 import {
     HostInteractionService,
     type ModalOptions,
@@ -883,6 +884,10 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
      */
     openPanel(id: string, props: Record<string, unknown> = {}, options: OpenPanelOptions = {}) {
         this.desktopSurface.openPanel(id, props, options);
+    }
+
+    launchActivity(intent: ActivityLaunchIntent) {
+        this.desktopSurface.launchActivity(intent);
     }
 
     /**

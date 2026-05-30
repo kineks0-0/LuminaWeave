@@ -17,39 +17,57 @@ describe('DesktopSurfaceService', () => {
         });
     });
 
-    it('opens a registered panel as a dynamic tab with the official surface contract when one exists', () => {
+    it('keeps registered panel tab compatibility as a primary default Activity with the official surface contract', () => {
         const emit = vi.fn();
         const service = new DesktopSurfaceService(emit);
 
         service.registerPanel('card_maker', DummyPanel, { title: 'Card Maker', icon: 'id-card', defaultMode: 'tab' });
         service.openPanel('card_maker', { source: 'test' });
 
-        expect(emit).toHaveBeenCalledWith('OPEN_TAB', {
+        expect(emit).toHaveBeenCalledWith('LAUNCH_ACTIVITY', {
             id: 'card_maker',
-            name: 'Card Maker',
+            title: 'Card Maker',
             icon: 'id-card',
-            surfaceContractId: 'forge.workspace',
-            props: { source: 'test', isTabMode: true }
+            role: 'primary',
+            target: {
+                kind: 'surface',
+                contractId: 'forge.workspace'
+            },
+            activity: {
+                size: 'default',
+                pageType: 'nested'
+            },
+            props: { source: 'test', isTabMode: true },
+            dedupeKey: 'panel:card_maker'
         });
     });
 
-    it('opens a registered panel as a dynamic tab with its component when no surface contract exists', () => {
+    it('keeps registered panel tab compatibility as a primary component Activity when no surface contract exists', () => {
         const emit = vi.fn();
         const service = new DesktopSurfaceService(emit);
 
         service.registerPanel('custom_panel', DummyPanel, { title: 'Custom', defaultMode: 'tab' });
         service.openPanel('custom_panel');
 
-        expect(emit).toHaveBeenCalledWith('OPEN_TAB', {
+        expect(emit).toHaveBeenCalledWith('LAUNCH_ACTIVITY', {
             id: 'custom_panel',
-            name: 'Custom',
+            title: 'Custom',
             icon: '',
-            component: DummyPanel,
-            props: { isTabMode: true }
+            role: 'primary',
+            target: {
+                kind: 'component',
+                component: DummyPanel
+            },
+            activity: {
+                size: 'default',
+                pageType: 'nested'
+            },
+            props: { isTabMode: true },
+            dedupeKey: 'panel:custom_panel'
         });
     });
 
-    it('opens a registered panel with an explicit surface contract', () => {
+    it('launches a registered panel with an explicit surface contract', () => {
         const emit = vi.fn();
         const service = new DesktopSurfaceService(emit);
 
@@ -60,12 +78,21 @@ describe('DesktopSurfaceService', () => {
         });
         service.openPanel('custom_panel');
 
-        expect(emit).toHaveBeenCalledWith('OPEN_TAB', {
+        expect(emit).toHaveBeenCalledWith('LAUNCH_ACTIVITY', {
             id: 'custom_panel',
-            name: 'Custom',
+            title: 'Custom',
             icon: '',
-            surfaceContractId: 'custom.surface',
-            props: { isTabMode: true }
+            role: 'primary',
+            target: {
+                kind: 'surface',
+                contractId: 'custom.surface'
+            },
+            activity: {
+                size: 'default',
+                pageType: 'nested'
+            },
+            props: { isTabMode: true },
+            dedupeKey: 'panel:custom_panel'
         });
     });
 
@@ -77,5 +104,57 @@ describe('DesktopSurfaceService', () => {
         service.openPanel('sync_report', { nodeId: 'node-1' });
 
         expect(emit).toHaveBeenCalledWith('OPEN_PANEL_SYNC_REPORT', { nodeId: 'node-1' });
+    });
+
+    it('wraps legacy openTab calls as primary Activity intents', () => {
+        const emit = vi.fn();
+        const service = new DesktopSurfaceService(emit);
+
+        service.openTab({
+            id: 'settings-tab',
+            name: 'Settings',
+            icon: 'gear',
+            surfaceContractId: 'settings.root',
+            props: { activity: { size: 'default', pageType: 'standalone' } }
+        });
+
+        expect(emit).toHaveBeenCalledWith('LAUNCH_ACTIVITY', {
+            id: 'settings-tab',
+            title: 'Settings',
+            icon: 'gear',
+            role: 'primary',
+            target: {
+                kind: 'surface',
+                contractId: 'settings.root'
+            },
+            activity: {
+                size: 'default',
+                pageType: 'standalone'
+            },
+            props: { activity: { size: 'default', pageType: 'standalone' } },
+            dedupeKey: 'tab:settings-tab'
+        });
+    });
+
+    it('maps legacy small tab mode to support Activity intents', () => {
+        const emit = vi.fn();
+        const service = new DesktopSurfaceService(emit);
+
+        service.openTab({
+            id: 'stats-tab',
+            name: 'Stats',
+            icon: '',
+            surfaceContractId: 'stats.panel',
+            props: { mode: 'small' }
+        });
+
+        expect(emit).toHaveBeenCalledWith('LAUNCH_ACTIVITY', expect.objectContaining({
+            id: 'stats-tab',
+            role: 'support',
+            activity: {
+                size: 'small',
+                pageType: 'nested'
+            }
+        }));
     });
 });

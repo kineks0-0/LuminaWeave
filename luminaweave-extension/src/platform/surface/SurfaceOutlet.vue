@@ -61,6 +61,24 @@ const rendererRuntime: SurfaceRendererRuntimeBridge = {
   openSurface: (contractId, surfaceProps = {}) => {
     const lw = typeof window !== 'undefined' ? (window as any).LuminaWeave : null;
     const desktopSurface = lw?.services?.desktopSurface || lw?.desktopSurface;
+    if (desktopSurface && typeof desktopSurface.launchActivity === 'function') {
+      desktopSurface.launchActivity({
+        id: contractId,
+        title: String(contractId),
+        icon: '',
+        role: 'support',
+        target: {
+          kind: 'surface',
+          contractId
+        },
+        activity: {
+          size: 'small',
+          pageType: 'nested'
+        },
+        props: surfaceProps
+      });
+      return;
+    }
     if (desktopSurface && typeof desktopSurface.openTab === 'function') {
       desktopSurface.openTab({
         id: contractId,

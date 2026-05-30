@@ -198,6 +198,29 @@ const handleSwitchAuxMode = (mode: 'left' | 'right' | 'widget') => {
 };
 
 const getWidgetPanelId = (kind: ForgeAuxPanelKind) => `forge_${kind}`;
+const launchAuxActivity = (kind: ForgeAuxPanelKind) => {
+  const meta = FORGE_AUX_PANEL_META[kind];
+  luminaWeaveApi.services.desktopSurface.launchActivity({
+    id: meta.id,
+    title: meta.title,
+    icon: meta.icon,
+    role: 'auxiliary',
+    target: {
+      kind: 'registered-panel',
+      panelId: meta.id
+    },
+    activity: {
+      size: 'small',
+      pageType: 'nested',
+      titleBar: {
+        title: meta.title,
+        showBack: true
+      }
+    },
+    props: { kind },
+    dedupeKey: `panel:${meta.id}`
+  });
+};
 
 const isAuxPanelSelected = (kind: ForgeAuxPanelKind): boolean => {
   if (currentAuxSidebarMode.value === 'widget') {
@@ -212,7 +235,11 @@ const handleOpenAuxPanel = (kind: ForgeAuxPanelKind) => {
 
   if (currentAuxSidebarMode.value === 'widget') {
     store.setActiveAuxPanel(kind);
-    luminaWeaveApi.emit(isSelected ? 'TOGGLE_WIDGET_PANEL' : 'SWITCH_WIDGET_PANEL', panelId);
+    if (isSelected) {
+      luminaWeaveApi.emit('TOGGLE_WIDGET_PANEL', panelId);
+      return;
+    }
+    launchAuxActivity(kind);
     return;
   }
 
