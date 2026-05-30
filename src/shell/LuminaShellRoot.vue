@@ -31,6 +31,7 @@
 import { computed, ref, watch, type CSSProperties } from 'vue';
 import PanelHeader from '../components/PanelHeader.vue';
 import { desktopModeRuntimeRegistry } from '../platform/desktop/DesktopModeRuntimeRegistry.js';
+import type { ActivityPanelPayload } from '../platform/activity/types.js';
 import type { LuminaPlugin } from '../types/plugin.js';
 import type {
   CharacterChannelState,
@@ -119,6 +120,7 @@ const props = defineProps<{
   rawSidebarMode: 'left' | 'right' | 'widget' | 'hidden';
   activeWidgetPlugin: LuminaPlugin | null;
   activeRegisteredPanel: RegisteredPanelEntry | null;
+  activeRightPanelActivity: ActivityPanelPayload | null;
   showWidgetDropdown: boolean;
   showNexus: boolean;
   getPluginName: (pluginId: string | null) => string;
@@ -241,6 +243,7 @@ const shellContext = computed<ShellRuntimeContext>(() => ({
     rawSidebarMode: props.rawSidebarMode,
     activeWidgetPlugin: props.activeWidgetPlugin,
     activeRegisteredPanel: props.activeRegisteredPanel,
+    activeRightPanelActivity: props.activeRightPanelActivity,
     showWidgetDropdown: props.showWidgetDropdown,
     showNexus: props.showNexus
   },

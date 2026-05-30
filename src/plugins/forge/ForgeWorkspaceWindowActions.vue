@@ -169,11 +169,26 @@ const togglePresentationMode = () => {
 const openDetachedAuxPanel = (kind: ForgeAuxPanelKind) => {
   store.setActiveAuxPanel(kind);
   const meta = FORGE_AUX_PANEL_META[kind];
-  if (workspaceActions?.openWorkspaceApp) {
-    workspaceActions.openWorkspaceApp(`panel:${meta.id}`);
-  } else {
-    luminaWeaveApi.services.desktopSurface.openPanel(meta.id, { kind }, { mode: 'tab' });
-  }
+  luminaWeaveApi.services.desktopSurface.launchActivity({
+    id: meta.id,
+    title: meta.title,
+    icon: meta.icon,
+    role: 'auxiliary',
+    target: {
+      kind: 'registered-panel',
+      panelId: meta.id
+    },
+    activity: {
+      size: 'small',
+      pageType: 'nested',
+      titleBar: {
+        title: meta.title,
+        showBack: true
+      }
+    },
+    props: { kind },
+    dedupeKey: `panel:${meta.id}`
+  });
   closeMenus();
 };
 

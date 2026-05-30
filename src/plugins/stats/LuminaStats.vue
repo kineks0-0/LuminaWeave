@@ -1,7 +1,7 @@
 <template>
   <div
     class="lw-widgets-pane"
-    :class="{ 'is-mobile': props.isMobile, 'is-small': props.mode === 'small' }"
+    :class="{ 'is-mobile': props.isMobile, 'is-small': isSmallActivity }"
     :data-skin-variant="statsVariant || 'default'"
     :style="statsSkinStyle"
   >
@@ -50,10 +50,13 @@
 <script setup lang="ts">
 import { computed, inject, type CSSProperties } from 'vue';
 import { LuminaWeaveAPI } from '../../api/index.js';
+import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../platform/activity/activityLaunchResolver.js';
+import type { ActivityDescriptor } from '../../platform/activity/types.js';
 import { useComponentSkin } from '../../theme/useComponentSkin.js';
 
 const props = withDefaults(defineProps<{
   mode?: 'large' | 'small';
+  activity?: ActivityDescriptor;
   isMobile?: boolean;
 }>(), {
   mode: 'small',
@@ -63,6 +66,8 @@ const props = withDefaults(defineProps<{
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const { cssVars: statsCssVars, variant: statsVariant } = useComponentSkin('stats.panel');
 const statsSkinStyle = computed<CSSProperties>(() => statsCssVars.value as CSSProperties);
+const normalizedActivity = computed(() => normalizeActivityDescriptor(props.activity, activityFromLegacyMode(props.mode)));
+const isSmallActivity = computed(() => normalizedActivity.value.size === 'small');
 
 const getStatValue = (key: string, fallback: number): number => {
   // 暂时保留 fallback 以防核心状态机未就绪

@@ -114,22 +114,25 @@
       <div class="widget-main-content">
         <SurfaceOutlet
           v-if="activeWidgetPlugin"
-          :contract-id="getPrimarySurfaceContractIdForPlugin(activeWidgetPlugin.id)"
-          :mode="'small'"
+          :contract-id="activeWidgetSurfaceContractId"
+          v-bind="activePanelProps"
+          :activity="activePanelActivity"
           :isMobile="isMobile"
         />
         <component
           v-else-if="activeRegisteredPanel && !getSurfaceContractIdForRegisteredPanel(activeRegisteredPanel.id)"
           :is="activeRegisteredPanel.component"
-          :kind="activeForgeAuxKind || undefined"
-          :mode="'small'"
+          v-bind="activePanelProps"
+          :kind="activePanelKind"
+          :activity="activePanelActivity"
           :isMobile="isMobile"
         />
         <SurfaceOutlet
           v-else-if="activeRegisteredPanel"
-          :contract-id="getSurfaceContractIdForRegisteredPanel(activeRegisteredPanel.id) || activeRegisteredPanel.id"
-          :kind="activeForgeAuxKind || undefined"
-          :mode="'small'"
+          :contract-id="activeRegisteredPanelSurfaceContractId"
+          v-bind="activePanelProps"
+          :kind="activePanelKind"
+          :activity="activePanelActivity"
           :isMobile="isMobile"
         />
       </div>
@@ -139,15 +142,16 @@
 </template>
 
 <script setup lang="ts">
-import type { CSSProperties } from 'vue';
+import { computed, type CSSProperties } from 'vue';
 import type { LuminaPlugin } from '../../types/plugin.js';
 import type { CharacterChannelState, CreateChatConversationInput } from '../../types/ConversationContextTypes.js';
 import type { RegisteredPanelEntry, WidgetPanelGroup } from '../types.js';
+import type { ActivityPanelPayload } from '../../platform/activity/types.js';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
 import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
 
-defineProps<{
+const props = defineProps<{
   activeRightPanel: string;
   isMobile: boolean;
   characterChannelState: CharacterChannelState;
@@ -162,12 +166,38 @@ defineProps<{
   rawSidebarMode: 'left' | 'right' | 'widget' | 'hidden';
   activeWidgetPlugin: LuminaPlugin | null;
   activeRegisteredPanel: RegisteredPanelEntry | null;
+  activeRightPanelActivity: ActivityPanelPayload | null;
   widgetGroups: WidgetPanelGroup[];
   showWidgetDropdown: boolean;
   getPluginName: (pluginId: string | null) => string;
   onCreateChatSession?: (payload: CreateChatConversationInput) => void;
   onOpenSession?: (sessionId: string) => void;
 }>();
+
+const defaultPanelActivity = { size: 'small', pageType: 'nested' } as const;
+const activePanelPayload = computed(() => (
+  props.activeRightPanelActivity?.panelId === props.activeRightPanel
+    ? props.activeRightPanelActivity
+    : null
+));
+const activePanelProps = computed(() => activePanelPayload.value?.props || {});
+const activePanelActivity = computed(() => activePanelPayload.value?.activity || defaultPanelActivity);
+const activePanelKind = computed(() => {
+  const payloadKind = activePanelProps.value.kind;
+  return typeof payloadKind === 'string'
+    ? payloadKind
+    : props.activeForgeAuxKind || undefined;
+});
+const activeWidgetSurfaceContractId = computed(() => (
+  activePanelPayload.value?.contractId
+  || (props.activeWidgetPlugin ? getPrimarySurfaceContractIdForPlugin(props.activeWidgetPlugin.id) : '')
+));
+const activeRegisteredPanelSurfaceContractId = computed(() => (
+  activePanelPayload.value?.contractId
+  || (props.activeRegisteredPanel
+    ? getSurfaceContractIdForRegisteredPanel(props.activeRegisteredPanel.id) || props.activeRegisteredPanel.id
+    : '')
+));
 
 const emit = defineEmits<{
   (e: 'resizeStart', event: MouseEvent): void;

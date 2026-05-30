@@ -47,10 +47,10 @@
             <div :class="iconBoxClass(true)">🧩</div>
             <div class="tw:flex tw:min-w-0 tw:flex-col tw:gap-1 tw:text-left">
               <span class="tw:font-lw-display tw:text-[length:var(--lw-type-title-medium-size)] tw:font-bold tw:text-lw-text tw:truncate">制卡工坊</span>
-              <span class="tw:text-[length:var(--lw-type-body-small-size)] tw:text-lw-text-secondary">打开制卡工坊窗口</span>
+              <span class="tw:text-[length:var(--lw-type-body-small-size)] tw:text-lw-text-secondary">打开制卡工坊</span>
             </div>
             <div class="tw:ml-auto">
-              <span class="tw:inline-flex tw:rounded-lw-pill tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-2 tw:py-1 tw:text-xs tw:font-bold tw:text-lw-text-secondary">Tab</span>
+              <span class="tw:inline-flex tw:rounded-lw-pill tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-2 tw:py-1 tw:text-xs tw:font-bold tw:text-lw-text-secondary">默认</span>
             </div>
           </button>
           <button type="button" :class="launcherItemClass(false, true)" @click="openContextSwitcher">
@@ -77,7 +77,7 @@
               <span class="tw:text-[length:var(--lw-type-body-small-size)] tw:text-lw-text-secondary">打开或聚焦辅助窗口</span>
             </div>
             <div class="tw:ml-auto" v-if="plugin.id === 'lumina-settings'">
-              <span class="tw:inline-flex tw:rounded-lw-pill tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-2 tw:py-1 tw:text-xs tw:font-bold tw:text-lw-text-secondary">大窗口</span>
+              <span class="tw:inline-flex tw:rounded-lw-pill tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-2 tw:py-1 tw:text-xs tw:font-bold tw:text-lw-text-secondary">默认</span>
             </div>
           </button>
         </div>
@@ -91,6 +91,7 @@ import { computed, inject } from 'vue';
 import { pluginManager } from '../../core/PluginManager.js';
 import { LuminaWeaveAPI } from '../../api';
 import { cn } from '../../ui/cn.js';
+import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
 
 const lwApi = inject('lwApi') as LuminaWeaveAPI;
 
@@ -129,37 +130,73 @@ const iconBoxClass = (compact: boolean) => cn(
 );
 
 const openMainPlugin = (plugin: any) => {
-  lwApi.emit('SWITCH_MAIN_VIEW', plugin.id);
+  lwApi.services.desktopSurface.launchActivity({
+    id: plugin.id,
+    title: plugin.name,
+    icon: plugin.icon,
+    role: 'primary',
+    target: {
+      kind: 'plugin',
+      pluginId: plugin.id,
+      contractId: getPrimarySurfaceContractIdForPlugin(plugin.id)
+    },
+    activity: {
+      size: 'default',
+      pageType: 'nested'
+    },
+    dedupeKey: `plugin:${plugin.id}`
+  });
   if (props.dismissOnSelect) {
     emit('dismiss');
   }
 };
 
 const openToolPlugin = (plugin: any) => {
-  if (plugin.id === 'lumina-settings') {
-    // 特别处理：设置可以打开为标签页
-    lwApi.services.desktopSurface.openTab({
-      id: 'lumina-settings-large',
-      name: '系统设置',
-      icon: plugin.icon,
-      surfaceContractId: 'settings.root',
-      props: { mode: 'large' }
-    });
-  } else {
-    lwApi.emit('SWITCH_WIDGET_PANEL', plugin.id);
-  }
+  lwApi.services.desktopSurface.launchActivity({
+    id: plugin.id,
+    title: plugin.name,
+    icon: plugin.icon,
+    role: 'support',
+    target: {
+      kind: 'plugin',
+      pluginId: plugin.id,
+      contractId: getPrimarySurfaceContractIdForPlugin(plugin.id)
+    },
+    activity: {
+      size: 'small',
+      pageType: plugin.id === 'lumina-settings' ? 'standalone' : 'nested'
+    },
+    dedupeKey: `plugin:${plugin.id}`
+  });
   if (props.dismissOnSelect) {
     emit('dismiss');
   }
 };
 
 const openCardMaker = () => {
-  lwApi.services.desktopSurface.openTab({
+  lwApi.services.desktopSurface.launchActivity({
     id: 'card_maker',
-    name: '制卡工坊',
+    title: '制卡工坊',
     icon: '🧩',
-    surfaceContractId: 'forge.workspace',
-    props: { isTabMode: true }
+    role: 'support',
+    target: {
+      kind: 'registered-panel',
+      panelId: 'card_maker',
+      contractId: 'forge.workspace'
+    },
+    activity: {
+      size: 'small',
+      pageType: 'standalone',
+      statusBar: {
+        iconColor: 'auto'
+      },
+      titleBar: {
+        title: '制卡工坊',
+        showBack: true
+      }
+    },
+    props: { isTabMode: true },
+    dedupeKey: 'panel:card_maker'
   });
   if (props.dismissOnSelect) {
     emit('dismiss');
@@ -167,7 +204,21 @@ const openCardMaker = () => {
 };
 
 const openContextSwitcher = () => {
-  lwApi.emit('SWITCH_WIDGET_PANEL', 'context-switcher');
+  lwApi.services.desktopSurface.launchActivity({
+    id: 'context-switcher',
+    title: '会话切换',
+    icon: '🔄',
+    role: 'support',
+    target: {
+      kind: 'registered-panel',
+      panelId: 'context-switcher'
+    },
+    activity: {
+      size: 'small',
+      pageType: 'nested'
+    },
+    dedupeKey: 'panel:context-switcher'
+  });
   if (props.dismissOnSelect) {
     emit('dismiss');
   }

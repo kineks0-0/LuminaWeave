@@ -37,7 +37,8 @@
       :isTelegramLeftRailResizing="isTelegramLeftRailResizing" :currentDetailedView="currentDetailedView"
       :saveStatus="saveStatus" :activeForgeAuxKind="activeForgeAuxKind" :rawSidebarMode="rawSidebarMode"
       :activeWidgetPlugin="activeWidgetPlugin" :activeRegisteredPanel="activeRegisteredPanel"
-      :showWidgetDropdown="showWidgetDropdown" :showNexus="visibleShowNexus" :getPluginName="getPluginName"
+      :activeRightPanelActivity="activeRightPanelActivity" :showWidgetDropdown="showWidgetDropdown"
+      :showNexus="visibleShowNexus" :getPluginName="getPluginName"
       :showWorkspaceMenu="showWorkspaceMenu" :shellWorkspaceMenuVariant="shellWorkspaceMenuVariant || 'default'"
       :shellWorkspaceMenuStyle="shellWorkspaceMenuStyle"
       :shellWorkspaceStageVariant="shellWorkspaceStageVariant || 'default'"
@@ -48,7 +49,7 @@
       :isWorkspaceDockVisible="isWorkspaceDockVisible" :workspaceDockDisplayItems="workspaceDockDisplayItems"
       :onSwitchMainView="handleSwitchMainView" :onCloseTab="closeTab" :onClose="toggleExpand"
       :onOpenSettingsPanel="openSettingsPanel" :onToggleDiscordGuildRail="toggleDiscordGuildRail"
-      :onUpdateDesktopMode="updateDesktopMode" :onHandleOpenWidget="handleOpenWidget"
+      :onUpdateDesktopMode="updateDesktopMode" :onHandleOpenWidget="handleOpenWidgetWithActivityReset"
       :onToggleForgeSidebarCollapse="toggleForgeSidebarCollapse" :onSetSidebarMode="setSidebarMode"
       :onOpenDiscordChatSession="handleOpenDiscordChatSession"
       :onOpenDiscordMobileChatSession="handleOpenDiscordMobileChatSession"
@@ -62,12 +63,12 @@
       :onSelectTelegramCharacterOverview="selectTelegramCharacterOverview"
       :onOpenTelegramToolEntry="openTelegramToolEntry"
       :onSetTelegramConversationListMode="setTelegramConversationListMode"
-      :onSetTelegramDesktopLeftRoute="setTelegramDesktopLeftRoute" :onPushTelegramMobileRoute="pushTelegramMobileRoute"
-      :onPopTelegramMobileRoute="popTelegramMobileRoute" :onResizeStart="initResize"
+      :onSetTelegramDesktopLeftRoute="setTelegramDesktopLeftRoute" :onPushTelegramMobileRoute="pushTelegramMobileRouteWithActivityReset"
+      :onPopTelegramMobileRoute="popTelegramMobileRouteWithActivityReset" :onResizeStart="initResize"
       :onTelegramLeftRailResizeStart="initLeftRailResize" :onBackFromDetailedSettings="backFromDetailedSettings"
-      :onToggleWidgetDropdown="toggleWidgetDropdown" :onSwitchRightPanel="switchRightPanel"
-      :onRestoreSidebarLeft="restoreSidebarLeft" :onClosePanel="closeWidgetPanel" :onUpdateShowNexus="updateShowNexus"
-      :onSelectTelegramBottomNav="handleTelegramBottomNavSelect"
+      :onToggleWidgetDropdown="toggleWidgetDropdown" :onSwitchRightPanel="handleSwitchRightPanel"
+      :onRestoreSidebarLeft="restoreSidebarLeft" :onClosePanel="handleCloseWidgetPanel" :onUpdateShowNexus="updateShowNexus"
+      :onSelectTelegramBottomNav="handleTelegramBottomNavSelectWithActivityReset"
       :onCreateStageWithLauncher="createStageWithLauncherAndCloseMenu"
       :onOpenWorkspaceSettings="openWorkspaceSettingsAndCloseMenu"
       :onActivateWorkspaceStageWithNavigation="activateWorkspaceStageWithNavigation"
@@ -101,7 +102,10 @@ import { useShellBootstrap } from './composables/shell/useShellBootstrap.js';
 import { useTelegramShell } from './composables/shell/useTelegramShell.js';
 import { useWidgetPanels } from './composables/shell/useWidgetPanels.js';
 import { useWorkspaceNavigation } from './composables/shell/useWorkspaceNavigation.js';
+import { useActivityLaunchState } from './composables/shell/useActivityLaunchState.js';
 import { useDiscordShell } from './composables/shell/useDiscordShell.js';
+import { resolveActivityLaunchPlacement } from './platform/activity/activityLaunchResolver.js';
+import type { ActivityLaunchIntent } from './platform/activity/types.js';
 import {
   getDesktopModeOptions,
   resolveThemeValues
@@ -405,6 +409,12 @@ const rootSafeAreaStyle = computed<CSSProperties>(() => resolveRootSafeAreaStyle
 const rootFrameSafeAreaStyle = computed<CSSProperties>(() =>
   resolveRootSafeAreaResidualStyle(rootSafeAreaStyle.value)
 );
+const {
+  activeRightPanelActivity,
+  activityStatusBarStyle,
+  applyLaunchResolution,
+  clearTransientActivityMetadata
+} = useActivityLaunchState();
 
 const parseCssPixel = (value: unknown): number => {
   const parsed = Number.parseFloat(String(value ?? '0'));
@@ -448,6 +458,7 @@ const appRootStyle = computed<CSSProperties>(() => ({
   '--lw-safe-bottom': `${safeInsetBottomPx.value}px`,
   '--lw-safe-left': `${safeInsetLeftPx.value}px`,
   ...rootSafeAreaStyle.value,
+  ...activityStatusBarStyle.value,
   ...resolveThemeValues(activeDesktopMode.value.designTokens, {
     activeSettings,
     resolvedAppearance: resolvedTheme.value,
@@ -602,7 +613,79 @@ const handleOpenTab = (tabConfig: DynamicTabConfig) => {
   }
 };
 
-const handleSwitchMainView = (tabId: string) => {
+const resolveWorkspaceActivityAppId = (preferredAppId: string | undefined, panelId: string | undefined) => {
+  const candidates = [
+    preferredAppId,
+    panelId ? `panel:${panelId}` : undefined,
+    panelId ? `widget:${panelId}` : undefined,
+    panelId ? `plugin:${panelId}` : undefined
+  ].filter((value): value is string => Boolean(value));
+  return candidates.find((candidate) => workspaceAppMap.value.has(candidate)) || candidates[0] || '';
+};
+
+const handleLaunchActivity = (intent: ActivityLaunchIntent) => {
+  const resolved = resolveActivityLaunchPlacement(intent, {
+    layoutMode: layoutMode.value,
+    isMobile: isMobile.value,
+    desktopModeId: activeDesktopModeId.value
+  });
+  applyLaunchResolution(resolved);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('lw:activity-change', {
+      detail: {
+        activity: resolved.activity,
+        placement: resolved.placement,
+        panelId: resolved.panelId
+      }
+    }));
+  }
+
+  if (resolved.placement === 'modal') {
+    if (resolved.modalEvent) {
+      lwApi.emit(resolved.modalEvent, intent.props || {});
+    }
+    return;
+  }
+
+  if (resolved.placement === 'telegram-stack') {
+    if (resolved.telegramRoute) {
+      pushTelegramMobileRoute(resolved.telegramRoute);
+    }
+    return;
+  }
+
+  if (resolved.placement === 'workspace-window') {
+    const appId = resolveWorkspaceActivityAppId(resolved.workspaceAppId, resolved.panelId);
+    if (appId && workspaceAppMap.value.has(appId)) {
+      openWorkspaceApp(appId);
+      return;
+    }
+    if (resolved.tab) {
+      handleOpenTab(resolved.tab);
+    }
+    return;
+  }
+
+  if (resolved.placement === 'right-panel') {
+    activeRightPanel.value = resolved.panelId || intent.id || 'lumina-settings';
+    showWidgetDropdown.value = false;
+    return;
+  }
+
+  if (resolved.placement === 'main' && intent.target.kind === 'plugin') {
+    handleSwitchMainView(intent.target.pluginId, { preserveActivityMetadata: true });
+    return;
+  }
+
+  if (resolved.tab) {
+    handleOpenTab(resolved.tab);
+  }
+};
+
+const handleSwitchMainView = (tabId: string, options: { preserveActivityMetadata?: boolean } = {}) => {
+  if (!options.preserveActivityMetadata) {
+    clearTransientActivityMetadata();
+  }
   activeMainTab.value = tabId;
   if (layoutMode.value === 'freeform') {
     openWorkspaceApp(getWorkspaceAppIdForMainTab(tabId));
@@ -610,10 +693,14 @@ const handleSwitchMainView = (tabId: string) => {
 };
 
 const closeTab = (tabId: string) => {
+  if (activeMainTab.value === tabId) {
+    clearTransientActivityMetadata();
+  }
   closeWorkspaceTab(tabId);
 };
 
 const handleToggleWidgetPanel = (panelId: string) => {
+  clearTransientActivityMetadata();
   if (layoutMode.value === 'freeform') {
     const widgetId = `widget:${panelId}`;
     const pluginId = `plugin:${panelId}`;
@@ -628,6 +715,7 @@ const handleToggleWidgetPanel = (panelId: string) => {
 };
 
 const openSettingsPanel = () => {
+  clearTransientActivityMetadata();
   if (layoutMode.value === 'freeform') {
     openWorkspaceSettings();
     return;
@@ -667,6 +755,38 @@ const {
   showCharacterRail: showDiscordMobileCharacterRail,
   switchMainView: handleSwitchMainView
 });
+
+const handleSwitchRightPanel = (panelId: string) => {
+  clearTransientActivityMetadata();
+  switchRightPanel(panelId);
+};
+
+const handleOpenWidgetWithActivityReset = (panelId: string) => {
+  clearTransientActivityMetadata();
+  handleOpenWidget(panelId);
+};
+
+const handleCloseWidgetPanel = () => {
+  clearTransientActivityMetadata();
+  closeWidgetPanel();
+};
+
+const pushTelegramMobileRouteWithActivityReset = (route: Parameters<typeof pushTelegramMobileRoute>[0]) => {
+  clearTransientActivityMetadata();
+  pushTelegramMobileRoute(route);
+};
+
+const popTelegramMobileRouteWithActivityReset = () => {
+  clearTransientActivityMetadata();
+  popTelegramMobileRoute();
+};
+
+const handleTelegramBottomNavSelectWithActivityReset = (
+  itemId: Parameters<typeof handleTelegramBottomNavSelect>[0]
+) => {
+  clearTransientActivityMetadata();
+  handleTelegramBottomNavSelect(itemId);
+};
 
 const createStageWithLauncherAndCloseMenu = () => {
   createStageWithLauncher();
@@ -768,8 +888,9 @@ useShellBootstrap({
   initStatusText,
   settingsRevision,
   handleOpenTab,
+  handleLaunchActivity,
   handleSwitchMainView,
-  handleSwitchWidgetPanel: switchRightPanel,
+  handleSwitchWidgetPanel: handleSwitchRightPanel,
   handleToggleWidgetPanel,
   setSidebarMode,
   onWorkspaceKeydown: handleWorkspaceKeydown,

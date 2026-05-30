@@ -7,6 +7,7 @@ import type {
 } from '../types/ConversationContextTypes.js';
 import type { LuminaPlugin } from '../types/plugin.js';
 import type { SurfaceContractId } from '../platform/surface/types.js';
+import type { ActivityDescriptor, ActivityPanelPayload } from '../platform/activity/types.js';
 
 export interface DynamicTabConfig {
   id: string;
@@ -15,6 +16,7 @@ export interface DynamicTabConfig {
   component?: Component | string;
   surfaceContractId?: SurfaceContractId;
   props?: Record<string, unknown>;
+  activity?: ActivityDescriptor;
 }
 
 export interface RegisteredPanelConfig {
@@ -66,6 +68,11 @@ export interface TelegramStackRoute {
   sessionId?: string;
   panelId?: string;
   toolId?: TelegramRailToolEntry['id'];
+  title?: string;
+  icon?: string;
+  contractId?: SurfaceContractId;
+  activity?: ActivityDescriptor;
+  props?: Record<string, unknown>;
 }
 
 export type WidgetPluginEntry = LuminaPlugin;
@@ -160,6 +167,7 @@ export interface ShellRuntimeContext {
     rawSidebarMode: 'left' | 'right' | 'widget' | 'hidden';
     activeWidgetPlugin: LuminaPlugin | null;
     activeRegisteredPanel: RegisteredPanelEntry | null;
+    activeRightPanelActivity: ActivityPanelPayload | null;
     showWidgetDropdown: boolean;
     showNexus: boolean;
   };
