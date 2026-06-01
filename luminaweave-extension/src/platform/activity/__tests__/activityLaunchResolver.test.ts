@@ -42,7 +42,7 @@ describe('activity launch resolver', () => {
 
   it('resolves support small activities to the traditional desktop right panel', () => {
     const resolved = resolveActivityLaunchPlacement(supportSurfaceIntent, {
-      layoutMode: 'traditional',
+      shellKind: 'traditional',
       isMobile: false,
       desktopModeId: 'traditional'
     });
@@ -61,7 +61,7 @@ describe('activity launch resolver', () => {
 
   it('resolves support small activities to temporary tabs on traditional mobile', () => {
     const resolved = resolveActivityLaunchPlacement(supportSurfaceIntent, {
-      layoutMode: 'traditional',
+      shellKind: 'traditional',
       isMobile: true,
       desktopModeId: 'traditional'
     });
@@ -77,9 +77,9 @@ describe('activity launch resolver', () => {
 
   it('resolves support small activities to workspace windows in freeform mode', () => {
     const resolved = resolveActivityLaunchPlacement(supportSurfaceIntent, {
-      layoutMode: 'freeform',
+      shellKind: 'freeform',
       isMobile: false,
-      desktopModeId: 'freeform'
+      desktopModeId: 'custom-freeform'
     });
 
     expect(resolved.placement).toBe('workspace-window');
@@ -106,7 +106,7 @@ describe('activity launch resolver', () => {
       },
       props: { isTabMode: true }
     }, {
-      layoutMode: 'traditional',
+      shellKind: 'traditional',
       isMobile: true,
       desktopModeId: 'telegram'
     });

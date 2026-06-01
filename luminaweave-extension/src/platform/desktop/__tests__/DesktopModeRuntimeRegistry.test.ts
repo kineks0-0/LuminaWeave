@@ -5,6 +5,7 @@ import { desktopModeRuntimeRegistry } from '../DesktopModeRuntimeRegistry.js';
 import { initializeDesktopModeRuntime } from '../initializeDesktopModeRuntime.js';
 import { SurfaceRegistry } from '../../surface/SurfaceRegistry.js';
 import type { SurfaceRendererDefinition } from '../../surface/types.js';
+import { registerDesktopMode } from '../../../theme/themeRegistry.js';
 
 vi.mock('../../../shell/traditional/TelegramUserInfoPanel.vue', () => ({
     default: defineComponent({ name: 'TelegramUserInfoPanelStub', template: '<div />' })
@@ -29,6 +30,11 @@ describe('DesktopModeRuntimeRegistry', () => {
         const renderer = createRenderer('telegram');
 
         desktopRegistry.register({
+            manifest: {
+                id: 'telegram',
+                name: 'Telegram 桌面',
+                shell: { kind: 'traditional' }
+            },
             id: 'telegram',
             name: 'Telegram 桌面',
             shellKind: 'traditional',
@@ -56,6 +62,11 @@ describe('DesktopModeRuntimeRegistry', () => {
     it('rejects duplicate desktop mode ids', () => {
         const desktopRegistry = new DesktopModeRuntimeRegistry();
         const manifest = {
+            manifest: {
+                id: 'stage',
+                name: '自由工作台',
+                shell: { kind: 'freeform' as const }
+            },
             id: 'stage',
             name: '自由工作台',
             shellKind: 'freeform' as const,
@@ -98,5 +109,40 @@ describe('DesktopModeRuntimeRegistry', () => {
         expect(desktopModeRuntimeRegistry.get('stage')?.shellRenderer).toBeDefined();
         expect(desktopModeRuntimeRegistry.get('telegram')?.navigationModel.mobileSurfaces).toContain('settings.root');
         expect(desktopModeRuntimeRegistry.get('telegram')?.componentOverrides?.['telegram.infoPanel']?.ownerId).toBe('telegram');
+    });
+
+    it('keeps the runtime registry synchronized with custom modes registered after initialization', () => {
+        desktopModeRuntimeRegistry.clearForTests();
+        initializeDesktopModeRuntime();
+
+        const customId = `runtime-custom-${Math.random().toString(36).slice(2, 8)}`;
+        registerDesktopMode({
+            id: customId,
+            name: 'Runtime Custom Desktop',
+            description: 'Verifies single-source desktop mode registration.',
+            shell: {
+                kind: 'freeform'
+            },
+            settingsManifest: {
+                density: {
+                    default: 'compact',
+                    label: 'Density',
+                    type: 'options',
+                    allowedScopes: ['Global'],
+                    options: [
+                        { value: 'compact', label: 'Compact' },
+                        { value: 'cozy', label: 'Cozy' }
+                    ]
+                }
+            }
+        });
+
+        const runtimeMode = desktopModeRuntimeRegistry.get(customId);
+
+        expect(runtimeMode?.manifest.id).toBe(customId);
+        expect(runtimeMode?.shellKind).toBe('freeform');
+        expect(runtimeMode?.shellRenderer).toBeDefined();
+        expect(runtimeMode?.interactionPolicy.supportsOverlappingWindows).toBe(true);
+        expect(runtimeMode?.settingsSchema?.density?.default).toBe('compact');
     });
 });

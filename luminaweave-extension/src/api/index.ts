@@ -26,7 +26,7 @@ import {
     type RegisteredPanelConfig,
     type RegisteredPanelEntry
 } from './services/DesktopSurfaceService.js';
-import type { ActivityLaunchIntent } from '../platform/activity/types.js';
+import type { ActivityLaunchIntent, ActivityStatusBarDescriptor } from '../platform/activity/types.js';
 import {
     HostInteractionService,
     type ModalOptions,
@@ -888,6 +888,14 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
     launchActivity(intent: ActivityLaunchIntent) {
         this.desktopSurface.launchActivity(intent);
+    }
+
+    setActivityStatusBar(statusBar: ActivityStatusBarDescriptor | null) {
+        this.emit('SET_ACTIVITY_STATUS_BAR', statusBar);
+    }
+
+    clearActivityStatusBar() {
+        this.setActivityStatusBar(null);
     }
 
     /**

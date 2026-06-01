@@ -4,11 +4,19 @@ import type { SurfaceContractId } from '../surface/types.js';
 export type ActivitySize = 'default' | 'small';
 export type ActivityPageType = 'nested' | 'standalone';
 export type ActivityStatusBarIconColor = 'light' | 'dark' | 'auto';
+export type ActivityStatusBarSafeAreaMode = 'shell' | 'manual';
 export type LegacyActivityMode = 'large' | 'small';
 
 export interface ActivityStatusBarDescriptor {
   background?: string;
   iconColor?: ActivityStatusBarIconColor;
+  safeArea?: ActivityStatusBarSafeAreaMode;
+}
+
+export interface ResolvedActivityStatusBarAppearance {
+  background: string | null;
+  iconColor: Exclude<ActivityStatusBarIconColor, 'auto'>;
+  safeArea: ActivityStatusBarSafeAreaMode;
 }
 
 export interface ActivityTitleBarAction {
@@ -72,7 +80,12 @@ export interface ActivityLaunchIntent {
 }
 
 export interface ActivityLaunchEnvironment {
-  layoutMode: 'traditional' | 'freeform';
+  shellKind?: 'traditional' | 'freeform';
+  /**
+   * @deprecated Use shellKind. Kept while shell callers finish migrating away
+   * from the old user-facing layout mode terminology.
+   */
+  layoutMode?: 'traditional' | 'freeform';
   isMobile: boolean;
   desktopModeId: string;
 }

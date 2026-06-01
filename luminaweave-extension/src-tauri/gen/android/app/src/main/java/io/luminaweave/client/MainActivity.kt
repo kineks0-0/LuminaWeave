@@ -19,6 +19,13 @@ class MainActivity : TauriActivity() {
       mainHandler = mainHandler,
     )
   }
+  private val statusBarBridge: LuminaAndroidStatusBarBridge by lazy {
+    LuminaAndroidStatusBarBridge(
+      windowProvider = { window },
+      isDestroyed = { isDestroyed },
+      mainHandler = mainHandler,
+    )
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
@@ -29,17 +36,27 @@ class MainActivity : TauriActivity() {
   override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
     activeWebView = webView
+    webView.addJavascriptInterface(statusBarBridge, LuminaAndroidStatusBarBridge.JS_BRIDGE_NAME)
     insetsBridge.onWebViewAvailable(webView)
+    statusBarBridge.reapplyLastAppearance()
   }
 
   override fun onResume() {
     super.onResume()
     insetsBridge.onResume()
+    statusBarBridge.reapplyLastAppearance()
+  }
+
+  override fun onRestart() {
+    super.onRestart()
+    insetsBridge.onResume()
+    statusBarBridge.reapplyLastAppearance()
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
     insetsBridge.onConfigurationChanged()
+    statusBarBridge.reapplyLastAppearance()
   }
 
   override fun onDestroy() {

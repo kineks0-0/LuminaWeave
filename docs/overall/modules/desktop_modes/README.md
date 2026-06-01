@@ -2,6 +2,8 @@
 
 Desktop Modes 定义 LuminaWeave 的平台级桌面模式。桌面模式不是局部皮肤，而是由 shell、navigation、surface preset、renderer variant、tokens 与 interaction policy 共同决定的工作方式。
 
+桌面模式采用单注册源：`DesktopModeManifest` 是公开事实源，`registerDesktopMode()` 会同时进入模式列表、设置详情和 Desktop Mode Runtime。运行时内部只派生 `DesktopModeRuntimeDescriptor`，用于解析 shell renderer、`shellKind`、navigation model、interaction policy 与受控 desktop overrides。
+
 ## Activity 与启动意图
 
 组件页面统一用 Activity metadata 描述，不再把“大窗口/小窗口”当作业务层容器决策。业务层通过 LaunchIntent 声明目标、角色、默认/小窗偏好、嵌套/独立页面，以及状态栏、标题栏和二级菜单 metadata。
@@ -14,6 +16,8 @@ Desktop Mode Runtime 负责解析 LaunchIntent：
 - Freeform：support / auxiliary / standalone Activity 进入自由工作台窗口。
 
 旧 `mode: large | small` 仅作为迁移期兼容输入，映射到 `Activity.size = default | small`。
+
+状态栏 metadata 由 shell 统一解析，不由普通插件组件直接操作宿主。`statusBar.iconColor` 支持 `auto`、`light` 和 `dark`：`auto` 按当前外观解析，深色外观对应白色系统图标，浅色外观对应黑色系统图标。`statusBar.background` 由 root shell 的 edge-to-edge Web 层通过 `--lw-activity-statusbar-bg` 渲染，不交给 native Android 解析。`statusBar.safeArea` 默认为 `shell`，由 root shell 消费顶部 safe-area；独立移动页面可以声明 `manual`，自行消费 `--lw-content-safe-top` 适配状态栏区域。普通 Tauri Android 通过 WebView JS bridge 应用解析后的图标颜色；TauriTavern 不新增宿主 ABI，图标颜色保持 no-op。
 
 ## 文档
 

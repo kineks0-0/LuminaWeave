@@ -34,6 +34,7 @@
 - 2026-05-27：参考 TauriTavern 的 native inset bridge 链路，将 `MainActivity` 收敛为生命周期接线；`LuminaAndroidInsetsBridge` 负责 content root `WindowInsets` 监听、ready 重注入和重复快照去重；`LuminaWebViewInsetsStyleApplier` 负责 CSS 变量契约注入。日志同时输出 `rawTopPx`、`cssTopPx` 和 `density`，用于排查物理 px / CSS px 混用。
 - 2026-05-27：取消独立 `.lw-root-safe-area-backdrop` 层；顶部 safe area 仍由 full-bleed `.lw-fullscreen-panel` 的 `--lw-shell-panel-bg` 覆盖，内容避让继续由 root padding 完成。本阶段不发布 safe-area 背景覆盖 API。
 - 2026-05-27：补齐 Web / PWA 末级 fallback：全局 `--lw-web-safe-*` 从 `env(safe-area-inset-*)` 派生，`useHostLayoutViewport` 的 `auto` 来源按 native -> TauriTavern -> Web fallback 顺序归一化到 `--lw-safe-*`。Director、Lorebook、Stats、Timeline 的 Telegram 移动端 padding 已改为消费 `--lw-content-safe-bottom`，不再直接读取浏览器 safe-area。
+- 2026-05-30：补齐普通 Tauri Android 状态栏 appearance 链路：Activity `statusBar.iconColor` 支持 `auto` / `light` / `dark`，前端按当前外观把 `auto` 解析为深色白图标、浅色黑图标，再通过 WebView `LuminaAndroidStatusBar` JS bridge 交给 native 设置 `WindowInsetsControllerCompat.isAppearanceLightStatusBars`。`statusBar.background` 只由 root shell Web 层消费为 `--lw-activity-statusbar-bg`，不作为 native Android 背景色 ABI。`statusBar.safeArea = manual` 允许独立页面自行消费顶部 `--lw-content-safe-top`，TauriTavern 路径仍不新增宿主 ABI。
 
 ## 后续阶段
 
@@ -42,6 +43,7 @@
 - 已添加 Android Tauri 目标和平台配置。
 - 已补 Android status bar / display cutout 的 native safe-area 桥接。
 - Android safe-area 桥接已按 native raw px -> CSS px -> `:root` CSS 变量 -> root shell padding / `--lw-content-safe-*` residual 消费的契约收敛。
+- 已补普通 Tauri Android 状态栏图标颜色 bridge、Web 层状态栏背景覆盖和 Activity `safeArea: manual` 顶部状态栏区域所有权声明。
 - Web / PWA fallback 已通过 `--lw-web-safe-*` 接入同一归一化链路，插件目录已迁出直接 `env(safe-area-inset-*)` 消费。
 - 待继续验证 Android SDK、NDK、JDK、Rust Android targets 的 release build 路径。
 - 待继续处理移动端 IME、触控和本地存储边界。

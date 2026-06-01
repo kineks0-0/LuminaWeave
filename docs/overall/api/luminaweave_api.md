@@ -90,7 +90,7 @@ import { luminaWeaveApi as lwApi } from '../api/index.ts';
 桌面模式是完整壳层模式，不是局部皮肤。`Discord 桌面`、`传统桌面`、`自由工作台` 都属于同级桌面模式。
 
 - **`registerDesktopMode(manifest: DesktopModeManifest)`**
-  - **用途**: 注册一个新的桌面模式，并让它自动进入设置中的桌面模式列表。
+  - **用途**: 注册一个新的桌面模式，并让它自动进入设置中的桌面模式列表、设置详情和 Desktop Mode Runtime。
   - **约束**: `id` 必须唯一；重复注册会抛出错误。
 - **`listDesktopModes()`**
   - **返回**: 当前所有已注册桌面模式的清单。
@@ -110,6 +110,7 @@ import { luminaWeaveApi as lwApi } from '../api/index.ts';
 
 - 允许自定义 shell、navigation、surface、settings 与受控 renderer variants
 - 不允许直接替换核心会话、同步、持久化与事务运行时
+- `layoutMode` 只保留为旧命名兼容；Activity placement 和运行时策略使用 manifest 派生的 `shellKind`
 
 最小注册示例：
 
@@ -157,6 +158,7 @@ lwApi.registerDesktopMode({
 接入结果：
 
 - 新模式会自动进入“桌面模式”设置选项
+- 新模式会自动进入 Desktop Mode Runtime，并按 `shell.kind` 使用传统桌面或自由工作台壳层
 - `desktop-mode-operator-deck.*` 会成为正式设置命名空间
 - 不需要额外手写设置页接线代码
 

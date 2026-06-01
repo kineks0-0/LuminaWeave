@@ -84,14 +84,18 @@ export const resolveThemeValues = (
     return cleanResolvedValues(raw);
 };
 
+export type DesktopModeRegistrationListener = (manifest: DesktopModeManifest) => void;
+
 class ThemeRegistry {
     public readonly packs = shallowReactive<Record<string, DesktopModeManifest>>({} as Record<string, DesktopModeManifest>);
+    private readonly registrationListeners = new Set<DesktopModeRegistrationListener>();
 
     register(pack: DesktopModeManifest) {
         if (this.packs[pack.id]) {
             throw new Error(`[DesktopModeRegistry] Duplicate desktop mode id: ${pack.id}`);
         }
         this.packs[pack.id] = pack;
+        this.registrationListeners.forEach(listener => listener(pack));
     }
 
     get(themeId: string) {
@@ -101,6 +105,13 @@ class ThemeRegistry {
     list() {
         return Object.values(this.packs);
     }
+
+    onRegister(listener: DesktopModeRegistrationListener) {
+        this.registrationListeners.add(listener);
+        return () => {
+            this.registrationListeners.delete(listener);
+        };
+    }
 }
 
 export const themeRegistry = new ThemeRegistry();
@@ -109,6 +120,8 @@ export const desktopModeRegistry = themeRegistry;
 builtinDesktopModes.forEach(mode => desktopModeRegistry.register(mode));
 
 export const registerDesktopMode = (manifest: DesktopModeManifest) => desktopModeRegistry.register(manifest);
+export const onDesktopModeRegistered = (listener: DesktopModeRegistrationListener) =>
+    desktopModeRegistry.onRegister(listener);
 export const listDesktopModes = () => desktopModeRegistry.list();
 export const getDesktopMode = (desktopModeId: string) => desktopModeRegistry.get(desktopModeId);
 export const getDesktopModeOrDefault = (desktopModeId?: string | null) =>

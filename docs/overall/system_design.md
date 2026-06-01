@@ -48,7 +48,7 @@ Host Drivers 只负责宿主物理交互。
 - 宿主探测按两层分类表达：`runtimeEnvelope` 区分 `plugin-hosted` 与 `standalone-app`，`physicalHost` 区分 `sillytavern`、`tauritavern`、`generic-tauri` 与 `web`。普通 Tauri 客户端不得被归入 TauriTavern 插件宿主。
 - 读写宿主资源、事件、网络和基础存储。
 - 封装宿主全局对象、TavernHelper、Tauri ABI、local fallback。
-- 普通 Tauri Android 客户端的 native layout bridge 只输出宿主布局契约：监听 Android `WindowInsets`，将 raw physical px 转为 Web CSS px 后注入 `--lw-native-safe-*` / `--lw-native-ime-bottom`，由 shell/root layout 消费。`--lw-safe-*` 是归一化注入值，不得由 root 或子树覆盖；root fullscreen panel 保持 full-bleed，状态栏区域沿用 panel 背景覆盖，内容通过 `--lw-root-safe-*` padding 避让；子内容只消费 `--lw-content-safe-*` residual；不得把 safe-area 修正散落到插件组件内部。
+- 普通 Tauri Android 客户端的 native layout bridge 只输出宿主布局契约：监听 Android `WindowInsets`，将 raw physical px 转为 Web CSS px 后注入 `--lw-native-safe-*` / `--lw-native-ime-bottom`，由 shell/root layout 消费。`--lw-safe-*` 是归一化注入值，不得由 root 或子树覆盖；root fullscreen panel 保持 full-bleed，状态栏区域默认沿用 panel 背景覆盖，也可由 Activity metadata 派生的 `--lw-activity-statusbar-bg` 覆盖；内容默认通过 `--lw-root-safe-*` padding 避让；子内容只消费 `--lw-content-safe-*` residual；不得把 safe-area 修正散落到普通插件组件内部。独立 Activity 可通过 `statusBar.safeArea = manual` 声明自行适配顶部状态栏区域，此时 root 不消费 top inset，页面继续从 `--lw-content-safe-top` 读取原始剩余值。
 - Web / PWA fallback 只暴露浏览器 `env(safe-area-inset-*)` 到 `--lw-web-safe-*`，作为 host layout / native bridge 都不可用时的末级输入。插件和子页面仍不得直接消费 `env(safe-area-inset-*)`。
 - ST 世界书、会话目录、物理消息列表、角色资料、Forge 测试聊天宿主资料、环境就绪、生成函数定位等宿主物理操作必须通过 `host-drivers/st/*Driver` 或 HAL ST provider 暴露给 Core / Facade。
 
@@ -138,10 +138,11 @@ Desktop Mode Runtime 定义完整工作方式。
 - surface map / overrides
 - component overrides
 - interaction policy
+- 单注册源：公开注册入口只接受 `DesktopModeManifest`；内部 `DesktopModeRuntimeDescriptor` 由该 manifest 派生 shell renderer、navigation model、interaction policy、settings schema 和受控 desktop overrides。`layoutMode` 仅作为 legacy 命名兼容，运行时策略输入使用派生的 `shellKind`。
 - Activity LaunchIntent 解析：业务层只提交目标、角色、默认/小窗偏好、嵌套/独立页面和 Activity metadata；Desktop Mode Runtime 决定实际呈现为主区、右侧栏、移动临时页、Telegram 移动页面栈或自由工作台窗口。
 - tokens
 - settings schema
-- root safe-area padding 契约。普通 Tauri Android 的 safe-area 由 root shell 统一消费，`--lw-safe-*` 保持可观测原值，`--lw-content-safe-*` 表示 root 消费后的剩余量；Activity 可声明独立页面的状态栏背景和图标颜色，Lumina 原生 Android 客户端消费该 metadata，TauriTavern 不新增 ABI 且图标颜色 no-op。
+- root safe-area padding 契约。普通 Tauri Android 的 safe-area 默认由 root shell 统一消费，`--lw-safe-*` 保持可观测原值，`--lw-content-safe-*` 表示 root 消费后的剩余量；Activity 可声明独立页面的状态栏背景、图标颜色和 `safeArea` 所有权。Desktop Mode Runtime 先把 `iconColor: auto` 解析为实际 `light` / `dark`：深色外观映射白色图标，浅色外观映射黑色图标；状态栏背景只进入 Web/root shell CSS 层，不进入 native bridge；Lumina 原生 Android 客户端只消费解析后的状态栏图标颜色，TauriTavern 不新增 ABI 且图标颜色 no-op。
 - Web / PWA safe-area fallback 同样先进入 `--lw-safe-*` 归一化层，再由 root / residual 变量分发；桌面模式和插件不得绕过该层直接读取浏览器 `env()`。
 
 约束：

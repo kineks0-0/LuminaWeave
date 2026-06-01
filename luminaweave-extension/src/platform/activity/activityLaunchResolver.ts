@@ -125,6 +125,7 @@ export const resolveActivityLaunchPlacement = (
   const activity = normalizeActivityDescriptor(intent.activity);
   const role = intent.role || 'primary';
   const panelId = getActivityPanelId(intent);
+  const shellKind = environment.shellKind || environment.layoutMode || 'traditional';
 
   if (role === 'dialog') {
     return {
@@ -137,7 +138,7 @@ export const resolveActivityLaunchPlacement = (
   }
 
   if (
-    environment.layoutMode === 'traditional'
+    shellKind === 'traditional'
     && environment.desktopModeId === 'telegram'
     && environment.isMobile
     && activity.pageType === 'standalone'
@@ -160,7 +161,7 @@ export const resolveActivityLaunchPlacement = (
     };
   }
 
-  if (environment.layoutMode === 'freeform') {
+  if (shellKind === 'freeform') {
     return {
       placement: 'workspace-window',
       intent,

@@ -81,6 +81,32 @@ describe('resolveRootSafeAreaStyle', () => {
     });
   });
 
+  it('lets standalone activities own the top status-bar safe area while root keeps other insets', () => {
+    const rootStyle = resolveRootSafeAreaStyle({
+      isAndroidGenericTauri: true,
+      layoutSource: 'window',
+      statusBarSafeArea: 'manual',
+      safeInsets: {
+        top: 24,
+        right: 2,
+        bottom: 18,
+        left: 4
+      }
+    });
+
+    expect(rootStyle).toEqual({
+      '--lw-root-safe-top': '0px',
+      '--lw-root-safe-right': '2px',
+      '--lw-root-safe-bottom': '18px',
+      '--lw-root-safe-left': '4px'
+    });
+    expect(resolveRootSafeAreaResidualStyle(rootStyle)).toEqual({
+      '--lw-content-safe-right': '0px',
+      '--lw-content-safe-bottom': '0px',
+      '--lw-content-safe-left': '0px'
+    });
+  });
+
   it('keeps the fullscreen panel full-bleed and consumes root safe area as padding without a backdrop layer', () => {
     const cssPath = resolve(sourceRoot, 'styles/app-shell-base.css');
     const css = readFileSync(cssPath, 'utf8');
@@ -96,6 +122,15 @@ describe('resolveRootSafeAreaStyle', () => {
     expect(css).toContain('var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px))');
     expect(css).not.toContain('top: calc(var(--lw-viewport-offset-top, 0px) + var(--lw-root-safe-top, 0px));');
     expect(css).not.toContain('height: calc(var(--lw-app-height, 100vh) - var(--lw-root-safe-top, 0px)');
+  });
+
+  it('paints Activity status bar background through the web shell layer', () => {
+    const cssPath = resolve(sourceRoot, 'styles/app-shell-base.css');
+    const css = readFileSync(cssPath, 'utf8');
+
+    expect(css).toContain('.lw-fullscreen-panel::after');
+    expect(css).toContain('height: var(--lw-safe-top, 0px);');
+    expect(css).toContain('background: var(--lw-activity-statusbar-bg, transparent);');
   });
 
   it('defines web safe-area fallback variables from CSS environment insets', () => {

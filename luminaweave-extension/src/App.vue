@@ -105,7 +105,12 @@ import { useWorkspaceNavigation } from './composables/shell/useWorkspaceNavigati
 import { useActivityLaunchState } from './composables/shell/useActivityLaunchState.js';
 import { useDiscordShell } from './composables/shell/useDiscordShell.js';
 import { resolveActivityLaunchPlacement } from './platform/activity/activityLaunchResolver.js';
-import type { ActivityLaunchIntent } from './platform/activity/types.js';
+import {
+  createActivityStatusBarStyle,
+  resolveActivityStatusBarAppearance
+} from './platform/activity/statusBarAppearance.js';
+import { applyAndroidStatusBarAppearance } from './platform/activity/androidStatusBarBridge.js';
+import type { ActivityLaunchIntent, ActivityStatusBarDescriptor } from './platform/activity/types.js';
 import {
   getDesktopModeOptions,
   resolveThemeValues
@@ -121,7 +126,7 @@ import AppRootContainer from './shell/AppRootContainer.vue';
 import LuminaShellRoot from './shell/LuminaShellRoot.vue';
 import SplashPage from './components/SplashPage.vue';
 
-type LayoutMode = 'traditional' | 'freeform';
+type ShellKind = 'traditional' | 'freeform';
 
 registerLuminaPlugins();
 
@@ -186,7 +191,8 @@ const {
   navigationPreset,
   surfacePreset
 } = useThemePack();
-const layoutMode = computed<LayoutMode>(() => desktopShell.value.kind as LayoutMode);
+const shellKind = computed<ShellKind>(() => desktopShell.value.kind as ShellKind);
+const layoutMode = shellKind;
 
 const traditionalNavigationPreset = computed<Required<ThemeTraditionalNavigationPreset>>(() => ({
   headerVariant: navigationPreset.value.traditional?.headerVariant || 'default',
@@ -395,9 +401,27 @@ const {
   safeAreaCssSource: HostDetector.isGenericTauriApp && HostDetector.isAndroid ? 'lumina-native' : 'auto'
 });
 
+const {
+  activeActivityStatusBar,
+  activeRightPanelActivity,
+  applyLaunchResolution,
+  setActivityStatusBarOverride,
+  clearTransientActivityMetadata
+} = useActivityLaunchState();
+
+const resolvedActivityStatusBarAppearance = computed(() => resolveActivityStatusBarAppearance({
+  statusBar: activeActivityStatusBar.value,
+  resolvedAppearance: resolvedTheme.value
+}));
+
+const activityStatusBarStyle = computed<CSSProperties>(() =>
+  createActivityStatusBarStyle(resolvedActivityStatusBarAppearance.value)
+);
+
 const rootSafeAreaStyle = computed<CSSProperties>(() => resolveRootSafeAreaStyle({
   isAndroidGenericTauri: HostDetector.isGenericTauriApp && HostDetector.isAndroid,
   layoutSource: layoutSource.value,
+  statusBarSafeArea: resolvedActivityStatusBarAppearance.value.safeArea,
   safeInsets: {
     top: safeInsetTopPx.value,
     right: safeInsetRightPx.value,
@@ -409,12 +433,6 @@ const rootSafeAreaStyle = computed<CSSProperties>(() => resolveRootSafeAreaStyle
 const rootFrameSafeAreaStyle = computed<CSSProperties>(() =>
   resolveRootSafeAreaResidualStyle(rootSafeAreaStyle.value)
 );
-const {
-  activeRightPanelActivity,
-  activityStatusBarStyle,
-  applyLaunchResolution,
-  clearTransientActivityMetadata
-} = useActivityLaunchState();
 
 const parseCssPixel = (value: unknown): number => {
   const parsed = Number.parseFloat(String(value ?? '0'));
@@ -442,6 +460,13 @@ watch([
     rootSafeTopPx,
     panelTopPx,
     panelPaddingTopPx
+  });
+}, { immediate: true });
+
+watch(resolvedActivityStatusBarAppearance, (appearance) => {
+  applyAndroidStatusBarAppearance({
+    appearance,
+    isAndroidGenericTauri: HostDetector.isGenericTauriApp && HostDetector.isAndroid
   });
 }, { immediate: true });
 
@@ -625,7 +650,7 @@ const resolveWorkspaceActivityAppId = (preferredAppId: string | undefined, panel
 
 const handleLaunchActivity = (intent: ActivityLaunchIntent) => {
   const resolved = resolveActivityLaunchPlacement(intent, {
-    layoutMode: layoutMode.value,
+    shellKind: shellKind.value,
     isMobile: isMobile.value,
     desktopModeId: activeDesktopModeId.value
   });
@@ -680,6 +705,10 @@ const handleLaunchActivity = (intent: ActivityLaunchIntent) => {
   if (resolved.tab) {
     handleOpenTab(resolved.tab);
   }
+};
+
+const handleSetActivityStatusBar = (statusBar: ActivityStatusBarDescriptor | null) => {
+  setActivityStatusBarOverride(statusBar);
 };
 
 const handleSwitchMainView = (tabId: string, options: { preserveActivityMetadata?: boolean } = {}) => {
@@ -889,6 +918,7 @@ useShellBootstrap({
   settingsRevision,
   handleOpenTab,
   handleLaunchActivity,
+  handleSetActivityStatusBar,
   handleSwitchMainView,
   handleSwitchWidgetPanel: handleSwitchRightPanel,
   handleToggleWidgetPanel,

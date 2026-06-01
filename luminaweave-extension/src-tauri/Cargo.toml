@@ -2,7 +2,7 @@
 name = "luminaweave-client"
 version = "0.1.0"
 description = "LuminaWeave Tauri Client"
-authors = ["LuminaWeave"]
+# authors = ["LuminaWeave"]
 license = "AGPL-3.0-only"
 repository = ""
 edition = "2021"

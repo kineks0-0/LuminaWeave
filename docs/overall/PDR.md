@@ -159,6 +159,7 @@ Desktop Modes 定义完整工作方式，不只是皮肤。
 
 - Traditional、Freeform、Discord、Telegram 等可替换壳层。
 - 由 desktop mode 决定导航、surface 映射、交互策略和设计 tokens。
+- `DesktopModeManifest` 是桌面模式的唯一公开事实源；Desktop Mode Runtime、设置详情、surface overrides 与 Activity placement 都应从该 manifest 派生运行时描述，不再维护并行的第二份公开 manifest。
 - 插件通过 surface contract 暴露业务 renderer，桌面模式可以包裹、替换布局或提供 variant。
 - 插件或业务组件通过 Activity LaunchIntent 启动页面，只声明目标、默认/小窗偏好、嵌套/独立页面和可选状态栏/标题栏/二级菜单 metadata；具体落到主区、右侧栏、临时移动页、Telegram 移动页面栈或自由工作台窗口，由 desktop mode 解析。
 
@@ -204,7 +205,7 @@ LuminaWeave 至少支持三类运行形态：
 - TauriTavern / 原生宿主环境。
 - Standalone / local fallback 路径。
 - 普通 Tauri Android 客户端的 safe area 由 native bridge 提供：Android `WindowInsets` 的物理像素必须转换为 Web CSS px 后写入 `--lw-native-safe-*`，再归一化为不可覆盖的 `--lw-safe-*`。Root shell 以 full-bleed panel 背景和 `--lw-root-safe-*` padding 统一消费，并用 `--lw-content-safe-*` 表达子内容剩余可消费 safe-area，避免组件级状态栏补丁和重复 padding。
-- Activity 可声明状态栏背景与图标颜色。Lumina 原生 Android 客户端消费该 metadata；TauriTavern 不新增宿主 ABI，保持 safe-area / 背景消费，状态栏图标颜色在该宿主下为 no-op。
+- Activity 可声明状态栏背景、图标颜色与 safe-area 所有权。状态栏背景由 root shell 的 edge-to-edge Web 层消费 `--lw-activity-statusbar-bg` 渲染，不作为 native Android 背景色 ABI；`iconColor: auto` 由 Desktop Mode Runtime 按当前外观解析：深色外观使用白色状态栏图标，浅色外观使用黑色状态栏图标；`light` / `dark` 可由页面手动覆盖。`safeArea: shell` 由 root shell 消费顶部状态栏区域，`safeArea: manual` 保留顶部 `--lw-content-safe-top` 给独立页面自行适配。Lumina 原生 Android 客户端通过 WebView JS bridge 只消费解析后的图标颜色；TauriTavern 不新增宿主 ABI，保持 safe-area / 背景消费，状态栏图标颜色在该宿主下为 no-op。
 - Web / PWA fallback 路径只通过全局 `--lw-web-safe-* = env(safe-area-inset-*)` 暴露浏览器 safe-area；前端 `auto` 来源优先使用 native / TauriTavern host layout，只有宿主布局源不可用时才落到 Web safe-area 变量。
 
 运行形态由 Runtime Host、host-drivers 与 HAL runtime ports 描述；资源来源由 Resource Source 描述。二者不应混为一谈。
