@@ -25,14 +25,14 @@ import { computed, onMounted } from 'vue';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 import { useSettings } from './useSettings.js';
 import { getSettingsEntry } from './settingsRegistry.js';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 
 const props = defineProps({
   pluginId: String
 });
 
 const { initSettings } = useSettings();
-const { cssVars, variant: detailVariant } = useComponentSkin('settings.detailed');
+const { cssVars, variant: detailVariant } = useSurfaceSkin('settings.detailed');
 const detailSkinStyle = computed(() => cssVars.value);
 
 onMounted(() => {

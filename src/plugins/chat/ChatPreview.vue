@@ -111,7 +111,7 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted, reactive, watch, nextTick } from 'vue';
 import { activeSettings } from '../settings/useSettings.js';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 
 const isCollapsed = ref(false);
 const activeTab = ref<'typography' | 'streaming'>('typography');
@@ -141,7 +141,7 @@ let chunkTimer: any = null;
 let buffer = '';
 let queue: string[] = [];
 let charIndex = 0;
-const { cssVars: previewSkinVars, variant: chatVariant } = useComponentSkin('chat.preview');
+const { cssVars: previewSkinVars, variant: chatVariant } = useSurfaceSkin('chat.preview');
 
 const previewStyle = computed(() => {
   return {

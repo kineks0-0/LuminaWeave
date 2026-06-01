@@ -373,8 +373,8 @@ import { LuminaWeaveAPI } from '../../api/index.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { useConversationContextStore } from '../../stores/useConversationContextStore.js';
 import { useImeSubmitGuard } from '../../composables/useImeSubmitGuard.js';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
-import { getThemeSettingValue } from '../../theme/themeRegistry.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import { getDesktopModeSettingValue } from '../../desktop-modes/core/registry.js';
 import { resolveChatSurfaceState, resolveChatViewState } from './chatViewState.js';
 import type { ChatSessionRef } from '../../types/SessionTypes.js';
 
@@ -395,9 +395,9 @@ const props = withDefaults(defineProps<Props>(), {
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const { activeSettings } = useSettings();
 const contextStore = useConversationContextStore();
-const { cssVars: chatSkinVars, variant: chatVariant, desktopModeId } = useComponentSkin('chat.stream');
-const { cssVars: telegramConversationVars } = useComponentSkin('telegram.conversation');
-const { cssVars: telegramComposerVars } = useComponentSkin('telegram.composer');
+const { cssVars: chatSkinVars, variant: chatVariant, desktopModeId } = useSurfaceSkin('chat.stream');
+const { cssVars: telegramConversationVars } = useSurfaceSkin('telegram.conversation');
+const { cssVars: telegramComposerVars } = useSurfaceSkin('telegram.composer');
 
 // === 状态 ===
 const quickInput = ref('');
@@ -441,7 +441,7 @@ const effectClass = computed(() => {
 
 const isCompact = computed(() => props.isMobile || props.workspaceCompact);
 const isTelegramVariant = computed(() => chatVariant.value === 'telegram');
-const showUsernames = computed(() => getThemeSettingValue(activeSettings, desktopModeId.value, 'showUsernames', true) !== false);
+const showUsernames = computed(() => getDesktopModeSettingValue(activeSettings, desktopModeId.value, 'showUsernames', true) !== false);
 const assistantMessageShape = computed(() => String(chatSkinVars.value['--lw-chat-assistant-shape'] || 'bubble'));
 const userMessageShape = computed(() => String(chatSkinVars.value['--lw-chat-user-shape'] || 'bubble'));
 const assistantAvatarPlacement = computed(() => String(chatSkinVars.value['--lw-chat-assistant-avatar-placement'] || 'inline'));

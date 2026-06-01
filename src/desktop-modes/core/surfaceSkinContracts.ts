@@ -1,12 +1,12 @@
 import { shallowReactive } from 'vue';
-import type { ThemeableComponentContract } from './types.js';
+import type { SurfaceSkinContract } from './types.js';
 
-class ThemeComponentRegistry {
-    public readonly contracts = shallowReactive<Record<string, ThemeableComponentContract>>(
-        {} as Record<string, ThemeableComponentContract>
+class SurfaceSkinContractRegistry {
+    public readonly contracts = shallowReactive<Record<string, SurfaceSkinContract>>(
+        {} as Record<string, SurfaceSkinContract>
     );
 
-    register(contract: ThemeableComponentContract) {
+    register(contract: SurfaceSkinContract) {
         this.contracts[contract.componentId] = contract;
     }
 
@@ -19,7 +19,7 @@ class ThemeComponentRegistry {
     }
 }
 
-export const themeComponentRegistry = new ThemeComponentRegistry();
+export const surfaceSkinContracts = new SurfaceSkinContractRegistry();
 
 [
     {
@@ -351,6 +351,6 @@ export const themeComponentRegistry = new ThemeComponentRegistry();
         ],
         supportedVariants: ['default', 'telegram']
     }
-].forEach(contract => themeComponentRegistry.register(contract));
+].forEach(contract => surfaceSkinContracts.register(contract));
 
-export const getThemeableComponentContract = (componentId: string) => themeComponentRegistry.get(componentId);
+export const getSurfaceSkinContract = (componentId: string) => surfaceSkinContracts.get(componentId);

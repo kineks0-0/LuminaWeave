@@ -5,7 +5,7 @@ import { desktopModeRuntimeRegistry } from '../DesktopModeRuntimeRegistry.js';
 import { initializeDesktopModeRuntime } from '../initializeDesktopModeRuntime.js';
 import { SurfaceRegistry } from '../../surface/SurfaceRegistry.js';
 import type { SurfaceRendererDefinition } from '../../surface/types.js';
-import { registerDesktopMode } from '../../../theme/themeRegistry.js';
+import { registerDesktopMode } from '../../../desktop-modes/core/registry.js';
 
 vi.mock('../../../shell/traditional/TelegramUserInfoPanel.vue', () => ({
     default: defineComponent({ name: 'TelegramUserInfoPanelStub', template: '<div />' })

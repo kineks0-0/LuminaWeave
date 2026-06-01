@@ -1,8 +1,4 @@
 import { lwStorage, type StorageScope } from '../storage.js';
-import {
-    getCanonicalSettingsStorageKey,
-    getLegacySettingsStorageKey
-} from '../../theme/themeRegistry.js';
 
 export interface SettingsStorageChange {
     key: string;
@@ -34,35 +30,15 @@ export class SettingsDomainService {
     }
 
     getEffectiveValue(storageKey: string, scope?: StorageScope): unknown {
-        const primaryValue = this.getValue(storageKey, null, scope);
-        if (primaryValue !== null && primaryValue !== undefined) {
-            return primaryValue;
-        }
-
-        const legacyStorageKey = getLegacySettingsStorageKey(storageKey);
-        if (!legacyStorageKey) {
-            return primaryValue;
-        }
-
-        return this.getValue(legacyStorageKey, null, scope);
+        return this.getValue(storageKey, null, scope);
     }
 
     getEffectiveScope(storageKey: string): StorageScope | null {
-        const directScope = this.storage.getScopeOf(storageKey);
-        if (directScope) {
-            return directScope;
-        }
-
-        const legacyStorageKey = getLegacySettingsStorageKey(storageKey);
-        return legacyStorageKey ? this.storage.getScopeOf(legacyStorageKey) : null;
+        return this.storage.getScopeOf(storageKey);
     }
 
     async setSetting(storageKey: string, value: unknown, scope: StorageScope = 'Global'): Promise<void> {
         await this.storage.set(storageKey, value, scope);
-        const legacyStorageKey = getLegacySettingsStorageKey(storageKey);
-        if (legacyStorageKey) {
-            await this.storage.set(legacyStorageKey, value, scope);
-        }
     }
 
     setGlobalValue(storageKey: string, value: unknown): Promise<void> {
@@ -85,7 +61,7 @@ export class SettingsDomainService {
     }
 
     canonicalizeStorageKey(storageKey: string): string {
-        return getCanonicalSettingsStorageKey(storageKey);
+        return storageKey;
     }
 
     onAnyChange(callback: SettingsStorageChangeHandler): () => void {

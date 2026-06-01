@@ -188,7 +188,7 @@ import { lwStorage } from '../../../api/storage.js';
 import { LuminaWeaveAPI } from '../../../api';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../../platform/activity/activityLaunchResolver.js';
 import type { ActivityDescriptor } from '../../../platform/activity/types.js';
-import { useComponentSkin } from '../../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
 
 const props = withDefaults(defineProps<{
   mode?: 'large' | 'small';
@@ -200,7 +200,7 @@ const props = withDefaults(defineProps<{
 });
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
-const { cssVars: directorCssVars, variant: directorVariant } = useComponentSkin('director.panel');
+const { cssVars: directorCssVars, variant: directorVariant } = useSurfaceSkin('director.panel');
 const directorPanelStyle = computed<CSSProperties>(() => directorCssVars.value as CSSProperties);
 const normalizedActivity = computed(() => normalizeActivityDescriptor(props.activity, activityFromLegacyMode(props.mode)));
 const isSmallActivity = computed(() => normalizedActivity.value.size === 'small');

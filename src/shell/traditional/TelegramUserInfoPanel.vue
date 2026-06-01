@@ -128,7 +128,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import type { CSSProperties } from 'vue';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import type {
   CharacterChannelGroup,
   CharacterChannelSessionItem,
@@ -164,7 +164,7 @@ const emit = defineEmits<{
   (e: 'openSession', sessionId: string): void;
 }>();
 
-const { cssVars: infoPanelVars } = useComponentSkin('telegram.infoPanel');
+const { cssVars: infoPanelVars } = useSurfaceSkin('telegram.infoPanel');
 const infoPanelStyle = computed<CSSProperties>(() => infoPanelVars.value as CSSProperties);
 const activeTab = ref<'history' | 'tools'>('history');
 

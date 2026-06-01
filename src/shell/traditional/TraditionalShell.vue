@@ -302,7 +302,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue';
 import { computed } from 'vue';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import DiscordCharacterRail from '../../components/DiscordCharacterRail.vue';
 import DiscordGuildRail from '../../components/DiscordGuildRail.vue';
 import ForgeSidebar from '../../components/ForgeSidebar.vue';
@@ -500,7 +500,7 @@ const onOpenTelegramMobileToolEntry = (toolId: TelegramRailToolEntry['id']) => {
   onOpenTelegramToolEntry(toolId);
   onPushTelegramMobileRoute({ name: 'tool', toolId });
 };
-const { cssVars: telegramFrameVars } = useComponentSkin('telegram.frame');
+const { cssVars: telegramFrameVars } = useSurfaceSkin('telegram.frame');
 const telegramFrameStyle = computed<CSSProperties>(() => telegramFrameVars.value as CSSProperties);
 const telegramLeftRailStyle = computed<CSSProperties>(() => ({
   width: `${telegramLeftRailWidth.value}px`,

@@ -13,8 +13,8 @@ import {
     getDesktopMode,
     listDesktopModes,
     registerDesktopMode
-} from '../../theme/themeRegistry.js';
-import type { DesktopModeManifest } from '../../theme/types.js';
+} from '../../desktop-modes/core/registry.js';
+import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
 
 export interface RegisteredPanelConfig {
     title: string;

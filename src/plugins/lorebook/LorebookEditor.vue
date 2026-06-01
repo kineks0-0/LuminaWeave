@@ -222,7 +222,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 
 const props = defineProps<{
   entry: LuminaLorebookEntry,
@@ -245,7 +245,7 @@ const isFullWindow = computed({
   get: () => props.isFullWindow || false,
   set: (val) => emit('update:isFullWindow', val)
 });
-const { cssVars: editorSkinVars, variant: editorVariant } = useComponentSkin('lorebook.editor');
+const { cssVars: editorSkinVars, variant: editorVariant } = useSurfaceSkin('lorebook.editor');
 const editorSkinStyle = computed(() => editorSkinVars.value);
 
 const isNew = computed(() => !props.entry.uid);

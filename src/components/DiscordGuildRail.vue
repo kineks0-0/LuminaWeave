@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue';
-import { useComponentSkin } from '../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../desktop-modes/core/useSurfaceSkin.js';
 
 defineProps<{
   items: { id: string; name: string; icon?: string }[];
@@ -71,7 +71,7 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
-const { cssVars: guildSkinVars, variant: guildVariant } = useComponentSkin('shell.guildRail');
+const { cssVars: guildSkinVars, variant: guildVariant } = useSurfaceSkin('shell.guildRail');
 const guildStyle = computed<CSSProperties>(() => guildSkinVars.value as CSSProperties);
 </script>
 

@@ -1,14 +1,13 @@
-import type { SettingDefinition } from '../types/plugin.js';
-import { getThemeSettingValue } from './themeRegistry.js';
+import type { SettingDefinition } from '../../types/plugin.js';
+import { getDesktopModeSettingValue } from '../core/registry.js';
 import type {
     ComponentThemeContext,
     DesktopModeManifest,
-    ThemePack,
     ThemeAvatarPlacement,
     ThemeMessageShape,
     ThemeValueMap,
     ThemeValueResolver
-} from './types.js';
+} from '../core/types.js';
 
 const resolveAvatarRadius = (shape: string | undefined) => {
     if (shape === 'square') return '14px';
@@ -51,7 +50,6 @@ const CHAT_ROLE_TYPOGRAPHY_OPTIONS = [
 ] as const;
 const GLOBAL_SCOPES: Array<'Global'> = ['Global'];
 const ACTIVE_DESKTOP_MODE_SETTING_KEY = 'lumina-settings.activeDesktopMode';
-const LEGACY_ACTIVE_THEME_PACK_SETTING_KEY = 'lumina-settings.activeThemePack';
 
 const getActiveDesktopModeScopedSetting = (
     settings: Record<string, any>,
@@ -60,11 +58,9 @@ const getActiveDesktopModeScopedSetting = (
 ) => {
     const activeMode = String(
         settings[ACTIVE_DESKTOP_MODE_SETTING_KEY]
-        ?? settings[LEGACY_ACTIVE_THEME_PACK_SETTING_KEY]
         ?? 'classic'
     );
     return settings[`desktop-mode-${activeMode}.${settingKey}`]
-        ?? settings[`theme-pack-${activeMode}.${settingKey}`]
         ?? fallback;
 };
 
@@ -293,31 +289,31 @@ const createChatTypographySettings = (defaults: {
 
 const resolveRoleTypographyVars = (
     activeSettings: ThemeValueMap,
-    themePackId: string,
+    desktopModeId: string,
     prefix: '--lw-chat' | '--lw-chat-preview'
 ): Record<string, string> => {
-    const fontSize = Number(getThemeSettingValue(activeSettings, themePackId, 'chatFontSize', 16));
-    const lineHeight = Number(getThemeSettingValue(activeSettings, themePackId, 'chatLineHeight', 1.6));
-    const letterSpacing = Number(getThemeSettingValue(activeSettings, themePackId, 'chatLetterSpacing', 0));
-    const assistantMode = String(getThemeSettingValue(activeSettings, themePackId, 'assistantTypographyMode', 'follow'));
-    const userMode = String(getThemeSettingValue(activeSettings, themePackId, 'userTypographyMode', 'follow'));
+    const fontSize = Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontSize', 16));
+    const lineHeight = Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLineHeight', 1.6));
+    const letterSpacing = Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLetterSpacing', 0));
+    const assistantMode = String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantTypographyMode', 'follow'));
+    const userMode = String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userTypographyMode', 'follow'));
     const assistantFontSize = assistantMode === 'custom'
-        ? Number(getThemeSettingValue(activeSettings, themePackId, 'assistantFontSize', fontSize))
+        ? Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantFontSize', fontSize))
         : fontSize;
     const assistantLineHeight = assistantMode === 'custom'
-        ? Number(getThemeSettingValue(activeSettings, themePackId, 'assistantLineHeight', lineHeight))
+        ? Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantLineHeight', lineHeight))
         : lineHeight;
     const assistantLetterSpacing = assistantMode === 'custom'
-        ? Number(getThemeSettingValue(activeSettings, themePackId, 'assistantLetterSpacing', letterSpacing))
+        ? Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantLetterSpacing', letterSpacing))
         : letterSpacing;
     const userFontSize = userMode === 'custom'
-        ? Number(getThemeSettingValue(activeSettings, themePackId, 'userFontSize', fontSize))
+        ? Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userFontSize', fontSize))
         : fontSize;
     const userLineHeight = userMode === 'custom'
-        ? Number(getThemeSettingValue(activeSettings, themePackId, 'userLineHeight', lineHeight))
+        ? Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userLineHeight', lineHeight))
         : lineHeight;
     const userLetterSpacing = userMode === 'custom'
-        ? Number(getThemeSettingValue(activeSettings, themePackId, 'userLetterSpacing', letterSpacing))
+        ? Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userLetterSpacing', letterSpacing))
         : letterSpacing;
 
     return {
@@ -330,7 +326,7 @@ const resolveRoleTypographyVars = (
     };
 };
 
-const discordThemeSettings: Record<string, SettingDefinition> = {
+export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
     messageDensity: {
         default: 'compact',
         label: '消息密度',
@@ -451,7 +447,7 @@ const discordThemeSettings: Record<string, SettingDefinition> = {
     }
 };
 
-const classicThemeSettings: Record<string, SettingDefinition> = {
+export const classicDesktopModeSettings: Record<string, SettingDefinition> = {
     messageDensity: {
         default: 'cozy',
         label: '消息密度',
@@ -512,8 +508,8 @@ const classicThemeSettings: Record<string, SettingDefinition> = {
     }
 };
 
-const stageThemeSettings: Record<string, SettingDefinition> = {
-    messageDensity: classicThemeSettings.messageDensity,
+export const stageDesktopModeSettings: Record<string, SettingDefinition> = {
+    messageDensity: classicDesktopModeSettings.messageDensity,
     ...createRoleMessageSettings({
         assistantShape: 'bubble',
         userShape: 'bubble',
@@ -530,17 +526,17 @@ const stageThemeSettings: Record<string, SettingDefinition> = {
         letterSpacing: 0
     }),
     avatarShape: {
-        ...classicThemeSettings.avatarShape,
+        ...classicDesktopModeSettings.avatarShape,
         default: 'rounded'
     },
     bubbleStyle: {
-        ...classicThemeSettings.bubbleStyle,
+        ...classicDesktopModeSettings.bubbleStyle,
         default: 'soft'
     },
-    showUsernames: classicThemeSettings.showUsernames
+    showUsernames: classicDesktopModeSettings.showUsernames
 };
 
-const telegramThemeSettings: Record<string, SettingDefinition> = {
+export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
     appearanceMode: {
         default: 'follow-setting',
         label: '配色模式',
@@ -671,7 +667,7 @@ const telegramThemeSettings: Record<string, SettingDefinition> = {
     }
 };
 
-const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifest['surfaceSkins'] => ({
+export const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifest['surfaceSkins'] => ({
     'shell.app': {
         componentId: 'shell.app',
         cssVars: {
@@ -780,9 +776,9 @@ const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifes
     },
     'shell.characterCard': {
         componentId: 'shell.characterCard',
-        cssVars: ({ activeSettings, themePackId }) => {
-            const density = getThemeSettingValue(activeSettings, themePackId, 'sidebarCardDensity');
-            const avatarShape = getThemeSettingValue(activeSettings, themePackId, 'avatarShape');
+        cssVars: ({ activeSettings, desktopModeId }) => {
+            const density = getDesktopModeSettingValue(activeSettings, desktopModeId, 'sidebarCardDensity');
+            const avatarShape = getDesktopModeSettingValue(activeSettings, desktopModeId, 'avatarShape');
             return {
                 '--lw-character-card-bg': 'var(--lw-bg-surface)',
                 '--lw-character-card-border': 'var(--lw-border-base)',
@@ -819,11 +815,11 @@ const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifes
     },
     'chat.stream': {
         componentId: 'chat.stream',
-        cssVars: ({ activeSettings, themePackId, resolvedAppearance }) => {
-            const density = getThemeSettingValue(activeSettings, themePackId, 'messageDensity');
-            const avatarShape = getThemeSettingValue(activeSettings, themePackId, 'avatarShape');
-            const bubbleStyle = getThemeSettingValue(activeSettings, themePackId, 'bubbleStyle');
-            const chatFontFamily = getThemeSettingValue(activeSettings, themePackId, 'chatFontFamily', 'sans-serif');
+        cssVars: ({ activeSettings, desktopModeId, resolvedAppearance }) => {
+            const density = getDesktopModeSettingValue(activeSettings, desktopModeId, 'messageDensity');
+            const avatarShape = getDesktopModeSettingValue(activeSettings, desktopModeId, 'avatarShape');
+            const bubbleStyle = getDesktopModeSettingValue(activeSettings, desktopModeId, 'bubbleStyle');
+            const chatFontFamily = getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontFamily', 'sans-serif');
             const isDark = resolvedAppearance === 'dark';
             return {
                 '--lw-chat-stream-bg': isDark ? 'var(--lw-bg-app)' : 'transparent',
@@ -841,33 +837,33 @@ const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifes
                 '--lw-chat-menu-shadow': 'var(--lw-shadow-card)',
                 '--lw-chat-empty-mark-bg': 'var(--lw-primary)',
                 '--lw-chat-empty-mark-shadow': 'var(--lw-shadow-card)',
-                '--lw-chat-user-name-display': getThemeSettingValue(activeSettings, themePackId, 'showUsernames', true) === false ? 'none' : 'inline-flex',
+                '--lw-chat-user-name-display': getDesktopModeSettingValue(activeSettings, desktopModeId, 'showUsernames', true) === false ? 'none' : 'inline-flex',
                 '--lw-chat-user-bubble': isDark ? 'color-mix(in srgb, var(--lw-bg-surface) 92%, white 8%)' : 'var(--lw-bg-subtle)',
                 '--lw-chat-user-bubble-border': 'var(--lw-chat-border, var(--lw-border-subtle))',
                 '--lw-chat-message-hover-bg': 'transparent',
-                '--lw-chat-assistant-shape': String(getThemeSettingValue(activeSettings, themePackId, 'assistantMessageShape', 'bubble')),
-                '--lw-chat-user-shape': String(getThemeSettingValue(activeSettings, themePackId, 'userMessageShape', 'bubble')),
-                '--lw-chat-assistant-avatar-placement': String(getThemeSettingValue(activeSettings, themePackId, 'assistantAvatarPlacement', 'inline')),
-                '--lw-chat-user-avatar-placement': String(getThemeSettingValue(activeSettings, themePackId, 'userAvatarPlacement', 'inline')),
+                '--lw-chat-assistant-shape': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantMessageShape', 'bubble')),
+                '--lw-chat-user-shape': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userMessageShape', 'bubble')),
+                '--lw-chat-assistant-avatar-placement': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantAvatarPlacement', 'inline')),
+                '--lw-chat-user-avatar-placement': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userAvatarPlacement', 'inline')),
                 '--lw-chat-font': resolveFontFamily(chatFontFamily),
-                '--lw-chat-font-weight': Number(getThemeSettingValue(activeSettings, themePackId, 'chatFontWeight', 400)),
-                '--lw-chat-font-size': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatFontSize', 16))}px`,
-                '--lw-chat-line-height': Number(getThemeSettingValue(activeSettings, themePackId, 'chatLineHeight', 1.6)),
-                '--lw-chat-paragraph-spacing': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatParagraphSpacing', 16))}px`,
-                '--lw-chat-letter-spacing': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatLetterSpacing', 0))}px`,
-                '--lw-chat-page-width': String(getThemeSettingValue(activeSettings, themePackId, 'chatPageWidth', 'auto')),
-                ...resolveRoleTypographyVars(activeSettings, themePackId, '--lw-chat'),
+                '--lw-chat-font-weight': Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontWeight', 400)),
+                '--lw-chat-font-size': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontSize', 16))}px`,
+                '--lw-chat-line-height': Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLineHeight', 1.6)),
+                '--lw-chat-paragraph-spacing': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatParagraphSpacing', 16))}px`,
+                '--lw-chat-letter-spacing': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLetterSpacing', 0))}px`,
+                '--lw-chat-page-width': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatPageWidth', 'auto')),
+                ...resolveRoleTypographyVars(activeSettings, desktopModeId, '--lw-chat'),
                 ...overrides
             };
         }
     },
     'chat.preview': {
         componentId: 'chat.preview',
-        cssVars: ({ activeSettings, themePackId, resolvedAppearance }) => {
-            const density = getThemeSettingValue(activeSettings, themePackId, 'messageDensity');
-            const bubbleStyle = getThemeSettingValue(activeSettings, themePackId, 'bubbleStyle');
-            const avatarShape = getThemeSettingValue(activeSettings, themePackId, 'avatarShape');
-            const chatFontFamily = getThemeSettingValue(activeSettings, themePackId, 'chatFontFamily', 'sans-serif');
+        cssVars: ({ activeSettings, desktopModeId, resolvedAppearance }) => {
+            const density = getDesktopModeSettingValue(activeSettings, desktopModeId, 'messageDensity');
+            const bubbleStyle = getDesktopModeSettingValue(activeSettings, desktopModeId, 'bubbleStyle');
+            const avatarShape = getDesktopModeSettingValue(activeSettings, desktopModeId, 'avatarShape');
+            const chatFontFamily = getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontFamily', 'sans-serif');
             const isDark = resolvedAppearance === 'dark';
             return {
                 '--lw-chat-preview-bg': isDark ? 'color-mix(in srgb, var(--lw-bg-app) 92%, black)' : 'var(--lw-bg-subtle)',
@@ -877,17 +873,17 @@ const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifes
                 '--lw-chat-preview-bubble-radius': resolveBubbleRadius(bubbleStyle),
                 '--lw-chat-preview-padding': density === 'compact' ? '10px 14px' : '12px 16px',
                 '--lw-chat-preview-avatar-radius': resolveAvatarRadius(avatarShape),
-                '--lw-chat-preview-assistant-shape': String(getThemeSettingValue(activeSettings, themePackId, 'assistantMessageShape', 'bubble')),
-                '--lw-chat-preview-user-shape': String(getThemeSettingValue(activeSettings, themePackId, 'userMessageShape', 'bubble')),
-                '--lw-chat-preview-assistant-avatar-placement': String(getThemeSettingValue(activeSettings, themePackId, 'assistantAvatarPlacement', 'inline')),
-                '--lw-chat-preview-user-avatar-placement': String(getThemeSettingValue(activeSettings, themePackId, 'userAvatarPlacement', 'inline')),
+                '--lw-chat-preview-assistant-shape': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantMessageShape', 'bubble')),
+                '--lw-chat-preview-user-shape': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userMessageShape', 'bubble')),
+                '--lw-chat-preview-assistant-avatar-placement': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantAvatarPlacement', 'inline')),
+                '--lw-chat-preview-user-avatar-placement': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userAvatarPlacement', 'inline')),
                 '--lw-chat-preview-font': resolveFontFamily(chatFontFamily),
-                '--lw-chat-preview-font-weight': Number(getThemeSettingValue(activeSettings, themePackId, 'chatFontWeight', 400)),
-                '--lw-chat-preview-font-size': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatFontSize', 16))}px`,
-                '--lw-chat-preview-line-height': Number(getThemeSettingValue(activeSettings, themePackId, 'chatLineHeight', 1.6)),
-                '--lw-chat-preview-paragraph-spacing': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatParagraphSpacing', 16))}px`,
-                '--lw-chat-preview-letter-spacing': `${Number(getThemeSettingValue(activeSettings, themePackId, 'chatLetterSpacing', 0))}px`,
-                ...resolveRoleTypographyVars(activeSettings, themePackId, '--lw-chat-preview'),
+                '--lw-chat-preview-font-weight': Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontWeight', 400)),
+                '--lw-chat-preview-font-size': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontSize', 16))}px`,
+                '--lw-chat-preview-line-height': Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLineHeight', 1.6)),
+                '--lw-chat-preview-paragraph-spacing': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatParagraphSpacing', 16))}px`,
+                '--lw-chat-preview-letter-spacing': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLetterSpacing', 0))}px`,
+                ...resolveRoleTypographyVars(activeSettings, desktopModeId, '--lw-chat-preview'),
                 ...overrides
             };
         }
@@ -1079,7 +1075,7 @@ const mergeCssVars = (
     ...resolveThemeValueMap(overrides, context)
 });
 
-const resolveDiscordDesignTokens = ({ resolvedAppearance }: ComponentThemeContext): ThemeValueMap => {
+export const resolveDiscordDesignTokens = ({ resolvedAppearance }: ComponentThemeContext): ThemeValueMap => {
     const isDark = resolvedAppearance === 'dark';
     return isDark
         ? {
@@ -1168,7 +1164,7 @@ const resolveDiscordDesignTokens = ({ resolvedAppearance }: ComponentThemeContex
         };
 };
 
-const createDiscordSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => {
+export const createDiscordSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => {
     const base = createSurfaceSkinMap() as NonNullable<DesktopModeManifest['surfaceSkins']>;
 
     return {
@@ -1666,9 +1662,9 @@ const createDiscordSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => {
     };
 };
 
-const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance, themePackId }: ComponentThemeContext): ThemeValueMap => {
+export const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance, desktopModeId }: ComponentThemeContext): ThemeValueMap => {
     const isDark = resolvedAppearance === 'dark';
-    const glassIntensity = getThemeSettingValue(activeSettings, themePackId, 'glassIntensity', 'medium');
+    const glassIntensity = getDesktopModeSettingValue(activeSettings, desktopModeId, 'glassIntensity', 'medium');
     const glassBlur = glassIntensity === 'clear'
         ? (isDark ? 'blur(30px) saturate(1.24)' : 'blur(32px) saturate(1.28)')
         : glassIntensity === 'soft'
@@ -1757,7 +1753,7 @@ const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance, theme
         };
 };
 
-const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => {
+export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => {
     const base = createSurfaceSkinMap() as NonNullable<DesktopModeManifest['surfaceSkins']>;
 
     return {
@@ -1808,15 +1804,15 @@ const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => 
             componentId: 'telegram.frame',
             variant: 'telegram',
             cssVars: (context: ComponentThemeContext) => {
-                const isFloating = getThemeSettingValue(
+                const isFloating = getDesktopModeSettingValue(
                     context.activeSettings,
-                    context.themePackId,
+                    context.desktopModeId,
                     'panelChromeStyle',
                     'floating-rounded'
                 ) !== 'edge-to-edge';
-                const hasTopBlankSpace = getThemeSettingValue(
+                const hasTopBlankSpace = getDesktopModeSettingValue(
                     context.activeSettings,
-                    context.themePackId,
+                    context.desktopModeId,
                     'topBlankSpace',
                     true
                 ) !== false;
@@ -1967,7 +1963,7 @@ const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => 
         'chat.stream': {
             ...base['chat.stream'],
             cssVars: (context: ComponentThemeContext) => {
-                const density = getThemeSettingValue(context.activeSettings, context.themePackId, 'messageDensity');
+                const density = getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'messageDensity');
                 return {
                     ...resolveThemeValueMap(base['chat.stream']?.cssVars, context),
                     '--lw-chat-stream-bg': context.resolvedAppearance === 'dark'
@@ -2014,10 +2010,10 @@ const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => 
                         : '0 12px 28px rgba(62, 113, 150, 0.13)',
                     '--lw-chat-streaming-surface': 'rgba(var(--lw-primary-rgb), 0.12)',
                     '--lw-chat-streaming-border': 'rgba(var(--lw-primary-rgb), 0.22)',
-                    '--lw-chat-font-size': `${Number(getThemeSettingValue(context.activeSettings, context.themePackId, 'chatFontSize', 12))}px`,
-                    '--lw-chat-line-height': Number(getThemeSettingValue(context.activeSettings, context.themePackId, 'chatLineHeight', 1.45)),
-                    '--lw-chat-paragraph-spacing': `${Number(getThemeSettingValue(context.activeSettings, context.themePackId, 'chatParagraphSpacing', 12))}px`,
-                    '--lw-chat-page-width': String(getThemeSettingValue(context.activeSettings, context.themePackId, 'chatPageWidth', 900))
+                    '--lw-chat-font-size': `${Number(getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'chatFontSize', 12))}px`,
+                    '--lw-chat-line-height': Number(getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'chatLineHeight', 1.45)),
+                    '--lw-chat-paragraph-spacing': `${Number(getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'chatParagraphSpacing', 12))}px`,
+                    '--lw-chat-page-width': String(getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'chatPageWidth', 900))
                 };
             }
         },
@@ -2286,177 +2282,3 @@ const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => 
     };
 };
 
-export const builtinDesktopModes: DesktopModeManifest[] = [
-    {
-        id: 'classic',
-        name: '传统桌面',
-        description: '保留当前 Lumina 工作区的传统桌面组织方式与默认阅读节奏。',
-        preferredAppearance: 'follow-setting',
-        shell: {
-            kind: 'traditional'
-        },
-        navigationPreset: {
-            traditional: {
-                headerVariant: 'default',
-                leftRail: 'none',
-                widgetVariant: 'default',
-                headerDesktopPosition: 'follow-setting',
-                headerMobilePosition: 'follow-setting',
-            },
-        },
-        surfacePreset: {
-            mainSurfaceVariant: 'default',
-            widgetSurfaceVariant: 'default',
-            chatVariant: 'default',
-            settingsVariant: 'default',
-            timelineVariant: 'default',
-        },
-        designTokens: ({ resolvedAppearance }) => ({
-            '--lw-theme-accent-soft': resolvedAppearance === 'dark'
-                ? 'rgba(var(--lw-primary-rgb), 0.16)'
-                : 'rgba(var(--lw-primary-rgb), 0.10)'
-        }),
-        surfaceSkins: createSurfaceSkinMap(),
-        settingsManifest: classicThemeSettings
-    },
-    {
-        id: 'stage',
-        name: '自由工作台',
-        description: '以舞台调度和多窗口工作台为核心的桌面模式。',
-        preferredAppearance: 'follow-setting',
-        shell: {
-            kind: 'freeform'
-        },
-        navigationPreset: {
-            traditional: {
-                headerVariant: 'default',
-                leftRail: 'none',
-                widgetVariant: 'default',
-                headerDesktopPosition: 'follow-setting',
-                headerMobilePosition: 'follow-setting',
-            },
-        },
-        surfacePreset: {
-            mainSurfaceVariant: 'default',
-            widgetSurfaceVariant: 'default',
-            chatVariant: 'default',
-            settingsVariant: 'default',
-            timelineVariant: 'default',
-        },
-        designTokens: ({ resolvedAppearance }) => ({
-            '--lw-theme-accent-soft': resolvedAppearance === 'dark'
-                ? 'rgba(var(--lw-primary-rgb), 0.20)'
-                : 'rgba(var(--lw-primary-rgb), 0.14)',
-            '--lw-theme-panel-sheen': resolvedAppearance === 'dark'
-                ? 'rgba(255, 255, 255, 0.04)'
-                : 'rgba(255, 255, 255, 0.42)'
-        }),
-        surfaceSkins: createSurfaceSkinMap({
-            '--lw-shell-main-bg':
-                'linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 84%, white), color-mix(in srgb, var(--lw-bg-surface) 90%, transparent))',
-            '--lw-shell-widget-bg':
-                'linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 90%, white), color-mix(in srgb, var(--lw-bg-surface) 88%, transparent))',
-            '--lw-shell-stage-bg':
-                'radial-gradient(circle at 18% 20%, rgba(var(--lw-primary-rgb), 0.20), transparent 26%), radial-gradient(circle at 82% 14%, rgba(255, 255, 255, 0.32), transparent 24%), linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 74%, white), color-mix(in srgb, var(--lw-bg-app) 86%, transparent))',
-            '--lw-chat-stream-bg': 'color-mix(in srgb, var(--lw-bg-elevated) 64%, transparent)',
-            '--lw-chat-input-surface': 'color-mix(in srgb, var(--lw-bg-surface) 88%, transparent)',
-            '--lw-chat-bubble-shadow': '0 18px 32px rgba(15, 23, 42, 0.10)'
-        }),
-        settingsManifest: stageThemeSettings
-    },
-    {
-        id: 'telegram',
-        name: 'Telegram 桌面',
-        description: '以聊天为中心的 Liquid Glass 桌面模式，支持浅色/深色、角色列表、会话资料页与移动端四项底栏。',
-        preferredAppearance: 'follow-setting',
-        shell: {
-            kind: 'traditional'
-        },
-        navigationPreset: {
-            traditional: {
-                headerVariant: 'telegram',
-                leftRail: 'character-rail',
-                widgetVariant: 'telegram',
-                headerDesktopPosition: 'top',
-                headerMobilePosition: 'bottom',
-            },
-        },
-        surfacePreset: {
-            mainSurfaceVariant: 'telegram',
-            widgetSurfaceVariant: 'telegram',
-            chatVariant: 'telegram',
-            settingsVariant: 'telegram',
-            timelineVariant: 'telegram',
-        },
-        designTokens: resolveTelegramDesignTokens,
-        surfaceSkins: createTelegramSurfaceSkinMap(),
-        rendererVariants: {
-            'telegram.frame': 'telegram',
-            'telegram.chatList': 'telegram',
-            'telegram.conversation': 'telegram',
-            'telegram.infoPanel': 'telegram',
-            'telegram.composer': 'telegram',
-            'shell.header': 'telegram',
-            'shell.widget': 'telegram',
-            'shell.mainSurface': 'telegram',
-            'shell.characterRail': 'telegram',
-            'shell.characterCard': 'telegram',
-            'chat.stream': 'telegram',
-            'chat.preview': 'telegram',
-            'settings.root': 'telegram',
-            'settings.unified': 'telegram',
-            'settings.detailed': 'telegram',
-            'settings.control': 'telegram',
-            'timeline.root': 'telegram',
-            'lorebook.workspace': 'telegram',
-            'lorebook.editor': 'telegram',
-            'stats.panel': 'telegram',
-            'director.panel': 'telegram'
-        },
-        settingsManifest: telegramThemeSettings
-    },
-    {
-        id: 'discord',
-        name: 'Discord 桌面',
-        description: '频道式桌面模式，角色轨、聊天区和侧栏统一成更强的面板结构，并跟随全局浅色/深色外观。',
-        preferredAppearance: 'follow-setting',
-        shell: {
-            kind: 'traditional'
-        },
-        navigationPreset: {
-            traditional: {
-                headerVariant: 'discord',
-                leftRail: 'character-rail',
-                widgetVariant: 'discord',
-                headerDesktopPosition: 'top',
-                headerMobilePosition: 'top',
-            },
-        },
-        surfacePreset: {
-            mainSurfaceVariant: 'discord',
-            widgetSurfaceVariant: 'discord',
-            chatVariant: 'discord',
-            settingsVariant: 'discord',
-            timelineVariant: 'discord',
-        },
-        designTokens: resolveDiscordDesignTokens,
-        surfaceSkins: createDiscordSurfaceSkinMap(),
-        rendererVariants: {
-            'shell.header': 'discord',
-            'shell.widget': 'discord',
-            'shell.mobileDiscord': 'discord',
-            'shell.guildRail': 'discord',
-            'shell.characterRail': 'discord',
-            'shell.characterCard': 'discord',
-            'chat.stream': 'discord',
-            'settings.root': 'discord-panel',
-            'settings.control': 'discord',
-            'timeline.root': 'discord',
-            'lorebook.workspace': 'discord',
-            'lorebook.editor': 'discord'
-        },
-        settingsManifest: discordThemeSettings
-    }
-];
-
-export const builtinThemePacks: ThemePack[] = builtinDesktopModes;

@@ -113,11 +113,11 @@ import { applyAndroidStatusBarAppearance } from './platform/activity/androidStat
 import type { ActivityLaunchIntent, ActivityStatusBarDescriptor } from './platform/activity/types.js';
 import {
   getDesktopModeOptions,
-  resolveThemeValues
-} from './theme/themeRegistry.js';
-import { useComponentSkin } from './theme/useComponentSkin.js';
-import { useThemePack } from './theme/useThemePack.js';
-import type { ThemeTraditionalNavigationPreset } from './theme/types.js';
+  resolveDesktopModeValues
+} from './desktop-modes/core/registry.js';
+import { useSurfaceSkin } from './desktop-modes/core/useSurfaceSkin.js';
+import { useDesktopMode } from './desktop-modes/core/useDesktopMode.js';
+import type { ThemeTraditionalNavigationPreset } from './desktop-modes/core/types.js';
 import type { DynamicTabConfig, TelegramRailToolEntry } from './shell/types.js';
 import { registerLuminaPlugins } from './bootstrap/registerPlugins.js';
 import { HostDetector } from './api/core/host-drivers/HostDetector.js';
@@ -190,7 +190,7 @@ const {
   resolvedAppearance,
   navigationPreset,
   surfacePreset
-} = useThemePack();
+} = useDesktopMode();
 const shellKind = computed<ShellKind>(() => desktopShell.value.kind as ShellKind);
 const layoutMode = shellKind;
 
@@ -226,12 +226,12 @@ const traditionalHeaderPosition = computed<'top' | 'bottom'>(() =>
     : 'top'
 );
 
-const { cssVars: shellAppSkinVars, variant: shellAppVariant } = useComponentSkin('shell.app');
-const { cssVars: shellPanelBodySkinVars } = useComponentSkin('shell.panelBody');
-const { cssVars: shellMainSurfaceSkinVars } = useComponentSkin('shell.mainSurface');
-const { cssVars: shellWidgetSkinVars } = useComponentSkin('shell.widget');
-const { cssVars: shellWorkspaceStageSkinVars, variant: shellWorkspaceStageVariant } = useComponentSkin('shell.workspaceStage');
-const { cssVars: shellWorkspaceMenuSkinVars, variant: shellWorkspaceMenuVariant } = useComponentSkin('shell.workspaceMenu');
+const { cssVars: shellAppSkinVars, variant: shellAppVariant } = useSurfaceSkin('shell.app');
+const { cssVars: shellPanelBodySkinVars } = useSurfaceSkin('shell.panelBody');
+const { cssVars: shellMainSurfaceSkinVars } = useSurfaceSkin('shell.mainSurface');
+const { cssVars: shellWidgetSkinVars } = useSurfaceSkin('shell.widget');
+const { cssVars: shellWorkspaceStageSkinVars, variant: shellWorkspaceStageVariant } = useSurfaceSkin('shell.workspaceStage');
+const { cssVars: shellWorkspaceMenuSkinVars, variant: shellWorkspaceMenuVariant } = useSurfaceSkin('shell.workspaceMenu');
 
 const {
   activeWorkspaceWindowId,
@@ -484,10 +484,9 @@ const appRootStyle = computed<CSSProperties>(() => ({
   '--lw-safe-left': `${safeInsetLeftPx.value}px`,
   ...rootSafeAreaStyle.value,
   ...activityStatusBarStyle.value,
-  ...resolveThemeValues(activeDesktopMode.value.designTokens, {
+  ...resolveDesktopModeValues(activeDesktopMode.value.designTokens, {
     activeSettings,
     resolvedAppearance: resolvedTheme.value,
-    themePackId: activeDesktopModeId.value,
     desktopModeId: activeDesktopModeId.value
   })
 }));

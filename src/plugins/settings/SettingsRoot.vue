@@ -90,10 +90,10 @@ import SettingsDetailed from './SettingsDetailed.vue';
 import TelegramSettingsHome from './TelegramSettingsHome.vue';
 import { activeSettings, currentDetailedView } from './useSettings.js';
 import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry.js';
-import { getActiveDesktopModeIdFromSettings } from '../../theme/themeRegistry.js';
+import { getActiveDesktopModeIdFromSettings } from '../../desktop-modes/core/registry.js';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../platform/activity/activityLaunchResolver.js';
 import type { ActivityDescriptor } from '../../platform/activity/types.js';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import { cn } from '../../ui/cn.js';
 import { LuminaButton } from '../../ui/primitives';
 
@@ -108,7 +108,7 @@ const props = defineProps({
   }
 });
 
-const { cssVars, variant: settingsVariant } = useComponentSkin('settings.root');
+const { cssVars, variant: settingsVariant } = useSurfaceSkin('settings.root');
 const settingsSkinStyle = computed(() => cssVars.value);
 const activeThemeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings));
 const normalizedActivity = computed(() => normalizeActivityDescriptor(

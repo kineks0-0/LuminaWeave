@@ -401,12 +401,12 @@ import { activeSettings, useSettings } from './useSettings.js';
 import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
 import { LuminaWeaveAPI } from '../../api/index.js';
 import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry.js';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
-import { getActiveDesktopModeIdFromSettings, getDesktopModeOrDefault, getDesktopModeSettingsPluginId } from '../../theme/themeRegistry.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import { getActiveDesktopModeIdFromSettings, getDesktopModeOrDefault, getDesktopModeSettingsPluginId } from '../../desktop-modes/core/registry.js';
 import { LuminaButton, LuminaCheckbox, LuminaIconButton, LuminaSelect, LuminaToggle } from '../../ui/primitives';
 
 const { initSettings } = useSettings();
-const { cssVars, variant: unifiedVariant } = useComponentSkin('settings.unified');
+const { cssVars, variant: unifiedVariant } = useSurfaceSkin('settings.unified');
 const unifiedSkinStyle = computed(() => cssVars.value);
 const activeThemeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings));
 

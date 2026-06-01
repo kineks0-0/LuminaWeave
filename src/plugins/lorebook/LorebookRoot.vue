@@ -12,7 +12,7 @@
 import { computed } from 'vue';
 import LorebookWorkspace from './components/LorebookWorkspace.vue';
 import type { ActivityDescriptor } from '../../platform/activity/types.js';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 
 const props = defineProps<{
   mode?: 'large' | 'small',
@@ -20,6 +20,6 @@ const props = defineProps<{
   isMobile?: boolean
 }>();
 
-const { cssVars: workspaceSkinVars, variant: workspaceVariant } = useComponentSkin('lorebook.workspace');
+const { cssVars: workspaceSkinVars, variant: workspaceVariant } = useSurfaceSkin('lorebook.workspace');
 const workspaceSkinStyle = computed(() => workspaceSkinVars.value);
 </script>
