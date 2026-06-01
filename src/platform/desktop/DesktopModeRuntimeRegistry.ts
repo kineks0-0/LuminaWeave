@@ -1,16 +1,16 @@
 import { markRaw } from 'vue';
 import { surfaceRegistry } from '../surface/SurfaceRegistry.js';
-import type { DesktopModeManifestV2 } from './types.js';
+import type { DesktopModeRuntimeDescriptor } from './types.js';
 
 export class DesktopModeRuntimeRegistry {
-    private readonly modes = new Map<string, DesktopModeManifestV2>();
+    private readonly modes = new Map<string, DesktopModeRuntimeDescriptor>();
 
-    register(manifest: DesktopModeManifestV2): void {
+    register(manifest: DesktopModeRuntimeDescriptor): void {
         if (this.modes.has(manifest.id)) {
             throw new Error(`[DesktopModeRuntimeRegistry] Duplicate desktop mode id: ${manifest.id}`);
         }
 
-        const normalizedManifest: DesktopModeManifestV2 = {
+        const normalizedManifest: DesktopModeRuntimeDescriptor = {
             ...manifest,
             shellRenderer: manifest.shellRenderer ? markRaw(manifest.shellRenderer) : undefined
         };
@@ -26,16 +26,17 @@ export class DesktopModeRuntimeRegistry {
         });
     }
 
-    get(desktopModeId: string): DesktopModeManifestV2 | undefined {
+    get(desktopModeId: string): DesktopModeRuntimeDescriptor | undefined {
         return this.modes.get(desktopModeId);
     }
 
-    list(): DesktopModeManifestV2[] {
+    list(): DesktopModeRuntimeDescriptor[] {
         return Array.from(this.modes.values());
     }
 
     clearForTests(): void {
         this.modes.clear();
+        surfaceRegistry.clearDesktopOverridesForTests();
     }
 }
 

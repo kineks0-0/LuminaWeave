@@ -6,8 +6,10 @@ import type {
 } from '../../platform/activity/types.js';
 
 export const useActivityLaunchState = () => {
-  const activeActivityStatusBar = ref<ActivityStatusBarDescriptor | null>(null);
+  const launchActivityStatusBar = ref<ActivityStatusBarDescriptor | null>(null);
+  const activityStatusBarOverride = ref<ActivityStatusBarDescriptor | null>(null);
   const activeRightPanelActivity = ref<ActivityPanelPayload | null>(null);
+  const activeActivityStatusBar = computed(() => activityStatusBarOverride.value || launchActivityStatusBar.value);
 
   const activityStatusBarStyle = computed<CSSProperties>(() => ({
     ...(activeActivityStatusBar.value?.background
@@ -19,14 +21,20 @@ export const useActivityLaunchState = () => {
   }));
 
   const applyLaunchResolution = (resolved: ActivityLaunchResolution) => {
-    activeActivityStatusBar.value = resolved.activity.statusBar || null;
+    launchActivityStatusBar.value = resolved.activity.statusBar || null;
+    activityStatusBarOverride.value = null;
     activeRightPanelActivity.value = resolved.placement === 'right-panel'
       ? resolved.panel || null
       : null;
   };
 
+  const setActivityStatusBarOverride = (statusBar: ActivityStatusBarDescriptor | null) => {
+    activityStatusBarOverride.value = statusBar;
+  };
+
   const clearTransientActivityMetadata = () => {
-    activeActivityStatusBar.value = null;
+    launchActivityStatusBar.value = null;
+    activityStatusBarOverride.value = null;
     activeRightPanelActivity.value = null;
   };
 
@@ -39,6 +47,7 @@ export const useActivityLaunchState = () => {
     activeRightPanelActivity,
     activityStatusBarStyle,
     applyLaunchResolution,
+    setActivityStatusBarOverride,
     clearTransientActivityMetadata,
     clearRightPanelActivity
   };

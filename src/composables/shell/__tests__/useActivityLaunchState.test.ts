@@ -47,4 +47,71 @@ describe('useActivityLaunchState', () => {
     expect(state.activeActivityStatusBar.value).toBeNull();
     expect(state.activeRightPanelActivity.value).toBeNull();
   });
+
+  it('lets components temporarily override Activity status bar metadata', () => {
+    const state = useActivityLaunchState();
+
+    state.setActivityStatusBarOverride({
+      background: 'var(--lw-bg-app)',
+      iconColor: 'light',
+      safeArea: 'manual'
+    });
+
+    expect(state.activeActivityStatusBar.value).toEqual({
+      background: 'var(--lw-bg-app)',
+      iconColor: 'light',
+      safeArea: 'manual'
+    });
+
+    state.setActivityStatusBarOverride(null);
+
+    expect(state.activeActivityStatusBar.value).toBeNull();
+  });
+
+  it('restores launch status bar metadata after a component override is cleared', () => {
+    const state = useActivityLaunchState();
+    const resolution: ActivityLaunchResolution = {
+      placement: 'main',
+      intent: {
+        id: 'card_maker',
+        title: 'Card Maker',
+        icon: 'cards',
+        target: {
+          kind: 'registered-panel',
+          panelId: 'card_maker'
+        }
+      },
+      activity: {
+        size: 'default',
+        pageType: 'standalone',
+        statusBar: {
+          background: 'var(--lw-card-maker-bg)',
+          iconColor: 'auto',
+          safeArea: 'manual'
+        }
+      },
+      panelId: 'card_maker'
+    };
+
+    state.applyLaunchResolution(resolution);
+    state.setActivityStatusBarOverride({
+      background: 'var(--lw-bg-app)',
+      iconColor: 'light',
+      safeArea: 'shell'
+    });
+
+    expect(state.activeActivityStatusBar.value).toEqual({
+      background: 'var(--lw-bg-app)',
+      iconColor: 'light',
+      safeArea: 'shell'
+    });
+
+    state.setActivityStatusBarOverride(null);
+
+    expect(state.activeActivityStatusBar.value).toEqual({
+      background: 'var(--lw-card-maker-bg)',
+      iconColor: 'auto',
+      safeArea: 'manual'
+    });
+  });
 });

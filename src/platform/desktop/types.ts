@@ -1,8 +1,9 @@
 import type { Component } from 'vue';
 import type { SettingDefinition } from '../../types/plugin.js';
 import type { SurfaceContractId, SurfaceRendererDefinition } from '../surface/types.js';
+import type { DesktopModeManifest, DesktopModeShellKind } from '../../theme/types.js';
 
-export type DesktopShellKind = 'traditional' | 'freeform' | (string & {});
+export type DesktopShellKind = DesktopModeShellKind | (string & {});
 
 export interface DesktopNavigationModel {
     id: string;
@@ -19,7 +20,8 @@ export interface DesktopInteractionPolicy {
     supportsContextualTools?: boolean;
 }
 
-export interface DesktopModeManifestV2 {
+export interface DesktopModeRuntimeDescriptor {
+    manifest: DesktopModeManifest;
     id: string;
     name: string;
     description?: string;
@@ -33,3 +35,9 @@ export interface DesktopModeManifestV2 {
     tokens?: Record<string, string | number>;
     settingsSchema?: Record<string, SettingDefinition>;
 }
+
+/**
+ * @deprecated DesktopModeManifest is the public protocol; runtime code should
+ * use DesktopModeRuntimeDescriptor as the derived internal shape.
+ */
+export type DesktopModeManifestV2 = DesktopModeRuntimeDescriptor;

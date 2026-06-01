@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --mode github",
-    "build:debug": "vite build --mode debug",
+    "build": "vue-tsc --noEmit && vite build --mode github",
+    "build:debug": "vue-tsc --noEmit && vite build --mode debug",
     "build:client": "vue-tsc --noEmit && vite build --mode client",
     "analyze": "vite build --mode analyze",
     "watch": "vite build --watch --mode debug",

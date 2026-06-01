@@ -135,6 +135,10 @@ export class SurfaceRegistry {
         this.desktopOverrides.set(key, [...(renderers || []), normalized]);
     }
 
+    clearDesktopOverridesForTests(): void {
+        this.desktopOverrides.clear();
+    }
+
     registerEmptyRenderer(renderer: SurfaceRendererDefinition): void {
         this.emptyRenderer = {
             ...renderer,

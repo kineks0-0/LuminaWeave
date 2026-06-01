@@ -202,6 +202,7 @@ const currentShellRenderer = computed(() => (
 ));
 
 const shellContext = computed<ShellRuntimeContext>(() => ({
+  shellKind: props.layoutMode,
   layoutMode: props.layoutMode,
   activeDesktopModeId: props.activeDesktopModeId,
   desktopModeOptions: props.desktopModeOptions,

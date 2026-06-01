@@ -126,6 +126,10 @@ export interface WorkspaceWindowEntry {
 }
 
 export interface ShellRuntimeContext {
+  shellKind: 'traditional' | 'freeform';
+  /**
+   * @deprecated Use shellKind. Kept for legacy shell templates and data attributes.
+   */
   layoutMode: 'traditional' | 'freeform';
   activeDesktopModeId: string;
   desktopModeOptions: Array<{ value: string; label: string; description?: string }>;
