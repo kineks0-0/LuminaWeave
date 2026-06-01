@@ -5,9 +5,9 @@ import {
     getDesktopModeSettingsPluginId,
     getDesktopModeOrDefault,
     getDesktopModeSettingsManifest,
-    isThemeSettingsPluginId,
+    isDesktopModeSettingsPluginId,
     listDesktopModes
-} from '../../theme/themeRegistry.js';
+} from '../../desktop-modes/core/registry.js';
 
 export interface SettingsSourceEntry {
     pluginId: string;
@@ -35,14 +35,14 @@ export const getRegisteredSettingsCatalog = (): Record<string, Record<string, Se
 };
 
 export const getSettingsEntry = (pluginId: string): SettingsSourceEntry | null => {
-    if (isThemeSettingsPluginId(pluginId)) {
-        const themeId = getDesktopModeIdFromSettingsPluginId(pluginId);
-        const desktopMode = getDesktopModeOrDefault(themeId);
+    if (isDesktopModeSettingsPluginId(pluginId)) {
+        const desktopModeId = getDesktopModeIdFromSettingsPluginId(pluginId);
+        const desktopMode = getDesktopModeOrDefault(desktopModeId);
         return {
-            pluginId: getDesktopModeSettingsPluginId(themeId),
+            pluginId: getDesktopModeSettingsPluginId(desktopModeId),
             pluginName: `${desktopMode.name}`,
             pluginIcon: desktopMode.icon || '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 3a9 9 0 1 0 9 9c0-.34-.02-.67-.06-1A7 7 0 0 1 12 3z"></path></svg>',
-            manifest: getDesktopModeSettingsManifest(themeId),
+            manifest: getDesktopModeSettingsManifest(desktopModeId),
             kind: 'desktop-mode'
         };
     }
@@ -63,7 +63,7 @@ export const getSettingsEntry = (pluginId: string): SettingsSourceEntry | null =
     };
 };
 
-export const getVisibleSettingsEntries = (activeThemeId: string): SettingsSourceEntry[] => {
+export const getVisibleSettingsEntries = (activeDesktopModeId: string): SettingsSourceEntry[] => {
     const entries: SettingsSourceEntry[] = [];
     Object.keys((pluginManager as any).registeredSettings).forEach(pluginId => {
         const entry = getSettingsEntry(pluginId);
@@ -72,9 +72,9 @@ export const getVisibleSettingsEntries = (activeThemeId: string): SettingsSource
         }
     });
 
-    const themeEntry = getSettingsEntry(getDesktopModeSettingsPluginId(activeThemeId));
-    if (themeEntry) {
-        entries.push(themeEntry);
+    const desktopModeEntry = getSettingsEntry(getDesktopModeSettingsPluginId(activeDesktopModeId));
+    if (desktopModeEntry) {
+        entries.push(desktopModeEntry);
     }
 
     return entries;

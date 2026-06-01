@@ -28,7 +28,7 @@ const createStoragePort = (initialValues: Record<string, unknown> = {}) => {
 };
 
 describe('SettingsDomainService', () => {
-    it('reads canonical values before legacy aliases', () => {
+    it('reads desktop mode settings from the canonical key only', () => {
         const storage = createStoragePort({
             'desktop-mode-discord.messageDensity': 'compact',
             'theme-pack-discord.messageDensity': 'comfortable'
@@ -38,23 +38,23 @@ describe('SettingsDomainService', () => {
         expect(service.getEffectiveValue('desktop-mode-discord.messageDensity')).toBe('compact');
     });
 
-    it('falls back to legacy aliases when the canonical key is empty', () => {
+    it('does not fall back to legacy theme pack aliases', () => {
         const storage = createStoragePort({
             'theme-pack-discord.messageDensity': 'comfortable'
         });
         const service = new SettingsDomainService(storage);
 
-        expect(service.getEffectiveValue('desktop-mode-discord.messageDensity')).toBe('comfortable');
+        expect(service.getEffectiveValue('desktop-mode-discord.messageDensity')).toBeNull();
     });
 
-    it('writes canonical and legacy aliases for migrated desktop mode settings', async () => {
+    it('writes only the canonical desktop mode setting key', async () => {
         const storage = createStoragePort();
         const service = new SettingsDomainService(storage);
 
         await service.setSetting('desktop-mode-discord.messageDensity', 'compact', 'Global');
 
         expect(storage.set).toHaveBeenCalledWith('desktop-mode-discord.messageDensity', 'compact', 'Global');
-        expect(storage.set).toHaveBeenCalledWith('theme-pack-discord.messageDensity', 'compact', 'Global');
+        expect(storage.set).not.toHaveBeenCalledWith('theme-pack-discord.messageDensity', 'compact', 'Global');
     });
 
     it('subscribes to wildcard storage changes and returns an unsubscribe function', () => {

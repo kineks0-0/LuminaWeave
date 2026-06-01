@@ -67,7 +67,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { getActiveDesktopModeIdFromSettings } from '../../theme/themeRegistry.js';
+import { getActiveDesktopModeIdFromSettings } from '../../desktop-modes/core/registry.js';
 import {
   TELEGRAM_ICON_STROKE_WIDTH,
   getTelegramAvatarStyle,

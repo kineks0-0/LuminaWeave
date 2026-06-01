@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-本规划用于把当前前端“主题包 / 桌面模式”体系收敛为可执行、可扩展、可文档化的正式架构，并为后续逐步实现提供统一约束。
+本规划用于把当前前端“桌面模式”体系收敛为可执行、可扩展、可文档化的正式架构，并为后续逐步实现提供统一约束。
 
 本轮规划只处理桌面模式相关抽象，不扩展其他业务目标。
 
@@ -104,20 +104,21 @@
 
 ## 6. 兼容策略
 
-正式命名：
+项目仍处于早期阶段，本专项不保留旧 Theme Pack 兼容层。正式命名：
 
 - `activeDesktopMode`
 - `desktop-mode-*`
 
-兼容读取但不再作为新实现主依赖：
+删除旧命名：
 
 - `activeThemePack`
 - `theme-pack-*`
+- `ThemePack`
+- `themePackId`
+- `useThemePack()`
+- `getThemePack*`
 
-兼容目标如下：
-
-- 旧配置中仅存在 `activeThemePack=discord` 时，仍能正确进入 `Discord 桌面`
-- 旧 `theme-pack-discord.*` 自定义项仍能迁移或映射到新命名体系
+不做 runtime fallback、不双写 storage key、不导出兼容别名。旧本地配置可直接失效。
 
 ## 7. 架构边界与实现要求
 
@@ -146,6 +147,9 @@
 2. App Shell 与 Header 收敛
 3. Discord 模式归位
 4. 自定义桌面标准化 API
+5. 无兼容硬切与桌面模式目录拆分
+   - 状态：2026-06-02 已完成首轮硬切。
+   - 输出：旧 `src/theme` 入口删除；新增 `src/desktop-modes/core` 和 `src/desktop-modes/builtins/<mode>`；不保留 Theme Pack API / storage fallback。
 
 各阶段的可执行任务文档位于：
 
@@ -153,6 +157,7 @@
 - [02-app-shell-refactor](../../../current/tasks/desktop-modes/steps/02-app-shell-refactor.md)
 - [03-discord-mode-normalization](../../../current/tasks/desktop-modes/steps/03-discord-mode-normalization.md)
 - [04-desktop-mode-extension-api](../../../current/tasks/desktop-modes/steps/04-desktop-mode-extension-api.md)
+- [05-hard-cut-desktop-mode-module](../../../current/tasks/desktop-modes/steps/05-hard-cut-desktop-mode-module.md)
 
 ## 9. 验收标准
 
@@ -164,7 +169,7 @@
 - 注册后的自定义模式可自动进入桌面模式选择列表
 - 注册后的自定义模式可自动进入设置详情区
 - 运行时能够解析 `classic`、`stage`、`discord` 与至少一个自定义模式
-- 旧 `activeThemePack` / `theme-pack-*` 配置仍具备兼容读取能力
+- 旧 `activeThemePack` / `theme-pack-*` / `ThemePack` 兼容入口被删除
 - `npm run type-check` 通过
 
 ## 10. 阶段通用验证
@@ -172,7 +177,7 @@
 每个阶段都至少执行以下验证：
 
 - `npm run type-check`
-- 旧配置兼容验证
+- 无旧 Theme Pack API / storage fallback 验证
 - `classic` / `stage` / `discord` 模式切换验证
 - 至少 1 个自定义模式的注册与显示验证
 - 设置面板中桌面模式列表与详情区验证

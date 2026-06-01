@@ -12,7 +12,7 @@
 
 ## 需要修改的子系统
 
-- `luminaweave-extension/src/theme/*` 中 Discord 相关注册定义
+- `luminaweave-extension/src/desktop-modes/builtins/discord/*` 中 Discord 相关注册定义
 - `App.vue`、`PanelHeader.vue`、设置面板中的 Discord 文案与状态映射
 - Discord 专属 navigation / surface / settings 归属定义
 - 必要时同步 `docs/index.md`、`docs/overall/PDR.md`、`docs/overall/system_design.md`

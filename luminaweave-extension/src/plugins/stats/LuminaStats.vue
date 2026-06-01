@@ -52,7 +52,7 @@ import { computed, inject, type CSSProperties } from 'vue';
 import { LuminaWeaveAPI } from '../../api/index.js';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../platform/activity/activityLaunchResolver.js';
 import type { ActivityDescriptor } from '../../platform/activity/types.js';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 
 const props = withDefaults(defineProps<{
   mode?: 'large' | 'small';
@@ -64,7 +64,7 @@ const props = withDefaults(defineProps<{
 });
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
-const { cssVars: statsCssVars, variant: statsVariant } = useComponentSkin('stats.panel');
+const { cssVars: statsCssVars, variant: statsVariant } = useSurfaceSkin('stats.panel');
 const statsSkinStyle = computed<CSSProperties>(() => statsCssVars.value as CSSProperties);
 const normalizedActivity = computed(() => normalizeActivityDescriptor(props.activity, activityFromLegacyMode(props.mode)));
 const isSmallActivity = computed(() => normalizedActivity.value.size === 'small');

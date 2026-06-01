@@ -38,7 +38,7 @@ import {
     type SendMessageOptions
 } from './services/GenerationDomainService.js';
 import { settingsDomainService, type SettingsDomainService } from './services/SettingsDomainService.js';
-import type { DesktopModeManifest } from '../theme/types.js';
+import type { DesktopModeManifest } from '../desktop-modes/core/types.js';
 
 // 全局变量声明已移动至 src/types/sillytavern.d.ts
 

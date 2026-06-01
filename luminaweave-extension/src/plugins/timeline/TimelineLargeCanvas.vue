@@ -134,7 +134,7 @@ import HistoryNode from './HistoryNode.vue';
 import NodePreviewModal from './NodePreviewModal.vue';
 
 import gsap from 'gsap';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import { useTimelineGraphViewModel, type TimelineViewNode } from './useTimelineGraphViewModel.js';
 
 // LogicFlow 节点属性定义
@@ -260,7 +260,7 @@ const props = defineProps<{
   mode?: 'small' | 'large',
   isMobile?: boolean
 }>();
-const { cssVars: timelineSkinVars, variant: timelineVariant } = useComponentSkin('timeline.root');
+const { cssVars: timelineSkinVars, variant: timelineVariant } = useSurfaceSkin('timeline.root');
 const timelineSkinStyle = computed(() => timelineSkinVars.value);
 
 // 内部判定移动端，增加对 navigator 的 fallback 以增强稳健性

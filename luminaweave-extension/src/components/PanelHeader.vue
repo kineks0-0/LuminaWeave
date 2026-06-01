@@ -296,7 +296,7 @@
 import { computed, inject, ref, onMounted, onUnmounted, type CSSProperties } from 'vue';
 import { LuminaWeaveAPI } from '@/api';
 import { pluginManager } from '@/core/PluginManager';
-import { useComponentSkin } from '../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../desktop-modes/core/useSurfaceSkin.js';
 
 const props = withDefaults(defineProps<{
   activeMainTab?: string;
@@ -337,7 +337,7 @@ const emit = defineEmits<{
 const mainPlugins = computed(() => pluginManager.getPluginsInSlot('mainView'));
 const headerCenterPlugins = computed(() => pluginManager.getPluginsInSlot('headerCenter'));
 const headerRightPlugins = computed(() => pluginManager.getPluginsInSlot('headerRight'));
-const { cssVars: headerSkinVars } = useComponentSkin('shell.header');
+const { cssVars: headerSkinVars } = useSurfaceSkin('shell.header');
 const headerSkinStyle = computed<CSSProperties>(() => headerSkinVars.value as CSSProperties);
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');

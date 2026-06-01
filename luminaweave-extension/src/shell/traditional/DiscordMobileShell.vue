@@ -62,7 +62,7 @@
 import { computed, type CSSProperties } from 'vue';
 import DiscordCharacterRail from '../../components/DiscordCharacterRail.vue';
 import DiscordGuildRail from '../../components/DiscordGuildRail.vue';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import type {
   CharacterChannelState,
   CreateChatConversationInput,
@@ -86,7 +86,7 @@ defineProps<{
   onToggleMobileSessionExpansion: (groupKey: string) => void;
 }>();
 
-const { cssVars: mobileDiscordSkinVars } = useComponentSkin('shell.mobileDiscord');
+const { cssVars: mobileDiscordSkinVars } = useSurfaceSkin('shell.mobileDiscord');
 const mobileDiscordStyle = computed<CSSProperties>(() => mobileDiscordSkinVars.value as CSSProperties);
 
 const emit = defineEmits<{

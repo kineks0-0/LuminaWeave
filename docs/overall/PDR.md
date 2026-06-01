@@ -160,6 +160,7 @@ Desktop Modes 定义完整工作方式，不只是皮肤。
 - Traditional、Freeform、Discord、Telegram 等可替换壳层。
 - 由 desktop mode 决定导航、surface 映射、交互策略和设计 tokens。
 - `DesktopModeManifest` 是桌面模式的唯一公开事实源；Desktop Mode Runtime、设置详情、surface overrides 与 Activity placement 都应从该 manifest 派生运行时描述，不再维护并行的第二份公开 manifest。
+- 当前早期阶段不保留旧 Theme Pack 兼容层；代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`，旧 `activeThemePack` / `theme-pack-*` 配置可直接失效。
 - 插件通过 surface contract 暴露业务 renderer，桌面模式可以包裹、替换布局或提供 variant。
 - 插件或业务组件通过 Activity LaunchIntent 启动页面，只声明目标、默认/小窗偏好、嵌套/独立页面和可选状态栏/标题栏/二级菜单 metadata；具体落到主区、右侧栏、临时移动页、Telegram 移动页面栈或自由工作台窗口，由 desktop mode 解析。
 

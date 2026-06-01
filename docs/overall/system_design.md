@@ -139,6 +139,7 @@ Desktop Mode Runtime 定义完整工作方式。
 - component overrides
 - interaction policy
 - 单注册源：公开注册入口只接受 `DesktopModeManifest`；内部 `DesktopModeRuntimeDescriptor` 由该 manifest 派生 shell renderer、navigation model、interaction policy、settings schema 和受控 desktop overrides。`layoutMode` 仅作为 legacy 命名兼容，运行时策略输入使用派生的 `shellKind`。
+- 早期阶段不维护 Theme Pack 兼容 API 或 legacy storage fallback；桌面模式选择只读取 `lumina-settings.activeDesktopMode`，模式设置只使用 `desktop-mode-*` 前缀。
 - Activity LaunchIntent 解析：业务层只提交目标、角色、默认/小窗偏好、嵌套/独立页面和 Activity metadata；Desktop Mode Runtime 决定实际呈现为主区、右侧栏、移动临时页、Telegram 移动页面栈或自由工作台窗口。
 - tokens
 - settings schema
@@ -525,7 +526,7 @@ XMLTagRegistry 是 XML 标签元数据真相源。
 - `HostInteractionService`：toast、confirm、宿主交互。
 - `ConversationDomainService`：会话来源、列表、上下文、消息、世界线命令。
 - `GenerationDomainService`：发送、重生成、PromptInspector 自定义生成和生成状态。
-- `SettingsDomainService`：设置读写、legacy key、导入导出和监听。
+- `SettingsDomainService`：设置读写、导入导出和监听。当前不再为桌面模式维护 legacy key 双写或 fallback。
 
 Facade 可保留委托入口，但新增 UI 应优先消费明确 domain service。
 

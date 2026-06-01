@@ -1,5 +1,5 @@
-import { listDesktopModes, onDesktopModeRegistered } from '../../theme/themeRegistry.js';
-import type { DesktopModeManifest } from '../../theme/types.js';
+import { listDesktopModes, onDesktopModeRegistered } from '../../desktop-modes/core/registry.js';
+import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
 import FreeformShell from '../../shell/freeform/FreeformShell.vue';
 import TraditionalShell from '../../shell/traditional/TraditionalShell.vue';
 import TelegramUserInfoPanel from '../../shell/traditional/TelegramUserInfoPanel.vue';
@@ -7,7 +7,7 @@ import { desktopModeRuntimeRegistry } from './DesktopModeRuntimeRegistry.js';
 import type { DesktopModeRuntimeDescriptor, DesktopShellKind } from './types.js';
 
 const getShellKind = (mode: DesktopModeManifest): DesktopShellKind =>
-    mode.shell?.kind || mode.workspacePreset?.defaultMode || 'traditional';
+    mode.shell.kind;
 
 const getShellRenderer = (shellKind: DesktopShellKind) =>
     shellKind === 'freeform' ? FreeformShell : TraditionalShell;

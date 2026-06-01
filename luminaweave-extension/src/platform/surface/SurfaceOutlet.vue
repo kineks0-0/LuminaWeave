@@ -10,7 +10,7 @@ import { computed, provide, useAttrs } from 'vue';
 import { lwStorage } from '../../api/storage.js';
 import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
 import { activeSettings } from '../../plugins/settings/useSettings.js';
-import { getActiveDesktopModeIdFromSettings } from '../../theme/themeRegistry.js';
+import { getActiveDesktopModeIdFromSettings } from '../../desktop-modes/core/registry.js';
 import { surfaceRegistry } from './SurfaceRegistry.js';
 import type { SurfaceContractId, SurfaceRendererRuntimeBridge, SurfaceRuntimeContext, SurfaceThemeContext } from './types.js';
 

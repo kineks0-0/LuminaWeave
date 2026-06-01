@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'vue';
-import type { ResolvedThemeAppearance } from '../../theme/types.js';
+import type { ResolvedDesktopAppearance } from '../../desktop-modes/core/types.js';
 import type {
   ActivityStatusBarDescriptor,
   ResolvedActivityStatusBarAppearance
@@ -10,7 +10,7 @@ export const resolveActivityStatusBarIconColor = ({
   resolvedAppearance
 }: {
   iconColor?: ActivityStatusBarDescriptor['iconColor'];
-  resolvedAppearance: ResolvedThemeAppearance;
+  resolvedAppearance: ResolvedDesktopAppearance;
 }): ResolvedActivityStatusBarAppearance['iconColor'] => {
   if (iconColor === 'light' || iconColor === 'dark') {
     return iconColor;
@@ -24,7 +24,7 @@ export const resolveActivityStatusBarAppearance = ({
   resolvedAppearance
 }: {
   statusBar: ActivityStatusBarDescriptor | null | undefined;
-  resolvedAppearance: ResolvedThemeAppearance;
+  resolvedAppearance: ResolvedDesktopAppearance;
 }): ResolvedActivityStatusBarAppearance => ({
   background: statusBar?.background || null,
   iconColor: resolveActivityStatusBarIconColor({

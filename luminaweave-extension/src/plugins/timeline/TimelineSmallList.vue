@@ -110,7 +110,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import NodePreviewModal from './NodePreviewModal.vue';
 import { useTimelineGraphViewModel } from './useTimelineGraphViewModel.js';
 
@@ -118,7 +118,7 @@ const props = defineProps<{
   mode?: 'small' | 'large';
 }>();
 
-const { cssVars: timelineSkinVars, variant: timelineVariant } = useComponentSkin('timeline.root');
+const { cssVars: timelineSkinVars, variant: timelineVariant } = useSurfaceSkin('timeline.root');
 const timelineSkinStyle = computed(() => timelineSkinVars.value);
 const mode = computed(() => props.mode ?? 'small');
 const timelineTreeRef = ref<HTMLElement | null>(null);

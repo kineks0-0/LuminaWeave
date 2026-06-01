@@ -1,25 +1,24 @@
-import type { SettingDefinition } from '../types/plugin.js';
+import type { SettingDefinition } from '../../types/plugin.js';
 
-export type ThemePackAppearance = 'light' | 'dark' | 'follow-setting';
-export type ResolvedThemeAppearance = 'light' | 'dark';
-export type ThemeWorkspaceMode = 'traditional' | 'freeform';
-export type DesktopModeShellKind = ThemeWorkspaceMode;
-export type DesktopModeAppearance = ThemePackAppearance;
+export type DesktopModeAppearance = 'light' | 'dark' | 'follow-setting';
+export type ResolvedDesktopAppearance = 'light' | 'dark';
+export type DesktopModeShellKind = 'traditional' | 'freeform';
+export type ThemeWorkspaceMode = DesktopModeShellKind;
 export type ThemeMessageShape = 'bubble' | 'document';
 export type ThemeAvatarPlacement = 'hidden' | 'inline' | 'topbar' | 'rail';
 export type ThemeHeaderVariant = 'default' | 'discord' | 'telegram';
 export type ThemeRailMode = 'none' | 'character-rail';
 export type ThemeSurfaceVariant = 'default' | 'discord' | 'telegram';
 
-export interface ComponentThemeContext {
+export interface SurfaceSkinContext {
     activeSettings: Record<string, any>;
-    resolvedAppearance: ResolvedThemeAppearance;
-    themePackId: string;
-    desktopModeId?: string;
+    resolvedAppearance: ResolvedDesktopAppearance;
+    desktopModeId: string;
 }
 
+export type ComponentThemeContext = SurfaceSkinContext;
 export type ThemeValueMap = Record<string, string | number | undefined>;
-export type ThemeValueResolver = ThemeValueMap | ((context: ComponentThemeContext) => ThemeValueMap);
+export type ThemeValueResolver = ThemeValueMap | ((context: SurfaceSkinContext) => ThemeValueMap);
 
 export interface SurfaceSkinDefinition {
     componentId: string;
@@ -29,9 +28,7 @@ export interface SurfaceSkinDefinition {
     variant?: string;
 }
 
-export type ComponentSkinDefinition = SurfaceSkinDefinition;
-
-export interface ThemeableComponentContract {
+export interface SurfaceSkinContract {
     componentId: string;
     exposedCssVars?: string[];
     supportedVariants?: string[];
@@ -46,14 +43,6 @@ export interface ThemeWorkspaceModePreset {
 
 export interface DesktopModeShellDefinition extends ThemeWorkspaceModePreset {
     kind: DesktopModeShellKind;
-}
-
-export interface ThemeWorkspacePreset {
-    defaultMode: ThemeWorkspaceMode;
-    availableModes?: ThemeWorkspaceMode[];
-    lockedMode?: boolean;
-    traditional?: ThemeWorkspaceModePreset;
-    freeform?: ThemeWorkspaceModePreset;
 }
 
 export interface ThemeTraditionalNavigationPreset {
@@ -93,23 +82,11 @@ export interface DesktopModeManifest {
     icon?: string;
     preferredAppearance?: DesktopModeAppearance;
     shell: DesktopModeShellDefinition;
-    /**
-     * @deprecated Keep only as a compatibility layer while the codebase migrates
-     * from Theme Pack workspace presets to desktop-mode-first shells.
-     */
-    workspacePreset?: ThemeWorkspacePreset;
     navigationPreset?: ThemeNavigationPreset;
     surfacePreset?: ThemeSurfacePreset;
     windowPreset?: ThemeWindowPreset;
     designTokens?: ThemeValueResolver;
     surfaceSkins?: Record<string, SurfaceSkinDefinition>;
-    /**
-     * @deprecated Keep only as a compatibility layer while the codebase migrates
-     * from component-skin-first theming to pack-driven shell presets.
-     */
-    componentSkins?: Record<string, ComponentSkinDefinition>;
     settingsManifest?: Record<string, SettingDefinition>;
     rendererVariants?: Record<string, string>;
 }
-
-export type ThemePack = DesktopModeManifest;

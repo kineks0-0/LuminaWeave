@@ -4,6 +4,16 @@ Desktop Modes 定义 LuminaWeave 的平台级桌面模式。桌面模式不是�
 
 桌面模式采用单注册源：`DesktopModeManifest` 是公开事实源，`registerDesktopMode()` 会同时进入模式列表、设置详情和 Desktop Mode Runtime。运行时内部只派生 `DesktopModeRuntimeDescriptor`，用于解析 shell renderer、`shellKind`、navigation model、interaction policy 与受控 desktop overrides。
 
+当前项目仍处于早期阶段，桌面模式不保留旧 Theme Pack 兼容层。代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`；`ThemePack`、`activeThemePack`、`theme-pack-*`、`themePackId`、`useThemePack()` 和 `getThemePack*` 不再作为公开或内部入口。
+
+代码目录边界：
+
+- `luminaweave-extension/src/desktop-modes/core/`：公开 manifest 类型、注册中心、桌面模式 composable 与 surface skin 契约。
+- `luminaweave-extension/src/desktop-modes/builtins/<mode>/`：classic / stage / discord / telegram 的 manifest、settings、tokens、skins 与受控模式 policy。
+- `luminaweave-extension/src/desktop-modes/builtins/shared.ts`：跨模式共享 helper 与仍待继续下沉的共享 skins / settings 实现；新增模式不应把专属逻辑继续塞入该文件。
+- `luminaweave-extension/src/platform/desktop/`：运行时 descriptor 派生与 registry，不承载具体模式主题值。
+- `luminaweave-extension/src/shell/`：traditional / freeform 通用壳层渲染。
+
 ## Activity 与启动意图
 
 组件页面统一用 Activity metadata 描述，不再把“大窗口/小窗口”当作业务层容器决策。业务层通过 LaunchIntent 声明目标、角色、默认/小窗偏好、嵌套/独立页面，以及状态栏、标题栏和二级菜单 metadata。

@@ -1,6 +1,6 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue';
 import { lwStorage } from '../../api/storage.js';
-import { getThemeSettingValue } from '../../theme/themeRegistry.js';
+import { getDesktopModeSettingValue } from '../../desktop-modes/core/registry.js';
 import type {
   TelegramConversationListMode,
   TelegramDesktopLeftRoute,
@@ -51,7 +51,7 @@ export const useTelegramShell = ({
   );
 
   const rightInfoPanelMode = computed(() => String(
-    getThemeSettingValue(activeSettings, activeDesktopModeId.value, 'rightInfoPanel', 'auto')
+    getDesktopModeSettingValue(activeSettings, activeDesktopModeId.value, 'rightInfoPanel', 'auto')
   ));
   const isRightPanelExplicitlyOpened = ref(false);
   const telegramConversationListMode = ref<TelegramConversationListMode>(getStoredConversationListMode());

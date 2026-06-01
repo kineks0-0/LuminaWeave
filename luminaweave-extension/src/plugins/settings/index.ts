@@ -1,6 +1,6 @@
 import { defineAsyncComponent } from 'vue';
 import { LuminaPlugin } from '../../types/plugin.js';
-import { getDesktopModeOptions } from '../../theme/themeRegistry.js';
+import { getDesktopModeOptions } from '../../desktop-modes/core/registry.js';
 import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 
 const SettingsRoot = defineAsyncComponent(() => import('./SettingsRoot.vue'));

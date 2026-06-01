@@ -7,7 +7,7 @@
 import { computed, defineAsyncComponent } from 'vue';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../platform/activity/activityLaunchResolver.js';
 import type { ActivityDescriptor } from '../../platform/activity/types.js';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import TimelineSmallList from './TimelineSmallList.vue';
 
 const TimelineLargeCanvas = defineAsyncComponent(() => import('./TimelineLargeCanvas.vue'));
@@ -20,7 +20,7 @@ const props = defineProps<{
   isMobile?: boolean;
 }>();
 
-const { variant: timelineVariant } = useComponentSkin('timeline.root');
+const { variant: timelineVariant } = useSurfaceSkin('timeline.root');
 const normalizedActivity = computed(() => normalizeActivityDescriptor(props.activity, activityFromLegacyMode(props.mode)));
 const resolvedMode = computed<TimelineMode>(() => normalizedActivity.value.size === 'default' ? 'large' : 'small');
 const isMobileDevice = computed(() => {

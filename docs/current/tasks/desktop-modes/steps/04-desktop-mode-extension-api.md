@@ -12,7 +12,7 @@
 
 ## 需要修改的子系统
 
-- `luminaweave-extension/src/theme/*` 注册中心与公开类型
+- `luminaweave-extension/src/desktop-modes/core/*` 注册中心与公开类型
 - 桌面模式列表与设置详情区的自动接入逻辑
 - 运行时桌面模式解析逻辑
 - `docs/overall/api/luminaweave_api.md`

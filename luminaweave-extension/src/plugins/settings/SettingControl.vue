@@ -153,7 +153,7 @@ import { lwStorage } from '../../api/storage.js';
 import LuminaStepper from './LuminaStepper.vue';
 import { LuminaInput, LuminaSelect, LuminaSlider, LuminaToggle } from '../../ui/primitives';
 import { cn } from '../../ui/cn.js';
-import { useComponentSkin } from '../../theme/useComponentSkin.js';
+import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import {
   clampSettingNumber,
   getActiveSettingOptionDescription,
@@ -172,7 +172,7 @@ import {
 } from './settingControlModel.js';
 
 const { updateSetting, updateScope } = useSettings();
-const { cssVars: settingsControlSkinVars, variant: settingsControlVariant } = useComponentSkin('settings.control');
+const { cssVars: settingsControlSkinVars, variant: settingsControlVariant } = useSurfaceSkin('settings.control');
 
 const props = defineProps<{
   pluginId: string;

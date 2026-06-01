@@ -1,7 +1,7 @@
 import { computed, nextTick, ref, watch, type CSSProperties, type ComputedRef, type Ref } from 'vue';
 import { CharacterChannelService } from '../../api/core/conversation/CharacterChannelService.js';
 import { luminaWeaveApi as lwApi } from '../../api/index.js';
-import { getDesktopModeSettingStorageKey, getThemeSettingValue } from '../../theme/themeRegistry.js';
+import { getDesktopModeSettingStorageKey, getDesktopModeSettingValue } from '../../desktop-modes/core/registry.js';
 import { useConversationContextStore } from '../../stores/useConversationContextStore.js';
 import type { DynamicTabConfig } from '../../shell/types.js';
 import type { LuminaPlugin } from '../../types/plugin.js';
@@ -54,7 +54,7 @@ export const useDiscordShell = ({
   const showDiscordMobileCharacterRail = ref(false);
 
   const discordChannelMarkVisible = computed(() =>
-    getThemeSettingValue(activeSettings, activeDesktopModeId.value, 'discord-channel-mark', true) !== false
+    getDesktopModeSettingValue(activeSettings, activeDesktopModeId.value, 'discord-channel-mark', true) !== false
   );
 
   const isCharacterChannelDesktopMode = computed(() =>
@@ -80,14 +80,14 @@ export const useDiscordShell = ({
 
   const discordMobileGuildRailPosition = computed<DiscordMobileEdge>(() =>
     resolveDiscordMobileEdge(
-      getThemeSettingValue(activeSettings, activeDesktopModeId.value, 'mobileGuildRailPosition', 'top'),
+      getDesktopModeSettingValue(activeSettings, activeDesktopModeId.value, 'mobileGuildRailPosition', 'top'),
       'top'
     )
   );
 
   const discordMobileCharacterEntryPosition = computed<DiscordMobileEdge>(() =>
     resolveDiscordMobileEdge(
-      getThemeSettingValue(activeSettings, activeDesktopModeId.value, 'mobileCharacterEntryPosition', 'top'),
+      getDesktopModeSettingValue(activeSettings, activeDesktopModeId.value, 'mobileCharacterEntryPosition', 'top'),
       'top'
     )
   );

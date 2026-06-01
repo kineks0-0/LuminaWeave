@@ -402,8 +402,8 @@
 <script setup lang="ts">
 import { computed, ref, watch, type CSSProperties } from 'vue';
 import { activeSettings, useSettings } from '../plugins/settings/useSettings.js';
-import { getThemeSettingValue } from '../theme/themeRegistry.js';
-import { useComponentSkin } from '../theme/useComponentSkin.js';
+import { getDesktopModeSettingValue } from '../desktop-modes/core/registry.js';
+import { useSurfaceSkin } from '../desktop-modes/core/useSurfaceSkin.js';
 import {
   TELEGRAM_ICON_STROKE_WIDTH,
   getTelegramAvatarStyle,
@@ -467,9 +467,9 @@ const props = withDefaults(defineProps<{
 
 useSettings();
 
-const { cssVars: railSkinVars, variant: railVariant, desktopModeId } = useComponentSkin('shell.characterRail');
-const { cssVars: cardSkinVars } = useComponentSkin('shell.characterCard');
-const { cssVars: telegramChatListVars } = useComponentSkin('telegram.chatList');
+const { cssVars: railSkinVars, variant: railVariant, desktopModeId } = useSurfaceSkin('shell.characterRail');
+const { cssVars: cardSkinVars } = useSurfaceSkin('shell.characterCard');
+const { cssVars: telegramChatListVars } = useSurfaceSkin('telegram.chatList');
 
 const railStyle = computed<CSSProperties>(() => ({
   ...(railSkinVars.value as CSSProperties),
@@ -478,14 +478,14 @@ const railStyle = computed<CSSProperties>(() => ({
 const cardStyle = computed<CSSProperties>(() => cardSkinVars.value as CSSProperties);
 const isTelegramVariant = computed(() => railVariant.value === 'telegram');
 const previewLines = computed(() => {
-  const value = Number(getThemeSettingValue(activeSettings, desktopModeId.value, 'sidebarPreviewLines', 2));
+  const value = Number(getDesktopModeSettingValue(activeSettings, desktopModeId.value, 'sidebarPreviewLines', 2));
   return Number.isFinite(value) && value > 0 ? value : 2;
 });
 const cardDensity = computed(() => String(
-  getThemeSettingValue(activeSettings, desktopModeId.value, 'sidebarCardDensity', 'cozy')
+  getDesktopModeSettingValue(activeSettings, desktopModeId.value, 'sidebarCardDensity', 'cozy')
 ));
 const visibleSessionCount = computed(() => {
-  const value = Number(getThemeSettingValue(activeSettings, desktopModeId.value, 'discordCharacterRailVisibleSessions', DEFAULT_VISIBLE_SESSION_COUNT));
+  const value = Number(getDesktopModeSettingValue(activeSettings, desktopModeId.value, 'discordCharacterRailVisibleSessions', DEFAULT_VISIBLE_SESSION_COUNT));
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : DEFAULT_VISIBLE_SESSION_COUNT;
 });
 
