@@ -53,14 +53,14 @@ luminaweave-extension/src/desktop-modes/
 保留边界：
 
 - `src/desktop-modes/*` 只描述桌面模式定义：manifest、settings、tokens、surface skins、renderer variants、受控模式 policy。
-- `src/platform/desktop/*` 仍负责运行时 registry / descriptor 派生 / activity environment，不承载具体模式主题值。
+- `src/platform/desktop-mode-runtime/*` 负责运行时 registry / descriptor 派生 / activity environment，不承载具体模式主题值。
 - `src/shell/*` 仍负责通用 traditional / freeform 壳层渲染。Telegram / Discord 专属组件迁移可以后续进行，本阶段只迁移模式定义与命名。
 - `src/platform/surface/*` 仍负责 surface contract 与 renderer resolution。
 
 ## 需要修改的子系统
 
 - `luminaweave-extension/src/theme/*`：迁移到 `src/desktop-modes/core` 与 `src/desktop-modes/builtins`，删除旧命名入口。
-- `luminaweave-extension/src/platform/desktop/*`：改为从 `desktop-modes/core` 读取公开 manifest 和 registry。
+- `luminaweave-extension/src/platform/desktop-mode-runtime/*`：从 `desktop-modes/core` 读取公开 manifest 和 registry。
 - `luminaweave-extension/src/App.vue`、`src/shell/*`、`src/composables/shell/*`、`src/plugins/settings/*`、`src/platform/surface/*`、`src/api/services/*`：更新 import 和 API 命名。
 - 测试：移除 legacy alias 断言，新增“旧 ThemePack API 不再存在”的约束。
 - 文档：同步 `docs/overall/modules/desktop_modes/README.md` 与 `desktop-mode-architecture-plan.md`，明确无兼容策略。
@@ -107,7 +107,7 @@ luminaweave-extension/src/desktop-modes/
 - `stage` 仍解析为 `freeform` shell，`classic / discord / telegram` 仍解析为 `traditional` shell。
 - Activity placement 保持现有行为：freeform 进入 workspace window，traditional desktop support 进入 right panel，traditional mobile support 进入 temporary tab，Telegram mobile standalone 进入 Telegram stack。
 - 验证命令通过：
-  - `npm run test -- --run src/desktop-modes/core/__tests__/desktopModeRegistry.test.ts src/platform/desktop/__tests__/DesktopModeRuntimeRegistry.test.ts src/platform/activity/__tests__/activityLaunchResolver.test.ts src/platform/surface/__tests__/SurfaceRegistry.test.ts src/api/services/__tests__/SettingsDomainService.test.ts src/api/services/__tests__/DesktopSurfaceService.test.ts`
+  - `npm run test -- --run src/desktop-modes/core/__tests__/desktopModeRegistry.test.ts src/platform/desktop-mode-runtime/__tests__/DesktopModeRuntimeRegistry.test.ts src/platform/activity/__tests__/activityLaunchResolver.test.ts src/platform/surface/__tests__/SurfaceRegistry.test.ts src/api/services/__tests__/SettingsDomainService.test.ts src/api/services/__tests__/DesktopSurfaceService.test.ts`
   - `npm run type-check`
   - `git diff --check`
 

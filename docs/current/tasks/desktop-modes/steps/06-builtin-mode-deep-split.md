@@ -16,18 +16,18 @@
 1. **Settings 下沉**：把 `classicDesktopModeSettings`、`stageDesktopModeSettings`、`discordDesktopModeSettings`、`telegramDesktopModeSettings` 从 `shared.ts` 搬到各自 `settings.ts`。
 2. **Tokens 下沉**：把 `resolveDiscordDesignTokens`、`resolveTelegramDesignTokens` 和 simple classic / stage tokens 放到各自 `tokens.ts`。
 3. **Skins 下沉**：把 Discord / Telegram 专属 `create*SurfaceSkinMap()` 放到各自 `skins.ts`；`shared.ts` 只保留跨模式基础 skin helper。
-4. **Runtime 命名**：评估是否将 `src/platform/desktop` 改名为 `src/platform/desktop-mode-runtime`，避免与 `src/desktop-modes` 定义层混淆。
+4. **Runtime 命名**：将 `src/platform/desktop` 改名为 `src/platform/desktop-mode-runtime`，避免与 `src/desktop-modes` 定义层混淆。
 
 ## 目录边界
 
 - `desktop-modes/core/`：公开类型、注册中心、composable、surface skin contract。
 - `desktop-modes/builtins/<mode>/`：该模式自己的 manifest、settings、tokens、skins 和受控 policy。
 - `desktop-modes/builtins/shared.ts`：只保留跨模式通用 helper、基础 settings factory 和基础 skin factory。
-- `platform/desktop/`：runtime descriptor 派生和 registry，不承载具体模式视觉值。
+- `platform/desktop-mode-runtime/`：runtime descriptor 派生和 registry，不承载具体模式视觉值。
 
 ## 已完成范围
 
-已执行第 1 项 settings 下沉、第 2 项 tokens 下沉和第 3 项 skins 下沉：
+已执行第 1 项 settings 下沉、第 2 项 tokens 下沉、第 3 项 skins 下沉和第 4 项 runtime 命名：
 
 - `classic/settings.ts` 拥有 `classicDesktopModeSettings`。
 - `stage/settings.ts` 拥有 `stageDesktopModeSettings`。
@@ -40,6 +40,8 @@
 - `discord/skins.ts` 拥有 `createDiscordSurfaceSkinMap`。
 - `telegram/skins.ts` 拥有 `createTelegramSurfaceSkinMap`。
 - `shared.ts` 不再 export Discord / Telegram surface skin map。
+- `src/platform/desktop-mode-runtime/` 拥有 Desktop Mode Runtime registry、descriptor 派生、初始化入口和运行时类型。
+- `src/platform/desktop/` 不再存在。
 
 ## 测试策略
 
@@ -47,17 +49,14 @@
 - 同一测试检查四个 `builtins/<mode>/settings.ts` 直接拥有各自 settings 定义，而不是从 shared re-export。
 - 同一结构测试检查 Discord / Telegram 的 tokens resolver 由各自 `tokens.ts` 直接拥有，而不是从 shared re-export。
 - 同一结构测试检查 Discord / Telegram 的 surface skin map 由各自 `skins.ts` 直接拥有，而不是从 shared re-export。
+- 平台结构测试检查 Desktop Mode Runtime 目录必须是 `src/platform/desktop-mode-runtime/`，旧 `src/platform/desktop/` 不再保留。
 - 保留 desktop registry、runtime registry、activity placement、surface registry 和 settings service targeted Vitest。
 
 ## 验收检查
 
-- `npm run test -- --run src/desktop-modes/builtins/__tests__/builtinModeStructure.test.ts src/desktop-modes/core/__tests__/desktopModeRegistry.test.ts src/platform/desktop/__tests__/DesktopModeRuntimeRegistry.test.ts src/platform/activity/__tests__/activityLaunchResolver.test.ts src/platform/surface/__tests__/SurfaceRegistry.test.ts src/api/services/__tests__/SettingsDomainService.test.ts src/api/services/__tests__/DesktopSurfaceService.test.ts`
+- `npm run test -- --run src/desktop-modes/builtins/__tests__/builtinModeStructure.test.ts src/platform/__tests__/desktopModeRuntimeStructure.test.ts src/desktop-modes/core/__tests__/desktopModeRegistry.test.ts src/platform/desktop-mode-runtime/__tests__/DesktopModeRuntimeRegistry.test.ts src/platform/activity/__tests__/activityLaunchResolver.test.ts src/platform/surface/__tests__/SurfaceRegistry.test.ts src/api/services/__tests__/SettingsDomainService.test.ts src/api/services/__tests__/DesktopSurfaceService.test.ts`
 - `npm run type-check`
 - `git diff --check`
-
-## 后续未完成内容
-
-- `platform/desktop` runtime 目录改名评估与执行。
 
 ## 执行记录
 
@@ -81,3 +80,9 @@
 - `telegram/skins.ts` 已直接拥有 `createTelegramSurfaceSkinMap`。
 - `shared.ts` 不再导出 Discord / Telegram surface skin map，只保留跨模式 helper 与基础 skin factory。
 - 结构测试已扩展到 skins 归属约束。
+
+2026-06-03 已完成第四批 runtime 命名收敛：
+
+- `src/platform/desktop` 已改名为 `src/platform/desktop-mode-runtime`。
+- `bootstrap/registerPlugins.ts`、`shell/LuminaShellRoot.vue` 与 `platform/index.ts` 已改用新路径。
+- 新增 `src/platform/__tests__/desktopModeRuntimeStructure.test.ts`，约束旧 runtime 目录不能继续存在。

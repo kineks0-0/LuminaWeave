@@ -19,16 +19,17 @@
 
 当前状态：
 
-- 保留 `src/platform/desktop` 作为运行时层，后续可再改名为 `desktop-mode-runtime`，但本轮优先完成公开 API 与模式定义目录硬切。
+- `src/platform/desktop-mode-runtime` 作为运行时层，负责 registry、descriptor 派生、初始化入口和运行时类型。
 - `src/desktop-modes/builtins/<mode>/` 已提供 per-mode 的 `manifest.ts`、`settings.ts`、`tokens.ts`、`skins.ts` 入口。
 - 阶段 6 已完成第一批 settings 下沉：classic / stage / discord / telegram 的 settings 常量由各自目录直接拥有，`builtins/shared.ts` 不再导出 per-mode settings。
 - 阶段 6 已完成第二批 tokens 下沉：Discord / Telegram 的 design token resolver 由各自 `tokens.ts` 直接拥有。
 - 阶段 6 已完成第三批 skins 下沉：Discord / Telegram 的 surface skin map 由各自 `skins.ts` 直接拥有。
+- 阶段 6 已完成第四批 runtime 命名收敛：`src/platform/desktop` 已改为 `src/platform/desktop-mode-runtime`。
 - `builtins/shared.ts` 只保留跨模式 helper、基础 settings factory 与基础 skin factory。
 
 ## 下一步
 
-继续执行 [06-builtin-mode-deep-split](./steps/06-builtin-mode-deep-split.md)，下一步评估并执行 runtime 命名收敛，判断是否将 `src/platform/desktop` 改名为 `src/platform/desktop-mode-runtime`。
+阶段 6 已完成。后续建议进入 Lumina Shell Root 边界收窄：把壳层入口继续收敛到结构化 `ShellRuntimeContext / ShellRuntimeSurfaces / ShellRuntimeActions`，避免继续扩大平铺 props。
 
 ## 恢复入口
 

@@ -30,7 +30,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, type CSSProperties } from 'vue';
 import PanelHeader from '../components/PanelHeader.vue';
-import { desktopModeRuntimeRegistry } from '../platform/desktop/DesktopModeRuntimeRegistry.js';
+import { desktopModeRuntimeRegistry } from '../platform/desktop-mode-runtime/DesktopModeRuntimeRegistry.js';
 import type { ActivityPanelPayload } from '../platform/activity/types.js';
 import type { LuminaPlugin } from '../types/plugin.js';
 import type {
