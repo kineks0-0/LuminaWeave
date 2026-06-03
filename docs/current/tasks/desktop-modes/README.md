@@ -20,16 +20,13 @@
 当前状态：
 
 - 保留 `src/platform/desktop` 作为运行时层，后续可再改名为 `desktop-mode-runtime`，但本轮优先完成公开 API 与模式定义目录硬切。
-- `src/desktop-modes/builtins/<mode>/` 已提供 per-mode 的 `manifest.ts`、`settings.ts`、`tokens.ts`、`skins.ts` 入口；共享实现仍集中在 `builtins/shared.ts`，后续若继续细拆，应从该文件向各模式目录搬迁具体实现。
+- `src/desktop-modes/builtins/<mode>/` 已提供 per-mode 的 `manifest.ts`、`settings.ts`、`tokens.ts`、`skins.ts` 入口。
+- 阶段 6 已完成第一批 settings 下沉：classic / stage / discord / telegram 的 settings 常量由各自目录直接拥有，`builtins/shared.ts` 不再导出 per-mode settings。
+- `builtins/shared.ts` 仍保留跨模式 helper、基础 skin factory，以及待继续下沉的 Discord / Telegram tokens 与 skins 实现。
 
 ## 下一步
 
-阶段 5 已执行，详见 [05-hard-cut-desktop-mode-module](./steps/05-hard-cut-desktop-mode-module.md)。
-
-后续可选任务：
-
-- 将 `src/platform/desktop` 改名为 `src/platform/desktop-mode-runtime`，进一步降低 `desktop-modes` 定义层与 runtime 层的命名混淆。
-- 把 `desktop-modes/builtins/shared.ts` 内的具体 tokens / skins 实现继续搬入各 `builtins/<mode>/` 目录，只保留跨模式 helper。
+执行 [06-builtin-mode-deep-split](./steps/06-builtin-mode-deep-split.md)，按 settings -> tokens -> skins -> runtime 命名的顺序继续收敛桌面模式目录。
 
 ## 恢复入口
 
