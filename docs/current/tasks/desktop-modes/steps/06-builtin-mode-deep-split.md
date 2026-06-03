@@ -27,18 +27,22 @@
 
 ## 本轮执行范围
 
-本轮先执行第 1 项 settings 下沉：
+本轮执行第 1 项 settings 下沉和第 2 项 tokens 下沉：
 
 - `classic/settings.ts` 拥有 `classicDesktopModeSettings`。
 - `stage/settings.ts` 拥有 `stageDesktopModeSettings`。
 - `discord/settings.ts` 拥有 `discordDesktopModeSettings`。
 - `telegram/settings.ts` 拥有 `telegramDesktopModeSettings`。
 - `shared.ts` 不再 export 任何 `*DesktopModeSettings` 常量。
+- `discord/tokens.ts` 拥有 `resolveDiscordDesignTokens`。
+- `telegram/tokens.ts` 拥有 `resolveTelegramDesignTokens`。
+- `shared.ts` 不再 export Discord / Telegram 的 design token resolver。
 
 ## 测试策略
 
 - 新增结构测试，检查 `builtins/shared.ts` 不再导出 per-mode settings 常量。
 - 同一测试检查四个 `builtins/<mode>/settings.ts` 直接拥有各自 settings 定义，而不是从 shared re-export。
+- 同一结构测试检查 Discord / Telegram 的 tokens resolver 由各自 `tokens.ts` 直接拥有，而不是从 shared re-export。
 - 保留 desktop registry、runtime registry、activity placement、surface registry 和 settings service targeted Vitest。
 
 ## 验收检查
@@ -49,7 +53,6 @@
 
 ## 后续未完成内容
 
-- tokens 下沉。
 - skins 下沉。
 - `platform/desktop` runtime 目录改名评估与执行。
 
@@ -61,3 +64,10 @@
 - `classic/settings.ts`、`stage/settings.ts`、`discord/settings.ts`、`telegram/settings.ts` 已直接拥有各自 settings 常量。
 - `shared.ts` 不再导出 `classicDesktopModeSettings`、`stageDesktopModeSettings`、`discordDesktopModeSettings`、`telegramDesktopModeSettings`。
 - 已通过 targeted Vitest 与 `npm run type-check`。
+
+2026-06-03 已完成第二批 tokens 下沉：
+
+- `discord/tokens.ts` 已直接拥有 `resolveDiscordDesignTokens`。
+- `telegram/tokens.ts` 已直接拥有 `resolveTelegramDesignTokens`。
+- `shared.ts` 不再导出 Discord / Telegram design token resolver。
+- 结构测试已扩展到 tokens 归属约束。

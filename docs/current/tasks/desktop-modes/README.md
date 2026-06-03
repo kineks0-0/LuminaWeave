@@ -22,7 +22,8 @@
 - 保留 `src/platform/desktop` 作为运行时层，后续可再改名为 `desktop-mode-runtime`，但本轮优先完成公开 API 与模式定义目录硬切。
 - `src/desktop-modes/builtins/<mode>/` 已提供 per-mode 的 `manifest.ts`、`settings.ts`、`tokens.ts`、`skins.ts` 入口。
 - 阶段 6 已完成第一批 settings 下沉：classic / stage / discord / telegram 的 settings 常量由各自目录直接拥有，`builtins/shared.ts` 不再导出 per-mode settings。
-- `builtins/shared.ts` 仍保留跨模式 helper、基础 skin factory，以及待继续下沉的 Discord / Telegram tokens 与 skins 实现。
+- 阶段 6 已完成第二批 tokens 下沉：Discord / Telegram 的 design token resolver 由各自 `tokens.ts` 直接拥有。
+- `builtins/shared.ts` 仍保留跨模式 helper、基础 skin factory，以及待继续下沉的 Discord / Telegram skins 实现。
 
 ## 下一步
 
