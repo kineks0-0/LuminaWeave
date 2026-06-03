@@ -23,11 +23,12 @@
 - `src/desktop-modes/builtins/<mode>/` 已提供 per-mode 的 `manifest.ts`、`settings.ts`、`tokens.ts`、`skins.ts` 入口。
 - 阶段 6 已完成第一批 settings 下沉：classic / stage / discord / telegram 的 settings 常量由各自目录直接拥有，`builtins/shared.ts` 不再导出 per-mode settings。
 - 阶段 6 已完成第二批 tokens 下沉：Discord / Telegram 的 design token resolver 由各自 `tokens.ts` 直接拥有。
-- `builtins/shared.ts` 仍保留跨模式 helper、基础 skin factory，以及待继续下沉的 Discord / Telegram skins 实现。
+- 阶段 6 已完成第三批 skins 下沉：Discord / Telegram 的 surface skin map 由各自 `skins.ts` 直接拥有。
+- `builtins/shared.ts` 只保留跨模式 helper、基础 settings factory 与基础 skin factory。
 
 ## 下一步
 
-执行 [06-builtin-mode-deep-split](./steps/06-builtin-mode-deep-split.md)，按 settings -> tokens -> skins -> runtime 命名的顺序继续收敛桌面模式目录。
+继续执行 [06-builtin-mode-deep-split](./steps/06-builtin-mode-deep-split.md)，下一步评估并执行 runtime 命名收敛，判断是否将 `src/platform/desktop` 改名为 `src/platform/desktop-mode-runtime`。
 
 ## 恢复入口
 

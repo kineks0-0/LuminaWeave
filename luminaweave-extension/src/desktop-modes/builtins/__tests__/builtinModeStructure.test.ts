@@ -42,4 +42,22 @@ describe('builtin desktop mode structure', () => {
             expect(source).not.toContain(`export { ${exportName} } from '../shared.js';`);
         });
     });
+
+    it('keeps per-mode surface skin maps in each builtin mode directory', () => {
+        const sharedSource = readSource('shared.ts');
+        const cases = [
+            ['discord/skins.ts', 'createDiscordSurfaceSkinMap'],
+            ['telegram/skins.ts', 'createTelegramSurfaceSkinMap'],
+        ] as const;
+
+        cases.forEach(([, exportName]) => {
+            expect(sharedSource).not.toContain(`export const ${exportName}`);
+        });
+
+        cases.forEach(([filePath, exportName]) => {
+            const source = readSource(filePath);
+            expect(source).toContain(`export const ${exportName}`);
+            expect(source).not.toContain(`export { ${exportName} } from '../shared.js';`);
+        });
+    });
 });

@@ -25,9 +25,9 @@
 - `desktop-modes/builtins/shared.ts`：只保留跨模式通用 helper、基础 settings factory 和基础 skin factory。
 - `platform/desktop/`：runtime descriptor 派生和 registry，不承载具体模式视觉值。
 
-## 本轮执行范围
+## 已完成范围
 
-本轮执行第 1 项 settings 下沉和第 2 项 tokens 下沉：
+已执行第 1 项 settings 下沉、第 2 项 tokens 下沉和第 3 项 skins 下沉：
 
 - `classic/settings.ts` 拥有 `classicDesktopModeSettings`。
 - `stage/settings.ts` 拥有 `stageDesktopModeSettings`。
@@ -37,12 +37,16 @@
 - `discord/tokens.ts` 拥有 `resolveDiscordDesignTokens`。
 - `telegram/tokens.ts` 拥有 `resolveTelegramDesignTokens`。
 - `shared.ts` 不再 export Discord / Telegram 的 design token resolver。
+- `discord/skins.ts` 拥有 `createDiscordSurfaceSkinMap`。
+- `telegram/skins.ts` 拥有 `createTelegramSurfaceSkinMap`。
+- `shared.ts` 不再 export Discord / Telegram surface skin map。
 
 ## 测试策略
 
 - 新增结构测试，检查 `builtins/shared.ts` 不再导出 per-mode settings 常量。
 - 同一测试检查四个 `builtins/<mode>/settings.ts` 直接拥有各自 settings 定义，而不是从 shared re-export。
 - 同一结构测试检查 Discord / Telegram 的 tokens resolver 由各自 `tokens.ts` 直接拥有，而不是从 shared re-export。
+- 同一结构测试检查 Discord / Telegram 的 surface skin map 由各自 `skins.ts` 直接拥有，而不是从 shared re-export。
 - 保留 desktop registry、runtime registry、activity placement、surface registry 和 settings service targeted Vitest。
 
 ## 验收检查
@@ -53,7 +57,6 @@
 
 ## 后续未完成内容
 
-- skins 下沉。
 - `platform/desktop` runtime 目录改名评估与执行。
 
 ## 执行记录
@@ -71,3 +74,10 @@
 - `telegram/tokens.ts` 已直接拥有 `resolveTelegramDesignTokens`。
 - `shared.ts` 不再导出 Discord / Telegram design token resolver。
 - 结构测试已扩展到 tokens 归属约束。
+
+2026-06-03 已完成第三批 skins 下沉：
+
+- `discord/skins.ts` 已直接拥有 `createDiscordSurfaceSkinMap`。
+- `telegram/skins.ts` 已直接拥有 `createTelegramSurfaceSkinMap`。
+- `shared.ts` 不再导出 Discord / Telegram surface skin map，只保留跨模式 helper 与基础 skin factory。
+- 结构测试已扩展到 skins 归属约束。
