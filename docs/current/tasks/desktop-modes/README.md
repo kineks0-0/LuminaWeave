@@ -25,11 +25,12 @@
 - 阶段 6 已完成第二批 tokens 下沉：Discord / Telegram 的 design token resolver 由各自 `tokens.ts` 直接拥有。
 - 阶段 6 已完成第三批 skins 下沉：Discord / Telegram 的 surface skin map 由各自 `skins.ts` 直接拥有。
 - 阶段 6 已完成第四批 runtime 命名收敛：`src/platform/desktop` 已改为 `src/platform/desktop-mode-runtime`。
+- 阶段 7 已完成 Lumina Shell Root 运行时边界收窄：`App.vue` 组装 `ShellRuntimeContext / ShellRuntimeSurfaces / ShellRuntimeActions / ShellRuntimeFrame`，`LuminaShellRoot.vue` 只负责 header、body、shell renderer 分发与 legacy global panel 挂载。
 - `builtins/shared.ts` 只保留跨模式 helper、基础 settings factory 与基础 skin factory。
 
 ## 下一步
 
-阶段 6 已完成。后续建议进入 Lumina Shell Root 边界收窄：把壳层入口继续收敛到结构化 `ShellRuntimeContext / ShellRuntimeSurfaces / ShellRuntimeActions`，避免继续扩大平铺 props。
+阶段 7 已完成。后续建议进入更细的 shell 模块目录收敛：优先把 Discord / Telegram / Freeform / Traditional 的 shell-only 组件和组合逻辑按 `shell/<kind>`、`shell/modes/<mode>` 或现有相邻目录继续梳理，前提是保持 Desktop Mode manifest 与 runtime registry 作为单注册源。
 
 ## 恢复入口
 

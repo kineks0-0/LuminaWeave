@@ -125,6 +125,14 @@ export interface WorkspaceWindowEntry {
   isCompact: boolean;
 }
 
+export interface ShellRuntimeFrame {
+  panelHeaderVariant: 'default' | 'discord' | 'telegram';
+  traditionalHeaderPosition: 'top' | 'bottom';
+  panelBodyStyle: CSSProperties;
+  showSplash: boolean;
+  discordChannelMarkVisible: boolean;
+}
+
 export interface ShellRuntimeContext {
   shellKind: 'traditional' | 'freeform';
   /**
@@ -188,6 +196,7 @@ export interface ShellRuntimeContext {
 
 export interface ShellRuntimeSurfaces {
   dynamicTabs: DynamicTabConfig[];
+  widgetPanelList: WidgetPanelItem[];
   traditional: {
     mainPlugins: LuminaPlugin[];
     mainSurfaceVariant: string;
@@ -211,9 +220,13 @@ export interface ShellRuntimeActions {
   getPluginName: (pluginId: string | null) => string;
   navigation: {
     switchMainView: (tabId: string) => void;
+    closeTab: (tabId: string) => void;
     close: () => void;
     updateDesktopMode: (desktopModeId: string) => void;
     openSettingsPanel: () => void;
+  };
+  frame: {
+    panelBodyElementChange: (element: HTMLElement | null) => void;
   };
   traditional: {
     toggleDiscordGuildRail: () => void;

@@ -10,78 +10,13 @@
   <AppRootContainer :isExpanded="isExpanded" :resolvedTheme="resolvedTheme" :activeDesktopModeId="activeDesktopModeId"
     :motionPerformanceSetting="motionPerformanceSetting" :layoutMode="layoutMode" :appRootStyle="appRootStyle"
     :rootFrameStyle="rootFrameStyle" :shellAppVariant="shellAppVariant || 'default'" :showMiniSidebar="!isStandalone" @expand="toggleExpand">
-    <LuminaShellRoot ref="shellRootRef" :layoutMode="layoutMode" :panelHeaderVariant="panelHeaderVariant"
-      :traditionalHeaderPosition="traditionalHeaderPosition" :activeMainTab="activeMainTab" :dynamicTabs="dynamicTabs"
-      :isMobile="isMobile" :activeDesktopModeId="activeDesktopModeId" :desktopModeOptions="desktopModeOptions"
-      :widgetPanelList="widgetPanelList" :widgetGroups="widgetGroups" :activeRightPanel="visibleRightPanel"
-      :discordChannelMarkVisible="discordChannelMarkVisible" :shellPanelBodyStyle="shellPanelBodyStyle"
-      :isApiReady="isApiReady" :showSplash="showSplash" :initStatusText="initStatusText" :shouldShowDiscordGuildRail="shouldShowDiscordGuildRail"
-      :discordGuildEntries="discordGuildEntries" :shouldShowForgeSidebar="shouldShowForgeSidebar"
-      :isForgeSidebarCollapsed="isForgeSidebarCollapsed"
-      :shouldShowDiscordCharacterRail="shouldShowDiscordCharacterRail" :characterChannelState="characterChannelState"
-      :isDiscordMobileMode="isDiscordMobileMode" :isTelegramMobileMode="isTelegramMobileMode"
-      :shouldShowDiscordMobileShell="shouldShowDiscordMobileShell"
-      :discordMobileGuildRailPosition="discordMobileGuildRailPosition"
-      :discordMobileCharacterEntryPosition="discordMobileCharacterEntryPosition"
-      :showDiscordMobileCharacterRail="showDiscordMobileCharacterRail"
-      :discordMobileCharacterEntryStyle="discordMobileCharacterEntryStyle"
-      :telegramSelectedCharacterKey="telegramSelectedCharacterKey" :telegramToolEntries="telegramToolEntries"
-      :activeTelegramToolId="activeTelegramToolId" :telegramConversationListMode="telegramConversationListMode"
-      :telegramDesktopLeftRoute="telegramDesktopLeftRoute" :telegramMobileActiveTab="telegramMobileActiveTab"
-      :telegramMobileCurrentRoute="telegramMobileCurrentRoute" :mainPlugins="mainPlugins"
-      :shellMainSurfaceVariant="shellMainSurfaceVariant" :shellMainSurfaceStyle="shellMainSurfaceStyle"
-      :discordMobileMainStyle="discordMobileMainStyle" :isTimelineLoadedOnce="isTimelineLoadedOnce"
-      :isForgeActiveInTraditional="isForgeActiveInTraditional" :sidebarMode="sidebarMode"
-      :shellWidgetSurfaceVariant="shellWidgetSurfaceVariant" :shellWidgetStyle="shellWidgetStyle"
-      :widgetWidth="visibleWidgetWidth" :isResizing="isResizing" :telegramLeftRailWidth="telegramLeftRailWidth"
-      :isTelegramLeftRailResizing="isTelegramLeftRailResizing" :currentDetailedView="currentDetailedView"
-      :saveStatus="saveStatus" :activeForgeAuxKind="activeForgeAuxKind" :rawSidebarMode="rawSidebarMode"
-      :activeWidgetPlugin="activeWidgetPlugin" :activeRegisteredPanel="activeRegisteredPanel"
-      :activeRightPanelActivity="activeRightPanelActivity" :showWidgetDropdown="showWidgetDropdown"
-      :showNexus="visibleShowNexus" :getPluginName="getPluginName"
-      :showWorkspaceMenu="showWorkspaceMenu" :shellWorkspaceMenuVariant="shellWorkspaceMenuVariant || 'default'"
-      :shellWorkspaceMenuStyle="shellWorkspaceMenuStyle"
-      :shellWorkspaceStageVariant="shellWorkspaceStageVariant || 'default'"
-      :shellWorkspaceStageStyle="shellWorkspaceStageStyle" :isWorkspaceStageStripVisible="isWorkspaceStageStripVisible"
-      :workspaceStageStripItems="workspaceStageStripItems" :isWorkspaceNavigationVisible="isWorkspaceNavigationVisible"
-      :activeStageWindowEntries="activeStageWindowEntries" :activeWorkspaceWindowId="activeWorkspaceWindowId"
-      :workspaceSceneInsets="workspaceSceneInsets" :showWorkspaceLaunchpad="showWorkspaceLaunchpad"
-      :isWorkspaceDockVisible="isWorkspaceDockVisible" :workspaceDockDisplayItems="workspaceDockDisplayItems"
-      :onSwitchMainView="handleSwitchMainView" :onCloseTab="closeTab" :onClose="toggleExpand"
-      :onOpenSettingsPanel="openSettingsPanel" :onToggleDiscordGuildRail="toggleDiscordGuildRail"
-      :onUpdateDesktopMode="updateDesktopMode" :onHandleOpenWidget="handleOpenWidgetWithActivityReset"
-      :onToggleForgeSidebarCollapse="toggleForgeSidebarCollapse" :onSetSidebarMode="setSidebarMode"
-      :onOpenDiscordChatSession="handleOpenDiscordChatSession"
-      :onOpenDiscordMobileChatSession="handleOpenDiscordMobileChatSession"
-      :onCreateDiscordChatSession="handleCreateDiscordChatSession"
-      :onCreateDiscordMobileChatSession="handleCreateDiscordMobileChatSession"
-      :onRenameDiscordChatSession="renameDiscordChatSession" :onDeleteDiscordChatSession="deleteDiscordChatSession"
-      :onToggleDiscordCharacterGroup="toggleDiscordCharacterGroup"
-      :onToggleDiscordCharacterSessionExpansion="toggleDiscordCharacterSessionExpansion"
-      :onHandleDiscordMobileMainViewSwitch="handleDiscordMobileMainViewSwitch"
-      :onUpdateShowDiscordMobileCharacterRail="updateShowDiscordMobileCharacterRail"
-      :onSelectTelegramCharacterOverview="selectTelegramCharacterOverview"
-      :onOpenTelegramToolEntry="openTelegramToolEntry"
-      :onSetTelegramConversationListMode="setTelegramConversationListMode"
-      :onSetTelegramDesktopLeftRoute="setTelegramDesktopLeftRoute" :onPushTelegramMobileRoute="pushTelegramMobileRouteWithActivityReset"
-      :onPopTelegramMobileRoute="popTelegramMobileRouteWithActivityReset" :onResizeStart="initResize"
-      :onTelegramLeftRailResizeStart="initLeftRailResize" :onBackFromDetailedSettings="backFromDetailedSettings"
-      :onToggleWidgetDropdown="toggleWidgetDropdown" :onSwitchRightPanel="handleSwitchRightPanel"
-      :onRestoreSidebarLeft="restoreSidebarLeft" :onClosePanel="handleCloseWidgetPanel" :onUpdateShowNexus="updateShowNexus"
-      :onSelectTelegramBottomNav="handleTelegramBottomNavSelectWithActivityReset"
-      :onCreateStageWithLauncher="createStageWithLauncherAndCloseMenu"
-      :onOpenWorkspaceSettings="openWorkspaceSettingsAndCloseMenu"
-      :onActivateWorkspaceStageWithNavigation="activateWorkspaceStageWithNavigation"
-      :onCreateWorkspaceStageFromStrip="createWorkspaceStageFromStrip"
-      :onHoldWorkspaceNavigation="holdWorkspaceNavigation"
-      :onScheduleWorkspaceNavigationHide="scheduleWorkspaceNavigationHideWrapper"
-      :onToggleWorkspaceNavigation="toggleWorkspaceNavigation" :onToggleWorkspaceMenu="toggleWorkspaceMenu"
-      :onHandleFreeformScenePointerDown="handleFreeformScenePointerDown"
-      :onUpdateWorkspaceLayout="updateWorkspaceLayout" :onCloseWorkspaceWindow="closeWorkspaceWindow"
-      :onFocusWorkspaceWindow="focusWorkspaceWindow" :onFocusAdjacentWorkspaceWindow="focusAdjacentWorkspaceWindow"
-      :onCloseWorkspaceLaunchpad="closeWorkspaceLaunchpad"
-      :onHandleWorkspaceDockOpenWithNavigation="handleWorkspaceDockOpenWithNavigation"
-      :onStageElementChange="handleStageElementChange" :onPanelBodyElementChange="handlePanelBodyElementChange" />
+    <LuminaShellRoot
+      ref="shellRootRef"
+      :runtimeContext="shellRuntimeContext"
+      :runtimeSurfaces="shellRuntimeSurfaces"
+      :runtimeActions="shellRuntimeActions"
+      :runtimeFrame="shellRuntimeFrame"
+    />
   </AppRootContainer>
 </template>
 
@@ -118,7 +53,14 @@ import {
 import { useSurfaceSkin } from './desktop-modes/core/useSurfaceSkin.js';
 import { useDesktopMode } from './desktop-modes/core/useDesktopMode.js';
 import type { ThemeTraditionalNavigationPreset } from './desktop-modes/core/types.js';
-import type { DynamicTabConfig, TelegramRailToolEntry } from './shell/types.js';
+import type {
+  DynamicTabConfig,
+  ShellRuntimeActions,
+  ShellRuntimeContext,
+  ShellRuntimeFrame,
+  ShellRuntimeSurfaces,
+  TelegramRailToolEntry
+} from './shell/types.js';
 import { registerLuminaPlugins } from './bootstrap/registerPlugins.js';
 import { HostDetector } from './api/core/host-drivers/HostDetector.js';
 
@@ -910,6 +852,158 @@ const toggleExpand = () => {
     }
   }, 100);
 };
+
+const shellRuntimeContext = computed<ShellRuntimeContext>(() => ({
+  shellKind: shellKind.value,
+  layoutMode: layoutMode.value,
+  activeDesktopModeId: activeDesktopModeId.value,
+  desktopModeOptions: desktopModeOptions.value,
+  activeMainTab: activeMainTab.value,
+  isMobile: isMobile.value,
+  currentDetailedView: currentDetailedView.value,
+  saveStatus: saveStatus.value,
+  widgetGroups: widgetGroups.value,
+  characterChannelState: characterChannelState.value,
+  traditional: {
+    shouldShowDiscordGuildRail: shouldShowDiscordGuildRail.value,
+    discordGuildEntries: discordGuildEntries.value,
+    shouldShowForgeSidebar: shouldShowForgeSidebar.value,
+    isForgeSidebarCollapsed: isForgeSidebarCollapsed.value,
+    shouldShowDiscordCharacterRail: shouldShowDiscordCharacterRail.value,
+    isDiscordMobileMode: isDiscordMobileMode.value,
+    isTelegramMobileMode: isTelegramMobileMode.value,
+    shouldShowDiscordMobileShell: shouldShowDiscordMobileShell.value,
+    discordMobileGuildRailPosition: discordMobileGuildRailPosition.value,
+    discordMobileCharacterEntryPosition: discordMobileCharacterEntryPosition.value,
+    showDiscordMobileCharacterRail: showDiscordMobileCharacterRail.value,
+    discordMobileCharacterEntryStyle: discordMobileCharacterEntryStyle.value,
+    telegramSelectedCharacterKey: telegramSelectedCharacterKey.value,
+    telegramToolEntries: telegramToolEntries.value,
+    activeTelegramToolId: activeTelegramToolId.value,
+    telegramConversationListMode: telegramConversationListMode.value,
+    telegramDesktopLeftRoute: telegramDesktopLeftRoute.value,
+    telegramMobileActiveTab: telegramMobileActiveTab.value,
+    telegramMobileCurrentRoute: telegramMobileCurrentRoute.value,
+    isTimelineLoadedOnce: isTimelineLoadedOnce.value,
+    isForgeActiveInTraditional: isForgeActiveInTraditional.value,
+    sidebarMode: sidebarMode.value,
+    activeRightPanel: visibleRightPanel.value,
+    widgetWidth: visibleWidgetWidth.value,
+    isResizing: isResizing.value,
+    telegramLeftRailWidth: telegramLeftRailWidth.value,
+    isTelegramLeftRailResizing: isTelegramLeftRailResizing.value,
+    activeForgeAuxKind: activeForgeAuxKind.value,
+    rawSidebarMode: rawSidebarMode.value,
+    activeWidgetPlugin: activeWidgetPlugin.value,
+    activeRegisteredPanel: activeRegisteredPanel.value,
+    activeRightPanelActivity: activeRightPanelActivity.value,
+    showWidgetDropdown: showWidgetDropdown.value,
+    showNexus: visibleShowNexus.value
+  },
+  freeform: {
+    showWorkspaceMenu: showWorkspaceMenu.value,
+    isWorkspaceStageStripVisible: isWorkspaceStageStripVisible.value,
+    isWorkspaceNavigationVisible: isWorkspaceNavigationVisible.value,
+    activeWorkspaceWindowId: activeWorkspaceWindowId.value,
+    workspaceSceneInsets: workspaceSceneInsets.value,
+    showWorkspaceLaunchpad: showWorkspaceLaunchpad.value,
+    isWorkspaceDockVisible: isWorkspaceDockVisible.value
+  }
+}));
+
+const shellRuntimeSurfaces = computed<ShellRuntimeSurfaces>(() => ({
+  dynamicTabs: dynamicTabs.value,
+  widgetPanelList: widgetPanelList.value,
+  traditional: {
+    mainPlugins: mainPlugins.value,
+    mainSurfaceVariant: shellMainSurfaceVariant.value,
+    mainSurfaceStyle: shellMainSurfaceStyle.value,
+    mobileMainStyle: discordMobileMainStyle.value,
+    widgetSurfaceVariant: shellWidgetSurfaceVariant.value,
+    widgetStyle: shellWidgetStyle.value
+  },
+  freeform: {
+    workspaceMenuVariant: shellWorkspaceMenuVariant.value || 'default',
+    workspaceMenuStyle: shellWorkspaceMenuStyle.value,
+    workspaceStageVariant: shellWorkspaceStageVariant.value || 'default',
+    workspaceStageStyle: shellWorkspaceStageStyle.value,
+    stageStripItems: workspaceStageStripItems.value,
+    stageWindowEntries: activeStageWindowEntries.value,
+    dockDisplayItems: workspaceDockDisplayItems.value
+  }
+}));
+
+const shellRuntimeActions = computed<ShellRuntimeActions>(() => ({
+  getPluginName,
+  navigation: {
+    switchMainView: handleSwitchMainView,
+    closeTab,
+    close: toggleExpand,
+    updateDesktopMode,
+    openSettingsPanel
+  },
+  frame: {
+    panelBodyElementChange: handlePanelBodyElementChange
+  },
+  traditional: {
+    toggleDiscordGuildRail,
+    handleOpenWidget: handleOpenWidgetWithActivityReset,
+    toggleForgeSidebarCollapse,
+    setSidebarMode,
+    openDiscordChatSession: handleOpenDiscordChatSession,
+    openDiscordMobileChatSession: handleOpenDiscordMobileChatSession,
+    createDiscordChatSession: handleCreateDiscordChatSession,
+    createDiscordMobileChatSession: handleCreateDiscordMobileChatSession,
+    renameDiscordChatSession,
+    deleteDiscordChatSession,
+    toggleDiscordCharacterGroup,
+    toggleDiscordCharacterSessionExpansion,
+    handleDiscordMobileMainViewSwitch,
+    updateShowDiscordMobileCharacterRail,
+    selectTelegramCharacterOverview,
+    openTelegramToolEntry,
+    setTelegramConversationListMode,
+    setTelegramDesktopLeftRoute,
+    pushTelegramMobileRoute: pushTelegramMobileRouteWithActivityReset,
+    popTelegramMobileRoute: popTelegramMobileRouteWithActivityReset,
+    resizeStart: initResize,
+    telegramLeftRailResizeStart: initLeftRailResize,
+    backFromDetailedSettings,
+    toggleWidgetDropdown,
+    switchRightPanel: handleSwitchRightPanel,
+    restoreSidebarLeft,
+    closePanel: handleCloseWidgetPanel,
+    updateShowNexus,
+    selectTelegramBottomNav: handleTelegramBottomNavSelectWithActivityReset
+  },
+  freeform: {
+    createStageWithLauncher: createStageWithLauncherAndCloseMenu,
+    openWorkspaceSettings: openWorkspaceSettingsAndCloseMenu,
+    activateWorkspaceStageWithNavigation,
+    createWorkspaceStageFromStrip,
+    holdWorkspaceNavigation,
+    scheduleWorkspaceNavigationHide: scheduleWorkspaceNavigationHideWrapper,
+    toggleWorkspaceNavigation,
+    toggleWorkspaceMenu,
+    handleFreeformScenePointerDown,
+    updateWorkspaceLayout,
+    closeWorkspaceWindow,
+    focusWorkspaceWindow,
+    focusAdjacentWorkspaceWindow,
+    backFromDetailedSettings,
+    closeWorkspaceLaunchpad,
+    handleWorkspaceDockOpenWithNavigation,
+    stageElementChange: handleStageElementChange
+  }
+}));
+
+const shellRuntimeFrame = computed<ShellRuntimeFrame>(() => ({
+  panelHeaderVariant: panelHeaderVariant.value,
+  traditionalHeaderPosition: traditionalHeaderPosition.value,
+  panelBodyStyle: shellPanelBodyStyle.value,
+  showSplash: showSplash.value,
+  discordChannelMarkVisible: discordChannelMarkVisible.value
+}));
 
 useShellBootstrap({
   isApiReady,

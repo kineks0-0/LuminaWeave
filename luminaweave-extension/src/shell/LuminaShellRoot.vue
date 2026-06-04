@@ -1,61 +1,69 @@
 <template>
   <PanelHeader
-    v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'top' && shouldRenderTraditionalHeader"
-    :activeMainTab="activeMainTab" :dynamicTabs="dynamicTabs" :isMobile="isMobile"
-    :activeDesktopModeId="activeDesktopModeId" :desktopModes="desktopModeOptions" :variant="panelHeaderVariant"
-    :headerPlacement="traditionalHeaderPosition" :widgetPanels="widgetPanelList" :widgetGroups="widgetGroups"
-    :activeWidgetId="activeRightPanel !== 'none' ? activeRightPanel : ''" :guildRailVisible="discordChannelMarkVisible"
-    @switchMainView="onSwitchMainView" @closeTab="onCloseTab" @close="onClose" @toggleSettings="onOpenSettingsPanel"
-    @toggleGuildRail="onToggleDiscordGuildRail" @setDesktopMode="onUpdateDesktopMode"
-    @openWidget="onHandleOpenWidget" />
+    v-if="layoutMode === 'traditional' && runtimeFrame.traditionalHeaderPosition === 'top' && shouldRenderTraditionalHeader"
+    :activeMainTab="runtimeContext.activeMainTab"
+    :dynamicTabs="runtimeSurfaces.dynamicTabs"
+    :isMobile="runtimeContext.isMobile"
+    :activeDesktopModeId="runtimeContext.activeDesktopModeId"
+    :desktopModes="runtimeContext.desktopModeOptions"
+    :variant="runtimeFrame.panelHeaderVariant"
+    :headerPlacement="runtimeFrame.traditionalHeaderPosition"
+    :widgetPanels="runtimeSurfaces.widgetPanelList"
+    :widgetGroups="runtimeContext.widgetGroups"
+    :activeWidgetId="runtimeContext.traditional.activeRightPanel !== 'none' ? runtimeContext.traditional.activeRightPanel : ''"
+    :guildRailVisible="runtimeFrame.discordChannelMarkVisible"
+    @switchMainView="runtimeActions.navigation.switchMainView"
+    @closeTab="runtimeActions.navigation.closeTab"
+    @close="runtimeActions.navigation.close"
+    @toggleSettings="runtimeActions.navigation.openSettingsPanel"
+    @toggleGuildRail="runtimeActions.traditional.toggleDiscordGuildRail"
+    @setDesktopMode="runtimeActions.navigation.updateDesktopMode"
+    @openWidget="runtimeActions.traditional.handleOpenWidget"
+  />
 
-  <div ref="panelBodyElement" class="lw-panel-body" :class="{ 'is-freeform': layoutMode === 'freeform' }"
-    :style="shellPanelBodyStyle">
-    <component v-show="!showSplash" :is="currentShellRenderer" v-bind="shellRendererProps" />
+  <div
+    ref="panelBodyElement"
+    class="lw-panel-body"
+    :class="{ 'is-freeform': layoutMode === 'freeform' }"
+    :style="runtimeFrame.panelBodyStyle"
+  >
+    <component v-show="!runtimeFrame.showSplash" :is="currentShellRenderer" v-bind="shellRendererProps" />
   </div>
 
   <PanelHeader
-    v-if="layoutMode === 'traditional' && traditionalHeaderPosition === 'bottom' && shouldRenderTraditionalHeader"
-    :activeMainTab="activeMainTab" :dynamicTabs="dynamicTabs" :isMobile="isMobile"
-    :activeDesktopModeId="activeDesktopModeId" :desktopModes="desktopModeOptions" :variant="panelHeaderVariant"
-    :headerPlacement="traditionalHeaderPosition" :widgetPanels="widgetPanelList" :widgetGroups="widgetGroups"
-    :activeWidgetId="activeRightPanel !== 'none' ? activeRightPanel : ''" :guildRailVisible="discordChannelMarkVisible"
-    @switchMainView="onSwitchMainView" @closeTab="onCloseTab" @close="onClose" @toggleSettings="onOpenSettingsPanel"
-    @toggleGuildRail="onToggleDiscordGuildRail" @setDesktopMode="onUpdateDesktopMode"
-    @openWidget="onHandleOpenWidget" />
+    v-if="layoutMode === 'traditional' && runtimeFrame.traditionalHeaderPosition === 'bottom' && shouldRenderTraditionalHeader"
+    :activeMainTab="runtimeContext.activeMainTab"
+    :dynamicTabs="runtimeSurfaces.dynamicTabs"
+    :isMobile="runtimeContext.isMobile"
+    :activeDesktopModeId="runtimeContext.activeDesktopModeId"
+    :desktopModes="runtimeContext.desktopModeOptions"
+    :variant="runtimeFrame.panelHeaderVariant"
+    :headerPlacement="runtimeFrame.traditionalHeaderPosition"
+    :widgetPanels="runtimeSurfaces.widgetPanelList"
+    :widgetGroups="runtimeContext.widgetGroups"
+    :activeWidgetId="runtimeContext.traditional.activeRightPanel !== 'none' ? runtimeContext.traditional.activeRightPanel : ''"
+    :guildRailVisible="runtimeFrame.discordChannelMarkVisible"
+    @switchMainView="runtimeActions.navigation.switchMainView"
+    @closeTab="runtimeActions.navigation.closeTab"
+    @close="runtimeActions.navigation.close"
+    @toggleSettings="runtimeActions.navigation.openSettingsPanel"
+    @toggleGuildRail="runtimeActions.traditional.toggleDiscordGuildRail"
+    @setDesktopMode="runtimeActions.navigation.updateDesktopMode"
+    @openWidget="runtimeActions.traditional.handleOpenWidget"
+  />
 
   <LegacyGlobalPanels ref="legacyGlobalPanels" />
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, type CSSProperties } from 'vue';
+import { computed, ref, watch } from 'vue';
 import PanelHeader from '../components/PanelHeader.vue';
 import { desktopModeRuntimeRegistry } from '../platform/desktop-mode-runtime/DesktopModeRuntimeRegistry.js';
-import type { ActivityPanelPayload } from '../platform/activity/types.js';
-import type { LuminaPlugin } from '../types/plugin.js';
 import type {
-  CharacterChannelState,
-  CreateChatConversationInput,
-  DeleteChatConversationInput,
-  RenameChatConversationInput
-} from '../types/ConversationContextTypes.js';
-import type {
-  DynamicTabConfig,
-  RegisteredPanelEntry,
-  WidgetPanelGroup,
-  WidgetPanelItem,
-  TelegramRailToolEntry,
-  TelegramConversationListMode,
-  TelegramDesktopLeftRoute,
-  TelegramMobileTabId,
-  TelegramStackRoute,
-  WorkspaceDockItem,
   ShellRuntimeActions,
   ShellRuntimeContext,
-  ShellRuntimeSurfaces,
-  WorkspaceSceneInsets,
-  WorkspaceStageStripItem,
-  WorkspaceWindowEntry
+  ShellRuntimeFrame,
+  ShellRuntimeSurfaces
 } from './types.js';
 import FreeformShell from './freeform/FreeformShell.vue';
 import LegacyGlobalPanels from './LegacyGlobalPanels.vue';
@@ -65,298 +73,28 @@ const legacyGlobalPanels = ref<InstanceType<typeof LegacyGlobalPanels> | null>(n
 const panelBodyElement = ref<HTMLElement | null>(null);
 
 const props = defineProps<{
-  layoutMode: 'traditional' | 'freeform';
-  panelHeaderVariant: 'default' | 'discord' | 'telegram';
-  traditionalHeaderPosition: 'top' | 'bottom';
-  activeMainTab: string;
-  dynamicTabs: DynamicTabConfig[];
-  isMobile: boolean;
-  activeDesktopModeId: string;
-  desktopModeOptions: Array<{ value: string; label: string; description?: string }>;
-  widgetPanelList: WidgetPanelItem[];
-  widgetGroups: WidgetPanelGroup[];
-  activeRightPanel: string;
-  discordChannelMarkVisible: boolean;
-  shellPanelBodyStyle: CSSProperties;
-  isApiReady: boolean;
-  showSplash: boolean;
-  initStatusText: string;
-  shouldShowDiscordGuildRail: boolean;
-  discordGuildEntries: Array<{ id: string; name: string; icon: string }>;
-  shouldShowForgeSidebar: boolean;
-  isForgeSidebarCollapsed: boolean;
-  shouldShowDiscordCharacterRail: boolean;
-  characterChannelState: CharacterChannelState;
-  isDiscordMobileMode: boolean;
-  isTelegramMobileMode: boolean;
-  shouldShowDiscordMobileShell: boolean;
-  discordMobileGuildRailPosition: 'top' | 'bottom' | 'left' | 'right';
-  discordMobileCharacterEntryPosition: 'top' | 'bottom' | 'left' | 'right';
-  showDiscordMobileCharacterRail: boolean;
-  discordMobileCharacterEntryStyle: CSSProperties;
-  telegramSelectedCharacterKey: string | null;
-  telegramToolEntries: TelegramRailToolEntry[];
-  activeTelegramToolId: string | null;
-  telegramConversationListMode: TelegramConversationListMode;
-  telegramDesktopLeftRoute: TelegramDesktopLeftRoute;
-  telegramMobileActiveTab: TelegramMobileTabId;
-  telegramMobileCurrentRoute: TelegramStackRoute;
-  mainPlugins: LuminaPlugin[];
-  shellMainSurfaceVariant: string;
-  shellMainSurfaceStyle: CSSProperties;
-  discordMobileMainStyle: CSSProperties;
-  isTimelineLoadedOnce: boolean;
-  isForgeActiveInTraditional: boolean;
-  sidebarMode: 'left' | 'right' | 'widget' | 'hidden';
-  shellWidgetSurfaceVariant: string;
-  shellWidgetStyle: CSSProperties;
-  widgetWidth: number;
-  isResizing: boolean;
-  telegramLeftRailWidth: number;
-  isTelegramLeftRailResizing: boolean;
-  currentDetailedView: string | null;
-  saveStatus: string;
-  activeForgeAuxKind: string | null;
-  rawSidebarMode: 'left' | 'right' | 'widget' | 'hidden';
-  activeWidgetPlugin: LuminaPlugin | null;
-  activeRegisteredPanel: RegisteredPanelEntry | null;
-  activeRightPanelActivity: ActivityPanelPayload | null;
-  showWidgetDropdown: boolean;
-  showNexus: boolean;
-  getPluginName: (pluginId: string | null) => string;
-  showWorkspaceMenu: boolean;
-  shellWorkspaceMenuVariant: string;
-  shellWorkspaceMenuStyle: CSSProperties;
-  shellWorkspaceStageVariant: string;
-  shellWorkspaceStageStyle: CSSProperties;
-  isWorkspaceStageStripVisible: boolean;
-  workspaceStageStripItems: WorkspaceStageStripItem[];
-  isWorkspaceNavigationVisible: boolean;
-  activeStageWindowEntries: WorkspaceWindowEntry[];
-  activeWorkspaceWindowId: string | null;
-  workspaceSceneInsets: WorkspaceSceneInsets;
-  showWorkspaceLaunchpad: boolean;
-  isWorkspaceDockVisible: boolean;
-  workspaceDockDisplayItems: WorkspaceDockItem[];
-  onSwitchMainView: (tabId: string) => void;
-  onCloseTab: (tabId: string) => void;
-  onClose: () => void;
-  onOpenSettingsPanel: () => void;
-  onToggleDiscordGuildRail: () => void;
-  onUpdateDesktopMode: (desktopModeId: string) => void;
-  onHandleOpenWidget: (panelId: string) => void;
-  onToggleForgeSidebarCollapse: () => void;
-  onSetSidebarMode: (mode: 'left' | 'right' | 'widget') => void;
-  onOpenDiscordChatSession: (sessionId: string) => void;
-  onOpenDiscordMobileChatSession: (sessionId: string) => void;
-  onCreateDiscordChatSession: (payload: CreateChatConversationInput) => void;
-  onCreateDiscordMobileChatSession: (payload: CreateChatConversationInput) => void;
-  onRenameDiscordChatSession: (payload: RenameChatConversationInput) => Promise<void> | void;
-  onDeleteDiscordChatSession: (payload: DeleteChatConversationInput) => Promise<void> | void;
-  onToggleDiscordCharacterGroup: (groupKey: string) => void;
-  onToggleDiscordCharacterSessionExpansion: (groupKey: string) => void;
-  onHandleDiscordMobileMainViewSwitch: (tabId: string) => void;
-  onUpdateShowDiscordMobileCharacterRail: (value: boolean) => void;
-  onSelectTelegramCharacterOverview: (groupKey: string | null) => void;
-  onOpenTelegramToolEntry: (toolId: TelegramRailToolEntry['id']) => void;
-  onSetTelegramConversationListMode: (mode: TelegramConversationListMode) => void;
-  onSetTelegramDesktopLeftRoute: (route: TelegramDesktopLeftRoute) => void;
-  onPushTelegramMobileRoute: (route: TelegramStackRoute) => void;
-  onPopTelegramMobileRoute: () => void;
-  onResizeStart: (event?: MouseEvent) => void;
-  onTelegramLeftRailResizeStart: (event?: MouseEvent) => void;
-  onBackFromDetailedSettings: () => void;
-  onToggleWidgetDropdown: () => void;
-  onSwitchRightPanel: (panelId: string) => void;
-  onRestoreSidebarLeft: () => void;
-  onClosePanel: () => void;
-  onUpdateShowNexus: (value: boolean) => void;
-  onSelectTelegramBottomNav: (itemId: 'chat' | 'characters' | 'settings' | 'profile') => void;
-  onCreateStageWithLauncher: () => void;
-  onOpenWorkspaceSettings: () => void;
-  onActivateWorkspaceStageWithNavigation: (stageId: string) => void;
-  onCreateWorkspaceStageFromStrip: () => void;
-  onHoldWorkspaceNavigation: () => void;
-  onScheduleWorkspaceNavigationHide: () => void;
-  onToggleWorkspaceNavigation: () => void;
-  onToggleWorkspaceMenu: () => void;
-  onHandleFreeformScenePointerDown: (event: PointerEvent) => void;
-  onUpdateWorkspaceLayout: (entryId: string, patch: { x?: number; y?: number; width?: number; height?: number; interaction?: 'move' | 'resize'; isFinal?: boolean }) => void;
-  onCloseWorkspaceWindow: (entryId: string) => void;
-  onFocusWorkspaceWindow: (entryId: string) => void;
-  onFocusAdjacentWorkspaceWindow: (entryId: string, direction: 'prev' | 'next') => void;
-  onCloseWorkspaceLaunchpad: () => void;
-  onHandleWorkspaceDockOpenWithNavigation: (appId: string) => void;
-  onStageElementChange: (element: HTMLElement | null) => void;
-  onPanelBodyElementChange: (element: HTMLElement | null) => void;
+  runtimeContext: ShellRuntimeContext;
+  runtimeSurfaces: ShellRuntimeSurfaces;
+  runtimeActions: ShellRuntimeActions;
+  runtimeFrame: ShellRuntimeFrame;
 }>();
 
+const layoutMode = computed(() => props.runtimeContext.shellKind);
 
 const shouldRenderTraditionalHeader = computed(() => (
-  props.activeDesktopModeId !== 'telegram'
+  props.runtimeContext.activeDesktopModeId !== 'telegram'
 ));
 
 const currentShellRenderer = computed(() => (
-  desktopModeRuntimeRegistry.get(props.activeDesktopModeId)?.shellRenderer
-  || (props.layoutMode === 'freeform' ? FreeformShell : TraditionalShell)
+  desktopModeRuntimeRegistry.get(props.runtimeContext.activeDesktopModeId)?.shellRenderer
+  || (props.runtimeContext.shellKind === 'freeform' ? FreeformShell : TraditionalShell)
 ));
 
-const shellContext = computed<ShellRuntimeContext>(() => ({
-  shellKind: props.layoutMode,
-  layoutMode: props.layoutMode,
-  activeDesktopModeId: props.activeDesktopModeId,
-  desktopModeOptions: props.desktopModeOptions,
-  activeMainTab: props.activeMainTab,
-  isMobile: props.isMobile,
-  currentDetailedView: props.currentDetailedView,
-  saveStatus: props.saveStatus,
-  widgetGroups: props.widgetGroups,
-  characterChannelState: props.characterChannelState,
-  traditional: {
-    shouldShowDiscordGuildRail: props.shouldShowDiscordGuildRail,
-    discordGuildEntries: props.discordGuildEntries,
-    shouldShowForgeSidebar: props.shouldShowForgeSidebar,
-    isForgeSidebarCollapsed: props.isForgeSidebarCollapsed,
-    shouldShowDiscordCharacterRail: props.shouldShowDiscordCharacterRail,
-    isDiscordMobileMode: props.isDiscordMobileMode,
-    isTelegramMobileMode: props.isTelegramMobileMode,
-    shouldShowDiscordMobileShell: props.shouldShowDiscordMobileShell,
-    discordMobileGuildRailPosition: props.discordMobileGuildRailPosition,
-    discordMobileCharacterEntryPosition: props.discordMobileCharacterEntryPosition,
-    showDiscordMobileCharacterRail: props.showDiscordMobileCharacterRail,
-    discordMobileCharacterEntryStyle: props.discordMobileCharacterEntryStyle,
-    telegramSelectedCharacterKey: props.telegramSelectedCharacterKey,
-    telegramToolEntries: props.telegramToolEntries,
-    activeTelegramToolId: props.activeTelegramToolId,
-    telegramConversationListMode: props.telegramConversationListMode,
-    telegramDesktopLeftRoute: props.telegramDesktopLeftRoute,
-    telegramMobileActiveTab: props.telegramMobileActiveTab,
-    telegramMobileCurrentRoute: props.telegramMobileCurrentRoute,
-    isTimelineLoadedOnce: props.isTimelineLoadedOnce,
-    isForgeActiveInTraditional: props.isForgeActiveInTraditional,
-    sidebarMode: props.sidebarMode,
-    activeRightPanel: props.activeRightPanel,
-    widgetWidth: props.widgetWidth,
-    isResizing: props.isResizing,
-    telegramLeftRailWidth: props.telegramLeftRailWidth,
-    isTelegramLeftRailResizing: props.isTelegramLeftRailResizing,
-    activeForgeAuxKind: props.activeForgeAuxKind,
-    rawSidebarMode: props.rawSidebarMode,
-    activeWidgetPlugin: props.activeWidgetPlugin,
-    activeRegisteredPanel: props.activeRegisteredPanel,
-    activeRightPanelActivity: props.activeRightPanelActivity,
-    showWidgetDropdown: props.showWidgetDropdown,
-    showNexus: props.showNexus
-  },
-  freeform: {
-    showWorkspaceMenu: props.showWorkspaceMenu,
-    isWorkspaceStageStripVisible: props.isWorkspaceStageStripVisible,
-    isWorkspaceNavigationVisible: props.isWorkspaceNavigationVisible,
-    activeWorkspaceWindowId: props.activeWorkspaceWindowId,
-    workspaceSceneInsets: props.workspaceSceneInsets,
-    showWorkspaceLaunchpad: props.showWorkspaceLaunchpad,
-    isWorkspaceDockVisible: props.isWorkspaceDockVisible
-  }
+const shellRendererProps = computed(() => ({
+  runtimeContext: props.runtimeContext,
+  runtimeSurfaces: props.runtimeSurfaces,
+  runtimeActions: props.runtimeActions
 }));
-
-const shellSurfaces = computed<ShellRuntimeSurfaces>(() => ({
-  dynamicTabs: props.dynamicTabs,
-  traditional: {
-    mainPlugins: props.mainPlugins,
-    mainSurfaceVariant: props.shellMainSurfaceVariant,
-    mainSurfaceStyle: props.shellMainSurfaceStyle,
-    mobileMainStyle: props.discordMobileMainStyle,
-    widgetSurfaceVariant: props.shellWidgetSurfaceVariant,
-    widgetStyle: props.shellWidgetStyle
-  },
-  freeform: {
-    workspaceMenuVariant: props.shellWorkspaceMenuVariant,
-    workspaceMenuStyle: props.shellWorkspaceMenuStyle,
-    workspaceStageVariant: props.shellWorkspaceStageVariant,
-    workspaceStageStyle: props.shellWorkspaceStageStyle,
-    stageStripItems: props.workspaceStageStripItems,
-    stageWindowEntries: props.activeStageWindowEntries,
-    dockDisplayItems: props.workspaceDockDisplayItems
-  }
-}));
-
-const shellActions = computed<ShellRuntimeActions>(() => ({
-  getPluginName: props.getPluginName,
-  navigation: {
-    switchMainView: props.onSwitchMainView,
-    close: props.onClose,
-    updateDesktopMode: props.onUpdateDesktopMode,
-    openSettingsPanel: props.onOpenSettingsPanel
-  },
-  traditional: {
-    toggleDiscordGuildRail: props.onToggleDiscordGuildRail,
-    handleOpenWidget: props.onHandleOpenWidget,
-    toggleForgeSidebarCollapse: props.onToggleForgeSidebarCollapse,
-    setSidebarMode: props.onSetSidebarMode,
-    openDiscordChatSession: props.onOpenDiscordChatSession,
-    openDiscordMobileChatSession: props.onOpenDiscordMobileChatSession,
-    createDiscordChatSession: props.onCreateDiscordChatSession,
-    createDiscordMobileChatSession: props.onCreateDiscordMobileChatSession,
-    renameDiscordChatSession: props.onRenameDiscordChatSession,
-    deleteDiscordChatSession: props.onDeleteDiscordChatSession,
-    toggleDiscordCharacterGroup: props.onToggleDiscordCharacterGroup,
-    toggleDiscordCharacterSessionExpansion: props.onToggleDiscordCharacterSessionExpansion,
-    handleDiscordMobileMainViewSwitch: props.onHandleDiscordMobileMainViewSwitch,
-    updateShowDiscordMobileCharacterRail: props.onUpdateShowDiscordMobileCharacterRail,
-    selectTelegramCharacterOverview: props.onSelectTelegramCharacterOverview,
-    openTelegramToolEntry: props.onOpenTelegramToolEntry,
-    setTelegramConversationListMode: props.onSetTelegramConversationListMode,
-    setTelegramDesktopLeftRoute: props.onSetTelegramDesktopLeftRoute,
-    pushTelegramMobileRoute: props.onPushTelegramMobileRoute,
-    popTelegramMobileRoute: props.onPopTelegramMobileRoute,
-    resizeStart: props.onResizeStart,
-    telegramLeftRailResizeStart: props.onTelegramLeftRailResizeStart,
-    backFromDetailedSettings: props.onBackFromDetailedSettings,
-    toggleWidgetDropdown: props.onToggleWidgetDropdown,
-    switchRightPanel: props.onSwitchRightPanel,
-    restoreSidebarLeft: props.onRestoreSidebarLeft,
-    closePanel: props.onClosePanel,
-    updateShowNexus: props.onUpdateShowNexus,
-    selectTelegramBottomNav: props.onSelectTelegramBottomNav
-  },
-  freeform: {
-    createStageWithLauncher: props.onCreateStageWithLauncher,
-    openWorkspaceSettings: props.onOpenWorkspaceSettings,
-    activateWorkspaceStageWithNavigation: props.onActivateWorkspaceStageWithNavigation,
-    createWorkspaceStageFromStrip: props.onCreateWorkspaceStageFromStrip,
-    holdWorkspaceNavigation: props.onHoldWorkspaceNavigation,
-    scheduleWorkspaceNavigationHide: props.onScheduleWorkspaceNavigationHide,
-    toggleWorkspaceNavigation: props.onToggleWorkspaceNavigation,
-    toggleWorkspaceMenu: props.onToggleWorkspaceMenu,
-    handleFreeformScenePointerDown: props.onHandleFreeformScenePointerDown,
-    updateWorkspaceLayout: props.onUpdateWorkspaceLayout,
-    closeWorkspaceWindow: props.onCloseWorkspaceWindow,
-    focusWorkspaceWindow: props.onFocusWorkspaceWindow,
-    focusAdjacentWorkspaceWindow: props.onFocusAdjacentWorkspaceWindow,
-    backFromDetailedSettings: props.onBackFromDetailedSettings,
-    closeWorkspaceLaunchpad: props.onCloseWorkspaceLaunchpad,
-    handleWorkspaceDockOpenWithNavigation: props.onHandleWorkspaceDockOpenWithNavigation,
-    stageElementChange: props.onStageElementChange
-  }
-}));
-
-const traditionalShellProps = computed(() => ({
-  runtimeContext: shellContext.value,
-  runtimeSurfaces: shellSurfaces.value,
-  runtimeActions: shellActions.value
-}));
-
-const freeformShellProps = computed(() => ({
-  runtimeContext: shellContext.value,
-  runtimeSurfaces: shellSurfaces.value,
-  runtimeActions: shellActions.value
-}));
-
-const shellRendererProps = computed(() => (
-  props.layoutMode === 'freeform'
-    ? freeformShellProps.value
-    : traditionalShellProps.value
-));
 
 const openConflictViewer = () => {
   legacyGlobalPanels.value?.openConflictViewer();
@@ -372,6 +110,6 @@ defineExpose({
 });
 
 watch(panelBodyElement, (element) => {
-  props.onPanelBodyElementChange(element);
+  props.runtimeActions.frame.panelBodyElementChange(element);
 }, { immediate: true });
 </script>
