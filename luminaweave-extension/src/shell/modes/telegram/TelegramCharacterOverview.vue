@@ -102,7 +102,7 @@ import type {
   CharacterChannelSessionItem,
   CharacterChannelState,
   CreateChatConversationInput
-} from '../../types/ConversationContextTypes.js';
+} from '../../../types/ConversationContextTypes.js';
 
 const props = defineProps<{
   state: CharacterChannelState;

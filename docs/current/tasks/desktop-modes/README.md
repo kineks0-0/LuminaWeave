@@ -26,11 +26,12 @@
 - 阶段 6 已完成第三批 skins 下沉：Discord / Telegram 的 surface skin map 由各自 `skins.ts` 直接拥有。
 - 阶段 6 已完成第四批 runtime 命名收敛：`src/platform/desktop` 已改为 `src/platform/desktop-mode-runtime`。
 - 阶段 7 已完成 Lumina Shell Root 运行时边界收窄：`App.vue` 组装 `ShellRuntimeContext / ShellRuntimeSurfaces / ShellRuntimeActions / ShellRuntimeFrame`，`LuminaShellRoot.vue` 只负责 header、body、shell renderer 分发与 legacy global panel 挂载。
+- 阶段 8 已完成 shell 模式目录收敛：Discord / Telegram 的模式专属 shell 组件从 `src/shell/traditional/` 移入 `src/shell/modes/<mode>/`，`desktop-modes/builtins/<mode>/` 继续只承载声明式 manifest / settings / tokens / skins。
 - `builtins/shared.ts` 只保留跨模式 helper、基础 settings factory 与基础 skin factory。
 
 ## 下一步
 
-阶段 7 已完成。后续建议进入更细的 shell 模块目录收敛：优先把 Discord / Telegram / Freeform / Traditional 的 shell-only 组件和组合逻辑按 `shell/<kind>`、`shell/modes/<mode>` 或现有相邻目录继续梳理，前提是保持 Desktop Mode manifest 与 runtime registry 作为单注册源。
+阶段 8 已完成。后续建议进入 TraditionalShell 内部拆分：优先抽出 Telegram desktop pane、Telegram mobile stack 与 Telegram route view-model，降低 `TraditionalShell.vue` 的模式分支密度，同时保持现有 Telegram mobile stack、Discord mobile shell、traditional right panel 行为不变。
 
 ## 恢复入口
 

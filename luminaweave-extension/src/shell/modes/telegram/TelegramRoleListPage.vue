@@ -58,7 +58,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { CharacterChannelGroup, CharacterChannelState } from '../../types/ConversationContextTypes.js';
+import type { CharacterChannelGroup, CharacterChannelState } from '../../../types/ConversationContextTypes.js';
 import {
   TELEGRAM_ICON_STROKE_WIDTH,
   getTelegramAvatarStyle,

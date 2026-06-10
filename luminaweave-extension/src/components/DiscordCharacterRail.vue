@@ -411,7 +411,7 @@ import {
   getTelegramInitial,
   getTelegramToolIconName,
   hideBrokenTelegramAvatar
-} from '../shell/traditional/telegramVisual.js';
+} from '../shell/modes/telegram/telegramVisual.js';
 import type {
   CharacterChannelGroup,
   CharacterChannelSessionItem,

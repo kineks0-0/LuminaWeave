@@ -144,7 +144,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { WidgetPanelGroup } from '../types.js';
+import type { WidgetPanelGroup } from '../../types.js';
 import {
   TELEGRAM_ICON_STROKE_WIDTH,
   getTelegramAvatarStyle,

@@ -12,7 +12,8 @@ Desktop Modes 定义 LuminaWeave 的平台级桌面模式。桌面模式不是�
 - `luminaweave-extension/src/desktop-modes/builtins/<mode>/`：classic / stage / discord / telegram 的 manifest、settings、tokens、skins 与受控模式 policy。每个模式的 settings、design token resolver 和 surface skin map 必须由自己的目录直接拥有。
 - `luminaweave-extension/src/desktop-modes/builtins/shared.ts`：跨模式共享 helper、基础 settings factory 与基础 skin factory；新增模式不应把专属逻辑继续塞入该文件。
 - `luminaweave-extension/src/platform/desktop-mode-runtime/`：运行时 descriptor 派生与 registry，不承载具体模式主题值。
-- `luminaweave-extension/src/shell/`：traditional / freeform 通用壳层渲染。
+- `luminaweave-extension/src/shell/`：traditional / freeform 通用壳层渲染、root shell 分发与 legacy global panel 挂载。
+- `luminaweave-extension/src/shell/modes/<mode>/`：Discord / Telegram 等模式专属 shell UI 组件；这些组件属于壳层实现，不放入 `desktop-modes/builtins/<mode>/`。
 
 ## Activity 与启动意图
 

@@ -60,15 +60,15 @@
 
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue';
-import DiscordCharacterRail from '../../components/DiscordCharacterRail.vue';
-import DiscordGuildRail from '../../components/DiscordGuildRail.vue';
-import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import DiscordCharacterRail from '../../../components/DiscordCharacterRail.vue';
+import DiscordGuildRail from '../../../components/DiscordGuildRail.vue';
+import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
 import type {
   CharacterChannelState,
   CreateChatConversationInput,
   DeleteChatConversationInput,
   RenameChatConversationInput
-} from '../../types/ConversationContextTypes.js';
+} from '../../../types/ConversationContextTypes.js';
 
 defineProps<{
   isDiscordMobileMode: boolean;
