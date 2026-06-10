@@ -7,7 +7,7 @@ import { SurfaceRegistry } from '../../surface/SurfaceRegistry.js';
 import type { SurfaceRendererDefinition } from '../../surface/types.js';
 import { registerDesktopMode } from '../../../desktop-modes/core/registry.js';
 
-vi.mock('../../../shell/traditional/TelegramUserInfoPanel.vue', () => ({
+vi.mock('../../../shell/modes/telegram/TelegramUserInfoPanel.vue', () => ({
     default: defineComponent({ name: 'TelegramUserInfoPanelStub', template: '<div />' })
 }));
 vi.mock('../../../shell/traditional/TraditionalShell.vue', () => ({

@@ -76,7 +76,7 @@ import {
   getTelegramSettingsIconName,
   getTelegramSettingsIconTone,
   hideBrokenTelegramAvatar
-} from '../../shell/traditional/telegramVisual.js';
+} from '../../shell/modes/telegram/telegramVisual.js';
 import { activeSettings } from './useSettings.js';
 import { getVisibleSettingsEntries, type SettingsSourceEntry } from './settingsRegistry.js';
 

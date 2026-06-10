@@ -128,13 +128,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import type { CSSProperties } from 'vue';
-import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
 import type {
   CharacterChannelGroup,
   CharacterChannelSessionItem,
   CharacterChannelState,
   CreateChatConversationInput
-} from '../../types/ConversationContextTypes.js';
+} from '../../../types/ConversationContextTypes.js';
 import {
   TELEGRAM_ICON_STROKE_WIDTH,
   type TelegramIconName,

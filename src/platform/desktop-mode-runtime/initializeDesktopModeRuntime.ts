@@ -2,7 +2,7 @@ import { listDesktopModes, onDesktopModeRegistered } from '../../desktop-modes/c
 import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
 import FreeformShell from '../../shell/freeform/FreeformShell.vue';
 import TraditionalShell from '../../shell/traditional/TraditionalShell.vue';
-import TelegramUserInfoPanel from '../../shell/traditional/TelegramUserInfoPanel.vue';
+import TelegramUserInfoPanel from '../../shell/modes/telegram/TelegramUserInfoPanel.vue';
 import { desktopModeRuntimeRegistry } from './DesktopModeRuntimeRegistry.js';
 import type { DesktopModeRuntimeDescriptor, DesktopShellKind } from './types.js';
 
