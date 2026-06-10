@@ -21,60 +21,28 @@
       @switchMode="onSetSidebarMode"
     />
 
-    <div
+    <TelegramDesktopPane
       v-if="isTelegramDesktopMode && shouldShowDiscordCharacterRail"
-      class="lw-telegram-left-pane"
-      :style="telegramLeftRailStyle"
-    >
-      <div class="lw-telegram-left-stack">
-        <nav class="lw-telegram-left-stack__tabs" aria-label="Telegram left pane pages">
-          <button
-            type="button"
-            :class="{ active: telegramDesktopLeftRoute === 'conversationList' }"
-            @click="onSetTelegramDesktopLeftRoute('conversationList')"
-          >
-            会话
-          </button>
-          <button
-            type="button"
-            :class="{ active: telegramDesktopLeftRoute === 'roleList' }"
-            @click="onSetTelegramDesktopLeftRoute('roleList')"
-          >
-            角色
-          </button>
-        </nav>
-        <DiscordCharacterRail
-          v-if="telegramDesktopLeftRoute === 'conversationList'"
-          :state="characterChannelState"
-          :onRenameSession="onRenameDiscordChatSession"
-          :onDeleteSession="onDeleteDiscordChatSession"
-          :onOpenSession="onOpenDiscordChatSession"
-          :onCreateSession="onCreateDiscordChatSession"
-          :selectedCharacterKey="telegramSelectedCharacterKey"
-          :telegramToolEntries="telegramToolEntries"
-          :activeTelegramToolId="activeTelegramToolId"
-          :telegramListMode="telegramConversationListMode"
-          :onTelegramListModeChange="onSetTelegramConversationListMode"
-          :onOpenTelegramToolEntry="onOpenTelegramToolEntry"
-          :onSelectCharacterOverview="onSelectTelegramCharacterOverview"
-          :onToggleGroup="onToggleDiscordCharacterGroup"
-          :onToggleSessionExpansion="onToggleDiscordCharacterSessionExpansion"
-        />
-        <TelegramRoleListPage
-          v-else
-          :state="characterChannelState"
-          @selectRole="onSelectTelegramCharacterOverview"
-        />
-      </div>
-      <div
-        class="lw-telegram-left-resizer"
-        :class="{ 'is-resizing': isTelegramLeftRailResizing }"
-        role="separator"
-        aria-orientation="vertical"
-        title="调整左侧列表宽度"
-        @mousedown.stop.prevent="onTelegramLeftRailResizeStart"
-      ></div>
-    </div>
+      :state="characterChannelState"
+      :leftRoute="telegramDesktopLeftRoute"
+      :leftRailStyle="telegramLeftRailStyle"
+      :isLeftRailResizing="isTelegramLeftRailResizing"
+      :selectedCharacterKey="telegramSelectedCharacterKey"
+      :telegramToolEntries="telegramToolEntries"
+      :activeTelegramToolId="activeTelegramToolId"
+      :telegramListMode="telegramConversationListMode"
+      :onSetLeftRoute="onSetTelegramDesktopLeftRoute"
+      :onRenameSession="onRenameDiscordChatSession"
+      :onDeleteSession="onDeleteDiscordChatSession"
+      :onOpenSession="onOpenDiscordChatSession"
+      :onCreateSession="onCreateDiscordChatSession"
+      :onTelegramListModeChange="onSetTelegramConversationListMode"
+      :onOpenTelegramToolEntry="onOpenTelegramToolEntry"
+      :onSelectCharacterOverview="onSelectTelegramCharacterOverview"
+      :onToggleGroup="onToggleDiscordCharacterGroup"
+      :onToggleSessionExpansion="onToggleDiscordCharacterSessionExpansion"
+      :onLeftRailResizeStart="onTelegramLeftRailResizeStart"
+    />
 
     <DiscordCharacterRail
       v-else-if="shouldShowDiscordCharacterRail"
@@ -113,99 +81,44 @@
       @updateShowDiscordMobileCharacterRail="onUpdateShowDiscordMobileCharacterRail"
     />
 
-    <template v-if="isTelegramMobileMode">
-      <div
-        class="lw-main-wrapper lw-telegram-mobile-stack"
-        :class="{ 'has-telegram-mobile-nav': shouldShowTelegramMobileBottomNav }"
-        :data-surface-variant="shellMainSurfaceVariant"
-        :style="[shellMainSurfaceStyle, discordMobileMainStyle]"
-      >
-        <header v-if="shouldShowTelegramMobileStackBar" class="lw-telegram-mobile-stack__bar">
-          <button type="button" title="返回" @click="onPopTelegramMobileRoute">
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.4" fill="none">
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
-          </button>
-          <strong>{{ telegramMobileRouteTitle }}</strong>
-        </header>
-
-        <DiscordCharacterRail
-          v-if="telegramMobileCurrentRoute.name === 'conversationList'"
-          :state="characterChannelState"
-          :isMobile="true"
-          :mobilePlacement="'bottom'"
-          :onRenameSession="onRenameDiscordChatSession"
-          :onDeleteSession="onDeleteDiscordChatSession"
-          :onOpenSession="onOpenTelegramMobileSession"
-          :onCreateSession="onCreateTelegramMobileSession"
-          :selectedCharacterKey="telegramSelectedCharacterKey"
-          :telegramToolEntries="telegramToolEntries"
-          :activeTelegramToolId="activeTelegramToolId"
-          :telegramListMode="telegramConversationListMode"
-          :onTelegramListModeChange="onSetTelegramConversationListMode"
-          :onOpenTelegramToolEntry="onOpenTelegramMobileToolEntry"
-          :onSelectCharacterOverview="onOpenTelegramMobileCharacterOverview"
-          :onToggleGroup="onToggleDiscordCharacterGroup"
-          :onToggleSessionExpansion="onToggleDiscordCharacterSessionExpansion"
-        />
-        <TelegramRoleListPage
-          v-else-if="telegramMobileCurrentRoute.name === 'roleList'"
-          :state="characterChannelState"
-          @selectRole="onOpenTelegramMobileCharacterOverview"
-        />
-        <TelegramCharacterOverview
-          v-else-if="telegramMobileCurrentRoute.name === 'characterOverview'"
-          :state="characterChannelState"
-          :selectedCharacterKey="telegramMobileCurrentRoute.groupKey || telegramSelectedCharacterKey"
-          :isMobile="true"
-          @openSession="onOpenTelegramMobileSession"
-          @createSession="onCreateTelegramMobileSession"
-          @openTool="onOpenTelegramMobilePanel"
-        />
-        <SurfaceOutlet
-          v-else-if="telegramMobileCurrentRoute.name === 'roleProfile'"
-          contract-id="telegram.infoPanel"
-          :state="characterChannelState"
-          :activity="{ size: 'default', pageType: 'standalone' }"
-          :isMobile="true"
-          @openSession="onOpenTelegramMobileSession"
-          @createSession="onCreateTelegramMobileSession"
-          @openTool="onHandleTelegramMobileRoleProfileTool"
-        />
-        <SurfaceOutlet
-          v-else-if="telegramMobileCurrentRoute.name === 'chat'"
-          contract-id="chat.main"
-          :activity="{ size: 'default', pageType: 'standalone' }"
-          :isMobile="true"
-          :onTelegramBack="onPopTelegramMobileRoute"
-          :onTelegramOpenRoleProfile="onOpenTelegramMobileRoleProfile"
-        />
-        <SurfaceOutlet
-          v-else-if="telegramMobileCurrentRoute.name === 'settings'"
-          contract-id="settings.root"
-          :activity="{ size: 'small', pageType: 'standalone' }"
-          :isMobile="true"
-        />
-        <TelegramUserProfilePage
-          v-else-if="telegramMobileCurrentRoute.name === 'profile'"
-          :desktopModes="desktopModeOptions"
-          :activeDesktopModeId="activeDesktopModeId"
-          :widgetGroups="widgetGroups"
-          @setDesktopMode="onUpdateDesktopMode"
-          @openSettings="onSelectTelegramBottomNav('settings')"
-          @openPanel="onOpenTelegramMobilePanel"
-          @close="onClose"
-        />
-        <SurfaceOutlet
-          v-else-if="telegramMobileCurrentRoute.name === 'tool'"
-          :contract-id="telegramMobileToolContractId"
-          v-bind="telegramMobileToolProps"
-          :activity="telegramMobileToolActivity"
-          :isMobile="true"
-          :auxSidebarMode="telegramMobileToolAuxSidebarMode"
-        />
-      </div>
-    </template>
+    <TelegramMobileStack
+      v-if="isTelegramMobileMode"
+      :route="telegramMobileCurrentRoute"
+      :routeTitle="telegramMobileStackTitle"
+      :showStackBar="telegramMobileStackShowsBar"
+      :showBottomNavPadding="shouldShowTelegramMobileBottomNav"
+      :mainSurfaceVariant="shellMainSurfaceVariant"
+      :mainSurfaceStyle="shellMainSurfaceStyle"
+      :mobileMainStyle="discordMobileMainStyle"
+      :state="characterChannelState"
+      :selectedCharacterKey="telegramSelectedCharacterKey"
+      :telegramToolEntries="telegramToolEntries"
+      :activeTelegramToolId="activeTelegramToolId"
+      :telegramListMode="telegramConversationListMode"
+      :desktopModes="desktopModeOptions"
+      :activeDesktopModeId="activeDesktopModeId"
+      :widgetGroups="widgetGroups"
+      :toolContractId="telegramMobileToolContractId"
+      :toolProps="telegramMobileToolProps"
+      :toolActivity="telegramMobileToolActivity"
+      :toolAuxSidebarMode="telegramMobileToolAuxSidebarMode"
+      :onPopRoute="onPopTelegramMobileRoute"
+      :onRenameSession="onRenameDiscordChatSession"
+      :onDeleteSession="onDeleteDiscordChatSession"
+      :onOpenSession="onOpenTelegramMobileSession"
+      :onCreateSession="onCreateTelegramMobileSession"
+      :onTelegramListModeChange="onSetTelegramConversationListMode"
+      :onOpenTelegramToolEntry="onOpenTelegramMobileToolEntry"
+      :onSelectCharacterOverview="onOpenTelegramMobileCharacterOverview"
+      :onToggleGroup="onToggleDiscordCharacterGroup"
+      :onToggleSessionExpansion="onToggleDiscordCharacterSessionExpansion"
+      :onOpenPanel="onOpenTelegramMobilePanel"
+      :onHandleRoleProfileTool="onHandleTelegramMobileRoleProfileTool"
+      :onOpenRoleProfile="onOpenTelegramMobileRoleProfile"
+      :onUpdateDesktopMode="onUpdateDesktopMode"
+      :onSelectBottomNav="onSelectTelegramBottomNav"
+      :onClose="onClose"
+    />
 
     <template v-else>
       <template v-for="plugin in mainPlugins" :key="plugin.id">
@@ -310,8 +223,17 @@ import type { ShellRuntimeActions, ShellRuntimeContext, ShellRuntimeSurfaces, Te
 import DiscordMobileShell from '../modes/discord/DiscordMobileShell.vue';
 import TelegramBottomNav from '../modes/telegram/TelegramBottomNav.vue';
 import TelegramCharacterOverview from '../modes/telegram/TelegramCharacterOverview.vue';
-import TelegramRoleListPage from '../modes/telegram/TelegramRoleListPage.vue';
-import TelegramUserProfilePage from '../modes/telegram/TelegramUserProfilePage.vue';
+import TelegramDesktopPane from '../modes/telegram/TelegramDesktopPane.vue';
+import TelegramMobileStack from '../modes/telegram/TelegramMobileStack.vue';
+import {
+  resolveTelegramMobileRouteTitle,
+  resolveTelegramMobileToolActivity,
+  resolveTelegramMobileToolAuxSidebarMode,
+  resolveTelegramMobileToolContractId,
+  resolveTelegramMobileToolProps,
+  shouldShowTelegramMobileBottomNav as resolveShouldShowTelegramMobileBottomNav,
+  shouldShowTelegramMobileStackBar as resolveShouldShowTelegramMobileStackBar
+} from '../modes/telegram/telegramRouteViewModel.js';
 import WidgetPanelHost from './WidgetPanelHost.vue';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
@@ -435,41 +357,30 @@ const isTelegramCharacterOverviewVisible = (pluginId: string) => (
   && pluginId === 'lumina-chat'
   && Boolean(telegramSelectedCharacterKey.value)
 );
-const isTelegramMobileRootRoute = computed(() => (
-  ['conversationList', 'roleList', 'settings', 'profile'].includes(telegramMobileCurrentRoute.value.name)
-));
-const canPopTelegramMobileRoute = computed(() => (
-  !isTelegramMobileRootRoute.value
-));
 const shouldShowTelegramMobileBottomNav = computed(() => (
-  isTelegramMobileMode.value && isTelegramMobileRootRoute.value
+  resolveShouldShowTelegramMobileBottomNav(isTelegramMobileMode.value, telegramMobileCurrentRoute.value)
 ));
-const shouldShowTelegramMobileStackBar = computed(() => (
-  canPopTelegramMobileRoute.value
-  && !['chat', 'roleProfile'].includes(telegramMobileCurrentRoute.value.name)
-));
-const telegramMobileRouteTitle = computed(() => {
-  if (telegramMobileCurrentRoute.value.name === 'characterOverview') return '角色概览';
-  if (telegramMobileCurrentRoute.value.name === 'roleProfile') return '角色资料';
-  if (telegramMobileCurrentRoute.value.name === 'chat') return '聊天';
-  if (telegramMobileCurrentRoute.value.name === 'tool') return telegramMobileCurrentRoute.value.title || '工具';
-  return '';
-});
-const telegramMobileToolContractId = computed(() => {
-  if (telegramMobileCurrentRoute.value.contractId) {
-    return telegramMobileCurrentRoute.value.contractId;
-  }
-  const panelId = telegramMobileCurrentRoute.value.panelId || telegramMobileCurrentRoute.value.toolId || 'lumina-settings';
-  return getSurfaceContractIdForRegisteredPanel(panelId)
-    || getPrimarySurfaceContractIdForPlugin(panelId);
-});
-const telegramMobileToolActivity = computed(() => (
-  telegramMobileCurrentRoute.value.activity || { size: 'default', pageType: 'standalone' }
-));
-const telegramMobileToolProps = computed(() => telegramMobileCurrentRoute.value.props || {});
-const telegramMobileToolAuxSidebarMode = computed(() => (
-  telegramMobileToolContractId.value === 'forge.workspace' ? 'hidden' : undefined
-));
+const telegramMobileStackShowsBar = computed(() =>
+  resolveShouldShowTelegramMobileStackBar(telegramMobileCurrentRoute.value)
+);
+const telegramMobileStackTitle = computed(() =>
+  resolveTelegramMobileRouteTitle(telegramMobileCurrentRoute.value)
+);
+const telegramMobileToolContractId = computed(() =>
+  resolveTelegramMobileToolContractId(telegramMobileCurrentRoute.value, {
+    resolveRegisteredPanelContractId: getSurfaceContractIdForRegisteredPanel,
+    resolvePluginContractId: getPrimarySurfaceContractIdForPlugin
+  })
+);
+const telegramMobileToolActivity = computed(() =>
+  resolveTelegramMobileToolActivity(telegramMobileCurrentRoute.value)
+);
+const telegramMobileToolProps = computed(() =>
+  resolveTelegramMobileToolProps(telegramMobileCurrentRoute.value)
+);
+const telegramMobileToolAuxSidebarMode = computed(() =>
+  resolveTelegramMobileToolAuxSidebarMode(telegramMobileToolContractId.value)
+);
 const onOpenTelegramMobileCharacterOverview = (groupKey: string | null) => {
   if (!groupKey) return;
   onSelectTelegramCharacterOverview(groupKey);
@@ -570,87 +481,6 @@ const telegramLeftRailStyle = computed<CSSProperties>(() => ({
   box-shadow: var(--lw-telegram-pane-shadow, none);
 }
 
-.lw-telegram-left-pane {
-  position: relative;
-  flex: 0 0 auto;
-  min-width: 260px;
-  display: flex;
-  align-self: stretch;
-  min-height: 0;
-}
-
-.lw-telegram-left-stack {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.lw-telegram-left-stack__tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  padding: 10px 10px 0;
-  background: var(--lw-telegram-chat-list-bg, var(--lw-character-rail-bg));
-}
-
-.lw-telegram-left-stack__tabs button {
-  min-height: 34px;
-  border: none;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 52%, transparent);
-  color: var(--lw-text-secondary);
-  font-size: var(--lw-type-label-medium-size);
-  line-height: var(--lw-type-label-medium-line-height);
-  font-weight: var(--lw-type-label-medium-weight);
-  letter-spacing: var(--lw-type-label-medium-tracking);
-}
-
-.lw-telegram-left-stack__tabs button.active,
-.lw-telegram-left-stack__tabs button:hover {
-  background: color-mix(in srgb, var(--lw-primary) 14%, transparent);
-  color: var(--lw-primary);
-}
-
-.lw-telegram-left-pane .lw-discord-rail[data-skin-variant='telegram'] {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-  flex: 1 1 auto;
-}
-
-.lw-traditional-shell.is-telegram-desktop .lw-discord-rail[data-skin-variant='telegram'] {
-  height: auto;
-  border-radius: var(--lw-telegram-pane-radius, 0);
-  border: 1px solid var(--lw-telegram-pane-border, transparent);
-  box-shadow: var(--lw-telegram-pane-shadow, none);
-}
-
-.lw-telegram-left-resizer {
-  position: absolute;
-  top: 0;
-  right: -7px;
-  bottom: 0;
-  width: 14px;
-  cursor: col-resize;
-  z-index: 12;
-}
-
-.lw-telegram-left-resizer::after {
-  content: '';
-  position: absolute;
-  inset: 12px 2px;
-  border-radius: 999px;
-  background: transparent;
-  transition: background 0.16s ease;
-}
-
-.lw-telegram-left-resizer:hover::after,
-.lw-telegram-left-resizer.is-resizing::after {
-  background: color-mix(in srgb, var(--lw-primary) 28%, transparent);
-}
-
 .lw-main-wrapper[data-surface-variant='discord'] {
   backdrop-filter: none;
 }
@@ -679,48 +509,6 @@ const telegramLeftRailStyle = computed<CSSProperties>(() => ({
   padding-right: var(--lw-discord-mobile-safe-right, 0px);
   padding-bottom: var(--lw-discord-mobile-safe-bottom, 0px);
   padding-left: var(--lw-discord-mobile-safe-left, 0px);
-}
-
-.lw-main-wrapper.has-telegram-mobile-nav {
-  padding-bottom: calc(78px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
-}
-
-.lw-telegram-mobile-stack {
-  position: relative;
-}
-
-.lw-telegram-mobile-stack__bar {
-  min-height: 52px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: calc(6px + var(--lw-content-safe-top, var(--lw-safe-top, 0px))) 14px 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, transparent);
-  background: color-mix(in srgb, var(--lw-surface-container-high) 76%, transparent);
-}
-
-.lw-telegram-mobile-stack__bar button {
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 72%, transparent);
-  color: var(--lw-text-main);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.lw-telegram-mobile-stack__bar strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--lw-type-title-small-size);
-  line-height: var(--lw-type-title-small-line-height);
-  font-weight: var(--lw-type-title-small-weight);
-  letter-spacing: var(--lw-type-title-small-tracking);
 }
 
 .lw-main-timeline-wrapper {
