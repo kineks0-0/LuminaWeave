@@ -34,6 +34,7 @@ import {
   resolveRootSafeAreaResidualStyle
 } from './composables/shell/rootSafeArea.js';
 import { useShellBootstrap } from './composables/shell/useShellBootstrap.js';
+import { useShellRuntimePayload } from './composables/shell/useShellRuntimePayload.js';
 import { useTelegramShell } from './composables/shell/useTelegramShell.js';
 import { useWidgetPanels } from './composables/shell/useWidgetPanels.js';
 import { useWorkspaceNavigation } from './composables/shell/useWorkspaceNavigation.js';
@@ -55,10 +56,6 @@ import { useDesktopMode } from './desktop-modes/core/useDesktopMode.js';
 import type { ThemeTraditionalNavigationPreset } from './desktop-modes/core/types.js';
 import type {
   DynamicTabConfig,
-  ShellRuntimeActions,
-  ShellRuntimeContext,
-  ShellRuntimeFrame,
-  ShellRuntimeSurfaces,
   TelegramRailToolEntry
 } from './shell/types.js';
 import { registerLuminaPlugins } from './bootstrap/registerPlugins.js';
@@ -853,157 +850,161 @@ const toggleExpand = () => {
   }, 100);
 };
 
-const shellRuntimeContext = computed<ShellRuntimeContext>(() => ({
-  shellKind: shellKind.value,
-  layoutMode: layoutMode.value,
-  activeDesktopModeId: activeDesktopModeId.value,
-  desktopModeOptions: desktopModeOptions.value,
-  activeMainTab: activeMainTab.value,
-  isMobile: isMobile.value,
-  currentDetailedView: currentDetailedView.value,
-  saveStatus: saveStatus.value,
-  widgetGroups: widgetGroups.value,
-  characterChannelState: characterChannelState.value,
-  traditional: {
-    shouldShowDiscordGuildRail: shouldShowDiscordGuildRail.value,
-    discordGuildEntries: discordGuildEntries.value,
-    shouldShowForgeSidebar: shouldShowForgeSidebar.value,
-    isForgeSidebarCollapsed: isForgeSidebarCollapsed.value,
-    shouldShowDiscordCharacterRail: shouldShowDiscordCharacterRail.value,
-    isDiscordMobileMode: isDiscordMobileMode.value,
-    isTelegramMobileMode: isTelegramMobileMode.value,
-    shouldShowDiscordMobileShell: shouldShowDiscordMobileShell.value,
-    discordMobileGuildRailPosition: discordMobileGuildRailPosition.value,
-    discordMobileCharacterEntryPosition: discordMobileCharacterEntryPosition.value,
-    showDiscordMobileCharacterRail: showDiscordMobileCharacterRail.value,
-    discordMobileCharacterEntryStyle: discordMobileCharacterEntryStyle.value,
-    telegramSelectedCharacterKey: telegramSelectedCharacterKey.value,
-    telegramToolEntries: telegramToolEntries.value,
-    activeTelegramToolId: activeTelegramToolId.value,
-    telegramConversationListMode: telegramConversationListMode.value,
-    telegramDesktopLeftRoute: telegramDesktopLeftRoute.value,
-    telegramMobileActiveTab: telegramMobileActiveTab.value,
-    telegramMobileCurrentRoute: telegramMobileCurrentRoute.value,
-    isTimelineLoadedOnce: isTimelineLoadedOnce.value,
-    isForgeActiveInTraditional: isForgeActiveInTraditional.value,
-    sidebarMode: sidebarMode.value,
-    activeRightPanel: visibleRightPanel.value,
-    widgetWidth: visibleWidgetWidth.value,
-    isResizing: isResizing.value,
-    telegramLeftRailWidth: telegramLeftRailWidth.value,
-    isTelegramLeftRailResizing: isTelegramLeftRailResizing.value,
-    activeForgeAuxKind: activeForgeAuxKind.value,
-    rawSidebarMode: rawSidebarMode.value,
-    activeWidgetPlugin: activeWidgetPlugin.value,
-    activeRegisteredPanel: activeRegisteredPanel.value,
-    activeRightPanelActivity: activeRightPanelActivity.value,
-    showWidgetDropdown: showWidgetDropdown.value,
-    showNexus: visibleShowNexus.value
+const {
+  shellRuntimeContext,
+  shellRuntimeSurfaces,
+  shellRuntimeActions,
+  shellRuntimeFrame
+} = useShellRuntimePayload({
+  context: {
+    shellKind,
+    layoutMode,
+    activeDesktopModeId,
+    desktopModeOptions,
+    activeMainTab,
+    isMobile,
+    currentDetailedView,
+    saveStatus,
+    widgetGroups,
+    characterChannelState,
+    traditional: {
+      shouldShowDiscordGuildRail,
+      discordGuildEntries,
+      shouldShowForgeSidebar,
+      isForgeSidebarCollapsed,
+      shouldShowDiscordCharacterRail,
+      isDiscordMobileMode,
+      isTelegramMobileMode,
+      shouldShowDiscordMobileShell,
+      discordMobileGuildRailPosition,
+      discordMobileCharacterEntryPosition,
+      showDiscordMobileCharacterRail,
+      discordMobileCharacterEntryStyle,
+      telegramSelectedCharacterKey,
+      telegramToolEntries,
+      activeTelegramToolId,
+      telegramConversationListMode,
+      telegramDesktopLeftRoute,
+      telegramMobileActiveTab,
+      telegramMobileCurrentRoute,
+      isTimelineLoadedOnce,
+      isForgeActiveInTraditional,
+      sidebarMode,
+      activeRightPanel: visibleRightPanel,
+      widgetWidth: visibleWidgetWidth,
+      isResizing,
+      telegramLeftRailWidth,
+      isTelegramLeftRailResizing,
+      activeForgeAuxKind,
+      rawSidebarMode,
+      activeWidgetPlugin,
+      activeRegisteredPanel,
+      activeRightPanelActivity,
+      showWidgetDropdown,
+      showNexus: visibleShowNexus
+    },
+    freeform: {
+      showWorkspaceMenu,
+      isWorkspaceStageStripVisible,
+      isWorkspaceNavigationVisible,
+      activeWorkspaceWindowId,
+      workspaceSceneInsets,
+      showWorkspaceLaunchpad,
+      isWorkspaceDockVisible
+    }
   },
-  freeform: {
-    showWorkspaceMenu: showWorkspaceMenu.value,
-    isWorkspaceStageStripVisible: isWorkspaceStageStripVisible.value,
-    isWorkspaceNavigationVisible: isWorkspaceNavigationVisible.value,
-    activeWorkspaceWindowId: activeWorkspaceWindowId.value,
-    workspaceSceneInsets: workspaceSceneInsets.value,
-    showWorkspaceLaunchpad: showWorkspaceLaunchpad.value,
-    isWorkspaceDockVisible: isWorkspaceDockVisible.value
-  }
-}));
-
-const shellRuntimeSurfaces = computed<ShellRuntimeSurfaces>(() => ({
-  dynamicTabs: dynamicTabs.value,
-  widgetPanelList: widgetPanelList.value,
-  traditional: {
-    mainPlugins: mainPlugins.value,
-    mainSurfaceVariant: shellMainSurfaceVariant.value,
-    mainSurfaceStyle: shellMainSurfaceStyle.value,
-    mobileMainStyle: discordMobileMainStyle.value,
-    widgetSurfaceVariant: shellWidgetSurfaceVariant.value,
-    widgetStyle: shellWidgetStyle.value
+  surfaces: {
+    dynamicTabs,
+    widgetPanelList,
+    traditional: {
+      mainPlugins,
+      mainSurfaceVariant: shellMainSurfaceVariant,
+      mainSurfaceStyle: shellMainSurfaceStyle,
+      mobileMainStyle: discordMobileMainStyle,
+      widgetSurfaceVariant: shellWidgetSurfaceVariant,
+      widgetStyle: shellWidgetStyle
+    },
+    freeform: {
+      workspaceMenuVariant: computed(() => shellWorkspaceMenuVariant.value || 'default'),
+      workspaceMenuStyle: shellWorkspaceMenuStyle,
+      workspaceStageVariant: computed(() => shellWorkspaceStageVariant.value || 'default'),
+      workspaceStageStyle: shellWorkspaceStageStyle,
+      stageStripItems: workspaceStageStripItems,
+      stageWindowEntries: activeStageWindowEntries,
+      dockDisplayItems: workspaceDockDisplayItems
+    }
   },
-  freeform: {
-    workspaceMenuVariant: shellWorkspaceMenuVariant.value || 'default',
-    workspaceMenuStyle: shellWorkspaceMenuStyle.value,
-    workspaceStageVariant: shellWorkspaceStageVariant.value || 'default',
-    workspaceStageStyle: shellWorkspaceStageStyle.value,
-    stageStripItems: workspaceStageStripItems.value,
-    stageWindowEntries: activeStageWindowEntries.value,
-    dockDisplayItems: workspaceDockDisplayItems.value
-  }
-}));
-
-const shellRuntimeActions = computed<ShellRuntimeActions>(() => ({
-  getPluginName,
-  navigation: {
-    switchMainView: handleSwitchMainView,
-    closeTab,
-    close: toggleExpand,
-    updateDesktopMode,
-    openSettingsPanel
+  actions: {
+    getPluginName,
+    navigation: {
+      switchMainView: handleSwitchMainView,
+      closeTab,
+      close: toggleExpand,
+      updateDesktopMode,
+      openSettingsPanel
+    },
+    frame: {
+      panelBodyElementChange: handlePanelBodyElementChange
+    },
+    traditional: {
+      toggleDiscordGuildRail,
+      handleOpenWidget: handleOpenWidgetWithActivityReset,
+      toggleForgeSidebarCollapse,
+      setSidebarMode,
+      openDiscordChatSession: handleOpenDiscordChatSession,
+      openDiscordMobileChatSession: handleOpenDiscordMobileChatSession,
+      createDiscordChatSession: handleCreateDiscordChatSession,
+      createDiscordMobileChatSession: handleCreateDiscordMobileChatSession,
+      renameDiscordChatSession,
+      deleteDiscordChatSession,
+      toggleDiscordCharacterGroup,
+      toggleDiscordCharacterSessionExpansion,
+      handleDiscordMobileMainViewSwitch,
+      updateShowDiscordMobileCharacterRail,
+      selectTelegramCharacterOverview,
+      openTelegramToolEntry,
+      setTelegramConversationListMode,
+      setTelegramDesktopLeftRoute,
+      pushTelegramMobileRoute: pushTelegramMobileRouteWithActivityReset,
+      popTelegramMobileRoute: popTelegramMobileRouteWithActivityReset,
+      resizeStart: initResize,
+      telegramLeftRailResizeStart: initLeftRailResize,
+      backFromDetailedSettings,
+      toggleWidgetDropdown,
+      switchRightPanel: handleSwitchRightPanel,
+      restoreSidebarLeft,
+      closePanel: handleCloseWidgetPanel,
+      updateShowNexus,
+      selectTelegramBottomNav: handleTelegramBottomNavSelectWithActivityReset
+    },
+    freeform: {
+      createStageWithLauncher: createStageWithLauncherAndCloseMenu,
+      openWorkspaceSettings: openWorkspaceSettingsAndCloseMenu,
+      activateWorkspaceStageWithNavigation,
+      createWorkspaceStageFromStrip,
+      holdWorkspaceNavigation,
+      scheduleWorkspaceNavigationHide: scheduleWorkspaceNavigationHideWrapper,
+      toggleWorkspaceNavigation,
+      toggleWorkspaceMenu,
+      handleFreeformScenePointerDown,
+      updateWorkspaceLayout,
+      closeWorkspaceWindow,
+      focusWorkspaceWindow,
+      focusAdjacentWorkspaceWindow,
+      backFromDetailedSettings,
+      closeWorkspaceLaunchpad,
+      handleWorkspaceDockOpenWithNavigation,
+      stageElementChange: handleStageElementChange
+    }
   },
   frame: {
-    panelBodyElementChange: handlePanelBodyElementChange
-  },
-  traditional: {
-    toggleDiscordGuildRail,
-    handleOpenWidget: handleOpenWidgetWithActivityReset,
-    toggleForgeSidebarCollapse,
-    setSidebarMode,
-    openDiscordChatSession: handleOpenDiscordChatSession,
-    openDiscordMobileChatSession: handleOpenDiscordMobileChatSession,
-    createDiscordChatSession: handleCreateDiscordChatSession,
-    createDiscordMobileChatSession: handleCreateDiscordMobileChatSession,
-    renameDiscordChatSession,
-    deleteDiscordChatSession,
-    toggleDiscordCharacterGroup,
-    toggleDiscordCharacterSessionExpansion,
-    handleDiscordMobileMainViewSwitch,
-    updateShowDiscordMobileCharacterRail,
-    selectTelegramCharacterOverview,
-    openTelegramToolEntry,
-    setTelegramConversationListMode,
-    setTelegramDesktopLeftRoute,
-    pushTelegramMobileRoute: pushTelegramMobileRouteWithActivityReset,
-    popTelegramMobileRoute: popTelegramMobileRouteWithActivityReset,
-    resizeStart: initResize,
-    telegramLeftRailResizeStart: initLeftRailResize,
-    backFromDetailedSettings,
-    toggleWidgetDropdown,
-    switchRightPanel: handleSwitchRightPanel,
-    restoreSidebarLeft,
-    closePanel: handleCloseWidgetPanel,
-    updateShowNexus,
-    selectTelegramBottomNav: handleTelegramBottomNavSelectWithActivityReset
-  },
-  freeform: {
-    createStageWithLauncher: createStageWithLauncherAndCloseMenu,
-    openWorkspaceSettings: openWorkspaceSettingsAndCloseMenu,
-    activateWorkspaceStageWithNavigation,
-    createWorkspaceStageFromStrip,
-    holdWorkspaceNavigation,
-    scheduleWorkspaceNavigationHide: scheduleWorkspaceNavigationHideWrapper,
-    toggleWorkspaceNavigation,
-    toggleWorkspaceMenu,
-    handleFreeformScenePointerDown,
-    updateWorkspaceLayout,
-    closeWorkspaceWindow,
-    focusWorkspaceWindow,
-    focusAdjacentWorkspaceWindow,
-    backFromDetailedSettings,
-    closeWorkspaceLaunchpad,
-    handleWorkspaceDockOpenWithNavigation,
-    stageElementChange: handleStageElementChange
+    panelHeaderVariant,
+    traditionalHeaderPosition,
+    panelBodyStyle: shellPanelBodyStyle,
+    showSplash,
+    discordChannelMarkVisible
   }
-}));
-
-const shellRuntimeFrame = computed<ShellRuntimeFrame>(() => ({
-  panelHeaderVariant: panelHeaderVariant.value,
-  traditionalHeaderPosition: traditionalHeaderPosition.value,
-  panelBodyStyle: shellPanelBodyStyle.value,
-  showSplash: showSplash.value,
-  discordChannelMarkVisible: discordChannelMarkVisible.value
-}));
+});
 
 useShellBootstrap({
   isApiReady,

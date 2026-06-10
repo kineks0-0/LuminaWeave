@@ -28,11 +28,12 @@
 - 阶段 7 已完成 Lumina Shell Root 运行时边界收窄：`App.vue` 组装 `ShellRuntimeContext / ShellRuntimeSurfaces / ShellRuntimeActions / ShellRuntimeFrame`，`LuminaShellRoot.vue` 只负责 header、body、shell renderer 分发与 legacy global panel 挂载。
 - 阶段 8 已完成 shell 模式目录收敛：Discord / Telegram 的模式专属 shell 组件从 `src/shell/traditional/` 移入 `src/shell/modes/<mode>/`，`desktop-modes/builtins/<mode>/` 继续只承载声明式 manifest / settings / tokens / skins。
 - 阶段 9 已完成 TraditionalShell Telegram 分支拆分：Telegram desktop pane、Telegram mobile stack 与 mobile route view-model 已移入 `src/shell/modes/telegram/`，`TraditionalShell.vue` 回到 traditional shell 组合层职责。
+- 阶段 10 已完成 App shell runtime payload 收敛：`ShellRuntimeContext / ShellRuntimeSurfaces / ShellRuntimeActions / ShellRuntimeFrame` 的组装移入 `src/composables/shell/useShellRuntimePayload.ts`，`App.vue` 继续保留状态、生命周期和 handler 所有权。
 - `builtins/shared.ts` 只保留跨模式 helper、基础 settings factory 与基础 skin factory。
 
 ## 下一步
 
-阶段 9 已完成。后续建议进入 App shell runtime payload 收敛：把 `App.vue` 中的 `ShellRuntimeContext / ShellRuntimeSurfaces / ShellRuntimeActions / ShellRuntimeFrame` 组装抽到贴近 shell 的 composable，前提是 `App.vue` 继续作为状态和生命周期所有者。
+阶段 10 已完成。后续建议进入 App shell handler 分组收敛：优先整理 Activity launch、workspace navigation、Telegram/Discord shell action glue 的输入边界，继续保持 `App.vue` 作为状态和生命周期所有者，避免把业务状态迁入 shell 组件。
 
 ## 恢复入口
 
