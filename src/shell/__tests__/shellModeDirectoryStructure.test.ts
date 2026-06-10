@@ -41,8 +41,8 @@ describe('shell mode directory structure', () => {
       "from '../modes/discord/DiscordMobileShell.vue';",
       "from '../modes/telegram/TelegramBottomNav.vue';",
       "from '../modes/telegram/TelegramCharacterOverview.vue';",
-      "from '../modes/telegram/TelegramRoleListPage.vue';",
-      "from '../modes/telegram/TelegramUserProfilePage.vue';"
+      "from '../modes/telegram/TelegramDesktopPane.vue';",
+      "from '../modes/telegram/TelegramMobileStack.vue';"
     ].forEach((importPath) => {
       expect(source).toContain(importPath);
     });
@@ -51,6 +51,8 @@ describe('shell mode directory structure', () => {
       "from './DiscordMobileShell.vue';",
       "from './TelegramBottomNav.vue';",
       "from './TelegramCharacterOverview.vue';",
+      "from './TelegramDesktopPane.vue';",
+      "from './TelegramMobileStack.vue';",
       "from './TelegramRoleListPage.vue';",
       "from './TelegramUserProfilePage.vue';"
     ].forEach((importPath) => {
