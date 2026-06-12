@@ -112,6 +112,7 @@ import {
     type BackendPresetDetail,
     type BackendPresetMeta,
     type ForgeTimelineFeedItem,
+    buildForgePiTimelineFeed,
     createAssistantStreamMessageUpdate,
     createForgeMessageNode,
     resolveAssistantStreamCommitPolicy
@@ -471,6 +472,14 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         // 显式引用修订号以驱动反应性
         timelineRevision.value;
         streamRevision.value;
+
+        if (forgeStore.piSessionEntries.length > 0 && !isGenerating.value && !streamingAssistantNodeId.value) {
+            return buildForgePiTimelineFeed({
+                entries: forgeStore.piSessionEntries,
+                activeNodeId: forgeStore.activePiNodeId,
+                sessionChatId: sessionChatId.value
+            });
+        }
 
         // 获取当前活跃路径的所有消息 ID
         const activePath = worldlineStore.value.getTrace(worldlineStore.value.activeLeafId);
@@ -1229,6 +1238,8 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 upsertMessage(update.message, { bumpTimelineRevision: policy.bumpTimelineRevision });
             }
             worldlineStore.value.activeLeafId = assistantNode.id;
+            streamText.value = '';
+            streamThinkingText.value = '';
             isGenerating.value = false;
             streamingAssistantNodeId.value = null;
             return;

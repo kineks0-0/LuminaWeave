@@ -1,10 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import {
+    buildForgePiTimelineFeed,
     createForgeMessageNode,
     sanitizeHistoryMessages,
     summarizeLorebookEntries
 } from '../store/forgeStoreHelpers.js';
 import { MessageUtils } from '@shared/LuminaMessage.js';
+import type { ForgePiSessionEntry } from '@shared/ForgePiTypes.js';
+
+const entry = (
+    id: string,
+    parentId: string | null,
+    kind: ForgePiSessionEntry['kind'],
+    payload: ForgePiSessionEntry['payload'],
+    summary = `${kind} summary`,
+    createdAt = Number(id.replace(/\D/g, '') || 0)
+): ForgePiSessionEntry => ({
+    id,
+    sessionId: 'forge_project__conversation',
+    parentId,
+    kind,
+    title: kind,
+    summary,
+    createdAt,
+    payload
+});
 
 describe('forgeStoreHelpers', () => {
     it('sanitizes non-empty chat history messages for runtime requests', () => {
@@ -76,5 +96,47 @@ describe('forgeStoreHelpers', () => {
             conversationId: 'session-1',
             nodeKind: 'message'
         });
+    });
+
+    it('builds the Forge feed from the active pi branch instead of the old worldline path', () => {
+        const feed = buildForgePiTimelineFeed({
+            sessionChatId: 'session-1',
+            activeNodeId: 'n8',
+            entries: [
+                entry('n1', null, 'metadata', {}),
+                entry('n2', 'n1', 'user', { role: 'user', text: '分支 A' }),
+                entry('n3', 'n2', 'assistant', { role: 'assistant', text: '回复 A' }),
+                entry('n4', 'n1', 'user', { role: 'user', text: '分支 B' }),
+                entry('n5', 'n4', 'process', { role: 'process', text: '正在读取 B.md。' }),
+                entry('n6', 'n5', 'workspace_patch', {
+                    nodeId: 'n6',
+                    changes: [{
+                        path: './B.md',
+                        kind: 'update',
+                        beforeHash: 'before',
+                        afterHash: 'after'
+                    }]
+                }, '1 file change(s)'),
+                entry('n7', 'n6', 'assistant', { role: 'assistant', text: '回复 B' }),
+                entry('n8', 'n7', 'label', { label: '当前分支' })
+            ]
+        });
+
+        expect(feed.map(item => item.kind === 'message'
+            ? `${item.message.role}:${item.message.mes}`
+            : `${item.item.origin?.entryType}:${item.item.summary}`)).toEqual([
+            'user:分支 B',
+            'process:正在读取 B.md。',
+            'workspace_patch:1 file change(s)',
+            'assistant:回复 B',
+            'label:label summary'
+        ]);
+        expect(feed.filter(item => item.kind === 'message').map(item => item.message.conversationId)).toEqual([
+            'session-1',
+            'session-1'
+        ]);
+        expect(feed.map(item => item.kind === 'message'
+            ? item.item.origin?.nodeId
+            : item.item.origin?.nodeId)).toEqual(['n4', 'n5', 'n6', 'n7', 'n8']);
     });
 });
