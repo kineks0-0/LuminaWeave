@@ -17,6 +17,7 @@ docs/current/tasks/<task-name>/
 ## 当前任务
 
 - [General](./tasks/general/)
+- [Agent Runtime SDK](./tasks/agent-runtime-sdk/)
 - [Desktop Modes](./tasks/desktop-modes/)
 - [Forge](./tasks/forge/)
 - [HAL Architecture Migration](./tasks/hal-architecture-migration/)

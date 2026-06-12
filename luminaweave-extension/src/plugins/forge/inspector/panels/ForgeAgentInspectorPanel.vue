@@ -66,6 +66,36 @@
           <span class="ai-mode-meta">Layer {{ store.activeLayer }} · {{ store.collectionMode || 'conversation' }}</span>
         </div>
 
+        <section v-if="agentRuntimeSnapshot" class="ai-card">
+          <h3 class="ai-card-title">
+            Runtime Snapshot
+            <span class="ai-count">{{ agentRuntimeSnapshot.messages.length }}</span>
+          </h3>
+          <div class="ai-trace-summary">
+            <div class="ai-trace-kv">
+              <span class="ai-trace-kv-label">Streaming</span>
+              <span>{{ agentRuntimeSnapshot.isStreaming ? 'yes' : 'no' }}</span>
+            </div>
+            <div class="ai-trace-kv">
+              <span class="ai-trace-kv-label">Pending tools</span>
+              <span>{{ agentRuntimeSnapshot.pendingToolCalls.map(tool => tool.toolName).join(', ') || 'none' }}</span>
+            </div>
+            <div class="ai-trace-kv">
+              <span class="ai-trace-kv-label">Active tools</span>
+              <span>{{ agentRuntimeSnapshot.activeTools.map(tool => tool.name).join(', ') || 'none' }}</span>
+            </div>
+            <div v-if="agentRuntimeSnapshot.messages.length > 0" class="ai-runtime-message-list">
+              <article v-for="message in agentRuntimeSnapshot.messages" :key="message.id" class="ai-runtime-message">
+                <div class="ai-card-list-head">
+                  <span class="ai-card-list-title">{{ message.role }}</span>
+                  <code class="ai-item-id">{{ message.status || 'unknown' }}</code>
+                </div>
+                <p class="ai-card-list-desc">{{ formatRuntimeMessage(message) || message.id }}</p>
+              </article>
+            </div>
+          </div>
+        </section>
+
         <!-- 已注册技能 -->
         <section class="ai-card">
           <h3 class="ai-card-title">
@@ -297,6 +327,7 @@ import { forgeSkillRegistry } from '../../../../api/core/forge/skills/ForgeSkill
 import { forgeCapabilityRegistry } from '../../../../api/core/forge/skills/ForgeCapabilityRegistry.js';
 import ForgeAuxPanelShell from '../../app/ForgeAuxPanelShell.vue';
 import type { ForgePromptPreviewTab } from '../../../../types/ForgePromptTypes.js';
+import type { AgentRuntimeMessage } from '../../../../api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
 const store = useCardMakerStore();
 
@@ -307,6 +338,7 @@ const tab = ref<'status' | 'prompts' | 'test'>('status');
 const builtInSkills = computed(() => forgeSkillRegistry.listBuiltInSkills());
 const capabilities = computed(() => forgeCapabilityRegistry.listCapabilities());
 const lastGraphResult = computed(() => store.lastAgentGraphResult);
+const agentRuntimeSnapshot = computed(() => store.agentRuntimeSnapshot);
 
 const currentMode = computed(() => {
   const mode = store.workflowSnapshot?.promptMode;
@@ -331,6 +363,15 @@ const currentModeDetail = computed(() => {
 
 function refreshStatus() {
   store.captureAgentGraphSnapshot();
+}
+
+function formatRuntimeMessage(message: AgentRuntimeMessage) {
+  return message.blocks
+    .map(block => typeof block.text === 'string' ? block.text : '')
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // ── Tab 2: 提示词检视 ──
@@ -688,6 +729,19 @@ async function runTest() {
 
 .ai-trace-summary {
   color: var(--lw-text-muted);
+}
+
+.ai-runtime-message-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ai-runtime-message {
+  border: 1px solid var(--lw-border-base);
+  border-radius: 14px;
+  background: var(--lw-bg-subtle);
+  padding: 10px 12px;
 }
 
 /* ── 内部状态可折叠区 ── */

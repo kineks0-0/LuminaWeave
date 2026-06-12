@@ -1,4 +1,5 @@
 import type { AgentSkillDefinition } from '../../hal/shell/AgentBashToolService.js';
+import { AgentSkillParser } from '../../agent-runtime/skills/AgentSkillParser.js';
 import {
     forgeWorkspacePath,
     type ShellWorkspaceService,
@@ -110,6 +111,8 @@ const BUILT_IN_SKILLS = [
 ] as const;
 
 export class ForgeSkillRegistry {
+    private readonly skillParser = new AgentSkillParser();
+
     constructor(private readonly workspaces: ShellWorkspaceService = shellWorkspaceService) {}
 
     listBuiltInSkills(): ForgeSkillMetadata[] {
@@ -181,12 +184,16 @@ export class ForgeSkillRegistry {
         const content = await fs.readFile(skillPath).catch(() => null);
         if (typeof content !== 'string') return null;
         const builtIn = BUILT_IN_SKILLS.find(skill => skill.name === normalizedName);
+        const parsed = this.skillParser.parse({
+            path: semanticSkillPath(normalizedName),
+            content
+        });
         return {
             source: 'project',
             path: semanticSkillPath(normalizedName),
             skill: {
                 name: normalizedName,
-                description: builtIn?.description ?? this.extractDescription(content),
+                description: builtIn?.description ?? parsed.skill?.description ?? this.extractDescription(content),
                 files: [{
                     path: 'SKILL.md',
                     content

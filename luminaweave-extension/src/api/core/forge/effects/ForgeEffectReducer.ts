@@ -15,8 +15,10 @@ import type {
 } from '../../../../types/ForgeRuntimeTypes.js';
 import type {
     ForgePiContextBundleSummary,
+    ForgePiSessionEntry,
     ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
+import type { AgentRuntimeSnapshot } from '../../agent-runtime/events/AgentRuntimeEventBus.js';
 import { annotateSuspiciousStagingEntry } from './ForgeStagingSafety.js';
 import type {
     ForgeTimelineOperationKind,
@@ -80,8 +82,13 @@ export interface ForgeEffectTarget {
     appendModelRequestToolEvent(requestId: string, event: ForgeModelRequestToolEvent): void;
     setModelRequestToolSetSummary(requestId: string, tools: ForgeModelRequestToolSummary[]): void;
     setModelRequestPiTrace(requestId: string, trace: ForgePiModelRequestTrace): void;
+    setAgentRuntimeSnapshot(payload: {
+        requestId?: string | null;
+        snapshot: AgentRuntimeSnapshot;
+    }): void;
     setForgePiSessionState(payload: {
         tree: ForgePiTreeNode[];
+        entries?: ForgePiSessionEntry[];
         activeNodeId: string | null;
         contextBundleSummary?: ForgePiContextBundleSummary | null;
         loadedExtensions?: string[];
@@ -415,9 +422,16 @@ export async function applyForgeEffects(
         case 'set_model_request_pi_trace':
             target.setModelRequestPiTrace(effect.requestId, effect.trace);
             break;
+        case 'set_agent_runtime_snapshot':
+            target.setAgentRuntimeSnapshot({
+                requestId: effect.requestId,
+                snapshot: effect.snapshot
+            });
+            break;
         case 'set_forge_pi_session_state':
             target.setForgePiSessionState({
                 tree: effect.tree,
+                entries: effect.entries,
                 activeNodeId: effect.activeNodeId,
                 contextBundleSummary: effect.contextBundleSummary,
                 loadedExtensions: effect.loadedExtensions

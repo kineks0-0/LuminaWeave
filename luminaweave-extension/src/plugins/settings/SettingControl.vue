@@ -141,6 +141,12 @@
           <LuminaInput type="text" class="lw-input" :modelValue="currentValue" @update:modelValue="updateValue"
             :placeholder="config.default || '请输入...'" />
         </template>
+
+        <!-- Password Input -->
+        <template v-else-if="config.type === 'password'">
+          <LuminaInput type="password" autocomplete="off" class="lw-input" :modelValue="currentValue"
+            @update:modelValue="updateValue" :placeholder="config.default || '请输入...'" />
+        </template>
       </div>
     </div>
   </div>

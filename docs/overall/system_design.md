@@ -1,7 +1,7 @@
 # LuminaWeave 系统架构与设计文档 (System Design)
 
-**版本:** v6.1-docs  
-**最后更新时间:** 2026-05-21
+**版本:** v6.1-docs
+**最后更新时间:** 2026-06-12
 
 本文记录 LuminaWeave 长期系统设计、模块边界、数据流和不可破坏的工程约束。短版入口见 `docs/architecture.md`，产品目标见 `docs/overall/PDR.md`。
 
@@ -100,7 +100,7 @@ Core Runtime 是业务真相层。
 - Generation、流式状态、停止、恢复和错误处理。
 - Storage、事务日志、幂等、序列对账和迁移。
 - XML/LuminaView 解析、标签注册和显示派生。
-- Forge 项目、Agent runtime、Prompt context、typed effects。
+- Forge 项目、Agent Runtime SDK、Forge adapter、Prompt context、typed effects。
 - API Facade 和 domain services。
 
 约束：
@@ -110,6 +110,45 @@ Core Runtime 是业务真相层。
 - UI 只能通过 service/store/intents 与 Core 交互。
 - `LuminaWeaveAPI` 的 public methods 是兼容 Facade；消息更新、Prompt 探测、生成路由等业务流程应委托 Core command services。
 - Command services 不进入 HAL，也不由各宿主 adapter 分别实现；宿主差异通过 host writer、prompt probe、generation invoker、token counter、macro resolver 等窄端口表达。
+
+#### Agent Runtime SDK
+
+Agent Runtime SDK 是 Core Runtime 内的跨插件 agent kernel。它消费 HAL 的 Resource、Prompt、Storage、Network、Event 和 Runtime Ports，并向 Forge、Chat、Director、Dev 等插件 adapter 提供一致的 agent loop、session、tool、approval、trace、skills 和测试边界。
+
+当前代码入口是 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 的 `src/api/core/forge/agent-app` 是第一套 adapter：它可以复用 SDK 的 `AgentRuntimeCore`、`AgentSessionTree`、`AgentToolRegistry`、`AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、可选 `workspace-tools/AgentWorkspaceTools`、`JustBashWorkspaceAdapter` 和 Agent Skills parser / formatter；`ForgePiCoreRuntime` 可暴露 SDK runtime snapshot/events，Forge adapter 再通过 typed runtime effect 写入 Forge store、模型请求 trace 和 Inspector presentation，但不得把 Forge Semantic VFS、`workspace_patch`、ST 发布边界或 Vue UI 上移到 SDK。
+
+职责：
+
+- 管理 agent turn 生命周期：run、continue、abort、preview。
+- 输出稳定 lifecycle event 与 runtime snapshot：`agent_start`、`turn_start`、`message_start`、`message_update`、`message_end`、`tool_execution_start`、`tool_execution_update`、`tool_execution_end`、`turn_end`、`agent_end`、`queue_update`，以及 `isStreaming`、`streamingMessage`、`pendingToolCalls`、`messages`、`errorMessage`、active tools summary。
+- 保持 UI projection 单向：SDK snapshot/events 是可序列化数据，adapter 通过本域 effect/store/presentation 映射到消息展示、工具摘要、模型请求 trace、文件变更列表和项目资源面板；SDK 不 import Vue、Pinia 或 Surface Runtime。
+- 管理 tree-structured session history：append-only entries、active node、branch checkout、branch messages。
+- 定义 Prompt Preview 端口：真实生成与 dry-run 必须共用同一个 prompt assembly 结果；同一 request 可通过 adapter 提供的 cache key 复用 prepared prompt object，真实 turn 消费后显式失效。Preview / `prompt_ready` payload 必须包含本轮 user message；真实 run 的 agent initial state 不重复注入本轮 user message。
+- 定义 model provider、tool provider、approval、trace/effect、session store 和 test harness 端口；`AgentToolRegistry` 可选接入 `AgentRuntimeEventBus`，把手动注册工具的执行投影为 `tool_execution_start` / `tool_execution_update` / `tool_execution_end`；SDK test harness 提供 mock model、mock tool、mock session store、mock approval 与 mock VFS。
+- 定义 extension workflow hook：`before_agent_start` hidden custom context、turn / agent end hook、custom message append、status / widget projection、continuation trigger、tool before/after hook 和 context transform。
+- 定义 extension loading boundary：adapter / 代码配置显式传入 extension factories 或 resolved extension paths；扩展可注册 event handlers、custom tools、custom messages、resource discovery hook、provider、status/widget projection。
+- 实现 Agent Skills 规格兼容：解析 `SKILL.md`，校验 `name`、`description`、`compatibility`、`metadata`、`allowed-tools` 与父目录匹配，建立 catalog，格式化 prompt catalog，并输出 diagnostics。
+- 定义 FS mount metadata、mount policy、phase/capability、approval hook、audit hook、trace hook。
+- 提供可选 Workspace Tools Kit：pi-style 短名 `read`、`write`、`edit`、`delete`、`bash`，并可补充只读 `grep`、`find`、`ls`、`search`；底层 I/O 通过 OpenFS / just-bash 或 adapter operations 注入。
+- 提供可选 Research Tools Kit：`AgentResearchProvider` 负责 search / fetch provider 适配，`webResearch` 负责模型可见工具包装；第一版 Tavily provider 适配 Tavily search / extract，浏览器运行时不静态导入 Tavily AI SDK，避免 `@tavily/core` 的 Node proxy 依赖进入扩展启动路径；不把 crawl / map 暴露给 Forge Agent。
+- 提供可选 phase/capability filter：接入方定义阶段状态和工具可见性规则；SDK 可按接入方规则过滤工具。
+
+禁止：
+
+- 不直接 import ST 宿主实现。
+- 不直接访问 Vue UI、Pinia store 或 Surface Runtime。
+- 不拥有 Forge Semantic VFS、Forge prompt 路径或 `workspace_patch` 格式。
+- 不自动扫描用户目录或项目目录。
+- 不自动加载 VFS 中的 TypeScript / JavaScript 扩展代码。
+- 不默认注册文件写入工具。
+- 不默认创建或注册 `bash` tool。
+- 不默认创建或注册联网 research 工具。
+- 不默认提供 skill activation tool；默认 skill 使用路径是代码提供 skill catalog 和 `SKILL.md` 路径，模型通过 `read` 按需读取完整 `SKILL.md`。
+- 不内置 Forge 的 Planner / Analyst / Executor 权限表。
+- 不内置 Plan Mode 或固定“规划 / 执行 / 汇报”状态机；这些流程由 adapter / extension workflow 定义。
+- 不决定哪个阶段能看到哪些工具。
+- 不根据 `allowed-tools` 自动授予权限。
+- 不把 thinking 写入默认业务状态；thinking 只作为 assistant message stream block、trace 和 UI projection 输入。
 
 ### 2.4 Plugin Domain
 
@@ -387,6 +426,12 @@ Resource Domain 是资源事实源的抽象层，VFS 是路径化视图。
 - `/workspaces` 由 ShellWorkspaceService 提供共享且可持久化的 workspace。
 - `BashTerminalRuntime` 只负责通用 shell runtime 和 mount 编排：默认挂载 `/sources`、`/library`、`/workspaces`，调用方可通过 `extraMounts` 注入额外 `IFileSystem`；HAL 不 import Forge 业务代码。
 - Forge Agent 暴露给模型和调试 UI 的 `./...` 是项目语义 VFS，由 `ForgeSemanticVfsProvider` / `ForgeProjectSemanticVfsService` 生成公开内容；Forge runtime 将该 provider 包装为 `ForgeSemanticBashFs` 并挂载到 Forge shell 的项目根。绝对 `/sources/...`、`/library/...` 保持底层 VFS 直通。
+- Agent Runtime SDK 不自研完整文件系统挂载层；第一阶段直接依赖 OpenFS 能力层，以 OpenFS 作为 agent-visible VFS 的标准适配目标。
+- `bash` tool 由接入方自行组装并注册。接入方创建 VFS、初始化 OpenFS、组合 just-bash `MountableFs`、注册 OpenFS 包提供的 custom commands，再把生成后的 `bash` tool 交给 SDK 的 tool provider。当前 `@open-fs/just-bash@0.1.0` 实际导出文件系统类为 `AxFs`，`createGrepCommand()` 的 command name 为 `axgrep`；升级依赖前必须重新读取类型文件并回归测试。
+- Workspace Tools Kit 的 `read`、`write`、`edit`、`delete`、`bash` 不直接绑定本地 `fs`；工具通过 OpenFS / just-bash 或 adapter operations 访问业务 VFS。`write`、`edit`、`delete` 必须串行化同一文件的并发修改，并输出可审计 diff / patch 或 adapter 审计 payload。
+- 阶段状态和工具可见性由接入方定义；SDK 只提供可选过滤机制。非写入阶段不注册写工具，也不注册可写 bash。
+- 写入阶段通过 audited OpenFS write adapter 执行 write/append/delete/move/copy；write adapter 必须检查 phase、mount policy 和 approval，并记录 trace。
+- 具体业务审计格式由 adapter 决定；Forge adapter 继续生成 `workspace_patch`。
 - 外部资源写入必须经过 Resource Write Policy。
 - ST 和订阅源不得被静默改写。
 - Agent shell 的写入和网络访问必须经过 ShellPermissionService 与 ShellNetworkPolicyService。
@@ -465,9 +510,9 @@ Forge Agent 语义 VFS：
 - `AGENTS.md` 是 Agent 工作契约，不是系统提示词；它规定工具使用、`workspace_patch` 审计、session tree、timeline 和回滚规则，不表达模型应该如何思考。
 - `./.forge/agent/SYSTEM.md` 是默认系统提示词，`./.forge/agent/<MODE>.md` 是模式提示词，`./.forge/agent/UI_DSL.md` 是 Forge `<V>` 组件 DSL，`./.forge/agent/REASONING.md` 是隐藏思维链与可见工作笔记边界；`./.pi/agent/prompts/` 不再作为 Forge prompt 主路径。
 - Forge 预设不再面向 Agent 暴露为 slot 拼接列表，而是提供 Agent 资源包与提示词编排：`AGENTS.md contract + ./.forge/agent/SYSTEM.md + ./.forge/agent/<MODE>.md + UI_DSL.md + REASONING.md + skills / capabilities + memory index + context files + branch messages`。Forge Agent 预设工作台是预设资源包维护入口；内置预设只读，自定义副本可编辑提示词、预设技能元数据、加载策略和正文。项目覆盖优先于 active preset，active preset 优先于 bundled fallback。
-- `./memory/**/*.md` 是 Forge 项目长期记忆正文；默认 prompt 编排只注入 `./.pi/agent/context/memory-index.md`，列出路径、标题、来源、更新时间和摘要。需要正文时必须通过同一 Semantic VFS / `readFile` 读取，不把完整长期记忆灌入 system prompt。
-- 技能统一通过 `./agent/skills/<skill-name>/SKILL.md` 加载。项目技能优先，active preset skill 次之，内置技能回退；preset skill 支持 `on_demand` / `always` 加载策略，参考提炼能力作为默认主预设的按需技能提供，不再作为独立参考提炼预设暴露。内置技能正文保存在 `src/resources/forge-skills/*.md`，registry 只负责声明 metadata 与加载资源；用户修改内置技能时应创建项目级同名 skill 覆盖，不改 bundled base。
-- `ForgePiResourceLoader`、`ForgePiToolBridge.readFile()`、Forge shell 和“项目 VFS”面板必须消费同一个语义 VFS provider/projection；不得再各自拼接 prompt、skill、thread 或 raw storage 路径。
+- `./memory/**/*.md` 是 Forge 项目长期记忆正文；默认 prompt 编排只注入 `./.pi/agent/context/memory-index.md`，列出路径、标题、来源、更新时间和摘要。需要正文时必须通过同一 Semantic VFS 和 `read` 读取，不把完整长期记忆灌入 system prompt。
+- 技能统一通过 `./agent/skills/<skill-name>/SKILL.md` 加载。项目技能优先，active preset skill 次之，内置技能回退；preset skill 支持 `on_demand` / `always` 加载策略，参考提炼能力作为默认主预设的按需技能提供，不再作为独立参考提炼预设暴露。Forge 默认遵循 pi-style progressive disclosure：prompt 中只列 skill catalog 和 `SKILL.md` 路径，完整 `SKILL.md` 由模型通过 `read` 按需读取；第一阶段不新增 activation tool。内置技能正文保存在 `src/resources/forge-agent/base/skills/<skill-name>/SKILL.md`，默认 preset skill 正文保存在 `src/resources/forge-agent/presets/forge-main-default/skills/<skill-name>/SKILL.md`；二者都必须携带标准 `SKILL.md` frontmatter，registry 负责声明 metadata 与加载资源；用户修改内置技能时应创建项目级同名 skill 覆盖，不改 bundled base。
+- `ForgePiResourceLoader`、Forge `read`、Forge shell 和“项目 VFS”面板必须消费同一个语义 VFS provider/projection；不得再各自拼接 prompt、skill、thread 或 raw storage 路径。
 
 Forge Runtime 分工：
 
@@ -476,12 +521,13 @@ Forge Runtime 分工：
 - Analyst：只读分析与上下文整理。
 - Executor：高精度条目重写与执行。
 - Graph：只提供阶段、状态、写入边界和能力索引，不再合成最终 prompt，也不再预先塞入完整 skill。
-- pi-style Agent Runtime：Forge Agent kernel 位于 `src/api/core/forge/agent-app`，已收敛到前端内嵌版 `pi-agent-core` runtime。`ForgePiAgentSession` / `ForgePiSessionManager` / `ForgePiResourceLoader` / `ForgePiExtensionRunner` / `ForgePiToolBridge` 参考 `pi-coding-agent` 结构实现浏览器 adapter 版本，负责 session tree、context engineering、最终提示词合成、tool execution 和 runtime event trace。
+- pi-style Agent Runtime：Forge Agent kernel 位于 `src/api/core/forge/agent-app`，是 Agent Runtime SDK 的第一套 adapter。`ForgePiCoreRuntime` 组合 `AgentRuntimeCore` 并暴露 `getAgentRuntimeSnapshot()` / `getAgentRuntimeEvents()`，`ForgePiRuntimeClient.runTurn()` 透传 `agentRuntimeSnapshot`，`ForgeRuntimeOrchestrator` 通过 `set_agent_runtime_snapshot` effect 写入 Forge store 和匹配的 model request trace；`ForgePiSessionManager` 复用 `AgentSessionTree`，`ForgePiAgentSession.preparePrompt()` 与 `prompt()` 复用 SDK `AgentPromptAssembler`，`ForgePiResourceLoader` 复用 SDK skill catalog formatter，`ForgePiToolBridge` 可把 Forge 工具适配到 `AgentToolRegistry`。`ForgePiAgentSession` / `ForgePiExtensionRunner` / `ForgePiToolBridge` 仍负责 Forge context engineering、run 阶段 tool 实例创建、tool execution、runtime event trace 和 `workspace_patch` 审计；必须保持 Forge Prompt Preview 与真实生成同源。
+- webResearch：`ForgePiToolBridge` 仅在 `lumina-forge.tavilyApiKey` 非空时注册模型可见 `webResearch`。工具通过 Agent Runtime SDK Research Tools Kit 和 Tavily provider 执行 search / fetch，只返回 Markdown 摘要、来源与 Tavily 请求元数据；不得写入 `workspace_patch`、Forge memory、项目 VFS 或 ST 资源。Tavily key 来自 Forge 设置，设置 UI 遮罩显示，v1 不提供加密 secret storage。
 - 模型适配：Forge Agent 模型协议层使用浏览器可用的 `@earendil-works/pi-ai`。`ForgePiModelRegistry` 创建 pi-ai model 并返回 provider 包装的 `streamSimple()` 兼容 `streamFn`；`ForgePiNexusProvider` 直接把现有 Nexus preset / API 配置映射为 pi-ai provider model 与 request options，不再拼接旧模型协议消息。一次 Forge turn 可能包含多次 pi-ai provider 调用，调试面板必须按调用链展示每次 provider 记录的 pi messages、provider payload、provider response、stream lifecycle、final text 和 error。前端 Forge runtime 不得引入 `@earendil-works/pi-coding-agent`、`pi-agent-core/node`、AI SDK tool/message 协议或 Node-only `fs/child_process`。
 - Reasoning artifact 边界：Forge 必须区分 provider raw message、replay-safe pi message 与用户可见/业务记忆内容。带 provider 签名或加密语义的 reasoning artifact 只允许在同 provider / 同模型的短期 pi replay 通道中原样回传；无签名 raw thinking、跨 provider / 跨模型 reasoning、普通 `<thinking>` 文本不得进入用户可见消息、workspace patch 内容、Forge memory、虚拟世界书或长期 prompt 回注。调试 trace 可以展示 raw / sanitized 差异，但 raw trace 不等于下一轮模型输入。
-- Forge UI：`src/plugins/forge` 对标 pi-tui 的交互分层，只负责输入、消息展示、调试面板、文件版本/项目资源面板、历史暂存与发布边界、store action controller。Vue 组件不得承载 Agent loop、模型请求、工具执行或最终提示词合成；只能通过 `ForgePiRuntimeClient` / store controller 消费 runtime snapshot 和提交用户意图。“项目 VFS”面板浏览 `ForgeProjectSemanticVfsService` 生成的 Agent 可见语义 VFS 投影，并以 `./...` 项目相对路径显示；目录节点显示子项清单，文件节点显示完整内容。该面板允许对受管理的 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/PLANNER.md`、`./.forge/agent/CONVERSATION.md`、`./.forge/agent/ANALYST.md`、`./.forge/agent/EXECUTOR.md` 与 `./agent/skills/<skill-name>/SKILL.md` 创建/编辑项目覆盖，写入项目 VFS 并追加 `workspace_patch`。raw workspace storage 只作为内部映射源，`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构不得暴露给模型或主视图。
-- Prompt Preview：Agent Inspector 与 Forge Prompt Preview 的主模型视图必须以 `ForgePiAgentSession.preparePrompt()` 的 dry-run 输出为事实源。旧 Forge Prompt Context / Prompt Assembly 只提供 source-unit trace / attention 解释，不代表最终发给 pi agent 的 system prompt，也不作为主模型 preview payload 输入来源；旧 `PromptBuilder` 仅保留 Chat / ST 世界书提示词挂载能力，不再提供 Forge Agent prompt 构建 API。
-- Direct project write：写入类 pi tool 使用 `writeFile(path, content)`、`editFile(path, old_string, new_string)`、`deleteFile(path)` 的直接语义，默认写入 Forge 项目 VFS 并追加 `workspace_patch`。`bash` 的 project-write-request 写入同样进入 direct patch reducer；资源 VFS、运行时 prompt、内置 skill、线程消息投影等只读目标必须返回明确错误且不得部分写入。真实 ST 世界书发布、导出或覆盖宿主数据仍必须走用户确认边界。
+- Forge UI：`src/plugins/forge` 对标 pi-tui 的交互分层，只负责输入、消息展示、调试面板、文件版本/项目资源面板、历史暂存与发布边界、store action controller。Vue 组件不得承载 Agent loop、模型请求、工具执行或最终提示词合成；只能通过 `ForgePiRuntimeClient` / store controller 消费 runtime snapshot 和提交用户意图。Agent Inspector 状态页与模型请求调试 pi-core 页消费 `forgePiRuntimePresentation` 派生摘要，而不是直接读取 SDK runtime 实例。“项目 VFS”面板浏览 `ForgeProjectSemanticVfsService` 生成的 Agent 可见语义 VFS 投影，并以 `./...` 项目相对路径显示；目录节点显示子项清单，文件节点显示完整内容。该面板允许对受管理的 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/PLANNER.md`、`./.forge/agent/CONVERSATION.md`、`./.forge/agent/ANALYST.md`、`./.forge/agent/EXECUTOR.md` 与 `./agent/skills/<skill-name>/SKILL.md` 创建/编辑项目覆盖，写入项目 VFS 并追加 `workspace_patch`。raw workspace storage 只作为内部映射源，`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构不得暴露给模型或主视图。
+- Prompt Preview：Agent Inspector 与 Forge Prompt Preview 的主模型视图必须以 `ForgePiAgentSession.preparePrompt()` 的 dry-run 输出为事实源。`ForgePiAgentSession.preparePromptState()` 在 SDK `AgentPromptAssembler` 的同一个 prepared prompt 中消费 `ForgePiExtensionRunner.emitBeforeAgentStart()`，确保 extension hidden context、active tools summary、skill catalog、branch messages 与本轮 user message 同时进入 preview / `prompt_ready` payload；真实 pi-agent-core initial state 仍只接收 branch messages，本轮 user message 由 `agent.prompt()` 注入。旧 Forge Prompt Context / Prompt Assembly 只提供 source-unit trace / attention 解释，不代表最终发给 pi agent 的 system prompt，也不作为主模型 preview payload 输入来源；旧 `PromptBuilder` 仅保留 Chat / ST 世界书提示词挂载能力，不再提供 Forge Agent prompt 构建 API。
+- Direct project write：Forge 模型可见写入类工具目标短名为 `write`、`edit`、`delete`，默认写入 Forge 项目 VFS 并追加 `workspace_patch`；旧会话和历史 trace 中的 `writeFile`、`editFile`、`deleteFile` 由 Forge adapter 兼容展示。`bash` 的 project-write-request 写入同样进入 direct patch reducer；资源 VFS、运行时 prompt、内置 skill、线程消息投影等只读目标必须返回明确错误且不得部分写入。真实 ST 世界书发布、导出或覆盖宿主数据仍必须走用户确认边界。
 
 Forge 分支、timeline 与工作区版本：
 

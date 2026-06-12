@@ -36,10 +36,12 @@
 - 聊天与 Forge 共用思考折叠块，默认只在“有思考、无正文”时展开，正文或 `<V>` 一出现即自动收起。
 - Forge 拥有独立排版设置：AI 回复、用户输入、消息内组件分别提供字号、行距、字距配置。设置写入 `lumina-forge.*` 命名空间，只在 Forge 工作台根节点输出 CSS 变量，不影响主聊天、桌面模式消息矩阵或核心生成链路。
 - Forge Agent runtime 已转向前端 pi-style runtime：制卡聊天的长期事实源收敛为同一协作线程内的 pi session tree，Forge timeline 作为 UI 投影保留用户可操作节点的 pi origin。
+- Forge 是 Agent Runtime SDK 的第一套 adapter 来源；后续抽取 SDK 时，Forge 仍保留 Semantic VFS、`workspace_patch` 审计、Prompt Preview 事实源和真实 ST 发布边界。
 - Forge 插件内 fork / 回滚 / 切换语义为当前协作线程内分支，不创建新 Forge thread；文件版本恢复由 Forge workspace version manager 生成可审计 `workspace_patch` 后直接写回 Forge 项目 VFS。
 - Forge Agent 现在通过项目相对语义 VFS 与项目交互：`./AGENTS.md` 是 Agent 工作契约，不是系统提示词；默认系统提示词位于 `./.forge/agent/SYSTEM.md`，模式提示词位于 `./.forge/agent/<MODE>.md`，`./.forge/agent/UI_DSL.md` 固定承载 Forge `<V>` 组件 DSL，`./.forge/agent/REASONING.md` 固定承载可见推理边界；技能统一映射为 `./agent/skills/<skill-name>/SKILL.md`，当前协作线程可通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 访问；`/library/...` 与 `/sources/...` 仍作为底层 Resource VFS 绝对路径直通。
 - Forge 预设已资源化：预设提供 `AGENTS.md`、`.forge/agent/SYSTEM.md`、`.forge/agent/<MODE>.md`、自定义技能、生成参数与 Agent 提示词编排；项目覆盖优先于 active preset，active preset 优先于 bundled fallback。
 - Forge Agent 预设工作台是预设资源包维护中心：内置预设只读，自定义副本可编辑提示词、技能名称、标题、说明、加载策略、正文，并展示最终编排顺序和资源路径。
+- Forge Skills 默认采用 pi-style progressive disclosure：代码提供技能列表和 `SKILL.md` 路径，完整 `SKILL.md` 通过 `read` 按需读取；第一阶段不新增 activation tool，`allowed-tools` 不授予真实权限；内置与默认 preset skill 资源本身必须携带标准 `SKILL.md` frontmatter。
 - Prompt Preview 与真实生成共享 `ForgePiAgentSession.preparePrompt()` / runtime prompt preparation；旧 `ForgePromptContextService` 不再组装最终模型消息，Prompt Assembly trace 只作为来源解释层。旧 `PromptBuilder` 仅保留 Chat / ST 世界书提示词挂载能力，不再提供 Forge Agent prompt 构建 API。
 - Forge Agent 默认 prompt 输入已按缓存边界拆分：Contract / System / Mode Prompt / UI DSL / Reasoning Boundary 形成稳定核心前缀，Skills、能力索引、Memory Index 与项目上下文位于其后，branch messages 承载短期对话历史。`./threads/目前/messages.md` 与 `./memory/**/*.md` 仍是 Semantic VFS 可读资源；默认 prompt 只注入 `./.pi/agent/context/memory-index.md` 的长期记忆路径、标题、来源、更新时间和摘要，不把完整线程消息或长期记忆正文注入 system prompt。
 - Forge pi runtime 会把稳定 `sessionId` 透传给 `pi-agent-core` / `pi-ai`，用于 provider prompt cache key 或 session affinity；模型请求 trace 会记录 cache read / write usage，便于排查缓存命中。
@@ -47,5 +49,5 @@
 - “项目 VFS”辅助面板浏览 Agent 可见的 Forge 语义 VFS 投影，显示 `./...` 项目相对路径、写入边界、目录子项清单和文件内容；受管理的 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、模式 prompt 与 `./agent/skills/<skill-name>/SKILL.md` 可在该面板创建/编辑项目覆盖，写入项目 VFS 并生成 `workspace_patch`，不回写 active preset 或 bundled fallback；raw workspace storage 只作为内部映射源，`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构不得暴露给模型或主视图。
 - Forge Semantic VFS 已挂载到 HAL Bash：`BashTerminalRuntime` 提供通用 `extraMounts`，Forge runtime 注入 `ForgeSemanticBashFs`，使 shell、`readFile`、Prompt/Skill loader 和项目 VFS 面板使用同一份语义 VFS 内容。
 - AI 对 Forge 项目 VFS 的写入默认直接应用并生成 `workspace_patch`；`./memory/**/*.md`、`./lorebook/entries/*.md` 和项目级 Agent 资源覆盖会同步写入项目数据。对话内“AI 更改文件”列表与“文件版本”面板都通过反向或重放 `workspace_patch` 撤回/恢复，不再生成 Review/Staging 条目。
-- 内置 Forge skills 的正文已迁移到 `src/resources/forge-skills/*.md`，`ForgeSkillRegistry` 只维护 metadata、优先级和 loader；长期文本不再堆在 TS 常量里。
+- Forge Agent bundled 资源按 Agent 包形态维护：默认底座位于 `src/resources/forge-agent/base/`，内置 skills 位于 `src/resources/forge-agent/base/skills/<skill-name>/SKILL.md`；默认主预设位于 `src/resources/forge-agent/presets/forge-main-default/`，mode prompts 与默认 preset reference skills 均以标准 `SKILL.md` / Markdown 文件维护。`ForgeSkillRegistry` 只维护 metadata、优先级和 loader，长期文本不再堆在 TS 常量里。
 - 真实 SillyTavern 世界书发布、导出或覆盖宿主数据仍属于显式用户确认边界；direct write 只覆盖 Forge 项目 workspace。

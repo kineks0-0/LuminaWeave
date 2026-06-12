@@ -16,7 +16,19 @@
 
 2026-05-22：Forge `<V>` 组件与可见推理边界从旧 `PromptBuilder` / `PromptType.CONSTRAINTS` 接缝迁移到 pi runtime 资源：`./.forge/agent/UI_DSL.md` 固定承载完整 Forge `<V>` DSL 与“优先用组件收集用户意图”的规则，`./.forge/agent/REASONING.md` 固定承载隐藏思维链与可见工作笔记边界。`ForgePiAgentSession.preparePrompt()` 不再把旧 Forge Prompt Context messages 当 system fragment 追加到 pi system prompt；旧 `PromptBuilder` 仅保留 Chat / ST 世界书提示词挂载能力。
 
-2026-05-24：Forge 提示词与技能维护边界收敛到“预设资源包维护中心 + 项目 VFS 覆盖”。预设工作台可编辑自定义预设的 Contract / System / Mode Prompt、技能名称/标题/说明/加载策略/正文，并保持内置预设只读；项目 VFS 面板可对 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/<MODE>.md` 和 `./agent/skills/*/SKILL.md` 创建/编辑项目覆盖，写入项目 VFS 并生成 `workspace_patch` 审计；`UI_DSL.md` 与 `REASONING.md` 仍是固定运行时资源；内置 Forge skills 正文迁移到 `src/resources/forge-skills/*.md`。
+2026-05-24：Forge 提示词与技能维护边界收敛到“预设资源包维护中心 + 项目 VFS 覆盖”。预设工作台可编辑自定义预设的 Contract / System / Mode Prompt、技能名称/标题/说明/加载策略/正文，并保持内置预设只读；项目 VFS 面板可对 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/<MODE>.md` 和 `./agent/skills/*/SKILL.md` 创建/编辑项目覆盖，写入项目 VFS 并生成 `workspace_patch` 审计；`UI_DSL.md` 与 `REASONING.md` 仍是固定运行时资源；内置 Forge skills 正文由 bundled Agent 资源包提供。
+
+2026-06-10：完成 Forge Agent 下一阶段可靠可控决策规划。结论是不替换当前 `src/api/core/forge/agent-app` 主链路，不引入外部主 Agent 框架；下一阶段优先真实宿主 walkthrough、Agent trace 收敛、tool boundary 回归集和 walkthrough 结果回写。记录见 `steps/2026-06-10-forge-agent-next-stage-decision.md`。
+
+2026-06-11：确认从 Forge pi-style runtime 抽取跨插件 Agent Runtime SDK。Forge 仍作为第一套 adapter，保留 `ForgePiAgentSession.preparePrompt()` 事实源、Semantic VFS、`workspace_patch` 审计和真实 ST 发布边界；Skills 默认采用 pi-style catalog + `readFile` progressive disclosure，暂不设计 activation tool。跨插件后续任务转入 `../agent-runtime-sdk/`。
+
+2026-06-11：Agent Runtime SDK 第一阶段行为已收敛到目标测试覆盖。Forge 当前以 adapter 方式复用 `AgentRuntimeCore`、`AgentSessionTree`、`AgentPromptAssembler`、SDK skill catalog formatter 与 `AgentToolRegistry` 适配入口；同一 `requestId` 的 Prompt Preview 和真实生成共用 prepared prompt object，run 阶段仍由 Forge 重新创建 tool 实例以保留 effect sink。Forge wire shape、Semantic VFS、`workspace_patch` 和真实 ST 发布边界仍保留在 Forge 域。
+
+2026-06-11：完成 Forge 技能资源规范化。内置 Forge skills 与默认主预设 reference skills 均以标准 `SKILL.md` frontmatter 暴露，Forge registry、Semantic VFS、`skillLoad` 与 `readFile` 继续共用 `./agent/skills/<skill-name>/SKILL.md` 路径；`allowed-tools` 只作为声明信息，不改变真实工具权限。
+
+2026-06-12：完成 Forge Agent bundled 资源目录整理。默认底座资源位于 `src/resources/forge-agent/base/`，包括 `AGENTS.md`、固定 `agent/SYSTEM.md` / `agent/UI_DSL.md` / `agent/REASONING.md` 与内置 skills；默认主预设资源位于 `src/resources/forge-agent/presets/forge-main-default/`，包括四个 mode prompt 和默认 reference skills。运行时 Agent 可见路径仍保持 `./AGENTS.md`、`./.forge/agent/*.md` 与 `./agent/skills/<skill-name>/SKILL.md`。
+
+2026-06-12：接入 Forge Agent `webResearch` Tavily v1。Forge 设置新增 `lumina-forge.tavilyApiKey`，通过现有 settings storage 持久化，UI 使用 password 控件遮罩显示，v1 不提供加密 secret storage。`ForgePiToolBridge` 仅在 Tavily key 非空时把 `webResearch` 加入模型可见工具列表；工具通过 Agent Runtime SDK Research Tools Kit 调用 Tavily search / fetch，返回 Markdown 摘要、来源和请求元数据，不开放 `curl`，不写 Forge 项目 VFS、`workspace_patch`、memory 或 ST 资源。浏览器运行时不静态导入 Tavily AI SDK，避免 `@tavily/core` 的 Node proxy 依赖进入扩展启动路径。
 
 ## 下一步
 
@@ -131,7 +143,17 @@
     - 预设工作台作为资源包维护中心：内置预设只读，自定义副本可编辑 Agent prompt、技能 metadata、加载策略和正文。
     - 项目 VFS 面板支持受管理 Agent 资源的项目覆盖写入，覆盖内容进入项目 VFS 并追加 `workspace_patch`。
     - Semantic VFS 对 prompt / skill 来源区分为 workspace、resource、virtual，保证项目 VFS 面板、`readFile`、Prompt Preview 与真实生成共享同一事实源。
-    - 内置 Forge skills 已资源化为 Markdown 文件，由 registry 读取并声明 metadata。
+    - 内置 Forge skills 已资源化为 `src/resources/forge-agent/base/skills/<skill-name>/SKILL.md`，由 registry 读取并声明 metadata。
+33. [x] 完成 Forge Agent 下一阶段可靠可控决策规划。
+    - 计划见 `steps/2026-06-10-forge-agent-next-stage-decision.md`。
+    - 下一阶段不替换主 runtime；优先真实宿主 walkthrough、trace 收敛、tool boundary 回归集和验证结果回写。
+    - 2026-06-11 起，跨插件 Agent Runtime SDK 抽取转入 `docs/current/tasks/agent-runtime-sdk/`，Forge 保留为第一套 adapter。
+34. [~] 配合 Agent Runtime SDK 抽取保持 Forge adapter 边界。
+    - Forge 继续负责 Semantic VFS、`workspace_patch`、Prompt Preview 事实源、session tree 到 timeline / 文件版本投影，以及真实 ST 发布/导出确认边界。
+    - `ForgePiAgentSession.preparePrompt()` 与真实 `prompt()` 已调用 SDK `AgentPromptAssembler`；Prompt Preview 与真实 run 对同一 `requestId` 复用 prepared prompt object。
+    - Skills 采用 pi-style catalog + `readFile`，不新增 activation tool；内置与默认 preset skill 资源已标准化为可被 SDK `AgentSkillParser` 解析的 `SKILL.md`。
+    - 后续实现规划见 `../agent-runtime-sdk/steps/2026-06-11-agent-runtime-sdk-boundary-plan.md`。
+    - 第一阶段实现记录见 `../agent-runtime-sdk/steps/2026-06-11-agent-runtime-sdk-implementation-record.md`。
 
 完成后归档到 `archive/completed-tasks/forge/`。
 
@@ -149,3 +171,5 @@
 - [Forge 项目 / 协作线程边界重塑](./steps/2026-05-15-forge-project-thread-boundary-plan.md)
 - [Forge Agent 提示词编排、缓存与记忆管理调整计划](./steps/2026-05-23-forge-agent-prompt-cache-memory-plan.md)
 - [Forge Memory VFS 提示词编排增强计划](./steps/2026-05-23-forge-memory-vfs-orchestration-plan.md)
+- [Forge Agent 下一阶段可靠可控决策规划](./steps/2026-06-10-forge-agent-next-stage-decision.md)
+- [Agent Runtime SDK 当前任务](../agent-runtime-sdk/)

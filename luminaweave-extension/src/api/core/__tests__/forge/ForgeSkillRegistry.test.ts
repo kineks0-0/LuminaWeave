@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
+import { AgentSkillParser } from '@/api/core/agent-runtime/skills/AgentSkillParser.js';
 import { ForgeSkillRegistry } from '@/api/core/forge/skills/ForgeSkillRegistry.js';
 import { ShellWorkspaceService } from '@/api/core/hal/shell/ShellWorkspaceService.js';
 
@@ -31,6 +32,30 @@ describe('ForgeSkillRegistry', () => {
         expect(skills.every(skill => !('instructions' in skill))).toBe(true);
     });
 
+    it('exposes built-in Forge skills as standard SKILL.md files', async () => {
+        const parser = new AgentSkillParser();
+
+        for (const metadata of registry.listBuiltInSkills()) {
+            const loaded = await registry.loadSkill({
+                forgeProjectId: 'forge_project_alpha',
+                skillName: metadata.name,
+                preferProject: false
+            });
+            const content = loaded?.skill.files.find(file => file.path === 'SKILL.md')?.content ?? '';
+            const parsed = parser.parse({
+                path: loaded?.path ?? `./agent/skills/${metadata.name}/SKILL.md`,
+                content
+            });
+
+            expect(parsed.diagnostics, metadata.name).toEqual([]);
+            expect(parsed.skill).toMatchObject({
+                name: metadata.name,
+                description: metadata.description,
+                path: `./agent/skills/${metadata.name}/SKILL.md`
+            });
+        }
+    });
+
     it('materializes selected built-in skills into the project workspace', async () => {
         const installed = await registry.materializeBuiltInSkills({
             forgeProjectId: 'forge_project_alpha',
@@ -44,6 +69,13 @@ describe('ForgeSkillRegistry', () => {
             path: './agent/skills/virtual-lorebook-editor/SKILL.md'
         });
         expect(installed[0].skill.files[0].content).toContain('虚拟世界书编辑器');
+
+        const parsed = new AgentSkillParser().parse({
+            path: installed[0].path,
+            content: installed[0].skill.files[0].content
+        });
+        expect(parsed.diagnostics).toEqual([]);
+        expect(parsed.skill?.name).toBe('virtual-lorebook-editor');
 
         const fs = await workspaces.getFileSystem({ projectId: 'forge_project_alpha' });
         await expect(fs.readFile('/forge/forge_project_alpha/agent/skills/virtual-lorebook-editor/SKILL.md'))

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
+import { AgentSkillParser } from '@/api/core/agent-runtime/skills/AgentSkillParser.js';
 import { ForgeProjectSemanticVfsService } from '@/api/core/forge/project/ForgeProjectSemanticVfsService.js';
 import { ForgeSemanticVfsProvider } from '@/api/core/forge/agent-app/vfs/ForgeSemanticVfsProvider.js';
 import { ShellWorkspaceService } from '@/api/core/hal/shell/ShellWorkspaceService.js';
@@ -245,9 +246,36 @@ describe('ForgeProjectSemanticVfsService', () => {
             expect.objectContaining({
                 path: './agent/skills/reference-xp-capture/SKILL.md',
                 source: 'resource',
-                content: expect.stringContaining('XP 捕捉附加条目')
+                content: expect.stringContaining('性癖捕捉附加条目')
             })
         ]));
+    });
+
+    it('exposes default semantic VFS skills as standard SKILL.md files', async () => {
+        const parser = new AgentSkillParser();
+        const entries = await service.listEntries(createContext());
+        const skillFiles = entries.filter(entry =>
+            entry.kind === 'file'
+            && entry.path.startsWith('./agent/skills/')
+            && entry.path.endsWith('/SKILL.md')
+        );
+
+        expect(skillFiles.map(entry => entry.path)).toEqual(expect.arrayContaining([
+            './agent/skills/reference-needs-capture/SKILL.md',
+            './agent/skills/reference-anti-cliche/SKILL.md',
+            './agent/skills/reference-xp-capture/SKILL.md',
+            './agent/skills/virtual-lorebook-editor/SKILL.md'
+        ]));
+
+        for (const entry of skillFiles) {
+            const parsed = parser.parse({
+                path: entry.path,
+                content: entry.content ?? ''
+            });
+
+            expect(parsed.diagnostics, entry.path).toEqual([]);
+            expect(parsed.skill?.path).toBe(entry.path);
+        }
     });
 
     it('labels preset prompt resources as resources and lets project overrides win', async () => {

@@ -125,10 +125,16 @@ describe('ForgePiCoreRuntime', () => {
             } as any
         });
 
-        expect(result.prompt).toEqual([{
-            role: 'system',
-            content: 'pi-system\n# Forge Alpha'
-        }]);
+        expect(result.prompt).toEqual([
+            {
+                role: 'system',
+                content: 'pi-system\n# Forge Alpha'
+            },
+            {
+                role: 'user',
+                content: '预览提示词'
+            }
+        ]);
         expect(resourceLoader.buildSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
             systemFragments: []
         }));
@@ -207,6 +213,27 @@ describe('ForgePiCoreRuntime', () => {
             'assistant'
         ]);
         expect(result.piSessionState.activeNodeId).toBe('pi_node_4');
+        const eventTypes = runtime.getAgentRuntimeEvents().map(event => event.type);
+        expect(eventTypes.slice(0, 3)).toEqual([
+            'agent_start',
+            'turn_start',
+            'message_start'
+        ]);
+        expect(eventTypes.filter(type => type === 'message_update').length).toBeGreaterThan(0);
+        expect(eventTypes.slice(-2)).toEqual([
+            'message_end',
+            'turn_end'
+        ]);
+        expect(runtime.getAgentRuntimeSnapshot()).toMatchObject({
+            isStreaming: false,
+            pendingToolCalls: [],
+            messages: [{
+                id: 'req_1',
+                role: 'assistant',
+                blocks: [{ type: 'text', text: '已读取项目上下文。' }],
+                status: 'complete'
+            }]
+        });
     });
 
     it('appends direct tool results and workspace patches into the pi session tree', async () => {
@@ -254,7 +281,7 @@ describe('ForgePiCoreRuntime', () => {
                         const message = assistantMessage([{
                             type: 'toolCall',
                             id: 'call_write',
-                            name: 'writeFile',
+                            name: 'write',
                             arguments: { path: './card.md', content: 'new' }
                         }], 'toolUse');
                         stream.push({ type: 'start', partial: assistantMessage([]) });
@@ -268,7 +295,7 @@ describe('ForgePiCoreRuntime', () => {
             } as any,
             extensionRunner: {
                 loadTools: vi.fn(() => [{
-                    name: 'writeFile',
+                    name: 'write',
                     label: '写入文件',
                     description: '直接写入 Forge 项目 VFS',
                     parameters: {} as any,
@@ -311,7 +338,7 @@ describe('ForgePiCoreRuntime', () => {
             } as any
         });
         expect(turn.events).toEqual(expect.arrayContaining([
-            expect.objectContaining({ type: 'tool_call', toolCallId: 'call_write', toolName: 'writeFile' }),
+            expect.objectContaining({ type: 'tool_call', toolCallId: 'call_write', toolName: 'write' }),
             expect.objectContaining({ type: 'tool_result', toolCallId: 'call_write', result: expect.objectContaining({ applied: true }) }),
             expect.objectContaining({ type: 'stream_done', displayText: '已写入项目。' })
         ]));
@@ -319,6 +346,11 @@ describe('ForgePiCoreRuntime', () => {
         expect(turn.piSessionState.tree.map(node => node.kind)).toContain('tool_result');
         expect(turn.piSessionState.tree.map(node => node.kind)).toContain('workspace_patch');
         expect(turn.piSessionState.tree.map(node => node.summary)).toContain('已写入项目。');
+        expect(runtime.getAgentRuntimeEvents().map(event => event.type)).toEqual(expect.arrayContaining([
+            'tool_execution_start',
+            'tool_execution_end'
+        ]));
+        expect(runtime.getAgentRuntimeSnapshot().pendingToolCalls).toEqual([]);
         expect(calls).toBe(2);
     });
 });

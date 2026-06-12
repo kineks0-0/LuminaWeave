@@ -42,7 +42,34 @@ describe('forgePiRuntimePresentation', () => {
             ],
             activeNodeId: 'node_2',
             loadedSkills: ['虚拟世界书编辑'],
-            loadedExtensions: ['@luminaweave/forge-browser-adapters']
+            loadedExtensions: ['@luminaweave/forge-browser-adapters'],
+            agentRuntimeSnapshot: {
+                isStreaming: true,
+                pendingToolCalls: [{
+                    toolCallId: 'call_read',
+                    toolName: 'read',
+                    args: { path: './agent/skills/card/SKILL.md' },
+                    status: 'running',
+                    updates: []
+                }],
+                messages: [{
+                    id: 'req_1',
+                    role: 'assistant',
+                    blocks: [
+                        { type: 'text', text: '已读取技能。' },
+                        { type: 'thinking', text: '整理文件变更。' }
+                    ],
+                    status: 'streaming'
+                }],
+                activeTools: [
+                    { name: 'read', description: '读取文件', needsApproval: false },
+                    { name: 'edit', description: '编辑文件', needsApproval: true }
+                ],
+                queue: {
+                    queuedTurns: 1,
+                    activeTurnId: 'req_1'
+                }
+            }
         });
 
         expect(presentation.hasState).toBe(true);
@@ -61,6 +88,23 @@ describe('forgePiRuntimePresentation', () => {
         ]);
         expect(presentation.skills).toEqual(['虚拟世界书编辑']);
         expect(presentation.extensions).toEqual(['@luminaweave/forge-browser-adapters']);
+        expect(presentation.runtime).toEqual(expect.objectContaining({
+            isStreaming: true,
+            messageCount: 1,
+            pendingToolCount: 1,
+            activeToolCount: 2,
+            queueLabel: '1 queued · active req_1'
+        }));
+        expect(presentation.runtime?.messages).toEqual([expect.objectContaining({
+            id: 'req_1',
+            role: 'assistant',
+            preview: '已读取技能。 整理文件变更。'
+        })]);
+        expect(presentation.runtime?.pendingToolCalls).toEqual([expect.objectContaining({
+            toolCallId: 'call_read',
+            toolName: 'read',
+            argsPreview: '{ "path": "./agent/skills/card/SKILL.md" }'
+        })]);
     });
 
     it('compares Graph suggested skills with pi loaded skills', () => {

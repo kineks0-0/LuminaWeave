@@ -103,7 +103,8 @@ const piRuntimePresentation = computed(() => buildForgePiRuntimePresentation({
     tree: forgeStore.piSessionTree,
     activeNodeId: forgeStore.activePiNodeId,
     loadedSkills: forgeStore.piLoadedSkills,
-    loadedExtensions: forgeStore.piLoadedExtensions
+    loadedExtensions: forgeStore.piLoadedExtensions,
+    agentRuntimeSnapshot: selectedTrace.value?.agentRuntimeSnapshot ?? forgeStore.agentRuntimeSnapshot
 }));
 const formatParameterPreview = (parameters: ForgeModelRequestTrace['requestParameters']) => {
     const entries = Object.entries(parameters);
@@ -379,6 +380,14 @@ const formatModelCallTitle = (index: number) => {
               </section>
 
               <div class="pi-summary-grid">
+                <article v-if="piRuntimePresentation.runtime" class="pi-summary-item">
+                  <span>Runtime messages</span>
+                  <strong>{{ piRuntimePresentation.runtime.messageCount }}</strong>
+                </article>
+                <article v-if="piRuntimePresentation.runtime" class="pi-summary-item">
+                  <span>Pending tools</span>
+                  <strong>{{ piRuntimePresentation.runtime.pendingToolCount }}</strong>
+                </article>
                 <article class="pi-summary-item">
                   <span>Context files</span>
                   <strong>{{ piRuntimePresentation.contextFiles.length }}</strong>
@@ -392,6 +401,43 @@ const formatModelCallTitle = (index: number) => {
                   <strong>{{ piRuntimePresentation.activeNode?.kind || 'none' }}</strong>
                 </article>
               </div>
+
+              <section v-if="piRuntimePresentation.runtime" class="pi-section">
+                <span class="pi-section-title">Agent Runtime Snapshot</span>
+                <div class="pi-summary-grid">
+                  <article class="pi-summary-item">
+                    <span>Streaming</span>
+                    <strong>{{ piRuntimePresentation.runtime.isStreaming ? 'yes' : 'no' }}</strong>
+                  </article>
+                  <article class="pi-summary-item">
+                    <span>Active tools</span>
+                    <strong>{{ piRuntimePresentation.runtime.activeToolCount }}</strong>
+                  </article>
+                  <article class="pi-summary-item">
+                    <span>Queue</span>
+                    <strong>{{ piRuntimePresentation.runtime.queueLabel || 'empty' }}</strong>
+                  </article>
+                </div>
+                <div v-if="piRuntimePresentation.runtime.pendingToolCalls.length > 0" class="message-list">
+                  <article v-for="tool in piRuntimePresentation.runtime.pendingToolCalls" :key="tool.toolCallId" class="message-card">
+                    <div class="message-head">
+                      <span class="message-role">{{ tool.toolName }}</span>
+                      <span class="message-name">{{ tool.updateCount }} updates</span>
+                    </div>
+                    <pre class="code-block">{{ tool.argsPreview }}</pre>
+                  </article>
+                </div>
+                <div v-if="piRuntimePresentation.runtime.messages.length > 0" class="pi-tree-list">
+                  <div v-for="message in piRuntimePresentation.runtime.messages" :key="message.id" class="pi-tree-row">
+                    <span class="pi-tree-kind">{{ message.role }}</span>
+                    <div class="pi-tree-copy">
+                      <strong>{{ message.status || 'unknown' }} · {{ message.blockCount }} blocks</strong>
+                      <span>{{ message.preview || message.id }}</span>
+                    </div>
+                  </div>
+                </div>
+                <p v-if="piRuntimePresentation.runtime.errorMessage" class="error-text">{{ piRuntimePresentation.runtime.errorMessage }}</p>
+              </section>
 
               <section class="pi-section">
                 <span class="pi-section-title">实际加载技能</span>

@@ -19,6 +19,14 @@ const settingsSchema = {
         type: 'nexus-select',
         allowedScopes: ['Global']
     },
+    tavilyApiKey: {
+        default: '',
+        label: 'Tavily API Key',
+        description: '用于 Forge Agent 的 webResearch 联网研究工具。该值按现有设置存储持久化，界面仅遮罩显示，不提供加密 secret storage。',
+        common: true,
+        type: 'password',
+        allowedScopes: ['Global']
+    },
     formAssistanceMode: {
         default: 'prefill',
         label: '表单辅助模式',

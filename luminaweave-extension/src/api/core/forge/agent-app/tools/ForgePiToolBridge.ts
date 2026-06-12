@@ -13,6 +13,7 @@ import {
     shellWorkspaceService,
     type ShellWorkspaceService
 } from '../../../hal/shell/ShellWorkspaceService.js';
+import { settingsDomainService } from '../../../../services/SettingsDomainService.js';
 import {
     forgeWorkspaceSearchShell,
     type ForgeShellAccessMode,
@@ -49,6 +50,12 @@ import {
 } from '../../project/ForgeProjectSemanticVfsService.js';
 import { forgeWorkspaceVersionManager } from '../../project/ForgeWorkspaceVersionManager.js';
 import type { ForgePiWorkspacePatchPayload } from '@shared/ForgePiTypes.js';
+import { AgentToolRegistry, type AgentRuntimeTool } from '../../../agent-runtime/tools/AgentToolRegistry.js';
+import {
+    TavilyResearchProvider,
+    createWebResearchTool,
+    type AgentResearchProvider
+} from '../../../agent-runtime/research/index.js';
 
 export interface ForgePiToolContext {
     forgeProjectId: string;
@@ -85,6 +92,8 @@ export interface ForgePiToolBridgeDeps {
     semanticVfs?: ForgeSemanticVfsMapper;
     projectVfs?: ForgeSemanticVfsReader;
     workspaces?: ShellWorkspaceService;
+    research?: AgentResearchProvider;
+    getTavilyApiKey?: () => string | null | undefined;
     onEffects?: (effects: ForgeRuntimeEffect[]) => void;
 }
 
@@ -128,6 +137,12 @@ const textResult = <TDetails>(text: string, details: TDetails): AgentToolResult<
 
 export class ForgePiToolBridge {
     private readonly pendingApprovals = new Map<string, PendingPiToolApproval>();
+    private readonly legacyToolNameAliases = new Map<string, string>([
+        ['readFile', 'read'],
+        ['writeFile', 'write'],
+        ['editFile', 'edit'],
+        ['deleteFile', 'delete']
+    ]);
 
     constructor(private readonly deps: ForgePiToolBridgeDeps = {}) {}
 
@@ -144,17 +159,30 @@ export class ForgePiToolBridge {
             this.deps.onEffects?.(effects);
         };
 
-        return [
+        const tools: ForgePiAgentTool[] = [
             this.createCapabilitySearchTool(ctx),
             this.createCapabilityLoadTool(ctx),
             this.createSkillListTool(ctx),
             this.createSkillLoadTool(ctx),
             this.createBashTool(ctx, emitEffects),
-            this.createReadFileTool(ctx),
-            this.createWriteFileTool(ctx, emitEffects),
-            this.createEditFileTool(ctx, emitEffects),
-            this.createDeleteFileTool(ctx, emitEffects)
+            this.createReadTool(ctx),
+            this.createWriteTool(ctx, emitEffects),
+            this.createEditTool(ctx, emitEffects),
+            this.createDeleteTool(ctx, emitEffects)
         ];
+        const researchTool = this.createResearchTool();
+        if (researchTool) {
+            tools.splice(4, 0, researchTool);
+        }
+        return tools;
+    }
+
+    createToolRegistry(context: ForgeRuntimeContext, onEffects?: (effects: ForgeRuntimeEffect[]) => void): AgentToolRegistry {
+        const registry = new AgentToolRegistry();
+        for (const tool of this.getTools(context, onEffects)) {
+            registry.register(tool as unknown as AgentRuntimeTool);
+        }
+        return registry;
     }
 
     getToolSummary(context: ForgeRuntimeContext): Array<{ name: string; description: string; needsApproval: boolean | 'dynamic' }> {
@@ -166,7 +194,7 @@ export class ForgePiToolBridge {
     }
 
     async needsApproval(toolName: string, args: unknown, context: ForgeRuntimeContext): Promise<boolean> {
-        const tool = this.getTools(context).find(item => item.name === toolName);
+        const tool = this.findExecutableTool(context, toolName);
         if (!tool) return false;
         if (typeof tool.needsApproval === 'function') {
             return Boolean(await tool.needsApproval(args as never));
@@ -198,8 +226,7 @@ export class ForgePiToolBridge {
 
         if (!approved) return { resolved: true, events, effects };
 
-        const tool = this.getTools(input.context, nextEffects => effects.push(...nextEffects))
-            .find(item => item.name === input.toolName);
+        const tool = this.findExecutableTool(input.context, input.toolName, nextEffects => effects.push(...nextEffects));
         if (!tool) {
             const errorMessage = `Forge pi tool not found: ${input.toolName}`;
             events.push(this.createToolErrorEvent(input, errorMessage));
@@ -278,6 +305,32 @@ export class ForgePiToolBridge {
 
     private usesDefaultProjectVfsDeps(): boolean {
         return !this.deps.workspaces && !this.deps.skills;
+    }
+
+    private createResearchTool(): ForgePiAgentTool | null {
+        const apiKey = this.getTavilyApiKey();
+        if (!apiKey) return null;
+        const provider = this.deps.research ?? new TavilyResearchProvider({ apiKey });
+        return createWebResearchTool({ provider }) as unknown as ForgePiAgentTool;
+    }
+
+    private getTavilyApiKey(): string {
+        const configured = this.deps.getTavilyApiKey?.()
+            ?? settingsDomainService.getEffectiveValue('lumina-forge.tavilyApiKey');
+        return typeof configured === 'string' ? configured.trim() : '';
+    }
+
+    private resolveExecutableToolName(toolName: string): string {
+        return this.legacyToolNameAliases.get(toolName) ?? toolName;
+    }
+
+    private findExecutableTool(
+        context: ForgeRuntimeContext,
+        toolName: string,
+        onEffects?: (effects: ForgeRuntimeEffect[]) => void
+    ): ForgePiAgentTool | undefined {
+        const executableToolName = this.resolveExecutableToolName(toolName);
+        return this.getTools(context, onEffects).find(item => item.name === executableToolName);
     }
 
     private get workspaces(): ShellWorkspaceService {
@@ -454,21 +507,21 @@ export class ForgePiToolBridge {
     private resolveMemorySemanticPath(displayPath: string, ctx: ForgePiToolContext): string | null {
         const match = displayPath.match(/^\.\/memory\/(.+)\.md$/);
         if (!match) return null;
-        const candidate = match[1].replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
+        const resolvedPath = match[1].replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
         const existing = ctx.runtimeContext.forgeMemoryTree.entries.find(entry =>
-            entry.path === candidate || this.safePathSegment(entry.path) === candidate
+            entry.path === resolvedPath || this.safePathSegment(entry.path) === resolvedPath
         );
-        return existing?.path ?? candidate;
+        return existing?.path ?? resolvedPath;
     }
 
     private resolveLorebookEntryId(displayPath: string, ctx: ForgePiToolContext): string | null {
         const match = displayPath.match(/^\.\/lorebook\/entries\/([^/]+)\.md$/);
         if (!match) return null;
-        const candidate = match[1];
+        const resolvedId = match[1];
         const existing = ctx.runtimeContext.virtualLorebookEntries.find(entry =>
-            entry.id === candidate || this.safePathSegment(entry.id) === candidate
+            entry.id === resolvedId || this.safePathSegment(entry.id) === resolvedId
         );
-        return existing?.id ?? candidate;
+        return existing?.id ?? resolvedId;
     }
 
     private parseMarkdownDocument(content: string): { title: string; body: string } {
@@ -809,12 +862,12 @@ export class ForgePiToolBridge {
         };
     }
 
-    private createReadFileTool(ctx: ForgePiToolContext): ForgePiAgentTool {
+    private createReadTool(ctx: ForgePiToolContext): ForgePiAgentTool {
         const parameters = Type.Object({
             path: Type.String({ description: '文件的绝对路径或相对路径' })
         });
         return {
-            name: 'readFile',
+            name: 'read',
             label: '读取文件',
             description: '读取 Forge 项目文件系统中的文件内容。',
             parameters,
@@ -874,13 +927,13 @@ export class ForgePiToolBridge {
         };
     }
 
-    private createWriteFileTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
+    private createWriteTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
         const parameters = Type.Object({
             path: Type.String({ description: '相对项目工作区的文件路径' }),
             content: Type.String({ description: '要直接写入 Forge 项目 VFS 的完整内容。' })
         });
         return {
-            name: 'writeFile',
+            name: 'write',
             label: '写入文件',
             description: '直接写入 Forge 项目 VFS，并返回可撤回的 workspace_patch；不会发布或改写真实 ST 世界书。',
             parameters,
@@ -890,7 +943,7 @@ export class ForgePiToolBridge {
                     toolCallId,
                     path,
                     contentAfter: String(content ?? ''),
-                    command: `writeFile ${path}`,
+                    command: `write ${path}`,
                     ctx,
                     emitEffects
                 });
@@ -902,14 +955,14 @@ export class ForgePiToolBridge {
         };
     }
 
-    private createEditFileTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
+    private createEditTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
         const parameters = Type.Object({
             path: Type.String({ description: '相对项目工作区的文件路径' }),
             old_string: Type.String({ description: '要替换的精确文本' }),
             new_string: Type.String({ description: '替换后的文本' })
         });
         return {
-            name: 'editFile',
+            name: 'edit',
             label: '编辑文件',
             description: '对 Forge 项目 VFS 文件执行精确替换，并返回可撤回的 workspace_patch。',
             parameters,
@@ -936,7 +989,7 @@ export class ForgePiToolBridge {
                     toolCallId,
                     path,
                     contentAfter: before.content.replace(old_string, new_string),
-                    command: `editFile ${path}`,
+                    command: `edit ${path}`,
                     ctx,
                     emitEffects
                 });
@@ -948,12 +1001,12 @@ export class ForgePiToolBridge {
         };
     }
 
-    private createDeleteFileTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
+    private createDeleteTool(ctx: ForgePiToolContext, emitEffects: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool {
         const parameters = Type.Object({
             path: Type.String({ description: '相对项目工作区的文件路径' })
         });
         return {
-            name: 'deleteFile',
+            name: 'delete',
             label: '删除文件',
             description: '删除 Forge 项目 VFS 文件，并返回可撤回的 workspace_patch。',
             parameters,
@@ -963,7 +1016,7 @@ export class ForgePiToolBridge {
                     toolCallId,
                     path,
                     contentAfter: null,
-                    command: `deleteFile ${path}`,
+                    command: `delete ${path}`,
                     ctx,
                     emitEffects
                 });
@@ -977,17 +1030,17 @@ export class ForgePiToolBridge {
 
     private async resolveSkillNameAlias(skillName: string, ctx: ForgePiToolContext): Promise<string> {
         const requested = skillName.trim();
-        const skillPathName = this.skillNameFromDisplayPath(this.normalizeSkillPathCandidate(requested));
+        const skillPathName = this.skillNameFromDisplayPath(this.normalizeSkillPathInput(requested));
         if (skillPathName) return skillPathName;
         if (this.isCanonicalSkillName(requested)) return requested.toLowerCase();
 
-        const candidates: Array<{
+        const skillOptions: Array<{
             name: string;
             aliases: string[];
         }> = [];
         const projectSkills = await this.skills.listProjectSkills(ctx.forgeProjectId, ctx.conversationId).catch(() => []);
         for (const item of projectSkills) {
-            candidates.push({
+            skillOptions.push({
                 name: item.skill.name,
                 aliases: [
                     item.skill.name,
@@ -998,7 +1051,7 @@ export class ForgePiToolBridge {
             });
         }
         for (const item of listForgePresetSkillResources(ctx.runtimeContext)) {
-            candidates.push({
+            skillOptions.push({
                 name: item.name,
                 aliases: [
                     item.name,
@@ -1010,7 +1063,7 @@ export class ForgePiToolBridge {
             });
         }
         for (const item of this.skills.listBuiltInSkills()) {
-            candidates.push({
+            skillOptions.push({
                 name: item.name,
                 aliases: [
                     item.name,
@@ -1022,13 +1075,13 @@ export class ForgePiToolBridge {
         }
 
         const normalizedRequested = this.normalizeSkillAlias(requested);
-        const matched = candidates.find(candidate =>
-            candidate.aliases.some(alias => this.normalizeSkillAlias(alias) === normalizedRequested)
+        const matched = skillOptions.find(option =>
+            option.aliases.some(alias => this.normalizeSkillAlias(alias) === normalizedRequested)
         );
         return matched?.name ?? requested;
     }
 
-    private normalizeSkillPathCandidate(value: string): string {
+    private normalizeSkillPathInput(value: string): string {
         const normalized = value.trim().replace(/\\/g, '/').replace(/\/+/g, '/');
         if (normalized.startsWith('./')) return normalized;
         if (normalized.startsWith('agent/')) return `./${normalized}`;
@@ -1036,7 +1089,7 @@ export class ForgePiToolBridge {
     }
 
     private normalizeSkillAlias(value: string): string {
-        return this.normalizeSkillPathCandidate(value).toLowerCase();
+        return this.normalizeSkillPathInput(value).toLowerCase();
     }
 
     private isCanonicalSkillName(value: string): boolean {
@@ -1044,7 +1097,7 @@ export class ForgePiToolBridge {
     }
 
     private skillNameFromDisplayPath(displayPath: string): string | null {
-        return this.normalizeSkillPathCandidate(displayPath).match(/^\.\/agent\/skills\/([^/]+)\/SKILL\.md$/)?.[1] ?? null;
+        return this.normalizeSkillPathInput(displayPath).match(/^\.\/agent\/skills\/([^/]+)\/SKILL\.md$/)?.[1] ?? null;
     }
 
     private async resolveSemanticDirectory(

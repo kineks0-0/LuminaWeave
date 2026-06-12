@@ -408,13 +408,16 @@ import type { ForgeDetailMode } from '../../../types/ForgeStructuredTypes.js';
 import type { ForgeTimelineOperationItem } from '../../../types/ForgeTimelineTypes.js';
 import type { ForgeAuxPanelKind, ForgeVisiblePhase } from '../../../types/ForgeWorkflowTypes.js';
 import type {
-  ForgePiSessionEntry,
   ForgePiWorkspacePatchChange,
   ForgePiWorkspacePatchPayload
 } from '@shared/ForgePiTypes.js';
 import type { ActivityDescriptor } from '../../../platform/activity/types.js';
 import type { SidebarMode } from '../../../composables/useResponsiveLayout.js';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../forgeAuxPanels.js';
+import {
+  buildWorkspacePatchGroupsByAssistantTurn,
+  type ForgeFeedWorkspaceChange
+} from '../project/forgeWorkspaceChangePresentation.js';
 
 const ForgeAuxPanelView = defineAsyncComponent(() => import('./ForgeAuxPanelView.vue'));
 
@@ -422,12 +425,14 @@ const props = withDefaults(defineProps<{
   mode?: 'large' | 'small';
   activity?: ActivityDescriptor;
   isMobile?: boolean;
+  workspaceCompact?: boolean;
   embeddedInWorkspaceWindow?: boolean;
   auxSidebarMode?: SidebarMode;
   activeRightPanelId?: string;
 }>(), {
   mode: 'large',
   isMobile: false,
+  workspaceCompact: false,
   embeddedInWorkspaceWindow: false
 });
 
@@ -495,69 +500,13 @@ const forgeTypographyStyle = computed<Record<string, string>>(() => ({
 // 操作分组：连续的 operation 条目聚合为一组，全部完成后可折叠
 const expandedGroups = reactive<Set<string>>(new Set());
 
-interface FeedWorkspaceChange {
-  id: string;
-  patchEntryId: string;
-  path: string;
-  kind: ForgePiWorkspacePatchChange['kind'];
-  beforeHash: string | null;
-  afterHash: string | null;
-  beforeContentRef: string | null;
-  afterContentRef: string | null;
-  restoreApplied: boolean;
-}
-
-interface FeedMessage { kind: 'message'; id: string; message: any; workspaceChanges?: FeedWorkspaceChange[] }
+interface FeedMessage { kind: 'message'; id: string; message: any; workspaceChanges?: ForgeFeedWorkspaceChange[] }
 interface FeedOpGroup { kind: 'op-group'; id: string; operations: ForgeTimelineOperationItem[]; allDone: boolean }
 type GroupedFeedItem = FeedMessage | FeedOpGroup;
 
-const isWorkspacePatchPayload = (payload: unknown): payload is ForgePiWorkspacePatchPayload => {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
-  const value = payload as { nodeId?: unknown; changes?: unknown };
-  return typeof value.nodeId === 'string' && Array.isArray(value.changes);
-};
-
-const restoredInlineChangeKeys = computed(() => new Set(
-  forgeStore.piSessionEntries
-    .map((entry) => {
-      const payload = entry.payload as { restoresEntryId?: unknown; restoreDirection?: unknown };
-      return typeof payload.restoresEntryId === 'string' && payload.restoreDirection === 'before'
-        ? `${payload.restoresEntryId}:before`
-        : null;
-    })
-    .filter((key): key is string => Boolean(key))
-));
-
-const workspacePatchGroupsByAssistantTurn = computed<FeedWorkspaceChange[][]>(() => {
-  const groups: FeedWorkspaceChange[][] = [];
-  let pending: FeedWorkspaceChange[] = [];
-
-  forgeStore.piSessionEntries.forEach((entry: ForgePiSessionEntry) => {
-    if (entry.kind === 'workspace_patch' && isWorkspacePatchPayload(entry.payload) && !entry.payload.restoresEntryId) {
-      pending.push(...entry.payload.changes.map((change, index) => {
-        const restoreEntryId = `${entry.id}:${change.path}`;
-        return {
-          id: `${entry.id}:${change.path}:${index}`,
-          patchEntryId: entry.id,
-          path: change.path,
-          kind: change.kind,
-          beforeHash: change.beforeHash,
-          afterHash: change.afterHash,
-          beforeContentRef: change.beforeContentRef ?? null,
-          afterContentRef: change.afterContentRef ?? null,
-          restoreApplied: restoredInlineChangeKeys.value.has(`${restoreEntryId}:before`)
-        };
-      }));
-      return;
-    }
-    if (entry.kind === 'assistant') {
-      groups.push(pending);
-      pending = [];
-    }
-  });
-
-  return groups;
-});
+const workspacePatchGroupsByAssistantTurn = computed<ForgeFeedWorkspaceChange[][]>(() =>
+  buildWorkspacePatchGroupsByAssistantTurn(forgeStore.piSessionEntries)
+);
 
 const groupedFeed = computed((): GroupedFeedItem[] => {
   const result: GroupedFeedItem[] = [];
@@ -610,7 +559,7 @@ const resolvePatchKind = (
   return 'update';
 };
 
-const handleUndoWorkspaceChange = async (change: FeedWorkspaceChange): Promise<void> => {
+const handleUndoWorkspaceChange = async (change: ForgeFeedWorkspaceChange): Promise<void> => {
   if (change.restoreApplied) return;
   const beforeContentRef = change.afterContentRef;
   const afterContentRef = change.beforeContentRef;

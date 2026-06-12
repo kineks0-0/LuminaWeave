@@ -42,6 +42,16 @@ import {
     type ForgePiAgentTool,
     type ForgePiToolBridge
 } from '../tools/ForgePiToolBridge.js';
+import { AgentPromptAssembler } from '../../../agent-runtime/prompt/AgentPromptAssembler.js';
+import {
+    type AgentRuntimeContentBlock,
+    AgentRuntimeEventBus
+} from '../../../agent-runtime/events/AgentRuntimeEventBus.js';
+import type { AgentRuntimeToolResult } from '../../../agent-runtime/tools/AgentToolRegistry.js';
+import type {
+    AgentRuntimeBeforeAgentStartResult,
+    AgentRuntimeCustomMessage
+} from '../../../agent-runtime/extensions/AgentRuntimeExtensionRunner.js';
 
 export interface ForgePiAgentSessionTurnInput {
     command: ForgeUserCommand;
@@ -110,13 +120,15 @@ interface ForgePiEventSink {
     request: ForgeExecutionRequest;
     emitFirstResponse: boolean;
     firstResponseMarked: boolean;
+    runtimeEvents: AgentRuntimeEventBus | null;
+    runtimeMessageStarted: boolean;
+    runtimeLastText: string | null;
     onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
 }
 
 interface ForgePiPreparedPrompt {
     contextBundle: ForgePiContextBundleSummary;
     source: ForgeRuntimeEventSource;
-    tools: ForgePiAgentTool[];
     modelConfig: ReturnType<ForgePiModelRegistry['resolveRunConfig']>;
     systemPrompt: string;
     branchMessages: AgentMessage[];
@@ -134,11 +146,13 @@ export class ForgePiAgentSession {
     private readonly modelRegistry: ForgePiModelRegistry;
     private readonly toolBridge: ForgePiToolBridge;
     private readonly sessionManager: ForgePiSessionManager;
+    private readonly promptAssembler: AgentPromptAssembler<ForgePiAgentSessionTurnInput, ForgePiPreparedPrompt>;
     private agent: Agent | null = null;
     private latestContext: ForgeRuntimeContext | null = null;
     private latestRequest: ForgeExecutionRequest | null = null;
     private latestContextBundle: ForgePiContextBundleSummary | null = null;
     private eventSink: ForgePiEventSink | null = null;
+    private agentRuntimeEvents: AgentRuntimeEventBus | null = null;
 
     constructor(
         private readonly sessionId: string,
@@ -159,13 +173,26 @@ export class ForgePiAgentSession {
             conversationId: metadata.conversationId,
             workspaceTitle: metadata.workspaceTitle
         }, deps);
+        this.promptAssembler = new AgentPromptAssembler({
+            assemble: input => this.preparePromptState(input),
+            resolveCacheKey: input => input.request.requestId
+        });
+    }
+
+    setAgentRuntimeEvents(events: AgentRuntimeEventBus): void {
+        this.agentRuntimeEvents = events;
     }
 
     async prompt(input: ForgePiAgentSessionTurnInput): Promise<ForgePiAgentSessionTurnResult> {
         this.latestContext = input.context;
         this.latestRequest = input.request;
         const effects: ForgeRuntimeEffect[] = [];
-        const prepared = await this.preparePromptState(input, effects);
+        const prepared = await this.promptAssembler.prepareForRun(input);
+        this.promptAssembler.invalidate(input);
+        const tools = this.extensionRunner.loadTools(
+            input.context,
+            nextEffects => effects.push(...nextEffects)
+        );
         this.latestContextBundle = prepared.contextBundle;
         const userInput = input.commandInput ?? this.resolveCommandInput(input.command);
         const events: ForgeRuntimeEvent[] = [];
@@ -180,6 +207,14 @@ export class ForgePiAgentSession {
             requestedAt: Date.now(),
             nodeSummary: input.request.nodeSummary ?? []
         });
+        this.agentRuntimeEvents?.emit({
+            type: 'agent_start',
+            sessionId: this.sessionId
+        });
+        this.agentRuntimeEvents?.emit({
+            type: 'turn_start',
+            turnId: input.request.requestId
+        });
 
         this.sessionManager.ensureMetadata();
         this.sessionManager.append('context_bundle', 'Context bundle', `${prepared.contextBundle.files.length} files`, {
@@ -189,7 +224,7 @@ export class ForgePiAgentSession {
         const agent = this.createAgent({
             systemPrompt: prepared.systemPrompt,
             messages: prepared.branchMessages,
-            tools: prepared.tools,
+            tools,
             modelConfig: prepared.modelConfig
         });
         this.agent = agent;
@@ -213,6 +248,9 @@ export class ForgePiAgentSession {
             request: input.request,
             emitFirstResponse: true,
             firstResponseMarked: false,
+            runtimeEvents: this.agentRuntimeEvents,
+            runtimeMessageStarted: false,
+            runtimeLastText: null,
             onRuntimeEvent: input.onRuntimeEvent
         };
         await agent.prompt(userMessage);
@@ -233,6 +271,10 @@ export class ForgePiAgentSession {
             thinkingText: '',
             completedAt: Date.now()
         });
+        this.agentRuntimeEvents?.emit({
+            type: 'turn_end',
+            turnId: input.request.requestId
+        });
 
         const snapshot = this.sessionManager.getSnapshot();
         return {
@@ -249,7 +291,7 @@ export class ForgePiAgentSession {
     }
 
     async preparePrompt(input: ForgePiAgentSessionTurnInput): Promise<ForgePiAgentSessionPromptPreview> {
-        const prepared = await this.preparePromptState(input);
+        const prepared = await this.promptAssembler.preview(input);
         const snapshot = this.sessionManager.getSnapshot();
         return {
             requestId: input.request.requestId,
@@ -324,12 +366,19 @@ export class ForgePiAgentSession {
 
         if (approved && resolved.toolResultMessage && this.agent && this.latestRequest) {
             this.replacePendingApprovalWithToolResult(resolved.toolResultMessage);
+            this.agentRuntimeEvents?.emit({
+                type: 'turn_start',
+                turnId: this.latestRequest.requestId
+            });
             this.eventSink = {
                 source: this.resolveEventSource(this.latestRequest),
                 events: resolved.events,
                 request: this.latestRequest,
                 emitFirstResponse: false,
-                firstResponseMarked: true
+                firstResponseMarked: true,
+                runtimeEvents: this.agentRuntimeEvents,
+                runtimeMessageStarted: false,
+                runtimeLastText: null
             };
             await this.agent.continue();
             const finalText = this.resolveLastAssistantText(this.agent.state.messages);
@@ -348,6 +397,10 @@ export class ForgePiAgentSession {
                 thinkingText: '',
                 completedAt: Date.now()
             });
+            this.agentRuntimeEvents?.emit({
+                type: 'turn_end',
+                turnId: this.latestRequest.requestId
+            });
         }
 
         return {
@@ -358,6 +411,10 @@ export class ForgePiAgentSession {
 
     abort(): void {
         this.agent?.abort();
+        this.agentRuntimeEvents?.emit({
+            type: 'agent_end',
+            sessionId: this.sessionId
+        });
     }
 
     getSnapshot() {
@@ -365,19 +422,21 @@ export class ForgePiAgentSession {
     }
 
     private async preparePromptState(
-        input: ForgePiAgentSessionTurnInput,
-        effects?: ForgeRuntimeEffect[]
+        input: ForgePiAgentSessionTurnInput
     ): Promise<ForgePiPreparedPrompt> {
         const contextBundle = await this.resourceLoader.buildContextBundle(input.context);
         const modelConfig = this.modelRegistry.resolveRunConfig({
             request: input.request,
             context: input.context
         });
-        const tools = this.extensionRunner.loadTools(
-            input.context,
-            effects ? nextEffects => effects.push(...nextEffects) : undefined
-        );
-        const systemPrompt = this.resourceLoader.buildSystemPrompt({ systemFragments: [], contextBundle });
+        const tools = this.extensionRunner.loadTools(input.context);
+        const baseSystemPrompt = this.resourceLoader.buildSystemPrompt({ systemFragments: [], contextBundle });
+        const userInput = input.commandInput ?? this.resolveCommandInput(input.command);
+        const beforeAgentStart = await (this.extensionRunner.emitBeforeAgentStart?.({
+            prompt: userInput,
+            systemPrompt: baseSystemPrompt
+        }) ?? Promise.resolve({ systemPrompt: baseSystemPrompt }));
+        const systemPrompt = this.applyBeforeAgentStartResult(baseSystemPrompt, beforeAgentStart);
         const branchMessages = this.sessionManager.getBranchMessages({
             providerId: modelConfig.model.provider,
             modelId: modelConfig.model.id
@@ -385,16 +444,51 @@ export class ForgePiAgentSession {
         return {
             contextBundle,
             source: this.resolveEventSource(input.request),
-            tools,
             modelConfig,
             systemPrompt,
             branchMessages,
             prompt: [{
                 role: 'system',
                 content: systemPrompt
-            }, ...branchMessages],
+            }, ...branchMessages, {
+                role: 'user',
+                content: userInput
+            }],
             activeTools: this.summarizeTools(tools)
         };
+    }
+
+    private applyBeforeAgentStartResult(
+        baseSystemPrompt: string,
+        result: AgentRuntimeBeforeAgentStartResult
+    ): string {
+        const systemPrompt = result.systemPrompt ?? baseSystemPrompt;
+        const hiddenMessages = (result.messages ?? [])
+            .filter(message => message.display === false)
+            .map(message => this.renderExtensionHiddenMessage(message));
+        if (hiddenMessages.length === 0) return systemPrompt;
+        return [
+            systemPrompt,
+            '# Extension hidden context',
+            ...hiddenMessages
+        ].join('\n\n');
+    }
+
+    private renderExtensionHiddenMessage(message: AgentRuntimeCustomMessage): string {
+        return [
+            `## ${message.customType}`,
+            this.stringifyExtensionMessageContent(message.content)
+        ].join('\n');
+    }
+
+    private stringifyExtensionMessageContent(content: unknown): string {
+        if (typeof content === 'string') return content;
+        try {
+            const serialized = JSON.stringify(content, null, 2);
+            return serialized ?? String(content);
+        } catch {
+            return String(content);
+        }
     }
 
     private createAgent(input: {
@@ -456,17 +550,13 @@ export class ForgePiAgentSession {
 
     private handleAgentEvent(
         event: AgentEvent,
-        input: {
-            source: ForgeRuntimeEventSource;
-            events: ForgeRuntimeEvent[];
-            request: ForgeExecutionRequest;
-            onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
-        },
+        input: ForgePiEventSink,
         markFirstResponse: () => void
     ): void {
         if (event.type === 'message_update') {
             markFirstResponse();
             const text = this.extractAssistantText(event.message);
+            if (!this.emitAgentRuntimeTextUpdate(input, text)) return;
             const runtimeEvent: ForgeRuntimeEvent = {
                 type: 'stream_chunk',
                 requestId: input.request.requestId,
@@ -479,6 +569,11 @@ export class ForgePiAgentSession {
         }
         if (event.type === 'message_end' && event.message.role === 'assistant') {
             const text = this.extractAssistantText(event.message);
+            this.emitAgentRuntimeMessageStart(input);
+            input.runtimeEvents?.emit({
+                type: 'message_end',
+                messageId: input.request.requestId
+            });
             const classified = classifyForgePiAssistantMessageForReplay(event.message, {
                 providerId: event.message.provider,
                 modelId: event.message.responseModel ?? event.message.model
@@ -498,6 +593,12 @@ export class ForgePiAgentSession {
             });
         }
         if (event.type === 'tool_execution_start') {
+            input.runtimeEvents?.emit({
+                type: 'tool_execution_start',
+                toolCallId: event.toolCallId,
+                toolName: event.toolName,
+                args: event.args
+            });
             const runtimeEvent: ForgeRuntimeEvent = {
                 type: 'tool_call',
                 requestId: input.request.requestId,
@@ -511,6 +612,13 @@ export class ForgePiAgentSession {
             this.sessionManager.append('tool_call', `Tool call · ${event.toolName}`, JSON.stringify(event.args).slice(0, 160), runtimeEvent);
         }
         if (event.type === 'tool_execution_end') {
+            input.runtimeEvents?.emit({
+                type: 'tool_execution_end',
+                toolCallId: event.toolCallId,
+                status: event.isError ? 'failed' : 'completed',
+                result: this.toAgentRuntimeToolResult(event.result),
+                errorMessage: event.isError ? 'Tool execution failed.' : undefined
+            });
             const runtimeEvent: ForgeRuntimeEvent = {
                 type: 'tool_result',
                 requestId: input.request.requestId,
@@ -525,6 +633,50 @@ export class ForgePiAgentSession {
             this.sessionManager.append('tool_result', `Tool result · ${event.toolName}`, JSON.stringify(runtimeEvent.result).slice(0, 160), runtimeEvent);
             this.appendWorkspacePatchesFromToolResult(runtimeEvent.result);
         }
+    }
+
+    private emitAgentRuntimeMessageStart(input: ForgePiEventSink): void {
+        if (!input.runtimeEvents || input.runtimeMessageStarted) return;
+        input.runtimeMessageStarted = true;
+        input.runtimeEvents.emit({
+            type: 'message_start',
+            message: {
+                id: input.request.requestId,
+                role: 'assistant',
+                blocks: []
+            }
+        });
+    }
+
+    private emitAgentRuntimeTextUpdate(input: ForgePiEventSink, text: string): boolean {
+        if (text.length === 0 || text === input.runtimeLastText) return false;
+        input.runtimeLastText = text;
+        if (!input.runtimeEvents) return true;
+        this.emitAgentRuntimeMessageStart(input);
+        input.runtimeEvents.emit({
+            type: 'message_update',
+            messageId: input.request.requestId,
+            block: { type: 'text', text }
+        });
+        return true;
+    }
+
+    private toAgentRuntimeToolResult(result: unknown): AgentRuntimeToolResult | undefined {
+        if (!result || typeof result !== 'object') return undefined;
+        const record = result as { content?: unknown; details?: unknown };
+        return {
+            content: this.toAgentRuntimeContent(record.content),
+            details: record.details ?? result
+        };
+    }
+
+    private toAgentRuntimeContent(content: unknown): AgentRuntimeContentBlock[] {
+        if (!Array.isArray(content)) return [];
+        return content
+            .filter((part): part is AgentRuntimeContentBlock =>
+                Boolean(part) && typeof part === 'object' && typeof (part as { type?: unknown }).type === 'string'
+            )
+            .map(part => ({ ...part }));
     }
 
     private appendWorkspacePatchesFromToolResult(result: unknown): void {

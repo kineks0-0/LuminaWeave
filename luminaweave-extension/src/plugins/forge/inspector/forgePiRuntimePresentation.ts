@@ -2,6 +2,11 @@ import type {
     ForgePiContextBundleSummary,
     ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
+import type {
+    AgentRuntimeMessage,
+    AgentRuntimePendingToolCall,
+    AgentRuntimeSnapshot
+} from '../../../api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
 export interface ForgePiRuntimePresentationInput {
     contextBundleSummary: ForgePiContextBundleSummary | null;
@@ -9,6 +14,7 @@ export interface ForgePiRuntimePresentationInput {
     activeNodeId: string | null;
     loadedSkills: string[];
     loadedExtensions: string[];
+    agentRuntimeSnapshot?: AgentRuntimeSnapshot | null;
 }
 
 export interface ForgePiRuntimeContextFilePresentation {
@@ -36,6 +42,40 @@ export interface ForgePiRuntimePresentation {
     treeRows: ForgePiRuntimeTreeRow[];
     skills: string[];
     extensions: string[];
+    runtime: ForgePiRuntimeSnapshotPresentation | null;
+}
+
+export interface ForgePiRuntimeMessagePresentation {
+    id: string;
+    role: AgentRuntimeMessage['role'];
+    status: AgentRuntimeMessage['status'] | null;
+    blockCount: number;
+    preview: string;
+}
+
+export interface ForgePiRuntimePendingToolPresentation {
+    toolCallId: string;
+    toolName: string;
+    argsPreview: string;
+    updateCount: number;
+}
+
+export interface ForgePiRuntimeActiveToolPresentation {
+    name: string;
+    description: string;
+    approvalLabel: string;
+}
+
+export interface ForgePiRuntimeSnapshotPresentation {
+    isStreaming: boolean;
+    messageCount: number;
+    pendingToolCount: number;
+    activeToolCount: number;
+    errorMessage: string | null;
+    queueLabel: string | null;
+    messages: ForgePiRuntimeMessagePresentation[];
+    pendingToolCalls: ForgePiRuntimePendingToolPresentation[];
+    activeTools: ForgePiRuntimeActiveToolPresentation[];
 }
 
 export interface ForgePiSkillComparison {
@@ -48,6 +88,15 @@ const trimPreview = (content: string, maxLength = 160): string => {
     const normalized = content.replace(/\s+/g, ' ').trim();
     if (normalized.length <= maxLength) return normalized;
     return `${normalized.slice(0, maxLength)}...`;
+};
+
+const stringifyPreview = (value: unknown, maxLength = 320): string => {
+    if (typeof value === 'string') return trimPreview(value, maxLength);
+    try {
+        return trimPreview(JSON.stringify(value, null, 2), maxLength);
+    } catch {
+        return '[unserializable]';
+    }
 };
 
 const uniqueStable = (values: string[]): string[] => Array.from(new Set(values.filter(Boolean)));
@@ -82,16 +131,62 @@ export const buildForgePiRuntimePresentation = (input: ForgePiRuntimePresentatio
         ...input.loadedExtensions,
         ...(input.contextBundleSummary?.loadedExtensions ?? [])
     ]);
+    const runtime = input.agentRuntimeSnapshot
+        ? buildRuntimeSnapshotPresentation(input.agentRuntimeSnapshot)
+        : null;
 
     return {
-        hasState: contextFiles.length > 0 || rows.length > 0 || skills.length > 0 || extensions.length > 0,
+        hasState: contextFiles.length > 0
+            || rows.length > 0
+            || skills.length > 0
+            || extensions.length > 0
+            || Boolean(runtime),
         contextFiles,
         activeNode,
         treeRows: rows,
         skills,
-        extensions
+        extensions,
+        runtime
     };
 };
+
+const buildRuntimeSnapshotPresentation = (snapshot: AgentRuntimeSnapshot): ForgePiRuntimeSnapshotPresentation => ({
+    isStreaming: snapshot.isStreaming,
+    messageCount: snapshot.messages.length,
+    pendingToolCount: snapshot.pendingToolCalls.length,
+    activeToolCount: snapshot.activeTools.length,
+    errorMessage: snapshot.errorMessage ?? null,
+    queueLabel: snapshot.queue
+        ? `${snapshot.queue.queuedTurns} queued${snapshot.queue.activeTurnId ? ` · active ${snapshot.queue.activeTurnId}` : ''}`
+        : null,
+    messages: snapshot.messages.map(buildRuntimeMessagePresentation),
+    pendingToolCalls: snapshot.pendingToolCalls.map(buildPendingToolPresentation),
+    activeTools: snapshot.activeTools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        approvalLabel: tool.needsApproval === 'dynamic'
+            ? 'dynamic approval'
+            : tool.needsApproval ? 'approval required' : 'no approval'
+    }))
+});
+
+const buildRuntimeMessagePresentation = (message: AgentRuntimeMessage): ForgePiRuntimeMessagePresentation => ({
+    id: message.id,
+    role: message.role,
+    status: message.status ?? null,
+    blockCount: message.blocks.length,
+    preview: trimPreview(message.blocks
+        .map(block => typeof block.text === 'string' ? block.text : '')
+        .filter(Boolean)
+        .join(' '))
+});
+
+const buildPendingToolPresentation = (toolCall: AgentRuntimePendingToolCall): ForgePiRuntimePendingToolPresentation => ({
+    toolCallId: toolCall.toolCallId,
+    toolName: toolCall.toolName,
+    argsPreview: stringifyPreview(toolCall.args),
+    updateCount: toolCall.updates.length
+});
 
 const buildTreeRows = (tree: ForgePiTreeNode[], activeNodeId: string | null): ForgePiRuntimeTreeRow[] => {
     const byParent = new Map<string | null, ForgePiTreeNode[]>();

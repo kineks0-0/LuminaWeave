@@ -7,6 +7,12 @@ import type { ForgeRuntimeContext } from '@/types/ForgeRuntimeTypes.js';
 import type { ForgeDraftTree, ForgeStructuredState } from '@/types/ForgeStructuredTypes.js';
 import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
 import { ShellWorkspaceService } from '@/api/core/hal/shell/ShellWorkspaceService.js';
+import type {
+    AgentResearchFetchInput,
+    AgentResearchProvider,
+    AgentResearchResult,
+    AgentResearchSearchInput
+} from '@/api/core/agent-runtime/research/index.js';
 
 const { store } = vi.hoisted(() => ({
     store: new Map<string, unknown>()
@@ -76,10 +82,11 @@ describe('ForgePiToolBridge', () => {
         });
     });
 
-    it('exposes direct workspace write tools without Review Gate metadata', () => {
+    it('exposes short direct workspace tools without Review Gate metadata', () => {
         const bridge = new ForgePiToolBridge({
             skills: createEmptySkills(),
-            capabilities: createEmptyCapabilities()
+            capabilities: createEmptyCapabilities(),
+            getTavilyApiKey: () => ''
         });
 
         const tools = bridge.getTools(createContext());
@@ -90,26 +97,122 @@ describe('ForgePiToolBridge', () => {
             'skillList',
             'skillLoad',
             'bash',
+            'read',
+            'write',
+            'edit',
+            'delete'
+        ]);
+        expect(tools.map(tool => tool.name)).not.toContain('webResearch');
+        expect(tools.map(tool => tool.name)).not.toEqual(expect.arrayContaining([
             'readFile',
             'writeFile',
             'editFile',
             'deleteFile'
-        ]);
-        expect(tools.find(tool => tool.name === 'writeFile')?.needsApproval).toBeUndefined();
-        expect(tools.find(tool => tool.name === 'editFile')?.needsApproval).toBeUndefined();
-        expect(tools.find(tool => tool.name === 'deleteFile')?.needsApproval).toBeUndefined();
+        ]));
+        expect(tools.find(tool => tool.name === 'write')?.needsApproval).toBeUndefined();
+        expect(tools.find(tool => tool.name === 'edit')?.needsApproval).toBeUndefined();
+        expect(tools.find(tool => tool.name === 'delete')?.needsApproval).toBeUndefined();
     });
 
-    it('applies writeFile directly to the Forge project workspace and returns a workspace patch', async () => {
+    it('adapts Forge tools to the Agent Runtime SDK tool registry without adding defaults', () => {
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            getTavilyApiKey: () => ''
+        });
+
+        const registry = bridge.createToolRegistry(createContext());
+
+        expect(registry.getToolSummary().map(tool => tool.name)).toEqual([
+            'capabilitySearch',
+            'capabilityLoad',
+            'skillList',
+            'skillLoad',
+            'bash',
+            'read',
+            'write',
+            'edit',
+            'delete'
+        ]);
+    });
+
+    it('exposes webResearch only when a Tavily API key is configured', async () => {
+        const research: AgentResearchProvider = {
+            name: 'tavily',
+            search: vi.fn(async (input: AgentResearchSearchInput): Promise<AgentResearchResult> => ({
+                mode: 'search',
+                provider: 'tavily',
+                requestId: 'req_forge_search',
+                responseTime: 1,
+                sources: [{
+                    title: 'Forge research',
+                    url: 'https://example.test/forge',
+                    content: 'Forge result'
+                }],
+                markdown: `# Forge result\n\n${input.query}`
+            })),
+            fetch: vi.fn(async (input: AgentResearchFetchInput): Promise<AgentResearchResult> => ({
+                mode: 'fetch',
+                provider: 'tavily',
+                requestId: 'req_forge_fetch',
+                responseTime: 1,
+                sources: [],
+                markdown: input.urls.join('\n')
+            }))
+        };
+        const withoutKey = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            research,
+            getTavilyApiKey: () => '   '
+        });
+        const withKey = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            research,
+            getTavilyApiKey: () => 'tvly-test'
+        });
+
+        expect(withoutKey.getTools(createContext()).map(tool => tool.name)).not.toContain('webResearch');
+
+        const webResearch = withKey.getTools(createContext()).find(tool => tool.name === 'webResearch');
+        const result = await webResearch?.execute('call_web', {
+            mode: 'search',
+            query: 'forge web research',
+            searchDepth: 'advanced'
+        });
+
+        expect(webResearch).toBeDefined();
+        expect(research.search).toHaveBeenCalledWith({
+            mode: 'search',
+            query: 'forge web research',
+            maxResults: 5,
+            searchDepth: 'advanced',
+            timeRange: undefined
+        });
+        expect(result).toMatchObject({
+            content: [{ type: 'text', text: expect.stringContaining('Forge result') }],
+            details: {
+                mode: 'search',
+                provider: 'tavily',
+                requestId: 'req_forge_search'
+            }
+        });
+        expect(result?.details).not.toMatchObject({
+            workspacePatch: expect.anything()
+        });
+    });
+
+    it('applies write directly to the Forge project workspace and returns a workspace patch', async () => {
         const workspaces = new ShellWorkspaceService();
         const bridge = new ForgePiToolBridge({
             skills: createEmptySkills(),
             capabilities: createEmptyCapabilities(),
             workspaces
         });
-        const writeFile = bridge.getTools(createContext()).find(tool => tool.name === 'writeFile');
+        const write = bridge.getTools(createContext()).find(tool => tool.name === 'write');
 
-        const result = await writeFile?.execute('call_write', {
+        const result = await write?.execute('call_write', {
             path: './card.md',
             content: '# Card\n\nUpdated.'
         });
@@ -123,6 +226,7 @@ describe('ForgePiToolBridge', () => {
         expect(result?.details).toMatchObject({
             path: './card.md',
             applied: true,
+            command: 'write ./card.md',
             workspacePatch: {
                 sourceToolCallId: 'call_write',
                 changes: [expect.objectContaining({
@@ -135,7 +239,61 @@ describe('ForgePiToolBridge', () => {
         });
     });
 
-    it('applies editFile and deleteFile directly without staging effects', async () => {
+    it('resolves pending approvals recorded with historical direct write tool names', async () => {
+        const workspaces = new ShellWorkspaceService();
+        const context = createContext();
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            workspaces
+        });
+
+        expect(bridge.getTools(context).map(tool => tool.name)).not.toContain('writeFile');
+
+        bridge.registerPendingApproval({
+            requestId: 'req_history',
+            toolCallId: 'call_history_write',
+            toolName: 'writeFile',
+            args: {
+                path: './history.md',
+                content: 'from historical approval'
+            },
+            context,
+            source: 'conversation'
+        });
+
+        const result = await bridge.resolveToolApproval('call_history_write', true);
+        const fs = await workspaces.getFileSystem({
+            projectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha'
+        });
+        const persisted = await fs.readFile('/forge/forge_project_alpha/history.md');
+
+        expect(String(persisted)).toBe('from historical approval');
+        expect(result.resolved).toBe(true);
+        expect(result.events).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                type: 'tool_result',
+                toolCallId: 'call_history_write',
+                toolName: 'writeFile',
+                result: expect.objectContaining({
+                    applied: true,
+                    command: 'write ./history.md'
+                })
+            })
+        ]));
+        expect(result.toolResultMessage).toMatchObject({
+            toolCallId: 'call_history_write',
+            toolName: 'writeFile',
+            isError: false,
+            details: expect.objectContaining({
+                applied: true,
+                command: 'write ./history.md'
+            })
+        });
+    });
+
+    it('applies edit and delete directly without staging effects', async () => {
         const effects: ForgeRuntimeEffect[] = [];
         const workspaces = new ShellWorkspaceService();
         const fs = await workspaces.getFileSystem({
@@ -152,15 +310,15 @@ describe('ForgePiToolBridge', () => {
             onEffects: next => effects.push(...next)
         });
         const tools = bridge.getTools(createContext());
-        const editFile = tools.find(tool => tool.name === 'editFile');
-        const deleteFile = tools.find(tool => tool.name === 'deleteFile');
+        const edit = tools.find(tool => tool.name === 'edit');
+        const deleteTool = tools.find(tool => tool.name === 'delete');
 
-        const edited = await editFile?.execute('call_edit', {
+        const edited = await edit?.execute('call_edit', {
             path: './card.md',
             old_string: 'old',
             new_string: 'new'
         });
-        const deleted = await deleteFile?.execute('call_delete', {
+        const deleted = await deleteTool?.execute('call_delete', {
             path: './card.md'
         });
 
@@ -169,6 +327,7 @@ describe('ForgePiToolBridge', () => {
         expect(edited?.details).toMatchObject({
             path: './card.md',
             applied: true,
+            command: 'edit ./card.md',
             workspacePatch: {
                 sourceToolCallId: 'call_edit',
                 changes: [expect.objectContaining({ kind: 'update' })]
@@ -177,6 +336,7 @@ describe('ForgePiToolBridge', () => {
         expect(deleted?.details).toMatchObject({
             path: './card.md',
             applied: true,
+            command: 'delete ./card.md',
             workspacePatch: {
                 sourceToolCallId: 'call_delete',
                 changes: [expect.objectContaining({ kind: 'delete' })]
@@ -288,12 +448,12 @@ describe('ForgePiToolBridge', () => {
             },
             capabilities: createEmptyCapabilities()
         });
-        const readFile = bridge.getTools(createContext()).find(tool => tool.name === 'readFile');
+        const read = bridge.getTools(createContext()).find(tool => tool.name === 'read');
 
-        const agents = await readFile?.execute('call_agents', { path: './AGENTS.md' });
-        const systemPrompt = await readFile?.execute('call_system', { path: './.forge/agent/SYSTEM.md' });
-        const conversationPrompt = await readFile?.execute('call_prompt', { path: './.forge/agent/CONVERSATION.md' });
-        const skill = await readFile?.execute('call_skill', { path: './agent/skills/memory-curator/SKILL.md' });
+        const agents = await read?.execute('call_agents', { path: './AGENTS.md' });
+        const systemPrompt = await read?.execute('call_system', { path: './.forge/agent/SYSTEM.md' });
+        const conversationPrompt = await read?.execute('call_prompt', { path: './.forge/agent/CONVERSATION.md' });
+        const skill = await read?.execute('call_skill', { path: './agent/skills/memory-curator/SKILL.md' });
 
         expect(agents?.details).toMatchObject({
             path: './AGENTS.md',
@@ -314,7 +474,7 @@ describe('ForgePiToolBridge', () => {
         });
     });
 
-    it('reads long-term memory bodies through the readFile tool', async () => {
+    it('reads long-term memory bodies through the read tool', async () => {
         const bridge = new ForgePiToolBridge({
             skills: createEmptySkills(),
             capabilities: createEmptyCapabilities()
@@ -333,9 +493,9 @@ describe('ForgePiToolBridge', () => {
                 lastUpdatedAt: 1
             }
         };
-        const readFile = bridge.getTools(context).find(tool => tool.name === 'readFile');
+        const read = bridge.getTools(context).find(tool => tool.name === 'read');
 
-        const result = await readFile?.execute('call_memory', { path: './memory/偏好/禁忌.md' });
+        const result = await read?.execute('call_memory', { path: './memory/偏好/禁忌.md' });
 
         expect(result?.details).toMatchObject({
             path: './memory/偏好/禁忌.md',
@@ -348,9 +508,9 @@ describe('ForgePiToolBridge', () => {
             skills: createEmptySkills(),
             capabilities: createEmptyCapabilities()
         });
-        const writeFile = bridge.getTools(createContext()).find(tool => tool.name === 'writeFile');
+        const write = bridge.getTools(createContext()).find(tool => tool.name === 'write');
 
-        const result = await writeFile?.execute('call_write', {
+        const result = await write?.execute('call_write', {
             path: './agent/skills/memory-curator/SKILL.md',
             content: '# patched skill'
         });
@@ -399,9 +559,9 @@ describe('ForgePiToolBridge', () => {
             capabilities: createEmptyCapabilities(),
             workspaces
         });
-        const readFile = bridge.getTools(createContext()).find(tool => tool.name === 'readFile');
+        const read = bridge.getTools(createContext()).find(tool => tool.name === 'read');
 
-        const result = await readFile?.execute('call_thread', {
+        const result = await read?.execute('call_thread', {
             path: './threads/02历史线程/messages.md'
         });
 
@@ -431,9 +591,9 @@ describe('ForgePiToolBridge', () => {
                 syncStatus: 'local' as const
             }]
         };
-        const readFile = bridge.getTools(context).find(tool => tool.name === 'readFile');
+        const read = bridge.getTools(context).find(tool => tool.name === 'read');
 
-        const result = await readFile?.execute('call_current_thread', {
+        const result = await read?.execute('call_current_thread', {
             path: './threads/目前/messages.md'
         });
 
@@ -449,9 +609,9 @@ describe('ForgePiToolBridge', () => {
             skills: createEmptySkills(),
             capabilities: createEmptyCapabilities()
         });
-        const readFile = bridge.getTools(createContext()).find(tool => tool.name === 'readFile');
+        const read = bridge.getTools(createContext()).find(tool => tool.name === 'read');
 
-        const result = await readFile?.execute('call_current_thread_meta', {
+        const result = await read?.execute('call_current_thread_meta', {
             path: './threads/目前/thread.md'
         });
 
@@ -471,9 +631,9 @@ describe('ForgePiToolBridge', () => {
             skills: createEmptySkills(),
             capabilities: createEmptyCapabilities()
         });
-        const readFile = bridge.getTools(createContext()).find(tool => tool.name === 'readFile');
+        const read = bridge.getTools(createContext()).find(tool => tool.name === 'read');
 
-        const result = await readFile?.execute('call_current_thread_dir', {
+        const result = await read?.execute('call_current_thread_dir', {
             path: './threads/目前/'
         });
 

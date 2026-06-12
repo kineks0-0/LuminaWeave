@@ -10,6 +10,11 @@ import type {
     ForgeRuntimeEvent,
     ForgeUserCommand
 } from '../../../../types/ForgeRuntimeTypes.js';
+import type {
+    AgentRuntimeEvent,
+    AgentRuntimeSnapshot
+} from '../../agent-runtime/events/AgentRuntimeEventBus.js';
+import { AgentRuntimeCore } from '../../agent-runtime/runtime/AgentRuntimeCore.js';
 import {
     ForgePiAgentSession,
     type ForgePiAgentSessionApprovalResult,
@@ -28,6 +33,7 @@ export interface ForgePiCoreRuntimeTurnInput {
 export interface ForgePiCoreRuntimeTurnResult {
     events: ForgeRuntimeEvent[];
     effects: ForgeRuntimeEffect[];
+    agentRuntimeSnapshot?: AgentRuntimeSnapshot;
     piSessionState: {
         tree: ForgePiTreeNode[];
         entries: ForgePiSessionEntry[];
@@ -37,7 +43,9 @@ export interface ForgePiCoreRuntimeTurnResult {
     };
 }
 
-export interface ForgePiCoreRuntimeApprovalResult extends ForgePiAgentSessionApprovalResult {}
+export interface ForgePiCoreRuntimeApprovalResult extends ForgePiAgentSessionApprovalResult {
+    agentRuntimeSnapshot?: AgentRuntimeSnapshot;
+}
 
 export interface ForgePiCoreRuntimePromptPreview extends ForgePiAgentSessionPromptPreview {}
 
@@ -60,19 +68,45 @@ export interface ForgePiCoreRuntimeBranchFromUserResult extends ForgePiCoreRunti
 
 export class ForgePiCoreRuntime {
     private readonly sessions = new Map<string, ForgePiAgentSession>();
+    private readonly core: AgentRuntimeCore<
+        ForgePiCoreRuntimeTurnInput,
+        ForgePiCoreRuntimeTurnResult,
+        ForgePiCoreRuntimePromptPreview,
+        ForgePiCoreRuntimeApprovalResult
+    >;
 
-    constructor(private readonly deps: ForgePiCoreRuntimeDeps = {}) {}
+    constructor(private readonly deps: ForgePiCoreRuntimeDeps = {}) {
+        this.core = new AgentRuntimeCore({
+            resolveSessionId: input => this.resolveSessionId(input.context),
+            createSession: input => {
+                const session = this.getSession(input.firstInput.context);
+                session.setAgentRuntimeEvents(input.events);
+                return {
+                    runTurn: turnInput => session.prompt(turnInput),
+                    previewPrompt: turnInput => session.preparePrompt(turnInput),
+                    continue: () => session.continue(),
+                    resolveToolApproval: (toolCallId, approved, message) =>
+                        session.resolveToolApproval(toolCallId, approved, message),
+                    abort: () => session.abort()
+                };
+            }
+        });
+    }
 
     async runTurn(input: ForgePiCoreRuntimeTurnInput): Promise<ForgePiCoreRuntimeTurnResult> {
-        return this.getSession(input.context).prompt(input);
+        const result = await this.core.runTurn(input);
+        return {
+            ...result,
+            agentRuntimeSnapshot: this.getAgentRuntimeSnapshot()
+        };
     }
 
     async previewPrompt(input: ForgePiCoreRuntimeTurnInput): Promise<ForgePiCoreRuntimePromptPreview> {
-        return this.getSession(input.context).preparePrompt(input);
+        return this.core.previewPrompt(input);
     }
 
     async continue(sessionId: string): Promise<void> {
-        await this.sessions.get(sessionId)?.continue();
+        await this.core.continue(sessionId);
     }
 
     checkout(input: {
@@ -96,17 +130,24 @@ export class ForgePiCoreRuntime {
     }
 
     async resolveToolApproval(toolCallId: string, approved: boolean, message?: string): Promise<ForgePiCoreRuntimeApprovalResult> {
-        for (const session of this.sessions.values()) {
-            const resolved = await session.resolveToolApproval(toolCallId, approved, message);
-            if (resolved.resolved) return resolved;
-        }
-        return { resolved: false, events: [], effects: [] };
+        const result = await this.core.resolveToolApproval(toolCallId, approved, message)
+            ?? { resolved: false, events: [], effects: [] };
+        return {
+            ...result,
+            agentRuntimeSnapshot: this.getAgentRuntimeSnapshot()
+        };
     }
 
     abortActiveGeneration(): void {
-        for (const session of this.sessions.values()) {
-            session.abort();
-        }
+        this.core.abortActiveGeneration();
+    }
+
+    getAgentRuntimeSnapshot(): AgentRuntimeSnapshot {
+        return this.core.events.getSnapshot();
+    }
+
+    getAgentRuntimeEvents(): AgentRuntimeEvent[] {
+        return this.core.events.getEvents();
     }
 
     private getSession(context: ForgeRuntimeContext): ForgePiAgentSession {

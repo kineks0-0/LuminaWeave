@@ -8,6 +8,7 @@ import type {
     ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { AgentSessionTree } from '../../../agent-runtime/session/AgentSessionTree.js';
 import {
     sanitizeForgePiAgentMessageForReplay,
     type ForgePiReplayTarget
@@ -48,32 +49,34 @@ export interface ForgePiBranchMessageOptions extends ForgePiReplayTarget {
 }
 
 export class ForgePiSessionManager {
-    private readonly now: () => number;
-    private readonly createNodeId: () => string;
-    private readonly entries: ForgePiSessionEntry[] = [];
-    private activeNodeId: string | null = null;
+    private readonly tree: AgentSessionTree<ForgePiRuntimeEventType, Record<string, unknown>>;
     private latestContextBundle: ForgePiContextBundleSummary | null = null;
 
     constructor(
         private readonly metadata: ForgePiSessionMetadata,
         deps: ForgePiSessionManagerDeps = {}
     ) {
-        this.now = deps.now ?? Date.now;
-        this.createNodeId = deps.createNodeId ?? (() => {
-            if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-                return `pi_node_${crypto.randomUUID()}`;
-            }
-            return `pi_node_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+        this.tree = new AgentSessionTree({
+            sessionId: metadata.sessionId,
+            now: deps.now,
+            createNodeId: deps.createNodeId,
+            initialState: deps.initialState
+                ? {
+                    sessionId: deps.initialState.sessionId,
+                    activeNodeId: deps.initialState.activeNodeId,
+                    entries: deps.initialState.entries.map(entry => ({
+                        ...entry,
+                        payload: this.clonePayload(entry.payload)
+                    })),
+                    version: 1
+                }
+                : null
         });
-        if (deps.initialState?.entries) {
-            this.entries.push(...deps.initialState.entries.map(entry => this.cloneEntry(entry)));
-            this.activeNodeId = deps.initialState.activeNodeId;
-            this.latestContextBundle = deps.initialState.contextBundleSummary ?? this.findLatestContextBundle();
-        }
+        this.latestContextBundle = deps.initialState?.contextBundleSummary ?? this.findLatestContextBundle();
     }
 
     ensureMetadata(): void {
-        if (this.entries.some(entry => entry.kind === 'metadata')) return;
+        if (this.getEntries().some(entry => entry.kind === 'metadata')) return;
         this.append('metadata', 'Forge pi session', this.metadata.workspaceTitle, {
             forgeProjectId: this.metadata.forgeProjectId,
             conversationId: this.metadata.conversationId
@@ -85,120 +88,79 @@ export class ForgePiSessionManager {
         title: string,
         summary: string,
         payload: ForgePiSessionEntryPayload | unknown,
-        parentId: string | null = this.activeNodeId,
-        createdAt = this.now()
+        parentId: string | null = this.tree.getActiveNodeId(),
+        createdAt?: number
     ): ForgePiTreeNode {
-        const entry: ForgePiSessionEntry = {
-            id: this.createNodeId(),
-            sessionId: this.metadata.sessionId,
-            parentId,
+        const node = this.tree.append(
             kind,
             title,
-            summary: String(summary || '').slice(0, 240),
-            createdAt,
-            payload: this.clonePayload(payload)
-        };
-        this.entries.push(entry);
-        this.activeNodeId = entry.id;
+            summary,
+            this.clonePayload(payload),
+            parentId,
+            createdAt
+        );
         if (kind === 'context_bundle') {
-            this.latestContextBundle = this.extractContextBundle(entry.payload);
+            this.latestContextBundle = this.extractContextBundle(node.payload);
         }
-        return this.toTreeNode(entry);
+        return node as ForgePiTreeNode;
     }
 
     checkout(nodeId: string | null): void {
-        if (nodeId !== null && !this.entries.some(entry => entry.id === nodeId)) {
-            throw new Error(`Forge pi session node not found: ${nodeId}`);
-        }
-        this.activeNodeId = nodeId;
+        this.tree.checkout(nodeId);
     }
 
     createBranchFromUserNode(userNodeId: string): ForgePiBranchFromUserResult {
-        const userEntry = this.entries.find(entry => entry.id === userNodeId);
-        if (!userEntry) {
-            throw new Error(`Forge pi session user node not found: ${userNodeId}`);
-        }
-        if (userEntry.kind !== 'user') {
-            throw new Error(`Forge pi session branch target is not a user node: ${userNodeId}`);
-        }
-        this.activeNodeId = userEntry.parentId;
-        return {
-            activeNodeId: this.activeNodeId,
-            input: this.extractPayloadText(userEntry.payload),
-            userNodeId
-        };
+        return this.tree.branchFromUserNode(userNodeId, {
+            userKind: 'user',
+            extractInput: payload => this.extractPayloadText(payload)
+        });
     }
 
     getActiveNodeId(): string | null {
-        return this.activeNodeId;
+        return this.tree.getActiveNodeId();
     }
 
-    getBranchMessages(input: string | null | ForgePiBranchMessageOptions = this.activeNodeId): AgentMessage[] {
+    getBranchMessages(input: string | null | ForgePiBranchMessageOptions = this.getActiveNodeId()): AgentMessage[] {
         const options: ForgePiBranchMessageOptions = typeof input === 'object' && input !== null
             ? input
             : { nodeId: input };
-        const nodeId = options.nodeId === undefined ? this.activeNodeId : options.nodeId;
-        const branch = this.getBranch(nodeId);
-        const messages = branch
-            .map(entry => this.extractAgentMessage(entry.payload, options))
-            .filter((message): message is AgentMessage => Boolean(message));
-        return this.selectReplaySafeBranchMessages(messages, {
+        const nodeId = options.nodeId === undefined ? this.getActiveNodeId() : options.nodeId;
+        return this.tree.getBranchMessages({
+            nodeId,
             maxMessages: options.maxMessages ?? 30,
-            preserveToolPairs: options.preserveToolPairs ?? true
+            preserveToolPairs: options.preserveToolPairs ?? true,
+            extractMessage: payload => this.extractAgentMessage(payload, options)
         });
     }
 
     getSnapshot(): ForgePiSessionSnapshot {
         return {
-            tree: this.entries.map(entry => this.toTreeNode(entry)),
-            entries: this.entries.map(entry => this.cloneEntry(entry)),
-            activeNodeId: this.activeNodeId,
+            tree: this.getFlatTreeNodes(),
+            entries: this.getEntries(),
+            activeNodeId: this.getActiveNodeId(),
             contextBundleSummary: this.latestContextBundle,
             loadedExtensions: this.latestContextBundle?.loadedExtensions ?? []
         };
     }
 
     getEntries(): ForgePiSessionEntry[] {
-        return this.entries.map(entry => this.cloneEntry(entry));
+        return this.tree.getEntries().map(entry => this.cloneEntry(entry as ForgePiSessionEntry));
     }
 
     getBranch(nodeId: string | null): ForgePiSessionEntry[] {
-        if (!nodeId) return [];
-        const byId = new Map(this.entries.map(entry => [entry.id, entry]));
-        const branch: ForgePiSessionEntry[] = [];
-        let current: ForgePiSessionEntry | undefined = byId.get(nodeId);
-        while (current) {
-            branch.push(current);
-            current = current.parentId ? byId.get(current.parentId) : undefined;
-        }
-        return branch.reverse();
+        return this.tree.getBranch(nodeId).map(entry => this.cloneEntry(entry as ForgePiSessionEntry));
     }
 
     getTree(): ForgePiTreeNode[] {
-        const byId = new Map<string, ForgePiTreeNode>();
-        const roots: ForgePiTreeNode[] = [];
-        for (const entry of this.entries) {
-            byId.set(entry.id, this.toTreeNode(entry));
-        }
-        for (const node of byId.values()) {
-            if (!node.parentId) {
-                roots.push(node);
-                continue;
-            }
-            const parent = byId.get(node.parentId);
-            if (!parent) {
-                roots.push(node);
-                continue;
-            }
-            parent.children = [...(parent.children ?? []), node];
-        }
-        const sortNodes = (nodes: ForgePiTreeNode[]): ForgePiTreeNode[] => nodes
-            .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id))
-            .map(node => ({
-                ...node,
-                children: node.children ? sortNodes(node.children) : []
-            }));
-        return sortNodes(roots);
+        return this.tree.getTree() as ForgePiTreeNode[];
+    }
+
+    private getFlatTreeNodes(): ForgePiTreeNode[] {
+        return this.getEntries().map(entry => ({
+            ...entry,
+            payload: this.clonePayload(entry.payload),
+            children: []
+        }));
     }
 
     toPersistedState(): ForgePiPersistedSessionState {
@@ -234,7 +196,7 @@ export class ForgePiSessionManager {
     }
 
     private findLatestContextBundle(): ForgePiContextBundleSummary | null {
-        for (const entry of [...this.entries].reverse()) {
+        for (const entry of [...this.getEntries()].reverse()) {
             if (entry.kind !== 'context_bundle') continue;
             const bundle = this.extractContextBundle(entry.payload);
             if (bundle) return bundle;
@@ -256,30 +218,12 @@ export class ForgePiSessionManager {
 
     private extractAgentMessage(payload: unknown, target: ForgePiReplayTarget = {}): AgentMessage | null {
         if (!this.isRecord(payload)) return null;
-        const candidate = this.isAgentMessage(payload.replayAgentMessage)
+        const message = this.isAgentMessage(payload.replayAgentMessage)
             ? payload.replayAgentMessage
             : this.isAgentMessage(payload.agentMessage)
                 ? payload.agentMessage
                 : null;
-        return candidate ? sanitizeForgePiAgentMessageForReplay(candidate, target) : null;
-    }
-
-    private selectReplaySafeBranchMessages(
-        messages: AgentMessage[],
-        options: { maxMessages: number; preserveToolPairs: boolean }
-    ): AgentMessage[] {
-        if (options.maxMessages <= 0 || messages.length <= options.maxMessages) return messages;
-        let startIndex = Math.max(0, messages.length - options.maxMessages);
-        if (options.preserveToolPairs) {
-            while (startIndex > 0 && this.isToolResultMessage(messages[startIndex])) {
-                startIndex -= 1;
-            }
-        }
-        return messages.slice(startIndex);
-    }
-
-    private isToolResultMessage(message: AgentMessage): boolean {
-        return message.role === 'toolResult';
+        return message ? sanitizeForgePiAgentMessageForReplay(message, target) : null;
     }
 
     private isAgentMessage(value: unknown): value is AgentMessage {

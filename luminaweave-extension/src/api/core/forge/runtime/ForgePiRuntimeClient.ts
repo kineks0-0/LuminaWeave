@@ -3,6 +3,7 @@ import type {
     ForgePiSessionEntry,
     ForgePiTurnResponse
 } from '@shared/ForgePiTypes.js';
+import type { AgentRuntimeSnapshot } from '../../agent-runtime/events/AgentRuntimeEventBus.js';
 import type {
     ForgeExecutionRequest,
     ForgeRuntimeContext,
@@ -34,6 +35,7 @@ export interface ForgePiRuntimeClientTurnInput {
 export interface ForgePiRuntimeClientTurnResult {
     events: ForgeRuntimeEventType[];
     effects?: ForgePiCoreRuntimeTurnResult['effects'];
+    agentRuntimeSnapshot?: AgentRuntimeSnapshot;
     piSessionState: {
         tree: ForgePiTurnResponse['tree'];
         entries: ForgePiSessionEntry[];
@@ -61,6 +63,7 @@ export class ForgePiRuntimeClient {
         return {
             events: result.events,
             effects: result.effects,
+            agentRuntimeSnapshot: result.agentRuntimeSnapshot,
             piSessionState: {
                 tree: result.piSessionState.tree,
                 entries: result.piSessionState.entries,

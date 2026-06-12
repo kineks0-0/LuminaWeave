@@ -121,7 +121,7 @@ export class ForgePromptContextService {
 
         const stagingContent = [
             '## Forge project write target',
-            'Use writeFile / editFile / deleteFile for Forge project VFS writes. Do not publish or overwrite the real ST lorebook directly.',
+            'Use write / edit / delete for Forge project VFS writes. Do not publish or overwrite the real ST lorebook directly.',
             `targetEntryId: "${options.entryId}"`,
             'originalContent:',
             options.originalContent
@@ -281,14 +281,14 @@ export class ForgePromptContextService {
         const fmt = lwStorage.get('lumina-forge.entryContentFormat', 'json', 'Global');
         switch (fmt) {
             case 'yaml':
-                return '### 项目写入内容格式约定\n- 通过 `writeFile` / `editFile` 写入条目时，正文建议使用 **YAML** 格式。\n- 示例：\n```yaml\ntitle: "角色名"\ncontent: "角色描述"\ntags:\n  - 标签1\n  - 标签2\n```';
+                return '### 项目写入内容格式约定\n- 通过 `write` / `edit` 写入条目时，正文建议使用 **YAML** 格式。\n- 示例：\n```yaml\ntitle: "角色名"\ncontent: "角色描述"\ntags:\n  - 标签1\n  - 标签2\n```';
             case 'toml':
-                return '### 项目写入内容格式约定\n- 通过 `writeFile` / `editFile` 写入条目时，正文建议使用 **TOML** 格式。\n- 示例：\n```toml\ntitle = "角色名"\ncontent = "角色描述"\ntags = ["标签1", "标签2"]\n```';
+                return '### 项目写入内容格式约定\n- 通过 `write` / `edit` 写入条目时，正文建议使用 **TOML** 格式。\n- 示例：\n```toml\ntitle = "角色名"\ncontent = "角色描述"\ntags = ["标签1", "标签2"]\n```';
             case 'free':
                 return '### 项目写入内容格式约定\n- 写入内容格式不限，可以是纯文本、Markdown 或任意结构。请确保文件标题清晰描述该条目名称。';
             case 'json':
             default:
-                return '### 项目写入内容格式约定\n- 通过 `writeFile` / `editFile` 写入条目时，正文建议使用 **JSON** 格式。\n- JSON 对象必须包含 `title` 字段作为条目名称，以及 `content` 字段作为正文内容。\n- 示例：\n```json\n{\n  "title": "角色名",\n  "content": "角色描述",\n  "tags": ["标签1", "标签2"]\n}\n```';
+                return '### 项目写入内容格式约定\n- 通过 `write` / `edit` 写入条目时，正文建议使用 **JSON** 格式。\n- JSON 对象必须包含 `title` 字段作为条目名称，以及 `content` 字段作为正文内容。\n- 示例：\n```json\n{\n  "title": "角色名",\n  "content": "角色描述",\n  "tags": ["标签1", "标签2"]\n}\n```';
         }
     }
 
@@ -349,7 +349,7 @@ export class ForgePromptContextService {
         });
 
         note += '\n**指令 (Shared Order)**：\n';
-        note += '1. 所有模型共享上述进度。如果你是 Planner/Analyst，请在补全槽位后，通过能力/技能加载与 `writeFile` / `editFile` 更新 `./memory/AUTO/Checklist.md`。\n';
+        note += '1. 所有模型共享上述进度。如果你是 Planner/Analyst，请在补全槽位后，通过能力/技能加载与 `write` / `edit` 更新 `./memory/AUTO/Checklist.md`。\n';
         note += '2. 补全条目时请在文件路径、标题或内容中标明 slot_id；展示进度优先用自然语言摘要或 `<V>` 组件。';
 
         return note;

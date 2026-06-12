@@ -21,6 +21,7 @@ import type {
 import type { ForgeTimelineItem, ForgeTimelineOperationKind, ForgeTimelineOperationStatus } from './ForgeTimelineTypes.js';
 import type { ForgeWorkflowPromptMode, ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
 import type { PromptPresetGenerationSettings } from './PromptPresetTypes.js';
+import type { AgentRuntimeSnapshot } from '../api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
 export interface StagingEntry {
     id: string;
@@ -198,6 +199,7 @@ export interface ForgeModelRequestTrace {
     toolSetSummary?: ForgeModelRequestToolSummary[];
     piModelTrace?: ForgePiModelRequestTrace | null;
     piModelTraces?: ForgePiModelRequestTrace[];
+    agentRuntimeSnapshot?: AgentRuntimeSnapshot | null;
 }
 
 export type ForgeUserCommand =
@@ -355,6 +357,11 @@ export type ForgeRuntimeEffect =
         activeNodeId: string | null;
         contextBundleSummary?: ForgePiContextBundleSummary | null;
         loadedExtensions?: string[];
+    }
+    | {
+        type: 'set_agent_runtime_snapshot';
+        requestId?: string | null;
+        snapshot: AgentRuntimeSnapshot;
     }
     | { type: 'upsert_tool_approval'; approval: ForgeToolApprovalRequest }
     | { type: 'resolve_tool_approval'; toolCallId: string; approved: boolean; message?: string }
