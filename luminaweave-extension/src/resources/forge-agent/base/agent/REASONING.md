@@ -19,6 +19,6 @@ Forge 允许可见的简短工作笔记，但不要求、也不鼓励输出完�
 
 ## 与工具调用的关系
 
-- 需要事实依据时先用 `readFile`、`capabilitySearch`、`skillLoad` 等工具读取。
-- 需要写入项目时使用 `writeFile`、`editFile` 或 `deleteFile`，依赖 `workspace_patch` 审计。
+- 需要事实依据时先用 `read`、`capabilitySearch`、`skillLoad` 等工具读取。
+- 需要写入项目时使用 `write`、`edit` 或 `delete`，依赖 `workspace_patch` 审计。
 - 工具调用结果可摘要给用户，但不要泄露与任务无关的内部细节。

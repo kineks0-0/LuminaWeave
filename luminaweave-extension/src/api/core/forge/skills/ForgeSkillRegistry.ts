@@ -4,13 +4,13 @@ import {
     type ShellWorkspaceService,
     shellWorkspaceService
 } from '../../hal/shell/ShellWorkspaceService.js';
-import _exportPreparer from '../../../../resources/forge-skills/export-preparer.md?raw';
-import _forgeProjectWriter from '../../../../resources/forge-skills/forge-project-writer.md?raw';
-import _materialAnalyzer from '../../../../resources/forge-skills/material-analyzer.md?raw';
-import _memoryCurator from '../../../../resources/forge-skills/memory-curator.md?raw';
-import _testChatRunner from '../../../../resources/forge-skills/test-chat-runner.md?raw';
-import _virtualLorebookEditor from '../../../../resources/forge-skills/virtual-lorebook-editor.md?raw';
-import _workspacePatchAuditor from '../../../../resources/forge-skills/workspace-patch-auditor.md?raw';
+import _exportPreparer from '../../../../resources/forge-agent/base/skills/export-preparer/SKILL.md?raw';
+import _forgeProjectWriter from '../../../../resources/forge-agent/base/skills/forge-project-writer/SKILL.md?raw';
+import _materialAnalyzer from '../../../../resources/forge-agent/base/skills/material-analyzer/SKILL.md?raw';
+import _memoryCurator from '../../../../resources/forge-agent/base/skills/memory-curator/SKILL.md?raw';
+import _testChatRunner from '../../../../resources/forge-agent/base/skills/test-chat-runner/SKILL.md?raw';
+import _virtualLorebookEditor from '../../../../resources/forge-agent/base/skills/virtual-lorebook-editor/SKILL.md?raw';
+import _workspacePatchAuditor from '../../../../resources/forge-agent/base/skills/workspace-patch-auditor/SKILL.md?raw';
 
 export interface ForgeSkillMetadata {
     name: string;
@@ -56,7 +56,7 @@ const BUILT_IN_SKILLS = [
         title: 'Forge 项目写入员',
         description: '通过 direct write tools 与 VFS 快照维护 project.json、草稿、项目补丁和记忆。',
         defaultWriteScope: '/workspaces/forge/<projectId>/',
-        resourcePath: 'src/resources/forge-skills/forge-project-writer.md',
+        resourcePath: 'src/resources/forge-agent/base/skills/forge-project-writer/SKILL.md',
         instructions: _forgeProjectWriter
     }),
     builtInSkill({
@@ -64,7 +64,7 @@ const BUILT_IN_SKILLS = [
         title: '虚拟世界书编辑器',
         description: '在 Forge 项目工作区内创建、拆分、合并、重写虚拟世界书条目。',
         defaultWriteScope: '/workspaces/forge/<projectId>/lorebook/entries/',
-        resourcePath: 'src/resources/forge-skills/virtual-lorebook-editor.md',
+        resourcePath: 'src/resources/forge-agent/base/skills/virtual-lorebook-editor/SKILL.md',
         instructions: _virtualLorebookEditor
     }),
     builtInSkill({
@@ -72,7 +72,7 @@ const BUILT_IN_SKILLS = [
         title: '项目记忆整理员',
         description: '把用户偏好、硬性约束、禁忌和设定决议整理进项目记忆树。',
         defaultWriteScope: '/workspaces/forge/<projectId>/memory/tree.json',
-        resourcePath: 'src/resources/forge-skills/memory-curator.md',
+        resourcePath: 'src/resources/forge-agent/base/skills/memory-curator/SKILL.md',
         instructions: _memoryCurator
     }),
     builtInSkill({
@@ -80,7 +80,7 @@ const BUILT_IN_SKILLS = [
         title: '工作区补丁审计员',
         description: '把草稿和生成变更转换为可 diff、可撤回的 workspace_patch 审计记录。',
         defaultWriteScope: '/workspaces/forge/<projectId>/',
-        resourcePath: 'src/resources/forge-skills/workspace-patch-auditor.md',
+        resourcePath: 'src/resources/forge-agent/base/skills/workspace-patch-auditor/SKILL.md',
         instructions: _workspacePatchAuditor
     }),
     builtInSkill({
@@ -88,7 +88,7 @@ const BUILT_IN_SKILLS = [
         title: '测试聊天验证员',
         description: '基于项目资源运行验证对话，并记录 trace 与测试发现。',
         defaultWriteScope: 'trace only',
-        resourcePath: 'src/resources/forge-skills/test-chat-runner.md',
+        resourcePath: 'src/resources/forge-agent/base/skills/test-chat-runner/SKILL.md',
         instructions: _testChatRunner
     }),
     builtInSkill({
@@ -96,7 +96,7 @@ const BUILT_IN_SKILLS = [
         title: '导出准备员',
         description: '准备导出包 metadata 与检查项，不写真实 ST 世界书。',
         defaultWriteScope: '/workspaces/forge/<projectId>/export/',
-        resourcePath: 'src/resources/forge-skills/export-preparer.md',
+        resourcePath: 'src/resources/forge-agent/base/skills/export-preparer/SKILL.md',
         instructions: _exportPreparer
     }),
     builtInSkill({
@@ -104,7 +104,7 @@ const BUILT_IN_SKILLS = [
         title: '素材分析员',
         description: '检查上传素材或项目素材文件，提取可复用设定片段。',
         defaultWriteScope: 'read-only by default',
-        resourcePath: 'src/resources/forge-skills/material-analyzer.md',
+        resourcePath: 'src/resources/forge-agent/base/skills/material-analyzer/SKILL.md',
         instructions: _materialAnalyzer
     })
 ] as const;

@@ -26,7 +26,8 @@ describe('ForgeSkillRegistry', () => {
         expect(skills.map(skill => skill.name)).toContain('material-analyzer');
         expect(skills.every(skill => /[\u4e00-\u9fff]/.test(`${skill.title}${skill.description}`))).toBe(true);
         expect(skills.every(skill => skill.builtIn)).toBe(true);
-        expect(skills.every(skill => skill.resourcePath.startsWith('src/resources/forge-skills/'))).toBe(true);
+        expect(skills.every(skill => skill.resourcePath.startsWith('src/resources/forge-agent/base/skills/'))).toBe(true);
+        expect(skills.every(skill => skill.resourcePath.endsWith('/SKILL.md'))).toBe(true);
         expect(skills.every(skill => !('instructions' in skill))).toBe(true);
     });
 
