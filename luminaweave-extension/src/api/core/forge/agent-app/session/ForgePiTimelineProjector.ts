@@ -103,6 +103,15 @@ const resolvePresentation = (entry: ForgePiSessionEntry): {
             detail: extractText(entry.payload) || null
         };
     }
+    if (entry.kind === 'process') {
+        return {
+            operationKind: 'execution',
+            status: 'completed',
+            title: 'Agent 过程',
+            summary: extractText(entry.payload) || entry.summary,
+            detail: extractText(entry.payload) || null
+        };
+    }
     if (entry.kind === 'tool_call') {
         return {
             operationKind: 'execution',

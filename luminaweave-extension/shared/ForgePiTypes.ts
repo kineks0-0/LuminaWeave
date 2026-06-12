@@ -4,6 +4,7 @@ export type ForgePiRuntimeEventType =
     | 'metadata'
     | 'context_bundle'
     | 'user'
+    | 'process'
     | 'assistant'
     | 'tool_call'
     | 'tool_result'
@@ -43,7 +44,7 @@ export interface ForgePiTreeNode {
 }
 
 export interface ForgePiMessagePayload {
-    role: 'user' | 'assistant' | 'system' | 'toolResult';
+    role: 'user' | 'process' | 'assistant' | 'system' | 'toolResult';
     text?: string;
     agentMessage?: unknown;
 }

@@ -285,6 +285,59 @@ describe('ForgeRuntimeOrchestrator pi runtime', () => {
         await dispatchPromise;
     });
 
+    it('keeps agent output parse diagnostics out of user-visible runtime operations', async () => {
+        vi.spyOn(ForgeWorkflowGraph, 'resolveDecision').mockResolvedValue({
+            workflowSnapshot: {} as any,
+            executionRequest: createRequest('conversation'),
+            effects: [],
+            requiresGeneration: true,
+            requiresUserDecision: false
+        } satisfies ForgeRuntimeDecision);
+        const { port, effects, events } = createPort();
+        const runPiTurn = vi.fn(async () => ({
+            events: [{
+                type: 'trace' as const,
+                requestId: 'req_conversation',
+                tag: 'agent_output_parse',
+                status: 'diagnostics:text_outside_block',
+                timestamp: 1
+            }],
+            piSessionState: {
+                tree: [],
+                entries: [],
+                activeNodeId: null,
+                contextBundleSummary: {
+                    files: [],
+                    activeSkills: [],
+                    loadedExtensions: []
+                },
+                loadedExtensions: []
+            }
+        }));
+
+        const orchestrator = new ForgeRuntimeOrchestrator(port, undefined, undefined, { runPiTurn });
+
+        await orchestrator.dispatch({ type: 'send_user_input', input: 'hello' });
+
+        expect(events).toEqual([expect.objectContaining({
+            type: 'trace',
+            tag: 'agent_output_parse',
+            status: 'diagnostics:text_outside_block'
+        })]);
+        expect(effects.flat()).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                type: 'upsert_running_operation',
+                sourceTag: 'agent_output_parse'
+            })
+        ]));
+        expect(effects.flat()).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                type: 'upsert_running_operation',
+                title: '正在处理 Forge pi runtime 事件'
+            })
+        ]));
+    });
+
     it('resolves tool approvals through the pi runtime and applies returned events/effects', async () => {
         const { port, effects, events } = createPort();
         const resolvePiToolApproval = vi.fn(async () => ({

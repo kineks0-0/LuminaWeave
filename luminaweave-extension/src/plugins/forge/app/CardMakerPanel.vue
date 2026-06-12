@@ -148,16 +148,18 @@
                         <span class="msg-node-id">#{{ item.message.id.slice(-6) }}</span>
                       </div>
                       <div class="msg-bubble">
-                        <ForgeMessageRenderer :message-id="item.message.id" :mes="item.message.mes || undefined"
-                          :mes-raw="item.message.mesRaw || item.message.mes || ''"
-                          :plugin-raw="item.message.pluginRaw || null"
-                          :thinking-text="item.message.thinkingText || null" :render-markdown="renderMarkdown" />
-                      </div>
-                      <div v-if="item.workspaceChanges?.length" class="msg-file-changes">
-                        <div class="file-changes-head">
-                          <span>AI 更改文件</span>
-                          <button type="button" @click="handleOpenWorkspaceVersions">版本面板</button>
+                          <ForgeMessageRenderer :message-id="item.message.id" :mes="item.message.mes || undefined"
+                            :mes-raw="item.message.mesRaw || item.message.mes || ''"
+                            :plugin-raw="item.message.pluginRaw || null"
+                            :thinking-text="item.suppressThinking ? null : item.message.thinkingText || null"
+                            :is-streaming="item.message.syncStatus === 'streaming'"
+                            :render-markdown="renderMarkdown" />
                         </div>
+                        <div v-if="item.workspaceChanges?.length" class="msg-file-changes">
+                          <div class="file-changes-head">
+                            <span>文件变更</span>
+                            <button type="button" @click="handleOpenWorkspaceVersions">版本面板</button>
+                          </div>
                         <div
                           v-for="change in item.workspaceChanges"
                           :key="change.id"
@@ -179,28 +181,48 @@
                     </div>
                   </div>
 
-                  <!-- 操作分组：全部完成时折叠为摘要行 -->
-                  <div v-else-if="item.kind === 'op-group'" class="op-group-wrap">
-                    <template v-if="!item.allDone || expandedGroups.has(item.id)">
-                      <ForgeInlineTrace
-                        v-for="op in item.operations"
-                        :key="op.id"
-                        :operation="op"
-                        @checkout-pi-node="handleCheckoutPiNode"
-                        @branch-from-pi-user-node="handleBranchFromPiUserNode"
-                        @open-workspace-versions="handleOpenWorkspaceVersions"
-                      />
-                      <button v-if="item.allDone" class="op-group-collapse-btn" @click="expandedGroups.delete(item.id)">
-                        收起
-                      </button>
-                    </template>
-                    <button v-else class="op-group-summary" @click="expandedGroups.add(item.id)">
-                      <span class="op-group-dot-row">
-                        <span class="op-dot"></span><span class="op-dot"></span><span class="op-dot"></span>
+                  <div
+                    v-else-if="item.kind === 'agent-process'"
+                    class="agent-process-inline"
+                    :class="{ 'is-done': item.presentation.isDone, 'is-collapsed': isAgentProcessCollapsed(item) }"
+                  >
+                    <button
+                      type="button"
+                      class="agent-process-line"
+                      :aria-expanded="!isAgentProcessCollapsed(item)"
+                      @click="toggleAgentProcessGroup(item)"
+                    >
+                      <span class="agent-process-title">执行过程</span>
+                      <span class="agent-process-state">
+                        {{ item.presentation.isDone ? item.presentation.summary.label : '运行中' }}
                       </span>
-                      <span class="op-group-label">运行了 {{ item.operations.length }} 步</span>
-                      <span class="op-group-expand">展开</span>
+                      <span class="agent-process-toggle">
+                        {{ isAgentProcessCollapsed(item) ? '展开' : item.presentation.isDone ? '收起' : '展开' }}
+                      </span>
                     </button>
+
+                    <div v-if="!isAgentProcessCollapsed(item)" class="agent-process-body">
+                      <div v-if="item.presentation.processBlocks.length" class="agent-process-text">
+                        <p
+                          v-for="(block, index) in item.presentation.processBlocks"
+                          :key="`${item.id}:process:${index}`"
+                        >
+                          {{ block }}
+                        </p>
+                      </div>
+                      <div
+                        v-for="step in item.presentation.steps"
+                        :key="step.id"
+                        class="agent-process-step"
+                        :class="[`tone-${step.tone}`, `status-${step.status}`]"
+                      >
+                        <span class="agent-process-node"></span>
+                        <div class="agent-process-step-main">
+                          <span class="agent-process-step-title">{{ step.title }}</span>
+                          <span v-if="step.detail" class="agent-process-step-detail">{{ step.detail }}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </template>
 
@@ -396,7 +418,6 @@ import { useForgeStore } from '../../../stores/useForgeStore.js';
 import { useSessionIndexStore } from '../../../stores/useSessionIndexStore.js';
 import { settingsDomainService, type SettingsStorageChange } from '../../../api/services/SettingsDomainService.js';
 import ForgePromptPreview from '../inspector/ForgePromptPreview.vue';
-import ForgeInlineTrace from '../console/ForgeInlineTrace.vue';
 import ForgeSessionBrowser from '../project/ForgeSessionBrowser.vue';
 import ForgeSessionToolbar from '../project/ForgeSessionToolbar.vue';
 import ForgeMessageRenderer from '../console/ForgeMessageRenderer.vue';
@@ -418,6 +439,10 @@ import {
   buildWorkspacePatchGroupsByAssistantTurn,
   type ForgeFeedWorkspaceChange
 } from '../project/forgeWorkspaceChangePresentation.js';
+import {
+  buildForgeAgentProcessPresentation,
+  type ForgeAgentProcessPresentation
+} from '../project/forgeAgentProcessPresentation.js';
 
 const ForgeAuxPanelView = defineAsyncComponent(() => import('./ForgeAuxPanelView.vue'));
 
@@ -497,15 +522,25 @@ const forgeTypographyStyle = computed<Record<string, string>>(() => ({
   '--lw-forge-component-letter-spacing': `${forgeTypographySettings.componentLetterSpacing}px`
 }));
 
-// 操作分组：连续的 operation 条目聚合为一组，全部完成后可折叠
-const expandedGroups = reactive<Set<string>>(new Set());
+// 连续的 agent operation 聚合为“执行过程”，完成后默认折叠。
+const expandedProcessGroups = reactive<Set<string>>(new Set());
 
-interface FeedMessage { kind: 'message'; id: string; message: any; workspaceChanges?: ForgeFeedWorkspaceChange[] }
-interface FeedOpGroup { kind: 'op-group'; id: string; operations: ForgeTimelineOperationItem[]; allDone: boolean }
-type GroupedFeedItem = FeedMessage | FeedOpGroup;
+interface FeedMessage {
+  kind: 'message';
+  id: string;
+  message: any;
+  workspaceChanges?: ForgeFeedWorkspaceChange[];
+  suppressThinking?: boolean;
+}
+interface FeedAgentProcess {
+  kind: 'agent-process';
+  id: string;
+  presentation: ForgeAgentProcessPresentation;
+}
+type GroupedFeedItem = FeedMessage | FeedAgentProcess;
 
 const workspacePatchGroupsByAssistantTurn = computed<ForgeFeedWorkspaceChange[][]>(() =>
-  buildWorkspacePatchGroupsByAssistantTurn(forgeStore.piSessionEntries)
+  buildWorkspacePatchGroupsByAssistantTurn(forgeStore.piSessionEntries, forgeStore.activePiNodeId)
 );
 
 const groupedFeed = computed((): GroupedFeedItem[] => {
@@ -514,35 +549,68 @@ const groupedFeed = computed((): GroupedFeedItem[] => {
   let groupIndex = 0;
   let assistantIndex = 0;
 
-  const flushBuffer = () => {
-    if (opBuffer.length === 0) return;
-    const groupId = `opgrp-${opBuffer[0].id}`;
-    const allDone = opBuffer.every((op) => op.status !== 'running');
-    result.push({ kind: 'op-group', id: groupId, operations: [...opBuffer], allDone });
+  const flushProcess = (options: {
+    workspaceChanges?: ForgeFeedWorkspaceChange[];
+    hasAssistantReply?: boolean;
+    streamProcessText?: string | null;
+  } = {}) => {
+    const workspaceChanges = options.workspaceChanges ?? [];
+    const streamProcessText = options.streamProcessText?.trim() || null;
+    if (opBuffer.length === 0 && workspaceChanges.length === 0 && !streamProcessText) return;
+    const groupId = `agent-process-${groupIndex}-${opBuffer[0]?.id ?? 'stream'}`;
+    const presentation = buildForgeAgentProcessPresentation({
+      id: groupId,
+      operations: [...opBuffer],
+      workspaceChanges,
+      streamProcessText,
+      hasAssistantReply: options.hasAssistantReply ?? false
+    });
+    result.push({ kind: 'agent-process', id: groupId, presentation });
     opBuffer = [];
     groupIndex++;
   };
 
   for (const item of store.timelineFeed) {
     if (item.kind === 'message') {
-      flushBuffer();
       const messageItem = item as FeedMessage;
       if (messageItem.message.role === 'assistant') {
+        const workspaceChanges = workspacePatchGroupsByAssistantTurn.value[assistantIndex] ?? [];
+        const isStreamingAssistant = messageItem.message.syncStatus === 'streaming';
+        const streamProcessText = isStreamingAssistant ? store.streamThinkingText : null;
+        flushProcess({
+          workspaceChanges,
+          hasAssistantReply: !isStreamingAssistant && Boolean(messageItem.message.mes || messageItem.message.mesRaw),
+          streamProcessText
+        });
         result.push({
           ...messageItem,
-          workspaceChanges: workspacePatchGroupsByAssistantTurn.value[assistantIndex] ?? []
+          suppressThinking: Boolean(streamProcessText),
+          workspaceChanges
         });
         assistantIndex++;
       } else {
+        flushProcess();
         result.push(messageItem);
       }
     } else {
       opBuffer.push(item.item);
     }
   }
-  flushBuffer();
+  flushProcess();
   return result;
 });
+
+const isAgentProcessCollapsed = (item: FeedAgentProcess): boolean =>
+  item.presentation.isDone && !expandedProcessGroups.has(item.id);
+
+const toggleAgentProcessGroup = (item: FeedAgentProcess): void => {
+  if (!item.presentation.isDone) return;
+  if (expandedProcessGroups.has(item.id)) {
+    expandedProcessGroups.delete(item.id);
+    return;
+  }
+  expandedProcessGroups.add(item.id);
+};
 
 const workspaceChangeKindLabel = (kind: ForgePiWorkspacePatchChange['kind']): string => {
   if (kind === 'create') return '新增';
@@ -578,35 +646,6 @@ const handleUndoWorkspaceChange = async (change: ForgeFeedWorkspaceChange): Prom
     }]
   };
   await store.applyWorkspacePatch(patch);
-};
-
-const hasPiWorkspaceVersionHistory = computed(() =>
-  forgeStore.piSessionEntries.some(entry =>
-    entry.kind === 'workspace_patch' || entry.kind === 'workspace_checkpoint'
-  )
-);
-
-const confirmPiConversationOnlySwitch = async (): Promise<boolean> => {
-  if (!hasPiWorkspaceVersionHistory.value) return true;
-  return luminaWeaveApi.confirm({
-    title: '切换 pi 分支',
-    message: '当前协作线程包含工作区文件版本记录。本次操作只切换制卡对话分支，不会自动恢复项目文件、暂存区或真实世界书。\n\n文件版本恢复与差异查看会在文件版本面板中处理。',
-    confirmText: '仅切换对话',
-    cancelText: '取消'
-  });
-};
-
-const handleCheckoutPiNode = async (nodeId: string) => {
-  const confirmed = await confirmPiConversationOnlySwitch();
-  if (!confirmed) return;
-  await store.checkoutPiNode(nodeId);
-};
-
-const handleBranchFromPiUserNode = async (nodeId: string) => {
-  const confirmed = await confirmPiConversationOnlySwitch();
-  if (!confirmed) return;
-  await store.branchFromPiUserNode(nodeId);
-  await nextTick(() => composerTextarea.value?.focus());
 };
 
 const handleOpenWorkspaceVersions = () => {
@@ -1586,76 +1625,132 @@ onUnmounted(() => {
   margin: 0 auto;
 }
 
-/* 操作分组折叠 */
-.op-group-wrap {
+.agent-process-inline {
   width: min(760px, 100%);
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  padding: 0 2px;
 }
 
-.op-group-summary {
+.agent-process-line {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 12px;
-  margin: 2px 0;
-  background: none;
+  min-height: 26px;
+  padding: 0;
   border: none;
+  background: transparent;
+  color: var(--lw-text-main);
   cursor: pointer;
-  border-radius: 8px;
-  color: var(--lw-text-muted);
   font-size: var(--lw-type-body-small-size);
-  transition: background 0.12s ease;
+  text-align: left;
 }
 
-.op-group-summary:hover {
-  background: color-mix(in srgb, var(--lw-border-base) 30%, transparent);
-}
-
-.op-group-dot-row {
-  display: flex;
-  gap: 3px;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.op-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--lw-text-muted);
-  opacity: 0.5;
-}
-
-.op-group-label {
-  font-weight: var(--lw-type-label-medium-weight);
+.agent-process-line:hover .agent-process-toggle {
   color: var(--lw-text-secondary);
 }
 
-.op-group-expand {
-  margin-left: auto;
-  font-size: var(--lw-type-label-small-size);
-  opacity: 0.6;
+.agent-process-title {
+  flex-shrink: 0;
+  color: var(--lw-text-secondary);
+  font-weight: var(--lw-type-label-medium-weight);
 }
 
-.op-group-collapse-btn {
-  display: block;
-  margin: 2px 0 4px 12px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: var(--lw-type-label-small-size);
+.agent-process-title::after {
+  content: '·';
+  margin-left: 8px;
   color: var(--lw-text-muted);
-  padding: 2px 8px;
-  border-radius: 4px;
-  transition: background 0.12s;
+  font-weight: var(--lw-type-label-small-weight);
 }
 
-.op-group-collapse-btn:hover {
-  background: color-mix(in srgb, var(--lw-border-base) 30%, transparent);
+.agent-process-state {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--lw-text-secondary);
+}
+
+.agent-process-toggle {
+  flex: 0 0 auto;
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size);
+  text-decoration: none;
+}
+
+.agent-process-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 3px;
+  padding: 0 0 0 12px;
+  border-left: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, transparent);
+}
+
+.agent-process-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 5px;
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-body-small-size);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.agent-process-text p {
+  margin: 0;
+}
+
+.agent-process-step {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 7px;
+  padding: 4px 0;
+}
+
+.agent-process-step + .agent-process-step {
+  border-top: none;
+}
+
+.agent-process-node {
+  width: 5px;
+  height: 5px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--lw-text-muted);
+}
+
+.agent-process-step.status-running .agent-process-node {
+  background: rgb(var(--lw-primary-rgb));
+}
+
+.agent-process-step.status-failed .agent-process-node,
+.agent-process-step.status-cancelled .agent-process-node {
+  background: var(--lw-danger, #d64f4f);
+}
+
+.agent-process-step-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-process-step-title {
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-body-small-size);
+  font-weight: var(--lw-type-label-medium-weight);
+}
+
+.agent-process-step-detail {
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-body-small-size);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .chat-section.is-detached-workspace .forge-msg {

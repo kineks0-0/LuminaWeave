@@ -114,6 +114,7 @@ Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge
 - Agent runtime event 与 snapshot：message stream、thinking block、tool execution partial/final result、queue update、agent end cleanup，以及 `isStreaming`、`streamingMessage`、`pendingToolCalls`、`messages`、`errorMessage` 等可投影状态。
 - Adapter UI projection：SDK 只输出可序列化 snapshot/events；Forge 等 adapter 负责将其写入本域 store、模型请求 trace、消息/工具摘要和项目面板 presentation。
 - Tree-structured session history：append-only entries、active node、branch checkout、branch messages。
+- 结构化 Agent 消息投影：SDK 的 session/event/projection 边界应能承载 adapter 定义的公开执行说明、工具记录、最终回复和审计引用；具体 prompt 语法、文件审计格式和 UI 展示仍由 adapter 定义。
 - Prompt Preview 事实源：真实生成与 dry-run 必须使用同一个 prompt assembly 端口；同一 request 可通过 adapter 提供的 cache key 复用 prepared prompt object，并在真实 turn 消费后显式失效。Extension workflow 注入的 hidden context、active tools summary、skill catalog、branch messages 与本轮 user message 必须先进入 preview / `prompt_ready` payload；真实 run 的 agent initial state 不重复注入本轮 user message，由 `agent.prompt()` 注入。
 - Model provider、tool provider、approval、trace/effect、session store 和 test harness 端口；`AgentToolRegistry` 可选接入 runtime event bus，把手动注册工具的执行投影为 `tool_execution_start` / `tool_execution_update` / `tool_execution_end`；test harness 应提供 mock model、mock tool、mock session store、mock approval 与 mock VFS，便于非 Forge adapter 验证。
 - Agent Skills 规格兼容：以 `SKILL.md` 为兼容目标，解析并校验标准 frontmatter，输出 diagnostics，并格式化 skill catalog；`name`、`description`、`compatibility`、`metadata` 与 `allowed-tools` 按 Agent Skills 规格处理。
@@ -132,6 +133,7 @@ Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge
 - Core SDK 不扫描项目目录或用户目录；prompt、skill 和业务上下文必须由 adapter 或可选 kit 通过 VFS source 提供。
 - Core SDK 不自动加载 VFS 中的 TypeScript / JavaScript 扩展代码。
 - Core SDK 不内置 Plan Mode、Planner / Executor 阶段语义或最终汇报协议；规划、执行、审阅和汇报由 adapter / extension workflow 通过 hook、custom context、custom message、status/widget 和 continuation trigger 组合。
+- Core SDK 不规定 Forge `<process>` / `<final>` prompt 协议；它只提供可复用的 session、event、trace、tool 和测试边界。
 - Core SDK 不把 thinking 写入默认业务状态；thinking 只作为 assistant message stream block、trace 和 UI projection 输入。
 - 非写入阶段不得暴露写工具，也不得暴露可写 bash。
 - 写入审计由具体 write adapter 负责；Forge adapter 的审计产物继续是 `workspace_patch`。
@@ -157,6 +159,7 @@ Forge 是制卡工坊和 Agent 工作台。
 - 制卡聊天内的 fork / 回滚 / 切换应基于同一协作线程内的 pi session tree 分支；Forge timeline 是用户可见投影，必须保留可操作的用户输入节点映射。
   - 项目文件和虚拟世界书的版本恢复由 Forge workspace version manager 生成反向或重放 `workspace_patch`，切换对话分支时默认询问用户是否同时恢复文件版本。
   - 虚拟世界书、Forge memory tree、draft tree、workspace patch 审计记录和发布/导出。
+- Forge Agent 聊天记录、执行过程、最终回复、timeline 和文件版本投影必须以 `piSessionEntries + activePiNodeId` 为唯一事实源。模型通过 `<process>` 显式输出公开执行说明，通过 `<final>` 输出最终回复；`process` 持久化到 pi session tree，并允许以压缩执行记录进入下一轮上下文。文件版本仍以 active branch 的 `workspace_patch` / checkpoint history 为事实源，不能从 `process` 文案推断。
 - Forge 专属 `<V>` 交互块由 `./.forge/agent/UI_DSL.md` 作为 pi prompt 固定资源承载；旧 `PromptBuilder` 不再作为 Forge Agent prompt 构建 API。
 
 边界：

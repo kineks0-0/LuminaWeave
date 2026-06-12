@@ -77,4 +77,32 @@ describe('ForgePiTimelineProjector', () => {
         expect(operationRows.map(item => item.summary)).toEqual(['分支 B']);
         expect(operationRows[0]?.origin?.nodeId).toBe('n4');
     });
+
+    it('projects process entries as agent execution process rows', () => {
+        const timeline = projectForgePiEntriesToTimeline([
+            entry('n1', null, 'metadata', {}),
+            entry('n2', 'n1', 'user', { role: 'user', text: '整理文件' }),
+            entry('n3', 'n2', 'process', { role: 'process', text: '正在读取 3 个文件。' }),
+            entry('n4', 'n3', 'assistant', { role: 'assistant', text: '已完成整理。' })
+        ]);
+
+        const operationRows = timeline.filter((item): item is ForgeTimelineOperationItem => item.kind === 'operation');
+
+        expect(operationRows.map(item => item.title)).toEqual([
+            '用户请求',
+            'Agent 过程',
+            'Agent 回复'
+        ]);
+        expect(operationRows[1]).toEqual(expect.objectContaining({
+            operationKind: 'execution',
+            status: 'completed',
+            summary: '正在读取 3 个文件。',
+            detail: '正在读取 3 个文件。',
+            origin: expect.objectContaining({
+                entryType: 'process',
+                nodeId: 'n3',
+                parentNodeId: 'n2'
+            })
+        }));
+    });
 });

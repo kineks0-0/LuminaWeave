@@ -44,6 +44,16 @@
 
 2026-06-12：新增 Research Tools Kit 初始实现。SDK 提供 `AgentResearchProvider` 和 `webResearch` 工具工厂，v1 Tavily provider 适配 Tavily search / fetch；Core SDK 不默认创建、注册或暴露联网工具。Forge adapter 在 `lumina-forge.tavilyApiKey` 非空时才注册 `webResearch`，工具结果只返回 Markdown、来源和请求元数据，不写项目 VFS、`workspace_patch`、memory 或 ST 资源。浏览器运行时不静态导入 Tavily AI SDK，避免 `@tavily/core` 的 Node proxy 依赖进入扩展启动路径。Parallel AI SDK Tools 与 Exa 后续通过同一 provider 接口接入，不在 v1 安装依赖或开放 UI 选择。
 
+2026-06-12：完成 Forge Agent process / final 显示与文件版本规划。确认 Forge Agent 聊天、执行过程、最终回复和文件版本投影以 `piSessionEntries + activePiNodeId` 为唯一事实源；模型通过 `<process>` 输出公开执行说明，通过 `<final>` 输出最终回复；`process` 持久化进 pi session tree 并允许以压缩执行记录进入下一轮上下文；文件版本继续以 active branch 的 `workspace_patch` / checkpoint history 为事实源。规划见 `steps/2026-06-12-forge-agent-process-final-version-plan.md`。
+
+2026-06-12：完成 Forge Agent process / final 首轮实现。`ForgePiAgentSession` 的 Prompt Preview 与真实生成统一注入 `<process>` / `<final>` 输出协议；新增严格 parser，把 `<process>` 投影为 `process` session entry，把 `<final>` 投影为 assistant 最终回复，标签外文本和结构错误进入 diagnostics 与 `agent_output_parse` trace；Forge stream message update 写回解析后的 `mes` / `mesRaw` / `thinkingText`，raw 输出只保留在 `pluginRaw` 作为审计来源；Forge timeline projector 已识别 `process` 过程项，聊天内文件变更分组可跨 `process` entry 继续归属到后续 assistant turn。文件版本事实源仍是 active branch 的 `workspace_patch` / checkpoint history。
+
+2026-06-12：完成 Forge active branch feed 首轮修正。`CardMakerStore.timelineFeed` 在 pi session 存在且非流式生成时改为从 active branch 的 `piSessionEntries + activePiNodeId` 投影 user message、process/tool/workspace operation 和 assistant final，不再继续读取旧 `worldlineStore.activeLeafId` 作为完成态聊天事实源；运行中仍保留 worldline streaming message 作为临时 UI。聊天内文件变更分组同步按 active branch 过滤，避免切换 timeline 后混入其他分支的 `workspace_patch`。实现留在 Forge plugin presentation/helper 层，没有让 UI shell import `agent-app/session` runtime。
+
+2026-06-12：完成 Forge 执行过程内联段分层显示修正。新增 Forge plugin presentation helper，把 active turn 的 `process`、tool call/result、`workspace_patch` 和文件变更投影为“执行过程”内联段；运行中默认展开，结束后在用户输入与最终回复之间保留一行摘要，并可手动展开/收起。`CardMakerPanel` 不再用 debug trace 组件渲染聊天内过程，assistant 最终回复区也不再显示 `thinkingText`，文件变更保持独立区域并继续通过 `workspace_patch` / 版本面板处理撤回与恢复。
+
+2026-06-12：收紧执行过程内联段的信息层级。模型公开过程正文直接显示为文本，不再作为专用标题或模型请求状态步骤行；步骤列表只承载工具调用、文件变更、`workspace_patch` 等过程事实。
+
 已确认方向：
 
 - Core SDK 承载通用 agent loop、session tree、tool provider、approval、trace、Agent Skills 兼容和 test harness。
@@ -61,19 +71,27 @@
 - Research Tools Kit 可提供 `webResearch` 工具工厂和 `AgentResearchProvider` 端口；Core SDK 不默认暴露联网工具，Forge 只有在 Tavily key 非空时才注册 Tavily-backed `webResearch`。
 - Forge 模型可见工具名迁移为 `read`、`write`、`edit`、`delete`、`bash`；旧会话回放和 trace 展示中的历史工具名由 Forge adapter 处理兼容。
 - thinking 作为 assistant message stream block、trace 和 UI projection 输入处理，不作为默认可持久化业务状态。
+- Forge 可在 adapter 层把模型显式输出拆为公开执行说明 `process` 和最终回复 `assistant`。Core SDK 可提供通用 session/event/projection 支撑，但不拥有 Forge `<process>` / `<final>` prompt 协议。
 - Forge adapter 继续负责 Forge Semantic VFS、项目 VFS 写入策略、`workspace_patch` 审计、session tree 到 timeline / 文件版本的投影，以及真实 ST 世界书发布/导出的用户确认边界。
 
 ## 下一步
 
-1. 讨论并收敛 `agent_end` 后 UI 状态清理：运行中状态、pending tool calls、streaming message、active trace 和 Inspector 展示的清理边界。
-2. 补真实宿主 walkthrough：Prompt Preview 与真实生成一致、Semantic VFS 读取、direct write 生成 `workspace_patch`、session branch checkout、文件版本恢复、`agent_end` 后 UI 状态清理。
-3. 评估非 Forge 插件接入样例：使用 SDK test harness + 手动注册 tool + 显式 VFS mount + extension workflow hook，验证 SDK 不默认暴露文件工具或 `bash`。
-4. OpenFS 包跟踪：当前 `@open-fs/just-bash@0.1.0` 实际导出 `AxFs`，`createGrepCommand()` 的 command name 为 `axgrep`；后续升级前必须重新读取包类型文件和测试。
+1. [x] 实现 Prompt Preview 与真实生成统一注入 `<process>` / `<final>` 协议。
+2. [x] 增加严格解析与 `process` / `assistant` 投影，解析失败进入 diagnostics，不写正式 assistant。
+3. [x] 让 stream message update 写回解析后的最终回复和过程文本，结束后清理临时 stream state。
+4. [x] 让 Forge timeline projector 识别 `process`，并锁定 `workspace_patch -> process -> assistant` 的文件变更归属。
+5. [x] 修正 Forge 完成态时间线切换，使聊天、执行过程、最终回复和聊天内文件变更从 active branch 的 `piSessionEntries + activePiNodeId` 投影；仍需真实 UI walkthrough 验证切换入口和文件恢复动作。
+6. [x] 执行过程内联段和最终回复分层显示已从 debug trace 渲染改为专用 presentation：公开过程正文直接显示，工具/文件事实进入步骤列表；运行中过程展开，结束后在用户输入与最终回复之间保留一行摘要且可展开/收起；assistant 最终回复区只显示 final text。
+7. [~] 文件版本面板已基于 active branch 的 `workspace_patch` / checkpoint 投影；仍需补真实宿主下确认、撤回、restore 的 walkthrough。
+8. [ ] 补真实宿主 walkthrough：Prompt Preview 与真实生成一致、Semantic VFS 读取、direct write 生成 `workspace_patch`、session branch checkout、文件版本恢复、`agent_end` 后 UI 状态清理和流式节流观感。
+9. [ ] 评估非 Forge 插件接入样例：使用 SDK test harness + 手动注册 tool + 显式 VFS mount + extension workflow hook，验证 SDK 不默认暴露文件工具或 `bash`。
+10. [ ] OpenFS 包跟踪：当前 `@open-fs/just-bash@0.1.0` 实际导出 `AxFs`，`createGrepCommand()` 的 command name 为 `axgrep`；后续升级前必须重新读取包类型文件和测试。
 
 ## 恢复入口
 
 - [Agent Runtime SDK 第一阶段实现记录](./steps/2026-06-11-agent-runtime-sdk-implementation-record.md)
 - [Agent Runtime SDK 边界规划](./steps/2026-06-11-agent-runtime-sdk-boundary-plan.md)
 - [pi agent 工作流与 UI 状态整理](./steps/2026-06-11-pi-agent-workflow-ui-state-plan.md)
+- [Forge Agent process / final 与文件版本规划](./steps/2026-06-12-forge-agent-process-final-version-plan.md)
 - [Forge Agent 下一阶段可靠可控决策规划](../forge/steps/2026-06-10-forge-agent-next-stage-decision.md)
 - [Forge 当前任务](../forge/)

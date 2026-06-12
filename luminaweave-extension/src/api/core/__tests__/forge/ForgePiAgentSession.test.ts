@@ -208,9 +208,11 @@ describe('ForgePiAgentSession', () => {
         const preview = await session.preparePrompt(turnInput);
         const result = await session.prompt(turnInput);
 
-        expect(preview.systemPrompt).toBe('# Version 1');
+        expect(preview.systemPrompt).toContain('# Version 1');
+        expect(preview.systemPrompt).toContain('<process>...</process>');
+        expect(preview.systemPrompt).toContain('<final>...</final>');
         expect(preview.prompt).toEqual([
-            { role: 'system', content: '# Version 1' },
+            { role: 'system', content: preview.systemPrompt },
             { role: 'user', content: 'hello' }
         ]);
         expect(result.events).toEqual(expect.arrayContaining([
@@ -222,7 +224,7 @@ describe('ForgePiAgentSession', () => {
         expect(resourceLoader.buildContextBundle).toHaveBeenCalledTimes(1);
         expect(agentConstructorSpy).toHaveBeenLastCalledWith(expect.objectContaining({
             initialState: expect.objectContaining({
-                systemPrompt: '# Version 1',
+                systemPrompt: preview.systemPrompt,
                 messages: []
             })
         }));
@@ -376,7 +378,7 @@ describe('ForgePiAgentSession', () => {
         agentPromptScript.run = async (agent, message) => {
             const firstAssistantMessage = {
                 role: 'assistant',
-                content: [{ type: 'text', text: '正在搜索' }],
+                content: [{ type: 'text', text: '<final>正在搜索</final>' }],
                 provider: 'test',
                 model: 'test',
                 responseModel: 'test',
@@ -388,7 +390,7 @@ describe('ForgePiAgentSession', () => {
 
             const secondAssistantMessage = {
                 ...firstAssistantMessage,
-                content: [{ type: 'text', text: '正在搜索\n完成整理' }]
+                content: [{ type: 'text', text: '<final>正在搜索\n完成整理</final>' }]
             };
             agent.state.messages = [...agent.state.messages.slice(0, -1), secondAssistantMessage];
             agent.emit({ type: 'message_update', message: secondAssistantMessage });
@@ -456,6 +458,224 @@ describe('ForgePiAgentSession', () => {
         expect(result.events.filter(event => event.type === 'stream_chunk').map(event => event.displayText)).toEqual([
             '正在搜索',
             '正在搜索\n完成整理'
+        ]);
+    });
+
+    it('persists explicit process blocks separately from final assistant replies', async () => {
+        const { ForgePiAgentSession } = await import('@/api/core/forge/agent-app/session/ForgePiAgentSession.js');
+        const { AgentRuntimeEventBus } = await import('@/api/core/agent-runtime/events/AgentRuntimeEventBus.js');
+        agentPromptScript.run = async (agent, message) => {
+            const assistantMessage = {
+                role: 'assistant',
+                content: [{
+                    type: 'text',
+                    text: [
+                        '<process>',
+                        '我需要先读取 xx.md 确认当前结构。',
+                        '</process>',
+                        '<final>',
+                        '已完成修改，主要调整了说明。',
+                        '</final>'
+                    ].join('\n')
+                }],
+                provider: 'test',
+                model: 'test',
+                responseModel: 'test',
+                timestamp: 1
+            };
+            agent.state.messages = [...agent.state.messages, message, assistantMessage];
+            agent.emit({ type: 'message_update', message: assistantMessage });
+            agent.emit({ type: 'message_end', message: assistantMessage });
+        };
+        const session = new ForgePiAgentSession(
+            'forge-pi-session-process-final',
+            {
+                forgeProjectId: 'forge_project_alpha',
+                conversationId: 'conversation_alpha',
+                workspaceTitle: 'Forge Alpha'
+            },
+            {
+                resourceLoader: {
+                    buildContextBundle: vi.fn(async () => ({
+                        files: [{ path: './AGENTS.md', title: 'Agent 工作契约', content: '# Contract' }],
+                        activeSkills: [],
+                        loadedExtensions: []
+                    })),
+                    buildSystemPrompt: vi.fn(() => '# Contract')
+                } as any,
+                modelRegistry: {
+                    resolveRunConfig: vi.fn(() => ({
+                        model: {
+                            id: 'test',
+                            name: 'test',
+                            api: 'test',
+                            provider: 'test',
+                            baseUrl: '',
+                            reasoning: false,
+                            input: [],
+                            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                            contextWindow: 0,
+                            maxTokens: 0
+                        },
+                        streamFn: vi.fn()
+                    }))
+                } as any,
+                extensionRunner: {
+                    loadTools: vi.fn(() => [])
+                } as any
+            }
+        );
+        const runtimeBus = new AgentRuntimeEventBus();
+        session.setAgentRuntimeEvents(runtimeBus);
+
+        const result = await session.prompt({
+            command: { type: 'send_user_input', input: '修改说明' },
+            commandInput: '修改说明',
+            context: createContext(),
+            request: {
+                requestId: 'req_process_final',
+                mode: 'conversation',
+                traceSource: 'conversation',
+                messages: [{ role: 'user', content: '修改说明' }],
+                nodeSummary: []
+            } as any
+        });
+
+        expect(result.events.filter(event => event.type === 'stream_done')).toEqual([
+            expect.objectContaining({
+                rawText: '<process>\n我需要先读取 xx.md 确认当前结构。\n</process>\n<final>\n已完成修改，主要调整了说明。\n</final>',
+                displayText: '已完成修改，主要调整了说明。',
+                thinkingText: '我需要先读取 xx.md 确认当前结构。'
+            })
+        ]);
+        expect(result.piSessionState.entries.map(entry => entry.kind)).toEqual([
+            'metadata',
+            'context_bundle',
+            'user',
+            'process',
+            'assistant'
+        ]);
+        expect(result.piSessionState.entries.find(entry => entry.kind === 'process')?.payload).toEqual(expect.objectContaining({
+            text: '我需要先读取 xx.md 确认当前结构。'
+        }));
+        expect(result.piSessionState.entries.find(entry => entry.kind === 'assistant')?.payload).toEqual(expect.objectContaining({
+            text: '已完成修改，主要调整了说明。'
+        }));
+        expect(runtimeBus.getEvents().map(event => event.type).slice(-3)).toEqual([
+            'message_end',
+            'turn_end',
+            'agent_end'
+        ]);
+
+        const preview = await session.preparePrompt({
+            command: { type: 'send_user_input', input: '继续' },
+            commandInput: '继续',
+            context: createContext(),
+            request: {
+                requestId: 'req_process_final_replay',
+                mode: 'conversation',
+                traceSource: 'conversation',
+                messages: [{ role: 'user', content: '继续' }],
+                nodeSummary: []
+            } as any
+        });
+
+        const branchTexts = preview.branchMessages
+            .filter(message => message.role === 'assistant')
+            .map(message => Array.isArray(message.content)
+                ? message.content
+                    .filter((part: any) => part.type === 'text')
+                    .map((part: any) => part.text)
+                    .join('')
+                : '');
+        expect(branchTexts).toContain('[Process]\n我需要先读取 xx.md 确认当前结构。');
+        expect(branchTexts).toContain('已完成修改，主要调整了说明。');
+    });
+
+    it('emits parse diagnostics without persisting invalid assistant final text', async () => {
+        const { ForgePiAgentSession } = await import('@/api/core/forge/agent-app/session/ForgePiAgentSession.js');
+        agentPromptScript.run = async (agent, message) => {
+            const assistantMessage = {
+                role: 'assistant',
+                content: [{ type: 'text', text: '没有使用输出协议的回复。' }],
+                provider: 'test',
+                model: 'test',
+                responseModel: 'test',
+                timestamp: 1
+            };
+            agent.state.messages = [...agent.state.messages, message, assistantMessage];
+            agent.emit({ type: 'message_update', message: assistantMessage });
+            agent.emit({ type: 'message_end', message: assistantMessage });
+        };
+        const session = new ForgePiAgentSession(
+            'forge-pi-session-invalid-output',
+            {
+                forgeProjectId: 'forge_project_alpha',
+                conversationId: 'conversation_alpha',
+                workspaceTitle: 'Forge Alpha'
+            },
+            {
+                resourceLoader: {
+                    buildContextBundle: vi.fn(async () => ({
+                        files: [{ path: './AGENTS.md', title: 'Agent 工作契约', content: '# Contract' }],
+                        activeSkills: [],
+                        loadedExtensions: []
+                    })),
+                    buildSystemPrompt: vi.fn(() => '# Contract')
+                } as any,
+                modelRegistry: {
+                    resolveRunConfig: vi.fn(() => ({
+                        model: {
+                            id: 'test',
+                            name: 'test',
+                            api: 'test',
+                            provider: 'test',
+                            baseUrl: '',
+                            reasoning: false,
+                            input: [],
+                            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                            contextWindow: 0,
+                            maxTokens: 0
+                        },
+                        streamFn: vi.fn()
+                    }))
+                } as any,
+                extensionRunner: {
+                    loadTools: vi.fn(() => [])
+                } as any
+            }
+        );
+
+        const result = await session.prompt({
+            command: { type: 'send_user_input', input: '回复我' },
+            commandInput: '回复我',
+            context: createContext(),
+            request: {
+                requestId: 'req_invalid_output',
+                mode: 'conversation',
+                traceSource: 'conversation',
+                messages: [{ role: 'user', content: '回复我' }],
+                nodeSummary: []
+            } as any
+        });
+
+        expect(result.events).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                type: 'trace',
+                requestId: 'req_invalid_output',
+                tag: 'agent_output_parse',
+                status: 'diagnostics:text_outside_block'
+            }),
+            expect.objectContaining({
+                type: 'stream_done',
+                displayText: '',
+                thinkingText: ''
+            })
+        ]));
+        expect(result.piSessionState.entries.map(entry => entry.kind)).toEqual([
+            'metadata',
+            'context_bundle',
+            'user'
         ]);
     });
 });

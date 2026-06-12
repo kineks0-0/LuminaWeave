@@ -3,6 +3,7 @@ import type {
     ForgePiWorkspacePatchChange,
     ForgePiWorkspacePatchPayload
 } from '@shared/ForgePiTypes.js';
+import { resolveForgePiActiveBranchEntries } from '../store/forgeStoreHelpers.js';
 
 export interface ForgeFeedWorkspaceChange {
     id: string;
@@ -17,13 +18,15 @@ export interface ForgeFeedWorkspaceChange {
 }
 
 export const buildWorkspacePatchGroupsByAssistantTurn = (
-    entries: ForgePiSessionEntry[]
+    entries: ForgePiSessionEntry[],
+    activeNodeId?: string | null
 ): ForgeFeedWorkspaceChange[][] => {
-    const restoredInlineChangeKeys = resolveRestoredInlineChangeKeys(entries);
+    const activeEntries = resolveForgePiActiveBranchEntries(entries, activeNodeId);
+    const restoredInlineChangeKeys = resolveRestoredInlineChangeKeys(activeEntries);
     const groups: ForgeFeedWorkspaceChange[][] = [];
     let pending: ForgeFeedWorkspaceChange[] = [];
 
-    entries.forEach((entry) => {
+    activeEntries.forEach((entry) => {
         if (entry.kind === 'workspace_patch' && isWorkspacePatchPayload(entry.payload) && !entry.payload.restoresEntryId) {
             pending.push(...entry.payload.changes.map((change, index) => {
                 const restoreEntryId = `${entry.id}:${change.path}`;

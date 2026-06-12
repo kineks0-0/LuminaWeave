@@ -54,11 +54,12 @@ const assistantMessage = (content: AssistantMessage['content'], stopReason: Assi
 
 const textStreamFn = (text: string) => () => {
     const stream = createAssistantMessageEventStream();
-    const message = assistantMessage([{ type: 'text', text }]);
+    const rawText = `<final>${text}</final>`;
+    const message = assistantMessage([{ type: 'text', text: rawText }]);
     stream.push({ type: 'start', partial: assistantMessage([]) });
     stream.push({ type: 'text_start', contentIndex: 0, partial: assistantMessage([{ type: 'text', text: '' }]) });
-    stream.push({ type: 'text_delta', contentIndex: 0, delta: text, partial: message });
-    stream.push({ type: 'text_end', contentIndex: 0, content: text, partial: message });
+    stream.push({ type: 'text_delta', contentIndex: 0, delta: rawText, partial: message });
+    stream.push({ type: 'text_end', contentIndex: 0, content: rawText, partial: message });
     stream.push({ type: 'done', reason: 'stop', message });
     stream.end(message);
     return stream;
@@ -126,15 +127,17 @@ describe('ForgePiCoreRuntime', () => {
         });
 
         expect(result.prompt).toEqual([
-            {
+            expect.objectContaining({
                 role: 'system',
-                content: 'pi-system\n# Forge Alpha'
-            },
+                content: expect.stringContaining('pi-system\n# Forge Alpha')
+            }),
             {
                 role: 'user',
                 content: '预览提示词'
             }
         ]);
+        expect(result.prompt[0]?.content).toContain('<process>...</process>');
+        expect(result.prompt[0]?.content).toContain('<final>...</final>');
         expect(resourceLoader.buildSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
             systemFragments: []
         }));
@@ -221,8 +224,8 @@ describe('ForgePiCoreRuntime', () => {
         ]);
         expect(eventTypes.filter(type => type === 'message_update').length).toBeGreaterThan(0);
         expect(eventTypes.slice(-2)).toEqual([
-            'message_end',
-            'turn_end'
+            'turn_end',
+            'agent_end'
         ]);
         expect(runtime.getAgentRuntimeSnapshot()).toMatchObject({
             isStreaming: false,
@@ -269,11 +272,12 @@ describe('ForgePiCoreRuntime', () => {
                         calls += 1;
                         const stream = createAssistantMessageEventStream();
                         if (calls === 2) {
-                            const message = assistantMessage([{ type: 'text', text: '已写入项目。' }]);
+                            const rawText = '<final>已写入项目。</final>';
+                            const message = assistantMessage([{ type: 'text', text: rawText }]);
                             stream.push({ type: 'start', partial: assistantMessage([]) });
                             stream.push({ type: 'text_start', contentIndex: 0, partial: assistantMessage([{ type: 'text', text: '' }]) });
-                            stream.push({ type: 'text_delta', contentIndex: 0, delta: '已写入项目。', partial: message });
-                            stream.push({ type: 'text_end', contentIndex: 0, content: '已写入项目。', partial: message });
+                            stream.push({ type: 'text_delta', contentIndex: 0, delta: rawText, partial: message });
+                            stream.push({ type: 'text_end', contentIndex: 0, content: rawText, partial: message });
                             stream.push({ type: 'done', reason: 'stop', message });
                             stream.end(message);
                             return stream;

@@ -403,6 +403,7 @@ export class ForgeRuntimeOrchestrator {
             ];
         }
         if (event.type === 'trace') {
+            if (event.tag === 'agent_output_parse') return [];
             const presentation = this.resolveTracePresentation(event.tag);
             return [{
                 type: 'upsert_running_operation',

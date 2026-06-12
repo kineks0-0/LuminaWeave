@@ -30,6 +30,12 @@
 
 2026-06-12：接入 Forge Agent `webResearch` Tavily v1。Forge 设置新增 `lumina-forge.tavilyApiKey`，通过现有 settings storage 持久化，UI 使用 password 控件遮罩显示，v1 不提供加密 secret storage。`ForgePiToolBridge` 仅在 Tavily key 非空时把 `webResearch` 加入模型可见工具列表；工具通过 Agent Runtime SDK Research Tools Kit 调用 Tavily search / fetch，返回 Markdown 摘要、来源和请求元数据，不开放 `curl`，不写 Forge 项目 VFS、`workspace_patch`、memory 或 ST 资源。浏览器运行时不静态导入 Tavily AI SDK，避免 `@tavily/core` 的 Node proxy 依赖进入扩展启动路径。
 
+2026-06-12：确认并首轮实现 Forge Agent process / final 与文件版本规划。Forge 聊天记录、执行过程、最终回复、timeline 和文件版本投影都以 `piSessionEntries + activePiNodeId` 为唯一事实源；模型通过 `<process>` 输出公开执行说明，通过 `<final>` 输出最终回复；`process` 持久化并允许以压缩执行记录进入下一轮上下文；文件版本继续由 active branch 的 `workspace_patch` / checkpoint history 投影。首轮代码已接入 Prompt Preview / 真实生成输出协议、严格 parser、`process` / assistant 投影、解析 diagnostics trace、stream message 字段写回和文件变更归属测试；跨插件 SDK 相关任务记录见 `../agent-runtime-sdk/steps/2026-06-12-forge-agent-process-final-version-plan.md`。
+
+2026-06-12：完成 Forge active branch feed 首轮修正。完成态 `CardMakerStore.timelineFeed` 改从 active pi branch 投影聊天、执行过程和最终回复，聊天内文件变更分组也按 `activePiNodeId` 过滤；切换 pi timeline node 后不再继续使用旧 worldline active leaf 作为完成态聊天事实源。流式生成期间仍使用 worldline streaming message 作为临时 UI。
+
+2026-06-12：完成 Forge Agent 执行过程显示修正。聊天内过程展示从 `ForgeInlineTrace` 调试渲染改为专用执行过程内联段：运行中展开，结束后在用户输入与最终回复之间保留一行摘要，并支持手动展开/收起；assistant 最终回复区只显示 `<final>` 流式正文，`<process>` / `thinkingText` 进入过程段并直接显示为正文，不作为步骤列表项。文件变更区独立展示并继续使用 `workspace_patch` / 文件版本面板作为撤回和恢复事实源。
+
 ## 下一步
 
 优先执行 Agent Runtime 与 Skill 系统迁移计划：
@@ -154,6 +160,15 @@
     - Skills 采用 pi-style catalog + `readFile`，不新增 activation tool；内置与默认 preset skill 资源已标准化为可被 SDK `AgentSkillParser` 解析的 `SKILL.md`。
     - 后续实现规划见 `../agent-runtime-sdk/steps/2026-06-11-agent-runtime-sdk-boundary-plan.md`。
     - 第一阶段实现记录见 `../agent-runtime-sdk/steps/2026-06-11-agent-runtime-sdk-implementation-record.md`。
+35. [~] 实现 Forge Agent process / final 分层显示、timeline 唯一事实源和文件版本投影修正。
+    - 已完成 Prompt Preview 与真实生成统一注入 `<process>` / `<final>` 协议。
+    - 已完成严格解析模型输出：`<process>` 保存为公开执行说明，`<final>` 保存为最终 assistant 回复；解析失败进入 diagnostics。
+    - 已完成 `process` entry 到 Forge timeline execution row 的投影，并锁定 `workspace_patch -> process -> assistant` 的文件变更归属。
+    - 已完成 stream message update 写回解析后的最终回复和过程文本，raw 输出保留在 `pluginRaw` 审计来源。
+    - 已完成完成态 active branch feed 投影：Forge timeline checkout / branch 驱动 pi session active node 后，聊天、执行过程、最终回复和聊天内文件变更从 `piSessionEntries + activePiNodeId` 重新投影；仍需真实 UI walkthrough 验证入口操作。
+    - 已完成执行过程内联段专用 presentation：公开过程正文直接显示，工具/文件事实进入步骤列表；运行中展开，结束后在用户输入与最终回复之间保留一行摘要，并支持手动展开/收起；assistant 最终回复区不再混入过程文本。
+    - 文件版本面板从 active branch 的 `workspace_patch` / checkpoint history 投影，确认、撤回和 restore 不从 `process` 文案推断；仍需真实宿主恢复验证。
+    - 规划见 `../agent-runtime-sdk/steps/2026-06-12-forge-agent-process-final-version-plan.md`。
 
 完成后归档到 `archive/completed-tasks/forge/`。
 
@@ -172,4 +187,5 @@
 - [Forge Agent 提示词编排、缓存与记忆管理调整计划](./steps/2026-05-23-forge-agent-prompt-cache-memory-plan.md)
 - [Forge Memory VFS 提示词编排增强计划](./steps/2026-05-23-forge-memory-vfs-orchestration-plan.md)
 - [Forge Agent 下一阶段可靠可控决策规划](./steps/2026-06-10-forge-agent-next-stage-decision.md)
+- [Forge Agent process / final 与文件版本规划](../agent-runtime-sdk/steps/2026-06-12-forge-agent-process-final-version-plan.md)
 - [Agent Runtime SDK 当前任务](../agent-runtime-sdk/)
