@@ -14,7 +14,7 @@ export interface SettingDefinition {
     label: string;
     description?: string;
     common?: boolean;
-    type: 'theme' | 'options' | 'stepper' | 'nexus-select' | 'slider' | 'boolean' | 'text';
+    type: 'theme' | 'options' | 'stepper' | 'nexus-select' | 'slider' | 'boolean' | 'text' | 'password';
     options?: SettingOptionsResolver;
     allowedScopes?: ('Global' | 'Character' | 'Chat' | 'Session')[];
     min?: number;

@@ -22,11 +22,12 @@
 
 
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect, onMounted } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import { useCardMakerStore } from '../CardMakerStore.js';
 import { parseForgeRichOptions, type ForgeRichOptionItem, parseCompositePath } from '../../../api/core/utils/forgeDslUtils.js';
 import { cn } from '../../../ui/cn.js';
 import { LuminaPanel } from '../../../ui/primitives';
+import { buildForgeChoiceGroupResetKey } from './forgeChoiceGroupReset.js';
 
 const props = defineProps<{
     fieldKey: string;
@@ -51,16 +52,6 @@ const isBound = computed(() => {
 /** 构造复合定位键：直接使用原始传入的路径字符串 */
 const compositeKey = computed(() => props.fieldKey);
 
-// 埋点：记录渲染时的绑定判定
-watchEffect(() => {
-    console.log(`[Forge-Render] 组件 "${props.label}" 渲染。绑定状态: ${isBound.value ? '已绑定 (Form)' : '未绑定 (Message)'}`, {
-        formId: resolvedFormId.value,
-        fieldKey: resolvedFieldKey.value,
-        options: props.options
-    });
-});
-
-
 const value = computed(() => {
     if (isBound.value) {
         return store.getStructuredFieldText(resolvedFormId.value!, resolvedFieldKey.value);
@@ -81,12 +72,15 @@ const disabledDueToClick = computed(() => {
     return false;
 });
 
-// 解决组件复用问题：当选项或标签改变时，视为新组件，重置点击状态
-watch(() => [props.options, props.label], () => {
-    console.log(`[Forge-Choice] 检测到 Props 变更，重置组件 "${props.label}" 的本地点击状态。`);
+const resetKey = computed(() => buildForgeChoiceGroupResetKey({
+    label: props.label,
+    options: props.options
+}));
+
+watch(resetKey, () => {
     isUnboundedClicked.value = false;
     unboundedValue.value = null;
-}, { deep: true });
+});
 
 /** 从 assistPool 读取候选值推荐 */
 const assistCandidates = computed(() =>

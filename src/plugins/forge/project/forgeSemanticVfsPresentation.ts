@@ -27,6 +27,7 @@ export interface ForgeSemanticVfsTreeInput {
     activeNodeId: string | null;
     projectFiles?: ForgeSemanticVfsProjectEntry[];
     includeAgentVirtualFiles?: boolean;
+    includeSessionProjection?: boolean;
 }
 
 export interface ForgeSemanticVfsProjectEntry {
@@ -35,6 +36,13 @@ export interface ForgeSemanticVfsProjectEntry {
     content: string | null;
     source?: ForgeSemanticVfsSource;
     writePolicy?: ForgeSemanticVfsWritePolicy;
+}
+
+export interface ForgeProjectVfsPanelTreeInput {
+    sessionEntries: ForgePiSessionEntry[];
+    activeNodeId: string | null;
+    projectFiles: ForgeSemanticVfsProjectEntry[];
+    contextBundle?: ForgePiContextBundleSummary | null;
 }
 
 interface SemanticFileSeed {
@@ -133,17 +141,28 @@ const DEFAULT_FILE_SEEDS: SemanticFileSeed[] = [
 
 export const buildForgeSemanticVfsTree = (input: ForgeSemanticVfsTreeInput): ForgeSemanticVfsNode[] => {
     const includeAgentVirtualFiles = input.includeAgentVirtualFiles ?? true;
+    const includeSessionProjection = input.includeSessionProjection ?? includeAgentVirtualFiles;
     const roots = createBaseRoots(includeAgentVirtualFiles);
     [
         ...(includeAgentVirtualFiles ? DEFAULT_FILE_SEEDS : []),
         ...(includeAgentVirtualFiles ? contextFileSeeds(input.contextBundle) : []),
         ...(includeAgentVirtualFiles ? skillFileSeeds(input.contextBundle) : []),
-        ...(includeAgentVirtualFiles ? sessionFileSeeds(input) : []),
+        ...(includeSessionProjection ? sessionFileSeeds(input) : []),
         ...projectFileSeeds(input.projectFiles ?? [])
     ]
         .forEach(seed => upsertSemanticPath(roots, normalizeSemanticPath(seed.path), seed));
     return withDirectoryContents(sortSemanticNodes(roots));
 };
+
+export const buildForgeProjectVfsPanelTree = (input: ForgeProjectVfsPanelTreeInput): ForgeSemanticVfsNode[] =>
+    buildForgeSemanticVfsTree({
+        contextBundle: input.contextBundle ?? null,
+        sessionEntries: input.sessionEntries,
+        activeNodeId: input.activeNodeId,
+        includeAgentVirtualFiles: false,
+        includeSessionProjection: true,
+        projectFiles: input.projectFiles
+    });
 
 export const flattenForgeSemanticVfsTree = (nodes: ForgeSemanticVfsNode[]): ForgeSemanticVfsNode[] =>
     nodes.flatMap(node => [node, ...flattenForgeSemanticVfsTree(node.children)]);

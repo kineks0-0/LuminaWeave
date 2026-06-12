@@ -1,4 +1,8 @@
 import type { ForgeRuntimeContext, ForgeRuntimeEffect } from '../../../../../types/ForgeRuntimeTypes.js';
+import type {
+    AgentRuntimeBeforeAgentStartEvent,
+    AgentRuntimeBeforeAgentStartResult
+} from '../../../agent-runtime/extensions/AgentRuntimeExtensionRunner.js';
 import {
     forgePiToolBridge,
     type ForgePiAgentTool,
@@ -18,6 +22,12 @@ export class ForgePiExtensionRunner {
 
     loadTools(context: ForgeRuntimeContext, onEffects?: (effects: ForgeRuntimeEffect[]) => void): ForgePiAgentTool[] {
         return this.toolBridge.getTools(context, onEffects);
+    }
+
+    async emitBeforeAgentStart(
+        event: AgentRuntimeBeforeAgentStartEvent
+    ): Promise<AgentRuntimeBeforeAgentStartResult> {
+        return { systemPrompt: event.systemPrompt };
     }
 
     getLoadedExtensions(): string[] {

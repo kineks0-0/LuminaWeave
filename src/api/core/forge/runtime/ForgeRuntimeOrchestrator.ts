@@ -13,6 +13,7 @@ import type {
     ForgePiSessionEntry,
     ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
+import type { AgentRuntimeSnapshot } from '../../agent-runtime/events/AgentRuntimeEventBus.js';
 import { ForgeWorkflowGraph } from '../graph/ForgeWorkflowGraph.js';
 
 export interface ForgeRuntimePort {
@@ -43,6 +44,7 @@ export interface ForgeRuntimeOrchestratorOptions {
     }) => Promise<{
         events?: ForgeRuntimeEvent[];
         effects?: ForgeRuntimeEffect[];
+        agentRuntimeSnapshot?: AgentRuntimeSnapshot;
         piSessionState?: {
             tree: ForgePiTreeNode[];
             entries?: ForgePiSessionEntry[];
@@ -55,6 +57,7 @@ export interface ForgeRuntimeOrchestratorOptions {
         resolved: boolean;
         events?: ForgeRuntimeEvent[];
         effects?: ForgeRuntimeEffect[];
+        agentRuntimeSnapshot?: AgentRuntimeSnapshot;
         piSessionState?: {
             tree: ForgePiTreeNode[];
             entries?: ForgePiSessionEntry[];
@@ -92,6 +95,13 @@ export class ForgeRuntimeOrchestrator {
                 activeNodeId: result.piSessionState.activeNodeId,
                 contextBundleSummary: result.piSessionState.contextBundleSummary ?? null,
                 loadedExtensions: result.piSessionState.loadedExtensions
+            });
+        }
+        if (result.agentRuntimeSnapshot) {
+            effects.push({
+                type: 'set_agent_runtime_snapshot',
+                requestId: this.resolveRequestId(result.events ?? []),
+                snapshot: result.agentRuntimeSnapshot
             });
         }
         for (const event of result.events ?? []) {
@@ -216,6 +226,13 @@ export class ForgeRuntimeOrchestrator {
                     activeNodeId: result.piSessionState.activeNodeId,
                     contextBundleSummary: result.piSessionState.contextBundleSummary ?? null,
                     loadedExtensions: result.piSessionState.loadedExtensions
+                });
+            }
+            if (result.agentRuntimeSnapshot) {
+                effects.push({
+                    type: 'set_agent_runtime_snapshot',
+                    requestId: request.requestId,
+                    snapshot: result.agentRuntimeSnapshot
                 });
             }
             for (const event of result.events ?? []) {
@@ -443,5 +460,9 @@ export class ForgeRuntimeOrchestrator {
         if (command.type === 'submit_form') return command.userInput;
         if (command.type === 'refresh_workflow') return command.userInput;
         return undefined;
+    }
+
+    private resolveRequestId(events: ForgeRuntimeEvent[]): string | null {
+        return events[0]?.requestId ?? null;
     }
 }

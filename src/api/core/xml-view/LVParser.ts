@@ -40,7 +40,6 @@ export function splitToSegments(mesRaw: string): MessageSegment[] {
     if (!mesRaw) return [];
 
     const segments: MessageSegment[] = [];
-    console.group(`[LVParser] Splitting message (${mesRaw.length} chars)`);
     
     // 1. 匹配所有闭合的 <V>...</V> 块（支持单行和多行）
     // 核心修复：将正则局部化，确保 lastIndex 每次调用重置，修复响应式刷新导致的组件消失问题
@@ -60,7 +59,6 @@ export function splitToSegments(mesRaw: string): MessageSegment[] {
         // 视图段：解析 <V> 内部内容
         const viewContent = match[1].trim();
         if (viewContent) {
-            console.debug(`[LVParser] Found closed <V> block: "${viewContent.substring(0, 30)}..."`);
             const components = parseViewBlock(viewContent);
             segments.push({
                 type: 'view',
@@ -72,7 +70,6 @@ export function splitToSegments(mesRaw: string): MessageSegment[] {
 
         lastIndex = match.index + match[0].length;
     }
-    console.groupEnd();
 
     // 2. 检查尾部是否包含未闭合的 <V> 标签 (流式中间态)
     const trailingContent = mesRaw.slice(lastIndex);
@@ -114,8 +111,6 @@ export function splitToSegments(mesRaw: string): MessageSegment[] {
 function parseViewBlock(content: string): ParsedViewComponent[] {
     if (!content) return [];
     
-    console.group(`[LVParser] Parsing block: "${content.substring(0, 50).replace(/\n/g, '\\n')}..."`);
-    
     // 1. 尝试快速行解析 (Fast Path)
     const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const components: ParsedViewComponent[] = [];
@@ -131,7 +126,6 @@ function parseViewBlock(content: string): ParsedViewComponent[] {
 
         const parsed = parseLine(line);
         if (parsed) {
-            console.debug(`[LVParser] Line parsed successfully:`, parsed);
             components.push(parsed);
         }
     }
@@ -139,13 +133,9 @@ function parseViewBlock(content: string): ParsedViewComponent[] {
     // 2. 如果检测到跨行特征且行解析结果不理想，执行跨行回退解析 (Fallback Path)
     // 所谓不理想：行解析没拿到任何组件，但 content 包含疑似函数调用的内容
     if (components.length === 0 && (hasUnbalancedLine || content.includes('('))) {
-        console.warn('[LVParser] 检测到跨行调用或未闭合特征，触发 Fallback 解析模式');
-        const fallbackResult = parseViewBlockMultiLine(content);
-        console.groupEnd();
-        return fallbackResult;
+        return parseViewBlockMultiLine(content);
     }
 
-    console.groupEnd();
     return components;
 }
 

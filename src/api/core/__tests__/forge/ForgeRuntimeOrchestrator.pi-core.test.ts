@@ -111,6 +111,17 @@ describe('ForgeRuntimeOrchestrator pi runtime', () => {
                 thinkingText: '',
                 completedAt: 1
             }],
+            agentRuntimeSnapshot: {
+                isStreaming: false,
+                pendingToolCalls: [],
+                messages: [{
+                    id: 'req_conversation',
+                    role: 'assistant' as const,
+                    blocks: [{ type: 'text', text: 'pi reply' }],
+                    status: 'complete' as const
+                }],
+                activeTools: [{ name: 'read', description: '读取文件', needsApproval: false }]
+            },
             piSessionState: {
                 tree: [{
                     id: 'pi_node_1',
@@ -140,6 +151,13 @@ describe('ForgeRuntimeOrchestrator pi runtime', () => {
         expect(runPiTurn).toHaveBeenCalledOnce();
         expect(effects.flat()).toEqual(expect.arrayContaining([
             expect.objectContaining({ type: 'set_forge_pi_session_state' }),
+            expect.objectContaining({
+                type: 'set_agent_runtime_snapshot',
+                requestId: 'req_conversation',
+                snapshot: expect.objectContaining({
+                    messages: [expect.objectContaining({ id: 'req_conversation' })]
+                })
+            }),
             expect.objectContaining({ type: 'complete_model_request', requestId: 'req_conversation' })
         ]));
     });

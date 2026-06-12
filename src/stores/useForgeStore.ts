@@ -19,6 +19,7 @@ import type {
     ForgePiSessionEntry,
     ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
+import type { AgentRuntimeSnapshot } from '../api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
 const clonePiPayload = <TPayload>(payload: TPayload): TPayload => {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
@@ -37,6 +38,9 @@ const clonePiTreeNode = (node: ForgePiTreeNode): ForgePiTreeNode => ({
     payload: clonePiPayload(node.payload),
     children: node.children?.map(clonePiTreeNode) ?? []
 });
+
+const cloneAgentRuntimeSnapshot = (snapshot: AgentRuntimeSnapshot): AgentRuntimeSnapshot =>
+    JSON.parse(JSON.stringify(snapshot)) as AgentRuntimeSnapshot;
 
 const buildPiTreeFromEntries = (entries: ForgePiSessionEntry[]): ForgePiTreeNode[] => {
     const byId = new Map<string, ForgePiTreeNode>();
@@ -81,6 +85,7 @@ export const useForgeStore = defineStore('forge', {
         piContextBundleSummary: null as ForgePiContextBundleSummary | null,
         piLoadedSkills: [] as string[],
         piLoadedExtensions: [] as string[],
+        agentRuntimeSnapshot: null as AgentRuntimeSnapshot | null,
         // 当前制卡会话 ID
         currentSessionId: null as string | null,
         // 是否正在进行制卡任务
@@ -114,7 +119,10 @@ export const useForgeStore = defineStore('forge', {
             this.replaceTrace({
                 ...payload,
                 toolEvents: payload.toolEvents ?? [],
-                piModelTraces: payload.piModelTraces ?? []
+                piModelTraces: payload.piModelTraces ?? [],
+                agentRuntimeSnapshot: payload.agentRuntimeSnapshot
+                    ? cloneAgentRuntimeSnapshot(payload.agentRuntimeSnapshot)
+                    : null
             });
             this.activeModelRequestTraceId = payload.id;
             return payload;
@@ -229,6 +237,23 @@ export const useForgeStore = defineStore('forge', {
             });
         },
 
+        setAgentRuntimeSnapshot(payload: {
+            requestId?: string | null;
+            snapshot: AgentRuntimeSnapshot;
+        }) {
+            const snapshot = cloneAgentRuntimeSnapshot(payload.snapshot);
+            this.agentRuntimeSnapshot = snapshot;
+            const requestId = payload.requestId ?? this.activeModelRequestTraceId;
+            if (!requestId) return;
+            const index = this.modelRequestTraces.findIndex(item => item.id === requestId);
+            if (index < 0) return;
+            const existing = this.modelRequestTraces[index];
+            this.replaceTrace({
+                ...existing,
+                agentRuntimeSnapshot: cloneAgentRuntimeSnapshot(snapshot)
+            });
+        },
+
         upsertToolApproval(approval: ForgeToolApprovalRequest) {
             const existingIndex = this.toolApprovals.findIndex(item => item.toolCallId === approval.toolCallId);
             const next: ForgeToolApprovalRequest = {
@@ -290,6 +315,7 @@ export const useForgeStore = defineStore('forge', {
                 this.piContextBundleSummary = null;
                 this.piLoadedSkills = [];
                 this.piLoadedExtensions = [];
+                this.agentRuntimeSnapshot = null;
                 return;
             }
             this.piSessionEntries = payload.entries.map(clonePiEntry);
@@ -583,6 +609,7 @@ export const useForgeStore = defineStore('forge', {
             this.piContextBundleSummary = null;
             this.piLoadedSkills = [];
             this.piLoadedExtensions = [];
+            this.agentRuntimeSnapshot = null;
             this.clearModelRequestTraces();
             this.isProcessing = false;
         }

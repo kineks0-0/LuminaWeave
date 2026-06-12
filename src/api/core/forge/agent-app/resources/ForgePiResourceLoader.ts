@@ -25,6 +25,7 @@ import {
     forgeSemanticVfsProvider,
     type ForgeSemanticVfsReader
 } from '../vfs/ForgeSemanticVfsProvider.js';
+import { formatAgentSkillCatalogLine } from '../../../agent-runtime/skills/AgentSkillParser.js';
 
 const safeMemoryPathSegment = (value: string): string => {
     const normalized = value
@@ -153,7 +154,12 @@ export class ForgePiResourceLoader {
     }
 
     private formatSkillRef(input: { name: string; title: string; path: string }): string {
-        return `${input.title} (skillName: ${input.name}, path: ${input.path})`;
+        return formatAgentSkillCatalogLine({
+            name: input.name,
+            description: input.title,
+            title: input.title,
+            path: input.path
+        });
     }
 
     private buildWorkflowFile(context: ForgeRuntimeContext): string {
@@ -176,7 +182,7 @@ export class ForgePiResourceLoader {
             '',
             `- 待审阅：${context.stagingEntries.length}`,
             `- Commit-ready：${context.commitReadyEntries.length}`,
-            '- 项目 VFS：writeFile / editFile / deleteFile 默认直接应用，并生成可撤回 workspace_patch。',
+            '- 项目 VFS：write / edit / delete 默认直接应用，并生成可撤回 workspace_patch。',
             '- 宿主边界：真实 ST 世界书发布、导出或覆盖宿主数据仍需要用户确认。'
         ].join('\n');
     }

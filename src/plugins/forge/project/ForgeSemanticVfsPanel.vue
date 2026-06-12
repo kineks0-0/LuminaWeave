@@ -121,7 +121,7 @@ import { useForgeStore } from '../../../stores/useForgeStore.js';
 import { useCardMakerStore } from '../CardMakerStore.js';
 import ForgeAuxPanelShell from '../app/ForgeAuxPanelShell.vue';
 import {
-  buildForgeSemanticVfsTree,
+  buildForgeProjectVfsPanelTree,
   flattenForgeSemanticVfsTree,
   isForgeAgentResourceOverridePath,
   type ForgeSemanticVfsNode,
@@ -143,11 +143,9 @@ const overrideDraft = ref('');
 const overrideError = ref<string | null>(null);
 const isSavingOverride = ref(false);
 
-const tree = computed<ForgeSemanticVfsNode[]>(() => buildForgeSemanticVfsTree({
-  contextBundle: null,
-  sessionEntries: [],
+const tree = computed<ForgeSemanticVfsNode[]>(() => buildForgeProjectVfsPanelTree({
+  sessionEntries: forgeStore.piSessionEntries,
   activeNodeId: forgeStore.activePiNodeId,
-  includeAgentVirtualFiles: false,
   projectFiles: projectEntries.value
 }));
 

@@ -95,6 +95,17 @@ describe('ForgePiRuntimeClient', () => {
                     completedAt: 10
                 }],
                 effects: [],
+                agentRuntimeSnapshot: {
+                    isStreaming: false,
+                    pendingToolCalls: [],
+                    messages: [{
+                        id: 'req_1',
+                        role: 'assistant',
+                        blocks: [{ type: 'text', text: 'local pi-core reply' }],
+                        status: 'complete'
+                    }],
+                    activeTools: []
+                },
                 piSessionState: {
                     tree: [{
                         id: 'pi_node_1',
@@ -140,6 +151,10 @@ describe('ForgePiRuntimeClient', () => {
         })]);
         expect(result.piSessionState.activeNodeId).toBe('pi_node_1');
         expect(result.piSessionState.loadedExtensions).toEqual(['@luminaweave/forge-browser-adapters']);
+        expect(result.agentRuntimeSnapshot).toEqual(expect.objectContaining({
+            isStreaming: false,
+            messages: [expect.objectContaining({ id: 'req_1', role: 'assistant' })]
+        }));
     });
 
     it('resolves tool approval through the local runtime instead of a server endpoint', async () => {

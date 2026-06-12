@@ -65,6 +65,7 @@ export const shouldUseVerticalSettingLayout = (
 ): boolean =>
     config.type === 'slider' ||
     config.type === 'text' ||
+    config.type === 'password' ||
     config.type === 'nexus-select' ||
     config.type === 'options' ||
     config.type === 'theme' ||

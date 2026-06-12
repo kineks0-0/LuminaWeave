@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ForgePiContextBundleSummary, ForgePiSessionEntry } from '@shared/ForgePiTypes.js';
 import {
+    buildForgeProjectVfsPanelTree,
     buildForgeSemanticVfsTree,
     flattenForgeSemanticVfsTree,
     isForgeAgentResourceOverridePath
@@ -113,6 +114,50 @@ describe('forgeSemanticVfsPresentation', () => {
         expect(rows.find(row => row.path === './lorebook/entries/')).toEqual(expect.objectContaining({
             kind: 'directory',
             content: '空目录'
+        }));
+    });
+
+    it('can add current session projection to the project VFS panel without default agent files', () => {
+        const rows = flattenForgeSemanticVfsTree(buildForgeProjectVfsPanelTree({
+            sessionEntries: [
+                entry('n1', null, 'metadata', {}),
+                entry('n2', 'n1', 'user', { role: 'user', text: '请更新检查清单' }),
+                entry('n3', 'n2', 'workspace_patch', {
+                    nodeId: 'n3',
+                    changes: [{
+                        path: './memory/AUTO/Checklist.md',
+                        kind: 'update',
+                        beforeHash: 'before',
+                        afterHash: 'after',
+                        beforeContentRef: 'inline:old',
+                        afterContentRef: 'inline:new'
+                    }]
+                })
+            ],
+            activeNodeId: 'n3',
+            projectFiles: [{
+                path: './project.json',
+                kind: 'file',
+                content: '{"title":"实际项目"}'
+            }]
+        }));
+
+        expect(rows.map(row => row.path)).toEqual(expect.arrayContaining([
+            './project.json',
+            './threads/目前/nodes/n2.md',
+            './memory/AUTO/Checklist.md'
+        ]));
+        expect(rows.map(row => row.path)).not.toContain('./.forge/agent/PLANNER.md');
+        expect(rows.find(row => row.path === './threads/目前/nodes/n2.md')).toEqual(expect.objectContaining({
+            source: 'session',
+            writePolicy: 'read-only',
+            label: 'User',
+            content: '请更新检查清单'
+        }));
+        expect(rows.find(row => row.path === './memory/AUTO/Checklist.md')).toEqual(expect.objectContaining({
+            source: 'workspace',
+            writePolicy: 'direct-write',
+            preview: 'update: workspace_patch summary'
         }));
     });
 

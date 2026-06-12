@@ -100,4 +100,37 @@ describe('forgeModelRequestToolTracePresentation', () => {
         expect(presentation.empty).toBe(true);
         expect(presentation.emptyTitle).toBe('暂无工具调用');
     });
+
+    it('limits long tool payload previews before rendering them in the debug panel', () => {
+        const longMarkdown = 'webResearch result\n'.repeat(4000);
+        const presentation = buildModelRequestToolTracePresentation(createTrace({
+            toolEvents: [
+                {
+                    id: 'event_web_research_result',
+                    type: 'tool_result',
+                    toolCallId: 'call_web_research',
+                    toolName: 'webResearch',
+                    payload: {
+                        content: longMarkdown,
+                        details: {
+                            provider: 'tavily',
+                            sources: [
+                                {
+                                    title: 'Result',
+                                    url: 'https://example.test/result',
+                                    rawContent: longMarkdown
+                                }
+                            ]
+                        }
+                    },
+                    createdAt: 100
+                }
+            ]
+        }));
+
+        const payloadText = presentation.events[0].payloadText;
+        expect(payloadText.length).toBeLessThanOrEqual(12000);
+        expect(payloadText).toContain('[已截断');
+        expect(payloadText).not.toContain(longMarkdown);
+    });
 });

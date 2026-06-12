@@ -133,9 +133,7 @@ const segments = computed<MessageSegment[]>(() => {
     targetText = state.displayText;
   }
   
-  const result = splitToSegments(targetText);
-  console.log(`[MessageRenderer] Calculated ${result.length} segments from text (filtered: ${filterChatReply}):`, result);
-  return result;
+  return splitToSegments(targetText);
 });
 
 const renderSegments = computed<MessageSegment[]>(() => {

@@ -23,6 +23,7 @@ const createTarget = () => {
         appendModelRequestToolEvent: vi.fn(() => record('appendModelRequestToolEvent')),
         setModelRequestToolSetSummary: vi.fn(() => record('setModelRequestToolSetSummary')),
         setModelRequestPiTrace: vi.fn(() => record('setModelRequestPiTrace')),
+        setAgentRuntimeSnapshot: vi.fn(() => record('setAgentRuntimeSnapshot')),
         setForgePiSessionState: vi.fn(() => record('setForgePiSessionState')),
         upsertToolApproval: vi.fn(() => record('upsertToolApproval')),
         resolveToolApproval: vi.fn(() => record('resolveToolApproval')),
@@ -117,12 +118,26 @@ describe('ForgeEffectReducer', () => {
                     createdAt: 100
                 }
             },
+            {
+                type: 'set_agent_runtime_snapshot',
+                requestId: 'req-1',
+                snapshot: {
+                    isStreaming: false,
+                    pendingToolCalls: [],
+                    messages: [],
+                    activeTools: []
+                }
+            },
             { type: 'append_message', role: 'assistant', content: 'hello' }
         ], target);
 
         expect(target.persistSession).not.toHaveBeenCalled();
         expect(target.appendModelRequestToolEvent).toHaveBeenCalledWith('req-1', expect.objectContaining({
             toolName: 'readFile'
+        }));
+        expect(target.setAgentRuntimeSnapshot).toHaveBeenCalledWith(expect.objectContaining({
+            requestId: 'req-1',
+            snapshot: expect.objectContaining({ isStreaming: false })
         }));
     });
 

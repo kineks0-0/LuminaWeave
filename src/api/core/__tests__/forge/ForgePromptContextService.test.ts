@@ -246,10 +246,14 @@ describe('ForgePromptContextService', () => {
 
         expect(messages).toHaveLength(3);
         expect(messages[0].role).toBe('system');
-        expect(messages[0].content).toContain('你是 Lumina Forge 的“执行者 (Executor)”');
+        expect(messages[0].content).toContain('你是 Lumina Forge 的“执行者”');
         expect(messages[0].content).toContain('原生 tool calling 写入协议');
-        expect(messages[0].content).toContain('writeFile');
-        expect(messages[0].content).toContain('editFile');
+        expect(messages[0].content).toContain('`write`');
+        expect(messages[0].content).toContain('`edit`');
+        expect(messages[0].content).toContain('`delete`');
+        expect(messages[0].content).not.toContain('writeFile');
+        expect(messages[0].content).not.toContain('editFile');
+        expect(messages[0].content).not.toContain('deleteFile');
         expect(messages[0].content).toContain('workspace_patch');
         expect(messages[0].content).not.toContain('stageEntry');
         expect(messages[0].content).not.toContain('writeProposal');
@@ -257,7 +261,8 @@ describe('ForgePromptContextService', () => {
         expect(messages[0].content).not.toContain('<entry_update id="条目ID">完整内容</entry_update>');
         expect(messages[1].content).toContain('重写性格描述，使其更冷静克制');
         expect(messages[2].content).toContain('targetEntryId: "character.alpha"');
-        expect(messages[2].content).toContain('writeFile');
+        expect(messages[2].content).toContain('Use write / edit / delete');
+        expect(messages[2].content).not.toContain('writeFile');
         expect(messages[2].content).toContain('原始条目内容');
     });
 

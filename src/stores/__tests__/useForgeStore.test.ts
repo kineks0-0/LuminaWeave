@@ -351,6 +351,40 @@ describe('useForgeStore model request traces', () => {
         expect(store.timelineItems).toHaveLength(0);
     });
 
+    it('projects agent runtime snapshot into store and the matching model request trace', () => {
+        const store = useForgeStore();
+        store.createModelRequestTrace(createTrace({ id: 'req_runtime' }));
+
+        store.setAgentRuntimeSnapshot({
+            requestId: 'req_runtime',
+            snapshot: {
+                isStreaming: false,
+                pendingToolCalls: [],
+                messages: [{
+                    id: 'req_runtime',
+                    role: 'assistant',
+                    blocks: [{ type: 'text', text: '完成总结' }],
+                    status: 'complete'
+                }],
+                activeTools: [{
+                    name: 'read',
+                    description: '读取文件',
+                    needsApproval: false
+                }]
+            }
+        });
+
+        expect(store.agentRuntimeSnapshot).toEqual(expect.objectContaining({
+            isStreaming: false,
+            messages: [expect.objectContaining({ id: 'req_runtime' })]
+        }));
+        expect(store.modelRequestTraces[0].agentRuntimeSnapshot).toEqual(store.agentRuntimeSnapshot);
+
+        store.clearAll();
+
+        expect(store.agentRuntimeSnapshot).toBeNull();
+    });
+
     it('hydrates a persisted pi session into a tree suitable for branch checkout UI', () => {
         const store = useForgeStore();
 
