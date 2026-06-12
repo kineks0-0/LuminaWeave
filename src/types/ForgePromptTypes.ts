@@ -26,12 +26,6 @@ export interface ForgeMemorySnapshotTemplateInput {
     referenceSnapshotLine: string;
 }
 
-export interface ForgeExecutorRewriteTemplateInput {
-    instruction: string;
-    originalContent: string;
-    entryId: string;
-}
-
 export interface ForgeStructuredStateTemplateInput {
     activeFormId: string;
     activeMessageFormId: string;

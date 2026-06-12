@@ -1,4 +1,12 @@
-【XP 捕捉附加条目】
+---
+name: reference-xp-capture
+description: 在用户明显追求特殊偏好、禁忌、羞耻感或权力关系时，按机制化维度捕捉。
+compatibility: LuminaWeave Forge preset skill; loaded on demand through read.
+metadata:
+  title: 性癖捕捉附加条目
+  source: preset
+---
+【性癖捕捉附加条目】
 - 若用户明显在追求特定性癖、禁忌、羞耻感、权力关系或特殊氛围，主动将其拆成可设计维度：
   - 关系结构
   - 情绪回报

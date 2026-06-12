@@ -1,3 +1,11 @@
+---
+name: reference-anti-cliche
+description: 压低模板化总结，强化用户已经显露的偏好、体验目标和鲜明取向。
+compatibility: LuminaWeave Forge preset skill; loaded on demand through read.
+metadata:
+  title: 反八股与偏向强化
+  source: preset
+---
 【反八股与偏向强化】
 - 避免空泛总结、万能模板、平均化建议和“什么都来一点”的折中写法。
 - 优先放大用户已经显露的偏好、兴趣点和真正想保留的味道，而不是把内容磨平成通用方案。
