@@ -25,9 +25,9 @@ import type { ForgeMemoryTree } from '../../types/ForgeMemoryTypes.js';
 import { FORGE_PLANNER_PROMPT, FORGE_EXECUTOR_SYSTEM_PROMPT } from '../../resources/prompts/forgePrompts.js';
 import { ForgePromptContextService } from '../../api/core/forge/prompt/ForgePromptContextService.js';
 import {
-    forgeAgentGraphRuntime,
+    ForgeAgentGraph,
     type ForgeAgentGraphResult
-} from '../../api/core/forge/graph/ForgeAgentGraphRuntime.js';
+} from '../../api/core/forge/graph/ForgeAgentGraph.js';
 import { ForgeRuntimeOrchestrator } from '../../api/core/forge/runtime/ForgeRuntimeOrchestrator.js';
 import { forgePiRuntimeClient } from '../../api/core/forge/runtime/ForgePiRuntimeClient.js';
 import { clonePromptPresetGenerationSettings } from '../../api/core/utils/promptPresetGenerationSettings.js';
@@ -1434,7 +1434,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 ? 'analyst'
                 : 'planner',
         getMessages: () => messages.value,
-        runAgentGraph: async () => forgeAgentGraphRuntime.run({
+        runAgentGraph: async () => ForgeAgentGraph.run({
             session: serializeSession(),
             userInput: input.value.trim() || workflowSnapshot.value?.recommendedAction || 'Prompt preview',
             workflowSnapshot: workflowSnapshot.value
@@ -1459,7 +1459,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     });
 
     const agentInspectorActions = new ForgeAgentInspectorActions({
-        runAgentGraph: (payload) => forgeAgentGraphRuntime.run(payload as any),
+        runAgentGraph: (payload) => ForgeAgentGraph.run(payload as any),
         setLastAgentGraphResult: (graph) => { lastAgentGraphResult.value = graph; },
         getAgentInspectorInput: () => input.value,
         getWorkflowSnapshot: () => workflowSnapshot.value,
@@ -1595,7 +1595,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         context: ForgeRuntimeContext
     ): Promise<{ graph: ForgeAgentGraphResult | null; agentContext: ForgePromptPreviewAgentContext | null }> => {
         try {
-            const graph = await forgeAgentGraphRuntime.run({
+            const graph = await ForgeAgentGraph.run({
                 session: serializeSession(),
                 userInput: context.latestUserInput.trim() || context.workflowSnapshot?.recommendedAction || context.latestUserCommand.type,
                 workflowSnapshot: context.workflowSnapshot

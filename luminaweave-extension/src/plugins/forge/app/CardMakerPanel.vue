@@ -411,7 +411,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, inject, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, inject, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { luminaWeaveApi } from '../../../api';
 import { useCardMakerStore } from '../CardMakerStore.js';
 import { useForgeStore } from '../../../stores/useForgeStore.js';
@@ -444,7 +444,7 @@ import {
   type ForgeAgentProcessPresentation
 } from '../project/forgeAgentProcessPresentation.js';
 
-const ForgeAuxPanelView = defineAsyncComponent(() => import('./ForgeAuxPanelView.vue'));
+import { ForgeAuxPanelView } from './forgeAsyncComponents.js';
 
 const props = withDefaults(defineProps<{
   mode?: 'large' | 'small';

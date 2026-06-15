@@ -4,9 +4,9 @@ import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from './forgeAuxPanels.js
 import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 import { forgeConversationGateway } from '../../api/core/forge/project/ForgeConversationGateway.js';
 import { useCardMakerStore } from './CardMakerStore.js';
+import { ForgeAuxPanelView } from './app/forgeAsyncComponents.js';
 
 const CardMakerPanel = defineAsyncComponent(() => import('./app/CardMakerPanel.vue'));
-const ForgeAuxPanelView = defineAsyncComponent(() => import('./app/ForgeAuxPanelView.vue'));
 const ForgePromptPresetInlineSummary = defineAsyncComponent(() => import('./ForgePromptPresetInlineSummary.vue'));
 const ForgePromptPresetWorkbench = defineAsyncComponent(() => import('./ForgePromptPresetWorkbench.vue'));
 
