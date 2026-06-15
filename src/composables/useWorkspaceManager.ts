@@ -1,4 +1,4 @@
-import { computed, defineAsyncComponent, onUnmounted, ref, watch, type Component, type ComputedRef, type Ref } from 'vue';
+import { computed, onUnmounted, ref, watch, type Component, type ComputedRef, type Ref } from 'vue';
 import { lwStorage } from '../api/storage.js';
 import SurfaceOutlet from '../platform/surface/SurfaceOutlet.vue';
 import DynamicTabOutlet from '../shell/DynamicTabOutlet.vue';
@@ -10,8 +10,7 @@ import { currentDetailedView } from '../plugins/settings/useSettings.js';
 import type { LuminaPlugin } from '../types/plugin.js';
 import type { DynamicTabConfig } from '../shell/types.js';
 import { getLegacyPanelDefinition } from '../shell/legacyPanelRegistry.js';
-
-const ForgeAuxPanelView = defineAsyncComponent(() => import('../plugins/forge/app/ForgeAuxPanelView.vue'));
+import { ForgeAuxPanelView } from '../plugins/forge/app/forgeAsyncComponents.js';
 
 type WorkspaceAppKind = 'launcher' | 'main' | 'widget' | 'panel';
 

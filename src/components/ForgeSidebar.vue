@@ -90,13 +90,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useCardMakerStore } from '../plugins/forge/CardMakerStore.js';
 import { useSessionIndexStore } from '../stores/useSessionIndexStore.js';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../plugins/forge/forgeAuxPanels.js';
 import type { ForgeAuxPanelKind } from '../types/ForgeWorkflowTypes.js';
-
-const ForgeAuxPanelView = defineAsyncComponent(() => import('../plugins/forge/app/ForgeAuxPanelView.vue'));
+import { ForgeAuxPanelView } from '../plugins/forge/app/forgeAsyncComponents.js';
 
 defineProps<{
   isCollapsed?: boolean;

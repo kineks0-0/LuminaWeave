@@ -44,7 +44,9 @@ import { globalXMLInterceptor, XMLInterceptor } from '../../../api/core/xml-view
 import { lwStorage } from '../../../api/storage.js';
 import { viewRenderRegistry, type ViewRenderContext } from '../../../api/core/xml-view/ViewRenderRegistry.js';
 
-const ForgeMessageAutoSubmit = defineAsyncComponent(() => import('../../forge/blocks/ForgeMessageAutoSubmit.vue'));
+const ForgeMessageAutoSubmit = defineAsyncComponent(() =>
+  import('../../forge/blocks/forgeBlockComponents.js').then(module => module.ForgeMessageAutoSubmit)
+);
 
 const props = defineProps<{
   /** 手动处理后的显示文本（ST 渲染主要来源） */

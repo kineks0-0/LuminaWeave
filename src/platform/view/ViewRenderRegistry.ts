@@ -9,23 +9,25 @@ import StatBlock from '../../plugins/chat/components/blocks/StatBlock.vue';
 
 export type ViewRenderContext = 'chat' | 'forge';
 
-const ForgeChecklistBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeChecklistBlock.vue'));
-const ForgeChoiceBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeChoiceBlock.vue'));
-const ForgeChoiceGroupBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeChoiceGroupBlock.vue'));
-const ForgeFacetChecklistBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeFacetChecklistBlock.vue'));
-const ForgeFormBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeFormBlock.vue'));
-const ForgeInputBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeInputBlock.vue'));
-const ForgeLayerNavigatorBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeLayerNavigatorBlock.vue'));
-const ForgeMessageSubmitBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeMessageSubmitBlock.vue'));
-const ForgeEntryProposalBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeEntryProposalBlock.vue'));
-const ForgeMemoryProposalBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeMemoryProposalBlock.vue'));
-const ForgeMissingFieldsBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeMissingFieldsBlock.vue'));
-const ForgeModePickerBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeModePickerBlock.vue'));
-const ForgeSelectBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeSelectBlock.vue'));
-const ForgeSummaryCardBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeSummaryCardBlock.vue'));
-const ForgeTextareaBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeTextareaBlock.vue'));
-const ForgeAutoListBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeAutoListBlock.vue'));
-const ForgeFormAssistBlock = defineAsyncComponent(() => import('../../plugins/forge/blocks/ForgeFormAssistBlock.vue'));
+const loadForgeBlockComponents = () => import('../../plugins/forge/blocks/forgeBlockComponents.js');
+
+const ForgeChecklistBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeChecklistBlock));
+const ForgeChoiceBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeChoiceBlock));
+const ForgeChoiceGroupBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeChoiceGroupBlock));
+const ForgeFacetChecklistBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeFacetChecklistBlock));
+const ForgeFormBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeFormBlock));
+const ForgeInputBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeInputBlock));
+const ForgeLayerNavigatorBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeLayerNavigatorBlock));
+const ForgeMessageSubmitBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeMessageSubmitBlock));
+const ForgeEntryProposalBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeEntryProposalBlock));
+const ForgeMemoryProposalBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeMemoryProposalBlock));
+const ForgeMissingFieldsBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeMissingFieldsBlock));
+const ForgeModePickerBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeModePickerBlock));
+const ForgeSelectBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeSelectBlock));
+const ForgeSummaryCardBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeSummaryCardBlock));
+const ForgeTextareaBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeTextareaBlock));
+const ForgeAutoListBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeAutoListBlock));
+const ForgeFormAssistBlock = defineAsyncComponent(() => loadForgeBlockComponents().then(module => module.ForgeFormAssistBlock));
 
 class ViewRenderRegistry {
     private readonly registry = new Map<string, Map<ViewRenderContext, Component>>();
