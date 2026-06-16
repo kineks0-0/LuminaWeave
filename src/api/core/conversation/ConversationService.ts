@@ -372,8 +372,7 @@ class ForgeConversationSourceAdapter implements ConversationSourceAdapter {
         if (!store.timelineGraph[input.targetNodeId]) {
             return false;
         }
-        forgeConversationGateway.switchToNode(input.targetNodeId);
-        return true;
+        return forgeConversationGateway.switchToNode(input.targetNodeId);
     }
 
     async branchFromNode(input: ConversationNodeSwitchInput): Promise<boolean> {

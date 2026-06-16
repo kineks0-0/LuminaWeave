@@ -2,6 +2,7 @@ import { watch, type WatchStopHandle } from 'vue';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { ConversationTimelineNode } from '../../../../types/ConversationContextTypes.js';
 import type { WorldlineStore } from '../../storage/WorldlineStore.js';
+import type { ForgeTimelinePiOrigin } from '@shared/ForgePiTypes.js';
 
 export interface ForgeConversationLiveState {
     workspaceSessionId: string;
@@ -24,15 +25,19 @@ export interface ForgeConversationStoreLike {
     selectedChatSessionId: string | null;
     selectedChatSnapshotId: string | null;
     activeLeafId: string | null;
+    conversationActiveLeafId?: string | null;
     timelineGraph: Record<string, ConversationTimelineNode>;
     messages: LuminaChatMessage[];
+    conversationMessages?: LuminaChatMessage[];
     messageCount: number;
     timelineRevision: number;
     workspaceUpdatedAt: number;
     openWorkspaceSession(sessionId: string): Promise<boolean>;
-    switchToNode(targetNodeId: string): void;
+    switchToNode(targetNodeId: string): void | boolean | Promise<void | boolean>;
     branchFromNode(targetNodeId: string): Promise<boolean>;
     rollbackFromNode(targetNodeId: string): Promise<boolean>;
+    checkoutPiNode?(nodeId: string | null): Promise<void>;
+    branchFromPiUserNode?(nodeId: string): Promise<void>;
     getWorldlineStore?(): WorldlineStore | null;
 }
 
@@ -80,7 +85,7 @@ export class ForgeConversationGateway {
             () => [
                 store.timelineRevision,
                 store.workspaceSessionId,
-                store.activeLeafId,
+                store.conversationActiveLeafId ?? store.activeLeafId,
                 store.messageCount,
                 store.workspaceTitle,
                 store.workspaceUpdatedAt
@@ -106,9 +111,9 @@ export class ForgeConversationGateway {
             workspaceTitle: store.workspaceTitle,
             selectedChatSessionId: store.selectedChatSessionId,
             selectedChatSnapshotId: store.selectedChatSnapshotId,
-            activeLeafId: store.activeLeafId,
+            activeLeafId: store.conversationActiveLeafId ?? store.activeLeafId,
             timelineGraph: store.timelineGraph,
-            messages: store.messages,
+            messages: store.conversationMessages ?? store.messages,
             messageCount: store.messageCount,
             timelineRevision: store.timelineRevision,
             workspaceUpdatedAt: store.workspaceUpdatedAt
@@ -123,16 +128,42 @@ export class ForgeConversationGateway {
         return this.getStore()?.openWorkspaceSession(sessionId) || false;
     }
 
-    switchToNode(targetNodeId: string): void {
-        this.getStore()?.switchToNode(targetNodeId);
+    async switchToNode(targetNodeId: string): Promise<boolean> {
+        const store = this.getStore();
+        if (!store) return false;
+        const origin = resolveForgePiOrigin(store.timelineGraph[targetNodeId]);
+        if (origin && store.checkoutPiNode) {
+            await store.checkoutPiNode(origin.nodeId);
+            return true;
+        }
+        const result = await store.switchToNode(targetNodeId);
+        return result !== false;
     }
 
     async branchFromNode(targetNodeId: string): Promise<boolean> {
-        return this.getStore()?.branchFromNode(targetNodeId) || false;
+        const store = this.getStore();
+        if (!store) return false;
+        const origin = resolveForgePiOrigin(store.timelineGraph[targetNodeId]);
+        if (origin?.entryType === 'user' && store.branchFromPiUserNode) {
+            await store.branchFromPiUserNode(origin.nodeId);
+            return true;
+        }
+        if (origin && store.checkoutPiNode) {
+            await store.checkoutPiNode(origin.nodeId);
+            return true;
+        }
+        return store.branchFromNode(targetNodeId);
     }
 
     async rollbackFromNode(targetNodeId: string): Promise<boolean> {
-        return this.getStore()?.rollbackFromNode(targetNodeId) || false;
+        const store = this.getStore();
+        if (!store) return false;
+        const origin = resolveForgePiOrigin(store.timelineGraph[targetNodeId]);
+        if (origin && store.checkoutPiNode) {
+            await store.checkoutPiNode(origin.nodeId);
+            return true;
+        }
+        return store.rollbackFromNode(targetNodeId);
     }
 
     watchConversationState(callback: () => void): WatchStopHandle {
@@ -145,5 +176,25 @@ export class ForgeConversationGateway {
         };
     }
 }
+
+const resolveForgePiOrigin = (node: ConversationTimelineNode | undefined): ForgeTimelinePiOrigin | null => {
+    const origin = node?.extra?.forgePiOrigin;
+    if (!isRecord(origin)) return null;
+    if (origin.runtime !== 'forge-pi') return null;
+    if (typeof origin.sessionId !== 'string') return null;
+    if (typeof origin.nodeId !== 'string') return null;
+    if (typeof origin.entryType !== 'string') return null;
+    return {
+        runtime: 'forge-pi',
+        sessionId: origin.sessionId,
+        nodeId: origin.nodeId,
+        parentNodeId: typeof origin.parentNodeId === 'string' ? origin.parentNodeId : null,
+        entryType: origin.entryType as ForgeTimelinePiOrigin['entryType'],
+        toolCallId: typeof origin.toolCallId === 'string' ? origin.toolCallId : undefined
+    };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export const forgeConversationGateway = new ForgeConversationGateway();

@@ -429,8 +429,7 @@ import type { ForgeDetailMode } from '../../../types/ForgeStructuredTypes.js';
 import type { ForgeTimelineOperationItem } from '../../../types/ForgeTimelineTypes.js';
 import type { ForgeAuxPanelKind, ForgeVisiblePhase } from '../../../types/ForgeWorkflowTypes.js';
 import type {
-  ForgePiWorkspacePatchChange,
-  ForgePiWorkspacePatchPayload
+  ForgePiWorkspacePatchChange
 } from '@shared/ForgePiTypes.js';
 import type { ActivityDescriptor } from '../../../platform/activity/types.js';
 import type { SidebarMode } from '../../../composables/useResponsiveLayout.js';
@@ -443,7 +442,6 @@ import {
   buildForgeAgentProcessPresentation,
   type ForgeAgentProcessPresentation
 } from '../project/forgeAgentProcessPresentation.js';
-
 import { ForgeAuxPanelView } from './forgeAsyncComponents.js';
 
 const props = withDefaults(defineProps<{
@@ -618,34 +616,8 @@ const workspaceChangeKindLabel = (kind: ForgePiWorkspacePatchChange['kind']): st
   return '更新';
 };
 
-const resolvePatchKind = (
-  beforeContentRef: string | null,
-  afterContentRef: string | null
-): ForgePiWorkspacePatchChange['kind'] => {
-  if (beforeContentRef === null && afterContentRef !== null) return 'create';
-  if (beforeContentRef !== null && afterContentRef === null) return 'delete';
-  return 'update';
-};
-
 const handleUndoWorkspaceChange = async (change: ForgeFeedWorkspaceChange): Promise<void> => {
-  if (change.restoreApplied) return;
-  const beforeContentRef = change.afterContentRef;
-  const afterContentRef = change.beforeContentRef;
-  const patch: ForgePiWorkspacePatchPayload = {
-    nodeId: `workspace-restore-${Date.now().toString(36)}-${change.patchEntryId}`,
-    sourceToolCallId: `workspace-change-restore:${change.patchEntryId}:${change.path}`,
-    restoresEntryId: `${change.patchEntryId}:${change.path}`,
-    restoreDirection: 'before',
-    changes: [{
-      path: change.path,
-      kind: resolvePatchKind(beforeContentRef, afterContentRef),
-      beforeHash: change.afterHash,
-      afterHash: change.beforeHash,
-      beforeContentRef,
-      afterContentRef
-    }]
-  };
-  await store.applyWorkspacePatch(patch);
+  await store.restoreWorkspaceChange(change);
 };
 
 const handleOpenWorkspaceVersions = () => {

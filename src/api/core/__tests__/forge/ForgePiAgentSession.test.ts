@@ -209,8 +209,9 @@ describe('ForgePiAgentSession', () => {
         const result = await session.prompt(turnInput);
 
         expect(preview.systemPrompt).toContain('# Version 1');
-        expect(preview.systemPrompt).toContain('<process>...</process>');
-        expect(preview.systemPrompt).toContain('<final>...</final>');
+        expect(preview.systemPrompt).toContain('Provider-native structured messages');
+        expect(preview.systemPrompt).not.toContain('<process>');
+        expect(preview.systemPrompt).not.toContain('<final>');
         expect(preview.prompt).toEqual([
             { role: 'system', content: preview.systemPrompt },
             { role: 'user', content: 'hello' }
@@ -378,7 +379,7 @@ describe('ForgePiAgentSession', () => {
         agentPromptScript.run = async (agent, message) => {
             const firstAssistantMessage = {
                 role: 'assistant',
-                content: [{ type: 'text', text: '<final>正在搜索</final>' }],
+                content: [{ type: 'text', text: '正在搜索' }],
                 provider: 'test',
                 model: 'test',
                 responseModel: 'test',
@@ -390,7 +391,7 @@ describe('ForgePiAgentSession', () => {
 
             const secondAssistantMessage = {
                 ...firstAssistantMessage,
-                content: [{ type: 'text', text: '<final>正在搜索\n完成整理</final>' }]
+                content: [{ type: 'text', text: '正在搜索\n完成整理' }]
             };
             agent.state.messages = [...agent.state.messages.slice(0, -1), secondAssistantMessage];
             agent.emit({ type: 'message_update', message: secondAssistantMessage });
@@ -461,23 +462,16 @@ describe('ForgePiAgentSession', () => {
         ]);
     });
 
-    it('persists explicit process blocks separately from final assistant replies', async () => {
+    it('persists provider-native thinking blocks separately from final assistant replies', async () => {
         const { ForgePiAgentSession } = await import('@/api/core/forge/agent-app/session/ForgePiAgentSession.js');
         const { AgentRuntimeEventBus } = await import('@/api/core/agent-runtime/events/AgentRuntimeEventBus.js');
         agentPromptScript.run = async (agent, message) => {
             const assistantMessage = {
                 role: 'assistant',
-                content: [{
-                    type: 'text',
-                    text: [
-                        '<process>',
-                        '我需要先读取 xx.md 确认当前结构。',
-                        '</process>',
-                        '<final>',
-                        '已完成修改，主要调整了说明。',
-                        '</final>'
-                    ].join('\n')
-                }],
+                content: [
+                    { type: 'thinking', thinking: '我需要先读取 xx.md 确认当前结构。' },
+                    { type: 'text', text: '已完成修改，主要调整了说明。' }
+                ],
                 provider: 'test',
                 model: 'test',
                 responseModel: 'test',
@@ -543,7 +537,6 @@ describe('ForgePiAgentSession', () => {
 
         expect(result.events.filter(event => event.type === 'stream_done')).toEqual([
             expect.objectContaining({
-                rawText: '<process>\n我需要先读取 xx.md 确认当前结构。\n</process>\n<final>\n已完成修改，主要调整了说明。\n</final>',
                 displayText: '已完成修改，主要调整了说明。',
                 thinkingText: '我需要先读取 xx.md 确认当前结构。'
             })
@@ -588,11 +581,11 @@ describe('ForgePiAgentSession', () => {
                     .map((part: any) => part.text)
                     .join('')
                 : '');
-        expect(branchTexts).toContain('[Process]\n我需要先读取 xx.md 确认当前结构。');
+        expect(branchTexts).not.toContain('[Process]\n我需要先读取 xx.md 确认当前结构。');
         expect(branchTexts).toContain('已完成修改，主要调整了说明。');
     });
 
-    it('emits parse diagnostics without persisting invalid assistant final text', async () => {
+    it('persists plain provider-native text without parse diagnostics', async () => {
         const { ForgePiAgentSession } = await import('@/api/core/forge/agent-app/session/ForgePiAgentSession.js');
         agentPromptScript.run = async (agent, message) => {
             const assistantMessage = {
@@ -661,21 +654,16 @@ describe('ForgePiAgentSession', () => {
 
         expect(result.events).toEqual(expect.arrayContaining([
             expect.objectContaining({
-                type: 'trace',
-                requestId: 'req_invalid_output',
-                tag: 'agent_output_parse',
-                status: 'diagnostics:text_outside_block'
-            }),
-            expect.objectContaining({
                 type: 'stream_done',
-                displayText: '',
+                displayText: '没有使用输出协议的回复。',
                 thinkingText: ''
             })
         ]));
         expect(result.piSessionState.entries.map(entry => entry.kind)).toEqual([
             'metadata',
             'context_bundle',
-            'user'
+            'user',
+            'assistant'
         ]);
     });
 });

@@ -112,6 +112,7 @@ import {
     type BackendPresetDetail,
     type BackendPresetMeta,
     type ForgeTimelineFeedItem,
+    buildForgePiConversationProjection,
     buildForgePiTimelineFeed,
     createAssistantStreamMessageUpdate,
     createForgeMessageNode,
@@ -124,7 +125,9 @@ import { ForgeStagingActionController } from './store/ForgeStagingActionControll
 import { ForgeFreezePublishController } from './store/ForgeFreezePublishController.js';
 import { ForgeFormSubmissionController } from './store/ForgeFormSubmissionController.js';
 import { ForgePromptPreviewPayloadBuilder } from './store/ForgePromptPreviewPayloadBuilder.js';
+import { buildWorkspaceChangeRestorePatch } from './store/forgeWorkspaceChangeActions.js';
 import { ForgeAgentInspectorActions, type ForgeAgentInspectorMode } from './store/ForgeAgentInspectorActions.js';
+import type { ForgeFeedWorkspaceChange } from './project/forgeWorkspaceChangePresentation.js';
 export const DEFAULT_PLANNER_PROMPT = FORGE_PLANNER_PROMPT;
 export const DEFAULT_EXECUTOR_PROMPT = FORGE_EXECUTOR_SYSTEM_PROMPT;
 let forgeControllerBridgeBound = false;
@@ -468,6 +471,37 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         streamRevision.value;
         return worldlineStore.value.nodePool.length;
     });
+    const conversationProjection = computed(() => {
+        timelineRevision.value;
+        streamRevision.value;
+
+        if (forgeStore.piSessionEntries.length > 0 && !isGenerating.value && !streamingAssistantNodeId.value) {
+            return buildForgePiConversationProjection({
+                entries: forgeStore.piSessionEntries,
+                activeNodeId: forgeStore.activePiNodeId,
+                sessionChatId: sessionChatId.value
+            });
+        }
+
+        const legacyMessages = worldlineStore.value.getTrace(worldlineStore.value.activeLeafId);
+        const timelineGraph = worldlineStore.value.nodePool.reduce<Record<string, TimelineNode>>((acc, node) => {
+            acc[node.id] = {
+                ...node,
+                text: node.mes || node.mesRaw || '',
+                timestamp: node.extra?.send_date || node.createdAt || Date.now(),
+                _original: node
+            };
+            return acc;
+        }, {});
+
+        return {
+            messages: legacyMessages,
+            timelineGraph,
+            activeLeafId: worldlineStore.value.activeLeafId
+        };
+    });
+    const conversationMessages = computed<LuminaChatMessage[]>(() => conversationProjection.value.messages);
+    const conversationActiveLeafId = computed<string | null>(() => conversationProjection.value.activeLeafId);
     const timelineFeed = computed<ForgeTimelineFeedItem[]>(() => {
         // 显式引用修订号以驱动反应性
         timelineRevision.value;
@@ -522,19 +556,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 return a.timestamp - b.timestamp;
             });
     });
-    const timelineGraph = computed<Record<string, TimelineNode>>(() => {
-        timelineRevision.value;
-        streamRevision.value;
-        return worldlineStore.value.nodePool.reduce<Record<string, TimelineNode>>((acc, node) => {
-            acc[node.id] = {
-                ...node,
-                text: node.mes || node.mesRaw || '',
-                timestamp: node.extra?.send_date || node.createdAt || Date.now(),
-                _original: node
-            };
-            return acc;
-        }, {});
-    });
+    const timelineGraph = computed<Record<string, TimelineNode>>(() => conversationProjection.value.timelineGraph);
 
     const bumpTimelineRevision = (): void => {
         timelineRevision.value += 1;
@@ -917,6 +939,11 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         appendWorkspacePatchEntry(patch);
         await persistWorkspaceSession();
         return true;
+    };
+
+    const restoreWorkspaceChange = async (change: ForgeFeedWorkspaceChange): Promise<boolean> => {
+        if (change.restoreApplied) return false;
+        return applyWorkspacePatch(buildWorkspaceChangeRestorePatch(change));
     };
 
     const saveProjectVfsOverride = async (path: string, content: string): Promise<boolean> => {
@@ -2079,8 +2106,10 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         activePreset,
         input,
         messages,
+        conversationMessages,
         timelineFeed,
         activeLeafId,
+        conversationActiveLeafId,
         messageCount,
         timelineGraph,
         timelineRevision,
@@ -2143,6 +2172,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         persistWorkspaceSession,
         flushWorkspaceSession,
         applyWorkspacePatch,
+        restoreWorkspaceChange,
         saveProjectVfsOverride,
         ensureWorkspaceSession,
         createWorkspaceSession,

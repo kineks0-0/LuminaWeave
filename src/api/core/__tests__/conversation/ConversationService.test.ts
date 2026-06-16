@@ -21,7 +21,7 @@ const mockState = vi.hoisted(() => ({
         workspaceTitle: 'Live Forge',
         selectedChatSessionId: 'chat_live',
         selectedChatSnapshotId: null,
-        activeLeafId: 'forge_leaf',
+        activeLeafId: 'forge_leaf' as string | null,
         timelineGraph: {} as Record<string, any>,
         messages: [] as LuminaChatMessage[],
         messageCount: 0,
@@ -58,6 +58,12 @@ const mockState = vi.hoisted(() => ({
         rollbackFromNode: vi.fn(async (targetNodeId: string) => {
             mockState.forgeStore.activeLeafId = targetNodeId;
             return true;
+        }),
+        checkoutPiNode: vi.fn(async (targetNodeId: string | null) => {
+            mockState.forgeStore.activeLeafId = targetNodeId ? `forge_pi_message_${targetNodeId}` : null;
+        }),
+        branchFromPiUserNode: vi.fn(async (targetNodeId: string) => {
+            mockState.forgeStore.activeLeafId = `forge_pi_message_${targetNodeId}`;
         }),
         getWorldlineStore: vi.fn()
     }
@@ -435,6 +441,60 @@ describe('ConversationService', () => {
         expect(context.activeLeafId).toBe('forge_alt_leaf');
         expect(context.meta?.workspaceTitle).toBe('Alt Forge');
         expect(context.meta?.selectedChatSessionId).toBe('chat_archive');
+    });
+
+    it('routes Forge timeline node switching through pi checkout instead of mutating worldline projection', async () => {
+        mockState.forgeStore.timelineGraph = {
+            forge_pi_message_n2: {
+                ...createMessage('forge_pi_message_n2', null, '用户请求', {
+                    forgePiOrigin: {
+                        runtime: 'forge-pi',
+                        sessionId: 'forge_live__lw_card_live',
+                        nodeId: 'n2',
+                        parentNodeId: null,
+                        entryType: 'user'
+                    }
+                }),
+                text: '用户请求',
+                timestamp: 123
+            }
+        };
+
+        const result = await service.switchConversationNode({
+            sourceId: 'forge',
+            targetNodeId: 'forge_pi_message_n2'
+        });
+
+        expect(result).toBe(true);
+        expect(mockState.forgeStore.checkoutPiNode).toHaveBeenCalledWith('n2');
+        expect(mockState.forgeStore.switchToNode).not.toHaveBeenCalledWith('forge_pi_message_n2');
+    });
+
+    it('routes Forge timeline user branch actions through pi branch without mutating worldline projection', async () => {
+        mockState.forgeStore.timelineGraph = {
+            forge_pi_message_n2: {
+                ...createMessage('forge_pi_message_n2', null, '用户请求', {
+                    forgePiOrigin: {
+                        runtime: 'forge-pi',
+                        sessionId: 'forge_live__lw_card_live',
+                        nodeId: 'n2',
+                        parentNodeId: null,
+                        entryType: 'user'
+                    }
+                }),
+                text: '用户请求',
+                timestamp: 123
+            }
+        };
+
+        const result = await service.branchConversationNode({
+            sourceId: 'forge',
+            targetNodeId: 'forge_pi_message_n2'
+        });
+
+        expect(result).toBe(true);
+        expect(mockState.forgeStore.branchFromPiUserNode).toHaveBeenCalledWith('n2');
+        expect(mockState.forgeStore.branchFromNode).not.toHaveBeenCalledWith('forge_pi_message_n2');
     });
 
     it('branches and rolls back archived chat sessions without touching live ST sync', async () => {

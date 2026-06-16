@@ -35,7 +35,7 @@ describe('forge runtime stream presentation', () => {
             requestId: 'request-1',
             displayText: '可见文本',
             thinkingText: '思考文本',
-            rawText: '<process>思考文本</process><final>可见文本</final>'
+            rawText: '可见文本'
         };
 
         const update = createAssistantStreamMessageUpdate(event, createAssistantNode(), 123);
@@ -47,8 +47,8 @@ describe('forge runtime stream presentation', () => {
         expect(update.message.mesRaw).toBe('可见文本');
         expect(update.message.thinkingText).toBe('思考文本');
         expect(update.message.syncStatus).toBe('streaming');
-        expect(update.message.pluginRaw).toBe('<process>思考文本</process><final>可见文本</final>');
-        expect(update.message.fingerprint).toBe(MessageUtils.getFingerprint('<process>思考文本</process><final>可见文本</final>'));
+        expect(update.message.pluginRaw).toBe('可见文本');
+        expect(update.message.fingerprint).toBe(MessageUtils.getFingerprint('可见文本'));
         expect(update.message.extra).toMatchObject({
             send_date: 100,
             lastChunkAt: 123
