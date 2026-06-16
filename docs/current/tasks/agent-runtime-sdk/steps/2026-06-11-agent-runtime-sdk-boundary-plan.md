@@ -10,6 +10,8 @@ LuminaWeave 需要内部 Agent Runtime SDK，而不是把 OpenAI Agents SDK、Cl
 
 Forge 是第一套 adapter。当前 Forge 主链路已经由 `src/api/core/forge/agent-app` 承载 runtime / session / resources / tools / model；后续抽取不能破坏 `ForgePiAgentSession.preparePrompt()` 作为 Prompt Preview 与真实生成的事实源，也不能绕过 Forge Semantic VFS 和 `workspace_patch` 审计。
 
+2026-06-12 补充决策：Agent message 主路径改为 provider-native structured messages。Core SDK 应承载 provider 原生 `text`、`thinking` / reasoning、tool call、tool result 和 audit reference 的 session/event/projection 语义；Forge 后续不保留 `<process>` / `<final>` 标签协议作为过渡兼容层。
+
 Skills 默认采用 pi-style progressive disclosure：
 
 - 代码提供技能列表：名称、描述和 `SKILL.md` 路径。
@@ -30,6 +32,7 @@ Core SDK 应包含：
 - Approval 端口：工具执行前 pause、approve、deny、resume。
 - Trace / effect bus：模型、工具、approval、session 持久化和业务 effect 都可记录。
 - Runtime event / snapshot：输出 `agent_start`、`turn_start`、`message_start`、`message_update`、`message_end`、`tool_execution_start`、`tool_execution_update`、`tool_execution_end`、`turn_end`、`agent_end`、`queue_update`，并维护 `isStreaming`、`streamingMessage`、`pendingToolCalls`、`messages`、`errorMessage`、active tools summary。
+- Provider-native structured messages：承载 provider 原生 `text`、`thinking` / reasoning、tool call、tool result、audit reference，并支持流式 block 更新、session 持久化和 UI projection。
 - Extension workflow hooks：支持 `before_agent_start` hidden custom context、turn / agent end hook、custom message append、status / widget projection、continuation trigger、tool before/after hook 和 context transform。
 - Extension loading boundary：支持 adapter / 代码配置显式传入 extension factories 或 resolved extension paths；扩展可以注册 event handlers、custom tools、custom messages、resource discovery hook 和 provider，但必须经过 SDK tool registry、Prompt Preview 和 trace 边界。
 - Test harness：mock model、mock tool、mock session store、mock approval、mock VFS。
@@ -51,7 +54,8 @@ Core SDK 不包含：
 - VFS 中 TypeScript / JavaScript 扩展代码的自动加载。
 - 自动扫描项目目录或用户目录。
 - 根据 `allowed-tools` 自动放权。
-- 把 thinking 写入默认业务状态；thinking 只作为 assistant message stream block、trace 和 UI projection 输入。
+- Forge `<process>` / `<final>` 标签协议。
+- 把 thinking 写入 Forge memory、虚拟世界书、workspace patch 或普通用户可见长期历史；thinking 只作为 structured message block、trace、replay-safe 通道和 UI projection 输入。
 
 ## 3. 可选 Kit 边界
 

@@ -36,6 +36,10 @@
 
 2026-06-12：完成 Forge Agent 执行过程显示修正。聊天内过程展示从 `ForgeInlineTrace` 调试渲染改为专用执行过程内联段：运行中展开，结束后在用户输入与最终回复之间保留一行摘要，并支持手动展开/收起；assistant 最终回复区只显示 `<final>` 流式正文，`<process>` / `thinkingText` 进入过程段并直接显示为正文，不作为步骤列表项。文件变更区独立展示并继续使用 `workspace_patch` / 文件版本面板作为撤回和恢复事实源。
 
+2026-06-12：选择方案 C，Forge Agent 后续消息主路径改为 provider-native structured messages，不保留 `<process>` / `<final>` 标签协议作为过渡兼容层。后续目标是让 provider 原生 `thinking` / reasoning 投影执行过程、`text` 投影最终回复，tool call / tool result / `workspace_patch` 投影过程事实和文件版本；完成态 UI 仍必须从 `piSessionEntries + activePiNodeId` 重投影。
+
+2026-06-13：完成 provider-native structured message 首轮接入。Forge Prompt Preview / `prompt_ready` 不再注入 `<process>` / `<final>` 标签协议；Forge runtime 不再使用 `ForgePiAgentOutputParser`；assistant `thinking` 内容直接生成 `process` entry，assistant `text` 内容生成最终 assistant entry；Core SDK runtime snapshot 通过 `id` / `contentIndex` 保留多个 provider content block。文件版本和 `workspace_patch` 事实源未改变。
+
 ## 下一步
 
 优先执行 Agent Runtime 与 Skill 系统迁移计划：
@@ -160,15 +164,23 @@
     - Skills 采用 pi-style catalog + `readFile`，不新增 activation tool；内置与默认 preset skill 资源已标准化为可被 SDK `AgentSkillParser` 解析的 `SKILL.md`。
     - 后续实现规划见 `../agent-runtime-sdk/steps/2026-06-11-agent-runtime-sdk-boundary-plan.md`。
     - 第一阶段实现记录见 `../agent-runtime-sdk/steps/2026-06-11-agent-runtime-sdk-implementation-record.md`。
-35. [~] 实现 Forge Agent process / final 分层显示、timeline 唯一事实源和文件版本投影修正。
+35. [x] 记录 Forge Agent process / final 首轮实现、timeline 唯一事实源和文件版本投影修正。
     - 已完成 Prompt Preview 与真实生成统一注入 `<process>` / `<final>` 协议。
     - 已完成严格解析模型输出：`<process>` 保存为公开执行说明，`<final>` 保存为最终 assistant 回复；解析失败进入 diagnostics。
     - 已完成 `process` entry 到 Forge timeline execution row 的投影，并锁定 `workspace_patch -> process -> assistant` 的文件变更归属。
     - 已完成 stream message update 写回解析后的最终回复和过程文本，raw 输出保留在 `pluginRaw` 审计来源。
     - 已完成完成态 active branch feed 投影：Forge timeline checkout / branch 驱动 pi session active node 后，聊天、执行过程、最终回复和聊天内文件变更从 `piSessionEntries + activePiNodeId` 重新投影；仍需真实 UI walkthrough 验证入口操作。
     - 已完成执行过程内联段专用 presentation：公开过程正文直接显示，工具/文件事实进入步骤列表；运行中展开，结束后在用户输入与最终回复之间保留一行摘要，并支持手动展开/收起；assistant 最终回复区不再混入过程文本。
-    - 文件版本面板从 active branch 的 `workspace_patch` / checkpoint history 投影，确认、撤回和 restore 不从 `process` 文案推断；仍需真实宿主恢复验证。
+    - 文件版本面板从 active branch 的 `workspace_patch` / checkpoint history 投影，确认、撤回和 restore 不从 `process` 文案推断。
+    - 该项为历史实现记录，不作为后续消息协议主线；后续不保留 `<process>` / `<final>` 标签协议作为过渡兼容层。
     - 规划见 `../agent-runtime-sdk/steps/2026-06-12-forge-agent-process-final-version-plan.md`。
+36. [~] 迁移 Forge Agent 到 provider-native structured message 主路径。
+    - 已完成 provider 原生 `thinking` 投影执行过程、provider 原生 `text` 投影最终回复，不依赖 `<process>` / `<final>` 解析。
+    - 已删除 `ForgePiAgentOutputParser` 生产入口和对应测试；Prompt Preview / `prompt_ready` 改为 provider-native structured message contract。
+    - tool call、tool result、approval、`workspace_patch`、checkpoint / restore 继续作为过程事实和文件版本事实，不从模型正文推断。
+    - 完成态聊天、执行过程、最终回复、timeline 和聊天内文件变更继续从 `piSessionEntries + activePiNodeId` 投影；Conversation / Timeline adapter 已改为读取 pi conversation projection，并把 switch / branch / rollback 意图回传 `checkoutPiNode` / `branchFromPiUserNode`。
+    - 文件版本面板继续基于 active branch 的 `workspace_patch` / checkpoint history；聊天内“撤回”已下沉为 Forge store action，仍需真实宿主下确认、撤回和 restore walkthrough。
+    - 规划见 `../agent-runtime-sdk/steps/2026-06-12-provider-native-structured-message-plan.md`。
 
 完成后归档到 `archive/completed-tasks/forge/`。
 
@@ -188,4 +200,5 @@
 - [Forge Memory VFS 提示词编排增强计划](./steps/2026-05-23-forge-memory-vfs-orchestration-plan.md)
 - [Forge Agent 下一阶段可靠可控决策规划](./steps/2026-06-10-forge-agent-next-stage-decision.md)
 - [Forge Agent process / final 与文件版本规划](../agent-runtime-sdk/steps/2026-06-12-forge-agent-process-final-version-plan.md)
+- [Provider-native structured message 主路径规划](../agent-runtime-sdk/steps/2026-06-12-provider-native-structured-message-plan.md)
 - [Agent Runtime SDK 当前任务](../agent-runtime-sdk/)

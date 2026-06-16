@@ -1,5 +1,7 @@
 # Forge Agent process / final 与文件版本规划
 
+> 2026-06-12 决策更新：本文件记录已完成的 `<process>` / `<final>` 首轮实现和文件版本事实源设计，不再作为后续消息协议主线。方案 C 已确定后续改为 provider-native structured messages，并且不保留 `<process>` / `<final>` 标签协议作为过渡兼容层。文件版本、active branch 投影、`workspace_patch` 审计和 `piSessionEntries + activePiNodeId` 唯一事实源约束继续有效。后续规划见 `2026-06-12-provider-native-structured-message-plan.md`。
+
 ## Summary
 
 目标是在 Forge Agent 中建立可持久、可回看、可切换分支、可审计文件变更的执行显示模型。运行中展示模型显式输出的公开执行说明、工具调用和文件变更；结束后自动折叠执行过程，保持最终回复展开，并让文件版本面板继续以 `workspace_patch` 为事实依据。

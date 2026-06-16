@@ -53,8 +53,14 @@
 2026-06-12：完成 Forge 执行过程内联段分层显示修正。新增 Forge plugin presentation helper，把 active turn 的 `process`、tool call/result、`workspace_patch` 和文件变更投影为“执行过程”内联段；运行中默认展开，结束后在用户输入与最终回复之间保留一行摘要，并可手动展开/收起。`CardMakerPanel` 不再用 debug trace 组件渲染聊天内过程，assistant 最终回复区也不再显示 `thinkingText`，文件变更保持独立区域并继续通过 `workspace_patch` / 版本面板处理撤回与恢复。
 
 2026-06-12：收紧执行过程内联段的信息层级。模型公开过程正文直接显示为文本，不再作为专用标题或模型请求状态步骤行；步骤列表只承载工具调用、文件变更、`workspace_patch` 等过程事实。
-2026-06-16：完成 pi-ai browser Nexus provider 边界收敛。取消 `PiAiBrowserTransport` 作为独立规划，新增 Agent Runtime model provider 端口与 `PiAiBrowserNexusProvider`，只负责把 Nexus preset / API 配置解析为 pi-ai `Model<Api>` 和 `SimpleStreamOptions`；Forge 的 `ForgePiNexusProvider` 继续保留模型请求 trace 和 stream 包装，但不再直接读取 `nexus.apis`。规划见 `steps/2026-06-16-pi-ai-browser-nexus-provider-plan.md`。
 
+2026-06-12：选择方案 C，下一阶段 Agent message 主路径改为 provider-native structured messages。Forge 后续不再保留 `<process>` / `<final>` 标签协议作为过渡兼容层；已经完成的标签解析只作为历史实现记录，后续目标是让模型 provider 的结构化 `text`、`thinking` / reasoning、tool call、tool result 与 audit reference 直接进入 SDK session/event/projection，再由 Forge presentation 投影执行过程、最终回复、工具记录和文件变更。规划见 `steps/2026-06-12-provider-native-structured-message-plan.md`。
+
+2026-06-13：完成 provider-native structured message 首轮落地。`AgentRuntimeEventBus` 的 message block 更新改为优先按 `id` / `contentIndex` 稳定更新，避免同类型 provider block 被覆盖；`ForgePiAgentSession` 不再注入 `<process>` / `<final>` 输出协议，不再使用标签 parser，assistant `thinking` 内容投影为 `process` session entry，assistant `text` 内容投影为最终回复；`ForgePiAgentOutputParser` 与对应测试已删除。文件版本、tool call / tool result 和 `workspace_patch` 路径保持原有事实源。
+
+2026-06-13：完成 Forge conversation/timeline projection 收口。`CardMakerStore` 为 Conversation / Timeline adapter 提供从 active branch `piSessionEntries + activePiNodeId` 派生的只读 conversation graph、messages 和 active leaf；投影消息携带 `extra.forgePiOrigin`，外部 Timeline 的 switch / branch / rollback 意图由 `ForgeConversationGateway` 回传给 `checkoutPiNode` / `branchFromPiUserNode`，不再直接改旧 worldline projection。聊天内文件变更的“撤回”也下沉为 Forge store action，Vue 面板只提交 projected change，不负责组装 restore patch。
+
+2026-06-16：完成 pi-ai browser Nexus provider 边界收敛。取消 `PiAiBrowserTransport` 作为独立规划，新增 Agent Runtime model provider 端口与 `PiAiBrowserNexusProvider`，只负责把 Nexus preset / API 配置解析为 pi-ai `Model<Api>` 和 `SimpleStreamOptions`；Forge 的 `ForgePiNexusProvider` 继续保留模型请求 trace 和 stream 包装，但不再直接读取 `nexus.apis`。规划见 `steps/2026-06-16-pi-ai-browser-nexus-provider-plan.md`。
 
 已确认方向：
 
@@ -73,22 +79,21 @@
 - Research Tools Kit 可提供 `webResearch` 工具工厂和 `AgentResearchProvider` 端口；Core SDK 不默认暴露联网工具，Forge 只有在 Tavily key 非空时才注册 Tavily-backed `webResearch`。
 - Model provider 端口提供 `getModel()`、`getStreamOptions()` 与 `listModels()`；浏览器直连实现为 `PiAiBrowserNexusProvider`，Forge 只传 `presetId` 和 request metadata，不直接读取 `nexus.apis`。
 - Forge 模型可见工具名迁移为 `read`、`write`、`edit`、`delete`、`bash`；旧会话回放和 trace 展示中的历史工具名由 Forge adapter 处理兼容。
-- thinking 作为 assistant message stream block、trace 和 UI projection 输入处理，不作为默认可持久化业务状态。
-- Forge 可在 adapter 层把模型显式输出拆为公开执行说明 `process` 和最终回复 `assistant`。Core SDK 可提供通用 session/event/projection 支撑，但不拥有 Forge `<process>` / `<final>` prompt 协议。
+- Agent message 主路径采用 provider-native structured messages：`text` 块投影最终回复，`thinking` / reasoning 块投影执行过程，tool call / tool result / audit reference 投影过程事实和文件变更。
+- Forge 后续不再要求模型输出 `<process>` / `<final>`；Core SDK 与 Forge adapter 都不把标签协议作为继续维护的兼容层。
 - Forge adapter 继续负责 Forge Semantic VFS、项目 VFS 写入策略、`workspace_patch` 审计、session tree 到 timeline / 文件版本的投影，以及真实 ST 世界书发布/导出的用户确认边界。
 
 ## 下一步
 
-1. [x] 实现 Prompt Preview 与真实生成统一注入 `<process>` / `<final>` 协议。
-2. [x] 增加严格解析与 `process` / `assistant` 投影，解析失败进入 diagnostics，不写正式 assistant。
-3. [x] 让 stream message update 写回解析后的最终回复和过程文本，结束后清理临时 stream state。
-4. [x] 让 Forge timeline projector 识别 `process`，并锁定 `workspace_patch -> process -> assistant` 的文件变更归属。
-5. [x] 修正 Forge 完成态时间线切换，使聊天、执行过程、最终回复和聊天内文件变更从 active branch 的 `piSessionEntries + activePiNodeId` 投影；仍需真实 UI walkthrough 验证切换入口和文件恢复动作。
-6. [x] 执行过程内联段和最终回复分层显示已从 debug trace 渲染改为专用 presentation：公开过程正文直接显示，工具/文件事实进入步骤列表；运行中过程展开，结束后在用户输入与最终回复之间保留一行摘要且可展开/收起；assistant 最终回复区只显示 final text。
-7. [~] 文件版本面板已基于 active branch 的 `workspace_patch` / checkpoint 投影；仍需补真实宿主下确认、撤回、restore 的 walkthrough。
-8. [ ] 补真实宿主 walkthrough：Prompt Preview 与真实生成一致、Semantic VFS 读取、direct write 生成 `workspace_patch`、session branch checkout、文件版本恢复、`agent_end` 后 UI 状态清理和流式节流观感。
-9. [ ] 评估非 Forge 插件接入样例：使用 SDK test harness + 手动注册 tool + 显式 VFS mount + extension workflow hook，验证 SDK 不默认暴露文件工具或 `bash`。
-10. [ ] OpenFS 包跟踪：当前 `@open-fs/just-bash@0.1.0` 实际导出 `AxFs`，`createGrepCommand()` 的 command name 为 `axgrep`；后续升级前必须重新读取包类型文件和测试。
+1. [x] 定义 Agent Runtime SDK structured message 主协议首轮：provider raw message、replay-safe message、UI projection block 与 session entry 的边界必须清晰，`text`、`thinking` / reasoning、tool call、tool result、audit reference 都要有稳定流式更新语义。
+2. [x] 改造 Forge model stream ingestion 首轮：不再依赖 `<process>` / `<final>` parser；provider-native `text` 进入 assistant final projection，provider-native `thinking` 进入执行过程 projection，tool call / tool result 继续来自 runtime event。
+3. [x] 改造 Prompt Preview / `prompt_ready` payload 首轮：展示 provider-native structured message contract、active tools、branch messages 与本轮 user message，不再把标签输出协议作为主模型要求。
+4. [x] 保持唯一事实源：完成态聊天、执行过程、最终回复、timeline、文件变更列表和文件版本面板继续从 active branch 的 `piSessionEntries + activePiNodeId` 投影，时间线切换必须先切换 Forge pi session active node。
+5. [~] 保持文件版本事实源：`workspace_patch` / checkpoint / restore 状态和当前项目 VFS 内容继续决定文件变更、撤回和恢复；执行过程文本不得成为文件版本依据。聊天内“撤回”已改为 Forge action；仍需真实宿主恢复流程 walkthrough。
+6. [ ] 补真实宿主 walkthrough：Prompt Preview 与真实生成一致、Semantic VFS 读取、direct write 生成 `workspace_patch`、session branch checkout、文件版本恢复、`agent_end` 后 UI 状态清理和流式节流观感。
+7. [~] 补 structured message 回归测试：provider-native thinking/text 流式更新和无标签协议输出已覆盖；仍需继续覆盖 tool call/result 顺序、branch checkout 后消息重投影和文件版本恢复。
+8. [ ] 评估非 Forge 插件接入样例：使用 SDK test harness + 手动注册 tool + 显式 VFS mount + extension workflow hook，验证 SDK 不默认暴露文件工具或 `bash`。
+9. [ ] OpenFS 包跟踪：当前 `@open-fs/just-bash@0.1.0` 实际导出 `AxFs`，`createGrepCommand()` 的 command name 为 `axgrep`；后续升级前必须重新读取包类型文件和测试。
 
 ## 恢复入口
 
@@ -97,5 +102,6 @@
 - [Pi AI Browser Nexus Provider 规划](./steps/2026-06-16-pi-ai-browser-nexus-provider-plan.md)
 - [pi agent 工作流与 UI 状态整理](./steps/2026-06-11-pi-agent-workflow-ui-state-plan.md)
 - [Forge Agent process / final 与文件版本规划](./steps/2026-06-12-forge-agent-process-final-version-plan.md)
+- [Provider-native structured message 主路径规划](./steps/2026-06-12-provider-native-structured-message-plan.md)
 - [Forge Agent 下一阶段可靠可控决策规划](../forge/steps/2026-06-10-forge-agent-next-stage-decision.md)
 - [Forge 当前任务](../forge/)
