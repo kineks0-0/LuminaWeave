@@ -4,42 +4,88 @@ import tailwindcss from '@tailwindcss/vite'
 import { analyzer } from 'vite-bundle-analyzer'
 import { resolve } from 'path'
 
-const toNormalizedId = (id: string) => id.replace(/\\/g, '/');
+export const toNormalizedId = (id: string) => id.replace(/\\/g, '/');
 const tauriDevHost = process.env.TAURI_DEV_HOST;
 
-const vendorChunkName = (id: string) => {
+export const resolveNodeModulePackageName = (id: string) => {
   const normalizedId = toNormalizedId(id);
-  if (!normalizedId.includes('/node_modules/')) return;
-
-  if (
-    normalizedId.includes('/node_modules/.vite/deps/vue') ||
-    normalizedId.includes('/node_modules/.vite/deps/pinia') ||
-    normalizedId.includes('/node_modules/vue/') ||
-    normalizedId.includes('/node_modules/@vue/') ||
-    normalizedId.includes('/node_modules/pinia/')
-  ) {
-    return 'vendor-vue';
+  const optimizedDepsMarker = '/node_modules/.vite/deps/';
+  const optimizedDepsIndex = normalizedId.lastIndexOf(optimizedDepsMarker);
+  if (optimizedDepsIndex >= 0) {
+    const optimizedName = normalizedId
+      .slice(optimizedDepsIndex + optimizedDepsMarker.length)
+      .split(/[?#]/)[0];
+    if (optimizedName.startsWith('vue')) return 'vue';
+    if (optimizedName.startsWith('pinia')) return 'pinia';
+    return undefined;
   }
-  if (normalizedId.includes('/node_modules/gsap/')) return 'vendor-motion';
-  if (normalizedId.includes('/node_modules/@langchain/')) return 'vendor-langchain';
-  if (normalizedId.includes('/node_modules/ai/') || normalizedId.includes('/node_modules/@ai-sdk/')) return 'vendor-ai-sdk';
-  if (normalizedId.includes('/node_modules/openai/')) return 'vendor-openai';
+
+  const nodeModulesMarker = '/node_modules/';
+  const nodeModulesIndex = normalizedId.lastIndexOf(nodeModulesMarker);
+  if (nodeModulesIndex < 0) return undefined;
+
+  const parts = normalizedId.slice(nodeModulesIndex + nodeModulesMarker.length).split('/');
+  const [scopeOrName, packageName] = parts;
+  if (!scopeOrName) return undefined;
+  return scopeOrName.startsWith('@') && packageName ? `${scopeOrName}/${packageName}` : scopeOrName;
 };
 
-const chunkFileNames = 'assets/[name]-[hash].js';
+const vendorPackageGroups = new Map<string, string>([
+  ['vue', 'vendor-vue'],
+  ['pinia', 'vendor-vue'],
+  ['gsap', 'vendor-motion'],
+  ['ai', 'vendor-ai-sdk'],
+  ['openai', 'vendor-openai']
+]);
 
-const assetFileNames = (assetInfo: { name?: string }) => {
-  if (assetInfo.name?.endsWith('.css')) return 'style.css';
-  return 'assets/[name]-[hash][extname]';
+export const vendorChunkName = (id: string) => {
+  const packageName = resolveNodeModulePackageName(id);
+  if (!packageName) return undefined;
+
+  const groupName = vendorPackageGroups.get(packageName);
+  if (groupName) return groupName;
+  if (packageName.startsWith('@vue/')) return 'vendor-vue';
+  if (packageName.startsWith('@langchain/')) return 'vendor-langchain';
+  if (packageName.startsWith('@ai-sdk/')) return 'vendor-ai-sdk';
+  return undefined;
+};
+
+const chunkFileNames = 'assets/[name].js';
+//const chunkFileNames = 'assets/[name]-[hash].js';
+
+export const assetFileNames = (assetInfo: { names?: string[]; name?: string }) => {
+  const name = assetInfo.names?.[0] ?? assetInfo.name ?? '';
+  if (name.endsWith('.css')) return 'style.css';
+  return 'assets/[name][extname]';
+  //return 'assets/[name]-[hash][extname]';
+};
+
+export const resolveBuildProfile = (command: 'serve' | 'build', mode: string) => {
+  const runtimeBuildMode = mode === 'analyze' ? 'github' : mode;
+  const isClientBuild = runtimeBuildMode === 'client';
+  const isAnalyzeBuild = mode === 'analyze' || process.env.LW_ANALYZE === 'true';
+  const inlineSourceMap = runtimeBuildMode !== 'github' && runtimeBuildMode !== 'client';
+  const nodeEnv = command === 'serve' ? 'development' : 'production';
+
+  return {
+    runtimeBuildMode,
+    isClientBuild,
+    isAnalyzeBuild,
+    inlineSourceMap,
+    nodeEnv
+  };
 };
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const isWatchBuild = process.argv.includes('--watch');
-  const isAnalyzeBuild = mode === 'analyze' || process.env.LW_ANALYZE === 'true';
-  const runtimeBuildMode = mode === 'analyze' ? 'github' : mode;
-  const isClientBuild = runtimeBuildMode === 'client';
-  const inlineSourceMap = runtimeBuildMode !== 'github' && runtimeBuildMode !== 'client';
+  const {
+    runtimeBuildMode,
+    isClientBuild,
+    isAnalyzeBuild,
+    inlineSourceMap,
+    nodeEnv
+  } = resolveBuildProfile(command, mode);
 
   return {
     base: './',
@@ -56,7 +102,7 @@ export default defineConfig(({ mode }) => {
       })
     ],
     define: {
-      'process.env.NODE_ENV': '"production"',
+      'process.env.NODE_ENV': JSON.stringify(nodeEnv),
       'process.env.LW_BUILD_MODE': JSON.stringify(runtimeBuildMode),
       'process.env.LW_INLINE_SOURCEMAP': JSON.stringify(inlineSourceMap)
     },
@@ -104,7 +150,7 @@ export default defineConfig(({ mode }) => {
             ]
           }
         : null,
-      rollupOptions: isClientBuild
+      rolldownOptions: isClientBuild
         ? {
             input: resolve(__dirname, 'index.html'),
             output: {

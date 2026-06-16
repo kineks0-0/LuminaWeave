@@ -1,0 +1,1 @@
+import{t as e}from"./HALContext.js";import{n as t,r as n,t as r}from"./STResourceProvider.js";import{i,n as a,r as o,t as s}from"./STTokenCounter.js";import{t as c}from"./DefaultBootstrapStorage.js";var l=class{createContext(){return new e(new n,new i,new o,new a,new t,new r,new c,new s)}};export{l as TauriHostProvider};
