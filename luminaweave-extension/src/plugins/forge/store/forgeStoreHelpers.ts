@@ -2,6 +2,7 @@ import { llmEngine } from '../../../api/llmEngine.js';
 import { lwStorage } from '../../../api/storage.js';
 import { promptPresetRegistry } from '../../../api/core/hal/prompt/PromptPresetRegistry.js';
 import { clonePromptPresetGenerationSettings } from '../../../api/core/utils/promptPresetGenerationSettings.js';
+import type { TimelineNode } from '../../../api/core/storage/TimelineManager.js';
 import type { CleanedMessage } from '../../../types/nexus.js';
 import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type {
@@ -55,6 +56,12 @@ export interface BuildForgePiTimelineFeedInput {
     entries: ForgePiSessionEntry[];
     activeNodeId: string | null;
     sessionChatId: string;
+}
+
+export interface ForgePiConversationProjection {
+    messages: LuminaChatMessage[];
+    timelineGraph: Record<string, TimelineNode>;
+    activeLeafId: string | null;
 }
 
 const createPrefixedId = (prefix: string): string => {
@@ -175,6 +182,7 @@ export const buildForgePiTimelineFeed = ({
         if (entry.kind === 'user' || entry.kind === 'assistant') {
             const role = entry.kind;
             const messageId = `forge_pi_message_${entry.id}`;
+            const origin = createPiOrigin(entry);
             const message = createForgeMessageNode({
                 role,
                 content: extractPiEntryText(entry),
@@ -183,11 +191,15 @@ export const buildForgePiTimelineFeed = ({
                 timestamp: entry.createdAt,
                 nodeId: messageId
             });
+            message.extra = {
+                ...message.extra,
+                forgePiOrigin: origin
+            };
             const item: ForgeTimelineMessageItem = {
                 id: `forge_pi_message_item_${entry.id}`,
                 kind: 'message',
                 messageId,
-                origin: createPiOrigin(entry),
+                origin,
                 createdAt: entry.createdAt,
                 updatedAt: entry.createdAt
             };
@@ -213,6 +225,38 @@ export const buildForgePiTimelineFeed = ({
     }
 
     return feed.sort((left, right) => left.timestamp - right.timestamp || left.id.localeCompare(right.id));
+};
+
+export const buildForgePiConversationProjection = (
+    input: BuildForgePiTimelineFeedInput
+): ForgePiConversationProjection => {
+    const feed = buildForgePiTimelineFeed(input);
+    const messages: LuminaChatMessage[] = [];
+    const timelineGraph: Record<string, TimelineNode> = {};
+    let activeLeafId: string | null = null;
+
+    feed.forEach((feedItem) => {
+        if (feedItem.kind !== 'message') return;
+        const message: LuminaChatMessage = {
+            ...feedItem.message,
+            extra: { ...feedItem.message.extra }
+        };
+        const node: TimelineNode = {
+            ...message,
+            text: message.mes || message.mesRaw || '',
+            timestamp: feedItem.timestamp,
+            _original: message
+        };
+        messages.push(message);
+        timelineGraph[node.id] = node;
+        activeLeafId = node.id;
+    });
+
+    return {
+        messages,
+        timelineGraph,
+        activeLeafId
+    };
 };
 
 const HIDDEN_PI_FEED_ENTRY_KINDS = new Set<ForgePiSessionEntry['kind']>([

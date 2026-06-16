@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    buildForgePiConversationProjection,
     buildForgePiTimelineFeed,
     createForgeMessageNode,
     sanitizeHistoryMessages,
@@ -138,5 +139,35 @@ describe('forgeStoreHelpers', () => {
         expect(feed.map(item => item.kind === 'message'
             ? item.item.origin?.nodeId
             : item.item.origin?.nodeId)).toEqual(['n4', 'n5', 'n6', 'n7', 'n8']);
+    });
+
+    it('projects the active pi branch into a read-only conversation graph with pi origin metadata', () => {
+        const projection = buildForgePiConversationProjection({
+            sessionChatId: 'session-1',
+            activeNodeId: 'n5',
+            entries: [
+                entry('n1', null, 'metadata', {}),
+                entry('n2', 'n1', 'user', { role: 'user', text: '分支 A' }),
+                entry('n3', 'n2', 'assistant', { role: 'assistant', text: '回复 A' }),
+                entry('n4', 'n1', 'user', { role: 'user', text: '分支 B' }),
+                entry('n5', 'n4', 'assistant', { role: 'assistant', text: '回复 B' })
+            ]
+        });
+
+        expect(Object.keys(projection.timelineGraph)).toEqual([
+            'forge_pi_message_n4',
+            'forge_pi_message_n5'
+        ]);
+        expect(projection.activeLeafId).toBe('forge_pi_message_n5');
+        expect(projection.messages.map(message => `${message.role}:${message.mes}`)).toEqual([
+            'user:分支 B',
+            'assistant:回复 B'
+        ]);
+        expect(projection.timelineGraph.forge_pi_message_n4.extra.forgePiOrigin).toMatchObject({
+            runtime: 'forge-pi',
+            sessionId: 'forge_project__conversation',
+            nodeId: 'n4',
+            entryType: 'user'
+        });
     });
 });

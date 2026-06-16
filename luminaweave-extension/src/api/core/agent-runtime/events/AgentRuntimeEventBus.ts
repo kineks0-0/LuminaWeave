@@ -15,6 +15,8 @@ export type AgentRuntimeEventType =
 
 export interface AgentRuntimeContentBlock {
     type: string;
+    id?: string;
+    contentIndex?: number;
     text?: string;
     [key: string]: unknown;
 }
@@ -193,7 +195,7 @@ const reduceSnapshot = (
         case 'message_update':
             return updateMessage(snapshot, event.messageId, message => ({
                 ...message,
-                blocks: [...message.blocks, event.block],
+                blocks: upsertMessageBlock(message.blocks, event.block),
                 status: message.status ?? 'streaming'
             }));
         case 'message_end':
@@ -276,6 +278,28 @@ const updateMessage = (
         streamingMessage: clearStreaming ? undefined : updatedStreamingMessage,
         messages
     };
+};
+
+const upsertMessageBlock = (
+    blocks: AgentRuntimeContentBlock[],
+    nextBlock: AgentRuntimeContentBlock
+): AgentRuntimeContentBlock[] => {
+    const existingIndex = findMessageBlockIndex(blocks, nextBlock);
+    if (existingIndex < 0) return [...blocks, nextBlock];
+    return blocks.map((block, index) => index === existingIndex ? nextBlock : block);
+};
+
+const findMessageBlockIndex = (
+    blocks: AgentRuntimeContentBlock[],
+    nextBlock: AgentRuntimeContentBlock
+): number => {
+    if (typeof nextBlock.id === 'string' && nextBlock.id.length > 0) {
+        return blocks.findIndex(block => block.id === nextBlock.id);
+    }
+    if (typeof nextBlock.contentIndex === 'number') {
+        return blocks.findIndex(block => block.contentIndex === nextBlock.contentIndex);
+    }
+    return blocks.findIndex(block => block.type === nextBlock.type);
 };
 
 const clone = <T>(value: T): T => {

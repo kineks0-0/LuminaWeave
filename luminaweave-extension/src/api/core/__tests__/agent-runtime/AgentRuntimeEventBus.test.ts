@@ -124,6 +124,77 @@ describe('AgentRuntimeEventBus', () => {
         ]);
     });
 
+    it('replaces streaming text blocks of the same type instead of accumulating full prefixes', () => {
+        const bus = new AgentRuntimeEventBus();
+
+        bus.emit({ type: 'turn_start', turnId: 'turn_1' });
+        bus.emit({
+            type: 'message_start',
+            message: { id: 'message_1', role: 'assistant', blocks: [] }
+        });
+        bus.emit({
+            type: 'message_update',
+            messageId: 'message_1',
+            block: { type: 'text', text: '需要' }
+        });
+        bus.emit({
+            type: 'message_update',
+            messageId: 'message_1',
+            block: { type: 'text', text: '需要搜索可抓取的资料' }
+        });
+        bus.emit({
+            type: 'message_update',
+            messageId: 'message_1',
+            block: { type: 'thinking', text: '先搜索' }
+        });
+        bus.emit({
+            type: 'message_update',
+            messageId: 'message_1',
+            block: { type: 'thinking', text: '先搜索并整理来源' }
+        });
+
+        expect(bus.getSnapshot().streamingMessage?.blocks).toEqual([
+            { type: 'text', text: '需要搜索可抓取的资料' },
+            { type: 'thinking', text: '先搜索并整理来源' }
+        ]);
+    });
+
+    it('updates provider-native content blocks by content index without collapsing same-type blocks', () => {
+        const bus = new AgentRuntimeEventBus();
+
+        bus.emit({ type: 'turn_start', turnId: 'turn_1' });
+        bus.emit({
+            type: 'message_start',
+            message: { id: 'message_1', role: 'assistant', blocks: [] }
+        });
+        bus.emit({
+            type: 'message_update',
+            messageId: 'message_1',
+            block: { type: 'text', contentIndex: 0, text: 'intro' }
+        });
+        bus.emit({
+            type: 'message_update',
+            messageId: 'message_1',
+            block: { type: 'thinking', contentIndex: 1, text: 'checking source' }
+        });
+        bus.emit({
+            type: 'message_update',
+            messageId: 'message_1',
+            block: { type: 'text', contentIndex: 2, text: 'answer' }
+        });
+        bus.emit({
+            type: 'message_update',
+            messageId: 'message_1',
+            block: { type: 'thinking', contentIndex: 1, text: 'checking source and policy' }
+        });
+
+        expect(bus.getSnapshot().streamingMessage?.blocks).toEqual([
+            { type: 'text', contentIndex: 0, text: 'intro' },
+            { type: 'thinking', contentIndex: 1, text: 'checking source and policy' },
+            { type: 'text', contentIndex: 2, text: 'answer' }
+        ]);
+    });
+
     it('sets error state on turn end and returns immutable snapshots', () => {
         const bus = new AgentRuntimeEventBus();
         bus.emit({ type: 'turn_start', turnId: 'turn_1' });

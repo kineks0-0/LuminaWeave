@@ -54,12 +54,11 @@ const assistantMessage = (content: AssistantMessage['content'], stopReason: Assi
 
 const textStreamFn = (text: string) => () => {
     const stream = createAssistantMessageEventStream();
-    const rawText = `<final>${text}</final>`;
-    const message = assistantMessage([{ type: 'text', text: rawText }]);
+    const message = assistantMessage([{ type: 'text', text }]);
     stream.push({ type: 'start', partial: assistantMessage([]) });
     stream.push({ type: 'text_start', contentIndex: 0, partial: assistantMessage([{ type: 'text', text: '' }]) });
-    stream.push({ type: 'text_delta', contentIndex: 0, delta: rawText, partial: message });
-    stream.push({ type: 'text_end', contentIndex: 0, content: rawText, partial: message });
+    stream.push({ type: 'text_delta', contentIndex: 0, delta: text, partial: message });
+    stream.push({ type: 'text_end', contentIndex: 0, content: text, partial: message });
     stream.push({ type: 'done', reason: 'stop', message });
     stream.end(message);
     return stream;
@@ -136,8 +135,9 @@ describe('ForgePiCoreRuntime', () => {
                 content: '预览提示词'
             }
         ]);
-        expect(result.prompt[0]?.content).toContain('<process>...</process>');
-        expect(result.prompt[0]?.content).toContain('<final>...</final>');
+        expect(result.prompt[0]?.content).toContain('Provider-native structured messages');
+        expect(result.prompt[0]?.content).not.toContain('<process>');
+        expect(result.prompt[0]?.content).not.toContain('<final>');
         expect(resourceLoader.buildSystemPrompt).toHaveBeenCalledWith(expect.objectContaining({
             systemFragments: []
         }));
@@ -272,12 +272,12 @@ describe('ForgePiCoreRuntime', () => {
                         calls += 1;
                         const stream = createAssistantMessageEventStream();
                         if (calls === 2) {
-                            const rawText = '<final>已写入项目。</final>';
-                            const message = assistantMessage([{ type: 'text', text: rawText }]);
+                            const text = '已写入项目。';
+                            const message = assistantMessage([{ type: 'text', text }]);
                             stream.push({ type: 'start', partial: assistantMessage([]) });
                             stream.push({ type: 'text_start', contentIndex: 0, partial: assistantMessage([{ type: 'text', text: '' }]) });
-                            stream.push({ type: 'text_delta', contentIndex: 0, delta: rawText, partial: message });
-                            stream.push({ type: 'text_end', contentIndex: 0, content: rawText, partial: message });
+                            stream.push({ type: 'text_delta', contentIndex: 0, delta: text, partial: message });
+                            stream.push({ type: 'text_end', contentIndex: 0, content: text, partial: message });
                             stream.push({ type: 'done', reason: 'stop', message });
                             stream.end(message);
                             return stream;

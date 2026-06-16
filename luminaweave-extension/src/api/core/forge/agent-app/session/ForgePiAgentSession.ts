@@ -3,7 +3,7 @@ import {
     type AgentEvent,
     type AgentMessage
 } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, ToolResultMessage } from '@earendil-works/pi-ai';
+import type { ToolResultMessage } from '@earendil-works/pi-ai';
 import type {
     ForgePiBranchFromUserResult,
     ForgePiContextBundleSummary,
@@ -42,10 +42,6 @@ import {
     type ForgePiAgentTool,
     type ForgePiToolBridge
 } from '../tools/ForgePiToolBridge.js';
-import {
-    parseForgePiAgentOutput,
-    projectForgePiStreamingOutput
-} from './ForgePiAgentOutputParser.js';
 import { AgentPromptAssembler } from '../../../agent-runtime/prompt/AgentPromptAssembler.js';
 import {
     type AgentRuntimeContentBlock,
@@ -128,6 +124,15 @@ interface ForgePiEventSink {
     runtimeMessageStarted: boolean;
     runtimeLastText: string | null;
     onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
+}
+
+interface ForgePiAssistantProjection {
+    rawText: string;
+    finalText: string;
+    thinkingBlocks: string[];
+    thinkingText: string;
+    runtimeBlocks: AgentRuntimeContentBlock[];
+    streamKey: string;
 }
 
 interface ForgePiPreparedPrompt {
@@ -259,8 +264,10 @@ export class ForgePiAgentSession {
         };
         await agent.prompt(userMessage);
 
-        const finalText = this.resolveLastAssistantText(agent.state.messages);
-        const parsedFinal = parseForgePiAgentOutput(finalText);
+        const finalMessage = this.resolveLastAssistantMessage(agent.state.messages);
+        const finalProjection = finalMessage
+            ? this.projectAssistantMessage(finalMessage)
+            : this.emptyAssistantProjection();
         for (const modelTrace of this.resolveModelTraces(input.request.requestId)) {
             emitEvent({
                 type: 'model_request_trace',
@@ -271,9 +278,9 @@ export class ForgePiAgentSession {
         emitEvent({
             type: 'stream_done',
             requestId: input.request.requestId,
-            rawText: finalText,
-            displayText: parsedFinal.finalText,
-            thinkingText: parsedFinal.processBlocks.join('\n\n'),
+            rawText: finalProjection.rawText,
+            displayText: finalProjection.finalText,
+            thinkingText: finalProjection.thinkingText,
             completedAt: Date.now()
         });
         this.agentRuntimeEvents?.emit({
@@ -390,8 +397,10 @@ export class ForgePiAgentSession {
                 runtimeLastText: null
             };
             await this.agent.continue();
-            const finalText = this.resolveLastAssistantText(this.agent.state.messages);
-            const parsedFinal = parseForgePiAgentOutput(finalText);
+            const finalMessage = this.resolveLastAssistantMessage(this.agent.state.messages);
+            const finalProjection = finalMessage
+                ? this.projectAssistantMessage(finalMessage)
+                : this.emptyAssistantProjection();
             for (const modelTrace of this.resolveModelTraces(this.latestRequest.requestId)) {
                 resolved.events.push({
                     type: 'model_request_trace',
@@ -402,9 +411,9 @@ export class ForgePiAgentSession {
             resolved.events.push({
                 type: 'stream_done',
                 requestId: this.latestRequest.requestId,
-                rawText: finalText,
-                displayText: parsedFinal.finalText,
-                thinkingText: parsedFinal.processBlocks.join('\n\n'),
+                rawText: finalProjection.rawText,
+                displayText: finalProjection.finalText,
+                thinkingText: finalProjection.thinkingText,
                 completedAt: Date.now()
             });
             this.agentRuntimeEvents?.emit({
@@ -450,7 +459,7 @@ export class ForgePiAgentSession {
             prompt: userInput,
             systemPrompt: baseSystemPrompt
         }) ?? Promise.resolve({ systemPrompt: baseSystemPrompt }));
-        const systemPrompt = this.applyOutputProtocol(
+        const systemPrompt = this.applyStructuredMessageContract(
             this.applyBeforeAgentStartResult(baseSystemPrompt, beforeAgentStart)
         );
         const branchMessages = this.sessionManager.getBranchMessages({
@@ -571,51 +580,41 @@ export class ForgePiAgentSession {
     ): void {
         if (event.type === 'message_update') {
             markFirstResponse();
-            const text = this.extractAssistantText(event.message);
-            const projection = projectForgePiStreamingOutput(text);
+            const projection = this.projectAssistantMessage(event.message);
             if (!this.emitAgentRuntimeTextUpdate(input, projection)) return;
             const runtimeEvent: ForgeRuntimeEvent = {
                 type: 'stream_chunk',
                 requestId: input.request.requestId,
                 displayText: projection.finalText,
-                thinkingText: projection.processText,
-                rawText: text
+                thinkingText: projection.thinkingText,
+                rawText: projection.rawText
             };
             input.events.push(runtimeEvent);
             input.onRuntimeEvent?.(runtimeEvent);
         }
         if (event.type === 'message_end' && event.message.role === 'assistant') {
-            const text = this.extractAssistantText(event.message);
-            const parsed = parseForgePiAgentOutput(text);
-            this.emitOutputParseDiagnostics(input, parsed.diagnostics);
+            const projection = this.projectAssistantMessage(event.message);
             this.emitAgentRuntimeMessageStart(input);
             input.runtimeEvents?.emit({
                 type: 'message_end',
                 messageId: input.request.requestId
             });
-            for (const processText of parsed.processBlocks) {
-                const processMessage = this.createAssistantTextMessage(
-                    event.message,
-                    `[Process]\n${processText}`
-                );
+            for (const processText of projection.thinkingBlocks) {
                 this.sessionManager.append('process', 'Process', processText, {
                     role: 'process',
-                    agentMessage: processMessage,
-                    replayAgentMessage: processMessage,
-                    text: processText
+                    text: processText,
+                    source: 'provider_native_thinking'
                 });
             }
-            if (!parsed.finalText) return;
-            const finalMessage = this.createAssistantTextMessage(event.message, parsed.finalText);
-            const classified = classifyForgePiAssistantMessageForReplay(finalMessage, {
+            if (!projection.finalText) return;
+            const classified = classifyForgePiAssistantMessageForReplay(event.message, {
                 providerId: event.message.provider,
                 modelId: event.message.responseModel ?? event.message.model
             });
-            this.sessionManager.append('assistant', 'Assistant', parsed.finalText, {
+            this.sessionManager.append('assistant', 'Assistant', projection.finalText, {
                 agentMessage: classified.replayMessage,
                 replayAgentMessage: classified.replayMessage,
-                text: parsed.finalText,
-                processParseDiagnostics: parsed.diagnostics,
+                text: projection.finalText,
                 providerReasoningArtifactCount: classified.providerReasoningArtifacts.length,
                 unsafeInternalPartCount: classified.unsafeInternalParts.length,
                 reasoningSanitizerTrace: {
@@ -684,43 +683,20 @@ export class ForgePiAgentSession {
 
     private emitAgentRuntimeTextUpdate(
         input: ForgePiEventSink,
-        projection: ReturnType<typeof projectForgePiStreamingOutput>
+        projection: ForgePiAssistantProjection
     ): boolean {
-        if (projection.rawText.length === 0 || projection.rawText === input.runtimeLastText) return false;
-        input.runtimeLastText = projection.rawText;
+        if (projection.streamKey.length === 0 || projection.streamKey === input.runtimeLastText) return false;
+        input.runtimeLastText = projection.streamKey;
         if (!input.runtimeEvents) return true;
         this.emitAgentRuntimeMessageStart(input);
-        if (projection.processText) {
+        for (const block of projection.runtimeBlocks) {
             input.runtimeEvents.emit({
                 type: 'message_update',
                 messageId: input.request.requestId,
-                block: { type: 'thinking', text: projection.processText }
-            });
-        }
-        if (projection.finalText) {
-            input.runtimeEvents.emit({
-                type: 'message_update',
-                messageId: input.request.requestId,
-                block: { type: 'text', text: projection.finalText }
+                block
             });
         }
         return true;
-    }
-
-    private emitOutputParseDiagnostics(
-        input: ForgePiEventSink,
-        diagnostics: ReturnType<typeof parseForgePiAgentOutput>['diagnostics']
-    ): void {
-        if (diagnostics.length === 0) return;
-        const runtimeEvent: ForgeRuntimeEvent = {
-            type: 'trace',
-            requestId: input.request.requestId,
-            tag: 'agent_output_parse',
-            status: `diagnostics:${[...new Set(diagnostics.map(diagnostic => diagnostic.code))].join(',')}`,
-            timestamp: Date.now()
-        };
-        input.events.push(runtimeEvent);
-        input.onRuntimeEvent?.(runtimeEvent);
     }
 
     private toAgentRuntimeToolResult(result: unknown): AgentRuntimeToolResult | undefined {
@@ -808,11 +784,6 @@ export class ForgePiAgentSession {
         return 'planner';
     }
 
-    private resolveLastAssistantText(messages: AgentMessage[]): string {
-        const lastAssistant = [...messages].reverse().find(message => message.role === 'assistant');
-        return lastAssistant ? this.extractAssistantText(lastAssistant) : '';
-    }
-
     private resolveModelTraces(requestId: string) {
         const traces = typeof this.modelRegistry.getTraces === 'function'
             ? this.modelRegistry.getTraces(requestId)
@@ -838,29 +809,79 @@ export class ForgePiAgentSession {
         return typeof type === 'string' && type.length > 0 ? type : 'unknown';
     }
 
-    private extractAssistantText(message: AgentMessage): string {
-        if (message.role !== 'assistant') return '';
-        return message.content
-            .filter(part => part.type === 'text')
-            .map(part => part.text)
-            .join('');
+    private resolveLastAssistantMessage(messages: AgentMessage[]): AgentMessage | null {
+        return [...messages].reverse().find(message => message.role === 'assistant') ?? null;
     }
 
-    private applyOutputProtocol(systemPrompt: string): string {
-        if (systemPrompt.includes('<process>') && systemPrompt.includes('<final>')) return systemPrompt;
+    private projectAssistantMessage(message: AgentMessage): ForgePiAssistantProjection {
+        if (message.role !== 'assistant') return this.emptyAssistantProjection();
+        const finalTextParts: string[] = [];
+        const thinkingBlocks: string[] = [];
+        const runtimeBlocks: AgentRuntimeContentBlock[] = [];
+        this.getAgentMessageContent(message).forEach((part, contentIndex) => {
+            if (!this.isRecord(part)) return;
+            if (part.type === 'text' && typeof part.text === 'string') {
+                finalTextParts.push(part.text);
+                runtimeBlocks.push({
+                    type: 'text',
+                    contentIndex,
+                    text: part.text
+                });
+                return;
+            }
+            if (part.type === 'thinking' && typeof part.thinking === 'string') {
+                if (part.thinking.length > 0) {
+                    thinkingBlocks.push(part.thinking);
+                }
+                runtimeBlocks.push({
+                    type: 'thinking',
+                    contentIndex,
+                    text: part.thinking,
+                    redacted: part.redacted === true
+                });
+                return;
+            }
+            if (part.type === 'toolCall' && typeof part.id === 'string' && typeof part.name === 'string') {
+                runtimeBlocks.push({
+                    type: 'toolCall',
+                    id: part.id,
+                    contentIndex,
+                    toolName: part.name,
+                    args: part.arguments
+                });
+            }
+        });
+        const finalText = finalTextParts.join('');
+        const thinkingText = thinkingBlocks.join('\n\n');
+        return {
+            rawText: finalText,
+            finalText,
+            thinkingBlocks,
+            thinkingText,
+            runtimeBlocks,
+            streamKey: runtimeBlocks.length > 0 ? JSON.stringify(runtimeBlocks) : ''
+        };
+    }
+
+    private emptyAssistantProjection(): ForgePiAssistantProjection {
+        return {
+            rawText: '',
+            finalText: '',
+            thinkingBlocks: [],
+            thinkingText: '',
+            runtimeBlocks: [],
+            streamKey: ''
+        };
+    }
+
+    private applyStructuredMessageContract(systemPrompt: string): string {
+        if (systemPrompt.includes('Provider-native structured messages')) return systemPrompt;
         return [
             systemPrompt,
-            '# Forge Agent output protocol',
-            'Use `<process>...</process>` for public execution notes that should appear in the running process card.',
-            'Use `<final>...</final>` for the final user-facing reply.',
-            'Do not place tool calls, file audit data, or workspace patch data inside these text blocks.'
+            '# Provider-native structured messages',
+            'Return the final user-facing reply as provider-native text content.',
+            'Use provider-native thinking content for concise public execution progress when the selected provider supports it.',
+            'Tool calls, file audit data, and workspace patch data must come from runtime/tool events, not assistant text.'
         ].join('\n\n');
-    }
-
-    private createAssistantTextMessage(source: AgentMessage, text: string): AssistantMessage {
-        return {
-            ...source,
-            content: [{ type: 'text', text }]
-        } as AssistantMessage;
     }
 }
