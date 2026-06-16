@@ -2,14 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 import {
     createAssistantMessageEventStream,
     type AssistantMessage,
+    type Api,
     type Context,
     type Message,
+    type Model,
     type Usage
 } from '@earendil-works/pi-ai';
 import {
     ForgePiNexusProvider,
     type ForgePiRunSimple
 } from '@/api/core/forge/agent-app/model/ForgePiNexusProvider.js';
+import type { AgentRuntimeModelProvider } from '@/api/core/agent-runtime/model/AgentRuntimeModelProvider.js';
 import type {
     ForgeExecutionRequest,
     ForgeRequestContextSnapshot,
@@ -112,6 +115,65 @@ const createAssistant = (text: string, assistantUsage: Usage = usage): Assistant
 });
 
 describe('ForgePiNexusProvider', () => {
+    it('delegates model and API key resolution to the Agent Runtime model provider', async () => {
+        const resolvedModel: Model<Api> = {
+            id: 'test-model',
+            name: 'Test Model',
+            api: 'openai-completions',
+            provider: 'test',
+            baseUrl: 'https://example.test/v1',
+            reasoning: false,
+            input: ['text'],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 0,
+            maxTokens: 0,
+            headers: { 'x-lumina-forge-request-id': 'req_provider_trace' }
+        };
+        const modelProvider: AgentRuntimeModelProvider = {
+            getModel: vi.fn(() => resolvedModel),
+            getStreamOptions: vi.fn(() => ({ apiKey: 'model-provider-key', temperature: 0.2, maxTokens: 512 })),
+            listModels: vi.fn(async () => [])
+        };
+        let observedApiKey: string | undefined;
+        const runSimple = vi.fn<ForgePiRunSimple>((_model, _context, options) => {
+            observedApiKey = options?.apiKey;
+            const output = createAssistantMessageEventStream();
+            queueMicrotask(() => {
+                const assistant = createAssistant('完成。');
+                output.push({ type: 'done', reason: 'stop', message: assistant });
+                output.end(assistant);
+            });
+            return output;
+        });
+        const provider = new ForgePiNexusProvider({
+            modelProvider,
+            runSimple,
+            now: () => 123
+        });
+        const request = createRequest();
+        const context = createContext();
+
+        const model = provider.createModelForRequest(request, context);
+        const output = provider.streamSimple(model, {
+            systemPrompt: 'system',
+            messages: [{ role: 'user', content: '继续', timestamp: 1 }],
+            tools: []
+        });
+        for await (const _event of output) {
+            // drain stream
+        }
+
+        expect(modelProvider.getModel).toHaveBeenCalledWith({
+            presetId: 'forge-main',
+            headers: { 'x-lumina-forge-request-id': request.requestId }
+        });
+        expect(modelProvider.getStreamOptions).toHaveBeenCalledWith({
+            presetId: 'forge-main',
+            generationSettings: request.generationSettings
+        });
+        expect(observedApiKey).toBe('model-provider-key');
+    });
+
     it('streams through pi-ai while recording native pi request trace data', async () => {
         let observedMessages: Message[] = [];
         const runSimple = vi.fn<ForgePiRunSimple>((model, context, options) => {

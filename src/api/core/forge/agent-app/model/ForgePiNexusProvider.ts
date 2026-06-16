@@ -8,13 +8,15 @@ import {
     type Context,
     type Message,
     type Model,
-    type Provider,
     type ProviderResponse,
     type SimpleStreamOptions,
     type StopReason
 } from '@earendil-works/pi-ai';
-import { llmEngine } from '../../../../llmEngine.js';
-import { lwStorage } from '../../../../storage.js';
+import {
+    PiAiBrowserNexusProvider,
+    piAiBrowserNexusProvider
+} from '../../../agent-runtime/model/PiAiBrowserNexusProvider.js';
+import type { AgentRuntimeModelProvider } from '../../../agent-runtime/model/AgentRuntimeModelProvider.js';
 import type {
     ForgeExecutionRequest,
     ForgePiModelRequestTrace,
@@ -33,6 +35,7 @@ export type ForgePiRunSimple = (
 ) => AssistantMessageEventStream;
 
 export interface ForgePiNexusProviderDeps {
+    modelProvider?: AgentRuntimeModelProvider;
     resolveNodesFromPreset?: (presetId?: string) => NexusNode[];
     readApiConfigs?: () => NexusAPI[];
     runSimple?: ForgePiRunSimple;
@@ -42,19 +45,11 @@ export interface ForgePiNexusProviderDeps {
 interface ForgePiNexusRunMetadata {
     request: ForgeExecutionRequest;
     context: ForgeRuntimeContext;
-    apiKey?: string;
-}
-
-interface ResolvedPiModelConfig {
-    api: Api;
-    provider: Provider;
-    baseUrl: string;
-    apiKey?: string;
+    streamOptions: SimpleStreamOptions;
 }
 
 export class ForgePiNexusProvider {
-    private readonly resolveNodesFromPreset: (presetId?: string) => NexusNode[];
-    private readonly readApiConfigs: () => NexusAPI[];
+    private readonly modelProvider: AgentRuntimeModelProvider;
     private readonly runSimple: ForgePiRunSimple;
     private readonly now: () => number;
     private readonly runMetadata = new Map<string, ForgePiNexusRunMetadata>();
@@ -62,39 +57,32 @@ export class ForgePiNexusProvider {
     private readonly traceGroups = new Map<string, ForgePiModelRequestTrace[]>();
 
     constructor(deps: ForgePiNexusProviderDeps = {}) {
-        this.resolveNodesFromPreset = deps.resolveNodesFromPreset ?? ((presetId) => llmEngine.resolveNodesFromPreset(presetId));
-        this.readApiConfigs = deps.readApiConfigs ?? (() => {
-            const value = lwStorage.get('nexus.apis', [], 'Global');
-            return Array.isArray(value) ? value as NexusAPI[] : [];
-        });
+        this.modelProvider = deps.modelProvider ?? (
+            deps.resolveNodesFromPreset || deps.readApiConfigs
+                ? new PiAiBrowserNexusProvider({
+                    resolveNodesFromPreset: deps.resolveNodesFromPreset,
+                    readApiConfigs: deps.readApiConfigs
+                })
+                : piAiBrowserNexusProvider
+        );
         this.runSimple = deps.runSimple ?? piRunSimple;
         this.now = deps.now ?? Date.now;
     }
 
     createModelForRequest(request: ForgeExecutionRequest, context: ForgeRuntimeContext): Model<Api> {
         const presetId = request.presetId || context.selectedPresetId;
-        const node = this.resolveNodesFromPreset(presetId)[0];
-        if (!node) {
-            throw new Error(`Forge pi runtime 无法解析 Nexus 预设节点：${presetId || '未指定'}`);
-        }
-        const apiConfig = this.readApiConfigs().find(item => item?.id === node.provider) ?? null;
-        const resolved = this.resolvePiModelConfig(node, apiConfig);
-        this.runMetadata.set(request.requestId, { request, context, apiKey: resolved.apiKey });
-        return {
-            id: node.model || presetId || 'forge-nexus',
-            name: node.model || 'Forge Nexus',
-            api: resolved.api,
-            provider: resolved.provider,
-            baseUrl: resolved.baseUrl,
-            reasoning: false,
-            input: ['text'],
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            contextWindow: 0,
-            maxTokens: 0,
+        const model = this.modelProvider.getModel({
+            presetId,
             headers: {
                 [FORGE_REQUEST_ID_HEADER]: request.requestId
             }
-        };
+        });
+        const streamOptions = this.modelProvider.getStreamOptions({
+            presetId,
+            generationSettings: request.generationSettings
+        });
+        this.runMetadata.set(request.requestId, { request, context, streamOptions });
+        return model;
     }
 
     streamSimple(model: Model<Api>, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream {
@@ -174,8 +162,7 @@ export class ForgePiNexusProvider {
     ): SimpleStreamOptions {
         return {
             ...options,
-            ...this.mapGenerationSettings(metadata.request.generationSettings),
-            apiKey: metadata.apiKey,
+            ...metadata.streamOptions,
             signal: options?.signal,
             onPayload: async (payload, model) => {
                 trace.providerPayload = this.toJsonSafe(payload);
@@ -220,30 +207,6 @@ export class ForgePiNexusProvider {
             totalTokens: message.usage.totalTokens,
             providerUsage: this.toJsonSafe(message.usage)
         };
-    }
-
-    private resolvePiModelConfig(node: NexusNode, apiConfig: NexusAPI | null): ResolvedPiModelConfig {
-        const type = apiConfig?.type;
-        const baseUrl = apiConfig?.url || node.url || '';
-        const apiKey = apiConfig?.key || node.key || undefined;
-        if (type === 'anthropic') {
-            return { api: 'anthropic-messages', provider: 'anthropic', baseUrl: baseUrl || 'https://api.anthropic.com', apiKey };
-        }
-        if (type === 'google') {
-            return { api: 'google-generative-ai', provider: 'google', baseUrl, apiKey };
-        }
-        return {
-            api: 'openai-completions',
-            provider: this.resolveOpenAiProvider(node, apiConfig),
-            baseUrl: baseUrl || 'https://api.openai.com/v1',
-            apiKey
-        };
-    }
-
-    private resolveOpenAiProvider(node: NexusNode, apiConfig: NexusAPI | null): Provider {
-        if (apiConfig?.type === 'openai') return 'openai';
-        if (node.provider === 'openai' || node.provider === 'openai_compatible') return 'openai';
-        return node.provider || 'openai';
     }
 
     private createTrace(input: {
@@ -325,13 +288,6 @@ export class ForgePiNexusProvider {
             timestamp: this.now()
         });
         trace.updatedAt = this.now();
-    }
-
-    private mapGenerationSettings(settings: ForgeExecutionRequest['generationSettings']): SimpleStreamOptions {
-        return {
-            temperature: typeof settings?.temperature === 'number' ? settings.temperature : undefined,
-            maxTokens: typeof settings?.max_tokens === 'number' ? settings.max_tokens : undefined
-        };
     }
 
     private summarizeProviderResponse(response: ProviderResponse): Record<string, unknown> {
