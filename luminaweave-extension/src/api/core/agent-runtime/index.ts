@@ -1,5 +1,6 @@
 export * from './events/AgentRuntimeEventBus.js';
 export * from './extensions/AgentRuntimeExtensionRunner.js';
+export * from './model/index.js';
 export * from './openfs/OpenFsAgentMount.js';
 export * from './prompt/AgentPromptAssembler.js';
 export * from './research/index.js';

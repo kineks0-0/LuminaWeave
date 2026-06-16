@@ -53,6 +53,8 @@
 2026-06-12：完成 Forge 执行过程内联段分层显示修正。新增 Forge plugin presentation helper，把 active turn 的 `process`、tool call/result、`workspace_patch` 和文件变更投影为“执行过程”内联段；运行中默认展开，结束后在用户输入与最终回复之间保留一行摘要，并可手动展开/收起。`CardMakerPanel` 不再用 debug trace 组件渲染聊天内过程，assistant 最终回复区也不再显示 `thinkingText`，文件变更保持独立区域并继续通过 `workspace_patch` / 版本面板处理撤回与恢复。
 
 2026-06-12：收紧执行过程内联段的信息层级。模型公开过程正文直接显示为文本，不再作为专用标题或模型请求状态步骤行；步骤列表只承载工具调用、文件变更、`workspace_patch` 等过程事实。
+2026-06-16：完成 pi-ai browser Nexus provider 边界收敛。取消 `PiAiBrowserTransport` 作为独立规划，新增 Agent Runtime model provider 端口与 `PiAiBrowserNexusProvider`，只负责把 Nexus preset / API 配置解析为 pi-ai `Model<Api>` 和 `SimpleStreamOptions`；Forge 的 `ForgePiNexusProvider` 继续保留模型请求 trace 和 stream 包装，但不再直接读取 `nexus.apis`。规划见 `steps/2026-06-16-pi-ai-browser-nexus-provider-plan.md`。
+
 
 已确认方向：
 
@@ -69,6 +71,7 @@
 - Extension workflow kit 可加载由 adapter / 代码配置显式指定的 extension factories 或 resolved extension paths；Core SDK 不自动扫描用户目录、项目目录或 VFS 中的可执行代码。
 - Workspace Tools Kit 可提供 pi-style 短名工具工厂：`read`、`write`、`edit`、`delete`、`bash`，并可补充只读 `grep`、`find`、`ls`、`search`；所有工具都由接入方显式选择、配置、注册。
 - Research Tools Kit 可提供 `webResearch` 工具工厂和 `AgentResearchProvider` 端口；Core SDK 不默认暴露联网工具，Forge 只有在 Tavily key 非空时才注册 Tavily-backed `webResearch`。
+- Model provider 端口提供 `getModel()`、`getStreamOptions()` 与 `listModels()`；浏览器直连实现为 `PiAiBrowserNexusProvider`，Forge 只传 `presetId` 和 request metadata，不直接读取 `nexus.apis`。
 - Forge 模型可见工具名迁移为 `read`、`write`、`edit`、`delete`、`bash`；旧会话回放和 trace 展示中的历史工具名由 Forge adapter 处理兼容。
 - thinking 作为 assistant message stream block、trace 和 UI projection 输入处理，不作为默认可持久化业务状态。
 - Forge 可在 adapter 层把模型显式输出拆为公开执行说明 `process` 和最终回复 `assistant`。Core SDK 可提供通用 session/event/projection 支撑，但不拥有 Forge `<process>` / `<final>` prompt 协议。
@@ -91,6 +94,7 @@
 
 - [Agent Runtime SDK 第一阶段实现记录](./steps/2026-06-11-agent-runtime-sdk-implementation-record.md)
 - [Agent Runtime SDK 边界规划](./steps/2026-06-11-agent-runtime-sdk-boundary-plan.md)
+- [Pi AI Browser Nexus Provider 规划](./steps/2026-06-16-pi-ai-browser-nexus-provider-plan.md)
 - [pi agent 工作流与 UI 状态整理](./steps/2026-06-11-pi-agent-workflow-ui-state-plan.md)
 - [Forge Agent process / final 与文件版本规划](./steps/2026-06-12-forge-agent-process-final-version-plan.md)
 - [Forge Agent 下一阶段可靠可控决策规划](../forge/steps/2026-06-10-forge-agent-next-stage-decision.md)
