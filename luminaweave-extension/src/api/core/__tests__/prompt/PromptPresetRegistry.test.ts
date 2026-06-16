@@ -152,7 +152,7 @@ describe('PromptPresetRegistry', () => {
                 title: 'XP 捕捉附加条目',
                 path: './agent/skills/reference-xp-capture/SKILL.md',
                 loadPolicy: 'on_demand',
-                content: expect.stringContaining('XP 捕捉附加条目')
+                content: expect.stringContaining('性癖捕捉附加条目')
             })
         ]));
     });

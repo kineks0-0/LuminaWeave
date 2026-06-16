@@ -55,3 +55,9 @@
 50:   - 在 `LuminaTimeline.vue` 和 `HistoryNode.vue` 中引入“跳转 (Jump)”功能，支持无损切换到已有分支节点。
 51: - **验证结果**: 经过代码检查和逻辑推导，该过滤逻辑可以确保 UI 只渲染当前世界线路径的内容。手动验证确认“从此分支”和新增的“跳转”动作均能正确触发 `activeLeafId` 变更并驱动消息列表更新。
 52: - **文档**: 本次修改符合“各子世界线严格隔离”的设计原则。
+## 6. Forge 主预设资源测试断言修复 (2026-06-16)
+- **错误消息**: `npm run test` 中 `src/api/core/__tests__/prompt/PromptPresetRegistry.test.ts` 的“Forge 主预设应暴露 agent 资源包和提示词编排，而不是依赖 slot 列表”失败；断言期望 `reference-xp-capture` 的 `content` 包含 `XP 捕捉附加条目`，实际 raw `SKILL.md` 内容包含 `性癖捕捉附加条目`。
+- **根本原因假设**: 测试同时校验 JSON 资源标题和 raw `SKILL.md` 正文，但该技能的 JSON display title 是 `XP 捕捉附加条目`，`SKILL.md` frontmatter/body 的真实标题是 `性癖捕捉附加条目`；测试没有按两个事实源分别断言。
+- **验证手段**: 修改测试只将 raw content 断言对齐到 `SKILL.md` 的精确正文标题，然后重新运行目标测试与完整验证命令。
+- **什么起作用了**: `npm run test -- src/api/core/__tests__/prompt/PromptPresetRegistry.test.ts` 通过 11 个用例；随后完整 `npm run test` 通过 151 个测试文件、771 个用例，2 个用例跳过。
+- **失败尝试**: 首次完整 `npm run test` 复现了该断言失败；未尝试其他代码修复路径。
