@@ -14,6 +14,13 @@ import {
 import { getSurfaceSkinContract } from '../surfaceSkinContracts.js';
 import type { DesktopModeManifest } from '../types.js';
 
+const expectNoHardcodedLightSurfaceEndpoint = (value: string | number | undefined): void => {
+    expect(String(value)).not.toContain('rgba(255, 255, 255');
+    expect(String(value)).not.toContain('rgba(244, 248, 254');
+    expect(String(value)).not.toContain('rgba(245, 249, 255');
+    expect(String(value)).not.toMatch(/(^|[^-\w])white(?![-\w])/);
+};
+
 describe('desktopModeRegistry', () => {
     it('uses activeDesktopMode as the only desktop mode selection setting', () => {
         expect(getActiveDesktopModeIdFromSettings({
@@ -66,6 +73,36 @@ describe('desktopModeRegistry', () => {
         expect(resolveSurfaceSkin('telegram', 'chat.stream', context).variant).toBe('telegram');
         expect(resolveSurfaceSkin('telegram', 'telegram.frame', context).cssVars['--lw-telegram-frame-bg']).toBeDefined();
         expect(getSurfaceSkinContract('shell.app')?.exposedCssVars).not.toContain('--lw-shell-statusbar-bg');
+    });
+
+    it('resolves dark shell surfaces without light endpoints', () => {
+        const classicDarkContext = {
+            activeSettings: {},
+            resolvedAppearance: 'dark' as const,
+            desktopModeId: 'classic'
+        };
+        const stageDarkContext = {
+            activeSettings: {},
+            resolvedAppearance: 'dark' as const,
+            desktopModeId: 'stage'
+        };
+        const classicMainSurface = resolveSurfaceSkin('classic', 'shell.mainSurface', classicDarkContext).cssVars;
+        const classicWidgetSurface = resolveSurfaceSkin('classic', 'shell.widget', classicDarkContext).cssVars;
+        const stageMainSurface = resolveSurfaceSkin('stage', 'shell.mainSurface', stageDarkContext).cssVars;
+        const stageWidgetSurface = resolveSurfaceSkin('stage', 'shell.widget', stageDarkContext).cssVars;
+        const stageWorkspaceMenu = resolveSurfaceSkin('stage', 'shell.workspaceMenu', stageDarkContext).cssVars;
+
+        expectNoHardcodedLightSurfaceEndpoint(classicMainSurface['--lw-shell-main-bg']);
+        expectNoHardcodedLightSurfaceEndpoint(classicMainSurface['--lw-shell-main-border']);
+        expectNoHardcodedLightSurfaceEndpoint(classicWidgetSurface['--lw-shell-widget-bg']);
+        expectNoHardcodedLightSurfaceEndpoint(classicWidgetSurface['--lw-shell-widget-border']);
+        expectNoHardcodedLightSurfaceEndpoint(stageMainSurface['--lw-shell-main-bg']);
+        expectNoHardcodedLightSurfaceEndpoint(stageWidgetSurface['--lw-shell-widget-bg']);
+        expectNoHardcodedLightSurfaceEndpoint(stageWidgetSurface['--lw-shell-widget-border']);
+        expectNoHardcodedLightSurfaceEndpoint(stageWorkspaceMenu['--lw-shell-workspace-menu-bg']);
+        expectNoHardcodedLightSurfaceEndpoint(stageWorkspaceMenu['--lw-shell-workspace-menu-border']);
+        expectNoHardcodedLightSurfaceEndpoint(stageWorkspaceMenu['--lw-shell-workspace-menu-item-bg']);
+        expectNoHardcodedLightSurfaceEndpoint(stageWorkspaceMenu['--lw-shell-workspace-menu-item-active-bg']);
     });
 
     it('registers a custom desktop mode and exposes it through settings options', async () => {

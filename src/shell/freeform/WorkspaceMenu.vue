@@ -67,12 +67,14 @@ const emit = defineEmits<{
   gap: 8px;
   padding: 12px;
   border-radius: 24px;
-  border: 1px solid var(--lw-shell-workspace-menu-border, color-mix(in srgb, var(--lw-border-base) 72%, white));
+  border: 1px solid var(--lw-shell-workspace-menu-border, color-mix(in srgb, var(--lw-border-base) 72%, var(--lw-bg-elevated)));
   background: var(--lw-shell-workspace-menu-bg,
-      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 249, 255, 0.76)));
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent),
+        color-mix(in srgb, var(--lw-bg-surface) 82%, transparent)));
   box-shadow:
     0 18px 42px rgba(48, 73, 114, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    inset 0 1px 0 color-mix(in srgb, var(--lw-bg-elevated) 80%, transparent);
   backdrop-filter: blur(22px) saturate(128%);
 }
 
@@ -117,8 +119,8 @@ const emit = defineEmits<{
   box-sizing: border-box;
   padding: 12px 14px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  background: var(--lw-shell-workspace-menu-item-bg, rgba(255, 255, 255, 0.24));
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 64%, transparent);
+  background: var(--lw-shell-workspace-menu-item-bg, color-mix(in srgb, var(--lw-bg-elevated) 76%, transparent));
   color: var(--lw-text-main);
   text-align: left;
   cursor: pointer;
@@ -129,9 +131,11 @@ const emit = defineEmits<{
 .lw-workspace-menu-item.active {
   border-color: rgba(var(--lw-primary-rgb), 0.16);
   background: var(--lw-shell-workspace-menu-item-active-bg,
-      linear-gradient(180deg, rgba(255, 255, 255, 0.86), color-mix(in srgb, var(--lw-primary) 9%, white)));
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--lw-bg-elevated) 86%, transparent),
+        color-mix(in srgb, var(--lw-primary) 9%, var(--lw-bg-surface))));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 1px 0 color-mix(in srgb, var(--lw-bg-elevated) 78%, transparent),
     0 8px 18px rgba(53, 80, 125, 0.1);
 }
 

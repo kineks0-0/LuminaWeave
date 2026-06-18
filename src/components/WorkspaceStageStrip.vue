@@ -92,7 +92,7 @@ defineEmits<{
 }
 
 .stage-create:hover {
-  background: color-mix(in srgb, var(--lw-primary) 10%, white);
+  background: color-mix(in srgb, var(--lw-primary) 10%, var(--lw-bg-elevated));
   border-color: var(--lw-border-active);
 }
 
@@ -119,7 +119,7 @@ defineEmits<{
 }
 
 .stage-card.is-active {
-  background: color-mix(in srgb, var(--lw-primary) 8%, white);
+  background: color-mix(in srgb, var(--lw-primary) 8%, var(--lw-bg-elevated));
   border-color: var(--lw-border-active);
   transform: translateX(4px);
   box-shadow: 0 20px 48px var(--lw-glass-shadow);

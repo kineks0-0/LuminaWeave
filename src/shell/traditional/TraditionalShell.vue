@@ -451,10 +451,12 @@ const telegramLeftRailStyle = computed<CSSProperties>(() => ({
   flex-direction: column;
   overflow: hidden;
   height: 100%;
-  border: 1px solid var(--lw-shell-main-border, color-mix(in srgb, var(--lw-border-base) 88%, white));
+  border: 1px solid var(--lw-shell-main-border, color-mix(in srgb, var(--lw-border-base) 88%, var(--lw-bg-elevated)));
   border-radius: var(--lw-shell-main-radius, 24px);
   background: var(--lw-shell-main-bg,
-      linear-gradient(180deg, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--lw-bg-elevated) 96%, white)));
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent),
+        color-mix(in srgb, var(--lw-bg-surface) 88%, transparent)));
   box-shadow: var(--lw-shell-main-shadow, 0 20px 44px rgba(15, 23, 42, 0.08));
   backdrop-filter: blur(10px);
 }
