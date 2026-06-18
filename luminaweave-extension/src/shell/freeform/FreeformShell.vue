@@ -343,12 +343,16 @@ watch(stageElement, (element) => {
   gap: 8px;
   padding: 6px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, white);
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, var(--lw-bg-elevated));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 249, 255, 0.76));
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent),
+      color-mix(in srgb, var(--lw-bg-surface) 82%, transparent)
+    );
   box-shadow:
     0 18px 42px rgba(48, 73, 114, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    inset 0 1px 0 color-mix(in srgb, var(--lw-bg-elevated) 80%, transparent);
   backdrop-filter: blur(22px) saturate(128%);
 }
 
@@ -370,11 +374,15 @@ watch(stageElement, (element) => {
 .lw-freeform-control:hover,
 .lw-freeform-control.active {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.86), color-mix(in srgb, var(--lw-primary) 9%, white));
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--lw-bg-elevated) 86%, transparent),
+      color-mix(in srgb, var(--lw-primary) 9%, var(--lw-bg-surface))
+    );
   border-color: rgba(var(--lw-primary-rgb), 0.16);
   color: var(--lw-text-main);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 1px 0 color-mix(in srgb, var(--lw-bg-elevated) 78%, transparent),
     0 8px 18px rgba(53, 80, 125, 0.1);
 }
 

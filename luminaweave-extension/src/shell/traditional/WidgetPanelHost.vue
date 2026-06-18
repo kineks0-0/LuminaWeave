@@ -230,9 +230,9 @@ const emit = defineEmits<{
 
 .lw-widget-container {
   background: var(--lw-shell-widget-bg,
-      linear-gradient(180deg, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--lw-bg-elevated) 96%, white)));
+      linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent), color-mix(in srgb, var(--lw-bg-surface) 88%, transparent)));
   backdrop-filter: var(--lw-glass-blur);
-  border: 1px solid var(--lw-shell-widget-border, color-mix(in srgb, var(--lw-border, var(--lw-border-base)) 88%, white));
+  border: 1px solid var(--lw-shell-widget-border, color-mix(in srgb, var(--lw-border, var(--lw-border-base)) 88%, var(--lw-bg-elevated)));
   border-radius: var(--lw-shell-widget-radius, 24px);
   display: flex;
   flex-direction: column;

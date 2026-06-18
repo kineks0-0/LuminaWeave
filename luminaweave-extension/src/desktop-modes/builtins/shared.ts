@@ -370,9 +370,9 @@ export const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopMode
         componentId: 'shell.mainSurface',
         cssVars: {
             '--lw-shell-main-bg':
-                'linear-gradient(180deg, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--lw-bg-elevated) 96%, white))',
+                'linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent), color-mix(in srgb, var(--lw-bg-surface) 88%, transparent))',
             '--lw-shell-main-mobile-bg': 'var(--lw-shell-main-bg)',
-            '--lw-shell-main-border': 'color-mix(in srgb, var(--lw-border-base) 88%, white)',
+            '--lw-shell-main-border': 'color-mix(in srgb, var(--lw-border-base) 88%, var(--lw-bg-elevated))',
             '--lw-shell-main-radius': '24px',
             '--lw-shell-main-shadow': '0 20px 44px rgba(15, 23, 42, 0.08)'
         }
@@ -381,8 +381,8 @@ export const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopMode
         componentId: 'shell.widget',
         cssVars: {
             '--lw-shell-widget-bg':
-                'linear-gradient(180deg, rgba(255, 255, 255, 0.92), color-mix(in srgb, var(--lw-bg-elevated) 96%, white))',
-            '--lw-shell-widget-border': 'color-mix(in srgb, var(--lw-border, var(--lw-border-base)) 88%, white)',
+                'linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent), color-mix(in srgb, var(--lw-bg-surface) 88%, transparent))',
+            '--lw-shell-widget-border': 'color-mix(in srgb, var(--lw-border, var(--lw-border-base)) 88%, var(--lw-bg-elevated))',
             '--lw-shell-widget-divider-border': '1px solid var(--lw-shell-widget-border)',
             '--lw-shell-widget-radius': '24px',
             '--lw-shell-widget-header-bg': 'transparent',
@@ -406,10 +406,10 @@ export const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopMode
         componentId: 'shell.workspaceMenu',
         cssVars: {
             '--lw-shell-workspace-menu-bg':
-                'linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(244, 248, 254, 0.34))',
-            '--lw-shell-workspace-menu-border': 'rgba(255, 255, 255, 0.42)',
-            '--lw-shell-workspace-menu-item-bg': 'rgba(255, 255, 255, 0.24)',
-            '--lw-shell-workspace-menu-item-active-bg': 'rgba(255, 255, 255, 0.4)'
+                'linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-elevated) 78%, transparent), color-mix(in srgb, var(--lw-bg-surface) 54%, transparent))',
+            '--lw-shell-workspace-menu-border': 'color-mix(in srgb, var(--lw-border-base) 72%, transparent)',
+            '--lw-shell-workspace-menu-item-bg': 'color-mix(in srgb, var(--lw-bg-elevated) 76%, transparent)',
+            '--lw-shell-workspace-menu-item-active-bg': 'color-mix(in srgb, var(--lw-bg-hover) 82%, transparent)'
         }
     },
     'shell.characterRail': {

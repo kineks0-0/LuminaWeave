@@ -456,17 +456,17 @@ function onDocPointerDown(e: PointerEvent) {
   height: 60px;
   min-height: 60px;
   padding: 0 var(--lw-panel-padding, 24px);
-  border-bottom: 1px solid var(--lw-border-base, #e2e8f0);
+  border-bottom: 1px solid var(--lw-border-base);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--lw-bg-elevated, #ffffff);
+  background: var(--lw-bg-elevated);
   z-index: 10;
   color: var(--lw-text-main);
 }
 
 .lw-panel-header.is-bottom {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--lw-border-base);
   border-bottom: none;
 }
 
@@ -486,9 +486,9 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .launcher-btn {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
+  background: var(--lw-bg-subtle);
+  border: 1px solid var(--lw-border-base);
+  color: var(--lw-text-secondary);
   width: 36px;
   height: 36px;
   border-radius: 10px;
@@ -500,7 +500,7 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .launcher-btn:hover {
-  background: #ffffff;
+  background: var(--lw-bg-elevated);
   color: var(--lw-primary);
   border-color: var(--lw-primary);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
@@ -615,10 +615,10 @@ function onDocPointerDown(e: PointerEvent) {
 .lw-tabs {
   display: flex;
   gap: 4px;
-  background: #f8fafc;
+  background: var(--lw-bg-subtle);
   padding: 4px;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--lw-border-base);
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -637,7 +637,7 @@ function onDocPointerDown(e: PointerEvent) {
   line-height: var(--lw-type-label-large-line-height);
   font-weight: var(--lw-type-label-large-weight);
   letter-spacing: var(--lw-type-label-large-tracking);
-  color: #64748b;
+  color: var(--lw-text-secondary);
   padding: 6px 12px;
   border-radius: 12px;
   cursor: pointer;
@@ -655,11 +655,11 @@ function onDocPointerDown(e: PointerEvent) {
 
 .lw-tab:hover {
   color: var(--lw-primary);
-  background: #e2e8f0;
+  background: var(--lw-bg-hover);
 }
 
 .lw-tab.active {
-  background: #ffffff;
+  background: var(--lw-bg-elevated);
   color: var(--lw-primary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
@@ -696,7 +696,7 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .lw-tab--more {
-  color: #64748b;
+  color: var(--lw-text-secondary);
   font-size: var(--lw-type-label-medium-size);
   line-height: var(--lw-type-label-medium-line-height);
   letter-spacing: var(--lw-type-label-medium-tracking);
@@ -707,8 +707,8 @@ function onDocPointerDown(e: PointerEvent) {
   top: calc(100% + 6px);
   left: 0;
   min-width: 160px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--lw-bg-elevated);
+  border: 1px solid var(--lw-border-base);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   padding: 4px;
@@ -723,7 +723,7 @@ function onDocPointerDown(e: PointerEvent) {
   line-height: var(--lw-type-label-medium-line-height);
   font-weight: var(--lw-type-label-medium-weight);
   letter-spacing: var(--lw-type-label-medium-tracking);
-  color: #64748b;
+  color: var(--lw-text-secondary);
   padding: 7px 10px;
   border-radius: 8px;
   cursor: pointer;
@@ -736,12 +736,12 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .lw-tab-dropdown-item:hover {
-  background: #f1f5f9;
+  background: var(--lw-bg-hover);
   color: var(--lw-primary);
 }
 
 .lw-tab-dropdown-item.active {
-  background: color-mix(in srgb, var(--lw-primary) 10%, white);
+  background: color-mix(in srgb, var(--lw-primary) 10%, var(--lw-bg-elevated));
   color: var(--lw-primary);
 }
 
@@ -751,8 +751,8 @@ function onDocPointerDown(e: PointerEvent) {
   bottom: auto;
   right: 0;
   min-width: 180px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--lw-bg-elevated);
+  border: 1px solid var(--lw-border-base);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   padding: 4px;
@@ -767,7 +767,7 @@ function onDocPointerDown(e: PointerEvent) {
   line-height: var(--lw-type-label-medium-line-height);
   font-weight: var(--lw-type-label-medium-weight);
   letter-spacing: var(--lw-type-label-medium-tracking);
-  color: #64748b;
+  color: var(--lw-text-secondary);
   padding: 7px 10px;
   border-radius: 8px;
   cursor: pointer;
@@ -780,19 +780,19 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .widget-dropdown-item:hover {
-  background: #f1f5f9;
+  background: var(--lw-bg-hover);
   color: var(--lw-primary);
 }
 
 .widget-dropdown-item.active {
-  background: color-mix(in srgb, var(--lw-primary) 10%, white);
+  background: color-mix(in srgb, var(--lw-primary) 10%, var(--lw-bg-elevated));
   color: var(--lw-primary);
 }
 
 .widget-dropdown-divider {
   height: 1px;
   margin: 4px 8px;
-  background: #e2e8f0;
+  background: var(--lw-border-base);
 }
 
 .widget-dropdown-label {
@@ -808,7 +808,7 @@ function onDocPointerDown(e: PointerEvent) {
 .widget-dropdown-title {
   padding-top: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--lw-border-base);
   margin-bottom: 4px;
 }
 
@@ -839,7 +839,7 @@ function onDocPointerDown(e: PointerEvent) {
   line-height: var(--lw-type-label-medium-line-height);
   font-weight: var(--lw-type-label-medium-weight);
   letter-spacing: var(--lw-type-label-medium-tracking);
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--lw-border-base);
   width: 100%;
   margin-bottom: 4px;
 }
@@ -859,9 +859,11 @@ function onDocPointerDown(e: PointerEvent) {
   gap: 8px;
   padding: 8px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 86%, white);
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 86%, var(--lw-bg-elevated));
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 250, 254, 0.78));
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--lw-bg-elevated) 86%, transparent),
+      color-mix(in srgb, var(--lw-bg-surface) 78%, transparent));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   transition:
@@ -898,7 +900,7 @@ function onDocPointerDown(e: PointerEvent) {
 
 .header-floating-control:hover,
 .header-floating-control.active {
-  background: color-mix(in srgb, var(--lw-primary) 10%, white);
+  background: color-mix(in srgb, var(--lw-primary) 10%, var(--lw-bg-elevated));
   border-color: rgba(var(--lw-primary-rgb), 0.18);
   color: var(--lw-text-main);
 }
@@ -911,10 +913,12 @@ function onDocPointerDown(e: PointerEvent) {
 .profile-trigger {
   min-height: 40px;
   padding: 4px 6px 4px 4px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 86%, white);
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 86%, var(--lw-bg-elevated));
   border-radius: 999px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 254, 0.84));
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--lw-bg-elevated) 92%, transparent),
+      color-mix(in srgb, var(--lw-bg-surface) 84%, transparent));
   color: var(--lw-text-main);
   display: inline-flex;
   align-items: center;
@@ -978,9 +982,11 @@ function onDocPointerDown(e: PointerEvent) {
   gap: 8px;
   padding: 12px;
   border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.42);
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, transparent);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(244, 248, 254, 0.4));
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--lw-bg-elevated) 78%, transparent),
+      color-mix(in srgb, var(--lw-bg-surface) 54%, transparent));
   box-shadow: 0 20px 44px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(24px) saturate(135%);
 }
@@ -1031,8 +1037,8 @@ function onDocPointerDown(e: PointerEvent) {
   column-gap: 10px;
   padding: 12px 14px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  background: rgba(255, 255, 255, 0.24);
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 64%, transparent);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 76%, transparent);
   color: var(--lw-text-main);
   text-align: left;
   cursor: pointer;
@@ -1040,7 +1046,7 @@ function onDocPointerDown(e: PointerEvent) {
 }
 
 .profile-menu-item:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: color-mix(in srgb, var(--lw-bg-hover) 82%, transparent);
   border-color: rgba(var(--lw-primary-rgb), 0.18);
   transform: translateY(-1px);
 }
@@ -1053,7 +1059,7 @@ function onDocPointerDown(e: PointerEvent) {
   width: 28px;
   height: 28px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.48);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 78%, transparent);
   color: var(--lw-text-secondary);
   display: inline-flex;
   align-items: center;
@@ -1108,8 +1114,8 @@ function onDocPointerDown(e: PointerEvent) {
   gap: 4px;
   padding: 12px 14px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  background: rgba(255, 255, 255, 0.24);
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 64%, transparent);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 76%, transparent);
   text-align: left;
   cursor: pointer;
   transition: 180ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -1117,7 +1123,7 @@ function onDocPointerDown(e: PointerEvent) {
 
 .profile-menu-choice:hover,
 .profile-menu-choice.active {
-  background: rgba(255, 255, 255, 0.5);
+  background: color-mix(in srgb, var(--lw-bg-hover) 82%, transparent);
   border-color: rgba(var(--lw-primary-rgb), 0.2);
   transform: translateY(-1px);
 }
@@ -1146,15 +1152,15 @@ function onDocPointerDown(e: PointerEvent) {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #e2e8f0;
+  background: var(--lw-bg-subtle);
   object-fit: cover;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--lw-border-base);
   display: block;
 }
 
 .avatar-sm.placeholder {
   display: block;
-  background: #e2e8f0;
+  background: var(--lw-bg-subtle);
 }
 
 .telegram-channel-bar {
