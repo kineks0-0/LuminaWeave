@@ -1,6 +1,5 @@
 import {
     createAssistantMessageEventStream,
-    streamSimple as piRunSimple,
     type Api,
     type AssistantMessage,
     type AssistantMessageEvent,
@@ -12,6 +11,7 @@ import {
     type SimpleStreamOptions,
     type StopReason
 } from '@earendil-works/pi-ai';
+import { streamSimple as piRunSimple } from '@earendil-works/pi-ai/compat';
 import {
     PiAiBrowserNexusProvider,
     piAiBrowserNexusProvider
