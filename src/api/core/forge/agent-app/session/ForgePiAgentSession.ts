@@ -2,10 +2,12 @@ import {
     Agent,
     type AgentEvent,
     type AgentMessage,
+    type AgentToolResult,
     type BeforeToolCallContext,
     type BeforeToolCallResult
 } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, ToolResultMessage } from '@earendil-works/pi-ai';
+import type { Static, TSchema } from 'typebox';
 import type {
     ForgePiBranchFromUserResult,
     ForgePiContextBundleSummary,
@@ -52,8 +54,14 @@ import {
 } from '../../../agent-runtime/events/AgentRuntimeEventBus.js';
 import type { AgentRuntimeToolResult } from '../../../agent-runtime/tools/AgentToolRegistry.js';
 import type {
+    AgentToolRegistry,
+    AgentRuntimeTool
+} from '../../../agent-runtime/tools/AgentToolRegistry.js';
+import type {
+    AgentRuntimeAgentEndEvent,
     AgentRuntimeBeforeAgentStartResult,
-    AgentRuntimeCustomMessage
+    AgentRuntimeCustomMessage,
+    AgentRuntimeExtensionRunner
 } from '../../../agent-runtime/extensions/AgentRuntimeExtensionRunner.js';
 
 export interface ForgePiAgentSessionTurnInput {
@@ -129,6 +137,11 @@ interface ForgePiEventSink {
     onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
 }
 
+interface ForgePiAgentRuntimeExtensionContext {
+    runner: AgentRuntimeExtensionRunner | null;
+    tools: AgentToolRegistry;
+}
+
 interface ForgePiAssistantProjection {
     rawText: string;
     finalText: string;
@@ -179,6 +192,7 @@ export class ForgePiAgentSession {
     private latestContextBundle: ForgePiContextBundleSummary | null = null;
     private eventSink: ForgePiEventSink | null = null;
     private agentRuntimeEvents: AgentRuntimeEventBus | null = null;
+    private agentRuntimeExtensionContext: ForgePiAgentRuntimeExtensionContext | null = null;
     private readonly pendingApprovalBlockedToolCallIds = new Set<string>();
     private readonly pendingApprovalWaits = new Map<string, { requestId: string }>();
 
@@ -211,13 +225,17 @@ export class ForgePiAgentSession {
         this.agentRuntimeEvents = events;
     }
 
+    setAgentRuntimeExtensionContext(context: ForgePiAgentRuntimeExtensionContext): void {
+        this.agentRuntimeExtensionContext = context;
+    }
+
     async prompt(input: ForgePiAgentSessionTurnInput): Promise<ForgePiAgentSessionTurnResult> {
         this.latestContext = input.context;
         this.latestRequest = input.request;
         const effects: ForgeRuntimeEffect[] = [];
         const prepared = await this.promptAssembler.prepareForRun(input);
         this.promptAssembler.invalidate(input);
-        const tools = this.extensionRunner.loadTools(
+        const tools = this.loadTools(
             input.context,
             nextEffects => effects.push(...nextEffects)
         );
@@ -332,6 +350,10 @@ export class ForgePiAgentSession {
             type: 'agent_end',
             sessionId: this.sessionId
         });
+        await this.emitAgentRuntimeAgentEnd({
+            messages: agent.state.messages,
+            result: finalProjection
+        });
 
         const snapshot = this.sessionManager.getSnapshot();
         return {
@@ -435,6 +457,10 @@ export class ForgePiAgentSession {
                 type: 'agent_end',
                 sessionId: this.sessionId
             });
+            await this.emitAgentRuntimeAgentEnd({
+                messages: this.agent?.state.messages ?? [],
+                result: { approved, toolCallId }
+            });
         }
 
         if (approved && resolved.toolResultMessage && this.agent && this.latestRequest) {
@@ -487,6 +513,10 @@ export class ForgePiAgentSession {
                 type: 'agent_end',
                 sessionId: this.sessionId
             });
+            await this.emitAgentRuntimeAgentEnd({
+                messages: this.agent.state.messages,
+                result: finalProjection
+            });
         }
 
         return {
@@ -515,13 +545,13 @@ export class ForgePiAgentSession {
             request: input.request,
             context: input.context
         });
-        const tools = this.extensionRunner.loadTools(input.context);
+        const tools = this.loadTools(input.context);
         const baseSystemPrompt = this.resourceLoader.buildSystemPrompt({ systemFragments: [], contextBundle });
         const userInput = input.commandInput ?? this.resolveCommandInput(input.command);
-        const beforeAgentStart = await (this.extensionRunner.emitBeforeAgentStart?.({
+        const beforeAgentStart = await this.emitBeforeAgentStart({
             prompt: userInput,
             systemPrompt: baseSystemPrompt
-        }) ?? Promise.resolve({ systemPrompt: baseSystemPrompt }));
+        });
         const systemPrompt = this.applyStructuredMessageContract(
             this.applyBeforeAgentStartResult(baseSystemPrompt, beforeAgentStart)
         );
@@ -544,6 +574,127 @@ export class ForgePiAgentSession {
             }],
             activeTools: this.summarizeTools(tools)
         };
+    }
+
+    private loadTools(
+        context: ForgeRuntimeContext,
+        onEffects?: (effects: ForgeRuntimeEffect[]) => void
+    ): ForgePiAgentTool[] {
+        const forgeTools = this.extensionRunner.loadTools(context, onEffects);
+        const runtimeTools = this.agentRuntimeExtensionContext
+            ? this.agentRuntimeExtensionContext.tools.listTools().map(tool => this.toForgeAgentTool(tool))
+            : [];
+        return this.mergeTools(forgeTools, runtimeTools);
+    }
+
+    private async emitBeforeAgentStart(input: {
+        prompt: string;
+        systemPrompt: string;
+    }): Promise<AgentRuntimeBeforeAgentStartResult> {
+        const forgeResult = await (this.extensionRunner.emitBeforeAgentStart?.(input)
+            ?? Promise.resolve({ systemPrompt: input.systemPrompt }));
+        const runner = this.agentRuntimeExtensionContext?.runner;
+        if (!runner) return forgeResult;
+        const runtimeResult = await runner.emitBeforeAgentStart({
+            ...input,
+            systemPrompt: forgeResult.systemPrompt ?? input.systemPrompt
+        });
+        return this.mergeBeforeAgentStartResults(input.systemPrompt, forgeResult, runtimeResult);
+    }
+
+    private mergeBeforeAgentStartResults(
+        baseSystemPrompt: string,
+        forgeResult: AgentRuntimeBeforeAgentStartResult,
+        runtimeResult: AgentRuntimeBeforeAgentStartResult
+    ): AgentRuntimeBeforeAgentStartResult {
+        const messages = [
+            ...(forgeResult.messages ?? []),
+            ...(runtimeResult.messages ?? [])
+        ];
+        return {
+            ...(messages.length > 0 ? { messages } : {}),
+            systemPrompt: runtimeResult.systemPrompt ?? forgeResult.systemPrompt ?? baseSystemPrompt
+        };
+    }
+
+    private toForgeAgentTool(tool: AgentRuntimeTool): ForgePiAgentTool<TSchema> {
+        const needsApproval = tool.needsApproval;
+        return {
+            name: tool.name,
+            label: tool.label ?? tool.name,
+            description: tool.description,
+            parameters: this.toToolSchema(tool.parameters),
+            ...(needsApproval !== undefined
+                ? {
+                    needsApproval: typeof needsApproval === 'function'
+                        ? (args: Static<TSchema>) => needsApproval(args)
+                        : needsApproval
+                }
+                : {}),
+            execute: async (
+                toolCallId: string,
+                params: Static<TSchema>
+            ): Promise<AgentToolResult<unknown>> => this.executeAgentRuntimeTool(tool.name, toolCallId, params)
+        };
+    }
+
+    private toToolSchema(parameters: unknown): TSchema {
+        // SDK 只持有跨运行时 schema；Forge pi-agent 边界在这里恢复为 pi 可执行工具 schema。
+        return parameters as TSchema;
+    }
+
+    private async executeAgentRuntimeTool(
+        toolName: string,
+        toolCallId: string,
+        args: unknown
+    ): Promise<AgentToolResult<unknown>> {
+        const tools = this.agentRuntimeExtensionContext?.tools;
+        if (!tools) {
+            throw new Error('Agent runtime tool registry is not attached.');
+        }
+        const execution = await tools.execute({ toolCallId, toolName, args });
+        if (execution.status === 'executed' || execution.status === 'blocked') {
+            return this.toPiAgentToolResult(execution.result);
+        }
+        return {
+            content: [{
+                type: 'text',
+                text: '工具调用需要授权，但 Forge 适配层尚未接入 SDK approval resolution。'
+            }],
+            details: {
+                status: execution.status,
+                approval: execution.approval
+            },
+            terminate: true
+        };
+    }
+
+    private toPiAgentToolResult(result: AgentRuntimeToolResult): AgentToolResult<unknown> {
+        return {
+            content: result.content.map(content =>
+                content as AgentToolResult<unknown>['content'][number]
+            ),
+            details: result.details
+        };
+    }
+
+    private mergeTools(...groups: ForgePiAgentTool[][]): ForgePiAgentTool[] {
+        const tools: ForgePiAgentTool[] = [];
+        const names = new Set<string>();
+        for (const group of groups) {
+            for (const tool of group) {
+                if (names.has(tool.name)) {
+                    throw new Error(`Forge agent tool already registered: ${tool.name}`);
+                }
+                names.add(tool.name);
+                tools.push(tool);
+            }
+        }
+        return tools;
+    }
+
+    private async emitAgentRuntimeAgentEnd(event: AgentRuntimeAgentEndEvent): Promise<void> {
+        await this.agentRuntimeExtensionContext?.runner?.emitAgentEnd(event);
     }
 
     private applyBeforeAgentStartResult(
@@ -693,12 +844,14 @@ export class ForgePiAgentSession {
             });
         }
         if (event.type === 'tool_execution_start') {
-            input.runtimeEvents?.emit({
-                type: 'tool_execution_start',
-                toolCallId: event.toolCallId,
-                toolName: event.toolName,
-                args: event.args
-            });
+            if (!this.isAgentRuntimeRegisteredTool(event.toolName)) {
+                input.runtimeEvents?.emit({
+                    type: 'tool_execution_start',
+                    toolCallId: event.toolCallId,
+                    toolName: event.toolName,
+                    args: event.args
+                });
+            }
             const runtimeEvent: ForgeRuntimeEvent = {
                 type: 'tool_call',
                 requestId: input.request.requestId,
@@ -749,13 +902,15 @@ export class ForgePiAgentSession {
                 this.emitToolApprovalNeeded(input, runtimeEvent);
                 return;
             }
-            input.runtimeEvents?.emit({
-                type: 'tool_execution_end',
-                toolCallId: event.toolCallId,
-                status: event.isError ? 'failed' : 'completed',
-                result: this.toAgentRuntimeToolResult(event.result),
-                errorMessage: event.isError ? 'Tool execution failed.' : undefined
-            });
+            if (!this.isAgentRuntimeRegisteredTool(event.toolName)) {
+                input.runtimeEvents?.emit({
+                    type: 'tool_execution_end',
+                    toolCallId: event.toolCallId,
+                    status: event.isError ? 'failed' : 'completed',
+                    result: this.toAgentRuntimeToolResult(event.result),
+                    errorMessage: event.isError ? 'Tool execution failed.' : undefined
+                });
+            }
             const runtimeEvent: ForgeRuntimeEvent = {
                 type: 'tool_result',
                 requestId: input.request.requestId,
@@ -769,6 +924,10 @@ export class ForgePiAgentSession {
             input.onRuntimeEvent?.(runtimeEvent);
             this.sessionManager.append('tool_result', `Tool result · ${event.toolName}`, JSON.stringify(runtimeEvent.result).slice(0, 160), runtimeEvent);
         }
+    }
+
+    private isAgentRuntimeRegisteredTool(toolName: string): boolean {
+        return Boolean(this.agentRuntimeExtensionContext?.tools.listTools().some(tool => tool.name === toolName));
     }
 
     private handleBeforeToolCall(context: BeforeToolCallContext): BeforeToolCallResult | undefined {

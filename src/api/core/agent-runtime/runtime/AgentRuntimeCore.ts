@@ -1,4 +1,6 @@
 import { AgentRuntimeEventBus } from '../events/AgentRuntimeEventBus.js';
+import type { AgentRuntimeExtensionRunner } from '../extensions/AgentRuntimeExtensionRunner.js';
+import type { AgentToolRegistry } from '../tools/AgentToolRegistry.js';
 
 export interface AgentRuntimeManagedSession<TTurnInput, TRunResult, TPreviewResult, TApprovalResult> {
     runTurn(input: TTurnInput): Promise<TRunResult>;
@@ -12,6 +14,8 @@ export interface AgentRuntimeSessionFactoryInput<TTurnInput> {
     sessionId: string;
     firstInput: TTurnInput;
     events: AgentRuntimeEventBus;
+    extensionRunner?: AgentRuntimeExtensionRunner | null;
+    tools?: AgentToolRegistry;
 }
 
 export interface AgentRuntimeCoreOptions<TTurnInput, TRunResult, TPreviewResult, TApprovalResult> {

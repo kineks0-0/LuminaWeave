@@ -16,6 +16,18 @@ import type {
     AgentRuntimeSnapshot
 } from '../../agent-runtime/events/AgentRuntimeEventBus.js';
 import { AgentRuntime } from '../../agent-runtime/runtime/AgentRuntime.js';
+import type {
+    AgentRuntimeExtension,
+    AgentRuntimeResourceDiscoveryInput,
+    AgentRuntimeResourceDiscoveryResult
+} from '../../agent-runtime/extensions/AgentRuntimeExtensionRunner.js';
+import type {
+    AgentRuntimeExtensionLoader,
+    AgentRuntimeModelSelection,
+    AgentRuntimeResourceScanner,
+    AgentRuntimeToolEntry
+} from '../../agent-runtime/runtime/AgentRuntimeTypes.js';
+import type { AgentRuntimeModelProvider } from '../../agent-runtime/model/AgentRuntimeModelProvider.js';
 import {
     ForgePiAgentSession,
     type ForgePiAgentSessionApprovalResult,
@@ -50,7 +62,17 @@ export interface ForgePiCoreRuntimeApprovalResult extends ForgePiAgentSessionApp
 
 export interface ForgePiCoreRuntimePromptPreview extends ForgePiAgentSessionPromptPreview {}
 
-export interface ForgePiCoreRuntimeDeps extends ForgePiAgentSessionDeps {}
+export interface ForgePiCoreRuntimeDeps extends ForgePiAgentSessionDeps {
+    model?: AgentRuntimeModelSelection;
+    modelProvider?: AgentRuntimeModelProvider;
+    tools?: AgentRuntimeToolEntry[];
+    extensions?: AgentRuntimeExtension[];
+    extensionLoader?: AgentRuntimeExtensionLoader;
+    resourceScanner?: AgentRuntimeResourceScanner;
+    workspace?: unknown;
+    approvals?: unknown;
+    permissions?: unknown;
+}
 
 export interface ForgePiCoreRuntimeSessionStateResult {
     piSessionState: {
@@ -80,10 +102,25 @@ export class ForgePiCoreRuntime {
         // Forge 只把通用生命周期托管给 SDK façade；Forge 专属 session、VFS、工具和发布边界仍留在 adapter 内。
         this.runtime = new AgentRuntime({
             id: 'forge-pi-core-runtime',
+            model: deps.model,
+            modelProvider: deps.modelProvider,
+            tools: deps.tools,
+            extensions: deps.extensions,
+            extensionLoader: deps.extensionLoader,
+            resourceScanner: deps.resourceScanner,
+            workspace: deps.workspace,
+            approvals: deps.approvals,
+            permissions: deps.permissions,
             resolveSessionId: input => this.resolveSessionId(input.context),
             createSession: input => {
                 const session = this.getSession(input.firstInput.context);
                 session.setAgentRuntimeEvents(input.events);
+                if (input.tools) {
+                    session.setAgentRuntimeExtensionContext({
+                        runner: input.extensionRunner ?? null,
+                        tools: input.tools
+                    });
+                }
                 return {
                     runTurn: turnInput => session.prompt(turnInput),
                     previewPrompt: turnInput => session.preparePrompt(turnInput),
@@ -115,6 +152,12 @@ export class ForgePiCoreRuntime {
 
     async previewPrompt(input: ForgePiCoreRuntimeTurnInput): Promise<ForgePiCoreRuntimePromptPreview> {
         return this.runtime.previewPrompt(input);
+    }
+
+    async discoverResources(
+        input: AgentRuntimeResourceDiscoveryInput
+    ): Promise<AgentRuntimeResourceDiscoveryResult> {
+        return this.runtime.discoverResources(input);
     }
 
     async continue(sessionId: string): Promise<void> {
