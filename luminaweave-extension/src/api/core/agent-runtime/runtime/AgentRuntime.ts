@@ -36,7 +36,11 @@ export class AgentRuntime<TTurnInput, TRunResult, TPreviewResult, TApprovalResul
         this.core = new AgentRuntimeCore({
             resolveSessionId: options.resolveSessionId,
             events: this.events,
-            createSession: options.createSession
+            createSession: input => options.createSession({
+                ...input,
+                extensionRunner: this.extensionHost.getRunner(),
+                tools: this.tools
+            })
         });
     }
 

@@ -68,6 +68,8 @@
 
 2026-06-27：完成 Forge 当前 pi session 到 `AgentRuntime` façade 的首轮迁移。`ForgePiCoreRuntime` 现在组合高层 `AgentRuntime`，由 façade 负责 setup、session lifecycle、runtime event bus 和 snapshot 暴露；`ForgePiAgentSession`、`ForgePiToolBridge`、Forge Semantic VFS、写入摘要、Git-backed 版本和 ST 发布边界仍留在 Forge adapter 内。实现记录见 `steps/2026-06-27-forge-agent-runtime-facade-migration.md`。
 
+2026-06-28：完成 Forge extension workflow 接入 `AgentRuntimeExtensionHost`。`AgentRuntime` 在创建 managed session 时向 adapter session factory 传入已 setup 的 `AgentRuntimeExtensionRunner` 与共享 `AgentToolRegistry`；`ForgePiCoreRuntime` 可显式接收 SDK `extensions`、`extensionLoader`、`resourceScanner` 和 `tools`，并暴露 `discoverResources()`；`ForgePiAgentSession.preparePromptState()` 在同一个 prepared prompt 中串联 Forge runner 与 SDK `before_agent_start`，SDK hidden context、resource discovery 和 registered tools 进入 Prompt Preview / 真实 run 同源链路。SDK registered tool approval resume 尚未接入 Forge Composer 授权面板。实现记录见 `steps/2026-06-28-forge-extension-workflow-runtime-host-integration.md`。
+
 已确认方向：
 
 - Core SDK 承载通用 agent loop、session tree、tool provider、approval、trace、Agent Skills 兼容和 test harness。
@@ -103,7 +105,8 @@
 9. [ ] OpenFS 包跟踪：当前 `@open-fs/just-bash@0.1.0` 实际导出 `AxFs`，`createGrepCommand()` 的 command name 为 `axgrep`；后续升级前必须重新读取包类型文件和测试。
 10. [ ] 完成 pi `0.80.2` 兼容迁移：先跑依赖守卫、focused runtime tests 和 type-check，再按迁移清单逐项修正 API、structured message、tool behavior、extension workflow 和非 Forge harness。
 11. [x] 将 Forge 当前 pi session 集成迁移到 `AgentRuntime` façade 下，保持 Forge Semantic VFS、写入摘要、Git-backed 版本和 ST 发布边界仍在 Forge adapter。
-12. [ ] 评估是否把 Forge extension workflow 的 `before_agent_start` / resource discovery 逐步接到 `AgentRuntimeExtensionHost`，前提是 Prompt Preview 与真实生成仍保持同源。
+12. [x] 将 Forge extension workflow 的 `before_agent_start` / resource discovery 接到 `AgentRuntimeExtensionHost`，并保持 Prompt Preview 与真实生成同源。
+13. [ ] 补 SDK registered tool approval resume：接入 Forge Composer 授权面板、`resolveToolApproval()` 和 `AgentToolRegistry.resolveToolApproval()`，避免需要审批的 SDK tool 停在终止提示。
 
 ## 恢复入口
 
@@ -116,5 +119,6 @@
 - [pi 0.80.2 依赖升级与迁移清单](./steps/2026-06-27-pi-0-80-upgrade-migration-inventory.md)
 - [AgentRuntime 高层 API 与 pi 扩展兼容首轮实现记录](./steps/2026-06-27-agent-runtime-pi-extension-compat-implementation.md)
 - [Forge pi session 迁移到 AgentRuntime façade](./steps/2026-06-27-forge-agent-runtime-facade-migration.md)
+- [Forge extension workflow 接入 AgentRuntimeExtensionHost](./steps/2026-06-28-forge-extension-workflow-runtime-host-integration.md)
 - [Forge Agent 下一阶段可靠可控决策规划](../forge/steps/2026-06-10-forge-agent-next-stage-decision.md)
 - [Forge 当前任务](../forge/)

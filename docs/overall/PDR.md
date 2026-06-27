@@ -106,7 +106,7 @@ Director 负责剧情推演、上下文压缩、记忆整理和提示词注入�
 
 Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge 当前 pi-style runtime 中抽取可复用运行能力，让 Forge 以外的子插件也可以组合自己的 agent，并用统一 test harness 验证 prompt、skill、tool、VFS、approval、trace 与 session tree 行为。
 
-当前第一阶段代码入口位于 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 通过 adapter 复用 SDK 的 runtime/session/tool/skill 边界；SDK 已提供 `AgentRuntime` 高层 façade、`AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、`AgentRuntimeExtensionHost`、pi-compatible `PiExtensionCompatHost` / `PiExtensionLoader` / `PiResourceScanner`、可选 `workspace-tools/AgentWorkspaceTools` 与 `JustBashWorkspaceAdapter` 初始实现，`ForgePiCoreRuntime` 已组合 `AgentRuntime` façade 并暴露 SDK runtime snapshot/events；Forge adapter 通过 typed runtime effect 把 snapshot 投影到 Forge store、模型请求 trace 和 Inspector presentation，不让 SDK import Vue 或 Pinia；Forge wire shape、Semantic VFS、Git-backed 工作区版本和真实 ST 发布边界仍留在 Forge 域内。
+当前第一阶段代码入口位于 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 通过 adapter 复用 SDK 的 runtime/session/tool/skill 边界；SDK 已提供 `AgentRuntime` 高层 façade、`AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、`AgentRuntimeExtensionHost`、pi-compatible `PiExtensionCompatHost` / `PiExtensionLoader` / `PiResourceScanner`、可选 `workspace-tools/AgentWorkspaceTools` 与 `JustBashWorkspaceAdapter` 初始实现，`ForgePiCoreRuntime` 已组合 `AgentRuntime` façade 并暴露 SDK runtime snapshot/events、extension resource discovery 和 SDK registered tools；Forge adapter 通过 typed runtime effect 把 snapshot 投影到 Forge store、模型请求 trace 和 Inspector presentation，并在同一个 Prompt Preview / 真实 run prepared prompt 中消费 SDK extension `before_agent_start` hidden context，不让 SDK import Vue 或 Pinia；Forge wire shape、Semantic VFS、Git-backed 工作区版本和真实 ST 发布边界仍留在 Forge 域内。
 
 应提供：
 

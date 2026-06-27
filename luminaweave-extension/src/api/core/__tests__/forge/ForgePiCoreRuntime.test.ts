@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
     createAssistantMessageEventStream,
+    Type,
     type AssistantMessage
 } from '@earendil-works/pi-ai';
-import { ForgePiCoreRuntime } from '@/api/core/forge/agent-app/ForgePiCoreRuntime.js';
+import {
+    ForgePiCoreRuntime,
+    type ForgePiCoreRuntimeDeps
+} from '@/api/core/forge/agent-app/ForgePiCoreRuntime.js';
+import type { AgentRuntimeExtension } from '@/api/core/agent-runtime/index.js';
 import type { ForgeRuntimeContext } from '@/types/ForgeRuntimeTypes.js';
 
 const createContext = (): ForgeRuntimeContext => ({
@@ -151,6 +156,219 @@ describe('ForgePiCoreRuntime', () => {
         expect(result.piSessionState.tree).toEqual([]);
         expect(result.piSessionState.activeNodeId).toBeNull();
         expect(streamFn).not.toHaveBeenCalled();
+    });
+
+    it('routes SDK extension workflow hooks and tools through Forge prompt preview', async () => {
+        const streamFn = vi.fn(textStreamFn('不应被调用'));
+        const resourceLoader = {
+            buildContextBundle: vi.fn(async () => ({
+                files: [{ path: 'context/project.md', title: '项目概况', content: '# Forge Alpha' }],
+                activeSkills: [],
+                loadedExtensions: ['@luminaweave/pi-forge-browser']
+            })),
+            buildSystemPrompt: vi.fn(({ contextBundle }) => contextBundle.files[0]?.content ?? '')
+        };
+        const sdkExtension: AgentRuntimeExtension = {
+            id: 'sdk-forge-extension',
+            setup: context => {
+                context.events.onBeforeAgentStart(event => ({
+                    messages: [{
+                        customType: 'sdk-hidden-context',
+                        content: {
+                            prompt: event.prompt,
+                            source: 'sdk-forge-extension'
+                        },
+                        display: false
+                    }],
+                    systemPrompt: `${event.systemPrompt}\n\nSDK extension saw: ${event.prompt}`
+                }));
+                context.tools.register({
+                    name: 'sdk.inspect',
+                    label: 'SDK Inspect',
+                    description: 'Read SDK registered extension context.',
+                    parameters: Type.Object({ query: Type.String() }),
+                    execute: async (_toolCallId, args: { query: string }) => ({
+                        content: [{ type: 'text', text: `sdk:${args.query}` }],
+                        details: { query: args.query }
+                    })
+                });
+                context.resources.onDiscover(() => ({
+                    skillPaths: ['./agent/skills/sdk/SKILL.md']
+                }));
+            }
+        };
+        const runtime = new ForgePiCoreRuntime({
+            createNodeId: (() => {
+                let index = 0;
+                return () => `pi_sdk_extension_node_${++index}`;
+            })(),
+            resourceLoader: resourceLoader as unknown as ForgePiCoreRuntimeDeps['resourceLoader'],
+            modelRegistry: {
+                resolveRunConfig: vi.fn(() => ({
+                    model: {
+                        id: 'test',
+                        name: 'test',
+                        api: 'test',
+                        provider: 'test',
+                        baseUrl: '',
+                        reasoning: false,
+                        input: [],
+                        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                        contextWindow: 0,
+                        maxTokens: 0
+                    },
+                    streamFn
+                }))
+            } as unknown as ForgePiCoreRuntimeDeps['modelRegistry'],
+            extensionRunner: {
+                loadTools: vi.fn(() => []),
+                emitBeforeAgentStart: vi.fn(async event => ({ systemPrompt: event.systemPrompt })),
+                getLoadedExtensions: vi.fn(() => ['@luminaweave/pi-forge-browser'])
+            } as unknown as ForgePiCoreRuntimeDeps['extensionRunner'],
+            extensions: [sdkExtension]
+        });
+
+        const result = await runtime.previewPrompt({
+            command: { type: 'send_user_input', input: '使用 SDK 扩展' },
+            commandInput: '使用 SDK 扩展',
+            context: createContext(),
+            request: {
+                requestId: 'req_sdk_extension_preview',
+                mode: 'conversation',
+                traceSource: 'conversation',
+                messages: [{ role: 'user', content: '使用 SDK 扩展' }],
+                nodeSummary: []
+            } as unknown as Parameters<ForgePiCoreRuntime['previewPrompt']>[0]['request']
+        });
+
+        expect(result.systemPrompt).toContain('SDK extension saw: 使用 SDK 扩展');
+        expect(result.systemPrompt).toContain('## sdk-hidden-context');
+        expect(result.systemPrompt).toContain('"source": "sdk-forge-extension"');
+        expect(result.activeTools).toEqual([{
+            name: 'sdk.inspect',
+            description: 'Read SDK registered extension context.',
+            needsApproval: false
+        }]);
+        await expect(runtime.discoverResources({ reason: 'startup' })).resolves.toEqual({
+            skillPaths: ['./agent/skills/sdk/SKILL.md']
+        });
+        expect(streamFn).not.toHaveBeenCalled();
+    });
+
+    it('executes SDK registered extension tools through the Forge pi-agent adapter', async () => {
+        let calls = 0;
+        const executeSdkTool = vi.fn(async (_toolCallId: string, args: { query: string }) => ({
+            content: [{ type: 'text', text: `sdk:${args.query}` }],
+            details: { query: args.query }
+        }));
+        const sdkExtension: AgentRuntimeExtension = {
+            id: 'sdk-tool-extension',
+            setup: context => {
+                context.tools.register({
+                    name: 'sdk.inspect',
+                    label: 'SDK Inspect',
+                    description: 'Read SDK registered extension context.',
+                    parameters: Type.Object({ query: Type.String() }),
+                    execute: executeSdkTool
+                });
+            }
+        };
+        const runtime = new ForgePiCoreRuntime({
+            createNodeId: (() => {
+                let index = 0;
+                return () => `pi_sdk_tool_node_${++index}`;
+            })(),
+            resourceLoader: {
+                buildContextBundle: vi.fn(async () => ({
+                    files: [{ path: 'context/project.md', title: '项目概况', content: '# Forge Alpha' }],
+                    activeSkills: [],
+                    loadedExtensions: []
+                })),
+                buildSystemPrompt: vi.fn(({ contextBundle }) => contextBundle.files[0]?.content ?? '')
+            } as unknown as ForgePiCoreRuntimeDeps['resourceLoader'],
+            modelRegistry: {
+                resolveRunConfig: vi.fn(() => ({
+                    model: {
+                        id: 'test',
+                        name: 'test',
+                        api: 'test',
+                        provider: 'test',
+                        baseUrl: '',
+                        reasoning: false,
+                        input: [],
+                        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                        contextWindow: 0,
+                        maxTokens: 0
+                    },
+                    streamFn: () => {
+                        calls += 1;
+                        const stream = createAssistantMessageEventStream();
+                        if (calls === 1) {
+                            const toolCall = {
+                                type: 'toolCall',
+                                id: 'call_sdk_inspect',
+                                name: 'sdk.inspect',
+                                arguments: { query: 'alpha' }
+                            } as Extract<AssistantMessage['content'][number], { type: 'toolCall' }>;
+                            const message = assistantMessage([toolCall], 'toolUse');
+                            stream.push({ type: 'start', partial: assistantMessage([]) });
+                            stream.push({ type: 'toolcall_start', contentIndex: 0, partial: assistantMessage([]) });
+                            stream.push({ type: 'toolcall_end', contentIndex: 0, toolCall, partial: message });
+                            stream.push({ type: 'done', reason: 'toolUse', message });
+                            stream.end(message);
+                            return stream;
+                        }
+                        const text = 'SDK 工具已执行。';
+                        const message = assistantMessage([{ type: 'text', text }]);
+                        stream.push({ type: 'start', partial: assistantMessage([]) });
+                        stream.push({ type: 'text_start', contentIndex: 0, partial: assistantMessage([{ type: 'text', text: '' }]) });
+                        stream.push({ type: 'text_delta', contentIndex: 0, delta: text, partial: message });
+                        stream.push({ type: 'text_end', contentIndex: 0, content: text, partial: message });
+                        stream.push({ type: 'done', reason: 'stop', message });
+                        stream.end(message);
+                        return stream;
+                    }
+                }))
+            } as unknown as ForgePiCoreRuntimeDeps['modelRegistry'],
+            extensionRunner: {
+                loadTools: vi.fn(() => []),
+                emitBeforeAgentStart: vi.fn(async event => ({ systemPrompt: event.systemPrompt })),
+                getLoadedExtensions: vi.fn(() => [])
+            } as unknown as ForgePiCoreRuntimeDeps['extensionRunner'],
+            extensions: [sdkExtension]
+        });
+
+        const result = await runtime.runTurn({
+            command: { type: 'send_user_input', input: '调用 SDK 工具' },
+            commandInput: '调用 SDK 工具',
+            context: createContext(),
+            request: {
+                requestId: 'req_sdk_tool_run',
+                mode: 'conversation',
+                traceSource: 'conversation',
+                messages: [{ role: 'user', content: '调用 SDK 工具' }],
+                nodeSummary: []
+            } as unknown as Parameters<ForgePiCoreRuntime['runTurn']>[0]['request']
+        });
+
+        expect(executeSdkTool).toHaveBeenCalledWith('call_sdk_inspect', { query: 'alpha' });
+        expect(result.events).toEqual(expect.arrayContaining([
+            expect.objectContaining({ type: 'tool_call', toolCallId: 'call_sdk_inspect', toolName: 'sdk.inspect' }),
+            expect.objectContaining({
+                type: 'tool_result',
+                toolCallId: 'call_sdk_inspect',
+                result: expect.objectContaining({ query: 'alpha' })
+            }),
+            expect.objectContaining({ type: 'stream_done', displayText: 'SDK 工具已执行。' })
+        ]));
+        expect(runtime.getAgentRuntimeEvents()
+            .filter(event => 'toolCallId' in event && event.toolCallId === 'call_sdk_inspect')
+            .map(event => event.type)
+        ).toEqual([
+            'tool_execution_start',
+            'tool_execution_update',
+            'tool_execution_end'
+        ]);
     });
 
     it('runs a pi AgentSession turn and records context/user/assistant tree entries', async () => {
