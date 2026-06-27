@@ -106,7 +106,7 @@ Director 负责剧情推演、上下文压缩、记忆整理和提示词注入�
 
 Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge 当前 pi-style runtime 中抽取可复用运行能力，让 Forge 以外的子插件也可以组合自己的 agent，并用统一 test harness 验证 prompt、skill、tool、VFS、approval、trace 与 session tree 行为。
 
-当前第一阶段代码入口位于 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 通过 adapter 复用 SDK 的 runtime/session/tool/skill 边界；SDK 已提供 `AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、可选 `workspace-tools/AgentWorkspaceTools` 与 `JustBashWorkspaceAdapter` 初始实现，`ForgePiCoreRuntime` 已可暴露 SDK runtime snapshot/events；Forge adapter 通过 typed runtime effect 把 snapshot 投影到 Forge store、模型请求 trace 和 Inspector presentation，不让 SDK import Vue 或 Pinia；Forge wire shape、Semantic VFS、Git-backed 工作区版本和真实 ST 发布边界仍留在 Forge 域内。
+当前第一阶段代码入口位于 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 通过 adapter 复用 SDK 的 runtime/session/tool/skill 边界；SDK 已提供 `AgentRuntime` 高层 façade、`AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、`AgentRuntimeExtensionHost`、pi-compatible `PiExtensionCompatHost` / `PiExtensionLoader` / `PiResourceScanner`、可选 `workspace-tools/AgentWorkspaceTools` 与 `JustBashWorkspaceAdapter` 初始实现，`ForgePiCoreRuntime` 已可暴露 SDK runtime snapshot/events；Forge adapter 通过 typed runtime effect 把 snapshot 投影到 Forge store、模型请求 trace 和 Inspector presentation，不让 SDK import Vue 或 Pinia；Forge wire shape、Semantic VFS、Git-backed 工作区版本和真实 ST 发布边界仍留在 Forge 域内。
 
 应提供：
 
@@ -118,7 +118,7 @@ Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge
 - Prompt Preview 事实源：真实生成与 dry-run 必须使用同一个 prompt assembly 端口；同一 request 可通过 adapter 提供的 cache key 复用 prepared prompt object，并在真实 turn 消费后显式失效。Extension workflow 注入的 hidden context、active tools summary、skill catalog、branch messages 与本轮 user message 必须先进入 preview / `prompt_ready` payload；真实 run 的 agent initial state 不重复注入本轮 user message，由 `agent.prompt()` 注入。
 - Model provider、tool provider、approval、trace/effect、session store 和 test harness 端口；`AgentToolRegistry` 可选接入 runtime event bus，把手动注册工具的执行投影为 `tool_execution_start` / `tool_execution_update` / `tool_execution_end`；test harness 应提供 mock model、mock tool、mock session store、mock approval 与 mock VFS，便于非 Forge adapter 验证。
 - Agent Skills 规格兼容：以 `SKILL.md` 为兼容目标，解析并校验标准 frontmatter，输出 diagnostics，并格式化 skill catalog；`name`、`description`、`compatibility`、`metadata` 与 `allowed-tools` 按 Agent Skills 规格处理。
-- Extension workflow 接入：由 adapter / 代码配置显式传入 extension factories 或 resolved extension paths；扩展可以注册 event handler、custom tool、custom message、resource discovery hook、provider、status/widget projection，但必须经过 SDK tool registry、Prompt Preview、approval、audit 和 trace 边界。
+- Extension workflow 接入：由 adapter / 代码配置显式传入 extension factories 或 resolved extension paths；扩展可以注册 event handler、custom tool、custom message、resource discovery hook、provider、status/widget projection，但必须经过 SDK tool registry、Prompt Preview、approval、audit 和 trace 边界。pi-compatible 适配层支持 `ExtensionFactory(pi)`、`registerTool`、`registerProvider`、`resources_discover`、`before_agent_start`、`agent_end`、`tool_call`、`tool_result` 的首轮映射，目录扫描与本地模块加载仍必须由接入方显式启用。
 - Agent-visible VFS 接入：通过 FS template、mount metadata、mount policy、approval hook、audit hook 和 trace hook 接入多个 VFS mount；第一阶段直接接入 OpenFS 能力层，shell mount dispatch 优先交给 OpenFS / just-bash；copy/move 等写入类操作同样必须进入 audit hook。
 - Workspace Tools Kit：作为可选工具包提供 pi-style 短名 `read`、`write`、`edit`、`delete`、`bash`，并可补充只读 `grep`、`find`、`ls`、`search`；底层 I/O 必须通过 OpenFS / just-bash 或 adapter operations 注入。
 - Research Tools Kit：作为可选工具包提供 `webResearch` 工具工厂和 `AgentResearchProvider` 端口；第一版 provider 为 Tavily search / extract 适配，浏览器运行时不静态导入 Tavily AI SDK，避免把 Node proxy 依赖带入扩展启动路径。后续 Parallel / Exa 通过同一端口接入。
@@ -132,6 +132,7 @@ Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge
 - Core SDK 不根据 skill 的 `allowed-tools` 自动授予权限。
 - Core SDK 不扫描项目目录或用户目录；prompt、skill 和业务上下文必须由 adapter 或可选 kit 通过 VFS source 提供。
 - Core SDK 不自动加载 VFS 中的 TypeScript / JavaScript 扩展代码。
+- pi-compatible scanner / loader 只是可选 adapter；启用后也必须通过注入的文件系统、模块加载器和权限策略工作，不成为 `AgentRuntime` 默认行为。
 - Core SDK 不内置 Plan Mode、Planner / Executor 阶段语义或最终汇报协议；规划、执行、审阅和汇报由 adapter / extension workflow 通过 hook、custom context、custom message、status/widget 和 continuation trigger 组合。
 - Core SDK 不规定 Forge `<process>` / `<final>` prompt 协议，也不把该标签协议作为过渡兼容层；它只提供可复用的 structured message、session、event、trace、tool 和测试边界。
 - Core SDK 不把 thinking 写入 Forge memory、虚拟世界书、工作区文件或普通用户可见长期历史；thinking 只作为 provider-native structured message block、trace、replay-safe 通道和 UI projection 输入。

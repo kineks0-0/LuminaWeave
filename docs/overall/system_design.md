@@ -115,7 +115,7 @@ Core Runtime 是业务真相层。
 
 Agent Runtime SDK 是 Core Runtime 内的跨插件 agent kernel。它消费 HAL 的 Resource、Prompt、Storage、Network、Event 和 Runtime Ports，并向 Forge、Chat、Director、Dev 等插件 adapter 提供一致的 agent loop、session、tool、approval、trace、skills 和测试边界。
 
-当前代码入口是 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 的 `src/api/core/forge/agent-app` 是第一套 adapter：它可以复用 SDK 的 `AgentRuntimeCore`、`AgentSessionTree`、`AgentToolRegistry`、`AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、可选 `workspace-tools/AgentWorkspaceTools`、`JustBashWorkspaceAdapter` 和 Agent Skills parser / formatter；`ForgePiCoreRuntime` 可暴露 SDK runtime snapshot/events，Forge adapter 再通过 typed runtime effect 写入 Forge store、模型请求 trace 和 Inspector presentation，但不得把 Forge Semantic VFS、Forge 工作区 Git 版本策略、ST 发布边界或 Vue UI 上移到 SDK。
+当前代码入口是 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 的 `src/api/core/forge/agent-app` 是第一套 adapter：它可以复用 SDK 的 `AgentRuntime` façade、`AgentRuntimeCore`、`AgentSessionTree`、`AgentToolRegistry`、`AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、`AgentRuntimeExtensionHost`、pi-compatible extension adapter、可选 `workspace-tools/AgentWorkspaceTools`、`JustBashWorkspaceAdapter` 和 Agent Skills parser / formatter；`ForgePiCoreRuntime` 可暴露 SDK runtime snapshot/events，Forge adapter 再通过 typed runtime effect 写入 Forge store、模型请求 trace 和 Inspector presentation，但不得把 Forge Semantic VFS、Forge 工作区 Git 版本策略、ST 发布边界或 Vue UI 上移到 SDK。
 
 职责：
 
@@ -127,7 +127,7 @@ Agent Runtime SDK 是 Core Runtime 内的跨插件 agent kernel。它消费 HAL 
 - 定义 Prompt Preview 端口：真实生成与 dry-run 必须共用同一个 prompt assembly 结果；同一 request 可通过 adapter 提供的 cache key 复用 prepared prompt object，真实 turn 消费后显式失效。Preview / `prompt_ready` payload 必须包含本轮 user message；真实 run 的 agent initial state 不重复注入本轮 user message。
 - 定义 model provider、tool provider、approval、trace/effect、session store 和 test harness 端口；model provider 负责把接入方的设置引用解析为 pi-ai `Model<Api>`、`SimpleStreamOptions` 和可用模型列表，Forge 等 adapter 不直接读取 Nexus API key；`AgentToolRegistry` 可选接入 `AgentRuntimeEventBus`，把手动注册工具的执行投影为 `tool_execution_start` / `tool_execution_update` / `tool_execution_end`；SDK test harness 提供 mock model、mock tool、mock session store、mock approval 与 mock VFS。
 - 定义 extension workflow hook：`before_agent_start` hidden custom context、turn / agent end hook、custom message append、status / widget projection、continuation trigger、tool before/after hook 和 context transform。
-- 定义 extension loading boundary：adapter / 代码配置显式传入 extension factories 或 resolved extension paths；扩展可注册 event handlers、custom tools、custom messages、resource discovery hook、provider、status/widget projection。
+- 定义 extension loading boundary：adapter / 代码配置显式传入 extension factories 或 resolved extension paths；扩展可注册 event handlers、custom tools、custom messages、resource discovery hook、provider、status/widget projection。pi-compatible adapter 可把 `ExtensionFactory(pi)` 映射到 SDK extension host，并通过显式 `PiResourceScanner` 与 `PiExtensionLoader` 复用 pi manifest / 目录发现规则；本地 TS/JS 模块加载必须由接入方注入 loader。
 - 实现 Agent Skills 规格兼容：解析 `SKILL.md`，校验 `name`、`description`、`compatibility`、`metadata`、`allowed-tools` 与父目录匹配，建立 catalog，格式化 prompt catalog，并输出 diagnostics。
 - 定义 FS mount metadata、mount policy、phase/capability、approval hook、audit hook、trace hook。
 - 提供可选 Workspace Tools Kit：pi-style 短名 `read`、`write`、`edit`、`delete`、`bash`，并可补充只读 `grep`、`find`、`ls`、`search`；底层 I/O 通过 OpenFS / just-bash 或 adapter operations 注入。
@@ -141,6 +141,7 @@ Agent Runtime SDK 是 Core Runtime 内的跨插件 agent kernel。它消费 HAL 
 - 不拥有 Forge Semantic VFS、Forge prompt 路径或 Forge 工作区 Git 版本策略。
 - 不自动扫描用户目录或项目目录。
 - 不自动加载 VFS 中的 TypeScript / JavaScript 扩展代码。
+- 不把 pi-compatible scanner / loader 作为默认 runtime 行为；这些能力只在接入方显式注入文件系统、模块加载器与权限策略时启用。
 - 不默认注册文件写入工具。
 - 不默认创建或注册 `bash` tool。
 - 不默认创建或注册联网 research 工具。

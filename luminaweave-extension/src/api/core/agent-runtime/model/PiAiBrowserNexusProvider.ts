@@ -1,7 +1,6 @@
 import type {
     Api,
     Model,
-    Provider,
     SimpleStreamOptions
 } from '@earendil-works/pi-ai';
 import { llmEngine } from '../../../llmEngine.js';
@@ -13,6 +12,8 @@ import type {
     AgentRuntimeModelRequest
 } from './AgentRuntimeModelProvider.js';
 
+type PiAiProviderId = Model<Api>['provider'];
+
 export interface PiAiBrowserNexusProviderDeps {
     resolveNodesFromPreset?: (presetId?: string) => NexusNode[];
     readApiConfigs?: () => NexusAPI[];
@@ -23,7 +24,7 @@ interface ResolvedPiAiNexusConfig {
     node: NexusNode;
     apiConfig: NexusAPI | null;
     api: Api;
-    provider: Provider;
+    provider: PiAiProviderId;
     baseUrl: string;
     apiKey?: string;
 }
@@ -116,7 +117,7 @@ export class PiAiBrowserNexusProvider implements AgentRuntimeModelProvider {
         };
     }
 
-    private resolveOpenAiProvider(node: NexusNode, apiConfig: NexusAPI | null): Provider {
+    private resolveOpenAiProvider(node: NexusNode, apiConfig: NexusAPI | null): PiAiProviderId {
         if (apiConfig?.type === 'openai') return 'openai';
         if (node.provider === 'openai' || node.provider === 'openai_compatible') return 'openai';
         return node.provider || 'openai';

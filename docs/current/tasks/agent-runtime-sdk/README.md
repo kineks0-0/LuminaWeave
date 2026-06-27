@@ -62,6 +62,10 @@
 
 2026-06-16：完成 pi-ai browser Nexus provider 边界收敛。取消 `PiAiBrowserTransport` 作为独立规划，新增 Agent Runtime model provider 端口与 `PiAiBrowserNexusProvider`，只负责把 Nexus preset / API 配置解析为 pi-ai `Model<Api>` 和 `SimpleStreamOptions`；Forge 的 `ForgePiNexusProvider` 继续保留模型请求 trace 和 stream 包装，但不再直接读取 `nexus.apis`。规划见 `steps/2026-06-16-pi-ai-browser-nexus-provider-plan.md`。
 
+2026-06-27：升级 `@earendil-works/pi-agent-core` 与 `@earendil-works/pi-ai` 到 `^0.80.2`，并确认继续不引入 `@earendil-works/pi-coding-agent`、`pi-agent-core/node` 或 Node-only runtime。迁移清单见 `steps/2026-06-27-pi-0-80-upgrade-migration-inventory.md`：后续迁移重点是 `0.80.2` API 兼容检查、provider-native structured message 细化、Workspace Tools Kit 行为对齐、extension workflow / resource discovery、session tree compaction / branch summary，以及非 Forge adapter harness。
+
+2026-06-27：完成通用 `AgentRuntime` 高层 API 与 pi 扩展兼容首轮实现。新增 `AgentRuntime` façade 组合 runtime core、event bus、tool registry、extension host、显式 scanner 与显式 loader；新增 `PiExtensionCompatHost`、`PiExtensionLoader` 和 `PiResourceScanner`，首轮支持 pi-style `ExtensionFactory(pi)`、`registerTool`、`registerProvider`、`resources_discover`、`before_agent_start`、`agent_end`、`tool_call`、`tool_result`，并通过注入文件系统复刻 pi 目录扫描规则。默认 runtime 仍不扫描目录、不加载本地 TS/JS、不注册任何工具。实现记录见 `steps/2026-06-27-agent-runtime-pi-extension-compat-implementation.md`。
+
 已确认方向：
 
 - Core SDK 承载通用 agent loop、session tree、tool provider、approval、trace、Agent Skills 兼容和 test harness。
@@ -75,6 +79,7 @@
 - `allowed-tools` 只作为声明和 diagnostics 信息，不授予真实权限。
 - Prompt Resource Kit 不内置 Forge 路径；prompt、skill、context 路径都由 adapter 显式配置。
 - Extension workflow kit 可加载由 adapter / 代码配置显式指定的 extension factories 或 resolved extension paths；Core SDK 不自动扫描用户目录、项目目录或 VFS 中的可执行代码。
+- Pi-compatible extension kit 作为显式 adapter 提供 `ExtensionFactory(pi)`、pi manifest / 目录扫描和本地模块加载接口；扫描与加载实现可被接入方替换，默认 `AgentRuntime` 不启用这些行为。
 - Workspace Tools Kit 可提供 pi-style 短名工具工厂：`read`、`write`、`edit`、`delete`、`bash`，并可补充只读 `grep`、`find`、`ls`、`search`；所有工具都由接入方显式选择、配置、注册。
 - Research Tools Kit 可提供 `webResearch` 工具工厂和 `AgentResearchProvider` 端口；Core SDK 不默认暴露联网工具，Forge 只有在 Tavily key 非空时才注册 Tavily-backed `webResearch`。
 - Model provider 端口提供 `getModel()`、`getStreamOptions()` 与 `listModels()`；浏览器直连实现为 `PiAiBrowserNexusProvider`，Forge 只传 `presetId` 和 request metadata，不直接读取 `nexus.apis`。
@@ -94,6 +99,8 @@
 7. [~] 补 structured message 回归测试：provider-native thinking/text 流式更新和无标签协议输出已覆盖；仍需继续覆盖 tool call/result 顺序、branch checkout 后消息重投影和文件版本恢复。
 8. [ ] 评估非 Forge 插件接入样例：使用 SDK test harness + 手动注册 tool + 显式 VFS mount + extension workflow hook，验证 SDK 不默认暴露文件工具或 `bash`。
 9. [ ] OpenFS 包跟踪：当前 `@open-fs/just-bash@0.1.0` 实际导出 `AxFs`，`createGrepCommand()` 的 command name 为 `axgrep`；后续升级前必须重新读取包类型文件和测试。
+10. [ ] 完成 pi `0.80.2` 兼容迁移：先跑依赖守卫、focused runtime tests 和 type-check，再按迁移清单逐项修正 API、structured message、tool behavior、extension workflow 和非 Forge harness。
+11. [ ] 将 Forge 当前 pi session 集成迁移到 `AgentRuntime` façade 下，保持 Forge Semantic VFS、写入摘要、Git-backed 版本和 ST 发布边界仍在 Forge adapter。
 
 ## 恢复入口
 
@@ -103,5 +110,7 @@
 - [pi agent 工作流与 UI 状态整理](./steps/2026-06-11-pi-agent-workflow-ui-state-plan.md)
 - [Forge Agent process / final 与文件版本规划](./steps/2026-06-12-forge-agent-process-final-version-plan.md)
 - [Provider-native structured message 主路径规划](./steps/2026-06-12-provider-native-structured-message-plan.md)
+- [pi 0.80.2 依赖升级与迁移清单](./steps/2026-06-27-pi-0-80-upgrade-migration-inventory.md)
+- [AgentRuntime 高层 API 与 pi 扩展兼容首轮实现记录](./steps/2026-06-27-agent-runtime-pi-extension-compat-implementation.md)
 - [Forge Agent 下一阶段可靠可控决策规划](../forge/steps/2026-06-10-forge-agent-next-stage-decision.md)
 - [Forge 当前任务](../forge/)

@@ -173,3 +173,32 @@
 - **验证手段**: 代码审计确认 `ForgePiRuntimeClientTurnInput` / `ForgePiCoreRuntimeTurnInput` 有 `onRuntimeEvent`，但 approval result 接口没有对应 live event 通道；`ForgePiAgentSession.handleAgentEvent()` 会在 message update 时生成 `stream_chunk` 并调用 `input.onRuntimeEvent?.()`，而 approval continuation 设置的 `eventSink` 没有该回调。
 - **什么起作用了**: 暂未修复。本条先记录问题与断裂点，后续应补 approval continuation 的 live event pipeline，并增加回归测试断言批准后 `stream_chunk` 在 `resolveToolApproval()` promise settle 前已到达 UI/store。
 - **失败尝试**: 未尝试代码修复；本次仅完成根因分析和文档记录。
+
+## 23. pi-ai 0.80.2 类型导出兼容修复 (2026-06-27)
+- **错误消息**: `npm run type-check` 失败：`src/api/core/agent-runtime/model/PiAiBrowserNexusProvider.ts` 中 `Provider<Api>` 与字符串 provider id 互不兼容；`src/api/core/forge/agent-app/model/ForgePiNexusProvider.ts` 从 `@earendil-works/pi-ai` 导入 `streamSimple` 失败，报 `Module '"@earendil-works/pi-ai"' has no exported member 'streamSimple'.`
+- **根本原因假设**: `@earendil-works/pi-ai@0.80.2` 根入口不再导出旧全局 `streamSimple`，该函数位于 `@earendil-works/pi-ai/compat`；同时根入口的 `Provider` 已不是旧的 provider id 字符串类型，当前 Nexus adapter 应按 `Model<Api>['provider']` 对齐公开模型结构。
+- **验证手段**: 修改前已运行 `npm run type-check` 复现；修复后重新运行 type-check、pi 依赖守卫和 agent-runtime / Forge pi 相关 focused 测试。
+- **什么起作用了**: `PiAiBrowserNexusProvider.ts` 改用 `Model<Api>['provider']` 表达 Nexus provider id；`ForgePiNexusProvider.ts` 从 `@earendil-works/pi-ai/compat` 导入旧 `streamSimple`。`npm run type-check` 通过；`npm run test -- --run src/api/core/__tests__/forge/ForgePiDependencyGuard.test.ts` 通过 1 个测试文件、5 个用例；`npm run test -- --run src/api/core/__tests__/agent-runtime src/api/core/__tests__/forge/ForgePiAgentSession.test.ts src/api/core/__tests__/forge/ForgePiToolBridge.test.ts src/api/core/__tests__/forge/ForgePiNexusProvider.test.ts src/api/core/__tests__/forge/ForgePiModelRegistry.test.ts` 通过 17 个测试文件、86 个用例；`npm run build` 通过。
+- **失败尝试**: 首次 `npm run type-check` 暴露上述 7 个 TypeScript 错误；未尝试修改运行时数据流。
+## 2026-06-27 AgentRuntime pi compat review fixes
+
+- 错误消息：
+  - `PiExtensionLoader.load()` 中单个扩展 `importModule()` 抛错时会中断整个加载流程。
+  - pi `tool_call` 兼容事件暴露 `args`，而真实 pi API 暴露可原地修改的 `input`。
+  - `AgentRuntime.setup()` 在 extension setup 失败后重试会重复注册工具。
+  - `AgentRuntime.setup({ reason: 'reload' })` 已公开 reload 参数，但不会重新扫描资源。
+- 根本原因假设：
+  - 首轮实现只覆盖 happy path 测试，缺少 extension load failure、pi API 原地 mutation、失败重试、reload lifecycle 的回归测试。
+- 验证计划：
+  - 先补失败测试，再逐项修复；修复后运行新增测试、agent-runtime 测试和 type-check。
+- 什么起作用了：
+  - `AgentRuntime` 将工具注册缓存为一次性初始化 promise，extension setup 失败后重试不再重复注册工具，仍保留首次扩展错误。
+  - `AgentRuntimeExtensionHost` 在 `setup({ reason: 'reload' })` 时重新扫描静态资源，并把 scanner diagnostics 与 loader diagnostics 分开保存。
+  - `PiExtensionLoader` 捕获单个模块导入失败并返回 diagnostics，后续扩展继续加载。
+  - `PiExtensionCompatHost` 按 pi 源码兼容 `tool_call` / `tool_result` 的 `event.input`，支持原地修改参数，同时保留现有 `args` 返回兼容层；单个 pi factory 抛错会记录 diagnostics 并允许后续扩展继续 setup。
+  - `npm run test -- --run src/api/core/__tests__/agent-runtime/AgentRuntime.test.ts src/api/core/__tests__/agent-runtime/PiExtensionCompatHost.test.ts src/api/core/__tests__/agent-runtime/PiExtensionLoader.test.ts` 通过 3 个测试文件、9 个用例。
+  - `npm run test -- --run src/api/core/__tests__/agent-runtime` 通过 17 个测试文件、64 个用例。
+  - `npm run test -- --run src/api/core/__tests__/agent-runtime src/api/core/__tests__/forge/ForgePiAgentSession.test.ts src/api/core/__tests__/forge/ForgePiToolBridge.test.ts src/api/core/__tests__/forge/ForgePiNexusProvider.test.ts src/api/core/__tests__/forge/ForgePiModelRegistry.test.ts` 通过 21 个测试文件、97 个用例。
+  - `npm run type-check` 通过；`npm run build` 通过。
+- 失败尝试：
+  - 首次红测复现旧行为：setup 重试报 `Agent tool already registered: echo`，reload 扫描只执行 1 次，`event.input` 为 `undefined`，loader 的 `importModule()` 抛错会直接 reject。
