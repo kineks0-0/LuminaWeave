@@ -137,7 +137,7 @@ const BUILTIN_COMMANDS: ShellCommandMetadata[] = [
         summary: 'Fetch network resources when network policy allows it.',
         usage: 'curl <url>',
         examples: ['curl https://api.example.com/v1/models', 'curl -X POST https://api.example.com/v1/search'],
-        permissions: 'User terminals require network allow-list configuration. Agent sessions require both allow-list and a network grant.'
+        permissions: 'User terminals require network policy configuration. Agent network-request sessions require network policy and a network grant; curl file input/output uses the mounted workspace filesystem.'
     })
 ];
 
@@ -189,7 +189,7 @@ export const createShellCommandManual = (input: ShellCommandManualInput): ShellC
         'Forge agents may write /workspaces/forge/<projectId>/... by default.',
         'Chat agents may write /workspaces/chat/<conversationId>/... by default.',
         'Agent writes outside their workspace require lw-permission request.',
-        'Network access through curl requires configured allow-list; Agent sessions additionally require a network grant.'
+        'Network access through curl requires configured network policy; Agent network-request sessions additionally require a network grant, while curl file input/output stays inside the mounted workspace filesystem.'
     ],
     commands: getShellCommandMetadata({ networkEnabled: input.networkEnabled }),
     notes: [

@@ -1,47 +1,43 @@
 import type {
     ForgePiSessionEntry,
-    ForgePiWorkspacePatchChange,
-    ForgePiWorkspacePatchPayload
+    ForgeTurnWorkspaceWriteSummary,
+    ForgeWorkspaceChangedFile
 } from '@shared/ForgePiTypes.js';
 import { resolveForgePiActiveBranchEntries } from '../store/forgeStoreHelpers.js';
 
 export interface ForgeFeedWorkspaceChange {
     id: string;
-    patchEntryId: string;
+    sourceEntryId: string;
+    sourceToolCallId: string;
     path: string;
-    kind: ForgePiWorkspacePatchChange['kind'];
+    kind: ForgeWorkspaceChangedFile['kind'];
     beforeHash: string | null;
     afterHash: string | null;
-    beforeContentRef: string | null;
-    afterContentRef: string | null;
-    restoreApplied: boolean;
+    gitCommitHash: string | null;
 }
 
-export const buildWorkspacePatchGroupsByAssistantTurn = (
+export const buildWorkspaceWriteGroupsByAssistantTurn = (
     entries: ForgePiSessionEntry[],
     activeNodeId?: string | null
 ): ForgeFeedWorkspaceChange[][] => {
     const activeEntries = resolveForgePiActiveBranchEntries(entries, activeNodeId);
-    const restoredInlineChangeKeys = resolveRestoredInlineChangeKeys(activeEntries);
     const groups: ForgeFeedWorkspaceChange[][] = [];
     let pending: ForgeFeedWorkspaceChange[] = [];
 
     activeEntries.forEach((entry) => {
-        if (entry.kind === 'workspace_patch' && isWorkspacePatchPayload(entry.payload) && !entry.payload.restoresEntryId) {
-            pending.push(...entry.payload.changes.map((change, index) => {
-                const restoreEntryId = `${entry.id}:${change.path}`;
-                return {
-                    id: `${entry.id}:${change.path}:${index}`,
-                    patchEntryId: entry.id,
-                    path: change.path,
-                    kind: change.kind,
-                    beforeHash: change.beforeHash,
-                    afterHash: change.afterHash,
-                    beforeContentRef: change.beforeContentRef ?? null,
-                    afterContentRef: change.afterContentRef ?? null,
-                    restoreApplied: restoredInlineChangeKeys.has(`${restoreEntryId}:before`)
-                };
-            }));
+        if (entry.kind === 'tool_result') {
+            const summary = readWorkspaceWriteSummary(entry.payload);
+            if (!summary) return;
+            pending.push(...summary.changedFiles.map((change, index) => ({
+                id: `${entry.id}:${change.path}:${index}`,
+                sourceEntryId: entry.id,
+                sourceToolCallId: summary.sourceToolCallId,
+                path: change.path,
+                kind: change.kind,
+                beforeHash: change.beforeHash,
+                afterHash: change.afterHash,
+                gitCommitHash: summary.gitCommitHash ?? null
+            })));
             return;
         }
         if (entry.kind === 'assistant') {
@@ -53,19 +49,21 @@ export const buildWorkspacePatchGroupsByAssistantTurn = (
     return groups;
 };
 
-const resolveRestoredInlineChangeKeys = (entries: ForgePiSessionEntry[]): Set<string> => new Set(
-    entries
-        .map((entry) => {
-            const payload = entry.payload as { restoresEntryId?: unknown; restoreDirection?: unknown };
-            return typeof payload.restoresEntryId === 'string' && payload.restoreDirection === 'before'
-                ? `${payload.restoresEntryId}:before`
-                : null;
-        })
-        .filter((key): key is string => Boolean(key))
-);
-
-const isWorkspacePatchPayload = (payload: unknown): payload is ForgePiWorkspacePatchPayload => {
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
-    const value = payload as { nodeId?: unknown; changes?: unknown };
-    return typeof value.nodeId === 'string' && Array.isArray(value.changes);
+const readWorkspaceWriteSummary = (payload: unknown): ForgeTurnWorkspaceWriteSummary | null => {
+    if (!isRecord(payload)) return null;
+    const result = isRecord(payload.result) ? payload.result : payload;
+    const summary = result.workspaceWriteSummary;
+    if (!isWorkspaceWriteSummary(summary)) return null;
+    return summary;
 };
+
+const isWorkspaceWriteSummary = (value: unknown): value is ForgeTurnWorkspaceWriteSummary => {
+    if (!isRecord(value)) return false;
+    return typeof value.sourceToolCallId === 'string'
+        && Array.isArray(value.changedFiles)
+        && typeof value.writeCount === 'number'
+        && Array.isArray(value.errors);
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);

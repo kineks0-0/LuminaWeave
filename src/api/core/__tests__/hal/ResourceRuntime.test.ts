@@ -59,7 +59,7 @@ describe('Resource Runtime', () => {
     beforeEach(() => {
         store.clear();
         initMockHAL({ runtime: { extensionStore: { listKeys: vi.fn(async () => Array.from(store.keys())), getJson: vi.fn(async ({ key }: { key: string }) => store.get(key) ?? null), setJson: vi.fn(async ({ key, value }: { key: string; value: unknown }) => { store.set(key, value); }), updateJson: vi.fn(async ({ key, value }: { key: string; value: unknown }) => { store.set(key, value); }), deleteJson: vi.fn(async ({ key }: { key: string }) => { store.delete(key); }), setBlob: vi.fn(), getBlob: vi.fn() } } });
-        shellWorkspaceService.resetForTests();
+        shellWorkspaceService.resetForTests({ clearStorage: true });
         stMainRef.value = null;
         stHelperRef.value = null;
         ctxRef.value = null;

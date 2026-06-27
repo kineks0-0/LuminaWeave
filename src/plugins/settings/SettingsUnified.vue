@@ -179,59 +179,7 @@
       </div>
     </SettingsSectionPanel>
 
-    <!-- 备份与迁移控制台 -->
-    <SettingsSectionPanel class="migration-block">
-      <SettingsBlockHeader title="备份与迁移">
-        <template #icon>
-          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" y1="3" x2="12" y2="15"></line>
-          </svg>
-        </template>
-      </SettingsBlockHeader>
-      <div class="block-content migration-content tw:flex tw:flex-col tw:gap-4 tw:pt-1">
-        <SettingsInsetPanel class="scope-selector tw:grid tw:grid-cols-2 tw:gap-2.5 tw:p-3 tw:max-[920px]:grid-cols-1">
-          <LuminaCheckbox v-model="migrationScope.apis">
-            API 接口配置
-          </LuminaCheckbox>
-          <LuminaCheckbox v-model="migrationScope.presets">
-            Nexus 编排预设
-          </LuminaCheckbox>
-          <LuminaCheckbox v-model="migrationScope.chat">
-            对话/流式过滤设置
-          </LuminaCheckbox>
-          <LuminaCheckbox v-model="migrationScope.general">
-            系统常规偏好
-          </LuminaCheckbox>
-        </SettingsInsetPanel>
-
-        <div class="migration-actions tw:flex tw:gap-3 tw:max-[720px]:flex-wrap">
-          <LuminaButton class="settings-action-button" tone="primary" size="sm" @click="handleExport">
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            导出选定范围
-          </LuminaButton>
-          <div class="import-wrapper tw:relative">
-            <LuminaButton class="settings-action-button" variant="soft" size="sm" @click="triggerImport">
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-              导入配置
-            </LuminaButton>
-            <input type="file" ref="importFileInput" style="display: none" accept=".json" @change="handleImportFile" />
-          </div>
-        </div>
-        <SettingsDescription class="migration-hint tw:italic">
-          * 导入操作将根据选定范围覆盖当前配置，请谨慎操作。
-        </SettingsDescription>
-      </div>
-    </SettingsSectionPanel>
+    <SettingsStoragePanel />
 
     <!-- LLM 模型与生成系统 -->
     <SettingsSectionPanel class="llm-block">
@@ -396,6 +344,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { pluginManager } from '../../core/PluginManager.js';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 import NexusPresetManager from './NexusPresetManager.vue';
+import SettingsStoragePanel from './SettingsStoragePanel.vue';
 import { SettingsBlockHeader, SettingsDescription, SettingsInsetPanel, SettingsMetaItem, SettingsSectionPanel, SettingsStatusBadge } from './components';
 import { activeSettings, useSettings } from './useSettings.js';
 import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
@@ -403,7 +352,7 @@ import { LuminaWeaveAPI } from '../../api/index.js';
 import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry.js';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import { getActiveDesktopModeIdFromSettings, getDesktopModeOrDefault, getDesktopModeSettingsPluginId } from '../../desktop-modes/core/registry.js';
-import { LuminaButton, LuminaCheckbox, LuminaIconButton, LuminaSelect, LuminaToggle } from '../../ui/primitives';
+import { LuminaButton, LuminaIconButton, LuminaSelect, LuminaToggle } from '../../ui/primitives';
 
 const { initSettings } = useSettings();
 const { cssVars, variant: unifiedVariant } = useSurfaceSkin('settings.unified');
@@ -438,109 +387,6 @@ const storageState = computed(() => {
     sub: '系统检测到全栈服务端模式已强制开启。数据保存至 LuminaServer 数据目录，支持高性能 Timeline 分支回溯。'
   };
 });
-const migrationScope = ref({
-  apis: true,
-  presets: true,
-  chat: true,
-  general: true
-});
-
-const getKeysFromScope = () => {
-  const keys: string[] = [];
-  if (migrationScope.value.apis) keys.push('nexus.apis');
-  if (migrationScope.value.presets) keys.push('nexus.presets');
-  if (migrationScope.value.chat) {
-    keys.push('lumina-chat.filterChatReply', 'lumina-chat.allowTopLevelInFilter', 'lumina-chat.implicitThinkingInFilter', 'lumina-chat.aggressiveThinking', 'lumina-chat.unlimitedResponse');
-  }
-  if (migrationScope.value.general) {
-    keys.push('lumina-settings.thinkingDisplayMode', 'lumina-settings.thinkingAutoExpand', 'nexus.useSSE');
-  }
-  return keys;
-};
-
-const handleExport = () => {
-  const data: Record<string, any> = {};
-  const keys = getKeysFromScope();
-  
-  keys.forEach(key => {
-    const val = settingsDomainService.getGlobalValue(key, undefined);
-    if (val !== undefined) data[key] = val;
-  });
-
-  if (Object.keys(data).length === 0) {
-    (window as any).LuminaWeave?.showToast('没有可导出的数据，请至少勾选一项。', 'warning');
-    return;
-  }
-
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-  const downloadAnchorNode = document.createElement('a');
-  downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", `LuminaWeave_Backup_${new Date().toISOString().split('T')[0]}.json`);
-  document.body.appendChild(downloadAnchorNode);
-  downloadAnchorNode.click();
-  downloadAnchorNode.remove();
-  (window as any).LuminaWeave?.showToast('配置导出成功！', 'success');
-};
-
-const importFileInput = ref<HTMLInputElement | null>(null);
-
-const triggerImport = () => {
-  importFileInput.value?.click();
-};
-
-const handleImportFile = (e: Event) => {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = async (event) => {
-    try {
-      const content = event.target?.result as string;
-      const data = JSON.parse(content);
-      const keys = getKeysFromScope();
-      
-      const foundKeys = Object.keys(data).filter(k => keys.includes(k));
-      if (foundKeys.length === 0) {
-         (window as any).LuminaWeave?.showToast('所选文件不包含当前勾选范围内的任何有效配置。', 'warning');
-         return;
-      }
-
-      if (confirm(`检测到 ${foundKeys.length} 项有效配项，确定要导入并覆盖当前设置吗？`)) {
-        await settingsDomainService.importData(data, foundKeys);
-        (window as any).LuminaWeave?.showToast('配置导入成功！', 'success');
-        // 刷新当前页面的响应式变量
-        refreshFromStorage();
-      }
-    } catch (err) {
-      console.error('[LuminaWeave] Import failed:', err);
-      (window as any).LuminaWeave?.showToast('导入失败：文件格式错误。', 'error');
-    } finally {
-      if (importFileInput.value) importFileInput.value.value = '';
-    }
-  };
-  reader.readAsText(file);
-};
-
-const refreshFromStorage = () => {
-  filterChatReply.value = settingsDomainService.getGlobalValue('lumina-chat.filterChatReply', false);
-  allowTopLevelInFilter.value = settingsDomainService.getGlobalValue('lumina-chat.allowTopLevelInFilter', true);
-  implicitThinkingInFilter.value = settingsDomainService.getGlobalValue('lumina-chat.implicitThinkingInFilter', false);
-  aggressiveThinking.value = settingsDomainService.getGlobalValue('lumina-chat.aggressiveThinking', false);
-  unlimitedResponse.value = settingsDomainService.getGlobalValue('lumina-chat.unlimitedResponse', false);
-  thinkingDisplayMode.value = settingsDomainService.getGlobalValue('lumina-settings.thinkingDisplayMode', 'collapsible');
-  thinkingAutoExpand.value = Boolean(settingsDomainService.getGlobalValue('lumina-settings.thinkingAutoExpand', true));
-};
-
-const downloadJson = () => {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settingsDomainService.getGlobalSettingsSnapshot(), null, 2));
-  const downloadAnchorNode = document.createElement('a');
-  downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", "LuminaWeave.json");
-  document.body.appendChild(downloadAnchorNode);
-  downloadAnchorNode.click();
-  downloadAnchorNode.remove();
-};
-
 onMounted(() => {
   initSettings();
   refreshLlmData();

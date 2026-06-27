@@ -30,19 +30,14 @@ describe('ForgePiTimelineProjector', () => {
             entry('n3', 'n2', 'user', { role: 'user', text: '测试 shell' }),
             entry('n4', 'n3', 'tool_call', { toolCallId: 'call_1', toolName: 'bash', args: { command: 'ls' } }),
             entry('n5', 'n4', 'tool_result', { toolCallId: 'call_1', toolName: 'bash', result: { stdout: 'ok' } }),
-            entry('n6', 'n5', 'approval_needed', { approvalId: 'approval_1', toolCallId: 'call_2', toolName: 'stageEntry' }),
-            entry('n7', 'n6', 'workspace_patch', {
-                nodeId: 'n7',
-                changes: [{ path: 'review/staging.json', kind: 'update', beforeHash: null, afterHash: 'h1' }]
-            })
+            entry('n6', 'n5', 'approval_needed', { approvalId: 'approval_1', toolCallId: 'call_2', toolName: 'stageEntry' })
         ]);
 
         expect(timeline.map(item => item.id)).toEqual([
             'forge_pi_n3',
             'forge_pi_n4',
             'forge_pi_n5',
-            'forge_pi_n6',
-            'forge_pi_n7'
+            'forge_pi_n6'
         ]);
         expect(timeline[0]).toEqual(expect.objectContaining({
             operationKind: 'user_action',
@@ -59,10 +54,12 @@ describe('ForgePiTimelineProjector', () => {
             status: 'running',
             origin: expect.objectContaining({ toolCallId: 'call_1' })
         }));
-        expect(timeline[4]).toEqual(expect.objectContaining({
-            operationKind: 'workspace_write',
-            origin: expect.objectContaining({ entryType: 'workspace_patch' })
-        }));
+        expect(timeline.map(item => item.origin?.entryType)).toEqual([
+            'user',
+            'tool_call',
+            'tool_result',
+            'approval_needed'
+        ]);
     });
 
     it('can project only the active branch', () => {

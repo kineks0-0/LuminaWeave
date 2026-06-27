@@ -68,13 +68,19 @@ const createStat = (input: { kind: 'file' | 'directory'; size?: number }): FsSta
 
 export class ForgeSemanticVfsProvider implements ForgeSemanticVfsReader {
     private readonly service: ForgeProjectSemanticVfsService;
+    private readonly entryCache = new WeakMap<ForgeRuntimeContext, Promise<ForgeProjectSemanticVfsEntry[]>>();
 
     constructor(deps: ForgeSemanticVfsProviderDeps = {}) {
         this.service = deps.service ?? new ForgeProjectSemanticVfsService(deps);
     }
 
     async listEntries(context: ForgeRuntimeContext): Promise<ForgeProjectSemanticVfsEntry[]> {
-        return this.withSyntheticDirectories(await this.service.listEntries(context));
+        const cached = this.entryCache.get(context);
+        if (cached) return cached;
+        const entries = this.service.listEntries(context)
+            .then(items => this.withSyntheticDirectories(items));
+        this.entryCache.set(context, entries);
+        return entries;
     }
 
     async readFile(context: ForgeRuntimeContext, path: string): Promise<string> {

@@ -171,10 +171,9 @@
                           </div>
                           <button
                             type="button"
-                            :disabled="change.restoreApplied"
-                            @click="handleUndoWorkspaceChange(change)"
+                            @click="handleOpenWorkspaceVersions"
                           >
-                            {{ change.restoreApplied ? '已撤回' : '撤回' }}
+                            版本
                           </button>
                         </div>
                       </div>
@@ -236,8 +235,8 @@
               </div>
             </div>
 
-            <div class="composer-section" data-lw-ime-anchor :class="{ 'is-collapsed': isComposerCollapsed }">
-              <template v-if="isComposerCollapsed">
+            <div class="composer-section" data-lw-ime-anchor :class="{ 'is-collapsed': isComposerCollapsed && !activeComposerApproval }">
+              <template v-if="isComposerCollapsed && !activeComposerApproval">
                 <div class="composer-collapsed-bar">
                   <div class="composer-inline-meta">
                     <span class="composer-inline-pill">FORGE</span>
@@ -258,7 +257,42 @@
                 <div class="composer-shell" ref="composerMenuRef">
                   <ForgePromptPreview :open="isPromptPreviewOpen" @close="closePromptPreview" />
 
-                  <div class="input-container codex-composer">
+                  <div v-if="activeComposerApproval" class="composer-approval-shell">
+                    <div class="composer-approval-main">
+                      <div class="composer-approval-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="17" height="17" stroke="currentColor" stroke-width="2"
+                          fill="none">
+                          <path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"></path>
+                          <path d="M9 12l2 2 4-5"></path>
+                        </svg>
+                      </div>
+                      <div class="composer-approval-copy">
+                        <div class="composer-approval-kicker">需要授权</div>
+                        <strong>{{ composerApprovalTitle }}</strong>
+                        <p>{{ composerApprovalSummary }}</p>
+                        <code>{{ composerApprovalCommand }}</code>
+                      </div>
+                    </div>
+                    <div class="composer-approval-actions">
+                      <button class="composer-approval-btn secondary" type="button"
+                        :disabled="isResolvingComposerApproval"
+                        @click="resolveComposerApproval(false)">
+                        拒绝
+                      </button>
+                      <button class="composer-approval-btn primary" type="button"
+                        :disabled="isResolvingComposerApproval"
+                        @click="resolveComposerApproval(true, 'domain')">
+                        允许此域名
+                      </button>
+                      <button class="composer-approval-btn primary" type="button"
+                        :disabled="isResolvingComposerApproval"
+                        @click="resolveComposerApproval(true, 'all_network')">
+                        后续都允许
+                      </button>
+                    </div>
+                  </div>
+
+                  <div v-else class="input-container codex-composer">
                     <textarea ref="composerTextarea" class="composer-textarea" v-model="store.input"
                       :disabled="store.isGenerating" placeholder="Ask Forge anything about this project"
                       @keydown="handleComposerKeydown" @compositionstart="composerImeGuard.handleCompositionStart"
@@ -427,15 +461,14 @@ import { useForgeSeedImport } from '../useForgeSeedImport.js';
 import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
 import type { ForgeDetailMode } from '../../../types/ForgeStructuredTypes.js';
 import type { ForgeTimelineOperationItem } from '../../../types/ForgeTimelineTypes.js';
+import type { ForgeToolApprovalGrantMode, ForgeToolApprovalRequest } from '../../../types/ForgeRuntimeTypes.js';
 import type { ForgeAuxPanelKind, ForgeVisiblePhase } from '../../../types/ForgeWorkflowTypes.js';
-import type {
-  ForgePiWorkspacePatchChange
-} from '@shared/ForgePiTypes.js';
+import type { ForgeWorkspaceChangedFile } from '@shared/ForgePiTypes.js';
 import type { ActivityDescriptor } from '../../../platform/activity/types.js';
 import type { SidebarMode } from '../../../composables/useResponsiveLayout.js';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../forgeAuxPanels.js';
 import {
-  buildWorkspacePatchGroupsByAssistantTurn,
+  buildWorkspaceWriteGroupsByAssistantTurn,
   type ForgeFeedWorkspaceChange
 } from '../project/forgeWorkspaceChangePresentation.js';
 import {
@@ -474,6 +507,7 @@ const isComposerCollapsed = ref(false);
 const isComposerMenuOpen = ref(false);
 const isDetailModeMenuOpen = ref(false);
 const isPromptPreviewOpen = ref(false);
+const isResolvingComposerApproval = ref(false);
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let stopForgeTypographyWatch: (() => void) | null = null;
 
@@ -493,6 +527,41 @@ type ForgeTypographySettingKey = keyof typeof FORGE_TYPOGRAPHY_DEFAULTS;
 
 const forgeTypographySettings = reactive<Record<ForgeTypographySettingKey, number>>({
   ...FORGE_TYPOGRAPHY_DEFAULTS
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const activeComposerApproval = computed<ForgeToolApprovalRequest | null>(() =>
+  forgeStore.composerToolApprovalsForSession({
+    forgeProjectId: store.activeForgeProjectId ?? null,
+    conversationId: store.sessionChatId ?? null
+  })[0] ?? null
+);
+
+const composerApprovalArgs = computed<Record<string, unknown>>(() =>
+  isRecord(activeComposerApproval.value?.args) ? activeComposerApproval.value.args : {}
+);
+
+const composerApprovalCommand = computed(() => {
+  const command = composerApprovalArgs.value.command;
+  return typeof command === 'string' && command.trim().length > 0
+    ? command
+    : activeComposerApproval.value?.toolName ?? 'tool';
+});
+
+const composerApprovalTitle = computed(() => {
+  if (!activeComposerApproval.value) return '';
+  return activeComposerApproval.value.approvalKind === 'network'
+    ? '允许 Forge Agent 发起网络请求'
+    : `允许工具调用：${activeComposerApproval.value.toolName}`;
+});
+
+const composerApprovalSummary = computed(() => {
+  const approval = activeComposerApproval.value;
+  if (!approval) return '';
+  const requestId = approval.shellPermissionRequestId ? ` · ${approval.shellPermissionRequestId}` : '';
+  return `${approval.reason}${requestId}`;
 });
 
 const readForgeTypographyNumber = (key: ForgeTypographySettingKey): number => {
@@ -537,8 +606,8 @@ interface FeedAgentProcess {
 }
 type GroupedFeedItem = FeedMessage | FeedAgentProcess;
 
-const workspacePatchGroupsByAssistantTurn = computed<ForgeFeedWorkspaceChange[][]>(() =>
-  buildWorkspacePatchGroupsByAssistantTurn(forgeStore.piSessionEntries, forgeStore.activePiNodeId)
+const workspaceWriteGroupsByAssistantTurn = computed<ForgeFeedWorkspaceChange[][]>(() =>
+  buildWorkspaceWriteGroupsByAssistantTurn(forgeStore.piSessionEntries, forgeStore.activePiNodeId)
 );
 
 const groupedFeed = computed((): GroupedFeedItem[] => {
@@ -572,7 +641,7 @@ const groupedFeed = computed((): GroupedFeedItem[] => {
     if (item.kind === 'message') {
       const messageItem = item as FeedMessage;
       if (messageItem.message.role === 'assistant') {
-        const workspaceChanges = workspacePatchGroupsByAssistantTurn.value[assistantIndex] ?? [];
+        const workspaceChanges = workspaceWriteGroupsByAssistantTurn.value[assistantIndex] ?? [];
         const isStreamingAssistant = messageItem.message.syncStatus === 'streaming';
         const streamProcessText = isStreamingAssistant ? store.streamThinkingText : null;
         flushProcess({
@@ -610,14 +679,10 @@ const toggleAgentProcessGroup = (item: FeedAgentProcess): void => {
   expandedProcessGroups.add(item.id);
 };
 
-const workspaceChangeKindLabel = (kind: ForgePiWorkspacePatchChange['kind']): string => {
+const workspaceChangeKindLabel = (kind: ForgeWorkspaceChangedFile['kind']): string => {
   if (kind === 'create') return '新增';
   if (kind === 'delete') return '删除';
   return '更新';
-};
-
-const handleUndoWorkspaceChange = async (change: ForgeFeedWorkspaceChange): Promise<void> => {
-  await store.restoreWorkspaceChange(change);
 };
 
 const handleOpenWorkspaceVersions = () => {
@@ -840,7 +905,33 @@ const handleChooseDetailMode = (mode: ForgeDetailMode) => {
   void store.chooseDetailMode(mode);
 };
 
+const resolveComposerApproval = async (
+  approved: boolean,
+  grantMode?: ForgeToolApprovalGrantMode
+): Promise<void> => {
+  const approval = activeComposerApproval.value;
+  if (!approval || isResolvingComposerApproval.value) return;
+  isResolvingComposerApproval.value = true;
+  closeComposerMenu();
+  closePromptPreview();
+  try {
+    await store.resolveToolApproval(
+      approval.toolCallId,
+      approved,
+      approved
+        ? grantMode === 'all_network'
+          ? '已允许 Forge Agent 后续所有网络请求。'
+          : '已允许 Forge Agent 访问此域名。'
+        : '已拒绝 Forge Agent 网络请求。',
+      approved ? { grantMode: grantMode ?? 'domain' } : undefined
+    );
+  } finally {
+    isResolvingComposerApproval.value = false;
+  }
+};
+
 const toggleComposerCollapsed = () => {
+  if (activeComposerApproval.value) return;
   isComposerCollapsed.value = !isComposerCollapsed.value;
   if (isComposerCollapsed.value) {
     closeComposerMenu();
@@ -852,6 +943,10 @@ const toggleComposerCollapsed = () => {
 };
 
 const handleComposerKeydown = (event: KeyboardEvent) => {
+  if (activeComposerApproval.value) {
+    event.preventDefault();
+    return;
+  }
   if (event.key !== 'Enter' || event.shiftKey) return;
   if (composerImeGuard.shouldIgnoreSubmit(event)) return;
   event.preventDefault();
@@ -2018,6 +2113,114 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.composer-approval-shell {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--lw-primary) 24%, var(--lw-border-base));
+  background: color-mix(in srgb, var(--lw-bg-elevated) 94%, var(--lw-primary) 6%);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
+.composer-approval-main {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.composer-approval-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--lw-primary);
+  background: color-mix(in srgb, var(--lw-primary) 12%, var(--lw-bg-elevated));
+}
+
+.composer-approval-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.composer-approval-kicker {
+  color: var(--lw-primary);
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-label-medium-weight);
+}
+
+.composer-approval-copy strong {
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-body-size);
+  font-weight: var(--lw-type-title-small-weight);
+}
+
+.composer-approval-copy p {
+  margin: 0;
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-body-small-size);
+  line-height: 1.5;
+}
+
+.composer-approval-copy code {
+  display: block;
+  max-height: 68px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--lw-border-subtle);
+  background: color-mix(in srgb, var(--lw-bg-surface) 92%, var(--lw-primary) 8%);
+  color: var(--lw-text-secondary);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: var(--lw-type-label-small-size);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.composer-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.composer-approval-btn {
+  min-width: 92px;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-label-medium-weight);
+  cursor: pointer;
+  transition: var(--lw-transition);
+}
+
+.composer-approval-btn:disabled {
+  opacity: 0.56;
+  cursor: wait;
+}
+
+.composer-approval-btn.primary {
+  border: 1px solid var(--lw-primary);
+  background: var(--lw-primary);
+  color: var(--lw-text-inverse);
+}
+
+.composer-approval-btn.secondary {
+  border: 1px solid var(--lw-border-base);
+  background: var(--lw-bg-elevated);
+  color: var(--lw-text-secondary);
+}
+
+.composer-approval-btn:not(:disabled):hover {
+  transform: translateY(-1px);
 }
 
 .input-container {

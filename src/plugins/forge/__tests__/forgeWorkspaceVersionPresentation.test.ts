@@ -1,136 +1,65 @@
 import { describe, expect, it } from 'vitest';
-import type { ForgePiSessionEntry } from '@shared/ForgePiTypes.js';
+import type { ForgeWorkspaceGitLogEntry } from '@/api/core/forge/project/ForgeWorkspaceGitService.js';
 import {
-    buildWorkspaceVersionRows,
-    countBranchDiffChanges,
-    createWorkspaceVersionRestorePatch,
-    resolvePatchChangeContents
+    buildWorkspaceVersionRowsFromGitLog,
+    compactId,
+    countGitVersionChanges,
+    gitChangeStatusLabel
 } from '../project/forgeWorkspaceVersionPresentation.js';
 
-const entry = (
-    id: string,
-    parentId: string | null,
-    kind: ForgePiSessionEntry['kind'],
-    payload: ForgePiSessionEntry['payload']
-): ForgePiSessionEntry => ({
-    id,
-    sessionId: 'forge_project__conversation',
-    parentId,
-    kind,
-    title: kind,
-    summary: `${kind} summary`,
-    createdAt: Number(id.replace(/\D/g, '') || 0),
-    payload
+const logEntry = (overrides: Partial<ForgeWorkspaceGitLogEntry> = {}): ForgeWorkspaceGitLogEntry => ({
+    hash: '1234567890abcdef1234567890abcdef12345678',
+    shortHash: '1234567',
+    message: 'Update card',
+    parents: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+    authorName: 'Forge',
+    authorEmail: 'forge@example.test',
+    createdAt: 1000,
+    changedFiles: [{
+        path: 'card.md',
+        status: 'modified',
+        oldHash: 'old',
+        newHash: 'new'
+    }],
+    ...overrides
 });
 
 describe('forgeWorkspaceVersionPresentation', () => {
-    it('projects patch and checkpoint rows with active branch flags', () => {
-        const rows = buildWorkspaceVersionRows([
-            entry('n1', null, 'metadata', {}),
-            entry('n2', 'n1', 'user', { text: 'branch A' }),
-            entry('n3', 'n2', 'workspace_patch', {
-                nodeId: 'n3',
-                changes: [{
-                    path: 'review/staging.json',
-                    kind: 'update',
-                    beforeHash: 'before',
-                    afterHash: 'after',
-                    beforeContentRef: 'inline:old',
-                    afterContentRef: 'inline:new'
+    it('projects Git log entries into version rows', () => {
+        const rows = buildWorkspaceVersionRowsFromGitLog([
+            logEntry(),
+            logEntry({
+                hash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                shortHash: 'bbbbbbb',
+                message: 'Create memory',
+                parents: [],
+                changedFiles: [{
+                    path: 'memory/AUTO.md',
+                    status: 'added'
                 }]
-            }),
-            entry('n4', 'n1', 'user', { text: 'branch B' }),
-            entry('n5', 'n4', 'workspace_checkpoint', {
-                nodeId: 'n5',
-                fileTreeHash: 'hash',
-                stateSnapshotRef: 'snapshot',
-                label: 'B'
             })
-        ], 'n3');
+        ]);
 
-        expect(rows).toHaveLength(2);
-        expect(rows.find(row => row.id === 'n3')).toEqual(expect.objectContaining({
-            kind: 'patch',
-            isOnActiveBranch: true
-        }));
-        expect(rows.find(row => row.id === 'n5')).toEqual(expect.objectContaining({
-            kind: 'checkpoint',
-            isOnActiveBranch: false
-        }));
-        expect(countBranchDiffChanges(rows)).toEqual({
-            activeBranchChanges: 1,
-            otherBranchChanges: 0
-        });
+        expect(rows).toEqual([
+            expect.objectContaining({
+                id: '1234567890abcdef1234567890abcdef12345678',
+                title: 'Update card',
+                parentHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                summary: '1 file change(s)'
+            }),
+            expect.objectContaining({
+                id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                title: 'Create memory',
+                parentHash: null
+            })
+        ]);
+        expect(countGitVersionChanges(rows)).toBe(2);
     });
 
-    it('creates direct restore patches from inline patch content', () => {
-        const [row] = buildWorkspaceVersionRows([
-            entry('n1', null, 'workspace_patch', {
-                nodeId: 'n1',
-                changes: [{
-                    path: 'review/staging.json',
-                    kind: 'update',
-                    beforeHash: 'before',
-                    afterHash: 'after',
-                    beforeContentRef: 'inline:%7B%22old%22%3Atrue%7D',
-                    afterContentRef: 'inline:%7B%22new%22%3Atrue%7D'
-                }, {
-                    path: 'created.json',
-                    kind: 'create',
-                    beforeHash: null,
-                    afterHash: 'created',
-                    beforeContentRef: null,
-                    afterContentRef: 'inline:created'
-                }]
-            })
-        ], 'n1');
-
-        expect(row?.kind).toBe('patch');
-        if (!row || row.kind !== 'patch') return;
-
-        expect(createWorkspaceVersionRestorePatch(row, 'before', 'restore-before')).toEqual({
-            nodeId: 'restore-before',
-            sourceToolCallId: 'workspace-version-restore:n1:before',
-            restoresEntryId: 'n1',
-            restoreDirection: 'before',
-            changes: [
-            expect.objectContaining({
-                    path: 'review/staging.json',
-                    kind: 'update',
-                    beforeContentRef: 'inline:%7B%22new%22%3Atrue%7D',
-                    afterContentRef: 'inline:%7B%22old%22%3Atrue%7D'
-            }),
-            expect.objectContaining({
-                    path: 'created.json',
-                    kind: 'delete',
-                    beforeContentRef: 'inline:created',
-                    afterContentRef: null
-            })
-            ]
-        });
-        expect(createWorkspaceVersionRestorePatch(row, 'after', 'restore-after')).toEqual({
-            nodeId: 'restore-after',
-            sourceToolCallId: 'workspace-version-restore:n1:after',
-            restoresEntryId: 'n1',
-            restoreDirection: 'after',
-            changes: [
-            expect.objectContaining({
-                    path: 'review/staging.json',
-                    kind: 'update',
-                    beforeContentRef: 'inline:%7B%22old%22%3Atrue%7D',
-                    afterContentRef: 'inline:%7B%22new%22%3Atrue%7D'
-            }),
-            expect.objectContaining({
-                    path: 'created.json',
-                    kind: 'create',
-                    beforeContentRef: null,
-                    afterContentRef: 'inline:created'
-            })
-            ]
-        });
-        expect(resolvePatchChangeContents(row.changes[0])).toEqual({
-            before: '{"old":true}',
-            after: '{"new":true}'
-        });
+    it('formats status labels and compact hashes', () => {
+        expect(gitChangeStatusLabel('added')).toBe('新增');
+        expect(gitChangeStatusLabel('deleted')).toBe('删除');
+        expect(gitChangeStatusLabel('modified')).toBe('更新');
+        expect(compactId('1234567890abcdef')).toBe('123456...cdef');
     });
 });

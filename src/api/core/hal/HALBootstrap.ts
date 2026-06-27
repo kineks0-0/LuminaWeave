@@ -1,5 +1,6 @@
 import { HostDetector } from '../host-drivers/HostDetector.js';
 import { HALContext } from './HALContext.js';
+import type { RuntimeExtensionStorePort } from '@shared/api/HALRuntimePorts.js';
 
 /**
  * HAL 启动编排器
@@ -144,6 +145,16 @@ export class HALBootstrap {
     private static async initStandaloneRuntime(options: { onProgress?: (msg: string) => void }): Promise<void> {
         options.onProgress?.('加载 standalone local runtime...');
         const { StandaloneLocalRuntime } = await import('./adapters/standalone/StandaloneLocalRuntime.js');
-        HALContext.instance.runtime = new StandaloneLocalRuntime();
+        const extensionStore = await this.createStandaloneExtensionStore(options);
+        HALContext.instance.runtime = new StandaloneLocalRuntime({ extensionStore });
+    }
+
+    private static async createStandaloneExtensionStore(options: {
+        onProgress?: (msg: string) => void;
+    }): Promise<RuntimeExtensionStorePort | undefined> {
+        if (!HostDetector.isGenericTauriApp) return undefined;
+        options.onProgress?.('加载 Tauri SQLite runtime store...');
+        const { TauriSqliteExtensionStore } = await import('./adapters/tauri/TauriSqliteExtensionStore.js');
+        return new TauriSqliteExtensionStore();
     }
 }

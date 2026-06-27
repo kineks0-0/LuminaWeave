@@ -94,7 +94,7 @@ const piOrigin = computed(() => {
 
 const canBranchFromPiNode = computed(() => piOrigin.value?.entryType === 'user');
 const canOpenWorkspaceVersions = computed(() =>
-  piOrigin.value?.entryType === 'workspace_patch' || piOrigin.value?.entryType === 'workspace_checkpoint'
+  piOrigin.value?.entryType === 'tool_result' && hasWorkspaceWriteSummary(props.operation.detail)
 );
 
 const kindLabel = computed(() => {
@@ -194,6 +194,19 @@ const emitBranchFromPiUserNode = () => {
 const emitOpenWorkspaceVersions = () => {
   if (!canOpenWorkspaceVersions.value) return;
   emit('openWorkspaceVersions');
+};
+
+const hasWorkspaceWriteSummary = (detail: string | null | undefined): boolean => {
+  if (!detail) return false;
+  try {
+    const parsed = JSON.parse(detail);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+    const result = (parsed as { result?: unknown }).result;
+    if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
+    return Boolean((result as { workspaceWriteSummary?: unknown }).workspaceWriteSummary);
+  } catch {
+    return false;
+  }
 };
 </script>
 

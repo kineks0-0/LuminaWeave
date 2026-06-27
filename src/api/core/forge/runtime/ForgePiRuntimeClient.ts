@@ -8,7 +8,8 @@ import type {
     ForgeExecutionRequest,
     ForgeRuntimeContext,
     ForgeRuntimeEvent as ForgeRuntimeEventType,
-    ForgeUserCommand
+    ForgeUserCommand,
+    ForgeToolApprovalResolutionOptions
 } from '../../../../types/ForgeRuntimeTypes.js';
 import {
     forgePiCoreRuntime,
@@ -78,8 +79,15 @@ export class ForgePiRuntimeClient {
         return this.runtime.previewPrompt(input);
     }
 
-    async resolveToolApproval(toolCallId: string, approved: boolean, message?: string): Promise<ForgePiRuntimeClientApprovalResult> {
-        return this.runtime.resolveToolApproval(toolCallId, approved, message);
+    async resolveToolApproval(
+        toolCallId: string,
+        approved: boolean,
+        message?: string,
+        options?: ForgeToolApprovalResolutionOptions
+    ): Promise<ForgePiRuntimeClientApprovalResult> {
+        return options === undefined
+            ? this.runtime.resolveToolApproval(toolCallId, approved, message)
+            : this.runtime.resolveToolApproval(toolCallId, approved, message, options);
     }
 
     checkout(input: {

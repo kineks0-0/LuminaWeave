@@ -8,7 +8,8 @@ import type {
     ForgeRuntimeContext,
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
-    ForgeUserCommand
+    ForgeUserCommand,
+    ForgeToolApprovalResolutionOptions
 } from '../../../../types/ForgeRuntimeTypes.js';
 import type {
     AgentRuntimeEvent,
@@ -85,8 +86,17 @@ export class ForgePiCoreRuntime {
                     runTurn: turnInput => session.prompt(turnInput),
                     previewPrompt: turnInput => session.preparePrompt(turnInput),
                     continue: () => session.continue(),
-                    resolveToolApproval: (toolCallId, approved, message) =>
-                        session.resolveToolApproval(toolCallId, approved, message),
+                    resolveToolApproval: (toolCallId, approved, message, options) => {
+                        if (options === undefined) {
+                            return session.resolveToolApproval(toolCallId, approved, message);
+                        }
+                        return session.resolveToolApproval(
+                            toolCallId,
+                            approved,
+                            message,
+                            options as ForgeToolApprovalResolutionOptions
+                        );
+                    },
                     abort: () => session.abort()
                 };
             }
@@ -129,8 +139,13 @@ export class ForgePiCoreRuntime {
         };
     }
 
-    async resolveToolApproval(toolCallId: string, approved: boolean, message?: string): Promise<ForgePiCoreRuntimeApprovalResult> {
-        const result = await this.core.resolveToolApproval(toolCallId, approved, message)
+    async resolveToolApproval(
+        toolCallId: string,
+        approved: boolean,
+        message?: string,
+        options?: ForgeToolApprovalResolutionOptions
+    ): Promise<ForgePiCoreRuntimeApprovalResult> {
+        const result = await this.core.resolveToolApproval(toolCallId, approved, message, options)
             ?? { resolved: false, events: [], effects: [] };
         return {
             ...result,

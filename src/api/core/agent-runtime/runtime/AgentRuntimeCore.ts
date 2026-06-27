@@ -4,7 +4,7 @@ export interface AgentRuntimeManagedSession<TTurnInput, TRunResult, TPreviewResu
     runTurn(input: TTurnInput): Promise<TRunResult>;
     previewPrompt(input: TTurnInput): Promise<TPreviewResult>;
     continue?(): Promise<void>;
-    resolveToolApproval?(toolCallId: string, approved: boolean, message?: string): Promise<TApprovalResult>;
+    resolveToolApproval?(toolCallId: string, approved: boolean, message?: string, options?: unknown): Promise<TApprovalResult>;
     abort?(): void;
 }
 
@@ -40,9 +40,11 @@ export class AgentRuntimeCore<TTurnInput, TRunResult, TPreviewResult, TApprovalR
         await this.sessions.get(sessionId)?.continue?.();
     }
 
-    async resolveToolApproval(toolCallId: string, approved: boolean, message?: string): Promise<TApprovalResult | null> {
+    async resolveToolApproval(toolCallId: string, approved: boolean, message?: string, options?: unknown): Promise<TApprovalResult | null> {
         for (const session of this.sessions.values()) {
-            const result = await session.resolveToolApproval?.(toolCallId, approved, message);
+            const result = options === undefined
+                ? await session.resolveToolApproval?.(toolCallId, approved, message)
+                : await session.resolveToolApproval?.(toolCallId, approved, message, options);
             if (result) return result;
         }
         return null;

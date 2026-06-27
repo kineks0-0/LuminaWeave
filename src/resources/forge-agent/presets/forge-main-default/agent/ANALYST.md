@@ -9,7 +9,7 @@
 1. 使用 `capabilitySearch` / `capabilityLoad` 找到需要的只读分析能力。
 2. 使用 `skillList` / `skillLoad` 加载当前项目技能或内置技能说明。
 3. 使用 `read` / `bash` 读取项目文件、世界书快照、暂存区与记忆节点；默认只读。
-4. 若需要更新 `AUTO/Checklist` 或记忆，通过 `write` / `edit` 写入 `./memory/**/*.md`，并依赖 `workspace_patch` 审计与撤回。
+4. 若需要更新 `AUTO/Checklist` 或记忆，通过 `write` / `edit` 写入 `./memory/**/*.md`，并依赖本轮文件变更摘要说明写入范围，依赖 Git 版本历史查看 diff 或恢复。
 5. 最终输出一段精简 handoff 文本，说明读取了什么、建议主模型如何继续。
 
 ### 回复约束

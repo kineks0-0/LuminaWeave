@@ -19,6 +19,7 @@ import {
     shellWorkspaceService
 } from '../../hal/shell/ShellWorkspaceService.js';
 import { forgeProjectDataService } from './ForgeProjectDataService.js';
+import { forgePiSessionStore } from './ForgePiSessionStore.js';
 
 const STORAGE_KEY = 'lumina-forge.workspace-sessions';
 const ACTIVE_KEY = 'lumina-forge.active-session-id';
@@ -62,7 +63,7 @@ export class ForgeSessionRepository {
             selectedChatSnapshotId: forge.selectedChatSnapshotId || null,
             draftInput: forge.draftInput || '',
             timelineItems: [],
-            piSession: forge.piSession as any,
+            piSession: undefined,
             stagingEntries: (forge.stagingEntries || []) as any[],
             commitReadyEntries: (forge.commitReadyEntries || []) as any[],
             virtualLorebookEntries: (forge.virtualLorebookEntries || []) as any[],
@@ -84,7 +85,11 @@ export class ForgeSessionRepository {
     }
 
     private sessionToConversation(session: ForgeWorkspaceSession): ConversationDocument {
-        return migrateLegacyForgeSession(this.normalizeProjectFields(session) as any, session.worldlineNodes);
+        const normalized = this.normalizeProjectFields(session);
+        return migrateLegacyForgeSession({
+            ...normalized,
+            piSession: undefined
+        }, session.worldlineNodes);
     }
 
     private pruneOldSessions(sessions: ForgeWorkspaceSession[], count: number = 3): ForgeWorkspaceSession[] {
@@ -135,7 +140,7 @@ export class ForgeSessionRepository {
                         selectedChatSnapshotId: session.selectedChatSnapshotId || null,
                         draftInput: session.draftInput || '',
                         timelineItems: session.timelineItems || [],
-                        piSession: session.piSession,
+                        piSession: undefined,
                         stagingEntries: (session.stagingEntries || []).map((entry) => ({
                             ...entry,
                             layer: entry.layer || null,
@@ -216,6 +221,14 @@ export class ForgeSessionRepository {
         };
     }
 
+    private async hydratePiSession(session: ForgeWorkspaceSession): Promise<ForgeWorkspaceSession> {
+        const piSession = await forgePiSessionStore.load(session.id);
+        return {
+            ...session,
+            piSession: piSession ?? undefined
+        };
+    }
+
     private dehydrateSession(session: ForgeWorkspaceSession): ForgeWorkspaceSession {
         const normalized = this.normalizeProjectFields(session);
         // “脱水”逻辑：清空重量级内容，本地仅留存根
@@ -223,7 +236,7 @@ export class ForgeSessionRepository {
             ...normalized,
             worldlineNodes: [],
             timelineItems: [],
-            piSession: normalized.piSession,
+            piSession: undefined,
             stagingEntries: [],
             commitReadyEntries: [],
             virtualLorebookEntries: [],
@@ -260,7 +273,7 @@ export class ForgeSessionRepository {
             if (data && data.document) {
                 console.log(`[ForgeRepository] 已从后端加载会话: ${id}`);
                 // 顺便更新下本地存根，保持元数据同步
-                const session = await this.hydrateProjectData(this.conversationToSession(data.document));
+                const session = await this.hydratePiSession(await this.hydrateProjectData(this.conversationToSession(data.document)));
                 await this.writeConversationProjection(session);
                 this.updateLocalMeta(session);
                 return session;
@@ -276,7 +289,7 @@ export class ForgeSessionRepository {
                 console.warn(`[ForgeRepository] 本地仅存在会话存根，且后端不可达: ${id}`);
                 // 此时可以考虑弹窗提示，或者直接返回 stub（UI 层需处理空数据）
             }
-            return this.hydrateProjectData(local);
+            return this.hydratePiSession(await this.hydrateProjectData(local));
         }
 
         return null;
@@ -321,6 +334,12 @@ export class ForgeSessionRepository {
             forgeMemoryTree: cloneForgeMemoryTree(session.forgeMemoryTree || createEmptyForgeMemoryTree())
         });
         await this.bindProjectWorkspace(normalizedSession);
+        if (normalizedSession.piSession) {
+            await forgePiSessionStore.save({
+                sessionId: normalizedSession.id,
+                state: normalizedSession.piSession
+            });
+        }
 
         // 1. 优先推送到后端
         const syncSuccess = await this.syncSessionToServer(normalizedSession);
@@ -556,6 +575,7 @@ export class ForgeSessionRepository {
         }
 
         this.writeLocal(sessions.filter((session) => session.id !== id));
+        await forgePiSessionStore.delete(id);
         if (this.getActiveSessionId() === id) {
             const next = sessions.find((session) => session.id !== id) || null;
             this.setActiveSessionId(next?.id ?? null);
@@ -586,6 +606,7 @@ export class ForgeSessionRepository {
             } catch (error) {
                 console.warn(`[ForgeRepository] 删除项目线程远端会话失败，将继续清理本地索引: ${session.id}`, error);
             }
+            await forgePiSessionStore.delete(session.id);
         }
 
         const deletingIds = new Set(deleting.map((session) => session.id));

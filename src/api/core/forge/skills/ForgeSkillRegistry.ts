@@ -11,7 +11,6 @@ import _materialAnalyzer from '../../../../resources/forge-agent/base/skills/mat
 import _memoryCurator from '../../../../resources/forge-agent/base/skills/memory-curator/SKILL.md?raw';
 import _testChatRunner from '../../../../resources/forge-agent/base/skills/test-chat-runner/SKILL.md?raw';
 import _virtualLorebookEditor from '../../../../resources/forge-agent/base/skills/virtual-lorebook-editor/SKILL.md?raw';
-import _workspacePatchAuditor from '../../../../resources/forge-agent/base/skills/workspace-patch-auditor/SKILL.md?raw';
 
 export interface ForgeSkillMetadata {
     name: string;
@@ -55,7 +54,7 @@ const BUILT_IN_SKILLS = [
     builtInSkill({
         name: 'forge-project-writer',
         title: 'Forge 项目写入员',
-        description: '通过 direct write tools 与 VFS 快照维护 project.json、草稿、项目补丁和记忆。',
+        description: '通过 direct write tools 写入项目 VFS，并让 Git 记录版本历史。',
         defaultWriteScope: '/workspaces/forge/<projectId>/',
         resourcePath: 'src/resources/forge-agent/base/skills/forge-project-writer/SKILL.md',
         instructions: _forgeProjectWriter
@@ -75,14 +74,6 @@ const BUILT_IN_SKILLS = [
         defaultWriteScope: '/workspaces/forge/<projectId>/memory/tree.json',
         resourcePath: 'src/resources/forge-agent/base/skills/memory-curator/SKILL.md',
         instructions: _memoryCurator
-    }),
-    builtInSkill({
-        name: 'workspace-patch-auditor',
-        title: '工作区补丁审计员',
-        description: '把草稿和生成变更转换为可 diff、可撤回的 workspace_patch 审计记录。',
-        defaultWriteScope: '/workspaces/forge/<projectId>/',
-        resourcePath: 'src/resources/forge-agent/base/skills/workspace-patch-auditor/SKILL.md',
-        instructions: _workspacePatchAuditor
     }),
     builtInSkill({
         name: 'test-chat-runner',

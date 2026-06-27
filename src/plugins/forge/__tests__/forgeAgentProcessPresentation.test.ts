@@ -13,7 +13,7 @@ const operation = (
 ): ForgeTimelineOperationItem => ({
     id,
     kind: 'operation',
-    operationKind: entryType === 'workspace_patch' ? 'workspace_write' : 'execution',
+    operationKind: 'execution',
     status,
     title,
     summary,
@@ -43,15 +43,14 @@ const toolDetail = (toolName: string, path: string): string => JSON.stringify({
 });
 
 const workspaceChange = (path: string): ForgeFeedWorkspaceChange => ({
-    id: `patch:${path}:0`,
-    patchEntryId: 'patch-1',
+    id: `write:${path}:0`,
+    sourceEntryId: 'result-1',
+    sourceToolCallId: 'call-write',
     path,
     kind: 'update',
     beforeHash: 'before',
     afterHash: 'after',
-    beforeContentRef: 'inline:old',
-    afterContentRef: 'inline:new',
-    restoreApplied: false
+    gitCommitHash: 'commit-1'
 });
 
 describe('forgeAgentProcessPresentation', () => {
@@ -99,8 +98,7 @@ describe('forgeAgentProcessPresentation', () => {
             operations: [
                 operation('op1', 'running', '工具调用 · read', '读取文件', toolDetail('read', './xx.md')),
                 operation('op2', 'completed', '工具结果 · read', '读取完成', toolDetail('read', './xx.md'), 'tool_result'),
-                operation('op3', 'running', '工具调用 · edit', '编辑文件', toolDetail('edit', './xx.md')),
-                operation('op4', 'completed', '工作区变更记录', '1 file change(s)', '{"nodeId":"patch-1"}', 'workspace_patch')
+                operation('op3', 'running', '工具调用 · edit', '编辑文件', toolDetail('edit', './xx.md'))
             ],
             workspaceChanges: [workspaceChange('./xx.md')],
             hasAssistantReply: true
@@ -111,17 +109,14 @@ describe('forgeAgentProcessPresentation', () => {
         expect(presentation.steps.map(step => step.title)).toEqual([
             '已读取文件',
             '已编辑文件',
-            './xx.md 文件被更改',
-            '已生成 workspace_patch'
+            './xx.md 文件被更改'
         ]);
     });
 
-    it('falls back to a file-change summary when only workspace patch rows are available', () => {
+    it('falls back to a file-change summary when only write summary rows are available', () => {
         const presentation = buildForgeAgentProcessPresentation({
-            id: 'process-patch-only',
-            operations: [
-                operation('op1', 'completed', '工作区变更记录', '2 file change(s)', '{"nodeId":"patch-1"}', 'workspace_patch')
-            ],
+            id: 'process-write-only',
+            operations: [],
             workspaceChanges: [workspaceChange('./a.md'), workspaceChange('./b.md')],
             hasAssistantReply: true
         });
@@ -129,8 +124,7 @@ describe('forgeAgentProcessPresentation', () => {
         expect(presentation.summary.label).toBe('更改 2 个文件 · 生成 1 条回复');
         expect(presentation.steps.map(step => step.title)).toEqual([
             './a.md 文件被更改',
-            './b.md 文件被更改',
-            '已生成 workspace_patch'
+            './b.md 文件被更改'
         ]);
     });
 });

@@ -1,161 +1,186 @@
 <template>
   <ForgeAuxPanelShell
     title="文件版本"
-    kicker="Workspace Versions"
-    :subtitle="`当前 pi session 中有 ${versionRows.length} 条工作区版本记录。`"
+    kicker="Git Versions"
+    :subtitle="`当前 Git 历史有 ${versionRows.length} 条提交，覆盖 ${totalChangedFiles} 个文件变更。`"
   >
     <template #actions>
-      <span v-if="activeNodeLabel" class="version-active-node">{{ activeNodeLabel }}</span>
+      <button class="version-action-btn" type="button" :disabled="isLoading" @click="loadVersions">
+        刷新
+      </button>
     </template>
 
-    <div v-if="versionRows.length > 0" class="version-branch-summary">
-      <div>
-        <strong>{{ branchDiffSummary.activeBranchChanges }}</strong>
-        <span>当前分支变更</span>
-      </div>
-      <div>
-        <strong>{{ branchDiffSummary.otherBranchChanges }}</strong>
-        <span>其他分支变更</span>
-      </div>
+    <div v-if="loadError" class="version-error">{{ loadError }}</div>
+
+    <div v-if="versionRows.length === 0 && !isLoading" class="version-empty">
+      <strong>暂无 Git 版本记录</strong>
+      <p>Forge 写入工具、bash 写入或项目 VFS 手动编辑产生文件变更后，会在这里显示 Git log 和 diff。</p>
     </div>
 
-    <div v-if="versionRows.length === 0" class="version-empty">
-      <strong>暂无工作区版本记录</strong>
-      <p>当 Forge 写入工具生成 proposal 或 checkpoint 时，这里会按 pi session tree 展示文件变更。</p>
-    </div>
-
-    <div v-else class="version-list">
-      <article v-for="row in versionRows" :key="row.id" class="version-card">
-        <header class="version-card__header">
-          <div class="version-card__title-group">
-            <span class="version-card__kind">{{ row.kind === 'patch' ? 'Patch' : 'Checkpoint' }}</span>
+    <div v-else class="version-layout">
+      <section class="version-list" aria-label="Git 提交列表">
+        <article
+          v-for="row in versionRows"
+          :key="row.id"
+          class="version-card"
+          :class="{ active: selectedHash === row.hash }"
+        >
+          <button class="version-card__button" type="button" @click="selectRow(row)">
+            <span class="version-card__hash">{{ row.shortHash }}</span>
             <strong>{{ row.title }}</strong>
-            <span class="version-card__node">node {{ compactId(row.nodeId) }}</span>
-          </div>
-          <div class="version-card__side">
-            <span class="version-branch-pill" :class="{ muted: !row.isOnActiveBranch }">
-              {{ row.isOnActiveBranch ? '当前分支' : '其他分支' }}
-            </span>
-            <time class="version-card__time">{{ formatTime(row.createdAt) }}</time>
-          </div>
-        </header>
+            <time>{{ formatTime(row.createdAt) }}</time>
+            <span>{{ row.changedFiles.length }} 个文件</span>
+          </button>
+        </article>
+      </section>
 
-        <p v-if="row.summary" class="version-card__summary">{{ row.summary }}</p>
-
-        <template v-if="row.kind === 'patch'">
-          <div class="version-card__actions">
-            <button
-              class="version-action-btn"
-              type="button"
-              :disabled="!canRestorePatchRow(row, 'before') || isRestoreApplied(row, 'before')"
-              @click="applyRestore(row, 'before')"
-            >
-              撤回变更
-            </button>
-            <button
-              class="version-action-btn"
-              type="button"
-              :disabled="!canRestorePatchRow(row, 'after') || isRestoreApplied(row, 'after')"
-              @click="applyRestore(row, 'after')"
-            >
-              恢复变更后
-            </button>
-          </div>
-
-          <div class="version-change-list">
-            <div v-for="change in row.changes" :key="`${row.id}:${change.path}`" class="version-change-row">
-              <div class="version-change-main">
-                <strong>{{ change.path }}</strong>
-                <span>{{ changeKindLabel(change.kind) }}</span>
-              </div>
-              <dl class="version-change-hashes">
-                <div>
-                  <dt>Before</dt>
-                  <dd>{{ change.beforeHash || 'none' }}</dd>
-                </div>
-                <div>
-                  <dt>After</dt>
-                  <dd>{{ change.afterHash || 'none' }}</dd>
-                </div>
-              </dl>
-              <details v-if="hasInlineDiff(change)" class="version-inline-diff">
-                <summary>查看内容差异</summary>
-                <div class="version-diff-grid">
-                  <section>
-                    <h4>Before</h4>
-                    <pre>{{ resolvePatchChangeContents(change).before ?? 'none' }}</pre>
-                  </section>
-                  <section>
-                    <h4>After</h4>
-                    <pre>{{ resolvePatchChangeContents(change).after ?? 'none' }}</pre>
-                  </section>
-                </div>
-              </details>
-            </div>
-          </div>
-        </template>
-
-        <dl v-else class="version-checkpoint-meta">
+      <section class="version-detail" aria-label="Git 差异">
+        <div v-if="selectedRow" class="version-detail__header">
           <div>
-            <dt>File tree</dt>
-            <dd>{{ row.fileTreeHash }}</dd>
+            <span class="version-card__hash">{{ selectedRow.shortHash }}</span>
+            <strong>{{ selectedRow.title }}</strong>
+            <p>parent {{ selectedRow.parentHash ? compactId(selectedRow.parentHash) : 'none' }}</p>
           </div>
-          <div>
-            <dt>Snapshot</dt>
-            <dd>{{ row.stateSnapshotRef }}</dd>
+          <button class="version-action-btn" type="button" :disabled="isRestoring" @click="restoreSelected">
+            恢复到此提交
+          </button>
+        </div>
+
+        <div v-if="selectedRow" class="version-change-list">
+          <div v-for="change in selectedRow.changedFiles" :key="`${selectedRow.id}:${change.path}`" class="version-change-row">
+            <strong>{{ change.path }}</strong>
+            <span>{{ gitChangeStatusLabel(change.status) }}</span>
           </div>
-          <div v-if="row.label">
-            <dt>Label</dt>
-            <dd>{{ row.label }}</dd>
-          </div>
-        </dl>
-      </article>
+        </div>
+
+        <pre v-if="selectedDiff" class="version-diff">{{ selectedDiff }}</pre>
+        <div v-else-if="selectedRow && isDiffLoading" class="version-empty">正在加载 diff...</div>
+        <div v-else-if="selectedRow" class="version-empty">该提交暂无可显示 diff。</div>
+      </section>
     </div>
   </ForgeAuxPanelShell>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { luminaWeaveApi } from '../../../api/index.js';
-import { useForgeStore } from '../../../stores/useForgeStore.js';
+import { shellWorkspaceService } from '../../../api/core/hal/shell/ShellWorkspaceService.js';
+import { forgeWorkspaceGitService } from '../../../api/core/forge/project/ForgeWorkspaceGitService.js';
 import { useCardMakerStore } from '../CardMakerStore.js';
-import type { ForgePiWorkspacePatchChange } from '@shared/ForgePiTypes.js';
 import ForgeAuxPanelShell from '../app/ForgeAuxPanelShell.vue';
 import {
-  buildWorkspaceVersionRows,
-  canRestorePatchRow,
+  buildWorkspaceVersionRowsFromGitLog,
   compactId,
-  countBranchDiffChanges,
-  createWorkspaceVersionRestorePatch,
-  resolvePatchChangeContents,
-  type PatchVersionRow,
-  type WorkspaceVersionRestoreDirection,
+  countGitVersionChanges,
+  gitChangeStatusLabel,
   type WorkspaceVersionRow
 } from './forgeWorkspaceVersionPresentation.js';
 
-const forgeStore = useForgeStore();
 const cardMakerStore = useCardMakerStore();
+const versionRows = ref<WorkspaceVersionRow[]>([]);
+const selectedHash = ref<string | null>(null);
+const selectedDiff = ref('');
+const isLoading = ref(false);
+const isDiffLoading = ref(false);
+const isRestoring = ref(false);
+const loadError = ref('');
 
-const versionRows = computed<WorkspaceVersionRow[]>(() =>
-  buildWorkspaceVersionRows(forgeStore.piSessionEntries, forgeStore.activePiNodeId)
-);
+const projectId = computed(() => cardMakerStore.activeForgeProjectId);
+const conversationId = computed(() => cardMakerStore.sessionChatId);
+const totalChangedFiles = computed(() => countGitVersionChanges(versionRows.value));
+const selectedRow = computed(() => versionRows.value.find(row => row.hash === selectedHash.value) ?? null);
 
-const branchDiffSummary = computed(() => countBranchDiffChanges(versionRows.value));
+const repoRoot = (id: string): string => `/forge/${encodeURIComponent(id)}`;
 
-const activeNodeLabel = computed(() =>
-  forgeStore.activePiNodeId ? `active ${compactId(forgeStore.activePiNodeId)}` : ''
-);
+const getProjectFileSystem = async () => shellWorkspaceService.getFileSystem({
+  projectId: projectId.value,
+  conversationId: conversationId.value
+});
 
-const restoredPatchKeys = computed(() => new Set(
-  forgeStore.piSessionEntries
-    .map((entry) => {
-      const payload = entry.payload as { restoresEntryId?: unknown; restoreDirection?: unknown };
-      return typeof payload.restoresEntryId === 'string' && typeof payload.restoreDirection === 'string'
-        ? `${payload.restoresEntryId}:${payload.restoreDirection}`
-        : null;
-    })
-    .filter((key): key is string => Boolean(key))
-));
+const loadVersions = async (): Promise<void> => {
+  isLoading.value = true;
+  loadError.value = '';
+  try {
+    const fs = await getProjectFileSystem();
+    const log = await forgeWorkspaceGitService.log({
+      fs,
+      repoRoot: repoRoot(projectId.value),
+      limit: 50
+    });
+    versionRows.value = buildWorkspaceVersionRowsFromGitLog(log);
+    selectedHash.value = versionRows.value[0]?.hash ?? null;
+    await loadSelectedDiff();
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : String(error);
+    versionRows.value = [];
+    selectedHash.value = null;
+    selectedDiff.value = '';
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const loadSelectedDiff = async (): Promise<void> => {
+  const row = selectedRow.value;
+  if (!row) {
+    selectedDiff.value = '';
+    return;
+  }
+  isDiffLoading.value = true;
+  try {
+    const fs = await getProjectFileSystem();
+    const diff = await forgeWorkspaceGitService.diff({
+      fs,
+      repoRoot: repoRoot(projectId.value),
+      baseHash: row.parentHash,
+      headHash: row.hash
+    });
+    selectedDiff.value = diff.text.trim();
+  } catch (error) {
+    selectedDiff.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    isDiffLoading.value = false;
+  }
+};
+
+const selectRow = async (row: WorkspaceVersionRow): Promise<void> => {
+  selectedHash.value = row.hash;
+  await loadSelectedDiff();
+};
+
+const restoreSelected = async (): Promise<void> => {
+  const row = selectedRow.value;
+  if (!row) return;
+  const confirmed = await luminaWeaveApi.confirm({
+    title: '恢复文件版本',
+    message: `将把 Forge 项目 VFS 恢复到 Git 提交 ${row.shortHash}，并提交一条新的恢复记录。此操作不会发布或覆盖真实 ST 世界书。`,
+    confirmText: '恢复',
+    cancelText: '取消'
+  });
+  if (!confirmed) return;
+
+  isRestoring.value = true;
+  loadError.value = '';
+  try {
+    const fs = await getProjectFileSystem();
+    await forgeWorkspaceGitService.restore({
+      fs,
+      repoRoot: repoRoot(projectId.value),
+      ref: row.hash
+    });
+    await forgeWorkspaceGitService.commitAll({
+      fs,
+      repoRoot: repoRoot(projectId.value),
+      message: `Restore Forge workspace to ${row.shortHash}`
+    });
+    await shellWorkspaceService.persist();
+    await loadVersions();
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    isRestoring.value = false;
+  }
+};
 
 const formatTime = (value: number): string => new Date(value).toLocaleString([], {
   month: '2-digit',
@@ -164,90 +189,53 @@ const formatTime = (value: number): string => new Date(value).toLocaleString([],
   minute: '2-digit'
 });
 
-const changeKindLabel = (kind: ForgePiWorkspacePatchChange['kind']): string => {
-  if (kind === 'create') return '新增';
-  if (kind === 'delete') return '删除';
-  return '更新';
-};
+onMounted(() => {
+  void loadVersions();
+});
 
-const hasInlineDiff = (change: ForgePiWorkspacePatchChange): boolean => {
-  const contents = resolvePatchChangeContents(change);
-  return contents.before !== null || contents.after !== null;
-};
-
-const isRestoreApplied = (row: PatchVersionRow, direction: WorkspaceVersionRestoreDirection): boolean =>
-  restoredPatchKeys.value.has(`${row.id}:${direction}`);
-
-const applyRestore = async (row: PatchVersionRow, direction: WorkspaceVersionRestoreDirection): Promise<void> => {
-  const patch = createWorkspaceVersionRestorePatch(row, direction, `workspace-restore-${Date.now().toString(36)}-${row.id}-${direction}`);
-  if (patch.changes.length === 0 || isRestoreApplied(row, direction)) return;
-  const confirmed = await luminaWeaveApi.confirm({
-    title: direction === 'before' ? '撤回文件变更' : '恢复文件变更',
-    message: `将直接写入 ${patch.changes.length} 个项目文件，并生成一条反向 workspace_patch。\n\n此操作不会发布或覆盖真实 ST 世界书。`,
-    confirmText: direction === 'before' ? '撤回' : '恢复',
-    cancelText: '取消'
-  });
-  if (!confirmed) return;
-  await cardMakerStore.applyWorkspacePatch(patch);
-};
+watch(projectId, () => {
+  void loadVersions();
+});
 </script>
 
 <style scoped>
-.version-active-node {
-  min-height: 24px;
-  padding: 0 9px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 82%, transparent);
-  background: color-mix(in srgb, var(--lw-bg-subtle) 88%, white);
-  color: var(--lw-text-secondary);
-  font-size: var(--lw-type-label-small-size);
-  font-family: var(--lw-font-mono), ui-monospace, Consolas, monospace;
-  display: inline-flex;
-  align-items: center;
-}
-
-.version-branch-summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.version-branch-summary div {
-  min-width: 0;
-  padding: 12px;
+.version-action-btn {
+  min-height: 30px;
+  padding: 0 12px;
   border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--lw-border-base) 78%, transparent);
   background: color-mix(in srgb, var(--lw-bg-subtle) 88%, white);
-}
-
-.version-branch-summary strong,
-.version-branch-summary span {
-  display: block;
-}
-
-.version-branch-summary strong {
-  color: var(--lw-text-main);
-  font-size: var(--lw-type-title-large-size);
-  line-height: 1;
-}
-
-.version-branch-summary span {
-  margin-top: 6px;
   color: var(--lw-text-secondary);
   font-size: var(--lw-type-label-small-size);
+  font-weight: var(--lw-type-title-small-weight);
+  cursor: pointer;
 }
 
+.version-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.version-error,
 .version-empty,
-.version-card {
+.version-card,
+.version-detail {
   border-radius: 8px;
   border: 1px solid var(--lw-border-base);
   background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
 }
 
+.version-error,
 .version-empty {
-  padding: 16px;
+  padding: 14px;
   color: var(--lw-text-secondary);
+  font-size: var(--lw-type-body-small-size);
+}
+
+.version-error {
+  margin-bottom: 12px;
+  border-color: color-mix(in srgb, var(--lw-danger, #d64f4f) 48%, var(--lw-border-base));
+  color: var(--lw-danger, #d64f4f);
 }
 
 .version-empty strong {
@@ -258,209 +246,109 @@ const applyRestore = async (row: PatchVersionRow, direction: WorkspaceVersionRes
 
 .version-empty p {
   margin: 0;
-  font-size: var(--lw-type-body-small-size);
   line-height: 1.6;
+}
+
+.version-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.85fr) minmax(0, 1.25fr);
+  gap: 12px;
 }
 
 .version-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  min-width: 0;
 }
 
-.version-card {
+.version-card.active {
+  border-color: rgba(var(--lw-primary-rgb), 0.32);
+  background: color-mix(in srgb, rgba(var(--lw-primary-rgb), 0.08) 72%, var(--lw-bg-elevated));
+}
+
+.version-card__button {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  text-align: left;
+  display: grid;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.version-card__button strong,
+.version-detail__header strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-body-small-size);
+}
+
+.version-card__button time,
+.version-card__button span,
+.version-detail__header p,
+.version-card__hash {
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size);
+}
+
+.version-card__hash {
+  font-family: var(--lw-font-mono), ui-monospace, Consolas, monospace;
+}
+
+.version-detail {
+  min-width: 0;
   padding: 14px;
 }
 
-.version-card__header {
+.version-detail__header {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 12px;
 }
 
-.version-card__title-group {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.version-card__side {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: flex-end;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.version-card__kind,
-.version-card__node,
-.version-card__time {
-  color: var(--lw-text-muted);
-  font-size: var(--lw-type-label-small-size);
-}
-
-.version-card__title-group strong {
-  color: var(--lw-text-main);
-  font-size: var(--lw-type-title-small-size);
-  line-height: 1.35;
-}
-
-.version-card__time {
-  flex: 0 0 auto;
-  font-family: var(--lw-font-mono), ui-monospace, Consolas, monospace;
-}
-
-.version-branch-pill {
-  min-height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(var(--lw-primary-rgb), 0.22);
-  background: color-mix(in srgb, rgba(var(--lw-primary-rgb), 0.08) 82%, var(--lw-bg-elevated));
-  color: rgb(var(--lw-primary-rgb));
-  font-size: var(--lw-type-label-small-size);
-  font-weight: var(--lw-type-title-small-weight);
-  display: inline-flex;
-  align-items: center;
-}
-
-.version-branch-pill.muted {
-  border-color: color-mix(in srgb, var(--lw-border-base) 78%, transparent);
-  background: color-mix(in srgb, var(--lw-bg-subtle) 86%, white);
-  color: var(--lw-text-muted);
-}
-
-.version-card__summary {
-  margin: 10px 0 0;
-  color: var(--lw-text-secondary);
-  font-size: var(--lw-type-body-small-size);
-  line-height: 1.6;
-}
-
-.version-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.version-action-btn {
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--lw-border-base) 78%, transparent);
-  background: color-mix(in srgb, var(--lw-bg-subtle) 88%, white);
-  color: var(--lw-text-secondary);
-  font-size: var(--lw-type-label-small-size);
-  font-weight: var(--lw-type-title-small-weight);
-  cursor: pointer;
-}
-
-.version-action-btn:not(:disabled):hover {
-  border-color: rgba(var(--lw-primary-rgb), 0.24);
-  background: color-mix(in srgb, rgba(var(--lw-primary-rgb), 0.08) 72%, var(--lw-bg-subtle));
-  color: var(--lw-text-main);
-}
-
-.version-action-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.48;
+.version-detail__header p {
+  margin: 4px 0 0;
 }
 
 .version-change-list {
-  margin-top: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--lw-border-base) 74%, transparent);
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 
 .version-change-row {
-  padding: 10px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--lw-border-base) 74%, transparent);
-}
-
-.version-change-main {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid color-mix(in srgb, var(--lw-border-base) 72%, transparent);
 }
 
-.version-change-main strong {
+.version-change-row strong {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--lw-text-main);
   font-size: var(--lw-type-body-small-size);
 }
 
-.version-change-main span {
+.version-change-row span {
   flex: 0 0 auto;
   color: rgb(var(--lw-primary-rgb));
   font-size: var(--lw-type-label-small-size);
-  font-weight: var(--lw-type-title-small-weight);
 }
 
-.version-change-hashes,
-.version-checkpoint-meta {
-  margin: 8px 0 0;
-  display: grid;
-  gap: 6px;
-}
-
-.version-change-hashes div,
-.version-checkpoint-meta div {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 8px;
-}
-
-.version-change-hashes dt,
-.version-checkpoint-meta dt {
-  color: var(--lw-text-muted);
-  font-size: var(--lw-type-label-small-size);
-}
-
-.version-change-hashes dd,
-.version-checkpoint-meta dd {
+.version-diff {
   margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--lw-text-secondary);
-  font-size: var(--lw-type-label-small-size);
-  font-family: var(--lw-font-mono), ui-monospace, Consolas, monospace;
-}
-
-.version-inline-diff {
-  margin-top: 10px;
-}
-
-.version-inline-diff summary {
-  cursor: pointer;
-  color: var(--lw-text-secondary);
-  font-size: var(--lw-type-label-small-size);
-  font-weight: var(--lw-type-title-small-weight);
-}
-
-.version-diff-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.version-diff-grid section {
-  min-width: 0;
-}
-
-.version-diff-grid h4 {
-  margin: 0 0 6px;
-  color: var(--lw-text-muted);
-  font-size: var(--lw-type-label-small-size);
-}
-
-.version-diff-grid pre {
-  margin: 0;
-  max-height: 180px;
+  max-height: 420px;
   overflow: auto;
-  padding: 10px;
+  padding: 12px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--lw-bg-subtle) 82%, white);
   color: var(--lw-text-secondary);
@@ -471,10 +359,13 @@ const applyRestore = async (row: PatchVersionRow, direction: WorkspaceVersionRes
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 640px) {
-  .version-diff-grid,
-  .version-branch-summary {
+@media (max-width: 720px) {
+  .version-layout {
     grid-template-columns: 1fr;
+  }
+
+  .version-detail__header {
+    flex-direction: column;
   }
 }
 </style>

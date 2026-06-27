@@ -1,4 +1,5 @@
 import type { ShellExecResult, ShellSessionRef } from '@shared/resources/index.js';
+import { createGit } from 'just-git';
 import type { ForgeRuntimeContext } from '../../../../types/ForgeRuntimeTypes.js';
 import {
     BashTerminalRuntime,
@@ -75,8 +76,15 @@ const READ_ONLY_COMMANDS = new Set([
     'tail'
 ]);
 
+const NETWORK_ALLOWED_COMMANDS = new Set([
+    ...READ_ONLY_COMMANDS,
+    'curl',
+    'lw-permission'
+]);
+
 const WRITE_ALLOWED_COMMANDS = new Set([
     'cp',
+    'git',
     'mkdir',
     'mv',
     'rm',
@@ -87,11 +95,9 @@ const WRITE_ALLOWED_COMMANDS = new Set([
 
 const DANGEROUS_COMMANDS = new Set([
     'chmod',
-    'curl',
     'eval',
     'export',
     'ln',
-    'lw-permission',
     'source',
     'unset'
 ]);
@@ -115,10 +121,16 @@ const splitCommandSegments = (command: string): string[] =>
         .map(segment => segment.trim())
         .filter(Boolean);
 
-const hasUnquotedRedirection = (command: string): boolean => {
+const isFileDescriptorDuplication = (command: string, index: number): boolean => {
+    if (command[index + 1] !== '&') return false;
+    return /\d/.test(command[index + 2] ?? '');
+};
+
+const hasUnquotedFileRedirection = (command: string): boolean => {
     let quote: '"' | '\'' | null = null;
     let escaping = false;
-    for (const char of command) {
+    for (let index = 0; index < command.length; index += 1) {
+        const char = command[index];
         if (escaping) {
             escaping = false;
             continue;
@@ -135,7 +147,13 @@ const hasUnquotedRedirection = (command: string): boolean => {
             quote = char;
             continue;
         }
-        if (char === '>' || char === '<') return true;
+        if (char === '>' || char === '<') {
+            if (isFileDescriptorDuplication(command, index)) {
+                index += 2;
+                continue;
+            }
+            return true;
+        }
     }
     return false;
 };
@@ -217,11 +235,21 @@ export class ForgeWorkspaceSearchShell {
             session,
             vfs: this.vfs,
             permissions: this.permissions,
+            network: mode === 'network-request' ? { dangerouslyAllowFullInternetAccess: true } : undefined,
             cwd,
             extraMounts: [{
                 path: FORGE_SEMANTIC_SHELL_ROOT,
                 fs: semanticFs
-            }]
+            }],
+            customCommands: [
+                createGit({
+                    identity: {
+                        name: 'LuminaWeave Forge',
+                        email: 'forge@luminaweave.local'
+                    },
+                    network: false
+                })
+            ]
         });
         const raw = await runtime.exec(command);
         const maxOutputBytes = input.maxOutputBytes ?? 8000;
@@ -280,9 +308,12 @@ export class ForgeWorkspaceSearchShell {
             return `command substitution is blocked in ${mode} shell`;
         }
 
-        const hasRedirect = hasUnquotedRedirection(trimmed);
+        const hasRedirect = hasUnquotedFileRedirection(trimmed);
         if (mode === 'project-readonly' && hasRedirect) {
             return 'redirection is blocked in project-readonly shell; use project-write-request mode for writes';
+        }
+        if (mode === 'network-request' && hasRedirect) {
+            return 'redirection is blocked in network-request shell; use project-write-request mode for writes';
         }
 
         for (const path of absoluteWorkspacePaths(trimmed)) {
@@ -303,6 +334,11 @@ export class ForgeWorkspaceSearchShell {
                 }
                 if (!READ_ONLY_COMMANDS.has(word)) {
                     return `${word} is not available in project-readonly shell`;
+                }
+            }
+            if (mode === 'network-request') {
+                if (!NETWORK_ALLOWED_COMMANDS.has(word)) {
+                    return `${word} is not available in network-request shell`;
                 }
             }
             // project-write-request: allow READ_ONLY + WRITE_ALLOWED, block everything else

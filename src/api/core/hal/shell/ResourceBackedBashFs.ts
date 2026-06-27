@@ -13,6 +13,23 @@ const joinVirtualPath = (mountPoint: string, path: string): string => {
     return local === '/' ? mountPoint : `${mountPoint}${local}`;
 };
 
+const WORKSPACE_MOUNT_POINT = '/workspaces';
+
+const normalizeWorkspaceMountPath = (path: string): string => {
+    const normalized = normalizeLocalPath(path);
+    if (normalized === WORKSPACE_MOUNT_POINT) return '/';
+    if (normalized.startsWith(`${WORKSPACE_MOUNT_POINT}/`)) {
+        return normalizeLocalPath(normalized.slice(WORKSPACE_MOUNT_POINT.length));
+    }
+    return normalized;
+};
+
+const resolveWorkspaceMountPath = (base: string, path: string): string => {
+    if (path.startsWith('/')) return normalizeWorkspaceMountPath(path);
+    const normalizedBase = normalizeWorkspaceMountPath(base);
+    return normalizeWorkspaceMountPath(`${normalizedBase}/${path}`);
+};
+
 const textContent = (content: FileContent): string =>
     content instanceof Uint8Array ? new TextDecoder().decode(content) : content;
 
@@ -61,7 +78,11 @@ export class ResourceBackedBashFs implements IFileSystem {
         const payload = this.parseJsonPayload(virtualPath, content);
         const result = await this.vfs.writeFile(virtualPath, payload, { policy: 'ask' });
         if (result.status !== 'saved' && result.status !== 'forked') {
-            const message = result.diagnostics?.map((diagnostic: any) => diagnostic.message).join(' ') || `Resource write ${result.status}: ${virtualPath}`;
+            const message = result.diagnostics?.map((diagnostic: unknown) =>
+                typeof diagnostic === 'object' && diagnostic !== null && 'message' in diagnostic
+                    ? String(diagnostic.message)
+                    : String(diagnostic)
+            ).join(' ') || `Resource write ${result.status}: ${virtualPath}`;
             throw new ResourceFsError(result.status === 'requires_policy' ? 'requires_policy' : 'readonly', message);
         }
     }
@@ -194,93 +215,118 @@ export class WorkspaceBashFs implements IFileSystem {
     ) {}
 
     async readFile(path: string, options?: unknown): Promise<string> {
-        this.assertPath('read', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('read', workspacePath);
         const fs = await this.getFs();
-        return fs.readFile(path, options as BufferEncoding | undefined);
+        return fs.readFile(workspacePath, options as BufferEncoding | undefined);
     }
 
     async readFileBuffer(path: string): Promise<Uint8Array> {
-        this.assertPath('read', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('read', workspacePath);
         const fs = await this.getFs();
-        return fs.readFileBuffer(path);
+        return fs.readFileBuffer(workspacePath);
     }
 
     async writeFile(path: string, content: FileContent, options?: unknown): Promise<void> {
-        this.assertPath('write', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('write', workspacePath);
         const fs = await this.getFs();
-        await fs.writeFile(path, content, options as BufferEncoding | undefined);
+        await fs.writeFile(workspacePath, content, options as BufferEncoding | undefined);
         await this.workspaces.persist();
     }
 
     async appendFile(path: string, content: FileContent, options?: unknown): Promise<void> {
-        this.assertPath('write', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('write', workspacePath);
         const fs = await this.getFs();
-        await fs.appendFile(path, content, options as BufferEncoding | undefined);
+        await fs.appendFile(workspacePath, content, options as BufferEncoding | undefined);
         await this.workspaces.persist();
     }
 
     async exists(path: string): Promise<boolean> {
         const fs = await this.getFs();
-        return fs.exists(path);
+        return fs.exists(normalizeWorkspaceMountPath(path));
     }
 
     async stat(path: string): Promise<FsStat> {
-        this.assertPath('read', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('read', workspacePath);
         const fs = await this.getFs();
-        return fs.stat(path);
+        return fs.stat(workspacePath);
     }
 
     async lstat(path: string): Promise<FsStat> {
-        this.assertPath('read', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('read', workspacePath);
         const fs = await this.getFs();
-        return fs.lstat(path);
+        return fs.lstat(workspacePath);
     }
 
     async mkdir(path: string, options?: MkdirOptions): Promise<void> {
-        this.assertPath('write', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('write', workspacePath);
         const fs = await this.getFs();
-        await fs.mkdir(path, options);
+        await fs.mkdir(workspacePath, options);
         await this.workspaces.persist();
     }
 
     async readdir(path: string): Promise<string[]> {
-        this.assertPath('read', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('read', workspacePath);
         const fs = await this.getFs();
-        return fs.readdir(path);
+        return fs.readdir(workspacePath);
     }
 
     async readdirWithFileTypes(path: string): Promise<DirentEntryLike[]> {
-        this.assertPath('read', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('read', workspacePath);
         const fs = await this.getFs();
-        return fs.readdirWithFileTypes(path);
+        if (fs.readdirWithFileTypes) {
+            return fs.readdirWithFileTypes(workspacePath);
+        }
+        const names = await fs.readdir(workspacePath);
+        return Promise.all(names.map(async (name): Promise<DirentEntryLike> => {
+            const stat = await fs.stat(resolveWorkspaceMountPath(workspacePath, name));
+            return {
+                name,
+                isFile: stat.isFile,
+                isDirectory: stat.isDirectory,
+                isSymbolicLink: stat.isSymbolicLink
+            };
+        }));
     }
 
     async rm(path: string, options?: RmOptions): Promise<void> {
-        this.assertPath('write', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('write', workspacePath);
         const fs = await this.getFs();
-        await fs.rm(path, options);
+        await fs.rm(workspacePath, options);
         await this.workspaces.persist();
     }
 
     async cp(src: string, dest: string, options?: CpOptions): Promise<void> {
-        this.assertPath('read', src);
-        this.assertPath('write', dest);
+        const workspaceSrc = normalizeWorkspaceMountPath(src);
+        const workspaceDest = normalizeWorkspaceMountPath(dest);
+        this.assertPath('read', workspaceSrc);
+        this.assertPath('write', workspaceDest);
         const fs = await this.getFs();
-        await fs.cp(src, dest, options);
+        await fs.cp(workspaceSrc, workspaceDest, options);
         await this.workspaces.persist();
     }
 
     async mv(src: string, dest: string): Promise<void> {
-        this.assertPath('write', src);
-        this.assertPath('write', dest);
+        const workspaceSrc = normalizeWorkspaceMountPath(src);
+        const workspaceDest = normalizeWorkspaceMountPath(dest);
+        this.assertPath('write', workspaceSrc);
+        this.assertPath('write', workspaceDest);
         const fs = await this.getFs();
-        await fs.mv(src, dest);
+        await fs.mv(workspaceSrc, workspaceDest);
         await this.workspaces.persist();
     }
 
     resolvePath(base: string, path: string): string {
-        if (path.startsWith('/')) return normalizeLocalPath(path);
-        return normalizeLocalPath(`${base}/${path}`);
+        return resolveWorkspaceMountPath(base, path);
     }
 
     getAllPaths(): string[] {
@@ -288,52 +334,61 @@ export class WorkspaceBashFs implements IFileSystem {
     }
 
     async chmod(path: string, fileMode: number): Promise<void> {
-        this.assertPath('write', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('write', workspacePath);
         const fs = await this.getFs();
-        await fs.chmod(path, fileMode);
+        await fs.chmod(workspacePath, fileMode);
         await this.workspaces.persist();
     }
 
     async symlink(target: string, linkPath: string): Promise<void> {
-        this.assertPath('write', linkPath);
+        const workspaceLinkPath = normalizeWorkspaceMountPath(linkPath);
+        this.assertPath('write', workspaceLinkPath);
         const fs = await this.getFs();
-        await fs.symlink(target, linkPath);
+        await fs.symlink(target, workspaceLinkPath);
         await this.workspaces.persist();
     }
 
     async link(existingPath: string, newPath: string): Promise<void> {
-        this.assertPath('read', existingPath);
-        this.assertPath('write', newPath);
+        const workspaceExistingPath = normalizeWorkspaceMountPath(existingPath);
+        const workspaceNewPath = normalizeWorkspaceMountPath(newPath);
+        this.assertPath('read', workspaceExistingPath);
+        this.assertPath('write', workspaceNewPath);
         const fs = await this.getFs();
-        await fs.link(existingPath, newPath);
+        await fs.link(workspaceExistingPath, workspaceNewPath);
         await this.workspaces.persist();
     }
 
     async readlink(path: string): Promise<string> {
-        this.assertPath('read', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('read', workspacePath);
         const fs = await this.getFs();
-        return fs.readlink(path);
+        return fs.readlink(workspacePath);
     }
 
     async realpath(path: string): Promise<string> {
-        this.assertPath('read', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('read', workspacePath);
         const fs = await this.getFs();
-        return fs.realpath(path);
+        const resolvedPath = await fs.realpath(workspacePath);
+        return normalizeWorkspaceMountPath(resolvedPath);
     }
 
     async utimes(path: string, atime: Date, mtime: Date): Promise<void> {
-        this.assertPath('write', path);
+        const workspacePath = normalizeWorkspaceMountPath(path);
+        this.assertPath('write', workspacePath);
         const fs = await this.getFs();
-        await fs.utimes(path, atime, mtime);
+        await fs.utimes(workspacePath, atime, mtime);
         await this.workspaces.persist();
     }
 
     private assertPath(operation: 'read' | 'write', path: string): void {
-        const decision = this.permissions.checkPath(this.session, operation, `/workspaces${normalizeLocalPath(path)}`);
-        if (!decision.allowed) throw new Error(decision.reason ?? `permission denied: /workspaces${normalizeLocalPath(path)}`);
+        const workspacePath = `${WORKSPACE_MOUNT_POINT}${normalizeWorkspaceMountPath(path)}`;
+        const decision = this.permissions.checkPath(this.session, operation, workspacePath);
+        if (!decision.allowed) throw new Error(decision.reason ?? `permission denied: ${workspacePath}`);
     }
 
-    private getFs(): Promise<InMemoryFs> {
+    private getFs(): Promise<IFileSystem> {
         return this.workspaces.getFileSystem({
             projectId: this.session.projectId,
             conversationId: this.session.conversationId

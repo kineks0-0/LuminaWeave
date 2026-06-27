@@ -41,6 +41,13 @@ export interface StagingEntry {
 }
 
 export type ForgeToolApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type ForgeToolApprovalKind = 'tool' | 'network';
+export type ForgeToolApprovalDisplaySurface = 'composer' | 'review';
+export type ForgeToolApprovalGrantMode = 'single_use' | 'domain' | 'all_network';
+
+export interface ForgeToolApprovalResolutionOptions {
+    grantMode?: ForgeToolApprovalGrantMode;
+}
 
 export interface ForgeToolApprovalRequest {
     id: string;
@@ -55,6 +62,12 @@ export interface ForgeToolApprovalRequest {
     createdAt: number;
     resolvedAt?: number | null;
     message?: string | null;
+    approvalKind?: ForgeToolApprovalKind;
+    displaySurface?: ForgeToolApprovalDisplaySurface;
+    shellPermissionRequestId?: string | null;
+    forgeProjectId?: string | null;
+    conversationId?: string | null;
+    sessionId?: string | null;
 }
 
 export interface ForgeToolApprovalResponse {
@@ -421,6 +434,12 @@ export type ForgeRuntimeEvent =
         args: unknown;
         reason: string;
         source: ForgeRuntimeEventSource;
+        approvalKind?: ForgeToolApprovalKind;
+        displaySurface?: ForgeToolApprovalDisplaySurface;
+        shellPermissionRequestId?: string | null;
+        forgeProjectId?: string | null;
+        conversationId?: string | null;
+        sessionId?: string | null;
     }
     | {
         type: 'tool_approval_resolved';
@@ -431,6 +450,12 @@ export type ForgeRuntimeEvent =
         approved: boolean;
         message?: string;
         source: ForgeRuntimeEventSource;
+        approvalKind?: ForgeToolApprovalKind;
+        displaySurface?: ForgeToolApprovalDisplaySurface;
+        shellPermissionRequestId?: string | null;
+        forgeProjectId?: string | null;
+        conversationId?: string | null;
+        sessionId?: string | null;
     }
     | { type: 'model_request_trace'; requestId: string; trace: ForgePiModelRequestTrace }
     | { type: 'prompt_ready'; requestId: string; prompt: ForgeRuntimePromptMessage[] }

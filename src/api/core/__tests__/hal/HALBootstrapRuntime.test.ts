@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
         physicalHost: 'web'
     },
     stProbeFails: false,
+    standaloneRuntimeOptions: [] as unknown[],
     bindHostEvents: vi.fn(),
     waitForReady: vi.fn(async () => undefined)
 }));
@@ -107,8 +108,18 @@ vi.mock('@/api/core/hal/adapters/tauri/TauriNativeRuntime.js', () => ({
     }
 }));
 
+vi.mock('@/api/core/hal/adapters/tauri/TauriSqliteExtensionStore.js', () => ({
+    TauriSqliteExtensionStore: class {
+        readonly backend = 'tauri-sqlite';
+    }
+}));
+
 vi.mock('@/api/core/hal/adapters/standalone/StandaloneLocalRuntime.js', () => ({
     StandaloneLocalRuntime: class {
+        constructor(options?: unknown) {
+            state.standaloneRuntimeOptions.push(options ?? {});
+        }
+
         readonly mode = 'standalone-local';
         readonly conversation = {};
         readonly generation = {};
@@ -127,6 +138,7 @@ describe('HALBootstrap runtime port selection', () => {
         state.host.runtimeEnvelope = 'standalone-app';
         state.host.physicalHost = 'web';
         state.stProbeFails = false;
+        state.standaloneRuntimeOptions = [];
         state.bindHostEvents.mockClear();
         state.waitForReady.mockClear();
         (HALBootstrap as any)._initialized = false;
@@ -172,7 +184,7 @@ describe('HALBootstrap runtime port selection', () => {
         expect(HALContext.instance.runtime.mode).toBe('standalone-local');
     });
 
-    it('uses standalone-local runtime in a generic Tauri app until a dedicated client runtime is registered', async () => {
+    it('uses standalone-local runtime with Tauri SQLite store in a generic Tauri app', async () => {
         state.host.isGenericTauriApp = true;
         state.host.isStandaloneApp = true;
         state.host.runtimeEnvelope = 'standalone-app';
@@ -181,6 +193,13 @@ describe('HALBootstrap runtime port selection', () => {
         await HALBootstrap.init();
 
         expect(HALContext.instance.runtime.mode).toBe('standalone-local');
+        expect(state.standaloneRuntimeOptions).toEqual([
+            {
+                extensionStore: expect.objectContaining({
+                    backend: 'tauri-sqlite'
+                })
+            }
+        ]);
         expect(state.waitForReady).not.toHaveBeenCalled();
     });
 

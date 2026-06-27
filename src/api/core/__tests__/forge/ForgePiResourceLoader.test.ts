@@ -113,7 +113,7 @@ describe('ForgePiResourceLoader', () => {
         expect(bundle.files.find(file => file.path === './.pi/agent/context/project.md')?.content)
             .not.toContain('forge_project_alpha');
         expect(bundle.files.find(file => file.path === './.pi/agent/context/write-boundary.md')?.content).toContain('默认直接应用');
-        expect(bundle.files.find(file => file.path === './.pi/agent/context/write-boundary.md')?.content).toContain('workspace_patch');
+        expect(bundle.files.find(file => file.path === './.pi/agent/context/write-boundary.md')?.content).toContain('Git');
         expect(bundle.files.find(file => file.path === './.pi/agent/context/capability-index.md')?.content)
             .toContain('./agent/skills/virtual-lorebook-editor/SKILL.md');
         expect(bundle.files.find(file => file.path === './AGENTS.md')?.title).toContain('工作契约');

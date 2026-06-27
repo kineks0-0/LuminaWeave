@@ -254,7 +254,7 @@ describe('ForgePromptContextService', () => {
         expect(messages[0].content).not.toContain('writeFile');
         expect(messages[0].content).not.toContain('editFile');
         expect(messages[0].content).not.toContain('deleteFile');
-        expect(messages[0].content).toContain('workspace_patch');
+        expect(messages[0].content).toContain('Git 版本历史');
         expect(messages[0].content).not.toContain('stageEntry');
         expect(messages[0].content).not.toContain('writeProposal');
         expect(messages[0].content).not.toContain('Review Gate');

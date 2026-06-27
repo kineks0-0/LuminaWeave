@@ -109,15 +109,24 @@ describe('forgeStoreHelpers', () => {
                 entry('n3', 'n2', 'assistant', { role: 'assistant', text: '回复 A' }),
                 entry('n4', 'n1', 'user', { role: 'user', text: '分支 B' }),
                 entry('n5', 'n4', 'process', { role: 'process', text: '正在读取 B.md。' }),
-                entry('n6', 'n5', 'workspace_patch', {
-                    nodeId: 'n6',
-                    changes: [{
-                        path: './B.md',
-                        kind: 'update',
-                        beforeHash: 'before',
-                        afterHash: 'after'
-                    }]
-                }, '1 file change(s)'),
+                entry('n6', 'n5', 'tool_result', {
+                    toolCallId: 'call_write',
+                    toolName: 'write',
+                    result: {
+                        workspaceWriteSummary: {
+                            turnId: 'turn_1',
+                            sourceToolCallId: 'call_write',
+                            writeCount: 1,
+                            errors: [],
+                            changedFiles: [{
+                                path: './B.md',
+                                kind: 'update',
+                                beforeHash: 'before',
+                                afterHash: 'after'
+                            }]
+                        }
+                    }
+                }, 'write summary'),
                 entry('n7', 'n6', 'assistant', { role: 'assistant', text: '回复 B' }),
                 entry('n8', 'n7', 'label', { label: '当前分支' })
             ]
@@ -128,7 +137,7 @@ describe('forgeStoreHelpers', () => {
             : `${item.item.origin?.entryType}:${item.item.summary}`)).toEqual([
             'user:分支 B',
             'process:正在读取 B.md。',
-            'workspace_patch:1 file change(s)',
+            'tool_result:write summary',
             'assistant:回复 B',
             'label:label summary'
         ]);
@@ -139,6 +148,44 @@ describe('forgeStoreHelpers', () => {
         expect(feed.map(item => item.kind === 'message'
             ? item.item.origin?.nodeId
             : item.item.origin?.nodeId)).toEqual(['n4', 'n5', 'n6', 'n7', 'n8']);
+    });
+
+    it('projects tool result write summaries without using Git history as the feed source', () => {
+        const feed = buildForgePiTimelineFeed({
+            sessionChatId: 'session-1',
+            activeNodeId: 'n4',
+            entries: [
+                entry('n1', null, 'metadata', {}),
+                entry('n2', 'n1', 'user', { role: 'user', text: '写文件' }),
+                entry('n3', 'n2', 'tool_result', {
+                    toolCallId: 'call_write',
+                    toolName: 'write',
+                    result: {
+                        workspaceWriteSummary: {
+                            turnId: 'turn_1',
+                            sourceToolCallId: 'call_write',
+                            writeCount: 1,
+                            errors: [],
+                            changedFiles: [{
+                        path: './B.md',
+                        kind: 'update',
+                        beforeHash: 'before',
+                        afterHash: 'after'
+                            }]
+                        }
+                    }
+                }, 'write summary'),
+                entry('n4', 'n3', 'assistant', { role: 'assistant', text: '已写入' })
+            ]
+        });
+
+        expect(feed.map(item => item.kind === 'message'
+            ? `${item.message.role}:${item.message.mes}`
+            : `${item.item.origin?.entryType}:${item.item.summary}`)).toEqual([
+            'user:写文件',
+            'tool_result:write summary',
+            'assistant:已写入'
+        ]);
     });
 
     it('projects the active pi branch into a read-only conversation graph with pi origin metadata', () => {

@@ -246,6 +246,7 @@ export interface ShellPermissionScope {
     sourceId?: string;
     resourceType?: ResourceType;
     urlPrefix?: string;
+    allNetwork?: boolean;
 }
 
 export interface ShellPermissionRequest {

@@ -46,7 +46,7 @@ const CAPABILITIES: ForgeCapabilityIndexItem[] = [
     {
         id: 'virtual-lorebook-editor',
         title: '虚拟世界书编辑器',
-        summary: '在 Forge 虚拟世界书内创建、拆分、合并、重写条目，并写入可撤回项目补丁。',
+        summary: '在 Forge 虚拟世界书内创建、拆分、合并、重写条目，并写入项目 VFS。',
         triggers: ['lorebook', 'worldbook', 'entry', 'rewrite', 'merge', 'split', '世界书', '条目'],
         loadAs: 'skill',
         namespace: 'forge.lorebook',
@@ -61,16 +61,6 @@ const CAPABILITIES: ForgeCapabilityIndexItem[] = [
         loadAs: 'skill',
         namespace: 'forge.memory',
         skillName: 'memory-curator',
-        risk: 'medium'
-    },
-    {
-        id: 'workspace-patch-auditor',
-        title: '工作区补丁审计员',
-        summary: '把生成变更整理为可 diff、可撤回的 workspace_patch 记录。',
-        triggers: ['patch', 'version', 'undo', 'audit', '补丁', '版本', '撤回'],
-        loadAs: 'skill',
-        namespace: 'forge.workspacePatch',
-        skillName: 'forge-project-writer',
         risk: 'medium'
     },
     {
@@ -107,7 +97,7 @@ const CAPABILITIES: ForgeCapabilityIndexItem[] = [
     {
         id: 'shell-writer',
         title: '项目文件写入员',
-        summary: '通过工具写入项目文件，变更只进入审阅暂存，结构化数据优先 JSON。',
+        summary: '通过工具写入项目文件，VFS 保存当前内容，Git 保存版本历史。',
         triggers: ['write', 'edit', 'modify', 'update', 'create', 'delete', '写入', '修改', '创建', '重写'],
         loadAs: 'shell-skill',
         namespace: 'forge.shellWrite',

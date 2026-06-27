@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
 import { ForgeWorkspaceSearchShell } from '@/api/core/forge/shell/ForgeWorkspaceSearchShell.js';
 import {
-    shellPermissionService,
+    ShellPermissionService,
     shellWorkspaceService,
     virtualFileSystemService
 } from '@/api/core/hal/shell/index.js';
@@ -14,12 +14,14 @@ const { store } = vi.hoisted(() => ({
 
 describe('ForgeWorkspaceSearchShell', () => {
     let shell: ForgeWorkspaceSearchShell;
+    let permissions: ShellPermissionService;
 
     beforeEach(async () => {
         store.clear();
         initMockHAL({ runtime: { extensionStore: { listKeys: vi.fn(async () => Array.from(store.keys())), getJson: vi.fn(async ({ key }: { key: string }) => store.get(key) ?? null), setJson: vi.fn(async ({ key, value }: { key: string; value: unknown }) => { store.set(key, value); }), updateJson: vi.fn(async ({ key, value }: { key: string; value: unknown }) => { store.set(key, value); }), deleteJson: vi.fn(async ({ key }: { key: string }) => { store.delete(key); }), setBlob: vi.fn(), getBlob: vi.fn() } } });
-        shellWorkspaceService.resetForTests();
-        shell = new ForgeWorkspaceSearchShell(virtualFileSystemService, shellPermissionService);
+        shellWorkspaceService.resetForTests({ clearStorage: true });
+        permissions = new ShellPermissionService();
+        shell = new ForgeWorkspaceSearchShell(virtualFileSystemService, permissions);
         const fs = await shellWorkspaceService.getFileSystem({
             projectId: 'forge_project_alpha',
             conversationId: 'conversation_alpha'
@@ -31,6 +33,10 @@ describe('ForgeWorkspaceSearchShell', () => {
             content: 'A ritual city with elevator shrines.'
         }, null, 2));
         await fs.writeFile('/forge/forge_project_alpha/material.txt', 'ritual city\nclockwork harbor\n');
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
     });
 
     it('lists actual Forge project VFS files as semantic project paths', async () => {
@@ -155,6 +161,149 @@ describe('ForgeWorkspaceSearchShell', () => {
         expect(result.ok).toBe(false);
         expect(result.result.stderr).toContain('project-write-request');
         expect(result.trace.deniedReason).toContain('redirection is blocked');
+    });
+
+    it('registers git for project-write-request shell mode only', async () => {
+        const readonly = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'git status',
+            reason: 'Inspect git status'
+        });
+        const writable = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'git init',
+            reason: 'Initialize project git',
+            accessMode: 'project-write-request'
+        });
+
+        expect(readonly.ok).toBe(false);
+        expect(readonly.result.stderr).toContain('project-readonly');
+        expect(writable.ok).toBe(true);
+        expect(writable.result.stdout).toContain('Initialized');
+    });
+
+    it('allows curl in network-request mode after a network grant', async () => {
+        const fetchMock = vi.fn(async () => new Response('forge-network-ok', {
+            status: 200,
+            statusText: 'OK'
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const request = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'lw-permission request network https://api.example.com/ --reason "Fetch reference"',
+            reason: 'Request network access',
+            accessMode: 'network-request'
+        });
+        expect(request.ok).toBe(true);
+        expect(request.result.stdout).toContain('permission request pending');
+
+        permissions.approveRequest(permissions.listRequests()[0].requestId);
+
+        const result = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'curl https://api.example.com/resource',
+            reason: 'Fetch reference',
+            accessMode: 'network-request'
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.result.stdout).toContain('forge-network-ok');
+        expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/resource', expect.objectContaining({
+            method: 'GET'
+        }));
+    });
+
+    it('allows curl local file input and output in network-request mode after a network grant', async () => {
+        const fetchMock = vi.fn(async () => new Response('downloaded reference', {
+            status: 200,
+            statusText: 'OK'
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const request = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'lw-permission request network https://api.example.com/ --reason "Fetch reference files"',
+            reason: 'Request network access',
+            accessMode: 'network-request'
+        });
+        expect(request.ok).toBe(true);
+        permissions.approveRequest(permissions.listRequests()[0].requestId);
+
+        const outputResult = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'curl -o fetched.txt https://api.example.com/resource',
+            reason: 'Fetch reference into a file',
+            accessMode: 'network-request'
+        });
+
+        expect(outputResult.ok).toBe(true);
+        expect(outputResult.result.stderr).toBe('');
+        expect(outputResult.writeLog).toEqual([expect.objectContaining({
+            path: './fetched.txt',
+            contentAfter: 'downloaded reference'
+        })]);
+        expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/resource', expect.objectContaining({
+            method: 'GET'
+        }));
+    });
+
+    it('allows stderr to stdout redirection in network-request mode for curl diagnostics', async () => {
+        const fetchMock = vi.fn(async () => new Response('{"ok":true}', {
+            status: 200,
+            statusText: 'OK'
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const request = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'lw-permission request network http://httpbin.org/ --reason "Fetch diagnostics"',
+            reason: 'Request network access',
+            accessMode: 'network-request'
+        });
+        expect(request.ok).toBe(true);
+        permissions.approveRequest(permissions.listRequests()[0].requestId);
+
+        const result = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'curl -s --max-time 10 "http://httpbin.org/get" -H "User-Agent: Mozilla/5.0" 2>&1',
+            reason: 'Fetch diagnostics',
+            accessMode: 'network-request'
+        });
+
+        expect(result.trace.deniedReason).toBeUndefined();
+        expect(result.ok).toBe(true);
+        expect(result.result.stdout).toContain('"ok":true');
+    });
+
+    it('does not reject curl upload and form file arguments during network-request validation', async () => {
+        const uploadResult = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'curl -T material.txt https://api.example.com/upload',
+            reason: 'Upload project file',
+            accessMode: 'network-request'
+        });
+        const formResult = await shell.execute({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha',
+            command: 'curl -F file=@material.txt https://api.example.com/form',
+            reason: 'Upload project file in a form',
+            accessMode: 'network-request'
+        });
+
+        expect(uploadResult.ok).toBe(false);
+        expect(uploadResult.result.stderr).toContain('network permission required');
+        expect(formResult.ok).toBe(false);
+        expect(formResult.result.stderr).toContain('network permission required');
     });
 
     it('blocks absolute paths outside the current Forge project', async () => {

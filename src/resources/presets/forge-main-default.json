@@ -73,6 +73,30 @@
                 "description": "在用户明显追求特殊偏好、禁忌、羞耻感或权力关系时，按机制化维度捕捉。",
                 "loadPolicy": "on_demand",
                 "content": "@FORGE_MAIN_REFERENCE_XP"
+            },
+            {
+                "name": "creation-style-guide",
+                "path": "./agent/skills/creation-style-guide/SKILL.md",
+                "title": "创作文风指南",
+                "description": "约束创作产出（世界书条目、角色设定、场景卡等文件，以及任何其他创作内容，比如用户要求你写一段内容）的结构规范、文风一致性与可迁移性。",
+                "loadPolicy": "on_demand",
+                "content": "@FORGE_MAIN_CREATION_STYLE_GUIDE"
+            },
+            {
+                "name": "output-voice-guard",
+                "path": "./agent/skills/output-voice-guard/SKILL.md",
+                "title": "输出语气与禁忌约束",
+                "description": "约束面向用户的输出语气、表达边界与禁忌回避，确保回复风格与角色身份、场景基调一致。",
+                "loadPolicy": "on_demand",
+                "content": "@FORGE_MAIN_OUTPUT_VOICE_GUARD"
+            },
+            {
+                "name": "nsfw-writing-intensify",
+                "path": "./agent/skills/nsfw-writing-intensify/SKILL.md",
+                "title": "NSFW 写作强化",
+                "description": "在 NSFW 写作中强化色情细节的描写，追求文字上的感官刺激。",
+                "loadPolicy": "on_demand",
+                "content": "@FORGE_MAIN_NSFW_WRITING_INTENSIFY"
             }
         ]
     },

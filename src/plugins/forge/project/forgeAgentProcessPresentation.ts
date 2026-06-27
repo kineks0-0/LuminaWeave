@@ -182,17 +182,6 @@ const buildProcessSteps = ({
         });
     });
 
-    if (operations.some(operation => operation.origin?.entryType === 'workspace_patch')) {
-        const patchOperation = operations.find(operation => operation.origin?.entryType === 'workspace_patch');
-        steps.push({
-            id: `${id}:workspace-patch`,
-            title: '已生成 workspace_patch',
-            detail: cleanDetail(patchOperation?.summary || null),
-            status: 'completed',
-            tone: 'file'
-        });
-    }
-
     const fallbackOperations = operations.filter(operation => operation.origin?.entryType !== 'process');
     if (steps.length === 0 && fallbackOperations.length > 0) {
         fallbackOperations.forEach((operation) => {
