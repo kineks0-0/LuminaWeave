@@ -15,7 +15,7 @@ import type {
     AgentRuntimeEvent,
     AgentRuntimeSnapshot
 } from '../../agent-runtime/events/AgentRuntimeEventBus.js';
-import { AgentRuntimeCore } from '../../agent-runtime/runtime/AgentRuntimeCore.js';
+import { AgentRuntime } from '../../agent-runtime/runtime/AgentRuntime.js';
 import {
     ForgePiAgentSession,
     type ForgePiAgentSessionApprovalResult,
@@ -69,7 +69,7 @@ export interface ForgePiCoreRuntimeBranchFromUserResult extends ForgePiCoreRunti
 
 export class ForgePiCoreRuntime {
     private readonly sessions = new Map<string, ForgePiAgentSession>();
-    private readonly core: AgentRuntimeCore<
+    private readonly runtime: AgentRuntime<
         ForgePiCoreRuntimeTurnInput,
         ForgePiCoreRuntimeTurnResult,
         ForgePiCoreRuntimePromptPreview,
@@ -77,7 +77,9 @@ export class ForgePiCoreRuntime {
     >;
 
     constructor(private readonly deps: ForgePiCoreRuntimeDeps = {}) {
-        this.core = new AgentRuntimeCore({
+        // Forge 只把通用生命周期托管给 SDK façade；Forge 专属 session、VFS、工具和发布边界仍留在 adapter 内。
+        this.runtime = new AgentRuntime({
+            id: 'forge-pi-core-runtime',
             resolveSessionId: input => this.resolveSessionId(input.context),
             createSession: input => {
                 const session = this.getSession(input.firstInput.context);
@@ -104,7 +106,7 @@ export class ForgePiCoreRuntime {
     }
 
     async runTurn(input: ForgePiCoreRuntimeTurnInput): Promise<ForgePiCoreRuntimeTurnResult> {
-        const result = await this.core.runTurn(input);
+        const result = await this.runtime.runTurn(input);
         return {
             ...result,
             agentRuntimeSnapshot: this.getAgentRuntimeSnapshot()
@@ -112,11 +114,11 @@ export class ForgePiCoreRuntime {
     }
 
     async previewPrompt(input: ForgePiCoreRuntimeTurnInput): Promise<ForgePiCoreRuntimePromptPreview> {
-        return this.core.previewPrompt(input);
+        return this.runtime.previewPrompt(input);
     }
 
     async continue(sessionId: string): Promise<void> {
-        await this.core.continue(sessionId);
+        await this.runtime.continue(sessionId);
     }
 
     checkout(input: {
@@ -145,7 +147,7 @@ export class ForgePiCoreRuntime {
         message?: string,
         options?: ForgeToolApprovalResolutionOptions
     ): Promise<ForgePiCoreRuntimeApprovalResult> {
-        const result = await this.core.resolveToolApproval(toolCallId, approved, message, options)
+        const result = await this.runtime.resolveToolApproval(toolCallId, approved, message, options)
             ?? { resolved: false, events: [], effects: [] };
         return {
             ...result,
@@ -154,15 +156,15 @@ export class ForgePiCoreRuntime {
     }
 
     abortActiveGeneration(): void {
-        this.core.abortActiveGeneration();
+        this.runtime.abortActiveGeneration();
     }
 
     getAgentRuntimeSnapshot(): AgentRuntimeSnapshot {
-        return this.core.events.getSnapshot();
+        return this.runtime.getSnapshot();
     }
 
     getAgentRuntimeEvents(): AgentRuntimeEvent[] {
-        return this.core.events.getEvents();
+        return this.runtime.events.getEvents();
     }
 
     private getSession(context: ForgeRuntimeContext): ForgePiAgentSession {

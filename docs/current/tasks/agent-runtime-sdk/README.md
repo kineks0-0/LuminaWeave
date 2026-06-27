@@ -66,6 +66,8 @@
 
 2026-06-27：完成通用 `AgentRuntime` 高层 API 与 pi 扩展兼容首轮实现。新增 `AgentRuntime` façade 组合 runtime core、event bus、tool registry、extension host、显式 scanner 与显式 loader；新增 `PiExtensionCompatHost`、`PiExtensionLoader` 和 `PiResourceScanner`，首轮支持 pi-style `ExtensionFactory(pi)`、`registerTool`、`registerProvider`、`resources_discover`、`before_agent_start`、`agent_end`、`tool_call`、`tool_result`，并通过注入文件系统复刻 pi 目录扫描规则。默认 runtime 仍不扫描目录、不加载本地 TS/JS、不注册任何工具。实现记录见 `steps/2026-06-27-agent-runtime-pi-extension-compat-implementation.md`。
 
+2026-06-27：完成 Forge 当前 pi session 到 `AgentRuntime` façade 的首轮迁移。`ForgePiCoreRuntime` 现在组合高层 `AgentRuntime`，由 façade 负责 setup、session lifecycle、runtime event bus 和 snapshot 暴露；`ForgePiAgentSession`、`ForgePiToolBridge`、Forge Semantic VFS、写入摘要、Git-backed 版本和 ST 发布边界仍留在 Forge adapter 内。实现记录见 `steps/2026-06-27-forge-agent-runtime-facade-migration.md`。
+
 已确认方向：
 
 - Core SDK 承载通用 agent loop、session tree、tool provider、approval、trace、Agent Skills 兼容和 test harness。
@@ -100,7 +102,8 @@
 8. [ ] 评估非 Forge 插件接入样例：使用 SDK test harness + 手动注册 tool + 显式 VFS mount + extension workflow hook，验证 SDK 不默认暴露文件工具或 `bash`。
 9. [ ] OpenFS 包跟踪：当前 `@open-fs/just-bash@0.1.0` 实际导出 `AxFs`，`createGrepCommand()` 的 command name 为 `axgrep`；后续升级前必须重新读取包类型文件和测试。
 10. [ ] 完成 pi `0.80.2` 兼容迁移：先跑依赖守卫、focused runtime tests 和 type-check，再按迁移清单逐项修正 API、structured message、tool behavior、extension workflow 和非 Forge harness。
-11. [ ] 将 Forge 当前 pi session 集成迁移到 `AgentRuntime` façade 下，保持 Forge Semantic VFS、写入摘要、Git-backed 版本和 ST 发布边界仍在 Forge adapter。
+11. [x] 将 Forge 当前 pi session 集成迁移到 `AgentRuntime` façade 下，保持 Forge Semantic VFS、写入摘要、Git-backed 版本和 ST 发布边界仍在 Forge adapter。
+12. [ ] 评估是否把 Forge extension workflow 的 `before_agent_start` / resource discovery 逐步接到 `AgentRuntimeExtensionHost`，前提是 Prompt Preview 与真实生成仍保持同源。
 
 ## 恢复入口
 
@@ -112,5 +115,6 @@
 - [Provider-native structured message 主路径规划](./steps/2026-06-12-provider-native-structured-message-plan.md)
 - [pi 0.80.2 依赖升级与迁移清单](./steps/2026-06-27-pi-0-80-upgrade-migration-inventory.md)
 - [AgentRuntime 高层 API 与 pi 扩展兼容首轮实现记录](./steps/2026-06-27-agent-runtime-pi-extension-compat-implementation.md)
+- [Forge pi session 迁移到 AgentRuntime façade](./steps/2026-06-27-forge-agent-runtime-facade-migration.md)
 - [Forge Agent 下一阶段可靠可控决策规划](../forge/steps/2026-06-10-forge-agent-next-stage-decision.md)
 - [Forge 当前任务](../forge/)
