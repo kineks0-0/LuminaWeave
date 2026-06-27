@@ -62,6 +62,14 @@ describe('Forge pi-core browser dependency guard', () => {
         expect(combinedSource).not.toContain('ToolSet');
     });
 
+    it('routes the Forge pi runtime through the public AgentRuntime facade', () => {
+        const source = readFileSync(join(forgeAgentAppDir, 'ForgePiCoreRuntime.ts'), 'utf8');
+
+        expect(source).toContain("import { AgentRuntime } from '../../agent-runtime/runtime/AgentRuntime.js';");
+        expect(source).not.toContain("import { AgentRuntimeCore } from '../../agent-runtime/runtime/AgentRuntimeCore.js';");
+        expect(source).not.toContain('new AgentRuntimeCore');
+    });
+
     it('removes legacy Forge agent runtime entrypoints from the runtime source', () => {
         const forgeCoreDir = join(repoRoot, 'src/api/core/forge');
         const combinedSource = collectSourceFiles(forgeCoreDir)
