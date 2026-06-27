@@ -239,7 +239,7 @@ describe('ForgePiCoreRuntime', () => {
         });
     });
 
-    it('appends direct tool results and workspace patches into the pi session tree', async () => {
+    it('appends complete direct tool results with workspace write summaries into the pi session tree', async () => {
         let calls = 0;
         const runtime = new ForgePiCoreRuntime({
             createNodeId: (() => {
@@ -308,20 +308,18 @@ describe('ForgePiCoreRuntime', () => {
                         details: {
                             path: './card.md',
                             applied: true,
-                            workspacePatch: {
-                                nodeId: 'tool:call_write',
-                                changes: [{
+                            workspaceWriteSummary: {
+                                sourceToolCallId: 'call_write',
+                                writeCount: 1,
+                                changedFiles: [{
                                     path: './card.md',
                                     kind: 'create',
                                     beforeHash: null,
-                                    afterHash: 'after',
-                                    beforeContentRef: null,
-                                    afterContentRef: 'inline:new'
+                                    afterHash: 'after'
                                 }],
-                                sourceToolCallId: 'call_write',
-                                sourceNodeId: 'tool:call_write',
-                                createdAt: 1,
-                                reversible: true
+                                errors: [],
+                                gitCommitHash: 'abc123',
+                                gitParentHash: null
                             }
                         }
                     }))
@@ -348,8 +346,10 @@ describe('ForgePiCoreRuntime', () => {
         ]));
         expect(turn.effects).toEqual([]);
         expect(turn.piSessionState.tree.map(node => node.kind)).toContain('tool_result');
-        expect(turn.piSessionState.tree.map(node => node.kind)).toContain('workspace_patch');
         expect(turn.piSessionState.tree.map(node => node.summary)).toContain('已写入项目。');
+        const toolResult = turn.piSessionState.entries.find(entry => entry.kind === 'tool_result');
+        expect(JSON.stringify(toolResult?.payload)).toContain('workspaceWriteSummary');
+        expect(JSON.stringify(toolResult?.payload)).toContain('abc123');
         expect(runtime.getAgentRuntimeEvents().map(event => event.type)).toEqual(expect.arrayContaining([
             'tool_execution_start',
             'tool_execution_end'

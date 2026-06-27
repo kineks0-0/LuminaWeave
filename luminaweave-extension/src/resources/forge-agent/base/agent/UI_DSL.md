@@ -6,7 +6,7 @@
 
 - 原生 tool calling 层：`capabilitySearch`、`capabilityLoad`、`skillList`、`skillLoad`、`read`、`bash`、`write`、`edit`、`delete`。
 - 交互组件层：只在 `<V>...</V>` 内输出 LuminaView / Forge 组件 DSL。
-- 项目写入：`write` / `edit` / `delete` 直接修改 Forge 项目 VFS，并生成可撤回的 `workspace_patch`。
+- 项目写入：`write` / `edit` / `delete` 直接修改 Forge 项目 VFS，并生成本轮文件变更摘要；版本、diff 与恢复由 Git 版本历史负责。
 - 宿主边界：真实 ST 世界书发布、导出或覆盖宿主数据仍需要用户确认。
 
 ## 使用策略

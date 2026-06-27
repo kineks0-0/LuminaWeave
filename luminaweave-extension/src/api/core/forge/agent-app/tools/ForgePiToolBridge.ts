@@ -5,8 +5,18 @@ import {
 } from '@earendil-works/pi-ai';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
+import type {
+    ShellPermissionGrant,
+    ShellSessionRef
+} from '@shared/resources/index.js';
 import type { VirtualFileSystemService } from '../../../hal/resource/VirtualFileSystemService.js';
 import { virtualFileSystemService } from '../../../hal/shell/index.js';
+import {
+    shellNetworkPolicyService,
+    shellPermissionService,
+    type ShellNetworkPolicyService,
+    type ShellPermissionService
+} from '../../../hal/shell/index.js';
 import {
     forgeThreadWorkspacePath,
     forgeWorkspacePath,
@@ -31,7 +41,9 @@ import type {
     ForgeRuntimeContext,
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
-    ForgeRuntimeEventSource
+    ForgeRuntimeEventSource,
+    ForgeToolApprovalGrantMode,
+    ForgeToolApprovalResolutionOptions
 } from '../../../../../types/ForgeRuntimeTypes.js';
 import {
     buildForgeStableThreadLabel,
@@ -48,8 +60,13 @@ import {
 import {
     listForgePresetSkillResources
 } from '../../project/ForgeProjectSemanticVfsService.js';
-import { forgeWorkspaceVersionManager } from '../../project/ForgeWorkspaceVersionManager.js';
-import type { ForgePiWorkspacePatchPayload } from '@shared/ForgePiTypes.js';
+import type {
+    ForgeTurnWorkspaceWriteSummary
+} from '@shared/ForgePiTypes.js';
+import {
+    ForgeWorkspaceWriteService,
+    forgeWorkspaceWriteService
+} from '../../project/ForgeWorkspaceWriteService.js';
 import { AgentToolRegistry, type AgentRuntimeTool } from '../../../agent-runtime/tools/AgentToolRegistry.js';
 import {
     TavilyResearchProvider,
@@ -71,6 +88,12 @@ export interface ForgePiToolCallInput {
     args: unknown;
     context: ForgeRuntimeContext;
     source: ForgeRuntimeEventSource;
+    approvalKind?: 'network' | 'tool';
+    displaySurface?: 'composer' | 'review';
+    shellPermissionRequestId?: string | null;
+    forgeProjectId?: string | null;
+    conversationId?: string | null;
+    sessionId?: string | null;
 }
 
 export interface ForgePiToolApprovalResolution {
@@ -78,6 +101,21 @@ export interface ForgePiToolApprovalResolution {
     events: ForgeRuntimeEvent[];
     effects: ForgeRuntimeEffect[];
     toolResultMessage?: ToolResultMessage;
+}
+
+export interface ForgePendingToolApproval {
+    approvalKind: 'network' | 'tool';
+    displaySurface: 'composer' | 'review';
+    toolCallId: string;
+    toolName: string;
+    args: unknown;
+    shellPermissionRequestId?: string | null;
+    reason: string;
+    url?: string;
+    urlPrefix?: string;
+    method?: string;
+    command?: string;
+    localFileIo?: boolean;
 }
 
 export type ForgePiAgentTool<TParameters extends TSchema = TSchema> = AgentTool<TParameters> & {
@@ -92,13 +130,25 @@ export interface ForgePiToolBridgeDeps {
     semanticVfs?: ForgeSemanticVfsMapper;
     projectVfs?: ForgeSemanticVfsReader;
     workspaces?: ShellWorkspaceService;
+    workspaceWriter?: ForgeWorkspaceWriteService;
     research?: AgentResearchProvider;
+    permissions?: ShellPermissionService;
+    networkPolicy?: ShellNetworkPolicyService;
     getTavilyApiKey?: () => string | null | undefined;
     onEffects?: (effects: ForgeRuntimeEffect[]) => void;
 }
 
 interface PendingPiToolApproval {
     input: ForgePiToolCallInput;
+    shellPermissionRequestId?: string | null;
+}
+
+interface ForgeBashNetworkApprovalRequirement {
+    url: string;
+    urlPrefix: string;
+    method: string;
+    command: string;
+    localFileIo: boolean;
 }
 
 interface ForgeDirectWorkspaceChangeInput {
@@ -114,7 +164,7 @@ interface ForgeDirectWorkspaceChangeResult {
     path: string;
     workspacePath?: string;
     applied: boolean;
-    workspacePatch?: ForgePiWorkspacePatchPayload;
+    workspaceWriteSummary?: ForgeTurnWorkspaceWriteSummary;
     error?: string;
     command?: string;
 }
@@ -203,10 +253,41 @@ export class ForgePiToolBridge {
     }
 
     registerPendingApproval(input: ForgePiToolCallInput): void {
-        this.pendingApprovals.set(input.toolCallId, { input });
+        const normalizedInput: ForgePiToolCallInput = {
+            ...input,
+            forgeProjectId: input.forgeProjectId ?? input.context.workspaceSessionId,
+            conversationId: input.conversationId ?? input.context.sessionChatId,
+            sessionId: input.sessionId ?? this.resolveSessionId(input.context)
+        };
+        this.pendingApprovals.set(input.toolCallId, {
+            input: normalizedInput,
+            shellPermissionRequestId: normalizedInput.shellPermissionRequestId ?? null
+        });
     }
 
-    async resolveToolApproval(toolCallId: string, approved: boolean, message?: string): Promise<ForgePiToolApprovalResolution> {
+    requestToolApproval(input: ForgePiToolCallInput): ForgePendingToolApproval | null {
+        const approval = this.prepareBashNetworkApproval(input);
+        if (!approval) return null;
+
+        this.registerPendingApproval({
+            ...input,
+            args: approval.args,
+            approvalKind: approval.approvalKind,
+            displaySurface: approval.displaySurface,
+            shellPermissionRequestId: approval.shellPermissionRequestId ?? null,
+            forgeProjectId: input.forgeProjectId ?? input.context.workspaceSessionId,
+            conversationId: input.conversationId ?? input.context.sessionChatId,
+            sessionId: input.sessionId ?? this.resolveSessionId(input.context)
+        });
+        return approval;
+    }
+
+    async resolveToolApproval(
+        toolCallId: string,
+        approved: boolean,
+        message?: string,
+        options: ForgeToolApprovalResolutionOptions = {}
+    ): Promise<ForgePiToolApprovalResolution> {
         const pending = this.pendingApprovals.get(toolCallId);
         if (!pending) return { resolved: false, events: [], effects: [] };
         this.pendingApprovals.delete(toolCallId);
@@ -220,14 +301,37 @@ export class ForgePiToolBridge {
             toolName: input.toolName,
             approved,
             message,
-            source: input.source
+            source: input.source,
+            approvalKind: input.approvalKind,
+            displaySurface: input.displaySurface,
+            shellPermissionRequestId: pending.shellPermissionRequestId ?? input.shellPermissionRequestId ?? null,
+            forgeProjectId: input.forgeProjectId ?? input.context.workspaceSessionId ?? null,
+            conversationId: input.conversationId ?? input.context.sessionChatId ?? null,
+            sessionId: input.sessionId ?? this.resolveSessionId(input.context)
         }];
         const effects: ForgeRuntimeEffect[] = [];
 
-        if (!approved) return { resolved: true, events, effects };
+        if (!approved) {
+            if (pending.shellPermissionRequestId) {
+                this.permissions.rejectRequest(pending.shellPermissionRequestId, message);
+            }
+            return { resolved: true, events, effects };
+        }
+
+        const approvedGrant = pending.shellPermissionRequestId
+            ? this.permissions.approveRequest(pending.shellPermissionRequestId)
+            : null;
+        const grantMode = options.grantMode ?? 'domain';
+        this.applyApprovedNetworkGrantScope(approvedGrant, grantMode);
+        const expireApprovedGrant = (): void => {
+            if (approvedGrant && grantMode === 'single_use') {
+                this.permissions.expireGrant(approvedGrant.grantId);
+            }
+        };
 
         const tool = this.findExecutableTool(input.context, input.toolName, nextEffects => effects.push(...nextEffects));
         if (!tool) {
+            expireApprovedGrant();
             const errorMessage = `Forge pi tool not found: ${input.toolName}`;
             events.push(this.createToolErrorEvent(input, errorMessage));
             return {
@@ -243,6 +347,7 @@ export class ForgePiToolBridge {
 
         try {
             const result = await tool.execute(input.toolCallId, input.args as never);
+            expireApprovedGrant();
             events.push({
                 type: 'tool_result',
                 requestId: input.requestId,
@@ -257,8 +362,9 @@ export class ForgePiToolBridge {
                 effects,
                 toolResultMessage: this.createToolResultMessage(input, result, false)
             };
-        } catch (error: any) {
-            const errorMessage = error?.message || String(error);
+        } catch (error: unknown) {
+            expireApprovedGrant();
+            const errorMessage = error instanceof Error ? error.message : String(error);
             events.push(this.createToolErrorEvent(input, errorMessage));
             return {
                 resolved: true,
@@ -278,6 +384,25 @@ export class ForgePiToolBridge {
 
     private get shell(): ForgeWorkspaceSearchShell {
         return this.deps.shell ?? forgeWorkspaceSearchShell;
+    }
+
+    private get permissions(): ShellPermissionService {
+        return this.deps.permissions ?? shellPermissionService;
+    }
+
+    private get networkPolicy(): ShellNetworkPolicyService {
+        return this.deps.networkPolicy ?? shellNetworkPolicyService;
+    }
+
+    private applyApprovedNetworkGrantScope(grant: ShellPermissionGrant | null, grantMode: ForgeToolApprovalGrantMode): void {
+        if (!grant || grant.operation !== 'network') return;
+        if (grantMode === 'all_network') {
+            grant.scope = { allNetwork: true };
+        }
+    }
+
+    private resolveSessionId(context: ForgeRuntimeContext): string {
+        return `${context.workspaceSessionId}__${context.sessionChatId}`;
     }
 
     private get capabilities(): Pick<ForgeCapabilityRegistry, 'search' | 'load' | 'listCapabilities'> {
@@ -337,6 +462,14 @@ export class ForgePiToolBridge {
         return this.deps.workspaces ?? shellWorkspaceService;
     }
 
+    private get workspaceWriter(): ForgeWorkspaceWriteService {
+        return this.deps.workspaceWriter ?? (
+            this.deps.workspaces
+                ? new ForgeWorkspaceWriteService({ workspaces: this.deps.workspaces })
+                : forgeWorkspaceWriteService
+        );
+    }
+
     private async readWritableProjectFile(path: string, ctx: ForgePiToolContext): Promise<ForgeWritableProjectFileResult> {
         const resolved = await this.resolvePath(path, ctx);
         const writableError = this.resolveDirectWriteError(resolved);
@@ -394,48 +527,25 @@ export class ForgePiToolBridge {
             };
         }
 
-        const fs = await this.workspaces.getFileSystem({
-            projectId: input.ctx.forgeProjectId,
-            conversationId: input.ctx.conversationId
-        });
-        const localPath = this.workspaceLocalPath(resolved.workspacePath);
-        const contentBefore = await fs.readFile(localPath)
-            .then(content => String(content ?? ''))
-            .catch(() => null);
-        if (input.contentAfter === null && contentBefore === null) {
-            return {
-                path: resolved.displayPath,
-                workspacePath: resolved.workspacePath,
-                applied: false,
-                error: `File not found: ${resolved.displayPath}`,
-                command: input.command
-            };
-        }
-
-        if (input.contentAfter === null) {
-            await fs.rm(localPath);
-        } else {
-            await fs.mkdir(this.parentLocalPath(localPath), { recursive: true });
-            await fs.writeFile(localPath, input.contentAfter);
-        }
-        await this.workspaces.persist();
-
-        const patch = forgeWorkspaceVersionManager.createPatch({
-            nodeId: `tool:${input.toolCallId}`,
-            beforeFiles: contentBefore === null ? {} : { [resolved.displayPath]: contentBefore },
-            afterFiles: input.contentAfter === null ? {} : { [resolved.displayPath]: input.contentAfter },
-            sourceToolCallId: input.toolCallId
+        const result = await this.workspaceWriter.write({
+            forgeProjectId: input.ctx.forgeProjectId,
+            conversationId: input.ctx.conversationId,
+            sourceToolCallId: input.toolCallId,
+            displayPath: resolved.displayPath,
+            workspacePath: resolved.workspacePath,
+            contentAfter: input.contentAfter,
+            command: input.command
         });
         const stateEffects = this.createDirectWriteStateEffects(resolved.displayPath, input.contentAfter, input.ctx);
-        if (stateEffects.length > 0) {
+        if (result.applied && stateEffects.length > 0) {
             input.emitEffects?.(stateEffects);
         }
-
         return {
-            path: resolved.displayPath,
-            workspacePath: resolved.workspacePath,
-            applied: true,
-            workspacePatch: patch,
+            path: result.path,
+            workspacePath: result.workspacePath,
+            applied: result.applied,
+            workspaceWriteSummary: result.workspaceWriteSummary,
+            error: result.error,
             command: input.command
         };
     }
@@ -460,12 +570,6 @@ export class ForgePiToolBridge {
             return `read-only Forge semantic path: ${resolved.displayPath}`;
         }
         return null;
-    }
-
-    private parentLocalPath(path: string): string {
-        const normalized = path.replace(/\\/g, '/').replace(/\/+/g, '/');
-        const index = normalized.lastIndexOf('/');
-        return index <= 0 ? '/' : normalized.slice(0, index);
     }
 
     private createDirectWriteStateEffects(
@@ -799,7 +903,8 @@ export class ForgePiToolBridge {
             command: Type.String({ description: '要执行的 bash 命令' }),
             accessMode: Type.Optional(Type.Union([
                 Type.Literal('project-readonly'),
-                Type.Literal('project-write-request')
+                Type.Literal('project-write-request'),
+                Type.Literal('network-request')
             ]))
         });
         return {
@@ -807,13 +912,15 @@ export class ForgePiToolBridge {
             label: '项目 Shell',
             description: [
                 '在 Forge 项目沙箱中执行 bash 命令。',
-                '默认 project-readonly；写入模式必须显式请求，并会直接写入项目 VFS 与生成 workspace_patch。',
-                '禁止：命令替换 $()、反引号、curl、eval、chmod。',
+                '默认 project-readonly；写入模式必须显式请求，并会直接写入项目 VFS 与生成本轮文件变更摘要。',
+                '联网 curl 必须使用 network-request；缺少 grant 时 Forge 会在输入区请求用户授权。',
+                'network-request 允许 curl 的 -o/-O/-c/-T/-F 文件参数，文件读写会通过项目语义 VFS 和本轮写入摘要记录。',
+                '禁止：命令替换 $()、反引号、eval、chmod。',
                 '当前工作目录：./'
             ].join('\n'),
             parameters,
-            execute: async (toolCallId, params: any) => {
-                const { command, accessMode } = params;
+            execute: async (toolCallId, params: unknown) => {
+                const { command, accessMode } = params as Static<typeof parameters>;
                 const mode = (accessMode ?? 'project-readonly') as ForgeShellAccessMode;
                 const stableThreads = await this.listStableThreads(ctx);
                 const result = await this.shell.execute({
@@ -850,9 +957,24 @@ export class ForgePiToolBridge {
                     exitCode: result.result.exitCode,
                     diagnostics: result.diagnostics,
                     writeCount: workspaceWrites.filter(write => write.applied).length,
-                    workspacePatches: workspaceWrites
-                        .map(write => write.workspacePatch)
-                        .filter((patch): patch is ForgePiWorkspacePatchPayload => Boolean(patch)),
+                    workspaceWriteSummary: this.workspaceWriter.mergeSummaries(toolCallId, workspaceWrites.map(write => ({
+                        path: write.path,
+                        workspacePath: write.workspacePath ?? write.path,
+                        applied: write.applied,
+                        changedFiles: write.workspaceWriteSummary?.changedFiles ?? [],
+                        workspaceWriteSummary: write.workspaceWriteSummary ?? {
+                            sourceToolCallId: toolCallId,
+                            changedFiles: [],
+                            writeCount: 0,
+                            errors: write.error ? [{ path: write.path, error: write.error }] : [],
+                            gitCommitHash: null,
+                            gitParentHash: null
+                        },
+                        gitCommitHash: write.workspaceWriteSummary?.gitCommitHash ?? null,
+                        gitParentHash: write.workspaceWriteSummary?.gitParentHash ?? null,
+                        command: write.command,
+                        error: write.error
+                    }))),
                     writeErrors: workspaceWrites
                         .filter(write => !write.applied)
                         .map(write => ({ path: write.path, error: write.error }))
@@ -860,6 +982,299 @@ export class ForgePiToolBridge {
                 return textResult(details.stdout || details.stderr || `exitCode=${result.result.exitCode}`, details);
             }
         };
+    }
+
+    private prepareBashNetworkApproval(input: ForgePiToolCallInput): ForgePendingToolApproval | null {
+        if (this.resolveExecutableToolName(input.toolName) !== 'bash') return null;
+        const args = this.resolveBashNetworkArgs(input.args);
+        if (!args || args.accessMode !== 'network-request') return null;
+        const requirement = this.resolveBashNetworkApprovalRequirement(args.command);
+        if (!requirement) return null;
+        const session = this.createShellSession({
+            forgeProjectId: input.context.workspaceSessionId,
+            conversationId: input.context.sessionChatId,
+            cwd: forgeWorkspacePath(input.context.workspaceSessionId),
+            runtimeContext: input.context
+        });
+        const decision = this.networkPolicy.checkAgentGrant(
+            this.permissions,
+            session,
+            { dangerouslyAllowFullInternetAccess: true },
+            requirement.url,
+            requirement.method
+        );
+        if (decision.allowed) return null;
+        if (decision.failureReason !== 'grant_required') {
+            return null;
+        }
+
+        const permissionRequest = this.permissions.requestPermission({
+            session,
+            operation: 'network',
+            scope: { urlPrefix: requirement.urlPrefix },
+            reason: `Forge Agent 请求访问 ${requirement.urlPrefix}`,
+            expiresAt: null
+        });
+        return {
+            approvalKind: 'network',
+            displaySurface: 'composer',
+            toolCallId: input.toolCallId,
+            toolName: 'bash',
+            args: {
+                command: args.command,
+                accessMode: 'network-request'
+            },
+            shellPermissionRequestId: permissionRequest.requestId,
+            url: requirement.url,
+            urlPrefix: requirement.urlPrefix,
+            method: requirement.method,
+            command: requirement.command,
+            localFileIo: requirement.localFileIo,
+            reason: permissionRequest.reason
+        };
+    }
+
+    private resolveBashNetworkArgs(args: unknown): {
+        command: string;
+        accessMode: ForgeShellAccessMode;
+    } | null {
+        if (!args || typeof args !== 'object' || Array.isArray(args)) return null;
+        const record = args as Record<string, unknown>;
+        if (typeof record.command !== 'string') return null;
+        const accessMode = typeof record.accessMode === 'string'
+            ? record.accessMode as ForgeShellAccessMode
+            : 'project-readonly';
+        return {
+            command: record.command,
+            accessMode
+        };
+    }
+
+    private createShellSession(ctx: ForgePiToolContext): ShellSessionRef {
+        return {
+            shellSessionId: `forge-agent-${ctx.forgeProjectId}-${ctx.conversationId}`,
+            kind: 'forge-agent',
+            ownerType: 'forge',
+            ownerId: ctx.forgeProjectId,
+            projectId: ctx.forgeProjectId,
+            conversationId: ctx.conversationId
+        };
+    }
+
+    private resolveBashNetworkApprovalRequirement(command: string): ForgeBashNetworkApprovalRequirement | null {
+        for (const segment of this.splitCommandSegments(command)) {
+            const tokens = this.tokenizeCommandSegment(segment);
+            if (tokens[0] !== 'curl') continue;
+            const url = this.resolveCurlUrl(tokens);
+            if (!url) continue;
+            const normalizedUrl = this.normalizeCurlUrl(url);
+            return {
+                url: normalizedUrl,
+                urlPrefix: this.urlPrefix(normalizedUrl),
+                method: this.resolveCurlMethod(tokens),
+                command,
+                localFileIo: this.hasCurlLocalFileIo(tokens)
+            };
+        }
+        return null;
+    }
+
+    private splitCommandSegments(command: string): string[] {
+        return command
+            .split(/\|\||&&|[|;]/)
+            .map(segment => segment.trim())
+            .filter(Boolean);
+    }
+
+    private tokenizeCommandSegment(segment: string): string[] {
+        const tokens: string[] = [];
+        let current = '';
+        let quote: '"' | '\'' | null = null;
+        let escaping = false;
+        for (const char of segment.trim()) {
+            if (escaping) {
+                current += char;
+                escaping = false;
+                continue;
+            }
+            if (char === '\\') {
+                escaping = true;
+                continue;
+            }
+            if (quote) {
+                if (char === quote) {
+                    quote = null;
+                } else {
+                    current += char;
+                }
+                continue;
+            }
+            if (char === '"' || char === '\'') {
+                quote = char;
+                continue;
+            }
+            if (/\s/.test(char)) {
+                if (current) {
+                    tokens.push(current);
+                    current = '';
+                }
+                continue;
+            }
+            current += char;
+        }
+        if (current) tokens.push(current);
+        return tokens;
+    }
+
+    private resolveCurlUrl(tokens: string[]): string | null {
+        for (let index = 1; index < tokens.length; index += 1) {
+            const token = tokens[index];
+            if (this.isCurlOptionWithValue(token)) {
+                index += 1;
+                continue;
+            }
+            if (this.isCurlInlineOptionWithValue(token)) continue;
+            if (token.startsWith('-')) continue;
+            return token;
+        }
+        return null;
+    }
+
+    private isCurlOptionWithValue(token: string): boolean {
+        return [
+            '-X',
+            '--request',
+            '-H',
+            '--header',
+            '-d',
+            '--data',
+            '--data-raw',
+            '--data-binary',
+            '--data-urlencode',
+            '-F',
+            '--form',
+            '-u',
+            '--user',
+            '-A',
+            '--user-agent',
+            '-e',
+            '--referer',
+            '-b',
+            '--cookie',
+            '-c',
+            '--cookie-jar',
+            '-T',
+            '--upload-file',
+            '-m',
+            '--max-time',
+            '--connect-timeout',
+            '--max-redirs',
+            '-w',
+            '--write-out',
+            '-o',
+            '--output'
+        ].includes(token);
+    }
+
+    private isCurlInlineOptionWithValue(token: string): boolean {
+        return token.startsWith('--request=')
+            || token.startsWith('--header=')
+            || token.startsWith('--data=')
+            || token.startsWith('--data-raw=')
+            || token.startsWith('--data-binary=')
+            || token.startsWith('--data-urlencode=')
+            || token.startsWith('--form=')
+            || token.startsWith('--user=')
+            || token.startsWith('--user-agent=')
+            || token.startsWith('--referer=')
+            || token.startsWith('--cookie=')
+            || token.startsWith('--cookie-jar=')
+            || token.startsWith('--upload-file=')
+            || token.startsWith('--max-time=')
+            || token.startsWith('--connect-timeout=')
+            || token.startsWith('--max-redirs=')
+            || token.startsWith('--write-out=')
+            || token.startsWith('--output=');
+    }
+
+    private normalizeCurlUrl(url: string): string {
+        return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    }
+
+    private urlPrefix(url: string): string {
+        try {
+            const parsed = new URL(url);
+            return `${parsed.origin}/`;
+        } catch {
+            return url;
+        }
+    }
+
+    private resolveCurlMethod(tokens: string[]): string {
+        for (let index = 1; index < tokens.length; index += 1) {
+            const token = tokens[index];
+            if (token === '-X' || token === '--request') return (tokens[index + 1] ?? 'GET').toUpperCase();
+            if (token.startsWith('-X') && token.length > 2) return token.slice(2).toUpperCase();
+            if (token.startsWith('--request=')) return token.slice('--request='.length).toUpperCase();
+            if (token === '-T' || token === '--upload-file' || token.startsWith('--upload-file=')) return 'PUT';
+            if (
+                token === '-d'
+                || token === '--data'
+                || token === '--data-raw'
+                || token === '--data-binary'
+                || token === '--data-urlencode'
+                || token === '-F'
+                || token === '--form'
+                || token.startsWith('-d')
+                || token.startsWith('--data=')
+                || token.startsWith('--data-raw=')
+                || token.startsWith('--data-binary=')
+                || token.startsWith('--data-urlencode=')
+                || token.startsWith('--form=')
+            ) {
+                return 'POST';
+            }
+        }
+        return 'GET';
+    }
+
+    private hasCurlLocalFileIo(tokens: string[]): boolean {
+        for (let index = 1; index < tokens.length; index += 1) {
+            const token = tokens[index];
+            if (
+                token === '-o'
+                || token === '--output'
+                || token === '-O'
+                || token === '--remote-name'
+                || token === '-c'
+                || token === '--cookie-jar'
+                || token === '-T'
+                || token === '--upload-file'
+                || token.startsWith('--output=')
+                || token.startsWith('--cookie-jar=')
+                || token.startsWith('--upload-file=')
+            ) {
+                return true;
+            }
+            if (token.startsWith('-') && !token.startsWith('--') && token.length > 2 && token.slice(1).includes('O')) {
+                return true;
+            }
+            if ((token === '-F' || token === '--form') && this.isCurlFormFileArgument(tokens[index + 1])) {
+                return true;
+            }
+            if (token.startsWith('--form=') && this.isCurlFormFileArgument(token.slice('--form='.length))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private isCurlFormFileArgument(value: string | undefined): boolean {
+        if (!value) return false;
+        const separatorIndex = value.indexOf('=');
+        if (separatorIndex < 0) return false;
+        const formValue = value.slice(separatorIndex + 1);
+        return formValue.startsWith('@') || formValue.startsWith('<');
     }
 
     private createReadTool(ctx: ForgePiToolContext): ForgePiAgentTool {
@@ -935,7 +1350,7 @@ export class ForgePiToolBridge {
         return {
             name: 'write',
             label: '写入文件',
-            description: '直接写入 Forge 项目 VFS，并返回可撤回的 workspace_patch；不会发布或改写真实 ST 世界书。',
+            description: '直接写入 Forge 项目 VFS，并返回本轮文件变更摘要；不会发布或改写真实 ST 世界书。',
             parameters,
             execute: async (toolCallId, params: any) => {
                 const { path, content } = params;
@@ -964,7 +1379,7 @@ export class ForgePiToolBridge {
         return {
             name: 'edit',
             label: '编辑文件',
-            description: '对 Forge 项目 VFS 文件执行精确替换，并返回可撤回的 workspace_patch。',
+            description: '对 Forge 项目 VFS 文件执行精确替换，并返回本轮文件变更摘要。',
             parameters,
             execute: async (toolCallId, params: any) => {
                 const { path, old_string, new_string } = params;
@@ -1008,7 +1423,7 @@ export class ForgePiToolBridge {
         return {
             name: 'delete',
             label: '删除文件',
-            description: '删除 Forge 项目 VFS 文件，并返回可撤回的 workspace_patch。',
+            description: '删除 Forge 项目 VFS 文件，并返回本轮文件变更摘要。',
             parameters,
             execute: async (toolCallId, params: any) => {
                 const { path } = params;
@@ -1161,6 +1576,7 @@ export class ForgePiToolBridge {
             timestamp: Date.now()
         };
     }
+
 }
 
 export const forgePiToolBridge = new ForgePiToolBridge();

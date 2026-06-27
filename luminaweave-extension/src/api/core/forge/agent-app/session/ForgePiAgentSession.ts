@@ -1,15 +1,16 @@
 import {
     Agent,
     type AgentEvent,
-    type AgentMessage
+    type AgentMessage,
+    type BeforeToolCallContext,
+    type BeforeToolCallResult
 } from '@earendil-works/pi-agent-core';
-import type { ToolResultMessage } from '@earendil-works/pi-ai';
+import type { AssistantMessage, ToolResultMessage } from '@earendil-works/pi-ai';
 import type {
     ForgePiBranchFromUserResult,
     ForgePiContextBundleSummary,
     ForgePiSessionEntry,
-    ForgePiTreeNode,
-    ForgePiWorkspacePatchPayload
+    ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
 import type {
     ForgeExecutionRequest,
@@ -18,6 +19,7 @@ import type {
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
     ForgeRuntimeEventSource,
+    ForgeToolApprovalResolutionOptions,
     ForgeUserCommand
 } from '../../../../../types/ForgeRuntimeTypes.js';
 import {
@@ -40,6 +42,7 @@ import {
 import {
     forgePiToolBridge,
     type ForgePiAgentTool,
+    type ForgePendingToolApproval,
     type ForgePiToolBridge
 } from '../tools/ForgePiToolBridge.js';
 import { AgentPromptAssembler } from '../../../agent-runtime/prompt/AgentPromptAssembler.js';
@@ -149,7 +152,21 @@ interface ForgePiPreparedPrompt {
     activeTools: ForgeModelRequestToolSummary[];
 }
 
+interface ForgePendingApprovalToolDetails {
+    status: 'approval_pending';
+    approvalKind: 'network' | 'tool';
+    displaySurface: 'composer' | 'review';
+    toolCallId: string;
+    toolName: string;
+    args: unknown;
+    shellPermissionRequestId?: string | null;
+    reason?: string;
+}
+
+type ForgeToolApprovalNeededEvent = Extract<ForgeRuntimeEvent, { type: 'tool_approval_needed' }>;
+
 export class ForgePiAgentSession {
+    private static readonly approvalBlockReasonPrefix = 'Forge tool approval pending';
     private readonly resourceLoader: ForgePiResourceLoader;
     private readonly extensionRunner: ForgePiExtensionRunner;
     private readonly modelRegistry: ForgePiModelRegistry;
@@ -162,6 +179,8 @@ export class ForgePiAgentSession {
     private latestContextBundle: ForgePiContextBundleSummary | null = null;
     private eventSink: ForgePiEventSink | null = null;
     private agentRuntimeEvents: AgentRuntimeEventBus | null = null;
+    private readonly pendingApprovalBlockedToolCallIds = new Set<string>();
+    private readonly pendingApprovalWaits = new Map<string, { requestId: string }>();
 
     constructor(
         private readonly sessionId: string,
@@ -264,6 +283,28 @@ export class ForgePiAgentSession {
         };
         await agent.prompt(userMessage);
 
+        if (this.hasPendingApprovalForRequest(input.request.requestId)) {
+            for (const modelTrace of this.resolveModelTraces(input.request.requestId)) {
+                emitEvent({
+                    type: 'model_request_trace',
+                    requestId: input.request.requestId,
+                    trace: modelTrace
+                });
+            }
+            const snapshot = this.sessionManager.getSnapshot();
+            return {
+                events,
+                effects,
+                piSessionState: {
+                    tree: snapshot.tree,
+                    entries: snapshot.entries,
+                    activeNodeId: snapshot.activeNodeId,
+                    contextBundleSummary: prepared.contextBundle,
+                    loadedExtensions: prepared.contextBundle.loadedExtensions
+                }
+            };
+        }
+
         const finalMessage = this.resolveLastAssistantMessage(agent.state.messages);
         const finalProjection = finalMessage
             ? this.projectAssistantMessage(finalMessage)
@@ -354,9 +395,15 @@ export class ForgePiAgentSession {
         return this.resolveToolApproval(toolCallId, false, message);
     }
 
-    async resolveToolApproval(toolCallId: string, approved: boolean, message?: string): Promise<ForgePiAgentSessionApprovalResult> {
-        const resolved = await this.toolBridge.resolveToolApproval(toolCallId, approved, message);
+    async resolveToolApproval(
+        toolCallId: string,
+        approved: boolean,
+        message?: string,
+        options?: ForgeToolApprovalResolutionOptions
+    ): Promise<ForgePiAgentSessionApprovalResult> {
+        const resolved = await this.toolBridge.resolveToolApproval(toolCallId, approved, message, options);
         if (!resolved.resolved) return resolved;
+        this.pendingApprovalWaits.delete(toolCallId);
 
         for (const event of resolved.events) {
             if (event.type === 'tool_approval_resolved') {
@@ -376,12 +423,28 @@ export class ForgePiAgentSession {
                         ? { ...event, agentMessage: resolved.toolResultMessage }
                         : event
                 );
-                this.appendWorkspacePatchesFromToolResult(event.result);
             }
         }
 
+        if (!approved && this.latestRequest) {
+            this.agentRuntimeEvents?.emit({
+                type: 'turn_end',
+                turnId: this.latestRequest.requestId
+            });
+            this.agentRuntimeEvents?.emit({
+                type: 'agent_end',
+                sessionId: this.sessionId
+            });
+        }
+
         if (approved && resolved.toolResultMessage && this.agent && this.latestRequest) {
-            this.replacePendingApprovalWithToolResult(resolved.toolResultMessage);
+            const restoredToolPair = this.replacePendingApprovalWithToolResult(resolved.toolResultMessage);
+            if (!restoredToolPair) {
+                return {
+                    ...resolved,
+                    piSessionState: this.sessionManager.getSnapshot()
+                };
+            }
             this.agentRuntimeEvents?.emit({
                 type: 'turn_start',
                 turnId: this.latestRequest.requestId
@@ -532,7 +595,8 @@ export class ForgePiAgentSession {
             },
             streamFn: input.modelConfig.streamFn,
             sessionId: this.sessionId,
-            toolExecution: 'sequential'
+            toolExecution: 'sequential',
+            beforeToolCall: async context => this.handleBeforeToolCall(context)
         });
 
         agent.subscribe((event) => {
@@ -578,6 +642,9 @@ export class ForgePiAgentSession {
         input: ForgePiEventSink,
         markFirstResponse: () => void
     ): void {
+        if (event.type === 'message_end' && event.message.role === 'toolResult') {
+            if (this.discardPendingApprovalToolResult(event.message)) return;
+        }
         if (event.type === 'message_update') {
             markFirstResponse();
             const projection = this.projectAssistantMessage(event.message);
@@ -642,9 +709,46 @@ export class ForgePiAgentSession {
             };
             input.events.push(runtimeEvent);
             input.onRuntimeEvent?.(runtimeEvent);
-            this.sessionManager.append('tool_call', `Tool call · ${event.toolName}`, JSON.stringify(event.args).slice(0, 160), runtimeEvent);
+            const replayAgentMessage = this.createToolCallReplayMessage({
+                toolCallId: event.toolCallId,
+                toolName: event.toolName,
+                args: event.args
+            });
+            this.sessionManager.append(
+                'tool_call',
+                `Tool call · ${event.toolName}`,
+                JSON.stringify(event.args).slice(0, 160),
+                replayAgentMessage
+                    ? { ...runtimeEvent, agentMessage: replayAgentMessage, replayAgentMessage }
+                    : runtimeEvent
+            );
         }
         if (event.type === 'tool_execution_end') {
+            if (this.markPendingApprovalBlockAsTerminating(event)) return;
+            const pendingApproval = this.resolvePendingApprovalToolDetails(event.result);
+            if (pendingApproval && this.latestContext) {
+                const runtimeEvent = this.createToolApprovalNeededEvent({
+                    requestId: input.request.requestId,
+                    source: input.source,
+                    approval: pendingApproval
+                });
+                this.toolBridge.registerPendingApproval({
+                    requestId: input.request.requestId,
+                    toolCallId: event.toolCallId,
+                    toolName: event.toolName,
+                    args: pendingApproval.args,
+                    context: this.latestContext,
+                    source: input.source,
+                    approvalKind: pendingApproval.approvalKind,
+                    displaySurface: pendingApproval.displaySurface,
+                    shellPermissionRequestId: pendingApproval.shellPermissionRequestId ?? null,
+                    forgeProjectId: this.latestContext.workspaceSessionId,
+                    conversationId: this.latestContext.sessionChatId,
+                    sessionId: this.sessionId
+                });
+                this.emitToolApprovalNeeded(input, runtimeEvent);
+                return;
+            }
             input.runtimeEvents?.emit({
                 type: 'tool_execution_end',
                 toolCallId: event.toolCallId,
@@ -664,8 +768,144 @@ export class ForgePiAgentSession {
             input.events.push(runtimeEvent);
             input.onRuntimeEvent?.(runtimeEvent);
             this.sessionManager.append('tool_result', `Tool result · ${event.toolName}`, JSON.stringify(runtimeEvent.result).slice(0, 160), runtimeEvent);
-            this.appendWorkspacePatchesFromToolResult(runtimeEvent.result);
         }
+    }
+
+    private handleBeforeToolCall(context: BeforeToolCallContext): BeforeToolCallResult | undefined {
+        const sink = this.eventSink;
+        const latestContext = this.latestContext;
+        if (!sink || !latestContext) return undefined;
+
+        const approval = this.toolBridge.requestToolApproval({
+            requestId: sink.request.requestId,
+            toolCallId: context.toolCall.id,
+            toolName: context.toolCall.name,
+            args: context.args,
+            context: latestContext,
+            source: sink.source,
+            forgeProjectId: latestContext.workspaceSessionId,
+            conversationId: latestContext.sessionChatId,
+            sessionId: this.sessionId
+        });
+        if (!approval) return undefined;
+
+        this.pendingApprovalBlockedToolCallIds.add(context.toolCall.id);
+        this.pendingApprovalWaits.set(context.toolCall.id, { requestId: sink.request.requestId });
+        this.emitToolApprovalNeeded(
+            sink,
+            this.createToolApprovalNeededEvent({
+                requestId: sink.request.requestId,
+                source: sink.source,
+                approval
+            })
+        );
+        return {
+            block: true,
+            reason: this.createApprovalBlockReason(context.toolCall.id)
+        };
+    }
+
+    private createToolApprovalNeededEvent(input: {
+        requestId: string;
+        source: ForgeRuntimeEventSource;
+        approval: ForgePendingToolApproval | ForgePendingApprovalToolDetails;
+    }): ForgeToolApprovalNeededEvent {
+        return {
+            type: 'tool_approval_needed',
+            requestId: input.requestId,
+            approvalId: `approval-${input.approval.toolCallId}`,
+            toolCallId: input.approval.toolCallId,
+            toolName: input.approval.toolName,
+            args: input.approval.args,
+            reason: input.approval.reason ?? '工具调用需要用户授权。',
+            source: input.source,
+            approvalKind: input.approval.approvalKind,
+            displaySurface: input.approval.displaySurface,
+            shellPermissionRequestId: input.approval.shellPermissionRequestId ?? null,
+            forgeProjectId: this.latestContext?.workspaceSessionId ?? null,
+            conversationId: this.latestContext?.sessionChatId ?? null,
+            sessionId: this.sessionId
+        };
+    }
+
+    private emitToolApprovalNeeded(input: ForgePiEventSink, runtimeEvent: ForgeToolApprovalNeededEvent): void {
+        input.events.push(runtimeEvent);
+        input.onRuntimeEvent?.(runtimeEvent);
+        this.sessionManager.append(
+            'approval_needed',
+            `Approval needed · ${runtimeEvent.toolName}`,
+            runtimeEvent.reason,
+            runtimeEvent
+        );
+    }
+
+    private createApprovalBlockReason(toolCallId: string): string {
+        return `${ForgePiAgentSession.approvalBlockReasonPrefix}: ${toolCallId}`;
+    }
+
+    private markPendingApprovalBlockAsTerminating(
+        event: Extract<AgentEvent, { type: 'tool_execution_end' }>
+    ): boolean {
+        if (!event.isError) return false;
+        if (!this.pendingApprovalBlockedToolCallIds.has(event.toolCallId)) return false;
+        if (!this.resultTextIncludes(event.result, this.createApprovalBlockReason(event.toolCallId))) return false;
+        if (this.isRecord(event.result)) {
+            event.result.terminate = true;
+        }
+        return true;
+    }
+
+    private hasPendingApprovalForRequest(requestId: string): boolean {
+        for (const pending of this.pendingApprovalWaits.values()) {
+            if (pending.requestId === requestId) return true;
+        }
+        return false;
+    }
+
+    private discardPendingApprovalToolResult(message: ToolResultMessage): boolean {
+        if (!this.pendingApprovalBlockedToolCallIds.has(message.toolCallId)) return false;
+        this.pendingApprovalBlockedToolCallIds.delete(message.toolCallId);
+        if (this.agent) {
+            this.agent.state.messages = this.agent.state.messages.filter(item =>
+                !this.isToolResultForCall(item, message.toolCallId)
+            );
+        }
+        return true;
+    }
+
+    private resultTextIncludes(result: unknown, text: string): boolean {
+        if (!this.isRecord(result)) return false;
+        const content = result.content;
+        if (!Array.isArray(content)) return false;
+        return content.some(item =>
+            this.isRecord(item)
+            && item.type === 'text'
+            && typeof item.text === 'string'
+            && item.text.includes(text)
+        );
+    }
+
+    private resolvePendingApprovalToolDetails(result: unknown): ForgePendingApprovalToolDetails | null {
+        if (!this.isRecord(result)) return null;
+        const details = result.details;
+        if (!this.isRecord(details)) return null;
+        if (details.status !== 'approval_pending') return null;
+        if (details.approvalKind !== 'network' && details.approvalKind !== 'tool') return null;
+        if (details.displaySurface !== 'composer' && details.displaySurface !== 'review') return null;
+        if (typeof details.toolCallId !== 'string') return null;
+        if (typeof details.toolName !== 'string') return null;
+        return {
+            status: 'approval_pending',
+            approvalKind: details.approvalKind,
+            displaySurface: details.displaySurface,
+            toolCallId: details.toolCallId,
+            toolName: details.toolName,
+            args: details.args,
+            shellPermissionRequestId: typeof details.shellPermissionRequestId === 'string'
+                ? details.shellPermissionRequestId
+                : null,
+            reason: typeof details.reason === 'string' ? details.reason : undefined
+        };
     }
 
     private emitAgentRuntimeMessageStart(input: ForgePiEventSink): void {
@@ -717,57 +957,107 @@ export class ForgePiAgentSession {
             .map(part => ({ ...part }));
     }
 
-    private appendWorkspacePatchesFromToolResult(result: unknown): void {
-        for (const patch of this.extractWorkspacePatches(result)) {
-            this.sessionManager.append(
-                'workspace_patch',
-                'Workspace patch',
-                `${patch.changes.length} file change(s)`,
-                patch
-            );
-        }
-    }
-
-    private extractWorkspacePatches(result: unknown): ForgePiWorkspacePatchPayload[] {
-        if (!this.isRecord(result)) return [];
-        const patches: ForgePiWorkspacePatchPayload[] = [];
-        if (this.isWorkspacePatchPayload(result.workspacePatch)) {
-            patches.push(result.workspacePatch);
-        }
-        if (Array.isArray(result.workspacePatches)) {
-            patches.push(...result.workspacePatches.filter((patch): patch is ForgePiWorkspacePatchPayload =>
-                this.isWorkspacePatchPayload(patch)
-            ));
-        }
-        return patches;
-    }
-
-    private isWorkspacePatchPayload(value: unknown): value is ForgePiWorkspacePatchPayload {
-        return this.isRecord(value)
-            && typeof value.nodeId === 'string'
-            && Array.isArray(value.changes);
-    }
-
     private isRecord(value: unknown): value is Record<string, unknown> {
         return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
     }
 
-    private replacePendingApprovalWithToolResult(toolResultMessage: ToolResultMessage): void {
-        if (!this.agent) return;
+    private replacePendingApprovalWithToolResult(toolResultMessage: ToolResultMessage): boolean {
+        if (!this.agent) return false;
         const messages = this.agent.state.messages;
         const toolCallIndex = [...messages].reverse().findIndex(message => {
             if (message.role !== 'assistant') return false;
             return message.content.some(part => part.type === 'toolCall' && part.id === toolResultMessage.toolCallId);
         });
         if (toolCallIndex === -1) {
-            this.agent.state.messages = [...messages, toolResultMessage as AgentMessage];
-            return;
+            const replayToolCallMessage = this.findReplayToolCallMessage(toolResultMessage.toolCallId);
+            if (!replayToolCallMessage) return false;
+            this.agent.state.messages = [
+                ...messages.filter(message => !this.isToolResultForCall(message, toolResultMessage.toolCallId)),
+                replayToolCallMessage,
+                toolResultMessage as AgentMessage
+            ];
+            return true;
         }
         const assistantIndex = messages.length - 1 - toolCallIndex;
         this.agent.state.messages = [
             ...messages.slice(0, assistantIndex + 1),
             toolResultMessage as AgentMessage
         ];
+        return true;
+    }
+
+    private createToolCallReplayMessage(input: {
+        toolCallId: string;
+        toolName: string;
+        args: unknown;
+    }): AssistantMessage | null {
+        const model = this.agent?.state.model;
+        if (!model) return null;
+        return {
+            role: 'assistant',
+            content: [{
+                type: 'toolCall',
+                id: input.toolCallId,
+                name: input.toolName,
+                arguments: this.toToolCallArguments(input.args)
+            }],
+            api: model.api,
+            provider: model.provider,
+            model: model.id,
+            responseModel: model.id,
+            usage: this.createEmptyUsage(),
+            stopReason: 'toolUse',
+            timestamp: Date.now()
+        };
+    }
+
+    private createEmptyUsage(): AssistantMessage['usage'] {
+        return {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: {
+                input: 0,
+                output: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
+                total: 0
+            }
+        };
+    }
+
+    private toToolCallArguments(args: unknown): Record<string, unknown> {
+        if (!this.isRecord(args)) return {};
+        return { ...args };
+    }
+
+    private findReplayToolCallMessage(toolCallId: string): AgentMessage | null {
+        for (const entry of [...this.sessionManager.getEntries()].reverse()) {
+            if (entry.kind !== 'tool_call') continue;
+            if (!this.isRecord(entry.payload)) continue;
+            if (this.isAssistantToolCallMessage(entry.payload.replayAgentMessage, toolCallId)) {
+                return entry.payload.replayAgentMessage;
+            }
+            if (this.isAssistantToolCallMessage(entry.payload.agentMessage, toolCallId)) {
+                return entry.payload.agentMessage;
+            }
+        }
+        return null;
+    }
+
+    private isAssistantToolCallMessage(value: unknown, toolCallId: string): value is AssistantMessage {
+        if (!this.isRecord(value)) return false;
+        if (value.role !== 'assistant') return false;
+        if (!Array.isArray(value.content)) return false;
+        return value.content.some(part =>
+            this.isRecord(part) && part.type === 'toolCall' && part.id === toolCallId
+        );
+    }
+
+    private isToolResultForCall(message: AgentMessage, toolCallId: string): boolean {
+        return message.role === 'toolResult' && message.toolCallId === toolCallId;
     }
 
     private resolveCommandInput(command: ForgeUserCommand): string {
@@ -881,7 +1171,7 @@ export class ForgePiAgentSession {
             '# Provider-native structured messages',
             'Return the final user-facing reply as provider-native text content.',
             'Use provider-native thinking content for concise public execution progress when the selected provider supports it.',
-            'Tool calls, file audit data, and workspace patch data must come from runtime/tool events, not assistant text.'
+            'Tool calls, file write summaries, and Git metadata must come from runtime/tool events, not assistant text.'
         ].join('\n\n');
     }
 }

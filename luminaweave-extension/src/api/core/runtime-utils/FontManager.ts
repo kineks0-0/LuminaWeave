@@ -60,7 +60,7 @@ export class FontManager extends LuminaWeaveAPIBase {
         const link = document.createElement('link');
         link.id = linkId;
         link.rel = 'stylesheet';
-        link.crossOrigin = 'anonymous';
+        //link.crossOrigin = 'anonymous';
         link.href = url;
         document.head.appendChild(link);
     }

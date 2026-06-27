@@ -5,7 +5,8 @@ import type {
     ForgeRuntimeDecision,
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
-    ForgeUserCommand
+    ForgeUserCommand,
+    ForgeToolApprovalResolutionOptions
 } from '../../../../types/ForgeRuntimeTypes.js';
 import type { ForgeTimelineOperationKind } from '../../../../types/ForgeTimelineTypes.js';
 import type {
@@ -53,7 +54,12 @@ export interface ForgeRuntimeOrchestratorOptions {
             loadedExtensions?: string[];
         };
     }>;
-    resolvePiToolApproval?: (toolCallId: string, approved: boolean, message?: string) => Promise<{
+    resolvePiToolApproval?: (
+        toolCallId: string,
+        approved: boolean,
+        message?: string,
+        options?: ForgeToolApprovalResolutionOptions
+    ) => Promise<{
         resolved: boolean;
         events?: ForgeRuntimeEvent[];
         effects?: ForgeRuntimeEffect[];
@@ -80,9 +86,16 @@ export class ForgeRuntimeOrchestrator {
         // The pi runtime owns the active AbortController.
     }
 
-    async resolveToolApproval(toolCallId: string, approved: boolean, message?: string): Promise<boolean> {
+    async resolveToolApproval(
+        toolCallId: string,
+        approved: boolean,
+        message?: string,
+        options?: ForgeToolApprovalResolutionOptions
+    ): Promise<boolean> {
         if (!this.options.resolvePiToolApproval) return false;
-        const result = await this.options.resolvePiToolApproval(toolCallId, approved, message);
+        const result = options === undefined
+            ? await this.options.resolvePiToolApproval(toolCallId, approved, message)
+            : await this.options.resolvePiToolApproval(toolCallId, approved, message, options);
         if (!result.resolved) return false;
 
         const context = this.port.getRuntimeContext({ type: 'noop' });
@@ -366,6 +379,12 @@ export class ForgeRuntimeOrchestrator {
                         args: event.args,
                         reason: event.reason,
                         source: event.source,
+                        approvalKind: event.approvalKind,
+                        displaySurface: event.displaySurface,
+                        shellPermissionRequestId: event.shellPermissionRequestId ?? null,
+                        forgeProjectId: event.forgeProjectId ?? null,
+                        conversationId: event.conversationId ?? null,
+                        sessionId: event.sessionId ?? null,
                         status: 'pending',
                         createdAt: Date.now(),
                         resolvedAt: null,
@@ -377,7 +396,18 @@ export class ForgeRuntimeOrchestrator {
                     type: 'tool_approval_needed',
                     toolCallId: event.toolCallId,
                     toolName: event.toolName,
-                    payload: { approvalId: event.approvalId ?? null, args: event.args, reason: event.reason, source: event.source }
+                    payload: {
+                        approvalId: event.approvalId ?? null,
+                        args: event.args,
+                        reason: event.reason,
+                        source: event.source,
+                        approvalKind: event.approvalKind,
+                        displaySurface: event.displaySurface,
+                        shellPermissionRequestId: event.shellPermissionRequestId ?? null,
+                        forgeProjectId: event.forgeProjectId ?? null,
+                        conversationId: event.conversationId ?? null,
+                        sessionId: event.sessionId ?? null
+                    }
                 })
             ];
         }
@@ -398,7 +428,18 @@ export class ForgeRuntimeOrchestrator {
                     type: 'tool_approval_resolved',
                     toolCallId: event.toolCallId,
                     toolName: event.toolName,
-                    payload: { approvalId: event.approvalId ?? null, approved: event.approved, message: event.message ?? null, source: event.source }
+                    payload: {
+                        approvalId: event.approvalId ?? null,
+                        approved: event.approved,
+                        message: event.message ?? null,
+                        source: event.source,
+                        approvalKind: event.approvalKind,
+                        displaySurface: event.displaySurface,
+                        shellPermissionRequestId: event.shellPermissionRequestId ?? null,
+                        forgeProjectId: event.forgeProjectId ?? null,
+                        conversationId: event.conversationId ?? null,
+                        sessionId: event.sessionId ?? null
+                    }
                 })
             ];
         }

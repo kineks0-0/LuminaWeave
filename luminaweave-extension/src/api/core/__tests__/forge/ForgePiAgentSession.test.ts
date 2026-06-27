@@ -1,16 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ForgeRuntimeContext } from '@/types/ForgeRuntimeTypes.js';
+import type {
+    ForgeExecutionRequest,
+    ForgeRequestContextSnapshot,
+    ForgeRuntimeContext
+} from '@/types/ForgeRuntimeTypes.js';
+import type { ForgePiToolBridge } from '@/api/core/forge/agent-app/tools/ForgePiToolBridge.js';
+
+interface MockAgentInstance {
+    state: {
+        messages: unknown[];
+        model?: unknown;
+    };
+    beforeToolCall?: (context: unknown) => Promise<{ block?: boolean; reason?: string } | undefined>;
+    emit(event: unknown): void;
+}
 
 const agentConstructorSpy = vi.hoisted(() => vi.fn());
 const agentPromptScript = vi.hoisted(() => ({
-    run: null as null | ((agent: any, message: unknown) => Promise<void> | void)
+    run: null as null | ((agent: MockAgentInstance, message: unknown) => Promise<void> | void),
+    continueRun: null as null | ((agent: MockAgentInstance) => Promise<void> | void)
 }));
 
 vi.mock('@earendil-works/pi-agent-core', () => {
     class MockAgent {
-        state: { messages: unknown[] };
-        private readonly listeners: Array<(event: any) => void> = [];
-        subscribe = vi.fn((listener: (event: any) => void) => {
+        state: { messages: unknown[]; model?: unknown };
+        private readonly listeners: Array<(event: unknown) => void> = [];
+        subscribe = vi.fn((listener: (event: unknown) => void) => {
             this.listeners.push(listener);
             return () => {
                 const index = this.listeners.indexOf(listener);
@@ -18,11 +33,18 @@ vi.mock('@earendil-works/pi-agent-core', () => {
             };
         });
 
-        constructor(options: { initialState?: { messages?: unknown[] } }) {
+        beforeToolCall?: (context: unknown) => Promise<{ block?: boolean; reason?: string } | undefined>;
+
+        constructor(options: {
+            initialState?: { messages?: unknown[]; model?: unknown };
+            beforeToolCall?: (context: unknown) => Promise<{ block?: boolean; reason?: string } | undefined>;
+        }) {
             agentConstructorSpy(options);
             this.state = {
-                messages: [...(options.initialState?.messages ?? [])]
+                messages: [...(options.initialState?.messages ?? [])],
+                model: options.initialState?.model
             };
+            this.beforeToolCall = options.beforeToolCall;
         }
 
         async prompt(message: unknown): Promise<void> {
@@ -44,7 +66,13 @@ vi.mock('@earendil-works/pi-agent-core', () => {
             ];
         }
 
-        emit(event: any): void {
+        async continue(): Promise<void> {
+            if (agentPromptScript.continueRun) {
+                await agentPromptScript.continueRun(this);
+            }
+        }
+
+        emit(event: unknown): void {
             for (const listener of this.listeners) {
                 listener(event);
             }
@@ -82,10 +110,43 @@ const createContext = (): ForgeRuntimeContext => ({
     latestUserCommand: { type: 'send_user_input', input: 'hello' }
 });
 
+const createContextSnapshot = (): ForgeRequestContextSnapshot => ({
+    kind: 'forge-runtime',
+    workspaceTitle: 'Forge Alpha',
+    detailMode: 'quick',
+    activeLayer: 'concept',
+    sourceCommand: { type: 'send_user_input', input: 'hello' },
+    workflowSnapshot: null,
+    historyMessages: [],
+    referenceChatSessionId: null,
+    referenceChatSnapshotId: null,
+    lorebookEntries: [],
+    memorySnapshot: null,
+    selectedPresetId: 'forge-main',
+    testChatPresetId: null,
+    nexusPresetId: null
+});
+
+const createExecutionRequest = (overrides: Partial<ForgeExecutionRequest> = {}): ForgeExecutionRequest => ({
+    requestId: 'req_forge_pi_session',
+    traceSource: 'conversation',
+    contextSnapshot: createContextSnapshot(),
+    nodeSummary: [],
+    generationSettings: {},
+    mode: 'conversation',
+    messages: [],
+    sessionChatId: 'conversation_alpha',
+    charName: 'Forge Assistant',
+    presetId: 'forge-main',
+    sourceCommand: { type: 'send_user_input', input: 'hello' },
+    ...overrides
+});
+
 describe('ForgePiAgentSession', () => {
     beforeEach(() => {
         agentConstructorSpy.mockClear();
         agentPromptScript.run = null;
+        agentPromptScript.continueRun = null;
     });
 
     it('passes the stable Forge pi session id to pi-agent-core Agent', async () => {
@@ -665,5 +726,380 @@ describe('ForgePiAgentSession', () => {
             'user',
             'assistant'
         ]);
+    });
+
+    it('projects network approval requests before returning a bash tool result', async () => {
+        const { ForgePiAgentSession } = await import('@/api/core/forge/agent-app/session/ForgePiAgentSession.js');
+        const networkArgs = {
+            command: 'curl -o fetched.txt https://api.example.com/resource',
+            accessMode: 'network-request'
+        };
+        const requestToolApproval = vi.fn(() => ({
+            approvalKind: 'network' as const,
+            displaySurface: 'composer' as const,
+            toolCallId: 'call_network',
+            toolName: 'bash',
+            args: networkArgs,
+            shellPermissionRequestId: 'shell-permission-request-network',
+            reason: 'Forge Agent 请求访问 https://api.example.com/'
+        }));
+        agentPromptScript.run = async (agent) => {
+            const assistantMessage = {
+                role: 'assistant' as const,
+                content: [{
+                    type: 'toolCall' as const,
+                    id: 'call_network',
+                    name: 'bash',
+                    arguments: networkArgs
+                }],
+                api: 'test',
+                provider: 'test',
+                model: 'test',
+                responseModel: 'test',
+                usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+                stopReason: 'toolUse' as const,
+                timestamp: 1
+            };
+            agent.emit({
+                type: 'tool_execution_start',
+                toolCallId: 'call_network',
+                toolName: 'bash',
+                args: networkArgs
+            });
+            const beforeResult = await agent.beforeToolCall?.({
+                assistantMessage,
+                toolCall: assistantMessage.content[0],
+                args: networkArgs,
+                context: {}
+            });
+            expect(beforeResult).toEqual(expect.objectContaining({
+                block: true,
+                reason: expect.stringContaining('call_network')
+            }));
+            const transientToolResult = {
+                role: 'toolResult' as const,
+                toolCallId: 'call_network',
+                toolName: 'bash',
+                content: [{ type: 'text' as const, text: beforeResult?.reason ?? '' }],
+                details: {},
+                isError: true,
+                timestamp: 2
+            };
+            agent.emit({
+                type: 'tool_execution_end',
+                toolCallId: 'call_network',
+                toolName: 'bash',
+                isError: true,
+                result: {
+                    content: [{ type: 'text', text: beforeResult?.reason ?? '' }],
+                    details: {}
+                }
+            });
+            agent.state.messages = [...agent.state.messages, transientToolResult];
+            agent.emit({ type: 'message_end', message: transientToolResult });
+            expect(agent.state.messages).not.toEqual(expect.arrayContaining([expect.objectContaining({
+                role: 'toolResult',
+                toolCallId: 'call_network'
+            })]));
+        };
+        const session = new ForgePiAgentSession(
+            'forge-pi-session-network-approval',
+            {
+                forgeProjectId: 'forge_project_alpha',
+                conversationId: 'conversation_alpha',
+                workspaceTitle: 'Forge Alpha'
+            },
+            {
+                resourceLoader: {
+                    buildContextBundle: vi.fn(async () => ({
+                        files: [{ path: './AGENTS.md', title: 'Agent 工作契约', content: '# Contract' }],
+                        activeSkills: [],
+                        loadedExtensions: []
+                    })),
+                    buildSystemPrompt: vi.fn(() => '# Contract')
+                } as any,
+                modelRegistry: {
+                    resolveRunConfig: vi.fn(() => ({
+                        model: {
+                            id: 'test',
+                            name: 'test',
+                            api: 'test',
+                            provider: 'test',
+                            baseUrl: '',
+                            reasoning: false,
+                            input: [],
+                            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                            contextWindow: 0,
+                            maxTokens: 0
+                        },
+                        streamFn: vi.fn()
+                    }))
+                } as any,
+                extensionRunner: {
+                    loadTools: vi.fn(() => [])
+                } as any,
+                toolBridge: {
+                    requestToolApproval
+                } as any
+            }
+        );
+        const events: unknown[] = [];
+
+        const result = await session.prompt({
+            command: { type: 'send_user_input', input: '下载参考资料' },
+            commandInput: '下载参考资料',
+            context: createContext(),
+            request: {
+                requestId: 'req_network_approval',
+                mode: 'conversation',
+                traceSource: 'conversation',
+                messages: [{ role: 'user', content: '下载参考资料' }],
+                nodeSummary: []
+            } as any,
+            onRuntimeEvent: event => events.push(event)
+        });
+
+        expect(events).toEqual(expect.arrayContaining([expect.objectContaining({
+            type: 'tool_approval_needed',
+            requestId: 'req_network_approval',
+            toolCallId: 'call_network',
+            toolName: 'bash',
+            approvalKind: 'network',
+            displaySurface: 'composer',
+            shellPermissionRequestId: 'shell-permission-request-network'
+        })]));
+        expect(events).not.toEqual(expect.arrayContaining([expect.objectContaining({
+            type: 'tool_result',
+            toolCallId: 'call_network'
+        })]));
+        expect(events).not.toEqual(expect.arrayContaining([expect.objectContaining({
+            type: 'stream_done',
+            requestId: 'req_network_approval'
+        })]));
+        expect(result.events).not.toEqual(expect.arrayContaining([expect.objectContaining({
+            type: 'stream_done',
+            requestId: 'req_network_approval'
+        })]));
+        expect(requestToolApproval).toHaveBeenCalledWith(expect.objectContaining({
+            requestId: 'req_network_approval',
+            toolCallId: 'call_network',
+            toolName: 'bash',
+            args: networkArgs
+        }));
+        expect(result.piSessionState.entries).toEqual(expect.arrayContaining([expect.objectContaining({
+            kind: 'approval_needed',
+            payload: expect.objectContaining({
+                type: 'tool_approval_needed',
+                displaySurface: 'composer'
+            })
+        })]));
+    });
+
+    it('keeps approved network tool results paired with their assistant tool call for continue and replay', async () => {
+        const { ForgePiAgentSession } = await import('@/api/core/forge/agent-app/session/ForgePiAgentSession.js');
+        const networkArgs = {
+            command: 'curl -s https://api.example.com/data',
+            accessMode: 'network-request'
+        };
+        const requestToolApproval = vi.fn(() => ({
+            approvalKind: 'network' as const,
+            displaySurface: 'composer' as const,
+            toolCallId: 'call_network',
+            toolName: 'bash',
+            args: networkArgs,
+            shellPermissionRequestId: 'shell-permission-request-network',
+            reason: 'Forge Agent 请求访问 https://api.example.com/'
+        }));
+        const resolveToolApproval = vi.fn(async () => ({
+            resolved: true,
+            events: [
+                {
+                    type: 'tool_approval_resolved' as const,
+                    requestId: 'req_network_replay',
+                    approvalId: 'approval-call_network',
+                    toolCallId: 'call_network',
+                    toolName: 'bash',
+                    approved: true,
+                    message: '允许联网',
+                    source: 'conversation' as const,
+                    approvalKind: 'network' as const,
+                    displaySurface: 'composer' as const,
+                    shellPermissionRequestId: 'shell-permission-request-network',
+                    forgeProjectId: 'forge_project_alpha',
+                    conversationId: 'conversation_alpha',
+                    sessionId: 'forge-pi-session-network-replay'
+                },
+                {
+                    type: 'tool_result' as const,
+                    requestId: 'req_network_replay',
+                    toolCallId: 'call_network',
+                    toolName: 'bash',
+                    result: { stdout: 'downloaded', exitCode: 0 },
+                    source: 'conversation' as const
+                }
+            ],
+            effects: [],
+            toolResultMessage: {
+                role: 'toolResult' as const,
+                toolCallId: 'call_network',
+                toolName: 'bash',
+                content: [{ type: 'text' as const, text: 'downloaded' }],
+                details: { stdout: 'downloaded', exitCode: 0 },
+                isError: false,
+                timestamp: 2
+            }
+        }));
+        const toolBridge = {
+            requestToolApproval,
+            resolveToolApproval
+        } as unknown as ForgePiToolBridge;
+        let continueMessages: unknown[] = [];
+        agentPromptScript.run = async (agent) => {
+            const assistantMessage = {
+                role: 'assistant' as const,
+                content: [{
+                    type: 'toolCall' as const,
+                    id: 'call_network',
+                    name: 'bash',
+                    arguments: networkArgs
+                }],
+                api: 'test',
+                provider: 'test',
+                model: 'test',
+                responseModel: 'test',
+                usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+                stopReason: 'toolUse' as const,
+                timestamp: 1
+            };
+            agent.emit({
+                type: 'tool_execution_start',
+                toolCallId: 'call_network',
+                toolName: 'bash',
+                args: networkArgs
+            });
+            const beforeResult = await agent.beforeToolCall?.({
+                assistantMessage,
+                toolCall: assistantMessage.content[0],
+                args: networkArgs,
+                context: {}
+            });
+            agent.emit({
+                type: 'tool_execution_end',
+                toolCallId: 'call_network',
+                toolName: 'bash',
+                isError: true,
+                result: {
+                    content: [{ type: 'text', text: beforeResult?.reason ?? '' }],
+                    details: {}
+                }
+            });
+        };
+        agentPromptScript.continueRun = (agent) => {
+            continueMessages = [...agent.state.messages];
+            const assistantMessage = {
+                role: 'assistant' as const,
+                content: [{ type: 'text' as const, text: '已完成下载。' }],
+                api: 'test',
+                provider: 'test',
+                model: 'test',
+                responseModel: 'test',
+                usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+                stopReason: 'stop' as const,
+                timestamp: 3
+            };
+            agent.state.messages = [...agent.state.messages, assistantMessage];
+            agent.emit({ type: 'message_end', message: assistantMessage });
+        };
+        const session = new ForgePiAgentSession(
+            'forge-pi-session-network-replay',
+            {
+                forgeProjectId: 'forge_project_alpha',
+                conversationId: 'conversation_alpha',
+                workspaceTitle: 'Forge Alpha'
+            },
+            {
+                resourceLoader: {
+                    buildContextBundle: vi.fn(async () => ({
+                        files: [{ path: './AGENTS.md', title: 'Agent 工作契约', content: '# Contract' }],
+                        activeSkills: [],
+                        loadedExtensions: []
+                    })),
+                    buildSystemPrompt: vi.fn(() => '# Contract')
+                },
+                modelRegistry: {
+                    resolveRunConfig: vi.fn(() => ({
+                        model: {
+                            id: 'test',
+                            name: 'test',
+                            api: 'test',
+                            provider: 'test',
+                            baseUrl: '',
+                            reasoning: false,
+                            input: [],
+                            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                            contextWindow: 0,
+                            maxTokens: 0
+                        },
+                        streamFn: vi.fn()
+                    }))
+                },
+                extensionRunner: {
+                    loadTools: vi.fn(() => [])
+                },
+                toolBridge
+            } as unknown as ConstructorParameters<typeof ForgePiAgentSession>[2]
+        );
+        const request: ForgeExecutionRequest = createExecutionRequest({
+            requestId: 'req_network_replay',
+            sourceCommand: { type: 'send_user_input', input: '下载参考资料' }
+        });
+
+        await session.prompt({
+            command: { type: 'send_user_input', input: '下载参考资料' },
+            commandInput: '下载参考资料',
+            context: createContext(),
+            request
+        });
+        const approval = await session.resolveToolApproval('call_network', true, '允许联网');
+        const preview = await session.preparePrompt({
+            command: { type: 'send_user_input', input: '继续' },
+            commandInput: '继续',
+            context: createContext(),
+            request: {
+                ...request,
+                requestId: 'req_network_replay_preview',
+                sourceCommand: { type: 'send_user_input', input: '继续' }
+            }
+        });
+
+        const continueToolResultIndex = continueMessages.findIndex(message =>
+            Boolean(message)
+            && typeof message === 'object'
+            && (message as { role?: unknown }).role === 'toolResult'
+            && (message as { toolCallId?: unknown }).toolCallId === 'call_network'
+        );
+        expect(continueToolResultIndex).toBeGreaterThan(0);
+        expect(continueMessages[continueToolResultIndex - 1]).toEqual(expect.objectContaining({
+            role: 'assistant',
+            content: [expect.objectContaining({
+                type: 'toolCall',
+                id: 'call_network',
+                name: 'bash'
+            })]
+        }));
+
+        const replayToolResultIndex = preview.branchMessages.findIndex(message =>
+            message.role === 'toolResult' && message.toolCallId === 'call_network'
+        );
+        expect(replayToolResultIndex).toBeGreaterThan(0);
+        expect(preview.branchMessages[replayToolResultIndex - 1]).toEqual(expect.objectContaining({
+            role: 'assistant',
+            content: [expect.objectContaining({
+                type: 'toolCall',
+                id: 'call_network',
+                name: 'bash'
+            })]
+        }));
+        expect(approval.resolved).toBe(true);
     });
 });

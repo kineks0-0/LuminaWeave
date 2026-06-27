@@ -103,3 +103,73 @@
 - **验证手段**: 扩展 `desktopModeRegistry.test.ts`，在 dark appearance 下断言 `classic` 与 `stage` 的 `shell.widget` 解析变量不包含浅色端点；扩展 `traditionalShellThemeStyles.test.ts`，断言 `.lw-widget-container` fallback 不包含浅色端点，先运行 focused 测试复现失败。
 - **什么起作用了**: 将 `desktop-modes/builtins/shared.ts` 的 `--lw-shell-widget-bg` / `--lw-shell-widget-border`、`stage/skins.ts` 的 `--lw-shell-widget-bg` 覆盖值，以及 `WidgetPanelHost.vue` 的 `.lw-widget-container` fallback 都改为基于 `--lw-bg-elevated` / `--lw-bg-surface` / `--lw-border-base` 的主题 token。`npm run test -- --run src/desktop-modes/core/__tests__/desktopModeRegistry.test.ts src/components/__tests__/WorkspaceStageStripStyles.test.ts src/shell/__tests__/freeformShellThemeStyles.test.ts src/components/__tests__/PanelHeaderThemeStyles.test.ts src/shell/__tests__/traditionalShellThemeStyles.test.ts` 通过 5 个测试文件、14 个用例；`npm run type-check` 通过。
 - **失败尝试**: 首次 focused 测试复现了 `shell.widget` 解析值和 `.lw-widget-container` fallback 同时包含 `rgba(255, 255, 255, 0.92)` 与 `white`；未继续只修组件 fallback，而是同步修正 surface skin 变量源。
+
+## 13. Forge VFS/Git 持久化测试收尾修复 (2026-06-19)
+- **错误消息**: `npm run test` 中 `ForgeWorkspaceVersionManager.test.ts` 引用已移除的 `ForgeWorkspaceVersionManager`；`ForgeSkillRegistry.test.ts` 发现 `forge-project-writer` 注册描述和 `SKILL.md` frontmatter 描述不一致；`ResourceRuntime.test.ts` 中 `/workspaces` 写入、cwd 保持、补全相关用例返回非零退出码。
+- **根本原因假设**: 版本事实源迁移到 Git 后旧版本管理测试未删除；`forge-project-writer` 的资源 frontmatter 未同步为新描述；`just-bash` 的 `MountableFs` 会把 `/workspaces/forge/...` 转成挂载内 `/forge/...` 调用子文件系统，`WorkspaceBashFs` 在权限检查和底层 FS 路径传递时没有统一处理挂载内路径与完整挂载路径。
+- **验证手段**: 删除旧版本管理测试、同步 `SKILL.md` 描述、让 `WorkspaceBashFs` 先归一化挂载内路径再执行权限检查和文件操作，然后运行 focused 测试与完整验证命令。
+- **什么起作用了**: 补齐 `binary` encoding 支持、测试隔离文件系统名、Git 版本展示类型收窄和 runtime store 类型收窄后，`npm run test` 通过 159 个测试文件、786 个用例，2 个用例跳过；`npm run type-check` 通过；`cargo check` 通过。
+- **失败尝试**: 首次 focused 测试暴露 `unsupported encoding: binary`；改用 lightning-fs `wipe` 做测试隔离会触发 Web Locks 的异步 `AbortError`，随后改为给测试分配独立文件系统名。
+
+## 14. Tauri dev 存储占用 SQL 权限修复 (2026-06-19)
+- **错误消息**: `tauri run dev` 中加载存储占用时出现 `sql.load not allowed. Permissions associated with this command: sql:allow-load, sql:default`，并导致 `Failed to save independent JSON`。
+- **根本原因假设**: Tauri SQL 插件已经注册，但 `src-tauri/capabilities/default.json` 未给主窗口授予 SQL capability；`TauriSqliteExtensionStore` 首次访问会执行 `Database.load`、建表、建索引和写入，因此至少需要 `sql:default` 与 `sql:allow-execute`。
+- **验证手段**: 新增 `TauriSqliteCapability.test.ts` 直接读取默认 capability 并断言 SQL runtime store 所需权限，先运行 focused 测试复现失败。
+- **什么起作用了**: 在默认 capability 中加入 `sql:default` 和 `sql:allow-execute`，让 Tauri dev 环境允许 SQLite runtime store 加载和写入；`npm run test -- --run src/api/core/__tests__/hal/TauriSqliteCapability.test.ts`、`npm run test`、`npm run type-check`、`cargo check` 均通过。
+- **失败尝试**: 首次 focused 测试确认默认权限仅包含 `core:default` 与 `opener:default`。
+
+## 15. Forge Agent bash 网络授权与 curl 本地 I/O 修复 (2026-06-19)
+- **错误消息**: Forge Agent 的 `bash` 联网命令需要模型先手动调用 `lw-permission request network`，缺少 grant 时会直接把授权失败作为工具失败返回；`network-request` 模式还会拒绝 `curl -o`、`curl -T` 等本地文件输入输出参数。
+- **根本原因假设**: Forge pi 工具桥接层只复用了 shell 内部权限命令，没有在 Agent runtime 与 Forge UI 之间建立即时授权事件；同时 `ForgeWorkspaceSearchShell` 把 `curl` 的本地文件 I/O 当作绕过写入服务的风险统一拦截，未考虑 semantic bash fs 的 `writeLog` 已能回流到 `ForgeWorkspaceWriteService`。
+- **验证手段**: 先新增 focused 测试，覆盖 `curl -o` 写入、无 grant 时返回 pending approval、Composer surface 与 Review surface 分流，再实施单一修复。
+- **什么起作用了**: 新增 Composer surface 授权投影、`ShellPermissionRequest` 绑定、批准后恢复执行原始 `bash` 命令、拒绝后不执行网络请求，并移除 `network-request` 下对 `curl` 本地文件 I/O 参数的拒绝逻辑；`npm run test -- --run src/api/core/__tests__/forge/ForgeWorkspaceSearchShell.test.ts src/api/core/__tests__/forge/ForgePiToolBridge.test.ts src/api/core/__tests__/forge/ForgePiAgentSession.test.ts src/stores/__tests__/useForgeStore.test.ts` 通过 4 个测试文件、48 个用例；完整 `npm run test` 通过 160 个测试文件、795 个用例，2 个用例跳过；`npm run type-check` 通过。
+- **失败尝试**: 首次 focused 测试复现了旧行为：`curl -o` 仍被 `curl local file input/output is blocked` 拦截，`useForgeStore` 缺少 Composer/Review surface 分流，`ForgePiToolBridge` 未返回 pending network approval；后续将直接调用 bridge approval 的测试修正为先注册 pending approval，保持 pending 投影由 `ForgePiAgentSession` 负责。
+
+## 16. Forge Composer 网络授权域名记忆与线程错位修复 (2026-06-19)
+- **错误消息**: Forge Agent 网络授权批准后缺少“后续请求都允许”的明确动作；切换到新协作线程后，旧线程 pending 网络授权仍可能被 Composer 取为第一个授权项，点击同意会把 UI 投影恢复到旧线程；`curl ... 2>&1` 在 `network-request` 模式下被误报为 `redirection is blocked in network-request shell`。
+- **根本原因假设**: Composer 授权队列只按 `displaySurface: 'composer'` 过滤，没有绑定当前 `forgeProjectId / conversationId / sessionId`；`ForgePiToolBridge.resolveToolApproval()` 批准 shell permission 时没有区分单次授权和持久同域名 grant；`ForgeWorkspaceSearchShell` 的重定向检测把文件描述符复制 `2>&1` 与文件写重定向混为一类。
+- **验证手段**: 先新增 focused 测试，覆盖 `2>&1` 诊断重定向、`single_use` grant 过期、`domain` grant 复用、Composer pending approval 按当前协作线程过滤。
+- **什么起作用了**: `ShellPermissionService.expireGrant()` 支持单次授权执行后失效；Composer 授权按钮拆分为“允许一次”和“后续都允许”；pending approval 带上 `forgeProjectId / conversationId / sessionId` 并由 `composerToolApprovalsForSession()` 过滤当前线程；重定向解析允许 `2>&1` 这类文件描述符复制但继续拦截文件写重定向。`npm run test -- --run src/api/core/__tests__/forge/ForgeWorkspaceSearchShell.test.ts src/api/core/__tests__/forge/ForgePiToolBridge.test.ts src/stores/__tests__/useForgeStore.test.ts` 通过 3 个测试文件、44 个用例；approval/runtime 邻近回归 6 个测试文件、24 个用例通过；完整 `npm run test` 通过 160 个测试文件、798 个用例，2 个用例跳过；`npm run type-check` 通过。
+- **失败尝试**: 首次 focused 测试复现了预期旧行为：`composerToolApprovalsForSession` 不存在，`2>&1` 被误判为写重定向，`single_use` 批准后 grant 仍保留；域名 grant 用例首次断言了不存在的 `AgentToolResult.text` 字段，随后按真实 `content[].text` 结构修正测试。
+
+## 17. Forge 项目中心项目菜单缺少新建对话与菜单裁剪修复 (2026-06-19)
+- **错误消息**: 对话管理 / 项目中心中项目右键菜单缺少“新建对话”；增加菜单项后菜单仍可能被项目树滚动容器裁剪。
+- **根本原因假设**: `buildForgeProjectCenterMenu('project')` 没有暴露项目级 `create-thread` 动作，`ForgeSessionBrowser.vue` 也没有把该动作转发到现有 `createWorkspaceThread(projectId)` 创建链路；同时 `.project-tree` 使用 `overflow: auto`，绝对定位的 `.project-menu` 会被该滚动容器裁切。
+- **验证手段**: 先扩展 `forgeProjectCenterPresentation.test.ts`，断言项目菜单必须包含 `create-thread / 新建对话`，并断言项目树菜单容器不再使用 `overflow: auto` 裁剪菜单。
+- **什么起作用了**: 在项目菜单模型中加入 `create-thread`，在 `ForgeSessionBrowser.vue` 中映射 `Plus` 图标并调用 `store.createWorkspaceThread(row.projectId)` 后刷新 / 选中新线程；将 `.project-tree` 调整为 `overflow: visible`，由外层项目中心滚动区域承接滚动。`npm run test -- --run src/plugins/forge/__tests__/forgeProjectCenterPresentation.test.ts` 通过 1 个测试文件、3 个用例；`npm run test -- --run src/stores/__tests__/useSessionIndexStore.test.ts` 通过 1 个测试文件、6 个用例；`npm run type-check` 通过。
+- **失败尝试**: 首次扩展后的 focused 测试复现了旧行为：项目菜单数组缺少 `create-thread`，`.project-tree` 样式仍包含 `overflow: auto`。
+
+## 18. Forge 网络授权批准后 tool result 孤立消息修复 (2026-06-19)
+- **错误消息**: 联网授权点击同意后，模型请求返回 `400 Messages with role 'tool' must be a response to a preceding message with 'tool_calls'`。
+- **根本原因假设**: `ForgePiAgentSession` 在 pending approval 阶段只把 `approval_needed` 写入会话树，tool-only assistant 消息因为没有最终文本没有进入 `piSession`；批准后如果 in-memory agent state 中找不到原始 assistant `toolCall`，`replacePendingApprovalWithToolResult()` 会直接追加 `toolResult`，形成 OpenAI 不接受的孤立 tool 消息。即使当轮未失败，后续从 `piSession` 重放也可能只有 `toolResult` 而没有前置 assistant `toolCall`。
+- **验证手段**: 扩展 `ForgePiAgentSession.test.ts`，模拟 bash 网络请求返回 pending approval、用户批准后继续，并断言继续前的 agent messages 与后续 Prompt Preview 的 branch messages 都保持 `assistant toolCall -> toolResult` 配对。
+- **什么起作用了**: 在 `tool_execution_start` 时为 tool call 写入可重放的 assistant tool-call message；批准恢复时若 in-memory agent state 缺少匹配 tool call，则从会话树取回该 assistant tool-call message 并插入到真实 `toolResult` 前；找不到配对时停止自动续写，避免继续发出非法 provider 请求。`npm run test -- --run src/api/core/__tests__/forge/ForgePiAgentSession.test.ts` 通过 1 个测试文件、8 个用例；`npm run type-check` 通过。
+- **失败尝试**: 首次新增 focused 测试复现了旧行为：批准后继续前 `toolResult` 位于消息列表第 0 条，没有任何前置 assistant tool call；首次类型检查还发现新增测试 fixture 缺少完整 `ForgeExecutionRequest` 字段，随后按真实 request 结构补齐。
+
+## 19. Forge 网络授权等待不再作为非失败工具结果返回 (2026-06-24)
+- **错误消息**: Forge Agent `bash(network-request)` 缺少 network grant 时，等待用户批准被编码为非失败的 `approval_pending` 工具结果；用户批准后应当执行原始工具并继续 Agent，而不是把“等待授权”作为模型可见工具结果语义。
+- **根本原因假设**: 授权等待属于 tool-call 前置策略控制流，但旧实现把它放在 `bash.execute()` 的返回值里，再由 `ForgePiAgentSession` 从 `tool_execution_end` 反解析为 `tool_approval_needed`。这会让权限等待、工具结果和模型消息配对三种语义耦合。
+- **验证手段**: 先改 focused 测试，断言 `ForgePiToolBridge.requestToolApproval()` 在工具执行前创建 Composer 网络授权请求；`ForgePiAgentSession` 通过 Agent `beforeToolCall` 投影 `tool_approval_needed`，并且不会产出对话侧 `tool_result`。
+- **什么起作用了**: 将网络授权预检移到 `beforeToolCall`：Bridge 负责创建 `ShellPermissionRequest` 并缓存原始 tool call，Session 负责投影 `tool_approval_needed`，等待授权期间吞掉 pi-agent-core 因 block 生成的临时 toolResult；批准后 `resolveToolApproval()` 继续执行原始 `bash` 并把真实 `toolResult` 接回对应 assistant tool call。`npm run test -- --run src/api/core/__tests__/forge/ForgePiToolBridge.test.ts src/api/core/__tests__/forge/ForgePiAgentSession.test.ts` 通过 2 个测试文件、26 个用例；完整 `npm run test` 通过 160 个测试文件、800 个用例，2 个用例跳过；`npm run type-check` 通过。
+- **失败尝试**: 首次红灯测试确认旧实现没有 `requestToolApproval()`，且 Session 没有 `beforeToolCall` 授权入口；首次类型检查暴露 hook 返回类型、授权事件联合类型收窄和 `execute` 入参类型不匹配，随后按真实 pi-agent-core API 修正。
+
+## 20. Forge 网络授权等待期间提前完成回复修复 (2026-06-24)
+- **错误消息**: Forge Agent 发起 `bash(network-request)` 后，Composer 已显示网络授权卡片，但 Agent 仍提前结束本轮并回复“网络请求正在等待你的授权”等文本，表现为跳过联网结果继续 loop。
+- **根本原因假设**: `beforeToolCall` block 只让 pi-agent-core 的工具循环以 `terminate` 结束，但 `ForgePiAgentSession.prompt()` 在 `agent.prompt()` 返回后仍按普通完成路径解析最后一个 assistant message，并发出空 `stream_done / turn_end / agent_end`；随后 `ForgeRuntimeActionController.dispatchWorkspaceCommand()` 在 finally 中看到 `isGenerating` 仍为 true，又强制回收生成态和 running operation。
+- **验证手段**: 扩展 `ForgePiAgentSession.test.ts`，断言 pending network approval 后不会产生 `stream_done`；扩展 `ForgeRuntimeActionController.test.ts`，断言 Composer 授权待处理时 dispatch 返回后保留生成态和运行中操作，拒绝授权时再清理生成态。
+- **什么起作用了**: `ForgePiAgentSession` 增加 pending approval wait 记录，授权待处理时只返回 session snapshot，不投影最终 assistant 回复、不发 `stream_done`；`ForgeRuntimeActionController` 增加 Composer pending 检查，dispatch 收尾时保留 `isGenerating` 和 running operation，拒绝授权时显式清理。`npm run test -- --run src/api/core/__tests__/forge/ForgePiToolBridge.test.ts src/api/core/__tests__/forge/ForgePiAgentSession.test.ts src/api/core/__tests__/forge/ForgeRuntimeOrchestrator.pi-core.test.ts src/api/core/__tests__/forge/ForgePiRuntimeClient.test.ts src/plugins/forge/__tests__/ForgeRuntimeActionController.test.ts src/stores/__tests__/useForgeStore.test.ts` 通过 6 个测试文件、50 个用例。
+- **失败尝试**: 首次 focused 测试复现了 pending approval 后仍然出现空 `stream_done`，以及 dispatch finally 强制把 `isGenerating` 设为 false；随后补充测试发现 finally 中直接 `return` 会吞掉原始 dispatch 返回值，改为条件分支后通过。
+
+## 21. Forge Composer 网络授权范围与关闭时机修复 (2026-06-24)
+- **错误消息**: 用户点击“同意”后 Composer 授权面板仍停留到真实 curl 执行完成；“允许一次”不符合期望，实际需要批准一次后同域名自动通过，并提供“后续都允许”批准所有后续网络请求。
+- **根本原因假设**: `ForgeToolApprovalGrantMode` 只表达 `single_use / domain`，`ShellPermissionScope` 也只能表达 `urlPrefix`；Composer 调用 `resolveToolApproval()` 时等待 runtime resume 完成后才更新本地 approval 状态。
+- **验证手段**: 扩展 `ForgePiToolBridge.test.ts`，断言 `grantMode: 'all_network'` 会保留 `allNetwork` network grant，并允许不同域名后续请求通过；扩展 `ForgeRuntimeActionController.test.ts`，断言本地 approval resolution 发生在等待 runtime resume 之前。
+- **什么起作用了**: 为 `ShellPermissionScope` 增加 `allNetwork`，让 `ShellPermissionService` 与 `ShellNetworkPolicyService` 识别全局 network grant；将 Composer 主批准按钮改为“允许此域名”，第二按钮改为 `grantMode: 'all_network'`；`ForgeRuntimeActionController` 在 await runtime 前先调用 store 本地 resolve，点击批准或拒绝后立即关闭授权覆盖态。`npm run test -- --run src/api/core/__tests__/forge/ForgePiToolBridge.test.ts src/plugins/forge/__tests__/ForgeRuntimeActionController.test.ts` 通过 2 个测试文件、25 个用例；授权邻近回归 `npm run test -- --run src/api/core/__tests__/forge/ForgePiToolBridge.test.ts src/api/core/__tests__/forge/ForgePiAgentSession.test.ts src/api/core/__tests__/forge/ForgeRuntimeOrchestrator.pi-core.test.ts src/api/core/__tests__/forge/ForgePiRuntimeClient.test.ts src/plugins/forge/__tests__/ForgeRuntimeActionController.test.ts src/stores/__tests__/useForgeStore.test.ts` 通过 6 个测试文件、52 个用例；`npm run type-check` 通过；完整 `npm run test` 通过 160 个测试文件、804 个用例，2 个用例跳过。
+- **失败尝试**: 首次 focused 测试复现了旧行为：`all_network` 批准后 grant scope 仍为同域名 `urlPrefix`，ActionController 没有在等待 runtime promise 前调用本地 resolve。
+
+## 22. Forge 网络授权批准后续跑流式输出阻塞问题记录 (2026-06-27)
+- **错误消息**: Forge Agent 发起联网搜索并等待 Composer 授权时，点击同意后授权卡片会关闭，但后续模型回复没有边生成边更新 UI，而是等 `curl` 和 `agent.continue()` 整体完成后才一次性更新。
+- **根本原因假设**: 普通 `runTurn` 路径通过 `ForgeRuntimeOrchestrator.runPiRequest()` 给 `runPiTurn` 传入 `onRuntimeEvent`，`stream_chunk` 会实时进入 `handleRuntimeEvent()` 和 `applyRuntimeEffects()`；授权批准路径通过 `ForgeRuntimeOrchestrator.resolveToolApproval()` 直接 await `resolvePiToolApproval()`，没有为 approval continuation 传入实时事件回调。`ForgePiAgentSession.resolveToolApproval()` 在 `agent.continue()` 中会产生 `stream_chunk`，但续跑时 `eventSink.onRuntimeEvent` 为空，事件只进入返回数组，等续跑完成后才由 Orchestrator 批量 apply。
+- **验证手段**: 代码审计确认 `ForgePiRuntimeClientTurnInput` / `ForgePiCoreRuntimeTurnInput` 有 `onRuntimeEvent`，但 approval result 接口没有对应 live event 通道；`ForgePiAgentSession.handleAgentEvent()` 会在 message update 时生成 `stream_chunk` 并调用 `input.onRuntimeEvent?.()`，而 approval continuation 设置的 `eventSink` 没有该回调。
+- **什么起作用了**: 暂未修复。本条先记录问题与断裂点，后续应补 approval continuation 的 live event pipeline，并增加回归测试断言批准后 `stream_chunk` 在 `resolveToolApproval()` promise settle 前已到达 UI/store。
+- **失败尝试**: 未尝试代码修复；本次仅完成根因分析和文档记录。

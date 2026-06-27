@@ -601,12 +601,12 @@ Forge 目前应统一为三类输出：
 
 - `luminaweave-extension/src/plugins/forge/CardMakerPanel.vue`
   - 从单页扩展为 `workspace / session-browser` 两页状态
-- `luminaweave-extension/src/plugins/forge/ForgeSessionBrowser.vue`
-  - 新增会话选择页
+- `luminaweave-extension/src/plugins/forge/project/ForgeSessionBrowser.vue`
+  - 项目中心单列资源树，按项目展开协作线程
+- `luminaweave-extension/src/plugins/forge/project/forgeProjectCenterPresentation.ts`
+  - 项目中心行与菜单展示模型
 - `luminaweave-extension/src/plugins/forge/ForgeSessionToolbar.vue`
   - 新增顶部会话工具条
-- `luminaweave-extension/src/plugins/forge/ForgeSessionCard.vue`
-  - 新增会话列表项卡片
 - `luminaweave-extension/src/plugins/forge/CardMakerStore.ts`
   - 收敛为当前激活 Forge 工作会话详情 store
 

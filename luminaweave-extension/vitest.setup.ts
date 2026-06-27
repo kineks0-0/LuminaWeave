@@ -1,4 +1,6 @@
 import { vi } from 'vitest';
+import Dexie from 'dexie';
+import { IDBKeyRange, indexedDB } from 'fake-indexeddb';
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -17,6 +19,10 @@ const localStorageMock = (() => {
 const g = globalThis as unknown as Record<string, unknown>;
 
 g.localStorage = localStorageMock;
+g.indexedDB = indexedDB;
+g.IDBKeyRange = IDBKeyRange;
+Dexie.dependencies.indexedDB = indexedDB;
+Dexie.dependencies.IDBKeyRange = IDBKeyRange;
 
 // Mock window and SillyTavern globals
 g.window = {

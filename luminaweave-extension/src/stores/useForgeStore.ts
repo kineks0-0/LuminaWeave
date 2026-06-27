@@ -76,7 +76,7 @@ export const useForgeStore = defineStore('forge', {
         // Forge 模型请求调试 trace（瞬态，不持久化）
         modelRequestTraces: [] as ForgeModelRequestTrace[],
         activeModelRequestTraceId: null as string | null,
-  // Legacy staging queues for manual export/publish flows; AI project writes now use workspace_patch directly.
+  // Legacy staging queues for manual export/publish flows; AI project writes now use project VFS plus Git history.
         toolApprovals: [] as ForgeToolApprovalRequest[],
         // Forge pi-core runtime tree/context state（由前端 pi-agent-core 浏览器适配层派生）
         piSessionTree: [] as ForgePiTreeNode[],
@@ -94,7 +94,23 @@ export const useForgeStore = defineStore('forge', {
 
     getters: {
         pendingToolApprovals: (state): ForgeToolApprovalRequest[] =>
-            state.toolApprovals.filter(item => item.status === 'pending')
+            state.toolApprovals.filter(item => item.status === 'pending'),
+        composerToolApprovals: (state): ForgeToolApprovalRequest[] =>
+            state.toolApprovals.filter(item => item.status === 'pending' && item.displaySurface === 'composer'),
+        composerToolApprovalsForSession: (state): ((input: {
+            forgeProjectId?: string | null;
+            conversationId?: string | null;
+        }) => ForgeToolApprovalRequest[]) =>
+            (input) => state.toolApprovals.filter(item =>
+                item.status === 'pending'
+                && item.displaySurface === 'composer'
+                && item.forgeProjectId === (input.forgeProjectId ?? null)
+                && item.conversationId === (input.conversationId ?? null)
+            ),
+        reviewToolApprovals: (state): ForgeToolApprovalRequest[] =>
+            state.toolApprovals.filter(item =>
+                item.status === 'pending' && (item.displaySurface ?? 'review') === 'review'
+            )
     },
 
     actions: {
@@ -260,7 +276,13 @@ export const useForgeStore = defineStore('forge', {
                 ...approval,
                 status: approval.status || 'pending',
                 resolvedAt: approval.resolvedAt ?? null,
-                message: approval.message ?? null
+                message: approval.message ?? null,
+                displaySurface: approval.displaySurface ?? 'review',
+                approvalKind: approval.approvalKind ?? 'tool',
+                shellPermissionRequestId: approval.shellPermissionRequestId ?? null,
+                forgeProjectId: approval.forgeProjectId ?? null,
+                conversationId: approval.conversationId ?? null,
+                sessionId: approval.sessionId ?? null
             };
 
             if (existingIndex >= 0) {

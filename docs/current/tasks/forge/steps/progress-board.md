@@ -48,10 +48,9 @@
 - 已支持：
   - Forge 工作会话切换
   - 新建 Forge 工作会话
-  - 项目中心右侧显示选中项目的协作线程
+  - 项目中心以单列资源树显示 Forge 项目与选中项目下的协作线程
   - Forge 工作会话重命名
   - 当前参考聊天会话解绑
-  - 最近恢复工作会话快捷入口
 - 工作台自动保存已改为防抖保存，并在卸载时补一次最终持久化
 - Forge 工作会话已补 `sessionChatId` 持久化，恢复旧会话时生成会话标识不再漂移
 - Forge 工作会话在切换/新建/重置前会先做最终保存，降低防抖窗口内丢失最新修改的风险
@@ -65,7 +64,7 @@
   - 工作台启动与会话索引刷新会优先读取统一会话文档，再按需回填本地存根
 - Forge 已开始迁移为项目化主语：
   - `forgeProjectId / conversationId / workspacePath` normalize 后作为长期项目容器字段使用
-  - 项目中心主列表显示 Forge 项目，右侧显示选中项目的协作线程
+  - 项目中心以单列资源树显示 Forge 项目，选中项目后在项目下方展开协作线程
   - 顶部工具栏、辅助区和审阅空态改为围绕当前项目表达
   - 传统桌面展开态已取消重复 hero/topbar，并在重置会话左侧提供“工作区”二级菜单入口
 - Forge 项目 VFS 数据层已接通第一阶段：
@@ -108,9 +107,9 @@
 - `luminaweave-extension/src/plugins/forge/CardMakerStore.ts`
 - `luminaweave-extension/src/plugins/forge/ForgePromptPreview.vue`
 - `luminaweave-extension/src/plugins/forge/ForgeInlineTrace.vue`
-- `luminaweave-extension/src/plugins/forge/ForgeSessionBrowser.vue`
+- `luminaweave-extension/src/plugins/forge/project/ForgeSessionBrowser.vue`
+- `luminaweave-extension/src/plugins/forge/project/forgeProjectCenterPresentation.ts`
 - `luminaweave-extension/src/plugins/forge/ForgeSessionToolbar.vue`
-- `luminaweave-extension/src/plugins/forge/ForgeSessionCard.vue`
 - `luminaweave-extension/src/stores/useSessionIndexStore.ts`
 - `luminaweave-extension/src/api/core/ForgeSessionRepository.ts`
 - `luminaweave-extension/src/api/core/ChatSessionIndexService.ts`
@@ -215,6 +214,7 @@
 - [x] 评估是否需要“最近恢复的 Forge 会话”入口
 - [x] 将 Forge 会话页迁移为项目中心
 - [x] 将项目中心右侧从历史聊天来源改为选中项目的协作线程
+- [x] 将项目中心改为 Codex 风格单列资源树，并移除旧双列卡片浏览器
 - [x] 传统桌面展开态 Forge 视图去重内部 hero/topbar，并新增工作区二级菜单
 - [x] 传统桌面展开态补回紧凑项目标题，并恢复辅助视图位置菜单与辅助按钮 toggle 语义
 - [x] 增加项目线程派生回归测试，覆盖 legacy 单线程项目与选中线程消失后的最近项目 fallback
@@ -416,7 +416,8 @@
 - Review Gate 已接入 transient approval 队列：
   - `tool_approval_needed` 会生成 `upsert_tool_approval` effect，并进入 `useForgeStore.toolApprovals`
   - `tool_approval_resolved` 会生成 `resolve_tool_approval` effect
-  - `ForgeReviewPanel` 可显示 pending 工具授权并标记批准/拒绝
+  - `ForgeReviewPanel` 只消费 `displaySurface: 'review'` 的 pending 工具授权并标记批准/拒绝
+  - `displaySurface: 'composer'` 的网络授权由 Forge Composer 输入区覆盖态消费，避免进入 Review 主流程
 - AI SDK 原生 approval request 已接线：
   - `writeFile / editFile / stageEntry` 声明 `needsApproval: true`
   - `bash(project-write-request)` 按参数触发 approval
@@ -485,8 +486,9 @@
 - `useForgeStore` 已补 `piLoadedSkills`，继续保存 pi session tree、active node、context bundle 和 loaded extensions。
 - Forge 设置项已从“服务端 pi-native”语义改为“前端 pi-agent-core Runtime”。
 - 当前仍未完成：
-  - pi approval resume 尚未接入；第一阶段只把写入工具转为 `tool_approval_needed`。
   - Debug Panel / Prompt Preview 尚未显示完整 pi context bundle 与 Graph guidance 差异。
+- 后续补充：
+  - pi approval resume 已覆盖写入工具与 Forge Composer 网络授权路径；`bash(network-request)` 缺少 grant 时会生成 `displaySurface: 'composer'` 的 pending approval，批准后执行原始命令并继续 Agent turn。
 - 已验证：
   - `npx vitest run src/api/core/__tests__/ForgePiRuntimeClient.test.ts src/api/core/__tests__/ForgePiResourceLoader.test.ts src/api/core/__tests__/ForgePiToolBridge.test.ts src/api/core/__tests__/ForgePiCoreRuntime.test.ts src/api/core/__tests__/ForgePiDependencyGuard.test.ts src/api/core/__tests__/ForgeRuntimeOrchestrator.pi-core.test.ts src/stores/__tests__/useForgeStore.test.ts`
   - `npm run type-check -- --pretty false`

@@ -341,15 +341,6 @@ const resolvePiFeedOperationPresentation = (entry: ForgePiSessionEntry): {
             detail: stringifyPiPayload(entry.payload)
         };
     }
-    if (entry.kind === 'workspace_patch' || entry.kind === 'workspace_checkpoint') {
-        return {
-            operationKind: 'workspace_write',
-            status: 'completed',
-            title: entry.kind === 'workspace_patch' ? '工作区变更记录' : '工作区版本检查点',
-            summary: entry.summary,
-            detail: stringifyPiPayload(entry.payload)
-        };
-    }
     return {
         operationKind: 'system',
         status: 'completed',

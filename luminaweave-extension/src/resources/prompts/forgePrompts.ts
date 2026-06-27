@@ -37,6 +37,9 @@ import _workflowSnapshot from './forge-workflow-snapshot.md?raw';
 import _refNeeds from '../forge-agent/presets/forge-main-default/skills/reference-needs-capture/SKILL.md?raw';
 import _refAntiCliche from '../forge-agent/presets/forge-main-default/skills/reference-anti-cliche/SKILL.md?raw';
 import _refXP from '../forge-agent/presets/forge-main-default/skills/reference-xp-capture/SKILL.md?raw';
+import _creationStyleGuide from '../forge-agent/presets/forge-main-default/skills/creation-style-guide/SKILL.md?raw';
+import _outputVoiceGuard from '../forge-agent/presets/forge-main-default/skills/output-voice-guard/SKILL.md?raw';
+import _nsfwWritingIntensify from '../forge-agent/presets/forge-main-default/skills/nsfw-writing-intensify/SKILL.md?raw';
 
 // ── 静态系统提示（无变量，直接使用）─────────────────────────────────────
 
@@ -52,6 +55,9 @@ export const FORGE_REASONING_PROMPT = _reasoning;
 export const FORGE_MAIN_REFERENCE_NEEDS_CAPTURE = _refNeeds;
 export const FORGE_MAIN_REFERENCE_ANTI_CLICHE = _refAntiCliche;
 export const FORGE_MAIN_REFERENCE_XP = _refXP;
+export const FORGE_MAIN_CREATION_STYLE_GUIDE = _creationStyleGuide;
+export const FORGE_MAIN_OUTPUT_VOICE_GUARD = _outputVoiceGuard;
+export const FORGE_MAIN_NSFW_WRITING_INTENSIFY = _nsfwWritingIntensify;
 
 export function renderForgeUiDslPrompt(vars: {
     syntaxLabel: string;

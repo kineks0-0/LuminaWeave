@@ -198,7 +198,7 @@ describe('ForgeProjectSemanticVfsService', () => {
         expect(paths.some(path => /^\.\/\.forge\/(PLANNER|CONVERSATION|ANALYST|EXECUTOR)\.md$/.test(path))).toBe(false);
         const agentsContent = entries.find(entry => entry.path === './AGENTS.md')?.content ?? '';
         expect(agentsContent).toContain('工作契约');
-        expect(agentsContent).toContain('workspace_patch');
+        expect(agentsContent).toContain('Git 版本历史');
         expect(agentsContent).not.toContain('基础身份');
         expect(entries.find(entry => entry.path === './.forge/agent/SYSTEM.md')?.content).toContain('Forge');
         expect(entries.find(entry => entry.path === './.forge/agent/CONVERSATION.md')?.content).toContain('Forge');

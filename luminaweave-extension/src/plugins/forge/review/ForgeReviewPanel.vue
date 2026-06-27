@@ -2,7 +2,7 @@
   <ForgeAuxPanelShell
     title="审阅中心"
     kicker="Review Queue"
-    :subtitle="`工具授权 ${forgeStore.pendingToolApprovals.length} 条，待审 ${forgeStore.stagingArea.length} 条，写回准备 ${forgeStore.commitReadyEntries.length} 条。`"
+    :subtitle="`工具授权 ${forgeStore.reviewToolApprovals.length} 条，待审 ${forgeStore.stagingArea.length} 条，写回准备 ${forgeStore.commitReadyEntries.length} 条。`"
   >
     <div v-if="isEmpty" class="review-empty">
       <strong>当前没有待审内容</strong>
@@ -10,13 +10,13 @@
     </div>
 
     <div v-else class="review-stack">
-      <section v-if="forgeStore.pendingToolApprovals.length > 0" class="tool-approval-list">
+      <section v-if="forgeStore.reviewToolApprovals.length > 0" class="tool-approval-list">
         <div class="tool-approval-header">
           <span>工具授权</span>
-          <span>{{ forgeStore.pendingToolApprovals.length }}</span>
+          <span>{{ forgeStore.reviewToolApprovals.length }}</span>
         </div>
         <article
-          v-for="approval in forgeStore.pendingToolApprovals"
+          v-for="approval in forgeStore.reviewToolApprovals"
           :key="approval.toolCallId"
           class="tool-approval-card"
         >
@@ -72,7 +72,7 @@ import type { ForgeToolApprovalRequest } from '../../../types/ForgeRuntimeTypes.
 const forgeStore = useForgeStore();
 const cardMakerStore = useCardMakerStore();
 const isEmpty = computed(() =>
-  forgeStore.pendingToolApprovals.length === 0 &&
+  forgeStore.reviewToolApprovals.length === 0 &&
   forgeStore.stagingArea.length === 0 &&
   forgeStore.commitReadyEntries.length === 0
 );

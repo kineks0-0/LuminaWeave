@@ -128,7 +128,7 @@
    - [done] 构建警告处理：为浏览器构建显式 alias `node:zlib` 到本地 shim，避免 `just-bash` 内置 gzip/rg 相关路径触发 Vite externalized Node module 警告；浏览器端调用 `gunzipSync` 会得到明确 unsupported error。
    - [done] Resource-backed FS 写入语义补强：`/sources/local` 可通过 just-bash `>`、`tee`、`cp` 写入完整 JSON，缺失资源路径会按 path 中的 source/type/id 创建本地资源；`/sources/st` 仍返回 Resource Write Policy required；资源 mount 的 `>>/rm/mv/mkdir/link/symlink` 首版返回结构化 unsupported/readonly/policy/grant/invalid-json 错误，不静默制造第二资源状态。
    - [done] Shell command manual 合流：新增 `ShellCommandManual`，记录 Lumina 推荐的 just-bash 命令、`lw-permission`、`lw-help`、路径、权限与 jq 语义说明；Agent tool prompt 与终端 `lw-help` 共用同一份 metadata。just-bash 原生 `help` 保留为 bash 内建帮助，不覆盖。
-   - [done] Network policy 最小闭环：新增 `ShellNetworkPolicyService`，统一 network allow-list、method 检查与 Agent grant 检查；`lw-permission request network ...` 只能申请 allow-list 内 URL 前缀；Agent `curl` 必须同时满足 allow-list 与 network grant，未配置网络、URL 不在 allow-list、缺少 grant 会给出不同错误原因。
+   - [done] Network policy 最小闭环：新增 `ShellNetworkPolicyService`，统一 network policy、method 检查与 Agent grant 检查；共享用户终端默认使用 just-bash 全网 network policy 暴露 `curl`；Agent `curl` 必须显式进入网络模式并获得 network grant，Forge 缺少 grant 时由 Composer 覆盖态请求用户授权；`network-request` 模式允许 `curl` 文件参数，但文件输入输出仍停留在挂载工作区和写入服务链路内。未配置网络、URL 不在策略范围、缺少 grant 会给出不同错误原因。
    - [done] 项目级 workspace 持久化：新增 `ShellWorkspaceService`，共享 `/workspaces` 的 just-bash FS，写入后快照到 `lumina.resource-runtime / shell-workspaces`；Forge Agent 多会话共享 `/workspaces/forge/<projectId>`，重建 runtime 后仍能读取已保存文件。
    - [done] Forge 项目绑定：`ForgeWorkspaceSession`、Conversation `pluginState.forge` 与 `ForgeSessionRepository` 保存 `forgeProjectId / conversationId / workspacePath`，并在保存会话时登记 `conversationId -> forgeProjectId`。
    - [done] Agent 权限审批 UI：`ShellPermissionService` 增加订阅事件和 reject reason；`TerminalRoot.vue` 展示 pending permission requests 与 active grants，支持批准、拒绝、撤销。
@@ -183,13 +183,13 @@
    - 进展：新增 `ShellCommandManual`，Agent `getToolPrompt()` 与终端 `lw-help` 共用命令 metadata；metadata 覆盖 `cat/cp/mv/rm/mkdir/touch/tee/ls/tree/find/grep/jq/curl/lw-permission/lw-help`，并明确 just-bash `jq` 不是旧 VFS JSONPath `jq`。just-bash 原生 `help` 保留给 bash 内建命令，不覆盖。
 
 6. [done] 网络能力最小闭环。
-   - 目标：让 `curl` 只在 allow-list 与 grant 同时满足时可用。
-   - 输入：URL allow-list、HTTP method、ShellSessionRef、network grant、可选 header transform。
-   - 处理流程：用户终端或设置页管理 allow-list；Agent 只能申请 allow-list 内网络访问；Runtime 将网络配置注入 just-bash。
-   - 状态变化：网络能力默认关闭；grant 不扩大 allow-list。
+   - 目标：让用户终端可直接使用 `curl`，让 Agent `curl` 只在 network policy 与 grant 同时满足时可用。
+   - 输入：network policy、HTTP method、ShellSessionRef、network grant、可选 header transform。
+   - 处理流程：共享用户终端使用全网 network policy；Agent 只能在 `network-request` 模式下申请策略范围内网络访问；Runtime 将网络配置注入 just-bash。
+   - 状态变化：普通未配置 runtime 的网络能力仍关闭；grant 不扩大 network policy。
    - 输出：`curl` 输出、网络拒绝原因、trace。
    - 上下游影响：订阅源发现/浏览可以复用这套网络边界，但订阅源导入后仍生成本地 Resource Ref。
-   - 进展：`ShellNetworkPolicyService` 统一 network config、allow-list、method 和 grant 检查。未配置网络时 `curl` 不存在；Agent session 命中 allow-list 后仍需 `lw-permission request network <url-prefix> --reason ...` 并批准 grant；allow-list 外 request 会直接拒绝，grant 不扩大 allow-list。
+   - 进展：`ShellNetworkPolicyService` 统一 network config、策略范围、method 和 grant 检查。未配置网络时 `curl` 不存在；共享用户终端默认可用 `curl`；Forge Agent session 在 `network-request` 模式下缺少 grant 时由 `beforeToolCall` 预检生成 `tool_approval_needed`，由 Composer 覆盖态批准或拒绝，等待授权期间不返回非失败工具结果。Composer 授权支持“允许一次”和“后续都允许”；后者保留同域名 `urlPrefix` grant，使同一协作线程后续同域名请求自动通过。批准后执行原始 `curl`；`curl -o/--output/-O/--remote-name/-c/--cookie-jar/-T/--upload-file` 和读取本地文件的 form 参数允许使用，`2>&1` 文件描述符复制不作为文件写重定向处理，并通过挂载工作区和写入服务记录文件变化；策略范围外 request 会直接拒绝，grant 不扩大 network policy。
 
 ## just-bash 官方文档评估：任务 1 / 4 / 6
 
@@ -244,7 +244,7 @@
 1. 新增 `ShellNetworkPolicyService` 或扩展 `ShellPermissionService`，输出 just-bash `network.allowedUrlPrefixes/allowedMethods` 配置。
 2. `BashTerminalRuntime` 构造时注入官方 `network` 配置；Agent session 在执行前检查 grant，必要时动态收窄 allow-list。
 3. `lw-permission request network <url> --reason ...` 只允许申请已在 allow-list 内的 URL 前缀。
-4. `curl` 失败时区分三类错误：未配置网络、URL 不在 allow-list、缺少 Agent grant。
+4. `curl` 失败时区分三类错误：未配置网络、URL 不在 network policy、缺少 Agent grant。
 
 ## 任务 1/4/6 风险与未验证前提
 

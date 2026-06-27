@@ -11,8 +11,6 @@ export type ForgePiRuntimeEventType =
     | 'approval_needed'
     | 'approval_resolved'
     | 'staging_proposal'
-    | 'workspace_patch'
-    | 'workspace_checkpoint'
     | 'branch_summary'
     | 'label'
     | 'checkout';
@@ -77,6 +75,12 @@ export interface ForgePiApprovalPayload {
     reason?: string;
     message?: string | null;
     args?: unknown;
+    approvalKind?: 'network' | 'tool';
+    displaySurface?: 'composer' | 'review';
+    shellPermissionRequestId?: string | null;
+    forgeProjectId?: string | null;
+    conversationId?: string | null;
+    sessionId?: string | null;
 }
 
 export interface ForgePiStagingProposalPayload {
@@ -87,28 +91,25 @@ export interface ForgePiStagingProposalPayload {
     sourceToolCallId?: string | null;
 }
 
-export interface ForgePiWorkspacePatchChange {
+export interface ForgeWorkspaceChangedFile {
     path: string;
+    workspacePath?: string;
     kind: 'create' | 'update' | 'delete';
     beforeHash: string | null;
     afterHash: string | null;
-    beforeContentRef?: string | null;
-    afterContentRef?: string | null;
 }
 
-export interface ForgePiWorkspacePatchPayload {
-    nodeId: string;
-    changes: ForgePiWorkspacePatchChange[];
-    sourceToolCallId?: string | null;
-    restoresEntryId?: string | null;
-    restoreDirection?: 'before' | 'after' | null;
-}
-
-export interface ForgePiWorkspaceCheckpointPayload {
-    nodeId: string;
-    fileTreeHash: string;
-    stateSnapshotRef: string;
-    label?: string | null;
+export interface ForgeTurnWorkspaceWriteSummary {
+    turnId?: string;
+    sourceToolCallId: string;
+    changedFiles: ForgeWorkspaceChangedFile[];
+    writeCount: number;
+    errors: Array<{
+        path: string;
+        error: string;
+    }>;
+    gitCommitHash?: string | null;
+    gitParentHash?: string | null;
 }
 
 export interface ForgePiBranchSummaryPayload {
@@ -130,8 +131,6 @@ export type ForgePiSessionEntryPayload =
     | ForgePiToolResultPayload
     | ForgePiApprovalPayload
     | ForgePiStagingProposalPayload
-    | ForgePiWorkspacePatchPayload
-    | ForgePiWorkspaceCheckpointPayload
     | ForgePiBranchSummaryPayload
     | ForgePiLabelPayload
     | Record<string, unknown>;

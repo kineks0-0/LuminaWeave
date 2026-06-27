@@ -106,7 +106,7 @@ Director 负责剧情推演、上下文压缩、记忆整理和提示词注入�
 
 Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge 当前 pi-style runtime 中抽取可复用运行能力，让 Forge 以外的子插件也可以组合自己的 agent，并用统一 test harness 验证 prompt、skill、tool、VFS、approval、trace 与 session tree 行为。
 
-当前第一阶段代码入口位于 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 通过 adapter 复用 SDK 的 runtime/session/tool/skill 边界；SDK 已提供 `AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、可选 `workspace-tools/AgentWorkspaceTools` 与 `JustBashWorkspaceAdapter` 初始实现，`ForgePiCoreRuntime` 已可暴露 SDK runtime snapshot/events；Forge adapter 通过 typed runtime effect 把 snapshot 投影到 Forge store、模型请求 trace 和 Inspector presentation，不让 SDK import Vue 或 Pinia；Forge wire shape、Semantic VFS、`workspace_patch` 和真实 ST 发布边界仍留在 Forge 域内。
+当前第一阶段代码入口位于 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 通过 adapter 复用 SDK 的 runtime/session/tool/skill 边界；SDK 已提供 `AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、可选 `workspace-tools/AgentWorkspaceTools` 与 `JustBashWorkspaceAdapter` 初始实现，`ForgePiCoreRuntime` 已可暴露 SDK runtime snapshot/events；Forge adapter 通过 typed runtime effect 把 snapshot 投影到 Forge store、模型请求 trace 和 Inspector presentation，不让 SDK import Vue 或 Pinia；Forge wire shape、Semantic VFS、Git-backed 工作区版本和真实 ST 发布边界仍留在 Forge 域内。
 
 应提供：
 
@@ -125,7 +125,7 @@ Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge
 
 边界：
 
-- Core SDK 不拥有 Forge Semantic VFS、Forge prompt 路径、`workspace_patch` 格式、ST 世界书发布边界或 Vue UI。
+- Core SDK 不拥有 Forge Semantic VFS、Forge prompt 路径、Forge 工作区 Git 版本策略、ST 世界书发布边界或 Vue UI。
 - Core SDK 不默认暴露文件读写工具，不默认创建或注册 `bash` tool。
 - Core SDK 不默认暴露联网 research 工具；接入方必须显式配置 provider 和凭据后注册。
 - Core SDK 不默认提供 skill activation tool；默认 skill 使用路径与 pi 一致，即代码提供 skill catalog 和 `SKILL.md` 路径，模型通过 `read` 按需读取完整 `SKILL.md`。
@@ -134,9 +134,9 @@ Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge
 - Core SDK 不自动加载 VFS 中的 TypeScript / JavaScript 扩展代码。
 - Core SDK 不内置 Plan Mode、Planner / Executor 阶段语义或最终汇报协议；规划、执行、审阅和汇报由 adapter / extension workflow 通过 hook、custom context、custom message、status/widget 和 continuation trigger 组合。
 - Core SDK 不规定 Forge `<process>` / `<final>` prompt 协议，也不把该标签协议作为过渡兼容层；它只提供可复用的 structured message、session、event、trace、tool 和测试边界。
-- Core SDK 不把 thinking 写入 Forge memory、虚拟世界书、workspace patch 或普通用户可见长期历史；thinking 只作为 provider-native structured message block、trace、replay-safe 通道和 UI projection 输入。
+- Core SDK 不把 thinking 写入 Forge memory、虚拟世界书、工作区文件或普通用户可见长期历史；thinking 只作为 provider-native structured message block、trace、replay-safe 通道和 UI projection 输入。
 - 非写入阶段不得暴露写工具，也不得暴露可写 bash。
-- 写入审计由具体 write adapter 负责；Forge adapter 的审计产物继续是 `workspace_patch`。
+- 写入摘要和版本历史由具体 adapter 负责；Forge adapter 使用本轮写入摘要服务对话展示，并使用 Git 作为文件版本事实源。
 
 ### 4.5 Forge
 
@@ -149,25 +149,26 @@ Forge 是制卡工坊和 Agent 工作台。
 - 以 `forgeProjectId` 为长期容器的项目模型。
   - 多协作线程共享同一项目资源、项目记忆、草稿和文件版本审计记录。
 - Planner / Analyst / Executor 等分工明确的 Agent 流程。
-  - Forge 是 Agent Runtime SDK 的第一套 adapter；当前主链路仍由 `src/api/core/forge/agent-app` 承载，并由 Forge browser adapters 维护 tree-structured session history、上下文包、技能/能力资源、工具桥接、direct workspace patch 审计和真实 ST 发布边界。
+  - Forge 是 Agent Runtime SDK 的第一套 adapter；当前主链路仍由 `src/api/core/forge/agent-app` 承载，并由 Forge browser adapters 维护 tree-structured session history、上下文包、技能/能力资源、工具桥接、Git-backed 工作区版本和真实 ST 发布边界。
 - Forge Agent 使用项目相对语义 VFS：`./AGENTS.md` 是 Agent 工作契约，不是系统提示词；默认系统提示词位于 `./.forge/agent/SYSTEM.md`，模式提示词位于 `./.forge/agent/<MODE>.md`，Forge `<V>` DSL 位于 `./.forge/agent/UI_DSL.md`，可见推理边界位于 `./.forge/agent/REASONING.md`，技能位于 `./agent/skills/<skill-name>/SKILL.md`，当前协作线程通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 动态访问。
 - Forge 预设提供 Agent 资源包与提示词编排，而不是面向模型暴露 slot 拼接概念；编排顺序固定为 Contract、System、Mode Prompt、UI DSL、Reasoning Boundary、Skills、Capabilities、Memory Index、Context Files、Branch Messages。默认主预设提供参考提炼类 preset skills，默认按需加载，可在自定义预设中改为常驻；内置和默认 preset skill 资源必须以标准 `SKILL.md` frontmatter 暴露，供 SDK skill parser 校验与 catalog 格式化。
 - Forge Agent 预设工作台是提示词与预设技能的默认维护入口：内置预设只读，自定义副本可编辑 Contract、System、Mode Prompt、技能名称/标题/说明/加载策略/正文和编排检查信息。
-- 项目 VFS 面板浏览 Agent 可见的语义 VFS 投影，而不是 raw workspace storage 树；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构只作为映射源，不进入模型长期上下文。项目级 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/<MODE>.md` 与 `./agent/skills/*/SKILL.md` 覆盖从这里写入项目 VFS，并生成 `workspace_patch` 审计，不回写 active preset 或 bundled fallback；`UI_DSL.md` 与 `REASONING.md` 仍是固定运行时资源。
+- 项目 VFS 面板浏览 Agent 可见的语义 VFS 投影，而不是 raw workspace storage 树；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构只作为映射源，不进入模型长期上下文。项目级 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/<MODE>.md` 与 `./agent/skills/*/SKILL.md` 覆盖从这里写入项目 VFS；写入后生成本轮文件变更摘要，并由 Git 记录版本历史，不回写 active preset 或 bundled fallback；`UI_DSL.md` 与 `REASONING.md` 仍是固定运行时资源。
 - Forge `read`、Forge shell、Prompt/Skill loader 和项目 VFS 面板必须共用 Forge Semantic VFS provider；HAL Bash 只提供通用 mount 扩展，不理解 Forge 业务语义。
-- Forge Agent 可在用户配置 `lumina-forge.tavilyApiKey` 后暴露 `webResearch`，通过 Tavily 执行 search / fetch 并返回 Markdown 和来源 metadata；该工具不写项目 VFS、不生成 `workspace_patch`、不写 memory，也不发布或改写 ST 资源。
+- Forge Agent 可在用户配置 `lumina-forge.tavilyApiKey` 后暴露 `webResearch`，通过 Tavily 执行 search / fetch 并返回 Markdown 和来源 metadata；该工具不写项目 VFS、不生成文件变更摘要、不写 memory，也不发布或改写 ST 资源。
+- Forge Agent Bash 的联网访问通过显式 `network-request` 模式开放；`curl` 仍必须经过 ShellNetworkPolicyService 与 ShellPermissionService network grant。缺少 grant 时 Forge 在 Agent `beforeToolCall` 阶段生成 `tool_approval_needed`，Composer 区域显示阻塞式授权面板，等待授权期间不返回非失败 `tool_result`；批准后才执行原始 `curl` 并回填真实工具结果。Composer 按当前 `forgeProjectId + conversationId` 只展示当前协作线程的 pending 网络授权。用户可以选择“允许此域名”或“后续都允许”；前者保留同域名 `urlPrefix` grant，使该协作线程后续同域名请求自动通过；后者保留全局 network grant，使该协作线程后续所有符合网络策略的请求自动通过。点击批准或拒绝后 Composer 立即关闭授权覆盖态，真实请求结果再异步回填到 Agent。`curl -o/-O/-c/-T/-F` 等本地文件参数允许使用，`2>&1` 等文件描述符复制不视为文件写重定向，但文件读写必须停留在项目语义 VFS 并进入本轮写入摘要与 Git 版本记录。
 - 制卡聊天内的 fork / 回滚 / 切换应基于同一协作线程内的 pi session tree 分支；Forge timeline 是用户可见投影，必须保留可操作的用户输入节点映射。
-  - 项目文件和虚拟世界书的版本恢复由 Forge workspace version manager 生成反向或重放 `workspace_patch`，切换对话分支时默认询问用户是否同时恢复文件版本。
-  - 虚拟世界书、Forge memory tree、draft tree、workspace patch 审计记录和发布/导出。
-- Forge Agent 聊天记录、执行过程、最终回复、timeline 和文件版本投影必须以 `piSessionEntries + activePiNodeId` 为唯一事实源。当前消息主路径采用 provider-native structured messages：provider 原生 `thinking` / reasoning 投影执行过程，provider 原生 `text` 投影最终回复，tool call / tool result / `workspace_patch` / checkpoint / restore 投影过程事实和文件版本。Forge 不保留 `<process>` / `<final>` 标签协议作为过渡兼容层；文件版本仍以 active branch 的 `workspace_patch` / checkpoint history 为事实源，不能从执行过程正文推断。
+  - 项目文件和虚拟世界书的版本恢复由 ForgeWorkspaceGitService 读取 Git log/diff 并恢复工作区文件；切换对话分支不隐式恢复文件版本。
+  - 虚拟世界书、Forge memory tree、draft tree、Git-backed 文件历史和发布/导出。
+- Forge Agent 聊天记录、执行过程、最终回复和 timeline 投影必须以 `piSessionEntries + activePiNodeId` 为事实源。当前消息主路径采用 provider-native structured messages：provider 原生 `thinking` / reasoning 投影执行过程，provider 原生 `text` 投影最终回复，tool call / tool result / approval 投影过程事实。本轮“AI 更改文件”列表只消费 tool result 中的 `ForgeTurnWorkspaceWriteSummary.changedFiles`；文件版本面板只消费 Git log/diff。Forge 不保留 `<process>` / `<final>` 标签协议作为过渡兼容层。
 - Forge 专属 `<V>` 交互块由 `./.forge/agent/UI_DSL.md` 作为 pi prompt 固定资源承载；旧 `PromptBuilder` 不再作为 Forge Agent prompt 构建 API。
 
 边界：
 
 - Forge 默认写入项目 VFS，不静默改写真实 ST 世界书。
 - 发布到 ST 或导出必须是用户确认后的后置动作。
-  - Forge 项目资源写入走 direct workspace patch reducer 或 typed runtime effects；每次 AI 写入必须留下可撤回的 `workspace_patch`。
-  - Agent Runtime SDK 只抽取通用 agent kernel；ST 宿主适配、Vue UI、Forge Semantic VFS、`workspace_patch` 审计和真实发布边界仍属于 LuminaWeave Forge adapter。
+  - Forge 项目资源写入走 ForgeWorkspaceWriteService 或 typed runtime effects；每次 AI 写入必须留下本轮写入摘要，并在文件变化时提交 Git commit。
+  - Agent Runtime SDK 只抽取通用 agent kernel；ST 宿主适配、Vue UI、Forge Semantic VFS、Git-backed 工作区版本和真实发布边界仍属于 LuminaWeave Forge adapter。
 
 ### 4.6 Resource / VFS / Terminal
 
@@ -182,6 +183,7 @@ Resource Domain 负责统一 ST、本地和未来订阅源等资源来源。VFS 
 - HAL Bash 支持调用方注入额外挂载点；Agent Runtime SDK 的 FS template 与 policy wrapper 可把业务 VFS 包装成 OpenFS / just-bash 可访问文件系统。Forge 通过该机制把 semantic VFS 挂到 Agent shell 项目根；非 Forge shell 默认挂载行为不变。
 - 只读浏览、搜索、读取和受控写入。
 - 终端和 Agent shell 共用同一 Resource-backed FS、权限门和写入策略。
+- 共享用户终端默认开放 just-bash `curl`，网络访问仍通过 ShellNetworkPolicyService 的 network policy 进入；Agent shell 使用 `network-request` 模式并额外要求 network grant，网络模式中的 `curl` 文件输入输出通过项目语义 VFS 与写入服务进入版本和本轮变更链路。
 - 非写入阶段不暴露写工具，也不暴露可写 bash。
 - 写入阶段通过 write adapter 检查 mount policy、phase、approval，并记录业务审计。
 

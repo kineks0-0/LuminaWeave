@@ -20,11 +20,16 @@ import { createEmptyConversationDocument } from '@shared/ConversationTypes.js';
 import { applyConversationMutation } from '@shared/ConversationReducer.js';
 import { migrateLegacyChatArray, migrateLegacyForgeSession } from '@shared/ConversationMigration.js';
 import { resolveConversationSummary } from '@shared/ConversationSummaryResolver.js';
+import { IndexedDbExtensionStore } from '../browser/IndexedDbExtensionStore.js';
+
+export interface StandaloneLocalRuntimeOptions {
+    extensionStore?: RuntimeExtensionStorePort;
+}
 
 /**
  * 离线/本地桥接适配器
  * 当后端服务不可用时，降级到纯前端运行模式。
- * 使用 localStorage 进行持久化，并模拟生成响应。
+ * 使用 runtime store 与 legacy localStorage 镜像承接本地持久化，并模拟生成响应。
  */
 export class StandaloneLocalRuntime implements HALRuntimePorts {
     public readonly mode = 'standalone-local' as const;
@@ -196,7 +201,8 @@ export class StandaloneLocalRuntime implements HALRuntimePorts {
         };
     }
 
-    constructor() {
+    constructor(options: StandaloneLocalRuntimeOptions = {}) {
+        this.extensionStore = options.extensionStore ?? new IndexedDbExtensionStore();
         this.conversation = {
             listConversations: async () => ({
                 conversations: this.readConversations().map((document) => resolveConversationSummary(document))
@@ -480,13 +486,21 @@ export class StandaloneLocalRuntime implements HALRuntimePorts {
 
         this.settings = {
             getSettings: async () => {
-                const data = localStorage.getItem('tt_ext_store_lumina_weave_main_global-settings-mirror');
-                return data ? JSON.parse(data) : {};
+                return await this.extensionStore.getJson({
+                    namespace: 'lumina_weave',
+                    table: 'main',
+                    key: 'global-settings-mirror'
+                }) ?? {};
             },
             saveSettings: async (s: any) => {
                 // global-settings-mirror 已经在 storage.ts 中通过 extensionStore.setJson 被写入了。
-                // 这里如果还有其他的 settings 后端保存逻辑，可直接写 localStorage，避免回调 lwStorage.set 产生死循环。
-                localStorage.setItem('tt_ext_store_lumina_weave_main_global-settings-mirror', JSON.stringify(s));
+                // 这里继续写入同一个 runtime store，避免绕开存储统计与导入导出。
+                await this.extensionStore.setJson({
+                    namespace: 'lumina_weave',
+                    table: 'main',
+                    key: 'global-settings-mirror',
+                    value: s
+                });
             }
         };
 
@@ -502,60 +516,6 @@ export class StandaloneLocalRuntime implements HALRuntimePorts {
             restoreDefaults: async () => ({ success: true })
         };
 
-        this.extensionStore = {
-            async getJson({ namespace, key, table = 'main' }: { namespace: string; key: string; table?: string }) {
-                const k = `tt_ext_store_${namespace}_${table}_${key}`;
-                const val = localStorage.getItem(k);
-                return val ? JSON.parse(val) : null;
-            },
-            async setJson({ namespace, key, value, table = 'main' }: { namespace: string; key: string; value: any; table?: string }) {
-                const k = `tt_ext_store_${namespace}_${table}_${key}`;
-                localStorage.setItem(k, JSON.stringify(value));
-            },
-            async updateJson({ namespace, key, value, table = 'main' }: { namespace: string; key: string; value: any; table?: string }) {
-                const k = `tt_ext_store_${namespace}_${table}_${key}`;
-                const old = localStorage.getItem(k);
-                const oldVal = old ? JSON.parse(old) : {};
-                const newVal = (typeof value === 'object' && value !== null && typeof oldVal === 'object')
-                    ? { ...oldVal, ...value }
-                    : value;
-                localStorage.setItem(k, JSON.stringify(newVal));
-            },
-            async deleteJson({ namespace, key, table = 'main' }: { namespace: string; key: string; table?: string }) {
-                const k = `tt_ext_store_${namespace}_${table}_${key}`;
-                localStorage.removeItem(k);
-            },
-            async listKeys({ namespace, table = 'main' }: { namespace: string; table?: string }) {
-                const prefix = `tt_ext_store_${namespace}_${table}_`;
-                return Object.keys(localStorage).filter(k => k.startsWith(prefix)).map(k => k.replace(prefix, ''));
-            },
-            async setBlob({ namespace, key, data, table = 'main' }: { namespace: string; key: string; data: any; table?: string }) {
-                let base64 = '';
-                if (data instanceof Blob) {
-                    base64 = await new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => resolve(reader.result as string);
-                        reader.readAsDataURL(data);
-                    });
-                } else if (data instanceof ArrayBuffer || (ArrayBuffer.isView(data))) {
-                     base64 = btoa(String.fromCharCode(...new Uint8Array(data as any)));
-                } else {
-                     base64 = String(data);
-                }
-                const k = `tt_ext_store_blob_${namespace}_${table}_${key}`;
-                localStorage.setItem(k, base64);
-            },
-            async getBlob({ namespace, key, table = 'main' }: { namespace: string; key: string; table?: string }) {
-                const k = `tt_ext_store_blob_${namespace}_${table}_${key}`;
-                const base64 = localStorage.getItem(k);
-                if (!base64) return null;
-                if (base64.startsWith('data:')) {
-                    const res = await fetch(base64);
-                    return await res.blob();
-                }
-                return new Blob([base64]);
-            }
-        };
     }
 }
 

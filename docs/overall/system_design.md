@@ -115,7 +115,7 @@ Core Runtime 是业务真相层。
 
 Agent Runtime SDK 是 Core Runtime 内的跨插件 agent kernel。它消费 HAL 的 Resource、Prompt、Storage、Network、Event 和 Runtime Ports，并向 Forge、Chat、Director、Dev 等插件 adapter 提供一致的 agent loop、session、tool、approval、trace、skills 和测试边界。
 
-当前代码入口是 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 的 `src/api/core/forge/agent-app` 是第一套 adapter：它可以复用 SDK 的 `AgentRuntimeCore`、`AgentSessionTree`、`AgentToolRegistry`、`AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、可选 `workspace-tools/AgentWorkspaceTools`、`JustBashWorkspaceAdapter` 和 Agent Skills parser / formatter；`ForgePiCoreRuntime` 可暴露 SDK runtime snapshot/events，Forge adapter 再通过 typed runtime effect 写入 Forge store、模型请求 trace 和 Inspector presentation，但不得把 Forge Semantic VFS、`workspace_patch`、ST 发布边界或 Vue UI 上移到 SDK。
+当前代码入口是 `luminaweave-extension/src/api/core/agent-runtime/`。Forge 的 `src/api/core/forge/agent-app` 是第一套 adapter：它可以复用 SDK 的 `AgentRuntimeCore`、`AgentSessionTree`、`AgentToolRegistry`、`AgentRuntimeEventBus`、`AgentRuntimeExtensionRunner`、可选 `workspace-tools/AgentWorkspaceTools`、`JustBashWorkspaceAdapter` 和 Agent Skills parser / formatter；`ForgePiCoreRuntime` 可暴露 SDK runtime snapshot/events，Forge adapter 再通过 typed runtime effect 写入 Forge store、模型请求 trace 和 Inspector presentation，但不得把 Forge Semantic VFS、Forge 工作区 Git 版本策略、ST 发布边界或 Vue UI 上移到 SDK。
 
 职责：
 
@@ -138,7 +138,7 @@ Agent Runtime SDK 是 Core Runtime 内的跨插件 agent kernel。它消费 HAL 
 
 - 不直接 import ST 宿主实现。
 - 不直接访问 Vue UI、Pinia store 或 Surface Runtime。
-- 不拥有 Forge Semantic VFS、Forge prompt 路径或 `workspace_patch` 格式。
+- 不拥有 Forge Semantic VFS、Forge prompt 路径或 Forge 工作区 Git 版本策略。
 - 不自动扫描用户目录或项目目录。
 - 不自动加载 VFS 中的 TypeScript / JavaScript 扩展代码。
 - 不默认注册文件写入工具。
@@ -150,7 +150,7 @@ Agent Runtime SDK 是 Core Runtime 内的跨插件 agent kernel。它消费 HAL 
 - 不决定哪个阶段能看到哪些工具。
 - 不规定 Forge `<process>` / `<final>` prompt 协议，也不把该标签协议作为过渡兼容层。
 - 不根据 `allowed-tools` 自动授予权限。
-- 不把 thinking 写入 Forge memory、虚拟世界书、workspace patch 或普通用户可见长期历史；thinking 只作为 provider-native structured message block、trace、replay-safe 通道和 UI projection 输入。
+- 不把 thinking 写入 Forge memory、虚拟世界书、工作区文件或普通用户可见长期历史；thinking 只作为 provider-native structured message block、trace、replay-safe 通道和 UI projection 输入。
 
 ### 2.4 Plugin Domain
 
@@ -433,10 +433,10 @@ Resource Domain 是资源事实源的抽象层，VFS 是路径化视图。
 - Workspace Tools Kit 的 `read`、`write`、`edit`、`delete`、`bash` 不直接绑定本地 `fs`；工具通过 OpenFS / just-bash 或 adapter operations 访问业务 VFS。`write`、`edit`、`delete` 必须串行化同一文件的并发修改，并输出可审计 diff / patch 或 adapter 审计 payload。
 - 阶段状态和工具可见性由接入方定义；SDK 只提供可选过滤机制。非写入阶段不注册写工具，也不注册可写 bash。
 - 写入阶段通过 audited OpenFS write adapter 执行 write/append/delete/move/copy；write adapter 必须检查 phase、mount policy 和 approval，并记录 trace。
-- 具体业务审计格式由 adapter 决定；Forge adapter 继续生成 `workspace_patch`。
+- 具体写入摘要和版本策略由 adapter 决定；Forge adapter 使用本轮写入摘要服务对话投影，并使用 Git 作为文件版本事实源。
 - 外部资源写入必须经过 Resource Write Policy。
 - ST 和订阅源不得被静默改写。
-- Agent shell 的写入和网络访问必须经过 ShellPermissionService 与 ShellNetworkPolicyService。
+- 共享用户终端默认开放 just-bash `curl`；Agent shell 的写入和网络访问必须经过 ShellPermissionService 与 ShellNetworkPolicyService，联网 `curl` 只能通过显式 `network-request` 模式和 network grant 进入。Forge Agent 缺少 network grant 时由 `beforeToolCall` 预检投影 `tool_approval_needed`，Composer 区域按当前项目和协作线程显示阻塞式授权面板，等待授权期间不返回非失败 `tool_result`；用户可选择“允许此域名”或“后续都允许”，前者保留同域名 `urlPrefix` grant，使同一协作线程的后续同域名请求自动通过，后者保留 `allNetwork` grant，使同一协作线程后续所有符合网络策略的请求自动通过。Composer 在点击批准或拒绝后立即本地 resolve 授权覆盖态；批准后通过 `resolveToolApproval` 执行原始工具并恢复 Agent 续写。`curl -o/-O/-c/-T/-F` 等本地文件参数允许使用，`2>&1` 这类文件描述符复制不视为文件写重定向，但文件输入输出必须停留在项目语义 VFS，写入结果通过 ForgeWorkspaceWriteService 进入本轮文件变更摘要和 Git-backed workspace history。
 
 ## 8. Forge 设计
 
@@ -450,7 +450,7 @@ Forge 以项目为长期容器，协作线程是项目内的 ConversationDocumen
 - project memory
 - virtual lorebook
 - draft tree
-- workspace patch audit log
+- Git-backed workspace history
 - Prompt Preset bindings
 
 边界：
@@ -509,7 +509,7 @@ Forge Agent 语义 VFS：
 - `./` 是当前 Forge 项目根；工具入参允许省略 `./`，显示和调试输出统一规范化为 `./...`。
 - `./threads/目前/` 是当前 active 协作线程的动态别名，不作为持久线程 id 保存到模型记忆。
 - `./threads/目前/thread.md` 暴露当前线程可读元信息，`./threads/目前/messages.md` 暴露当前线程消息摘要；历史线程稳定路径使用 `./threads/NN标题/thread.md` 与 `./threads/NN标题/messages.md`，由内部 `conversationId` 映射维护。
-- `AGENTS.md` 是 Agent 工作契约，不是系统提示词；它规定工具使用、`workspace_patch` 审计、session tree、timeline 和回滚规则，不表达模型应该如何思考。
+- `AGENTS.md` 是 Agent 工作契约，不是系统提示词；它规定工具使用、本轮文件变更摘要、Git 版本历史、session tree、timeline 和恢复规则，不表达模型应该如何思考。
 - `./.forge/agent/SYSTEM.md` 是默认系统提示词，`./.forge/agent/<MODE>.md` 是模式提示词，`./.forge/agent/UI_DSL.md` 是 Forge `<V>` 组件 DSL，`./.forge/agent/REASONING.md` 是隐藏思维链与可见工作笔记边界；`./.pi/agent/prompts/` 不再作为 Forge prompt 主路径。
 - Forge 预设不再面向 Agent 暴露为 slot 拼接列表，而是提供 Agent 资源包与提示词编排：`AGENTS.md contract + ./.forge/agent/SYSTEM.md + ./.forge/agent/<MODE>.md + UI_DSL.md + REASONING.md + skills / capabilities + memory index + context files + branch messages`。Forge Agent 预设工作台是预设资源包维护入口；内置预设只读，自定义副本可编辑提示词、预设技能元数据、加载策略和正文。项目覆盖优先于 active preset，active preset 优先于 bundled fallback。
 - `./memory/**/*.md` 是 Forge 项目长期记忆正文；默认 prompt 编排只注入 `./.pi/agent/context/memory-index.md`，列出路径、标题、来源、更新时间和摘要。需要正文时必须通过同一 Semantic VFS 和 `read` 读取，不把完整长期记忆灌入 system prompt。
@@ -523,31 +523,31 @@ Forge Runtime 分工：
 - Analyst：只读分析与上下文整理。
 - Executor：高精度条目重写与执行。
 - Graph：只提供阶段、状态、写入边界和能力索引，不再合成最终 prompt，也不再预先塞入完整 skill。
-- pi-style Agent Runtime：Forge Agent kernel 位于 `src/api/core/forge/agent-app`，是 Agent Runtime SDK 的第一套 adapter。`ForgePiCoreRuntime` 组合 `AgentRuntimeCore` 并暴露 `getAgentRuntimeSnapshot()` / `getAgentRuntimeEvents()`，`ForgePiRuntimeClient.runTurn()` 透传 `agentRuntimeSnapshot`，`ForgeRuntimeOrchestrator` 通过 `set_agent_runtime_snapshot` effect 写入 Forge store 和匹配的 model request trace；`ForgePiSessionManager` 复用 `AgentSessionTree`，`ForgePiAgentSession.preparePrompt()` 与 `prompt()` 复用 SDK `AgentPromptAssembler`，`ForgePiResourceLoader` 复用 SDK skill catalog formatter，`ForgePiToolBridge` 可把 Forge 工具适配到 `AgentToolRegistry`。`ForgePiAgentSession` / `ForgePiExtensionRunner` / `ForgePiToolBridge` 仍负责 Forge context engineering、run 阶段 tool 实例创建、tool execution、runtime event trace 和 `workspace_patch` 审计；必须保持 Forge Prompt Preview 与真实生成同源。
-- Provider-native structured message 主路径：Forge adapter 直接消费 provider 原生 `thinking` / reasoning、`text`、tool call、tool result 和 audit reference。`thinking` / reasoning 投影为执行过程正文，`text` 投影为 assistant 最终回复；tool call、tool result、approval、`workspace_patch`、checkpoint / restore 只由 runtime / tool bridge / workspace version manager 产生，不能从模型正文推断。Forge 不保留 `<process>` / `<final>` 标签协议作为过渡兼容层。
-- webResearch：`ForgePiToolBridge` 仅在 `lumina-forge.tavilyApiKey` 非空时注册模型可见 `webResearch`。工具通过 Agent Runtime SDK Research Tools Kit 和 Tavily provider 执行 search / fetch，只返回 Markdown 摘要、来源与 Tavily 请求元数据；不得写入 `workspace_patch`、Forge memory、项目 VFS 或 ST 资源。Tavily key 来自 Forge 设置，设置 UI 遮罩显示，v1 不提供加密 secret storage。
+- pi-style Agent Runtime：Forge Agent kernel 位于 `src/api/core/forge/agent-app`，是 Agent Runtime SDK 的第一套 adapter。`ForgePiCoreRuntime` 组合 `AgentRuntimeCore` 并暴露 `getAgentRuntimeSnapshot()` / `getAgentRuntimeEvents()`，`ForgePiRuntimeClient.runTurn()` 透传 `agentRuntimeSnapshot`，`ForgeRuntimeOrchestrator` 通过 `set_agent_runtime_snapshot` effect 写入 Forge store 和匹配的 model request trace；`ForgePiSessionManager` 复用 `AgentSessionTree`，`ForgePiAgentSession.preparePrompt()` 与 `prompt()` 复用 SDK `AgentPromptAssembler`，`ForgePiResourceLoader` 复用 SDK skill catalog formatter，`ForgePiToolBridge` 可把 Forge 工具适配到 `AgentToolRegistry`。`ForgePiAgentSession` / `ForgePiExtensionRunner` / `ForgePiToolBridge` 仍负责 Forge context engineering、run 阶段 tool 实例创建、tool execution、runtime event trace 和本轮写入摘要；必须保持 Forge Prompt Preview 与真实生成同源。
+- Provider-native structured message 主路径：Forge adapter 直接消费 provider 原生 `thinking` / reasoning、`text`、tool call 和 tool result。`thinking` / reasoning 投影为执行过程正文，`text` 投影为 assistant 最终回复；tool call、tool result、approval 和本轮文件变更摘要只由 runtime / tool bridge / write service 产生，不能从模型正文推断。Forge 不保留 `<process>` / `<final>` 标签协议作为过渡兼容层。
+- webResearch：`ForgePiToolBridge` 仅在 `lumina-forge.tavilyApiKey` 非空时注册模型可见 `webResearch`。工具通过 Agent Runtime SDK Research Tools Kit 和 Tavily provider 执行 search / fetch，只返回 Markdown 摘要、来源与 Tavily 请求元数据；不得写入 Forge memory、项目 VFS 或 ST 资源，也不得生成文件变更摘要。Tavily key 来自 Forge 设置，设置 UI 遮罩显示，v1 不提供加密 secret storage。
 - 模型适配：Forge Agent 模型协议层使用浏览器可用的 `@earendil-works/pi-ai`。Agent Runtime 的 `PiAiBrowserNexusProvider` 把现有 Nexus preset / API 配置解析为 pi-ai `Model<Api>`、`SimpleStreamOptions` 和可用模型列表；`ForgePiModelRegistry` 创建 pi-ai model 并返回 provider 包装的 `streamSimple()` 兼容 `streamFn`；`ForgePiNexusProvider` 只负责 Forge 模型请求 trace、cache usage 和 stream 包装，不直接读取 `nexus.apis`。一次 Forge turn 可能包含多次 pi-ai provider 调用，调试面板必须按调用链展示每次 provider 记录的 pi messages、provider payload、provider response、stream lifecycle、final text 和 error。前端 Forge runtime 不得引入 `@earendil-works/pi-coding-agent`、`pi-agent-core/node`、AI SDK tool/message 协议或 Node-only `fs/child_process`。
-- Reasoning artifact 边界：Forge 必须区分 provider raw message、replay-safe pi message 与用户可见/业务记忆内容。带 provider 签名或加密语义的 reasoning artifact 只允许在同 provider / 同模型的短期 pi replay 通道中原样回传；无签名 raw thinking、跨 provider / 跨模型 reasoning、普通 `<thinking>` 文本不得进入用户可见消息、workspace patch 内容、Forge memory、虚拟世界书或长期 prompt 回注。调试 trace 可以展示 raw / sanitized 差异，但 raw trace 不等于下一轮模型输入。
-- Forge UI：`src/plugins/forge` 对标 pi-tui 的交互分层，只负责输入、消息展示、执行过程内联段、最终回复展示、调试面板、文件版本/项目资源面板、历史暂存与发布边界、store action controller。Vue 组件不得承载 Agent loop、模型请求、工具执行或最终提示词合成；只能通过 `ForgePiRuntimeClient` / store controller 消费 runtime snapshot 和提交用户意图。运行中执行过程内联段直接显示 provider-native `thinking` / reasoning projection，工具调用、工具结果、workspace_patch 和 approval 作为过程事实显示；agent 结束后自动折叠为用户输入与最终回复之间的一行摘要，最终回复保持展开并只显示 provider-native `text` projection。Agent Inspector 状态页与模型请求调试 pi-core 页消费 `forgePiRuntimePresentation` 派生摘要，而不是直接读取 SDK runtime 实例。“项目 VFS”面板浏览 `ForgeProjectSemanticVfsService` 生成的 Agent 可见语义 VFS 投影，并以 `./...` 项目相对路径显示；目录节点显示子项清单，文件节点显示完整内容。该面板允许对受管理的 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/PLANNER.md`、`./.forge/agent/CONVERSATION.md`、`./.forge/agent/ANALYST.md`、`./.forge/agent/EXECUTOR.md` 与 `./agent/skills/<skill-name>/SKILL.md` 创建/编辑项目覆盖，写入项目 VFS 并追加 `workspace_patch`。raw workspace storage 只作为内部映射源，`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构不得暴露给模型或主视图。
+- Reasoning artifact 边界：Forge 必须区分 provider raw message、replay-safe pi message 与用户可见/业务记忆内容。带 provider 签名或加密语义的 reasoning artifact 只允许在同 provider / 同模型的短期 pi replay 通道中原样回传；无签名 raw thinking、跨 provider / 跨模型 reasoning、普通 `<thinking>` 文本不得进入用户可见消息、项目文件内容、Forge memory、虚拟世界书或长期 prompt 回注。调试 trace 可以展示 raw / sanitized 差异，但 raw trace 不等于下一轮模型输入。
+- Forge UI：`src/plugins/forge` 对标 pi-tui 的交互分层，只负责输入、消息展示、执行过程内联段、最终回复展示、调试面板、文件版本/项目资源面板、历史暂存与发布边界、store action controller。Vue 组件不得承载 Agent loop、模型请求、工具执行或最终提示词合成；只能通过 `ForgePiRuntimeClient` / store controller 消费 runtime snapshot 和提交用户意图。运行中执行过程内联段直接显示 provider-native `thinking` / reasoning projection，工具调用、工具结果和 approval 作为过程事实显示；agent 结束后自动折叠为用户输入与最终回复之间的一行摘要，最终回复保持展开并只显示 provider-native `text` projection。Agent Inspector 状态页与模型请求调试 pi-core 页消费 `forgePiRuntimePresentation` 派生摘要，而不是直接读取 SDK runtime 实例。“项目 VFS”面板浏览 `ForgeProjectSemanticVfsService` 生成的 Agent 可见语义 VFS 投影，并以 `./...` 项目相对路径显示；目录节点显示子项清单，文件节点显示完整内容。该面板允许对受管理的 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/PLANNER.md`、`./.forge/agent/CONVERSATION.md`、`./.forge/agent/ANALYST.md`、`./.forge/agent/EXECUTOR.md` 与 `./agent/skills/<skill-name>/SKILL.md` 创建/编辑项目覆盖，写入项目 VFS，经 ForgeWorkspaceWriteService 生成本轮写入摘要并提交 Git。raw workspace storage 只作为内部映射源，`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构不得暴露给模型或主视图。
 - Prompt Preview：Agent Inspector 与 Forge Prompt Preview 的主模型视图必须以 `ForgePiAgentSession.preparePrompt()` 的 dry-run 输出为事实源。`ForgePiAgentSession.preparePromptState()` 在 SDK `AgentPromptAssembler` 的同一个 prepared prompt 中消费 `ForgePiExtensionRunner.emitBeforeAgentStart()`，确保 extension hidden context、active tools summary、skill catalog、branch messages、本轮 user message 与 provider-native structured message contract 同时进入 preview / `prompt_ready` payload；真实 pi-agent-core initial state 仍只接收 branch messages，本轮 user message 由 `agent.prompt()` 注入。旧 Forge Prompt Context / Prompt Assembly 只提供 source-unit trace / attention 解释，不代表最终发给 pi agent 的 system prompt，也不作为主模型 preview payload 输入来源；旧 `PromptBuilder` 仅保留 Chat / ST 世界书提示词挂载能力，不再提供 Forge Agent prompt 构建 API。
-- Direct project write：Forge 模型可见写入类工具目标短名为 `write`、`edit`、`delete`，默认写入 Forge 项目 VFS 并追加 `workspace_patch`；旧会话和历史 trace 中的 `writeFile`、`editFile`、`deleteFile` 由 Forge adapter 兼容展示。`bash` 的 project-write-request 写入同样进入 direct patch reducer；资源 VFS、运行时 prompt、内置 skill、线程消息投影等只读目标必须返回明确错误且不得部分写入。真实 ST 世界书发布、导出或覆盖宿主数据仍必须走用户确认边界。
+- Direct project write：Forge 模型可见写入类工具目标短名为 `write`、`edit`、`delete`，默认写入 Forge 项目 VFS，并由 ForgeWorkspaceWriteService 生成本轮写入摘要；有文件变化时提交 Git commit。旧会话和历史 trace 中的 `writeFile`、`editFile`、`deleteFile` 由 Forge adapter 兼容展示。`bash` 的 project-write-request 写入同样进入统一写入服务；资源 VFS、运行时 prompt、内置 skill、线程消息投影等只读目标必须返回明确错误且不得部分写入。真实 ST 世界书发布、导出或覆盖宿主数据仍必须走用户确认边界。
 
 Forge 分支、timeline 与工作区版本：
 
 - 同一 Forge 协作线程对应一个 pi session。Forge UI 中的 fork / 回滚 / 切换是该 pi session tree 内的 `activeNodeId` 变化，不创建新的 Forge thread，也不复制新的 workspace session。
 - Forge 聊天记录、执行过程、assistant 最终回复、timeline rows、文件变更列表和文件版本面板都必须从 `piSessionEntries + activePiNodeId` 投影。时间线切换不能只改 UI 状态，必须先切换 Forge pi session active node，再重新投影 active branch。
 - 分支操作优先基于用户请求节点。选择历史 user node 时，runtime 应将 `activeNodeId` 切到该 user 的 parent，并把 user content 放回输入框供用户修改后重新发送；选择 assistant / tool / staging 节点时可 checkout 查看当前分支，重新生成时应定位到最近的 user 分支点。
-- pi session 持久化格式应是 flat append-only entries，使用 `id / parentId` 重建 tree、branch messages、timeline projection 和 workspace patch 审计状态。`children`、timeline rows、console messages、文件变更列表和 model debug summary 都是 projection，不是长期事实源。
-- Forge timeline 是从 pi session tree 派生的用户可见投影，可以合并、隐藏或重组 context / tool / assistant 节点，但必须保留 user input、workspace patch/checkpoint、branch summary 和 label 等可操作节点的 pi origin。
+- pi session 持久化格式应是 flat append-only entries，使用 `id / parentId` 重建 tree、branch messages 和 timeline projection。完整 `piSession` 存入 runtime extension store，localStorage 只保留索引存根；`children`、timeline rows、console messages、文件变更列表和 model debug summary 都是 projection，不是长期事实源。
+- Forge timeline 是从 pi session tree 派生的用户可见投影，可以合并、隐藏或重组 context / tool / assistant 节点，但必须保留 user input、tool result、branch summary 和 label 等可操作节点的 pi origin。
 - timeline item 若来自 pi session，必须携带 `runtime: "forge-pi"`、`sessionId`、`nodeId`、`parentNodeId`、`entryType` 等 origin 字段。用户从 timeline 发起 checkout / branch / 文件版本查看时，timeline 只提交意图和 origin，不能直接改 runtime 内部状态。
-- Forge workspace version manager 负责文件、VFS、虚拟世界书投影的分支版本。写入类工具应产生 workspace patch / checkpoint entry；切换对话分支时默认不强制恢复文件，而是询问用户“仅切换对话 / 恢复文件版本 / 查看差异”。
-- 文件版本辅助面板应基于 workspace patch / checkpoint history 展示当前分支文件状态、单文件版本历史和 branch diff，并支持撤回或恢复变更。恢复动作直接生成反向或重放 `workspace_patch` 并写回 Forge 项目 VFS，不再生成 Review/Staging 条目。恢复真实 ST 世界书仍必须经过用户确认的发布/导出边界。
-- `xx.md +10 -1` 等文件变更摘要来自 patch diff / checkpoint 记录，不来自执行过程正文。执行过程可以说明“文件已编辑”，但确认、撤回、restore 的依据只能是 `workspace_patch`、checkpoint / restore 状态和当前项目 VFS 内容。
+- ForgeWorkspaceGitService 负责文件、VFS 和虚拟世界书投影的版本历史。写入类工具只提交当前文件树变化；切换对话分支不隐式恢复文件。
+- 文件版本辅助面板基于 Git log/diff 展示当前项目历史、单次提交变更和恢复入口。恢复动作通过 Git restore 写回 Forge 项目 VFS，并再提交恢复 commit；恢复真实 ST 世界书仍必须经过用户确认的发布/导出边界。
+- `xx.md +10 -1` 等对话内文件变更摘要来自本轮工具调用产生的 `ForgeTurnWorkspaceWriteSummary.changedFiles`，不来自执行过程正文，也不从 Git log/diff 反推。
 
 写入规则：
 
-- 模型输出先进入 provider raw message、replay-safe structured message、pi session tree、typed runtime events 或 proposals。provider-native `thinking` / reasoning 进入执行过程 projection，provider-native `text` 进入 assistant 最终回复；tool call、tool result、approval、`workspace_patch` 和 checkpoint / restore 由 runtime、tool bridge 与 workspace version manager 产生。
-- pi 写入工具默认只作用于 Forge 项目 VFS，并必须追加 `workspace_patch` 审计记录。
+- 模型输出先进入 provider raw message、replay-safe structured message、pi session tree、typed runtime events 或 proposals。provider-native `thinking` / reasoning 进入执行过程 projection，provider-native `text` 进入 assistant 最终回复；tool call、tool result、approval 和本轮写入摘要由 runtime、tool bridge 与 write service 产生。
+- pi 写入工具默认只作用于 Forge 项目 VFS，并通过 ForgeWorkspaceWriteService 写入当前文件树；有文件变化时提交 Git commit。
 - `./memory/**/*.md` 和 `./lorebook/entries/*.md` 是一等 Forge 域文件：direct write 同步 runtime state，再持久化项目数据。
 - 受保护目标包括 Resource VFS、运行时 prompt、内置 skill、线程消息投影和内部 raw storage；写入请求必须失败且不得产生部分写入。
 - 发布到真实 ST 世界书或导出是后置动作，必须由用户显式确认。

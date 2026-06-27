@@ -269,6 +269,8 @@ describe('useForgeStore model request traces', () => {
 
         expect(store.toolApprovals).toHaveLength(1);
         expect(store.pendingToolApprovals).toHaveLength(1);
+        expect(store.reviewToolApprovals).toHaveLength(1);
+        expect(store.composerToolApprovals).toHaveLength(0);
         expect(store.toolApprovals[0]).toEqual(expect.objectContaining({
             toolCallId: 'call_1',
             status: 'pending',
@@ -283,6 +285,93 @@ describe('useForgeStore model request traces', () => {
             message: '允许进入暂存审阅'
         }));
         expect(store.stagingArea).toHaveLength(0);
+    });
+
+    it('keeps Composer approval requests out of the Review queue', () => {
+        const store = useForgeStore();
+
+        store.upsertToolApproval({
+            id: 'approval-network-call',
+            approvalId: 'approval-call-network',
+            requestId: 'req_network',
+            toolCallId: 'call_network',
+            toolName: 'bash',
+            args: {
+                command: 'curl -o fetched.txt https://api.example.com/resource',
+                accessMode: 'network-request'
+            },
+            reason: 'Forge Agent 请求访问 https://api.example.com/',
+            source: 'conversation',
+            status: 'pending',
+            createdAt: 200,
+            approvalKind: 'network',
+            displaySurface: 'composer',
+            shellPermissionRequestId: 'shell-permission-request-network'
+        });
+
+        expect(store.pendingToolApprovals).toHaveLength(1);
+        expect(store.reviewToolApprovals).toHaveLength(0);
+        expect(store.composerToolApprovals).toEqual([expect.objectContaining({
+            toolCallId: 'call_network',
+            approvalKind: 'network',
+            displaySurface: 'composer',
+            shellPermissionRequestId: 'shell-permission-request-network'
+        })]);
+    });
+
+    it('filters Composer approval requests to the active Forge thread', () => {
+        const store = useForgeStore();
+
+        store.upsertToolApproval({
+            id: 'approval-old-network-call',
+            approvalId: 'approval-call-old-network',
+            requestId: 'req_old_network',
+            toolCallId: 'call_old_network',
+            toolName: 'bash',
+            args: {
+                command: 'curl https://old.example.com/',
+                accessMode: 'network-request'
+            },
+            reason: 'Forge Agent 请求访问 https://old.example.com/',
+            source: 'conversation',
+            status: 'pending',
+            createdAt: 100,
+            approvalKind: 'network',
+            displaySurface: 'composer',
+            shellPermissionRequestId: 'shell-permission-request-old-network',
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_old',
+            sessionId: 'forge_project_alpha__conversation_old'
+        });
+        store.upsertToolApproval({
+            id: 'approval-new-network-call',
+            approvalId: 'approval-call-new-network',
+            requestId: 'req_new_network',
+            toolCallId: 'call_new_network',
+            toolName: 'bash',
+            args: {
+                command: 'curl https://new.example.com/',
+                accessMode: 'network-request'
+            },
+            reason: 'Forge Agent 请求访问 https://new.example.com/',
+            source: 'conversation',
+            status: 'pending',
+            createdAt: 200,
+            approvalKind: 'network',
+            displaySurface: 'composer',
+            shellPermissionRequestId: 'shell-permission-request-new-network',
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_new',
+            sessionId: 'forge_project_alpha__conversation_new'
+        });
+
+        expect(store.composerToolApprovalsForSession({
+            forgeProjectId: 'forge_project_alpha',
+            conversationId: 'conversation_new'
+        })).toEqual([expect.objectContaining({
+            toolCallId: 'call_new_network',
+            conversationId: 'conversation_new'
+        })]);
     });
 
     it('stores pi-core session tree and context summary separately from transient model request traces', () => {

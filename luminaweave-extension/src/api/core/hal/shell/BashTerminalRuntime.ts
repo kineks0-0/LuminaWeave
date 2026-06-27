@@ -7,6 +7,7 @@ import {
     type BashExecResult,
     type BashOptions,
     type Command,
+    type CustomCommand,
     type IFileSystem,
     type NetworkConfig
 } from 'just-bash';
@@ -26,6 +27,7 @@ export interface BashTerminalRuntimeOptions {
     network?: NetworkConfig;
     cwd?: string;
     extraMounts?: BashRuntimeMount[];
+    customCommands?: CustomCommand[];
 }
 
 export interface BashRuntimeMount {
@@ -123,7 +125,8 @@ export class BashTerminalRuntime {
             },
             customCommands: [
                 this.createPermissionCommand(),
-                this.createHelpCommand()
+                this.createHelpCommand(),
+                ...(options.customCommands ?? [])
             ]
         });
     }
@@ -277,6 +280,7 @@ export class BashTerminalRuntime {
             ...SHELL_BUILTINS,
             'lw-permission',
             'lw-help',
+            ...(this.options.customCommands ?? []).map(command => command.name),
             ...(this.resolveNetworkOptions().network || this.resolveNetworkOptions().fetch ? ['curl'] : [])
         ]);
         const candidates = Array.from(names)

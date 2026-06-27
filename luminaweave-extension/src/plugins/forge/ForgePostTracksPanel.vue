@@ -27,18 +27,24 @@ const forgeStore = useForgeStore();
 
 const trackCards = computed(() => {
   const hasWorkspaceContent = store.virtualLorebookEntries.length > 0 || store.draftTree.nodes.length > 0;
-  const hasWorkspacePatches = forgeStore.piSessionEntries.some(entry => entry.kind === 'workspace_patch');
+  const hasWorkspaceWrites = forgeStore.piSessionEntries.some(entry => {
+    if (entry.kind !== 'tool_result') return false;
+    const payload = entry.payload as { result?: unknown };
+    const result = payload.result;
+    return Boolean(result && typeof result === 'object' && !Array.isArray(result)
+      && (result as { workspaceWriteSummary?: unknown }).workspaceWriteSummary);
+  });
   const isFinalizing = store.publishState === 'workspace_frozen' || store.workflowSnapshot?.visiblePhase === 'finalize' || store.workflowSnapshot?.visiblePhase === 'output_delivery';
 
   return [
     {
       id: 'async_tasks',
       title: '异步任务',
-      status: hasWorkspacePatches ? 'ready' : 'pending',
-      statusLabel: hasWorkspacePatches ? '可挂接' : '待积累',
-      description: hasWorkspacePatches
+      status: hasWorkspaceWrites ? 'ready' : 'pending',
+      statusLabel: hasWorkspaceWrites ? '可挂接' : '待积累',
+      description: hasWorkspaceWrites
         ? '当前已经有项目文件变更记录，可以继续拆分为独立后续任务。'
-        : '先让主流程产出可审计的 workspace_patch，再决定需要挂起的异步任务。'
+        : '先让主流程产出项目 VFS 写入摘要，再决定需要挂起的异步任务。'
     },
     {
       id: 'worldbook_reorg',

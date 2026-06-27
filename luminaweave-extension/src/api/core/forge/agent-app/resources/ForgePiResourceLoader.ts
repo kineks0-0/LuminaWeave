@@ -182,7 +182,7 @@ export class ForgePiResourceLoader {
             '',
             `- 待审阅：${context.stagingEntries.length}`,
             `- Commit-ready：${context.commitReadyEntries.length}`,
-            '- 项目 VFS：write / edit / delete 默认直接应用，并生成可撤回 workspace_patch。',
+            '- 项目 VFS：write / edit / delete 默认直接应用，返回本轮文件变更摘要，并由 Git 记录版本历史。',
             '- 宿主边界：真实 ST 世界书发布、导出或覆盖宿主数据仍需要用户确认。'
         ].join('\n');
     }

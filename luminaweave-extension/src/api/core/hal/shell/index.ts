@@ -20,7 +20,8 @@ export const vfsCommandService = new VFSCommandService(virtualFileSystemService)
 export const bashTerminalRuntime = new BashTerminalRuntime({
     session: createUserTerminalSession(),
     vfs: virtualFileSystemService,
-    permissions: shellPermissionService
+    permissions: shellPermissionService,
+    network: { dangerouslyAllowFullInternetAccess: true }
 });
 
 export const shellSessionRuntime = new ShellSessionRuntime({
@@ -29,5 +30,6 @@ export const shellSessionRuntime = new ShellSessionRuntime({
 
 export const agentBashToolService = new AgentBashToolService({
     vfs: virtualFileSystemService,
-    permissions: shellPermissionService
+    permissions: shellPermissionService,
+    network: { dangerouslyAllowFullInternetAccess: true }
 });

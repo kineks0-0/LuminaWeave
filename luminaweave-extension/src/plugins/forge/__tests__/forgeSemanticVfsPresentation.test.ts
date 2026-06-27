@@ -121,25 +121,21 @@ describe('forgeSemanticVfsPresentation', () => {
         const rows = flattenForgeSemanticVfsTree(buildForgeProjectVfsPanelTree({
             sessionEntries: [
                 entry('n1', null, 'metadata', {}),
-                entry('n2', 'n1', 'user', { role: 'user', text: '请更新检查清单' }),
-                entry('n3', 'n2', 'workspace_patch', {
-                    nodeId: 'n3',
-                    changes: [{
-                        path: './memory/AUTO/Checklist.md',
-                        kind: 'update',
-                        beforeHash: 'before',
-                        afterHash: 'after',
-                        beforeContentRef: 'inline:old',
-                        afterContentRef: 'inline:new'
-                    }]
-                })
+                entry('n2', 'n1', 'user', { role: 'user', text: '请更新检查清单' })
             ],
-            activeNodeId: 'n3',
-            projectFiles: [{
-                path: './project.json',
-                kind: 'file',
-                content: '{"title":"实际项目"}'
-            }]
+            activeNodeId: 'n2',
+            projectFiles: [
+                {
+                    path: './project.json',
+                    kind: 'file',
+                    content: '{"title":"实际项目"}'
+                },
+                {
+                    path: './memory/AUTO/Checklist.md',
+                    kind: 'file',
+                    content: '- [ ] 已更新'
+                }
+            ]
         }));
 
         expect(rows.map(row => row.path)).toEqual(expect.arrayContaining([
@@ -157,7 +153,7 @@ describe('forgeSemanticVfsPresentation', () => {
         expect(rows.find(row => row.path === './memory/AUTO/Checklist.md')).toEqual(expect.objectContaining({
             source: 'workspace',
             writePolicy: 'direct-write',
-            preview: 'update: workspace_patch summary'
+            content: '- [ ] 已更新'
         }));
     });
 
@@ -200,25 +196,19 @@ describe('forgeSemanticVfsPresentation', () => {
         }));
     });
 
-    it('projects session history and workspace patches into user-facing semantic paths', () => {
+    it('projects session history and project files into user-facing semantic paths', () => {
         const rows = flattenForgeSemanticVfsTree(buildForgeSemanticVfsTree({
             contextBundle,
             sessionEntries: [
                 entry('n1', null, 'metadata', {}),
-                entry('n2', 'n1', 'user', { role: 'user', text: '第一轮' }),
-                entry('n3', 'n2', 'workspace_patch', {
-                    nodeId: 'n3',
-                    changes: [{
-                        path: './card.md',
-                        kind: 'update',
-                        beforeHash: 'before',
-                        afterHash: 'after',
-                        beforeContentRef: 'inline:old',
-                        afterContentRef: 'inline:new'
-                    }]
-                })
+                entry('n2', 'n1', 'user', { role: 'user', text: '第一轮' })
             ],
-            activeNodeId: 'n3'
+            activeNodeId: 'n2',
+            projectFiles: [{
+                path: './card.md',
+                kind: 'file',
+                content: '# Card'
+            }]
         }));
 
         expect(rows.find(row => row.path === './threads/目前/nodes/n2.md')).toEqual(expect.objectContaining({

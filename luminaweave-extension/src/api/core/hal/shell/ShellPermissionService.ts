@@ -25,7 +25,7 @@ const scopeMatchesPath = (scope: ShellPermissionScope, path: string): boolean =>
     Boolean(scope.pathPrefix && isSameOrChildPath(path, scope.pathPrefix));
 
 const scopeMatchesUrl = (scope: ShellPermissionScope, url: string): boolean =>
-    Boolean(scope.urlPrefix && url.startsWith(scope.urlPrefix));
+    scope.allNetwork === true || Boolean(scope.urlPrefix && url.startsWith(scope.urlPrefix));
 
 const sessionMatches = (left: ShellSessionRef, right: ShellSessionRef): boolean =>
     left.shellSessionId === right.shellSessionId
@@ -95,6 +95,15 @@ export class ShellPermissionService {
         return request;
     }
 
+    expireGrant(grantId: string): ShellPermissionGrant {
+        const grant = this.grants.get(grantId);
+        if (!grant) throw new Error(`Shell permission grant not found: ${grantId}`);
+        grant.status = 'expired';
+        grant.expiresAt = now();
+        this.notify();
+        return grant;
+    }
+
     revokeGrant(grantId: string, session: ShellSessionRef): ShellPermissionGrant {
         if (session.kind !== 'user-terminal') {
             throw new Error('Only user terminal sessions can revoke shell grants');
@@ -135,7 +144,7 @@ export class ShellPermissionService {
     }
 
     checkNetwork(session: ShellSessionRef, url: string, allowList: string[]): ShellPermissionDecision {
-        if (!allowList.some(prefix => url.startsWith(prefix))) {
+        if (!allowList.some(prefix => prefix === '*' || url.startsWith(prefix))) {
             return { allowed: false, reason: `network denied by allow-list: ${url}` };
         }
         if (session.kind === 'user-terminal') {

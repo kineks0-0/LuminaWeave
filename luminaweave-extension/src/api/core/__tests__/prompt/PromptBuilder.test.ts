@@ -230,6 +230,6 @@ describe('PromptBuilder', () => {
         expect(result[0].content).toContain('<Chat_Reply>');
         expect(result[0].content).not.toContain('Forge <V> DSL');
         expect(result[0].content).not.toContain('writeFile');
-        expect(result[0].content).not.toContain('workspace_patch');
+        expect(result[0].content).not.toContain('Forge VFS Git history');
     });
 });

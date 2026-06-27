@@ -1,5 +1,5 @@
 import type { NetworkConfig, SecureFetch } from 'just-bash';
-import type { ShellPermissionDecision, ShellSessionRef } from '@shared/resources/index.js';
+import type { ShellPermissionDecision, ShellPermissionScope, ShellSessionRef } from '@shared/resources/index.js';
 import type { ShellPermissionService } from './ShellPermissionService.js';
 
 export type ShellNetworkFailureReason = 'network_not_configured' | 'url_not_allowed' | 'method_not_allowed' | 'grant_required';
@@ -20,6 +20,9 @@ const normalizeMethod = (method: string | undefined): string =>
 
 const entryToUrlPrefix = (entry: NonNullable<NetworkConfig['allowedUrlPrefixes']>[number]): string =>
     typeof entry === 'string' ? entry : entry.url;
+
+const scopeMatchesNetworkUrl = (scope: ShellPermissionScope, url: string): boolean =>
+    scope.allNetwork === true || Boolean(scope.urlPrefix && url.startsWith(scope.urlPrefix));
 
 export class ShellNetworkPolicyService {
     createNetworkConfig(input: ShellNetworkPolicyInput): NetworkConfig | null {
@@ -87,8 +90,7 @@ export class ShellNetworkPolicyService {
 
         const grant = permissions.listGrants(session).find(item =>
             item.operation === 'network'
-            && Boolean(item.scope.urlPrefix)
-            && url.startsWith(item.scope.urlPrefix!)
+            && scopeMatchesNetworkUrl(item.scope, url)
         );
         return grant
             ? { allowed: true, reason: 'grant', grant }

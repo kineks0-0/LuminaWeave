@@ -6,10 +6,7 @@ import { lwStorage } from '../../api/storage.js';
 import { useForgeStore } from '../../stores/useForgeStore.js';
 import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
 import type {
-    ForgePiPersistedSessionState,
-    ForgePiSessionEntry,
-    ForgePiWorkspacePatchChange,
-    ForgePiWorkspacePatchPayload
+    ForgePiPersistedSessionState
 } from '@shared/ForgePiTypes.js';
 import type { CleanedMessage } from '../../types/nexus.js';
 import { WorldlineStore } from '../../api/core/storage/WorldlineStore.js';
@@ -41,7 +38,7 @@ import {
 } from '../../api/core/forge/forms/ForgeFormController.js';
 import { ForgeWorkflowGraph } from '../../api/core/forge/graph/ForgeWorkflowGraph.js';
 import { HALContext } from '../../api/core/hal/HALContext.js';
-import { shellWorkspaceService } from '../../api/core/hal/shell/ShellWorkspaceService.js';
+import { forgeWorkspacePath, shellWorkspaceService } from '../../api/core/hal/shell/ShellWorkspaceService.js';
 import type { ForgeAuxPanelKind, ForgeWorkflowSnapshot } from '../../types/ForgeWorkflowTypes.js';
 import {
     FORGE_FORM_RESULT_SUBMITTED,
@@ -59,6 +56,7 @@ import type {
     ForgeRuntimeContext,
     ForgeRuntimeEffect,
     ForgeRuntimeEvent,
+    ForgeToolApprovalResolutionOptions,
     ForgeUserCommand,
     StagingEntry
 } from '../../types/ForgeRuntimeTypes.js';
@@ -94,7 +92,7 @@ import {
     forgeProjectSemanticVfsService,
     type ForgeProjectSemanticVfsEntry
 } from '../../api/core/forge/project/ForgeProjectSemanticVfsService.js';
-import { forgeWorkspaceVersionManager } from '../../api/core/forge/project/ForgeWorkspaceVersionManager.js';
+import { forgeWorkspaceWriteService } from '../../api/core/forge/project/ForgeWorkspaceWriteService.js';
 import {
     PromptResourceBindingService,
     promptResourceBindingService
@@ -125,9 +123,7 @@ import { ForgeStagingActionController } from './store/ForgeStagingActionControll
 import { ForgeFreezePublishController } from './store/ForgeFreezePublishController.js';
 import { ForgeFormSubmissionController } from './store/ForgeFormSubmissionController.js';
 import { ForgePromptPreviewPayloadBuilder } from './store/ForgePromptPreviewPayloadBuilder.js';
-import { buildWorkspaceChangeRestorePatch } from './store/forgeWorkspaceChangeActions.js';
 import { ForgeAgentInspectorActions, type ForgeAgentInspectorMode } from './store/ForgeAgentInspectorActions.js';
-import type { ForgeFeedWorkspaceChange } from './project/forgeWorkspaceChangePresentation.js';
 export const DEFAULT_PLANNER_PROMPT = FORGE_PLANNER_PROMPT;
 export const DEFAULT_EXECUTOR_PROMPT = FORGE_EXECUTOR_SYSTEM_PROMPT;
 let forgeControllerBridgeBound = false;
@@ -787,25 +783,6 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         void persistWorkspaceSession();
     };
 
-    const resolveInlineContentRef = (ref: string | null | undefined): string | null => {
-        if (!ref?.startsWith('inline:')) return null;
-        return decodeURIComponent(ref.slice('inline:'.length));
-    };
-
-    const workspacePatchLocalPath = (path: string): string => {
-        const normalized = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/');
-        const relative = normalized.startsWith('./')
-            ? normalized.slice(2)
-            : normalized.replace(/^\/+/, '');
-        return `/${relative}`.replace(/\/+/g, '/');
-    };
-
-    const workspacePatchParentPath = (path: string): string => {
-        const normalized = path.replace(/\\/g, '/').replace(/\/+/g, '/');
-        const index = normalized.lastIndexOf('/');
-        return index <= 0 ? '/' : normalized.slice(0, index);
-    };
-
     const normalizeAgentResourceOverridePath = (path: string): string => {
         const normalized = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
         if (!normalized || normalized === '.') return './';
@@ -821,131 +798,6 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             || /^\.\/agent\/skills\/[a-z0-9][a-z0-9-]*\/SKILL\.md$/.test(normalized);
     };
 
-    const agentResourceOverrideLocalPath = (path: string): string => {
-        const semanticPath = normalizeAgentResourceOverridePath(path);
-        const relative = semanticPath.startsWith('./') ? semanticPath.slice(2) : semanticPath.replace(/^\/+/, '');
-        return `/forge/${encodeURIComponent(activeForgeProjectId.value)}/${relative}`.replace(/\/+/g, '/');
-    };
-
-    const parseMarkdownDocument = (content: string): { title: string; body: string } => {
-        const lines = content.replace(/\r\n/g, '\n').split('\n');
-        let title = '';
-        if (lines[0]?.startsWith('# ')) {
-            title = lines.shift()?.replace(/^#\s+/, '').trim() ?? '';
-            if (lines[0] === '') lines.shift();
-        }
-        const footerIndex = lines.findIndex(line => line.startsWith('> 来源：'));
-        const bodyLines = footerIndex >= 0 ? lines.slice(0, footerIndex) : lines;
-        return {
-            title,
-            body: bodyLines.join('\n').trim()
-        };
-    };
-
-    const applyWorkspacePatchStateChange = (change: ForgePiWorkspacePatchChange): void => {
-        const after = resolveInlineContentRef(change.afterContentRef);
-        const memoryMatch = change.path.match(/^\.?\/?memory\/(.+)\.md$/);
-        if (memoryMatch) {
-            const memoryPath = memoryMatch[1].replace(/\\/g, '/').replace(/\/+/g, '/');
-            if (after === null) {
-                removeForgeMemory(memoryPath);
-                return;
-            }
-            const parsed = parseMarkdownDocument(after);
-            upsertForgeMemory(memoryPath, parsed.title || memoryPath, parsed.body, 'planner', parsed.body.slice(0, 120));
-            return;
-        }
-
-        const lorebookMatch = change.path.match(/^\.?\/?lorebook\/entries\/([^/]+)\.md$/);
-        if (!lorebookMatch) return;
-        const entryId = lorebookMatch[1];
-        if (after === null) {
-            removeVirtualLorebookEntry(entryId);
-            return;
-        }
-        const parsed = parseMarkdownDocument(after);
-        const existing = findVirtualLorebookEntry(virtualLorebookEntries.value, entryId)?.entry;
-        upsertVirtualLorebookEntry({
-            id: entryId,
-            entry: {
-                ...(existing ?? {}),
-                uid: existing?.uid ?? entryId,
-                comment: parsed.title || existing?.comment || entryId,
-                key: existing?.key ?? [],
-                keysecondary: existing?.keysecondary ?? [],
-                content: parsed.body,
-                constant: existing?.constant ?? false,
-                selective: existing?.selective ?? false,
-                selectiveLogic: existing?.selectiveLogic ?? 0,
-                disable: existing?.disable ?? false,
-                enabled: existing?.enabled ?? true,
-                position: existing?.position ?? 0,
-                role: existing?.role,
-                depth: existing?.depth ?? 4,
-                order: existing?.order ?? 100,
-                probability: existing?.probability ?? 100,
-                useProbability: existing?.useProbability ?? false,
-                scan_depth: existing?.scan_depth ?? 4
-            }
-        });
-    };
-
-    const appendWorkspacePatchEntry = (patch: ForgePiWorkspacePatchPayload): void => {
-        const entry: ForgePiSessionEntry = {
-            id: patch.nodeId,
-            sessionId: `${activeForgeProjectId.value || workspaceSessionId.value}__${sessionChatId.value}`,
-            parentId: forgeStore.activePiNodeId,
-            kind: 'workspace_patch',
-            title: 'Workspace patch',
-            summary: `${patch.changes.length} file change(s)`,
-            createdAt: Date.now(),
-            payload: patch
-        };
-        forgeStore.setForgePiPersistedSessionState({
-            sessionId: entry.sessionId,
-            activeNodeId: entry.id,
-            entries: [...forgeStore.piSessionEntries, entry],
-            contextBundleSummary: forgeStore.piContextBundleSummary,
-            loadedExtensions: forgeStore.piLoadedExtensions,
-            version: 1
-        });
-    };
-
-    const applyWorkspacePatch = async (patch: ForgePiWorkspacePatchPayload): Promise<boolean> => {
-        const missingInline = patch.changes.find(change =>
-            change.afterContentRef !== null && resolveInlineContentRef(change.afterContentRef) === null
-        );
-        if (missingInline) {
-            lastError.value = `无法恢复 ${missingInline.path}：缺少 inline 内容引用。`;
-            return false;
-        }
-
-        const fs = await shellWorkspaceService.getFileSystem({
-            projectId: activeForgeProjectId.value,
-            conversationId: sessionChatId.value
-        });
-        for (const change of patch.changes) {
-            const localPath = workspacePatchLocalPath(change.path);
-            const after = resolveInlineContentRef(change.afterContentRef);
-            if (after === null) {
-                await fs.rm(localPath).catch(() => undefined);
-            } else {
-                await fs.mkdir(workspacePatchParentPath(localPath), { recursive: true });
-                await fs.writeFile(localPath, after);
-            }
-            applyWorkspacePatchStateChange(change);
-        }
-        await shellWorkspaceService.persist();
-        appendWorkspacePatchEntry(patch);
-        await persistWorkspaceSession();
-        return true;
-    };
-
-    const restoreWorkspaceChange = async (change: ForgeFeedWorkspaceChange): Promise<boolean> => {
-        if (change.restoreApplied) return false;
-        return applyWorkspacePatch(buildWorkspaceChangeRestorePatch(change));
-    };
-
     const saveProjectVfsOverride = async (path: string, content: string): Promise<boolean> => {
         const semanticPath = normalizeAgentResourceOverridePath(path);
         if (!isManagedAgentResourceOverridePath(semanticPath)) {
@@ -953,30 +805,21 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             return false;
         }
 
-        const fs = await shellWorkspaceService.getFileSystem({
-            projectId: activeForgeProjectId.value,
-            conversationId: sessionChatId.value
+        const relativePath = semanticPath.startsWith('./') ? semanticPath.slice(2) : semanticPath.replace(/^\/+/, '');
+        const result = await forgeWorkspaceWriteService.write({
+            forgeProjectId: activeForgeProjectId.value,
+            conversationId: sessionChatId.value,
+            sourceToolCallId: 'manual-agent-resource-override',
+            displayPath: semanticPath,
+            workspacePath: `${forgeWorkspacePath(activeForgeProjectId.value)}/${relativePath}`,
+            contentAfter: content,
+            command: `manual override ${semanticPath}`
         });
-        const localPath = agentResourceOverrideLocalPath(semanticPath);
-        const before = await fs.readFile(localPath)
-            .then(value => String(value ?? ''))
-            .catch(() => null);
-        if (before === content) return true;
-
-        await fs.mkdir(workspacePatchParentPath(localPath), { recursive: true });
-        await fs.writeFile(localPath, content);
-        await shellWorkspaceService.persist();
-
-        const patch = forgeWorkspaceVersionManager.createPatch({
-            nodeId: `manual-agent-resource-override:${Date.now().toString(36)}`,
-            beforeFiles: before === null ? {} : { [semanticPath]: before },
-            afterFiles: { [semanticPath]: content },
-            sourceToolCallId: 'manual-agent-resource-override'
-        });
-        if (patch.changes.length > 0) {
-            appendWorkspacePatchEntry(patch);
-            await persistWorkspaceSession();
+        if (!result.applied) {
+            lastError.value = result.error ?? `无法写入 ${semanticPath}。`;
+            return false;
         }
+        await persistWorkspaceSession();
         return true;
     };
 
@@ -1388,8 +1231,8 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 }
             }, undefined, undefined, {
                 runPiTurn: (input) => forgePiRuntimeClient.runTurn(input),
-                resolvePiToolApproval: (toolCallId, approved, message) =>
-                    forgePiRuntimeClient.resolveToolApproval(toolCallId, approved, message)
+                resolvePiToolApproval: (toolCallId, approved, message, options) =>
+                    forgePiRuntimeClient.resolveToolApproval(toolCallId, approved, message, options)
             });
         }
         return runtimeOrchestrator;
@@ -1400,7 +1243,13 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         setProcessing: (value) => { forgeStore.isProcessing = value; },
         getIsGenerating: () => isGenerating.value,
         setIsGenerating: (value) => { isGenerating.value = value; },
-        failRunningOperations: () => forgeStore.failRunningOperations(),
+        shouldKeepGenerationActiveAfterDispatch: () => forgeStore.composerToolApprovalsForSession({
+            forgeProjectId: activeForgeProjectId.value ?? null,
+            conversationId: sessionChatId.value ?? null
+        }).length > 0,
+        failRunningOperations: reason => forgeStore.failRunningOperations(reason),
+        markToolApprovalResolved: (toolCallId, approved, message) =>
+            forgeStore.resolveToolApproval(toolCallId, approved, message),
         fallbackResolveToolApproval: (toolCallId, approved, message) =>
             forgeStore.resolveToolApproval(toolCallId, approved, message)
     });
@@ -2047,8 +1896,13 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         stagingActionController.moveCommitReadyToStaging(id);
     };
 
-    const resolveToolApproval = async (toolCallId: string, approved: boolean, message?: string): Promise<boolean> => {
-        return runtimeActionController.resolveToolApproval(toolCallId, approved, message);
+    const resolveToolApproval = async (
+        toolCallId: string,
+        approved: boolean,
+        message?: string,
+        options?: ForgeToolApprovalResolutionOptions
+    ): Promise<boolean> => {
+        return runtimeActionController.resolveToolApproval(toolCallId, approved, message, options);
     };
 
     const checkoutPiNode = async (nodeId: string | null): Promise<void> => {
@@ -2171,8 +2025,6 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         buildPromptPreviewPayload,
         persistWorkspaceSession,
         flushWorkspaceSession,
-        applyWorkspacePatch,
-        restoreWorkspaceChange,
         saveProjectVfsOverride,
         ensureWorkspaceSession,
         createWorkspaceSession,

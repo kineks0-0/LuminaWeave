@@ -67,6 +67,48 @@ export interface RuntimeExtensionStorePort {
     listKeys(params: { namespace: string; table?: string }): Promise<string[]>;
     setBlob(params: { namespace: string; key: string; data: any; table?: string }): Promise<void>;
     getBlob(params: { namespace: string; key: string; table?: string }): Promise<any>;
+    listRecords?(): Promise<RuntimeStorageRecordInfo[]>;
+    deleteRecord?(location: RuntimeStorageRecordLocation): Promise<void>;
+    importRecords?(records: RuntimeStorageImportRecord[]): Promise<RuntimeStorageImportResult>;
+    exportRecords?(scope?: RuntimeStorageScope): Promise<RuntimeStorageExportEnvelope>;
+}
+
+export type RuntimeStorageBackend = 'indexeddb' | 'tauri-sqlite' | 'host-extension-store' | 'localStorage';
+export type RuntimeStorageRecordKind = 'json' | 'blob';
+
+export interface RuntimeStorageRecordLocation {
+    namespace: string;
+    table?: string;
+    key: string;
+    kind: RuntimeStorageRecordKind;
+}
+
+export interface RuntimeStorageRecordInfo extends RuntimeStorageRecordLocation {
+    table: string;
+    backend: RuntimeStorageBackend;
+    bytes: number;
+    updatedAt: number;
+}
+
+export interface RuntimeStorageImportRecord extends RuntimeStorageRecordLocation {
+    table?: string;
+    value: unknown;
+}
+
+export interface RuntimeStorageImportResult {
+    imported: number;
+}
+
+export interface RuntimeStorageScope {
+    namespace?: string;
+    table?: string;
+    kind?: RuntimeStorageRecordKind;
+}
+
+export interface RuntimeStorageExportEnvelope {
+    version: 1;
+    exportedAt: number;
+    records: RuntimeStorageImportRecord[];
 }
 
 export interface HALRuntimePorts {

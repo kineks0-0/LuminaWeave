@@ -14,6 +14,7 @@ vi.mock('@/stores/useForgeStore.js', () => ({
 const STORAGE_KEY = 'lumina-forge.workspace-sessions';
 
 function injectMockBridge(serverStorage: Map<string, any>) {
+    const runtimeStore = new Map<string, unknown>();
     const bridge = {
         chat: {
             listChats: vi.fn(),
@@ -93,11 +94,17 @@ function injectMockBridge(serverStorage: Map<string, any>) {
             restoreDefaults: vi.fn()
         },
         extensionStore: {
-            getJson: vi.fn(),
-            setJson: vi.fn(),
-            updateJson: vi.fn(),
-            deleteJson: vi.fn(),
-            listKeys: vi.fn(),
+            getJson: vi.fn(async ({ key }: { key: string }) => runtimeStore.get(key) ?? null),
+            setJson: vi.fn(async ({ key, value }: { key: string; value: unknown }) => {
+                runtimeStore.set(key, value);
+            }),
+            updateJson: vi.fn(async ({ key, value }: { key: string; value: unknown }) => {
+                runtimeStore.set(key, value);
+            }),
+            deleteJson: vi.fn(async ({ key }: { key: string }) => {
+                runtimeStore.delete(key);
+            }),
+            listKeys: vi.fn(async () => Array.from(runtimeStore.keys())),
             setBlob: vi.fn(),
             getBlob: vi.fn()
         }
@@ -113,7 +120,7 @@ describe('ForgeSessionRepository', () => {
 
     beforeEach(() => {
         setActivePinia(createPinia());
-        shellWorkspaceService.resetForTests();
+        shellWorkspaceService.resetForTests({ clearStorage: true });
         serverStorage = new Map<string, any>();
         bridge = injectMockBridge(serverStorage);
         const storage = new Map<string, string>();
@@ -256,6 +263,29 @@ describe('ForgeSessionRepository', () => {
             sessionChatId: 'lw_card_3',
             title: 'No Logs Local',
             worldlineNodes: [{ id: 'm1', content: 'hello' } as any],
+            piSession: {
+                sessionId: 'forge_ws_3__lw_card_3',
+                activeNodeId: 'tool_result_1',
+                entries: [{
+                    id: 'tool_result_1',
+                    sessionId: 'forge_ws_3__lw_card_3',
+                    parentId: null,
+                    kind: 'tool_result',
+                    title: 'Tool result',
+                    summary: 'large payload',
+                    createdAt: 1,
+                    payload: {
+                        toolCallId: 'tool_1',
+                        toolName: 'write',
+                        result: {
+                            content: 'x'.repeat(4096)
+                        }
+                    }
+                }],
+                contextBundleSummary: null,
+                loadedExtensions: [],
+                version: 1
+            },
             structuredState: {
                 forms: { f1: { id: 'f1' } }
             } as any,
@@ -266,8 +296,34 @@ describe('ForgeSessionRepository', () => {
         const sessionInLocal = rawSessions.find((s: any) => s.id === 'forge_ws_3');
 
         expect(sessionInLocal.worldlineNodes).toEqual([]);
+        expect(sessionInLocal.piSession).toBeUndefined();
         expect(sessionInLocal.structuredState.forms).toEqual({});
         expect(sessionInLocal.workspaceMode).toBe('stub');
+        expect(bridge.extensionStore.setJson).toHaveBeenCalledWith(expect.objectContaining({
+            namespace: 'lumina.forge',
+            table: 'pi-sessions',
+            key: 'forge_ws_3',
+            value: expect.objectContaining({
+                sessionId: 'forge_ws_3__lw_card_3',
+                entries: [expect.objectContaining({
+                    kind: 'tool_result',
+                    payload: expect.objectContaining({
+                        result: expect.objectContaining({
+                            content: expect.stringContaining('x')
+                        })
+                    })
+                })]
+            })
+        }));
+
+        const loaded = await repository.loadSession('forge_ws_3');
+
+        expect(loaded?.piSession?.activeNodeId).toBe('tool_result_1');
+        expect(loaded?.piSession?.entries[0]?.payload).toMatchObject({
+            result: {
+                content: 'x'.repeat(4096)
+            }
+        });
     });
 
     it('应把 Forge 会话保存为项目级 workspace 绑定', async () => {

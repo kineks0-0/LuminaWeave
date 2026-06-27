@@ -1,22 +1,10 @@
-import { InMemoryFs, type FileContent } from 'just-bash';
+import type { FileContent, IFileSystem } from 'just-bash';
 import { HALContext } from '../HALContext.js';
+import { LightningBashFsAdapter } from './LightningBashFsAdapter.js';
 
 const WORKSPACE_NAMESPACE = 'lumina.resource-runtime';
 const WORKSPACE_TABLE = 'shell-workspaces';
-const SNAPSHOT_KEY = 'workspace-fs.snapshot.v1';
 const FORGE_BINDINGS_KEY = 'forge-project-bindings.v1';
-
-interface WorkspaceSnapshotFile {
-    path: string;
-    content: string;
-}
-
-interface WorkspaceSnapshot {
-    version: 1;
-    updatedAt: number;
-    directories: string[];
-    files: WorkspaceSnapshotFile[];
-}
 
 export interface ForgeProjectWorkspaceBinding {
     forgeProjectId: string;
@@ -59,6 +47,16 @@ interface ForgeProjectWorkspaceBindingStore {
     bindings: Record<string, ForgeProjectWorkspaceBinding>;
 }
 
+export interface ShellWorkspaceServiceOptions {
+    filesystemName?: string;
+}
+
+export interface ShellWorkspaceResetOptions {
+    clearStorage?: boolean;
+}
+
+let testFilesystemSerial = 0;
+
 const normalizeLocalPath = (path: string): string =>
     `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 
@@ -90,20 +88,21 @@ export const resolveForgeConversationId = (input: { sessionChatId?: string; conv
     input.conversationId || input.sessionChatId || `lw_card_${Date.now().toString(36)}`;
 
 export class ShellWorkspaceService {
-    private fs: InMemoryFs | null = null;
-    private loadPromise: Promise<InMemoryFs> | null = null;
+    private fs: IFileSystem | null = null;
+    private loadPromise: Promise<IFileSystem> | null = null;
     private bindingStore: ForgeProjectWorkspaceBindingStore | null = null;
+    private testFilesystemName: string | null = null;
 
-    async getFileSystem(seed?: { projectId?: string; conversationId?: string }): Promise<InMemoryFs> {
+    constructor(private readonly options: ShellWorkspaceServiceOptions = {}) {}
+
+    async getFileSystem(seed?: { projectId?: string; conversationId?: string }): Promise<IFileSystem> {
         const fs = await this.load();
         await this.ensureSeedDirectories(fs, seed);
         return fs;
     }
 
     async persist(): Promise<void> {
-        const fs = await this.load();
-        const snapshot = await this.createSnapshot(fs);
-        await this.writeJson(SNAPSHOT_KEY, snapshot);
+        await this.load();
     }
 
     async listForgeProjectFiles(input: {
@@ -282,23 +281,27 @@ export class ShellWorkspaceService {
         return Object.values(store.bindings);
     }
 
-    resetForTests(): void {
+    resetForTests(options: ShellWorkspaceResetOptions = {}): void {
         this.fs = null;
         this.loadPromise = null;
         this.bindingStore = null;
+        if (options.clearStorage) {
+            testFilesystemSerial += 1;
+            const baseName = this.options.filesystemName ?? 'luminaweave-forge-workspace';
+            this.testFilesystemName = `${baseName}.test.${testFilesystemSerial}`;
+        }
     }
 
-    private async load(): Promise<InMemoryFs> {
+    private async load(): Promise<IFileSystem> {
         if (this.fs) return this.fs;
         if (this.loadPromise) return this.loadPromise;
 
         this.loadPromise = (async () => {
-            const fs = new InMemoryFs();
+            const fs = new LightningBashFsAdapter({
+                filesystemName: this.testFilesystemName ?? this.options.filesystemName
+            });
+            await fs.initialize();
             await this.ensureSeedDirectories(fs);
-            const snapshot = await this.readJson<WorkspaceSnapshot>(SNAPSHOT_KEY);
-            if (snapshot?.version === 1) {
-                await this.restoreSnapshot(fs, snapshot);
-            }
             this.fs = fs;
             return fs;
         })();
@@ -307,7 +310,7 @@ export class ShellWorkspaceService {
     }
 
     private async ensureSeedDirectories(
-        fs: InMemoryFs,
+        fs: IFileSystem,
         seed?: { projectId?: string; conversationId?: string }
     ): Promise<void> {
         await fs.mkdir('/forge', { recursive: true });
@@ -321,49 +324,6 @@ export class ShellWorkspaceService {
                 await fs.mkdir(forgeThreadLocalRoot(seed.projectId, seed.conversationId), { recursive: true });
             }
         }
-    }
-
-    private async restoreSnapshot(fs: InMemoryFs, snapshot: WorkspaceSnapshot): Promise<void> {
-        const directories = [...snapshot.directories]
-            .map(normalizeLocalPath)
-            .filter(path => path !== '/')
-            .sort((left, right) => left.length - right.length);
-        for (const directory of directories) {
-            await fs.mkdir(directory, { recursive: true });
-        }
-        for (const file of snapshot.files) {
-            const path = normalizeLocalPath(file.path);
-            const parent = path.slice(0, path.lastIndexOf('/')) || '/';
-            await fs.mkdir(parent, { recursive: true });
-            await fs.writeFile(path, file.content);
-        }
-    }
-
-    private async createSnapshot(fs: InMemoryFs): Promise<WorkspaceSnapshot> {
-        const directories = new Set<string>(['/forge', '/chat']);
-        const files: WorkspaceSnapshotFile[] = [];
-
-        for (const rawPath of fs.getAllPaths()) {
-            const path = normalizeLocalPath(rawPath);
-            if (path === '/') continue;
-            const stat = await fs.stat(path).catch(() => null);
-            if (!stat) continue;
-            if (stat.isDirectory) {
-                directories.add(path);
-            } else if (stat.isFile) {
-                files.push({
-                    path,
-                    content: toContentText(await fs.readFile(path))
-                });
-            }
-        }
-
-        return {
-            version: 1,
-            updatedAt: Date.now(),
-            directories: Array.from(directories).sort((left, right) => left.localeCompare(right)),
-            files: files.sort((left, right) => left.path.localeCompare(right.path))
-        };
     }
 
     private async loadBindingStore(): Promise<ForgeProjectWorkspaceBindingStore> {

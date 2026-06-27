@@ -61,6 +61,55 @@ describe('ForgeRuntimeActionController', () => {
         expect(harness.failRunningOperations).toHaveBeenCalledTimes(1);
     });
 
+    it('keeps generation active when dispatch returns while composer approval is pending', async () => {
+        const harness = createController({
+            shouldKeepGenerationActiveAfterDispatch: () => true
+        } as unknown as Partial<ConstructorParameters<typeof ForgeRuntimeActionController>[0]>);
+
+        const result = await harness.controller.dispatchWorkspaceCommand({ type: 'send_user_input', input: '需要联网' });
+
+        expect(result).toEqual({ ok: true });
+        expect(harness.processing).toBe(false);
+        expect(harness.generating).toBe(true);
+        expect(harness.failRunningOperations).not.toHaveBeenCalled();
+    });
+
+    it('cleans generation when a paused composer approval is rejected', async () => {
+        const harness = createController({
+            getRuntimeOrchestrator: () => ({
+                dispatch: vi.fn(),
+                resolveToolApproval: vi.fn().mockResolvedValue(true)
+            } as unknown as ForgeRuntimeOrchestrator)
+        });
+
+        const resolved = await harness.controller.resolveToolApproval('tool-1', false, '拒绝联网');
+
+        expect(resolved).toBe(true);
+        expect(harness.generating).toBe(false);
+        expect(harness.failRunningOperations).toHaveBeenCalledTimes(1);
+    });
+
+    it('marks approval resolved locally before waiting for runtime resume', async () => {
+        let resumeRuntime!: (value: boolean) => void;
+        const runtimeResult = new Promise<boolean>(resolve => {
+            resumeRuntime = resolve;
+        });
+        const markToolApprovalResolved = vi.fn();
+        const harness = createController({
+            getRuntimeOrchestrator: () => ({
+                dispatch: vi.fn(),
+                resolveToolApproval: vi.fn(() => runtimeResult)
+            } as unknown as ForgeRuntimeOrchestrator),
+            markToolApprovalResolved
+        });
+
+        const resolved = harness.controller.resolveToolApproval('tool-1', true, '允许此域名');
+
+        expect(markToolApprovalResolved).toHaveBeenCalledWith('tool-1', true, '允许此域名');
+        resumeRuntime(true);
+        await expect(resolved).resolves.toBe(true);
+    });
+
     it('falls back to store approval resolution when runtime has no pending approval', async () => {
         const harness = createController();
 

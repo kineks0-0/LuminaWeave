@@ -1,8 +1,7 @@
 import type {
     ForgePiContextBundleSummary,
     ForgePiMessagePayload,
-    ForgePiSessionEntry,
-    ForgePiWorkspacePatchPayload
+    ForgePiSessionEntry
 } from '@shared/ForgePiTypes.js';
 
 export type ForgeSemanticVfsNodeKind = 'directory' | 'file' | 'alias' | 'resource-root';
@@ -238,16 +237,6 @@ const sessionFileSeeds = (input: ForgeSemanticVfsTreeInput): SemanticFileSeed[] 
                 content: message
             });
         }
-        if (entry.kind === 'workspace_patch' && isWorkspacePatchPayload(entry.payload)) {
-            entry.payload.changes.forEach(change => {
-                seeds.push({
-                    path: normalizeSemanticPath(change.path),
-                    source: 'workspace',
-                    writePolicy: 'direct-write',
-                    preview: `${change.kind}: ${entry.summary}`
-                });
-            });
-        }
     });
     return seeds;
 };
@@ -410,16 +399,6 @@ const isMessagePayload = (value: unknown): value is ForgePiMessagePayload =>
     isRecord(value)
     && (value.role === 'user' || value.role === 'assistant' || value.role === 'system' || value.role === 'toolResult')
     && (typeof value.text === 'string' || value.text === undefined);
-
-const isWorkspacePatchPayload = (value: unknown): value is ForgePiWorkspacePatchPayload =>
-    isRecord(value)
-    && typeof value.nodeId === 'string'
-    && Array.isArray(value.changes)
-    && value.changes.every(change =>
-        isRecord(change)
-        && typeof change.path === 'string'
-        && (change.kind === 'create' || change.kind === 'update' || change.kind === 'delete')
-    );
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null;

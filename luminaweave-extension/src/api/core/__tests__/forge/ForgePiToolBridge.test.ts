@@ -1,12 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ForgePiToolBridge } from '@/api/core/forge/agent-app/tools/ForgePiToolBridge.js';
+import { ForgeWorkspaceSearchShell } from '@/api/core/forge/shell/ForgeWorkspaceSearchShell.js';
 import type { ForgeCapabilityRegistry } from '@/api/core/forge/skills/ForgeCapabilityRegistry.js';
 import type { ForgeSkillLoadResult, ForgeSkillRegistry } from '@/api/core/forge/skills/ForgeSkillRegistry.js';
 import type { ForgeRuntimeEffect } from '@/types/ForgeRuntimeTypes.js';
 import type { ForgeRuntimeContext } from '@/types/ForgeRuntimeTypes.js';
 import type { ForgeDraftTree, ForgeStructuredState } from '@/types/ForgeStructuredTypes.js';
 import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
+import { ShellPermissionService } from '@/api/core/hal/shell/ShellPermissionService.js';
 import { ShellWorkspaceService } from '@/api/core/hal/shell/ShellWorkspaceService.js';
+import { virtualFileSystemService } from '@/api/core/hal/shell/index.js';
 import type {
     AgentResearchFetchInput,
     AgentResearchProvider,
@@ -80,6 +83,10 @@ describe('ForgePiToolBridge', () => {
                 }
             }
         });
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
     });
 
     it('exposes short direct workspace tools without Review Gate metadata', () => {
@@ -198,12 +205,12 @@ describe('ForgePiToolBridge', () => {
                 requestId: 'req_forge_search'
             }
         });
-        expect(result?.details).not.toMatchObject({
-            workspacePatch: expect.anything()
+        expect(result?.details).toMatchObject({
+            provider: 'tavily'
         });
     });
 
-    it('applies write directly to the Forge project workspace and returns a workspace patch', async () => {
+    it('applies write directly to the Forge project workspace and returns a workspace write summary', async () => {
         const workspaces = new ShellWorkspaceService();
         const bridge = new ForgePiToolBridge({
             skills: createEmptySkills(),
@@ -227,16 +234,19 @@ describe('ForgePiToolBridge', () => {
             path: './card.md',
             applied: true,
             command: 'write ./card.md',
-            workspacePatch: {
+            workspaceWriteSummary: {
                 sourceToolCallId: 'call_write',
-                changes: [expect.objectContaining({
+                writeCount: 1,
+                changedFiles: [expect.objectContaining({
                     path: './card.md',
-                    kind: 'create',
-                    beforeContentRef: null,
-                    afterContentRef: expect.stringContaining('inline:')
-                })]
+                    kind: 'create'
+                })],
+                errors: []
             }
         });
+        expect(result?.details).toEqual(expect.objectContaining({
+            workspaceWriteSummary: expect.any(Object)
+        }));
     });
 
     it('resolves pending approvals recorded with historical direct write tool names', async () => {
@@ -293,6 +303,254 @@ describe('ForgePiToolBridge', () => {
         });
     });
 
+    it('creates a Composer network approval request before executing bash without a grant', async () => {
+        const permissions = new ShellPermissionService();
+        const shell = new ForgeWorkspaceSearchShell(virtualFileSystemService, permissions);
+        const context = createContext();
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            shell,
+            permissions
+        } as ConstructorParameters<typeof ForgePiToolBridge>[0] & { permissions: ShellPermissionService });
+
+        const approval = bridge.requestToolApproval({
+            requestId: 'req_network',
+            toolCallId: 'call_network',
+            toolName: 'bash',
+            args: {
+                command: 'curl -o fetched.txt https://api.example.com/resource',
+                accessMode: 'network-request'
+            },
+            context,
+            source: 'conversation'
+        });
+
+        expect(approval).toEqual(expect.objectContaining({
+            approvalKind: 'network',
+            displaySurface: 'composer',
+            toolCallId: 'call_network',
+            toolName: 'bash',
+            shellPermissionRequestId: expect.any(String),
+            urlPrefix: 'https://api.example.com/',
+            localFileIo: true
+        }));
+        expect(permissions.listRequests()).toEqual([expect.objectContaining({
+            requestId: approval?.shellPermissionRequestId,
+            operation: 'network',
+            scope: { urlPrefix: 'https://api.example.com/' },
+            status: 'pending'
+        })]);
+
+        const rejected = await bridge.resolveToolApproval('call_network', false, '不允许联网');
+
+        expect(rejected.resolved).toBe(true);
+        expect(rejected.events).toEqual([expect.objectContaining({
+            type: 'tool_approval_resolved',
+            toolCallId: 'call_network',
+            toolName: 'bash',
+            approved: false,
+            approvalKind: 'network',
+            displaySurface: 'composer',
+            shellPermissionRequestId: approval?.shellPermissionRequestId
+        })]);
+        expect(permissions.listRequests()[0]).toEqual(expect.objectContaining({
+            status: 'rejected',
+            decisionReason: '不允许联网'
+        }));
+    });
+
+    it('executes the original curl command after Composer network approval', async () => {
+        const fetchMock = vi.fn(async () => new Response('approved download', {
+            status: 200,
+            statusText: 'OK'
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+        const permissions = new ShellPermissionService();
+        const workspaces = new ShellWorkspaceService();
+        const shell = new ForgeWorkspaceSearchShell(virtualFileSystemService, permissions);
+        const context = createContext();
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            shell,
+            permissions,
+            workspaces
+        } as ConstructorParameters<typeof ForgePiToolBridge>[0] & { permissions: ShellPermissionService });
+        const approval = bridge.requestToolApproval({
+            requestId: 'req_network_write',
+            toolCallId: 'call_network_write',
+            toolName: 'bash',
+            args: {
+                command: 'curl -o fetched.txt https://api.example.com/resource',
+                accessMode: 'network-request'
+            },
+            context,
+            source: 'conversation'
+        });
+        expect(approval).toEqual(expect.objectContaining({
+            approvalKind: 'network',
+            displaySurface: 'composer'
+        }));
+
+        const approved = await bridge.resolveToolApproval('call_network_write', true, '允许下载参考', {
+            grantMode: 'single_use'
+        });
+        const fs = await workspaces.getFileSystem({
+            projectId: 'forge_project_alpha',
+            conversationId: 'conversation_alpha'
+        });
+
+        expect(approved.resolved).toBe(true);
+        expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/resource', expect.objectContaining({
+            method: 'GET'
+        }));
+        await expect(fs.readFile('/forge/forge_project_alpha/fetched.txt')).resolves.toBe('approved download');
+        expect(approved.events).toEqual(expect.arrayContaining([expect.objectContaining({
+            type: 'tool_result',
+            toolCallId: 'call_network_write',
+            result: expect.objectContaining({
+                writeCount: 1,
+                workspaceWriteSummary: expect.objectContaining({
+                    changedFiles: [expect.objectContaining({
+                        path: './fetched.txt',
+                        kind: 'create'
+                    })]
+                })
+            })
+        })]));
+        expect(approved.toolResultMessage).toMatchObject({
+            toolCallId: 'call_network_write',
+            toolName: 'bash',
+            isError: false
+        });
+        expect(permissions.listGrants()).toEqual([]);
+    });
+
+    it('keeps a domain grant when Composer approval allows future requests', async () => {
+        const fetchMock = vi.fn(async () => new Response('domain grant download', {
+            status: 200,
+            statusText: 'OK'
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+        const permissions = new ShellPermissionService();
+        const workspaces = new ShellWorkspaceService();
+        const shell = new ForgeWorkspaceSearchShell(virtualFileSystemService, permissions);
+        const context = createContext();
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            shell,
+            permissions,
+            workspaces
+        } as ConstructorParameters<typeof ForgePiToolBridge>[0] & { permissions: ShellPermissionService });
+        const bash = bridge.getTools(context).find(tool => tool.name === 'bash');
+
+        const approval = bridge.requestToolApproval({
+            requestId: 'req_network_domain',
+            toolCallId: 'call_network_domain',
+            toolName: 'bash',
+            args: {
+                command: 'curl https://api.example.com/first',
+                accessMode: 'network-request'
+            },
+            context,
+            source: 'conversation'
+        });
+        expect(approval).toEqual(expect.objectContaining({
+            approvalKind: 'network',
+            displaySurface: 'composer'
+        }));
+
+        const approved = await bridge.resolveToolApproval('call_network_domain', true, '允许后续访问此域名', {
+            grantMode: 'domain'
+        });
+        const second = await bash?.execute('call_network_domain_second', {
+            command: 'curl https://api.example.com/second',
+            accessMode: 'network-request'
+        });
+
+        expect(approved.resolved).toBe(true);
+        expect(permissions.listGrants()).toEqual([expect.objectContaining({
+            operation: 'network',
+            scope: { urlPrefix: 'https://api.example.com/' },
+            status: 'approved'
+        })]);
+        expect(second?.terminate).not.toBe(true);
+        expect(second?.content).toEqual([expect.objectContaining({
+            type: 'text',
+            text: expect.stringContaining('domain grant download')
+        })]);
+        expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/first', expect.objectContaining({
+            method: 'GET'
+        }));
+        expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/second', expect.objectContaining({
+            method: 'GET'
+        }));
+    });
+
+    it('keeps an all-network grant when Composer approval allows every future network request', async () => {
+        const fetchMock = vi.fn(async () => new Response('all network grant download', {
+            status: 200,
+            statusText: 'OK'
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+        const permissions = new ShellPermissionService();
+        const workspaces = new ShellWorkspaceService();
+        const shell = new ForgeWorkspaceSearchShell(virtualFileSystemService, permissions);
+        const context = createContext();
+        const bridge = new ForgePiToolBridge({
+            skills: createEmptySkills(),
+            capabilities: createEmptyCapabilities(),
+            shell,
+            permissions,
+            workspaces
+        } as ConstructorParameters<typeof ForgePiToolBridge>[0] & { permissions: ShellPermissionService });
+        const bash = bridge.getTools(context).find(tool => tool.name === 'bash');
+
+        const approval = bridge.requestToolApproval({
+            requestId: 'req_network_all',
+            toolCallId: 'call_network_all',
+            toolName: 'bash',
+            args: {
+                command: 'curl https://api.example.com/first',
+                accessMode: 'network-request'
+            },
+            context,
+            source: 'conversation'
+        });
+        expect(approval).toEqual(expect.objectContaining({
+            approvalKind: 'network',
+            displaySurface: 'composer'
+        }));
+
+        const approved = await bridge.resolveToolApproval('call_network_all', true, '允许后续所有网络请求', {
+            grantMode: 'all_network'
+        });
+        const second = await bash?.execute('call_network_all_second', {
+            command: 'curl https://other.example.com/second',
+            accessMode: 'network-request'
+        });
+
+        expect(approved.resolved).toBe(true);
+        expect(permissions.listGrants()).toEqual([expect.objectContaining({
+            operation: 'network',
+            scope: { allNetwork: true },
+            status: 'approved'
+        })]);
+        expect(second?.terminate).not.toBe(true);
+        expect(second?.content).toEqual([expect.objectContaining({
+            type: 'text',
+            text: expect.stringContaining('all network grant download')
+        })]);
+        expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/first', expect.objectContaining({
+            method: 'GET'
+        }));
+        expect(fetchMock).toHaveBeenCalledWith('https://other.example.com/second', expect.objectContaining({
+            method: 'GET'
+        }));
+    });
+
     it('applies edit and delete directly without staging effects', async () => {
         const effects: ForgeRuntimeEffect[] = [];
         const workspaces = new ShellWorkspaceService();
@@ -328,20 +586,30 @@ describe('ForgePiToolBridge', () => {
             path: './card.md',
             applied: true,
             command: 'edit ./card.md',
-            workspacePatch: {
+            workspaceWriteSummary: {
                 sourceToolCallId: 'call_edit',
-                changes: [expect.objectContaining({ kind: 'update' })]
+                writeCount: 1,
+                changedFiles: [expect.objectContaining({ kind: 'update' })],
+                errors: []
             }
         });
         expect(deleted?.details).toMatchObject({
             path: './card.md',
             applied: true,
             command: 'delete ./card.md',
-            workspacePatch: {
+            workspaceWriteSummary: {
                 sourceToolCallId: 'call_delete',
-                changes: [expect.objectContaining({ kind: 'delete' })]
+                writeCount: 1,
+                changedFiles: [expect.objectContaining({ kind: 'delete' })],
+                errors: []
             }
         });
+        expect(edited?.details).toEqual(expect.objectContaining({
+            workspaceWriteSummary: expect.any(Object)
+        }));
+        expect(deleted?.details).toEqual(expect.objectContaining({
+            workspaceWriteSummary: expect.any(Object)
+        }));
     });
 
     it('returns semantic skill paths from skill tools', async () => {
