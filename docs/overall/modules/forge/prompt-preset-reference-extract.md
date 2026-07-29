@@ -6,11 +6,11 @@
 - `D:\LuminaWeave\A.U.T.O制卡思路\参考预设\A.U.T.O.预设 v2.0.json`
 - `D:\LuminaWeave\A.U.T.O制卡思路\参考预设\夏瑾 Pro 比邻星 2.1.json`
 
-当前状态（2026-05-22）：
+当前状态（2026-06-28）：
 
 - 参考提炼不再作为独立内置预设暴露。
 - `built-in:forge-main-reference-extract`、`built-in:forge-executor-reference-extract`、`built-in:forge-test-chat-reference-extract` 已移除。
-- 可迁移内容已迁入默认主模型预设 `built-in:forge-main-default` 的 preset-provided skills，统一通过 `./agent/skills/<skill-name>/SKILL.md` 加载。
+- 可迁移内容已迁入默认 Agent 预设 `built-in:forge-agent-default` 的 preset-provided skills，统一通过 `./agent/skills/<skill-name>/SKILL.md` 加载。
 - 参考提炼技能默认 `on_demand`，不常驻 prompt；复制为自定义预设后可改为 `always`。
 - Forge Agent 预设工作台不再把这类能力表达为 slot 条目，而是表达为 Agent 资源包、技能和 Agent 提示词编排。
 
@@ -139,9 +139,9 @@
 
 ## 3. 当前接入方式
 
-### 默认主模型预设
+### 默认 Agent 预设
 
-`built-in:forge-main-default` 提供以下三条 preset skills：
+`built-in:forge-agent-default` 提供以下三条 preset skills：
 
 - `./agent/skills/reference-needs-capture/SKILL.md`
   - 标题：`需求捕捉与支撑点识别`
@@ -164,15 +164,15 @@
 ## 4. 使用说明
 
 - 默认情况下，参考提炼技能不会常驻 prompt，避免污染普通制卡协作风格。
-- 如需常驻某项能力，先复制默认 Forge 主模型预设为自定义预设，再在技能管理中把对应技能从 `按需加载` 切换为 `常驻`。
-- 技能解析优先级固定为 project skill > active preset skill > built-in skill。
+- 如需常驻某项能力，先复制默认 Forge Agent 预设为自定义预设，再在技能管理中把对应技能从 `按需加载` 切换为 `常驻`。
+- 技能解析优先级固定为 project skill > 当前预设 skill > base skill。
 - 项目侧可通过同名 `./agent/skills/<skill-name>/SKILL.md` 覆盖 preset skill。
 
 ## 5. 当前实现边界
 
 已做：
 
-- 默认主模型预设新增三条参考提炼 preset skills。
+- 默认 Agent 预设新增三条参考提炼 preset skills。
 - 删除三份参考提炼 built-in preset。
 - 旧 active binding 指向已删除参考提炼 preset 时回落默认预设。
 - Semantic VFS、`skill.list`、`skill.load` 统一识别 preset-provided skills。

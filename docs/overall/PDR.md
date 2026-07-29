@@ -1,7 +1,7 @@
 # LuminaWeave 产品需求文档 (PDR)
 
 **版本:** v6.1-docs
-**最后更新时间:** 2026-06-13
+**最后更新时间:** 2026-06-28
 
 本文记录 LuminaWeave 长期有效的产品目标、核心能力和边界。阶段性执行记录进入 `docs/current/tasks/`，已完成任务归档到 `docs/archive/completed-tasks/`。
 
@@ -113,6 +113,7 @@ Agent Runtime SDK 是 Core API 层的跨插件 agent kernel，目标是从 Forge
 - Agent turn 生命周期：run、continue、abort、preview。
 - Agent runtime event 与 snapshot：message stream、thinking block、tool execution partial/final result、queue update、agent end cleanup，以及 `isStreaming`、`streamingMessage`、`pendingToolCalls`、`messages`、`errorMessage` 等可投影状态。
 - Adapter UI projection：SDK 只输出可序列化 snapshot/events；Forge 等 adapter 负责将其写入本域 store、模型请求 trace、消息/工具摘要和项目面板 presentation。
+- Scoped event contract：所有 agent、turn、message、tool lifecycle event 都必须携带 `sessionId` 与 `turnId`；`queue_update` 携带 `sessionId` 与 `activeTurnId`。`AgentRuntimeEventBus` 按 session 独立维护 snapshot，并提供带 session/turn 过滤的订阅、snapshot 和 event 查询。Forge 普通生成与授权续跑只允许通过这一条实时投影路径更新消息、thinking、工具状态和运行时快照。
 - Tree-structured session history：append-only entries、active node、branch checkout、branch messages。
 - Provider-native structured Agent 消息投影：SDK 的 session/event/projection 边界应能承载 provider 原生 `text`、`thinking` / reasoning、tool call、tool result 和 audit reference；具体 UI 展示、文件审计格式和业务语义仍由 adapter 定义。
 - Prompt Preview 事实源：真实生成与 dry-run 必须使用同一个 prompt assembly 端口；同一 request 可通过 adapter 提供的 cache key 复用 prepared prompt object，并在真实 turn 消费后显式失效。Extension workflow 注入的 hidden context、active tools summary、skill catalog、branch messages 与本轮 user message 必须先进入 preview / `prompt_ready` payload；真实 run 的 agent initial state 不重复注入本轮 user message，由 `agent.prompt()` 注入。
@@ -149,12 +150,12 @@ Forge 是制卡工坊和 Agent 工作台。
 
 - 以 `forgeProjectId` 为长期容器的项目模型。
   - 多协作线程共享同一项目资源、项目记忆、草稿和文件版本审计记录。
-- Planner / Analyst / Executor 等分工明确的 Agent 流程。
+- Forge workflow 以 `intent` 表达 conversation / planning / analysis / edit / review / test / export；Planner / Conversation / Analyst 不再是独立角色提示词，只作为路由、trace 与界面文案中的意图标签，写入执行继续通过 executor 边界隔离。
   - Forge 是 Agent Runtime SDK 的第一套 adapter；当前主链路仍由 `src/api/core/forge/agent-app` 承载，并由 Forge browser adapters 维护 tree-structured session history、上下文包、技能/能力资源、工具桥接、Git-backed 工作区版本和真实 ST 发布边界。
-- Forge Agent 使用项目相对语义 VFS：`./AGENTS.md` 是 Agent 工作契约，不是系统提示词；默认系统提示词位于 `./.forge/agent/SYSTEM.md`，模式提示词位于 `./.forge/agent/<MODE>.md`，Forge `<V>` DSL 位于 `./.forge/agent/UI_DSL.md`，可见推理边界位于 `./.forge/agent/REASONING.md`，技能位于 `./agent/skills/<skill-name>/SKILL.md`，当前协作线程通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 动态访问。
-- Forge 预设提供 Agent 资源包与提示词编排，而不是面向模型暴露 slot 拼接概念；编排顺序固定为 Contract、System、Mode Prompt、UI DSL、Reasoning Boundary、Skills、Capabilities、Memory Index、Context Files、Branch Messages。默认主预设提供参考提炼类 preset skills，默认按需加载，可在自定义预设中改为常驻；内置和默认 preset skill 资源必须以标准 `SKILL.md` frontmatter 暴露，供 SDK skill parser 校验与 catalog 格式化。
-- Forge Agent 预设工作台是提示词与预设技能的默认维护入口：内置预设只读，自定义副本可编辑 Contract、System、Mode Prompt、技能名称/标题/说明/加载策略/正文和编排检查信息。
-- 项目 VFS 面板浏览 Agent 可见的语义 VFS 投影，而不是 raw workspace storage 树；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构只作为映射源，不进入模型长期上下文。项目级 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/<MODE>.md` 与 `./agent/skills/*/SKILL.md` 覆盖从这里写入项目 VFS；写入后生成本轮文件变更摘要，并由 Git 记录版本历史，不回写 active preset 或 bundled fallback；`UI_DSL.md` 与 `REASONING.md` 仍是固定运行时资源。
+- Forge Agent 使用项目相对语义 VFS：`./AGENTS.md` 是 Agent 工作契约，不是系统提示词；主模型系统提示词位于 `./.forge/agent/SYSTEM.md`，执行模型额外读取 `./.forge/agent/EXECUTOR.md`，Forge `<V>` DSL 位于 `./.forge/agent/UI_DSL.md`，可见推理边界位于 `./.forge/agent/REASONING.md`，技能位于 `./agent/skills/<skill-name>/SKILL.md`，当前协作线程通过 `./threads/目前/thread.md` 与 `./threads/目前/messages.md` 动态访问。
+- Forge 预设提供 Agent 资源包与提示词编排，而不是面向模型暴露 slot 拼接概念；编排顺序固定为 Contract、System、Executor Prompt、UI DSL、Reasoning Boundary、Skills、Extensions、Capabilities、Memory Index、Context Files、Branch Messages。技能和 Pi 扩展按 `base` 公共层加当前预设层合并，同名技能或同 ID 扩展由当前预设层覆盖。默认 Agent 预设提供参考提炼类 preset skills，默认按需加载，可在自定义预设中改为常驻；内置和默认 preset skill 资源必须以标准 `SKILL.md` frontmatter 暴露，供 SDK skill parser 校验与 catalog 格式化。
+- Forge Agent 预设工作台是提示词、预设技能与 Pi 扩展资源的默认维护入口：内置预设只读，自定义副本可编辑 Contract、System、Executor Prompt、技能名称/标题/说明/加载策略/正文和编排检查信息。用户可见 profile 只保留 Agent 与测试聊天。
+- 项目 VFS 面板浏览 Agent 可见的语义 VFS 投影，而不是 raw workspace storage 树；`./chat/<conversationId>`、`project.json`、`memory/tree.json`、`lorebook/entries/*.json`、`review/*.json` 等内部结构只作为映射源，不进入模型长期上下文。项目级 `./AGENTS.md`、`./.forge/agent/SYSTEM.md`、`./.forge/agent/EXECUTOR.md` 与 `./agent/skills/*/SKILL.md` 覆盖从这里写入项目 VFS；写入后生成本轮文件变更摘要，并由 Git 记录版本历史，不回写 active preset 或 bundled fallback；`UI_DSL.md` 与 `REASONING.md` 仍是固定运行时资源。
 - Forge `read`、Forge shell、Prompt/Skill loader 和项目 VFS 面板必须共用 Forge Semantic VFS provider；HAL Bash 只提供通用 mount 扩展，不理解 Forge 业务语义。
 - Forge Agent 可在用户配置 `lumina-forge.tavilyApiKey` 后暴露 `webResearch`，通过 Tavily 执行 search / fetch 并返回 Markdown 和来源 metadata；该工具不写项目 VFS、不生成文件变更摘要、不写 memory，也不发布或改写 ST 资源。
 - Forge Agent Bash 的联网访问通过显式 `network-request` 模式开放；`curl` 仍必须经过 ShellNetworkPolicyService 与 ShellPermissionService network grant。缺少 grant 时 Forge 在 Agent `beforeToolCall` 阶段生成 `tool_approval_needed`，Composer 区域显示阻塞式授权面板，等待授权期间不返回非失败 `tool_result`；批准后才执行原始 `curl` 并回填真实工具结果。Composer 按当前 `forgeProjectId + conversationId` 只展示当前协作线程的 pending 网络授权。用户可以选择“允许此域名”或“后续都允许”；前者保留同域名 `urlPrefix` grant，使该协作线程后续同域名请求自动通过；后者保留全局 network grant，使该协作线程后续所有符合网络策略的请求自动通过。点击批准或拒绝后 Composer 立即关闭授权覆盖态，真实请求结果再异步回填到 Agent。`curl -o/-O/-c/-T/-F` 等本地文件参数允许使用，`2>&1` 等文件描述符复制不视为文件写重定向，但文件读写必须停留在项目语义 VFS 并进入本轮写入摘要与 Git 版本记录。
