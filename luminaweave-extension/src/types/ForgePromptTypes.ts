@@ -2,7 +2,7 @@ import type { ForgeDraftTree, ForgeStructuredState } from './ForgeStructuredType
 import type { ForgeMemoryTree } from './ForgeMemoryTypes.js';
 import type { CleanedMessage } from './nexus.js';
 import type { MemorySnapshot } from './MemorySnapshotTypes.js';
-import type { ForgeWorkflowPromptMode, ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
+import type { ForgeWorkflowIntent, ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
 import type { PromptAssemblyResult } from './PromptAssemblyTypes.js';
 import type { ForgePromptPreviewAgentContext } from './ForgeAgentTypes.js';
 import type {
@@ -68,7 +68,7 @@ export interface ForgeWorkflowSnapshotTemplateInput {
     collectionMode: string;
     activeLayer: string;
     subLayer: string;
-    promptMode: string;
+    intent: string;
     reason: string;
     recommendedAction: string;
     shouldGenerate: boolean;
@@ -94,7 +94,7 @@ export interface ForgePlannerPromptPayload {
 
 export interface ForgePromptPreviewTab {
     key: 'primary' | 'executor';
-    mode: ForgeWorkflowPromptMode;
+    intent: ForgeWorkflowIntent;
     title: string;
     subtitle: string;
     payload: CleanedMessage[];

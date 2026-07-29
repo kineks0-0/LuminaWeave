@@ -1,12 +1,12 @@
 import type {
-    ForgeAgentPromptMode,
+    ForgeAgentExtensionResource,
     ForgeAgentPromptOrchestrationStep,
     ForgeAgentPromptResource,
     ForgeAgentSkillResource,
     PromptPresetDefinition
 } from '../../../types/PromptPresetTypes.js';
 
-export type ForgePromptPresetResourceRowKind = 'contract' | 'system' | 'mode_prompt' | 'skill';
+export type ForgePromptPresetResourceRowKind = 'contract' | 'system' | 'executor_prompt' | 'skill' | 'extension';
 
 export interface ForgePromptPresetResourceRow {
     id: string;
@@ -16,6 +16,7 @@ export interface ForgePromptPresetResourceRow {
     title: string;
     content: string;
     skillName?: string;
+    extensionId?: string;
     description?: string;
     loadPolicy?: NonNullable<ForgeAgentSkillResource['loadPolicy']>;
     loadPolicyLabel?: string;
@@ -34,7 +35,7 @@ export interface ForgePromptPresetSummary {
     details: string[];
 }
 
-export type ForgePromptPresetResourceGroupId = 'contract' | 'system' | 'mode' | 'skills';
+export type ForgePromptPresetResourceGroupId = 'contract' | 'system' | 'executor' | 'skills' | 'extensions';
 
 export interface ForgePromptPresetResourceGroup {
     id: ForgePromptPresetResourceGroupId;
@@ -53,22 +54,14 @@ export interface ForgePromptPresetWorkbenchOverview {
     skillCount: number;
 }
 
-const MODE_ORDER: ForgeAgentPromptMode[] = ['planner', 'conversation', 'analyst', 'executor'];
-
-const MODE_LABELS: Record<ForgeAgentPromptMode, string> = {
-    planner: 'Planner',
-    conversation: 'Conversation',
-    analyst: 'Analyst',
-    executor: 'Executor'
-};
-
 const ORCHESTRATION_LABELS: Record<ForgeAgentPromptOrchestrationStep['kind'], string> = {
     contract: 'Contract',
     system: 'System',
-    mode_prompt: 'Mode Prompt',
+    executor_prompt: 'Executor Prompt',
     ui_dsl: 'UI DSL',
     reasoning_boundary: 'Reasoning Boundary',
     skills: 'Skills',
+    extensions: 'Extensions',
     capabilities: 'Capabilities',
     memory_index: 'Memory Index',
     context_files: 'Context Files',
@@ -118,6 +111,17 @@ const buildSkillResourceRow = (skill: ForgeAgentSkillResource): ForgePromptPrese
     loadPolicyLabel: skill.loadPolicy === 'always' ? '常驻' : '按需'
 });
 
+const buildExtensionResourceRow = (extension: ForgeAgentExtensionResource): ForgePromptPresetResourceRow => ({
+    id: `extension:${extension.id}`,
+    kind: 'extension',
+    label: 'Extension',
+    path: extension.path,
+    title: extension.title || extension.id,
+    content: extension.description || '',
+    extensionId: extension.id,
+    description: extension.description
+});
+
 export const buildForgePromptPresetResourceRows = (preset: PromptPresetDefinition): ForgePromptPresetResourceRow[] => {
     const resources = preset.forgeAgentResources;
     if (!resources) return [];
@@ -125,10 +129,9 @@ export const buildForgePromptPresetResourceRows = (preset: PromptPresetDefinitio
     return [
         buildPromptResourceRow('contract', 'contract', 'Contract', resources.contract),
         buildPromptResourceRow('system', 'system', 'System', resources.system),
-        ...MODE_ORDER.map(mode =>
-            buildPromptResourceRow(`mode:${mode}`, 'mode_prompt', MODE_LABELS[mode], resources.modes[mode])
-        ),
-        ...(resources.skills || []).map(buildSkillResourceRow)
+        buildPromptResourceRow('executor', 'executor_prompt', 'Executor', resources.executor),
+        ...(resources.skills || []).map(buildSkillResourceRow),
+        ...(resources.extensions || []).map(buildExtensionResourceRow)
     ];
 };
 
@@ -153,20 +156,26 @@ export const buildForgePromptPresetResourceGroups = (preset: PromptPresetDefinit
             resources: rowsByKind('system')
         },
         {
-            id: 'mode',
-            label: 'Mode',
-            description: 'Planner、Conversation、Analyst、Executor 的模式提示词。',
-            resources: rowsByKind('mode_prompt')
+            id: 'executor',
+            label: 'Executor',
+            description: '执行模型提示词，仅在写入和执行路由中追加到主系统提示词之后。',
+            resources: rowsByKind('executor_prompt')
         },
         {
             id: 'skills',
             label: 'Skills',
             description: '预设提供的自定义技能，统一映射到 ./agent/skills/<name>/SKILL.md。',
             resources: rowsByKind('skill')
+        },
+        {
+            id: 'extensions',
+            label: 'Extensions',
+            description: 'Pi 扩展由 base 与当前预设合并，当前预设同 ID 覆盖 base。',
+            resources: rowsByKind('extension')
         }
     ];
 
-    return groups.filter(group => group.resources.length > 0 || group.id === 'skills');
+    return groups.filter(group => group.resources.length > 0 || group.id === 'skills' || group.id === 'extensions');
 };
 
 export const buildForgePromptPresetOrchestrationRows = (preset: PromptPresetDefinition): ForgePromptPresetOrchestrationRow[] =>
@@ -215,11 +224,13 @@ export const summarizeForgePromptPreset = (preset: PromptPresetDefinition | null
 
     const orchestrationCount = preset.forgeAgentOrchestration?.steps.filter(step => step.enabled).length || 0;
     const skillCount = preset.forgeAgentResources.skills?.length || 0;
+    const extensionCount = preset.forgeAgentResources.extensions?.length || 0;
     return {
         primary: 'Agent 资源包',
         details: [
             orchestrationCount > 0 ? `${orchestrationCount} 步编排` : '未配置编排',
-            skillCount > 0 ? `${skillCount} 技能` : ''
+            skillCount > 0 ? `${skillCount} 技能` : '',
+            extensionCount > 0 ? `${extensionCount} 扩展` : ''
         ].filter(Boolean)
     };
 };

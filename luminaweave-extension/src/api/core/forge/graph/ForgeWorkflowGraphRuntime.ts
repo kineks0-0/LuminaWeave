@@ -8,7 +8,7 @@ import type {
 import type {
     ForgeVisiblePhase,
     ForgeWorkflowAction,
-    ForgeWorkflowPromptMode,
+    ForgeWorkflowIntent,
     ForgeWorkflowSnapshot,
     ForgeWorkflowTurnInput
 } from '../../../../types/ForgeWorkflowTypes.js';
@@ -66,7 +66,7 @@ const ForgeWorkflowState = new StateSchema({
     recommendedAction: z.string().default(''),
     shouldGenerate: z.boolean().default(true),
     requiresUserDecision: z.boolean().default(false),
-    promptMode: z.enum(['planner', 'conversation', 'analyst', 'executor']).default('planner'),
+    intent: z.enum(['conversation', 'planning', 'analysis', 'edit', 'review', 'test', 'export']).default('planning'),
     updatedAt: z.number().default(0)
 });
 
@@ -285,16 +285,23 @@ const shouldUsePlanner = (context: ForgeRuntimeContext): boolean => {
 
     return false;
 };
-const resolveExecutionMode = (context: ForgeRuntimeContext): ForgeWorkflowPromptMode | null => {
+const resolveExecutionIntent = (context: ForgeRuntimeContext): ForgeWorkflowIntent | null => {
     if (context.latestUserCommand.type === 'submit_form' || context.latestUserCommand.type === 'advance_layer') {
-        return 'planner';
+        return 'planning';
     }
 
     if (context.latestUserCommand.type !== 'send_user_input') return null;
     if (!context.detailMode || !context.latestUserInput.trim()) return null;
-    if (shouldUseAnalyst(context)) return 'analyst';
-    return shouldUsePlanner(context) ? 'planner' : 'conversation';
+    if (shouldUseAnalyst(context)) return 'analysis';
+    return shouldUsePlanner(context) ? 'planning' : 'conversation';
 };
+
+const traceSourceForIntent = (intent: ForgeWorkflowIntent): 'planner' | 'conversation' | 'analyst' =>
+    intent === 'analysis'
+        ? 'analyst'
+        : intent === 'conversation'
+            ? 'conversation'
+            : 'planner';
 
 const resolveVisiblePhase = (
     detailMode: ForgeDetailMode | null | undefined,
@@ -349,7 +356,7 @@ const buildSnapshot = (state: ForgeWorkflowStateValue): ForgeWorkflowSnapshot =>
         collectionMode: resolveCollectionMode({ ...state, activeLayer }),
         activeLayer,
         subLayer: state.subLayer,
-        promptMode: state.promptMode,
+        intent: state.intent,
         reason: state.reason,
         recommendedAction: state.recommendedAction,
         shouldGenerate: state.shouldGenerate,
@@ -528,21 +535,21 @@ const buildDirectEffects = (context: ForgeRuntimeContext, snapshot: ForgeWorkflo
     }
 };
 
-const inferPromptModeForTurn = (input: ForgeWorkflowTurnInput, stage: ForgeStage): ForgeWorkflowPromptMode => {
+const inferIntentForTurn = (input: ForgeWorkflowTurnInput, stage: ForgeStage): ForgeWorkflowIntent => {
     const trimmedInput = input.userInput.trim();
-    if (!trimmedInput) return 'planner';
-    if (!input.detailMode) return 'planner';
+    if (!trimmedInput) return 'planning';
+    if (!input.detailMode) return 'planning';
 
     const hasContextToRead = Boolean(input.hasReferenceChat || input.draftCount || input.stagingCount || input.commitReadyCount);
     if (hasContextToRead && analystIntentPattern.test(trimmedInput)) {
-        return 'analyst';
+        return 'analysis';
     }
 
     if (conversationIntentPattern.test(trimmedInput) && stage !== 'kickoff') {
         return 'conversation';
     }
 
-    return 'planner';
+    return 'planning';
 };
 
 export class ForgeWorkflowGraph {
@@ -568,7 +575,7 @@ export class ForgeWorkflowGraph {
             stage: 'kickoff' as const,
             activeLayer: 'concept' as const,
             subLayer: null,
-            promptMode: 'planner' as const,
+            intent: 'planning' as const,
             shouldGenerate: Boolean(state.detailMode),
             requiresUserDecision: true,
             reason: state.detailMode
@@ -583,7 +590,7 @@ export class ForgeWorkflowGraph {
             stage: 'skeleton' as const,
             activeLayer: 'concept' as const,
             subLayer: 'concept' as const,
-            promptMode: 'planner' as const,
+            intent: 'planning' as const,
             shouldGenerate: true,
             requiresUserDecision: false,
             reason: '当前正在搭建最小角色骨架，需要先收敛角色的核心身份与背景。',
@@ -596,7 +603,7 @@ export class ForgeWorkflowGraph {
             stage: 'narrative' as const,
             activeLayer: 'description' as const,
             subLayer: 'description' as const,
-            promptMode: 'planner' as const,
+            intent: 'planning' as const,
             shouldGenerate: true,
             requiresUserDecision: false,
             reason: '当前正在定义叙事与表现方式，需要明确语言风格、表现重心与场景策略。',
@@ -607,7 +614,7 @@ export class ForgeWorkflowGraph {
         }))
         .addNode('expansion_state', (state) => ({
             stage: 'expansion' as const,
-            promptMode: 'planner' as const,
+            intent: 'planning' as const,
             shouldGenerate: true,
             requiresUserDecision: false,
             reason: `当前正在结构化扩展阶段，正在整理 ${state.activeLayer} 子层。`,
@@ -618,7 +625,7 @@ export class ForgeWorkflowGraph {
         }))
         .addNode('rewrite_export_state', (state) => ({
             stage: 'rewrite_export' as const,
-            promptMode: 'planner' as const,
+            intent: 'planning' as const,
             shouldGenerate: true,
             requiresUserDecision: true,
             reason: state.commitReadyCount > 0
@@ -654,19 +661,24 @@ export class ForgeWorkflowGraph {
             requiresUserDecision: state.workflowSnapshot?.requiresUserDecision ?? false
         }))
         .addNode('route_generation_mode', (state) => {
-            const mode = resolveExecutionMode(state.context);
-            const needsGeneration = Boolean(mode);
+            const intent = resolveExecutionIntent(state.context);
+            if (!intent) {
+                return {
+                    requiresGeneration: false,
+                    executionRequest: null
+                };
+            }
             return {
-                requiresGeneration: needsGeneration,
-                executionRequest: needsGeneration
-                    ? {
-                        mode,
-                        messages: [],
-                        sessionChatId: state.context.sessionChatId,
-                        charName: 'Forge Assistant',
-                        sourceCommand: state.context.latestUserCommand
-                    }
-                    : null
+                requiresGeneration: true,
+                executionRequest: {
+                    intent,
+                    modelRoute: 'main',
+                    traceSource: traceSourceForIntent(intent),
+                    messages: [],
+                    sessionChatId: state.context.sessionChatId,
+                    charName: 'Forge Assistant',
+                    sourceCommand: state.context.latestUserCommand
+                }
             };
         })
         .addNode('build_planner_request', () => ({}))
@@ -720,8 +732,8 @@ export class ForgeWorkflowGraph {
             missingFields
         });
 
-        const promptMode = inferPromptModeForTurn(input, result.stage);
-        return buildSnapshot({ ...result, promptMode });
+        const intent = inferIntentForTurn(input, result.stage);
+        return buildSnapshot({ ...result, intent });
     }
 
     static async resolveDecision(context: ForgeRuntimeContext): Promise<ForgeRuntimeDecision> {

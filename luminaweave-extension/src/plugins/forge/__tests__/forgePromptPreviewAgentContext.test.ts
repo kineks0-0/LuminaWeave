@@ -78,7 +78,7 @@ describe('forgePromptPreviewAgentContext', () => {
 
     it('projects graph capabilities into prompt preview agent context', () => {
         const context = buildPromptPreviewAgentContext({
-            intent: { mode: 'conversation' },
+            intent: 'conversation',
             trace: [{ node: 'capability-index' }],
             selectedSkills: ['虚拟世界书编辑'],
             loadedCapabilities: [{

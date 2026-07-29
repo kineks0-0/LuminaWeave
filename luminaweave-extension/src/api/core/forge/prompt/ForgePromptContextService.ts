@@ -8,7 +8,7 @@ import type { CleanedMessage } from '../../../../types/nexus.js';
 import type { MemorySnapshot } from '../../../../types/MemorySnapshotTypes.js';
 import type { ForgeDraftTree, ForgeStructuredState } from '../../../../types/ForgeStructuredTypes.js';
 import type { ForgeExecutionRequest, ForgeRuntimeContext, StagingEntry } from '../../../../types/ForgeRuntimeTypes.js';
-import type { ForgeWorkflowSnapshot } from '../../../../types/ForgeWorkflowTypes.js';
+import type { ForgeWorkflowIntent, ForgeWorkflowSnapshot } from '../../../../types/ForgeWorkflowTypes.js';
 import type { ForgeMemoryTree } from '../../../../types/ForgeMemoryTypes.js';
 import type {
     PromptAssemblyResult,
@@ -19,9 +19,7 @@ import type {
     PromptSourceUnit
 } from '../../../../types/PromptAssemblyTypes.js';
 import {
-    FORGE_PLANNER_PROMPT,
-    FORGE_CONVERSATION_PROMPT,
-    FORGE_ANALYST_PROMPT,
+    FORGE_AGENT_SYSTEM_PROMPT,
     FORGE_EXECUTOR_SYSTEM_PROMPT,
 } from '../../../../resources/prompts/forgePrompts.js';
 import type { PromptComposeSources, PromptPresetDefinition, PromptPresetSpecialKey } from '../../../../types/PromptPresetTypes.js';
@@ -63,7 +61,7 @@ interface BuildExecutorPromptOptions {
 }
 
 interface BuildPromptPreviewOptions extends BuildPlannerPromptOptions {
-    mode?: 'planner' | 'conversation' | 'analyst';
+    intent?: Extract<ForgeWorkflowIntent, 'planning' | 'conversation' | 'analysis'>;
 }
 
 type ForgeExecutionRequestBase = Omit<ForgeExecutionRequest, 'requestId' | 'traceSource' | 'contextSnapshot' | 'nodeSummary' | 'generationSettings'>;
@@ -90,10 +88,10 @@ export class ForgePromptContextService {
     }
 
     private static resolveExecutorPreset(presetId?: string): PromptPresetDefinition {
-        const requestedPresetId = presetId ?? promptPresetRegistry.getActivePresetId('forge-executor');
+        const requestedPresetId = presetId ?? promptPresetRegistry.getActivePresetId('forge-agent');
         return (
-            promptPresetRegistry.getPreset('forge-executor', requestedPresetId)
-            ?? promptPresetRegistry.getActivePreset('forge-executor')
+            promptPresetRegistry.getPreset('forge-agent', requestedPresetId)
+            ?? promptPresetRegistry.getActivePreset('forge-agent')
         );
     }
 
@@ -102,7 +100,7 @@ export class ForgePromptContextService {
         preset: PromptPresetDefinition
     ): CleanedMessage[] {
         const resources = preset.forgeAgentResources;
-        const executorPrompt = resources?.modes.executor;
+        const executorPrompt = resources?.executor;
         if (!resources || !executorPrompt) {
             return [];
         }
@@ -140,7 +138,7 @@ export class ForgePromptContextService {
     ): PromptAssemblyResult | null {
         const messages = this.buildExecutorResourceMessages(options, preset);
         const resources = preset.forgeAgentResources;
-        const executorPrompt = resources?.modes.executor;
+        const executorPrompt = resources?.executor;
         if (!resources || !executorPrompt || messages.length === 0) {
             return null;
         }
@@ -357,7 +355,7 @@ export class ForgePromptContextService {
 
     static buildPlannerPrompt(options: BuildPlannerPromptOptions): CleanedMessage[] {
         const maxHistory = options.maxHistoryMessages ?? this.getForgeMaxHistoryMessages();
-        return this.composeForgeMainPrompt('plannerSystemPrompt', {
+        return this.composeForgeMainPrompt('agentSystemPrompt', {
             ...options,
             messages: this.truncateHistory(options.messages, maxHistory)
         });
@@ -365,7 +363,7 @@ export class ForgePromptContextService {
 
     static buildConversationPrompt(options: BuildPlannerPromptOptions): CleanedMessage[] {
         const maxHistory = options.maxHistoryMessages ?? this.getForgeMaxHistoryMessages();
-        return this.composeForgeMainPrompt('conversationSystemPrompt', {
+        return this.composeForgeMainPrompt('agentSystemPrompt', {
             ...options,
             messages: this.truncateHistory(options.messages, maxHistory)
         });
@@ -382,25 +380,25 @@ export class ForgePromptContextService {
             maxRecentMessages: options.maxRecentMessages ?? 10
         });
 
-        return this.composeForgeMainPrompt('analystSystemPrompt', {
+        return this.composeForgeMainPrompt('agentSystemPrompt', {
             ...options,
             messages: analystCtx.recentHistory
         });
     }
 
     private static composeForgeMainPrompt(
-        specialKey: Extract<PromptPresetSpecialKey, 'plannerSystemPrompt' | 'conversationSystemPrompt' | 'analystSystemPrompt'>,
+        specialKey: Extract<PromptPresetSpecialKey, 'agentSystemPrompt'>,
         options: BuildPlannerPromptOptions
     ): CleanedMessage[] {
         return this.composeForgeMainPromptAssembly(specialKey, options).messages;
     }
 
     private static composeForgeMainPromptAssembly(
-        specialKey: Extract<PromptPresetSpecialKey, 'plannerSystemPrompt' | 'conversationSystemPrompt' | 'analystSystemPrompt'>,
+        specialKey: Extract<PromptPresetSpecialKey, 'agentSystemPrompt'>,
         options: BuildPlannerPromptOptions
     ): PromptAssemblyResult {
-        const presetId = promptPresetRegistry.getActivePresetId('forge-main');
-        const activePreset = promptPresetRegistry.getPreset('forge-main', presetId) ?? promptPresetRegistry.getActivePreset('forge-main');
+        const presetId = promptPresetRegistry.getActivePresetId('forge-agent');
+        const activePreset = promptPresetRegistry.getPreset('forge-agent', presetId) ?? promptPresetRegistry.getActivePreset('forge-agent');
         const target = this.resolveForgeMainTarget(specialKey);
         const route = PromptAssemblyRouter.route({
             target,
@@ -435,7 +433,7 @@ export class ForgePromptContextService {
         };
 
         const assembly = PromptPresetComposer.composeWithTrace(
-            'forge-main',
+            'forge-agent',
             presetId,
             sources,
             { mergeLeadingSystemMessages: true }
@@ -444,19 +442,12 @@ export class ForgePromptContextService {
     }
 
     private static buildForgeMainResourceAssembly(
-        specialKey: Extract<PromptPresetSpecialKey, 'plannerSystemPrompt' | 'conversationSystemPrompt' | 'analystSystemPrompt'>,
+        specialKey: Extract<PromptPresetSpecialKey, 'agentSystemPrompt'>,
         options: BuildPlannerPromptOptions,
         preset: PromptPresetDefinition
     ): PromptAssemblyResult | null {
         const resources = preset.forgeAgentResources;
         if (!resources) return null;
-
-        const modeResource = specialKey === 'conversationSystemPrompt'
-            ? resources.modes.conversation
-            : specialKey === 'analystSystemPrompt'
-                ? resources.modes.analyst
-                : resources.modes.planner;
-        if (!modeResource) return null;
 
         const protocolBlock = '';
         const sourceUnits: PromptSourceUnit[] = [
@@ -484,20 +475,6 @@ export class ForgePromptContextService {
                 priority: 100,
                 rawContent: resources.system.content,
                 content: this.resolveMacros(resources.system.content),
-                budgetPolicy: 'pinned',
-                forgeSlot: 'system_static',
-                forgeRegion: 'static_system'
-            },
-            {
-                id: `forge-main-mode:${modeResource.path ?? 'mode'}`,
-                kind: 'control',
-                sourceKind: 'forge',
-                sourcePath: modeResource.path ?? './.forge/agent/MODE.md',
-                label: modeResource.title ?? '模式提示词',
-                roleHint: 'system',
-                priority: 95,
-                rawContent: modeResource.content,
-                content: this.resolveMacros(modeResource.content),
                 budgetPolicy: 'pinned',
                 forgeSlot: 'system_static',
                 forgeRegion: 'static_system'
@@ -613,10 +590,8 @@ export class ForgePromptContextService {
     }
 
     private static resolveForgeMainTarget(
-        specialKey: Extract<PromptPresetSpecialKey, 'plannerSystemPrompt' | 'conversationSystemPrompt' | 'analystSystemPrompt'>
+        _specialKey: Extract<PromptPresetSpecialKey, 'agentSystemPrompt'>
     ): PromptAssemblyTarget {
-        if (specialKey === 'conversationSystemPrompt') return 'forge.conversation';
-        if (specialKey === 'analystSystemPrompt') return 'forge.analyst';
         return 'forge.planner';
     }
 
@@ -641,15 +616,11 @@ export class ForgePromptContextService {
     }
 
     private static resolveForgeMainSystemPrompt(
-        specialKey: Extract<PromptPresetSpecialKey, 'plannerSystemPrompt' | 'conversationSystemPrompt' | 'analystSystemPrompt'>,
+        _specialKey: Extract<PromptPresetSpecialKey, 'agentSystemPrompt'>,
         options: BuildPlannerPromptOptions
     ): string {
         const backendPrompt = options.presetData?.preset?.blob?.prompts?.[0]?.content?.trim();
-        const basePrompt = specialKey === 'plannerSystemPrompt'
-            ? FORGE_PLANNER_PROMPT
-            : specialKey === 'conversationSystemPrompt'
-                ? FORGE_CONVERSATION_PROMPT
-                : FORGE_ANALYST_PROMPT;
+        const basePrompt = FORGE_AGENT_SYSTEM_PROMPT;
 
         const promptParts = [
             basePrompt,
@@ -663,17 +634,17 @@ export class ForgePromptContextService {
     }
 
     static buildPromptPreviewPayload(options: BuildPromptPreviewOptions): CleanedMessage[] {
-        if (options.mode === 'analyst') {
+        if (options.intent === 'analysis') {
             return this.buildAnalystPrompt(options);
         }
-        if (options.mode === 'conversation') {
+        if (options.intent === 'conversation') {
             return this.buildConversationPrompt(options);
         }
         return this.buildPlannerPrompt(options);
     }
 
     static buildPromptPreviewAssembly(options: BuildPromptPreviewOptions): PromptAssemblyResult {
-        if (options.mode === 'analyst') {
+        if (options.intent === 'analysis') {
             const analystCtx = buildAnalystContext({
                 memoryTree: options.forgeMemoryTree,
                 recentHistory: options.messages,
@@ -681,20 +652,20 @@ export class ForgePromptContextService {
                 handoffTarget: 'planner',
                 maxRecentMessages: options.maxRecentMessages ?? 10
             });
-            return this.composeForgeMainPromptAssembly('analystSystemPrompt', {
+            return this.composeForgeMainPromptAssembly('agentSystemPrompt', {
                 ...options,
                 messages: analystCtx.recentHistory
             });
         }
-        if (options.mode === 'conversation') {
+        if (options.intent === 'conversation') {
             const maxHistory = options.maxHistoryMessages ?? this.getForgeMaxHistoryMessages();
-            return this.composeForgeMainPromptAssembly('conversationSystemPrompt', {
+            return this.composeForgeMainPromptAssembly('agentSystemPrompt', {
                 ...options,
                 messages: this.truncateHistory(options.messages, maxHistory)
             });
         }
         const maxHistory = options.maxHistoryMessages ?? this.getForgeMaxHistoryMessages();
-        return this.composeForgeMainPromptAssembly('plannerSystemPrompt', {
+        return this.composeForgeMainPromptAssembly('agentSystemPrompt', {
             ...options,
             messages: this.truncateHistory(options.messages, maxHistory)
         });
@@ -711,7 +682,8 @@ export class ForgePromptContextService {
         maxHistoryMessages?: number;
     }): ForgeExecutionRequestBase {
         return {
-            mode: 'planner',
+            intent: 'planning',
+            modelRoute: 'main',
             messages: [],
             sessionChatId: params.context.sessionChatId,
             charName: params.charName || 'Forge Assistant',
@@ -731,7 +703,8 @@ export class ForgePromptContextService {
         maxHistoryMessages?: number;
     }): ForgeExecutionRequestBase {
         return {
-            mode: 'conversation',
+            intent: 'conversation',
+            modelRoute: 'main',
             messages: [],
             sessionChatId: params.context.sessionChatId,
             charName: params.charName || 'Forge Assistant',
@@ -751,7 +724,8 @@ export class ForgePromptContextService {
         maxRecentMessages?: number;
     }): ForgeExecutionRequestBase {
         return {
-            mode: 'analyst',
+            intent: 'analysis',
+            modelRoute: 'main',
             messages: [],
             sessionChatId: params.context.sessionChatId,
             charName: params.charName || 'Forge Assistant',
@@ -762,7 +736,8 @@ export class ForgePromptContextService {
 
     static buildExecutorExecutionRequest(options: BuildExecutorPromptOptions): ForgeExecutionRequestBase {
         return {
-            mode: 'executor',
+            intent: 'edit',
+            modelRoute: 'executor',
             messages: [],
             sessionChatId: options.sessionChatId,
             charName: options.charName,
@@ -785,7 +760,7 @@ export class ForgePromptContextService {
                 sourceId: 'forge'
             },
             policy: { engine: 'lumina', sourceMode: 'project' },
-            presetId: options.presetId ?? promptPresetRegistry.getActivePresetId('forge-executor'),
+            presetId: options.presetId ?? promptPresetRegistry.getActivePresetId('forge-agent'),
             inputs: {
                 entryId: options.entryId,
                 sourceCommandType: options.sourceCommand.type
@@ -794,7 +769,7 @@ export class ForgePromptContextService {
 
         const preset = this.resolveExecutorPreset(options.presetId);
         const assembly = PromptPresetComposer.composeWithTrace(
-            'forge-executor',
+            'forge-agent',
             preset,
             {
                 baseSystemPromptKey: 'executorSystemPrompt',
@@ -809,7 +784,7 @@ export class ForgePromptContextService {
             },
             { mergeLeadingSystemMessages: true }
         );
-        const resourceAssembly = assembly.messages.length > 0
+        const resourceAssembly = assembly.messages.length >= 3
             ? assembly
             : this.buildExecutorResourceAssembly(options, preset);
         return PromptAssemblyRouter.attachRoute(resourceAssembly ?? assembly, route);
@@ -818,7 +793,7 @@ export class ForgePromptContextService {
     private static buildExecutorPreviewMessages(options: BuildExecutorPromptOptions): CleanedMessage[] {
         const preset = this.resolveExecutorPreset(options.presetId);
         const composedMessages = PromptPresetComposer.compose(
-            'forge-executor',
+            'forge-agent',
             preset,
             {
                 baseSystemPromptKey: 'executorSystemPrompt',
@@ -832,7 +807,7 @@ export class ForgePromptContextService {
                 }
             }
         ).messages;
-        return composedMessages.length > 0
+        return composedMessages.length >= 3
             ? composedMessages
             : this.buildExecutorResourceMessages(options, preset);
     }

@@ -909,7 +909,7 @@ export class ForgePiToolBridge {
                 '在 Forge 项目沙箱中执行 bash 命令。',
                 '默认 project-readonly；写入模式必须显式请求，并会直接写入项目 VFS 与生成本轮文件变更摘要。',
                 '联网 curl 必须使用 network-request；缺少 grant 时 Forge 会在输入区请求用户授权。',
-                'network-request 允许 curl 的 -o/-O/-c/-T/-F 文件参数，文件读写会通过项目语义 VFS 和本轮写入摘要记录。',
+                //'network-request 允许 curl 的 -o/-O/-c/-T/-F 文件参数，文件读写会通过项目语义 VFS 和本轮写入摘要记录。',
                 '禁止：命令替换 $()、反引号、eval、chmod。',
                 '当前工作目录：./'
             ].join('\n'),

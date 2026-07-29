@@ -34,11 +34,11 @@ const createBuilder = (overrides: Partial<ConstructorParameters<typeof ForgeProm
         fetchPresetDetail: vi.fn().mockResolvedValue({ preset: { blob: {} } }),
         resolveActiveLorebookView: () => ({ entries: [{ comment: 'lore' }] } as any),
         buildMemorySnapshot: () => ({ sourceId: 'forge' } as any),
-        getPrimaryMode: () => 'conversation',
+        getPrimaryIntent: () => 'conversation',
         getMessages: () => [{ role: 'user', mesRaw: 'raw hello', mes: 'hello', name: 'You' } as any],
         runAgentGraph: vi.fn().mockResolvedValue({
             promptSourceUnits: [{ id: 'unit-1', label: '能力索引', kind: 'context', sourceKind: 'forge-agent' }],
-            intent: { mode: 'conversation' },
+            intent: 'conversation',
             trace: [],
             selectedSkills: ['技能'],
             loadedCapabilities: [],
@@ -48,7 +48,7 @@ const createBuilder = (overrides: Partial<ConstructorParameters<typeof ForgeProm
         getForgeMemoryTree: () => ({ entries: [] } as any),
         getStructuredState: () => ({ forms: {} } as any),
         getDraftTree: () => ({ nodes: [] } as any),
-        getWorkflowSnapshot: () => ({ promptMode: 'conversation', reason: '当前原因' } as any),
+        getWorkflowSnapshot: () => ({ intent: 'conversation', reason: '当前原因' } as any),
         getCommitReadyEntries: () => [],
         getStagingEntries: () => [],
         resolveOriginalContent: () => '',
@@ -119,11 +119,11 @@ describe('ForgePromptPreviewPayloadBuilder', () => {
         expect(promptContextService.buildPromptPreviewAssembly).toHaveBeenCalledWith(expect.objectContaining({
             messages: [{ role: 'user', content: 'raw hello', name: 'You' }],
             forgeAgentSourceUnits: [{ id: 'unit-1', label: '能力索引', kind: 'context', sourceKind: 'forge-agent' }],
-            mode: 'conversation'
+            intent: 'conversation'
         }));
         expect(bundle.primary).toMatchObject({
             key: 'primary',
-            mode: 'conversation',
+            intent: 'conversation',
             title: '主模型 / Conversation',
             sourceLabel: '当前原因',
             targetEntryId: null
@@ -166,7 +166,8 @@ describe('ForgePromptPreviewPayloadBuilder', () => {
             request: expect.objectContaining({
                 requestId: 'req_preview',
                 traceSource: 'conversation',
-                mode: 'conversation',
+                intent: 'conversation',
+                modelRoute: 'main',
                 messages: []
             })
         }));

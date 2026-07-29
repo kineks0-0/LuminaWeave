@@ -6,6 +6,7 @@ allowed-tools: read bash
 metadata:
   title: 素材分析员
   source: built-in
+  defaultWriteScope: read-only by default
 ---
 # 素材分析员
 

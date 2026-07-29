@@ -1472,9 +1472,9 @@ export class ForgePiAgentSession {
     }
 
     private resolveEventSource(request: ForgeExecutionRequest): ForgeRuntimeEventSource {
-        if (request.mode === 'analyst') return 'analyst';
-        if (request.mode === 'executor') return 'executor';
-        if (request.mode === 'conversation') return 'conversation';
+        if (request.traceSource === 'analyst') return 'analyst';
+        if (request.traceSource === 'executor') return 'executor';
+        if (request.traceSource === 'conversation') return 'conversation';
         return 'planner';
     }
 

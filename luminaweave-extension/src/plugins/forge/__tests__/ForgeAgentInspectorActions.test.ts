@@ -1,12 +1,41 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ForgeAgentInspectorActions } from '../store/ForgeAgentInspectorActions.js';
+import { AgentRuntimeEventBus } from '@/api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
 const createActions = (overrides: Partial<ConstructorParameters<typeof ForgeAgentInspectorActions>[0]> = {}) => {
-    const runPiTurn = vi.fn().mockResolvedValue({
-        events: [
-            { type: 'stream_chunk', requestId: 'req-1', displayText: 'partial', thinkingText: '', rawText: 'partial' },
-            { type: 'stream_done', requestId: 'req-1', displayText: 'done', thinkingText: '', rawText: 'done', completedAt: 1 }
-        ]
+    const events = new AgentRuntimeEventBus();
+    const runPiTurn = vi.fn(async () => {
+        events.emit({ type: 'agent_start', sessionId: 'session-1__session-1', turnId: 'req-1' });
+        events.emit({ type: 'turn_start', sessionId: 'session-1__session-1', turnId: 'req-1' });
+        events.emit({
+            type: 'message_start',
+            sessionId: 'session-1__session-1',
+            turnId: 'req-1',
+            message: { id: 'agent-message:session-1__session-1:req-1:1', turnId: 'req-1', role: 'assistant', blocks: [] }
+        });
+        events.emit({
+            type: 'message_update',
+            sessionId: 'session-1__session-1',
+            turnId: 'req-1',
+            messageId: 'agent-message:session-1__session-1:req-1:1',
+            block: { type: 'text', contentIndex: 0, text: 'partial' }
+        });
+        events.emit({
+            type: 'message_update',
+            sessionId: 'session-1__session-1',
+            turnId: 'req-1',
+            messageId: 'agent-message:session-1__session-1:req-1:1',
+            block: { type: 'text', contentIndex: 0, text: 'done' }
+        });
+        events.emit({
+            type: 'message_end',
+            sessionId: 'session-1__session-1',
+            turnId: 'req-1',
+            messageId: 'agent-message:session-1__session-1:req-1:1'
+        });
+        events.emit({ type: 'turn_end', sessionId: 'session-1__session-1', turnId: 'req-1' });
+        events.emit({ type: 'agent_end', sessionId: 'session-1__session-1', turnId: 'req-1' });
+        return { events: [] };
     });
     const setLastAgentGraphResult = vi.fn();
     const actions = new ForgeAgentInspectorActions({
@@ -16,6 +45,8 @@ const createActions = (overrides: Partial<ConstructorParameters<typeof ForgeAgen
         getWorkflowSnapshot: () => ({ recommendedAction: 'next' } as any),
         serializeSession: () => ({ id: 'session' } as any),
         getRuntimeContext: (input) => ({
+            workspaceSessionId: 'session-1',
+            sessionChatId: 'session-1',
             selectedPresetId: 'preset-1',
             latestUserCommand: { type: 'send_user_input', input },
             latestUserInput: input
@@ -39,6 +70,8 @@ const createActions = (overrides: Partial<ConstructorParameters<typeof ForgeAgen
         generateRequestId: () => 'req-1',
         getSessionChatId: () => 'session-1',
         runPiTurn,
+        subscribeAgentRuntimeEvents: (filter, listener) => events.subscribe(filter, listener),
+        getAgentRuntimeSnapshot: sessionId => events.getSnapshot(sessionId),
         logger: { warn: vi.fn() },
         ...overrides
     });

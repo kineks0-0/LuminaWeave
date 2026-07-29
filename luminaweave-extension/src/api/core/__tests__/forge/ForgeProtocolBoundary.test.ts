@@ -6,7 +6,7 @@ const createContext = (): ForgeRuntimeContext => ({
     workspaceSessionId: 'forge_project_alpha',
     sessionChatId: 'conversation_alpha',
     workspaceTitle: 'Forge Alpha',
-    selectedPresetId: 'forge-main',
+    selectedPresetId: 'forge-agent',
     selectedChatSessionId: null,
     selectedChatSnapshotId: null,
     detailMode: 'quick',
@@ -16,7 +16,7 @@ const createContext = (): ForgeRuntimeContext => ({
     completedLayers: [],
     workflowSnapshot: {
         currentStage: 'narrative',
-        promptMode: 'conversation',
+        intent: 'conversation',
         reason: '用户继续细化角色',
         completedStages: ['kickoff']
     } as any,
@@ -75,7 +75,8 @@ describe('Forge protocol boundary', () => {
             context: createContext(),
             request: {
                 requestId: 'req_boundary',
-                mode: 'conversation',
+                intent: 'conversation',
+                modelRoute: 'main',
                 traceSource: 'conversation',
                 messages: [],
                 nodeSummary: []

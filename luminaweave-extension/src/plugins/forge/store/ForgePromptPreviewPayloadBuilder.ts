@@ -10,7 +10,7 @@ import type { PromptAssemblyResult } from '../../../types/PromptAssemblyTypes.js
 import type { MemorySnapshot } from '../../../types/MemorySnapshotTypes.js';
 import type { CleanedMessage } from '../../../types/nexus.js';
 import type { ForgeDraftTree, ForgeStructuredState } from '../../../types/ForgeStructuredTypes.js';
-import type { ForgeWorkflowPromptMode, ForgeWorkflowSnapshot } from '../../../types/ForgeWorkflowTypes.js';
+import type { ForgeWorkflowIntent, ForgeWorkflowSnapshot } from '../../../types/ForgeWorkflowTypes.js';
 import type {
     ForgeRequestContextSnapshot,
     ForgeRequestNodeSummaryItem,
@@ -23,10 +23,10 @@ import type { ResolvedLorebookViewState } from '../../../types/LorebookViewTypes
 import { buildPromptPreviewAgentContext } from './forgePromptPreviewAgentContext.js';
 
 interface ForgePromptPreviewContextService {
-    buildPromptPreviewPayload(input: any): CleanedMessage[];
-    buildPromptPreviewAssembly(input: any): PromptAssemblyResult;
-    buildExecutorPreviewPayload(input: any): CleanedMessage[];
-    buildExecutorPreviewAssembly(input: any): PromptAssemblyResult;
+    buildPromptPreviewPayload(input: unknown): CleanedMessage[];
+    buildPromptPreviewAssembly(input: unknown): PromptAssemblyResult;
+    buildExecutorPreviewPayload(input: unknown): CleanedMessage[];
+    buildExecutorPreviewAssembly(input: unknown): PromptAssemblyResult;
 }
 
 export interface ForgePromptPreviewPayloadBuilderDeps {
@@ -35,7 +35,7 @@ export interface ForgePromptPreviewPayloadBuilderDeps {
     fetchPresetDetail(presetId: string): Promise<unknown>;
     resolveActiveLorebookView(): ResolvedLorebookViewState;
     buildMemorySnapshot(): MemorySnapshot;
-    getPrimaryMode(): ForgeWorkflowPromptMode;
+    getPrimaryIntent(): ForgeWorkflowIntent;
     getMessages(): LuminaChatMessage[];
     runAgentGraph(): Promise<ForgeAgentGraphResult | null>;
     getForgeMemoryTree(): ForgeMemoryTree;
@@ -55,7 +55,7 @@ export interface ForgePromptPreviewPayloadBuilderDeps {
         resolvedPresetId: string
     ): ForgeRequestContextSnapshot;
     summarizeRequestNodeSummary(presetId: string): ForgeRequestNodeSummaryItem[];
-    resolvePromptPresetGenerationSettings(profileId: 'forge-main' | 'forge-executor'): PromptPresetGenerationSettings;
+    resolvePromptPresetGenerationSettings(profileId: 'forge-agent'): PromptPresetGenerationSettings;
     generateRequestId(): string;
     previewPiPrompt(input: ForgePromptPreviewPiInput): Promise<ForgePromptPreviewPiResult>;
     promptContextService: ForgePromptPreviewContextService;
@@ -80,7 +80,7 @@ export class ForgePromptPreviewPayloadBuilder {
         const presetData = await this.deps.fetchPresetDetail(selectedPresetId);
         const resolvedLorebookView = this.deps.resolveActiveLorebookView();
         const memorySnapshot = this.deps.buildMemorySnapshot();
-        const primaryMode = this.deps.getPrimaryMode();
+        const primaryIntent = this.deps.getPrimaryIntent();
         const previewMessages = this.deps.getMessages().map((message) => ({
             role: message.role as CleanedMessage['role'],
             content: message.mesRaw || message.mes || '',
@@ -98,14 +98,14 @@ export class ForgePromptPreviewPayloadBuilder {
             draftTree: this.deps.getDraftTree(),
             workflowSnapshot: this.deps.getWorkflowSnapshot(),
             forgeAgentSourceUnits,
-            mode: primaryMode
+            intent: primaryIntent
         };
         const primaryAssembly = this.deps.promptContextService.buildPromptPreviewAssembly(sharedPreviewInput);
         const primaryAgentContext = agentGraph
             ? buildPromptPreviewAgentContext(agentGraph, primaryAssembly)
             : null;
         const piPreview = await this.previewPrimaryPiPrompt({
-            primaryMode,
+            primaryIntent,
             previewMessages,
             resolvedLorebookView,
             memorySnapshot,
@@ -120,9 +120,9 @@ export class ForgePromptPreviewPayloadBuilder {
         return {
             primary: {
                 key: 'primary',
-                mode: primaryMode,
-                title: this.resolvePrimaryTitle(primaryMode),
-                subtitle: this.resolvePrimarySubtitle(primaryMode),
+                intent: primaryIntent,
+                title: this.resolvePrimaryTitle(primaryIntent),
+                subtitle: this.resolvePrimarySubtitle(primaryIntent),
                 payload: piPreview.prompt,
                 assembly: primaryAssembly,
                 agent: primaryAgentContext,
@@ -139,7 +139,7 @@ export class ForgePromptPreviewPayloadBuilder {
             },
             executor: {
                 key: 'executor',
-                mode: 'executor',
+                intent: 'edit',
                 title: '子模型 / Executor',
                 subtitle: `展示执行模型的隔离重写载荷。来源：${executorSeed.sourceLabel}`,
                 payload: executorPayload,
@@ -154,7 +154,7 @@ export class ForgePromptPreviewPayloadBuilder {
         return {
             primary: {
                 key: 'primary',
-                mode: 'planner',
+                intent: 'planning',
                 title: '主模型 / Planner',
                 subtitle: '当前未选择预设，无法生成主模型提示词预览',
                 payload: [],
@@ -163,7 +163,7 @@ export class ForgePromptPreviewPayloadBuilder {
             },
             executor: {
                 key: 'executor',
-                mode: 'executor',
+                intent: 'edit',
                 title: '子模型 / Executor',
                 subtitle: '当前未选择预设，执行模型仅能显示空预览',
                 payload: [],
@@ -174,7 +174,7 @@ export class ForgePromptPreviewPayloadBuilder {
     }
 
     private async previewPrimaryPiPrompt(input: {
-        primaryMode: ForgeWorkflowPromptMode;
+        primaryIntent: ForgeWorkflowIntent;
         previewMessages: CleanedMessage[];
         resolvedLorebookView: ResolvedLorebookViewState;
         memorySnapshot: MemorySnapshot;
@@ -186,7 +186,7 @@ export class ForgePromptPreviewPayloadBuilder {
         const resolvedPresetId = this.deps.resolveRuntimePresetId(context.selectedPresetId ?? input.selectedPresetId);
         const request = {
             requestId: this.deps.generateRequestId(),
-            traceSource: input.primaryMode,
+            traceSource: this.resolveTraceSource(input.primaryIntent),
             contextSnapshot: this.deps.buildRuntimeContextSnapshot(
                 context,
                 input.resolvedLorebookView,
@@ -194,8 +194,9 @@ export class ForgePromptPreviewPayloadBuilder {
                 resolvedPresetId
             ),
             nodeSummary: this.deps.summarizeRequestNodeSummary(resolvedPresetId),
-            generationSettings: this.deps.resolvePromptPresetGenerationSettings('forge-main'),
-            mode: input.primaryMode,
+            generationSettings: this.deps.resolvePromptPresetGenerationSettings('forge-agent'),
+            intent: input.primaryIntent,
+            modelRoute: 'main' as const,
             messages: [],
             sessionChatId: this.deps.getSessionChatId(),
             charName: 'Forge Assistant',
@@ -229,6 +230,12 @@ export class ForgePromptPreviewPayloadBuilder {
                 : JSON.stringify(message.content, null, 2),
             name: message.name
         }));
+    }
+
+    private resolveTraceSource(intent: ForgeWorkflowIntent): 'planner' | 'conversation' | 'analyst' {
+        if (intent === 'conversation') return 'conversation';
+        if (intent === 'analysis') return 'analyst';
+        return 'planner';
     }
 
     private async safeRunAgentGraph(): Promise<ForgeAgentGraphResult | null> {
@@ -269,17 +276,17 @@ export class ForgePromptPreviewPayloadBuilder {
         };
     }
 
-    private resolvePrimaryTitle(mode: ForgeWorkflowPromptMode): string {
-        if (mode === 'conversation') return '主模型 / Conversation';
-        if (mode === 'analyst') return '主模型 / Analyst';
+    private resolvePrimaryTitle(intent: ForgeWorkflowIntent): string {
+        if (intent === 'conversation') return '主模型 / Conversation';
+        if (intent === 'analysis') return '主模型 / Analysis';
         return '主模型 / Planner';
     }
 
-    private resolvePrimarySubtitle(mode: ForgeWorkflowPromptMode): string {
-        if (mode === 'conversation') {
+    private resolvePrimarySubtitle(intent: ForgeWorkflowIntent): string {
+        if (intent === 'conversation') {
             return '展示当前协作对话模式下 pi agent 实际合成后的完整消息载荷';
         }
-        if (mode === 'analyst') {
+        if (intent === 'analysis') {
             return '展示当前中间态分析模型经 pi agent 合成后的隔离上下文载荷';
         }
         return '展示当前规划模式下 pi agent 实际合成后的完整消息载荷';

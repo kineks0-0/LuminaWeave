@@ -129,9 +129,9 @@ export class ForgeRuntimeOrchestrator {
         }
 
         if (decision.requiresGeneration && command.type !== 'noop') {
-            if (decision.executionRequest?.mode === 'conversation') {
+            if (decision.executionRequest?.traceSource === 'conversation') {
                 await this.runConversation(command);
-            } else if (decision.executionRequest?.mode === 'analyst') {
+            } else if (decision.executionRequest?.traceSource === 'analyst') {
                 await this.runAnalyst(command);
             } else {
                 await this.runPlanner(command);
@@ -261,7 +261,7 @@ export class ForgeRuntimeOrchestrator {
         if (event.type === 'prompt_ready') {
             return [{
                 type: 'log_operation_prompt',
-                dedupeKey: this.getOperationDedupeKey(`pi:${context.workflowSnapshot?.promptMode ?? 'forge'}`),
+                dedupeKey: this.getOperationDedupeKey(`pi:${context.workflowSnapshot?.intent ?? 'forge'}`),
                 prompt: event.prompt
             }];
         }

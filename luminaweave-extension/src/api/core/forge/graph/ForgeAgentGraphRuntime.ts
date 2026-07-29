@@ -64,7 +64,7 @@ const ForgeAgentState = new StateSchema({
     conversationId: z.string().default(''),
     workspacePath: z.string().default(''),
     activeLeafId: z.string().nullable().default(null),
-    intent: z.enum(['conversation', 'planning', 'edit', 'review', 'test', 'export']).default('conversation'),
+    intent: z.enum(['conversation', 'planning', 'analysis', 'edit', 'review', 'test', 'export']).default('conversation'),
     selectedSkills: z.array(z.string()).default([]),
     loadedCapabilities: z.array(z.any()).default([]),
     projectResources: z.any().nullable().default(null),

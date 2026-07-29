@@ -6,7 +6,7 @@ const createContext = (): ForgeRuntimeContext => ({
     workspaceSessionId: 'forge_project',
     sessionChatId: 'conversation_1',
     workspaceTitle: 'Forge Project',
-    selectedPresetId: 'forge-main',
+    selectedPresetId: 'forge-agent',
     selectedChatSessionId: null,
     selectedChatSnapshotId: null,
     detailMode: 'quick',
@@ -70,7 +70,8 @@ describe('ForgePiRuntimeClient', () => {
             context: createContext(),
             request: {
                 requestId: 'req_preview',
-                mode: 'conversation',
+                intent: 'conversation',
+                modelRoute: 'main',
                 messages: [],
                 traceSource: 'conversation'
             } as any
@@ -130,7 +131,8 @@ describe('ForgePiRuntimeClient', () => {
             context: createContext(),
             request: {
                 requestId: 'req_1',
-                mode: 'conversation',
+                intent: 'conversation',
+                modelRoute: 'main',
                 messages: [],
                 traceSource: 'conversation'
             } as any

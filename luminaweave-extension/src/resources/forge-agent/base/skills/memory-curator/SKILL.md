@@ -6,6 +6,7 @@ allowed-tools: read write edit bash
 metadata:
   title: 项目记忆整理员
   source: built-in
+  defaultWriteScope: /workspaces/forge/<projectId>/memory/
 ---
 # 项目记忆整理员
 

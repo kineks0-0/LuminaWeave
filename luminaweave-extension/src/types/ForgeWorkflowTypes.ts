@@ -8,7 +8,16 @@ import type {
 } from './ForgeStructuredTypes.js';
 import type { StagingEntry } from './ForgeRuntimeTypes.js';
 
-export type ForgeWorkflowPromptMode = 'planner' | 'conversation' | 'analyst' | 'executor';
+export type ForgeWorkflowIntent =
+    | 'conversation'
+    | 'planning'
+    | 'analysis'
+    | 'edit'
+    | 'review'
+    | 'test'
+    | 'export';
+export type ForgeModelRoute = 'main' | 'executor';
+export type LegacyForgeWorkflowPromptMode = 'planner' | 'conversation' | 'analyst' | 'executor';
 export type ForgeVisiblePhase =
     | 'alignment'
     | 'entity_world'
@@ -38,7 +47,7 @@ export interface ForgeWorkflowSnapshot {
     collectionMode: ForgeCollectionMode;
     activeLayer: ForgeLayer;
     subLayer: ForgeLayer | null;
-    promptMode: ForgeWorkflowPromptMode;
+    intent: ForgeWorkflowIntent;
     reason: string;
     recommendedAction: string;
     shouldGenerate: boolean;

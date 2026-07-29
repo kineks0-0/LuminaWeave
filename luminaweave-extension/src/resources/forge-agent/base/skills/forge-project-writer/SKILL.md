@@ -6,6 +6,7 @@ allowed-tools: read write edit delete bash
 metadata:
   title: Forge 项目写入员
   source: built-in
+  defaultWriteScope: /workspaces/forge/<projectId>/
 ---
 # Forge 项目写入员
 

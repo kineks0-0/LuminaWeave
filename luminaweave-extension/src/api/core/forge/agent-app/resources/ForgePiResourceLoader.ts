@@ -14,9 +14,7 @@ import {
     buildForgeSystemPrompt,
     buildForgeUiDslPrompt,
     FORGE_AGENT_REASONING_PROMPT_PATH,
-    FORGE_AGENT_UI_DSL_PROMPT_PATH,
-    resolveForgeModePrompt,
-    resolveForgeModePromptPath
+    FORGE_AGENT_UI_DSL_PROMPT_PATH
 } from '../vfs/ForgePiVirtualProjectFiles.js';
 import {
     listForgePresetSkillResources
@@ -26,6 +24,8 @@ import {
     type ForgeSemanticVfsReader
 } from '../vfs/ForgeSemanticVfsProvider.js';
 import { formatAgentSkillCatalogLine } from '../../../agent-runtime/skills/AgentSkillParser.js';
+import { promptPresetRegistry } from '../../../hal/prompt/PromptPresetRegistry.js';
+import { forgeAgentPresetResourceRegistry } from '../../presets/ForgeAgentPresetResourceRegistry.js';
 
 const safeMemoryPathSegment = (value: string): string => {
     const normalized = value
@@ -56,8 +56,6 @@ export class ForgePiResourceLoader {
     async buildContextBundle(context: ForgeRuntimeContext): Promise<ForgePiContextBundleSummary> {
         const agentsFile = await this.readSemanticFile(context, './AGENTS.md', () => this.buildAgentsFile());
         const systemPrompt = await this.readSemanticFile(context, './.forge/agent/SYSTEM.md', () => this.buildSystemPromptFile());
-        const modePromptPath = resolveForgeModePromptPath(context);
-        const modePrompt = await this.readSemanticFile(context, modePromptPath, () => this.resolveModePrompt(context));
         const uiDslPrompt = await this.readSemanticFile(context, FORGE_AGENT_UI_DSL_PROMPT_PATH, () => buildForgeUiDslPrompt());
         const reasoningPrompt = await this.readSemanticFile(context, FORGE_AGENT_REASONING_PROMPT_PATH, () => buildForgeReasoningPrompt());
         const projectSkills = await this.skills.listProjectSkills(context.workspaceSessionId, context.sessionChatId)
@@ -72,7 +70,7 @@ export class ForgePiResourceLoader {
             })),
             ...presetSkills.map(item => this.formatSkillRef({
                 name: item.name,
-                title: item.title || item.description || item.name,
+                title: `[${item.source ?? 'preset'}] ${item.title || item.description || item.name}`,
                 path: item.path
             })),
             ...builtInSkills.map(item => this.formatSkillRef({
@@ -92,12 +90,7 @@ export class ForgePiResourceLoader {
         return {
             files: [
                 { path: './AGENTS.md', title: 'Agent 工作契约', content: agentsFile },
-                { path: './.forge/agent/SYSTEM.md', title: '默认系统提示词', content: systemPrompt },
-                {
-                    path: modePromptPath,
-                    title: '当前模式提示词',
-                    content: modePrompt
-                },
+                { path: './.forge/agent/SYSTEM.md', title: '主模型提示词', content: systemPrompt },
                 { path: FORGE_AGENT_UI_DSL_PROMPT_PATH, title: 'Forge <V> DSL', content: uiDslPrompt },
                 { path: FORGE_AGENT_REASONING_PROMPT_PATH, title: '推理与可见工作笔记边界', content: reasoningPrompt },
                 { path: './.pi/agent/context/project.md', title: '项目概况', content: this.buildProjectFile(context) },
@@ -109,7 +102,7 @@ export class ForgePiResourceLoader {
                 ...alwaysSkillFiles
             ],
             activeSkills,
-            loadedExtensions: ['@luminaweave/pi-forge-browser']
+            loadedExtensions: this.listLoadedExtensions()
         };
     }
 
@@ -168,7 +161,7 @@ export class ForgePiResourceLoader {
             '# 阶段状态',
             '',
             `- 当前阶段：${snapshot?.stage ?? 'unknown'}`,
-            `- Prompt 模式：${snapshot?.promptMode ?? 'unknown'}`,
+            `- Intent：${snapshot?.intent ?? 'unknown'}`,
             `- 阶段原因：${snapshot?.reason ?? '无'}`,
             `- 已完成层：${context.completedLayers.join(', ') || '无'}`,
             '',
@@ -248,17 +241,20 @@ export class ForgePiResourceLoader {
         return buildForgeSystemPrompt();
     }
 
+    private listLoadedExtensions(): string[] {
+        const presetId = promptPresetRegistry.getActivePresetId('forge-agent');
+        return forgeAgentPresetResourceRegistry
+            .resolve(presetId)
+            .extensions
+            .map(extension => `${extension.source}:${extension.id}`);
+    }
+
     private async readSemanticFile(
         context: ForgeRuntimeContext,
         path: string,
         fallback: () => string
     ): Promise<string> {
         return this.semanticVfs.readFile(context, path).catch(() => fallback());
-    }
-
-    private resolveModePrompt(context: ForgeRuntimeContext): string {
-        const mode = context.workflowSnapshot?.promptMode ?? 'conversation';
-        return resolveForgeModePrompt(mode) ?? '';
     }
 
     private buildProjectResourcesFile(context: ForgeRuntimeContext): string {

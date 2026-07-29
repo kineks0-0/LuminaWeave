@@ -6,6 +6,7 @@ allowed-tools: read write edit bash
 metadata:
   title: 虚拟世界书编辑器
   source: built-in
+  defaultWriteScope: /workspaces/forge/<projectId>/lorebook/entries/
 ---
 # 虚拟世界书编辑器
 

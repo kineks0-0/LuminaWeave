@@ -17,21 +17,19 @@ import {
 } from '../agent-app/vfs/ForgeSemanticVfsMapper.js';
 import {
     buildForgeAgentsFile,
+    buildForgeExecutorPrompt,
     buildForgeReasoningPrompt,
     buildForgeSystemPrompt,
     buildForgeUiDslPrompt,
+    FORGE_AGENT_EXECUTOR_PROMPT_PATH,
     FORGE_AGENT_REASONING_PROMPT_PATH,
-    FORGE_AGENT_UI_DSL_PROMPT_PATH,
-    FORGE_AGENT_PROMPTS_ROOT,
-    resolveForgeModePrompt
+    FORGE_AGENT_UI_DSL_PROMPT_PATH
 } from '../agent-app/vfs/ForgePiVirtualProjectFiles.js';
 import { promptPresetRegistry } from '../../hal/prompt/PromptPresetRegistry.js';
 import type {
-    ForgeAgentPromptMode,
     ForgeAgentSkillLoadPolicy,
     ForgeAgentSkillResource,
-    ForgeAgentPromptResourceSet,
-    PromptPresetProfileId
+    ForgeAgentPromptResourceSet
 } from '../../../../types/PromptPresetTypes.js';
 
 export type ForgeProjectSemanticVfsEntryKind = 'directory' | 'file';
@@ -52,8 +50,6 @@ export interface ForgeProjectSemanticVfsServiceDeps {
 }
 
 type EntryMap = Map<string, ForgeProjectSemanticVfsEntry>;
-
-const PROMPT_FILE_NAMES = ['PLANNER.md', 'CONVERSATION.md', 'ANALYST.md', 'EXECUTOR.md'] as const;
 
 const INTERNAL_STORAGE_ROOTS = [
     './chat/',
@@ -231,14 +227,12 @@ export const normalizeForgeAgentSkillLoadPolicy = (
 export const resolveForgeAgentPresetResources = (
     context: Pick<ForgeRuntimeContext, 'selectedPresetId'>
 ): ForgeAgentPromptResourceSet | undefined => {
-    const profileIds: PromptPresetProfileId[] = ['forge-main', 'forge-executor', 'forge-test-chat'];
-    if (context.selectedPresetId) {
-        for (const profileId of profileIds) {
-            const preset = promptPresetRegistry.getPreset(profileId, context.selectedPresetId);
-            if (preset?.forgeAgentResources) return preset.forgeAgentResources;
-        }
+    const selectedPresetId = context.selectedPresetId;
+    if (selectedPresetId && selectedPresetId !== 'forge-agent' && selectedPresetId !== 'forge-main' && selectedPresetId !== 'forge-executor') {
+        const preset = promptPresetRegistry.getPreset('forge-agent', selectedPresetId);
+        if (preset?.forgeAgentResources) return preset.forgeAgentResources;
     }
-    return promptPresetRegistry.getActivePreset('forge-main').forgeAgentResources;
+    return promptPresetRegistry.getActivePreset('forge-agent').forgeAgentResources;
 };
 
 export const listForgePresetSkillResources = (
@@ -323,17 +317,13 @@ export class ForgeProjectSemanticVfsService {
         );
         addFile(entries, FORGE_AGENT_UI_DSL_PROMPT_PATH, buildForgeUiDslPrompt(), 'virtual', 'protected');
         addFile(entries, FORGE_AGENT_REASONING_PROMPT_PATH, buildForgeReasoningPrompt(), 'virtual', 'protected');
-        PROMPT_FILE_NAMES.forEach((fileName) => {
-            const mode = fileName.replace(/\.md$/, '').toLowerCase() as ForgeAgentPromptMode;
-            const modeResource = presetResources?.modes[mode];
-            addFile(
-                entries,
-                `${FORGE_AGENT_PROMPTS_ROOT}/${fileName}`,
-                modeResource?.content ?? resolveForgeModePrompt(fileName) ?? '',
-                modeResource ? 'resource' : 'virtual',
-                'protected'
-            );
-        });
+        addFile(
+            entries,
+            FORGE_AGENT_EXECUTOR_PROMPT_PATH,
+            presetResources?.executor.content ?? buildForgeExecutorPrompt(),
+            presetResources?.executor ? 'resource' : 'virtual',
+            'protected'
+        );
     }
 
     private resolvePresetResources(context: ForgeRuntimeContext): ForgeAgentPromptResourceSet | undefined {

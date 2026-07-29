@@ -1,6 +1,7 @@
 import * as forgePrompts from '../../../../resources/prompts/forgePrompts.js';
 import { lwStorage } from '../../../storage.js';
 import { getPromptPresetProfile, listPromptPresetProfiles } from './PromptPresetProfiles.js';
+import { forgeAgentPresetResourceRegistry } from '../../forge/presets/ForgeAgentPresetResourceRegistry.js';
 import {
     clonePromptPresetGenerationSettings,
     sanitizePromptPresetGenerationSettings
@@ -9,10 +10,13 @@ import {
     type ForgeTestChatPreset as LegacyForgeTestChatPreset
 } from '../../../../types/ForgeTestChatTypes.js';
 import type {
-    ForgeAgentPromptMode,
+    ForgeAgentExtensionResource,
+    LegacyForgeAgentPromptMode,
+    LegacyPromptPresetProfileId,
     ForgeAgentPromptOrchestration,
     ForgeAgentPromptResource,
     ForgeAgentPromptResourceSet,
+    ForgeAgentSkillLoadPolicy,
     ForgeAgentSkillResource,
     PromptPresetBindingMap,
     PromptPresetDefinition,
@@ -27,12 +31,15 @@ const LEGACY_TEST_CHAT_PRESETS_KEY = 'lumina-forge.testChatPresets';
 const LEGACY_TEST_CHAT_ACTIVE_KEY = 'lumina-forge.testChatActivePreset';
 
 type PromptPresetBuiltInOverrideMap = Record<string, Record<string, boolean>>;
-type RawPresetModule = PromptPresetDefinition & {
-    forgeAgentResources?: Omit<ForgeAgentPromptResourceSet, 'contract' | 'system' | 'modes' | 'skills'> & {
+type RawPresetModule = Omit<PromptPresetDefinition, 'profileId' | 'forgeAgentResources'> & {
+    profileId: PromptPresetProfileId | LegacyPromptPresetProfileId;
+    forgeAgentResources?: Partial<Omit<ForgeAgentPromptResourceSet, 'contract' | 'system' | 'executor' | 'skills' | 'extensions'>> & {
         contract?: ForgeAgentPromptResource;
         system?: ForgeAgentPromptResource;
-        modes?: Partial<Record<ForgeAgentPromptMode, ForgeAgentPromptResource>>;
+        executor?: ForgeAgentPromptResource;
+        modes?: Partial<Record<LegacyForgeAgentPromptMode, ForgeAgentPromptResource>>;
         skills?: ForgeAgentSkillResource[];
+        extensions?: ForgeAgentExtensionResource[];
     };
 };
 
@@ -61,13 +68,9 @@ const cloneForgeAgentResources = (resources: ForgeAgentPromptResourceSet | undef
     return {
         contract: cloneForgeAgentResource(resources.contract),
         system: cloneForgeAgentResource(resources.system),
-        modes: {
-            planner: cloneForgeAgentResource(resources.modes.planner),
-            conversation: cloneForgeAgentResource(resources.modes.conversation),
-            analyst: cloneForgeAgentResource(resources.modes.analyst),
-            executor: cloneForgeAgentResource(resources.modes.executor)
-        },
-        skills: resources.skills?.map(cloneForgeAgentSkillResource)
+        executor: cloneForgeAgentResource(resources.executor),
+        skills: resources.skills?.map(cloneForgeAgentSkillResource),
+        extensions: resources.extensions?.map(extension => ({ ...extension }))
     };
 };
 
@@ -87,22 +90,39 @@ const resolveForgeAgentResource = (resource: ForgeAgentPromptResource | undefine
         }
         : undefined;
 
-const resolveForgeAgentResources = (resources: RawPresetModule['forgeAgentResources'] | undefined): ForgeAgentPromptResourceSet | undefined => {
-    if (!resources?.contract || !resources.system || !resources.modes) return undefined;
-    const planner = resolveForgeAgentResource(resources.modes.planner);
-    const conversation = resolveForgeAgentResource(resources.modes.conversation);
-    const analyst = resolveForgeAgentResource(resources.modes.analyst);
-    const executor = resolveForgeAgentResource(resources.modes.executor);
-    if (!planner || !conversation || !analyst || !executor) return undefined;
+const normalizeForgeAgentSkillLoadPolicy = (
+    loadPolicy: ForgeAgentSkillResource['loadPolicy']
+): ForgeAgentSkillLoadPolicy => loadPolicy === 'always' ? 'always' : 'on_demand';
+
+const resolveForgeAgentResources = (
+    presetId: string,
+    resources: RawPresetModule['forgeAgentResources'] | undefined
+): ForgeAgentPromptResourceSet | undefined => {
+    if (!resources?.contract) return undefined;
+    const folderResources = forgeAgentPresetResourceRegistry.resolve(presetId);
+    const system = folderResources.system
+        ?? resolveForgeAgentResource(resources.system)
+        ?? resolveForgeAgentResource(resources.modes?.conversation);
+    const executor = folderResources.executor
+        ?? resolveForgeAgentResource(resources.executor)
+        ?? resolveForgeAgentResource(resources.modes?.executor);
+    if (!system || !executor) return undefined;
     return {
         contract: resolveForgeAgentResource(resources.contract) ?? resources.contract,
-        system: resolveForgeAgentResource(resources.system) ?? resources.system,
-        modes: { planner, conversation, analyst, executor },
-        skills: resources.skills?.map(skill => ({
-            ...skill,
-            content: resolvePromptText(skill.content) ?? skill.content,
-            loadPolicy: skill.loadPolicy === 'always' ? 'always' : 'on_demand'
-        }))
+        system,
+        executor,
+        skills: [
+            ...(resources.skills?.map(skill => ({
+                ...skill,
+                content: resolvePromptText(skill.content) ?? skill.content,
+                loadPolicy: normalizeForgeAgentSkillLoadPolicy(skill.loadPolicy)
+            })) ?? []),
+            ...folderResources.skills
+        ],
+        extensions: [
+            ...(resources.extensions?.map(extension => ({ ...extension })) ?? []),
+            ...folderResources.extensions.map(({ factory: _factory, ...extension }) => extension)
+        ]
     };
 };
 
@@ -112,6 +132,9 @@ const createBuiltInDefinitions = (): PromptPresetDefinition[] => {
 
     for (const path in presetModules) {
         const preset = (presetModules[path] as { default: RawPresetModule }).default;
+        if (preset.profileId === 'forge-main' || preset.profileId === 'forge-executor') {
+            continue;
+        }
         
         // 解析 specials 中的提示词引用
         const specials: Record<string, string> = {};
@@ -122,7 +145,7 @@ const createBuiltInDefinitions = (): PromptPresetDefinition[] => {
         }
 
         // 解析 entries 中的提示词引用
-        const entries = (preset.entries || []).map((entry: any) => ({
+        const entries = (preset.entries || []).map((entry: PromptPresetEntry) => ({
             ...entry,
             content: resolvePromptText(entry.content)
         }));
@@ -132,7 +155,8 @@ const createBuiltInDefinitions = (): PromptPresetDefinition[] => {
             builtIn: true,
             specials,
             entries,
-            forgeAgentResources: resolveForgeAgentResources(preset.forgeAgentResources),
+            profileId: preset.profileId,
+            forgeAgentResources: resolveForgeAgentResources(preset.id, preset.forgeAgentResources),
             forgeAgentOrchestration: preset.forgeAgentOrchestration
                 ? cloneForgeAgentOrchestration(preset.forgeAgentOrchestration)
                 : undefined,
@@ -163,8 +187,7 @@ const createEntry = (
 });
 
 const createDefaultBindings = (): PromptPresetBindingMap => ({
-    'forge-main': getPromptPresetProfile('forge-main').defaultPresetId,
-    'forge-executor': getPromptPresetProfile('forge-executor').defaultPresetId,
+    'forge-agent': getPromptPresetProfile('forge-agent').defaultPresetId,
     'forge-test-chat': getPromptPresetProfile('forge-test-chat').defaultPresetId
 });
 
@@ -179,9 +202,31 @@ const clonePreset = (preset: PromptPresetDefinition): PromptPresetDefinition => 
 });
 
 const bindingsEqual = (left: PromptPresetBindingMap, right: PromptPresetBindingMap): boolean =>
-    left['forge-main'] === right['forge-main']
-    && left['forge-executor'] === right['forge-executor']
+    left['forge-agent'] === right['forge-agent']
     && left['forge-test-chat'] === right['forge-test-chat'];
+
+const normalizeLegacyPresetId = (presetId: string | undefined): string | undefined => {
+    if (!presetId) return undefined;
+    if (
+        presetId === 'built-in:forge-main-default'
+        || presetId === 'built-in:forge-executor-default'
+        || presetId === 'built-in:forge-main-reference-extract'
+        || presetId === 'built-in:forge-executor-reference-extract'
+    ) {
+        return 'built-in:forge-agent-default';
+    }
+    return presetId;
+};
+
+const normalizePresetProfileId = (
+    profileId: PromptPresetProfileId | LegacyPromptPresetProfileId
+): PromptPresetProfileId =>
+    profileId === 'forge-main' || profileId === 'forge-executor'
+        ? 'forge-agent'
+        : profileId;
+
+const isPromptPresetProfileId = (value: string): value is PromptPresetProfileId =>
+    value === 'forge-agent' || value === 'forge-test-chat';
 
 export class PromptPresetRegistry {
     private initialized = false;
@@ -391,16 +436,8 @@ export class PromptPresetRegistry {
         const userPresets = Array.isArray(rawRegistry)
             ? rawRegistry
                 .filter((preset): preset is PromptPresetDefinition => Boolean(preset && typeof preset === 'object' && !preset.builtIn))
-                .map(preset => ({
-                    ...preset,
-                    builtIn: false,
-                    entries: Array.isArray(preset.entries) ? preset.entries.map(entry => ({ ...entry })) : [],
-                    specials: { ...(preset.specials || {}) },
-                    generationSettings: sanitizePromptPresetGenerationSettings(preset.generationSettings),
-                    forgeAgentResources: cloneForgeAgentResources(preset.forgeAgentResources),
-                    forgeAgentOrchestration: cloneForgeAgentOrchestration(preset.forgeAgentOrchestration),
-                    customCharCard: preset.customCharCard ? { ...preset.customCharCard } : undefined
-                }))
+                .map(preset => this.normalizeStoredPreset(preset))
+                .filter((preset): preset is PromptPresetDefinition => Boolean(preset))
             : [];
 
         const normalizedBuiltInOverrides = this.normalizeBuiltInOverrides(builtIns, rawBuiltInOverrides);
@@ -412,11 +449,8 @@ export class PromptPresetRegistry {
         this.bindings = createDefaultBindings();
         this.builtInOverrides = normalizedBuiltInOverrides.overrides;
 
-        if (rawBindings && typeof rawBindings === 'object') {
-            this.bindings = {
-                ...this.bindings,
-                ...(rawBindings as Partial<PromptPresetBindingMap>)
-            };
+        if (rawBindings && typeof rawBindings === 'object' && !Array.isArray(rawBindings)) {
+            this.bindings = this.normalizeStoredBindings(rawBindings as Record<string, unknown>);
         }
 
         this.applyLegacyMigrationIfNeeded();
@@ -503,6 +537,42 @@ export class PromptPresetRegistry {
             default:
                 return 'chat_history';
         }
+    }
+
+    private normalizeStoredPreset(rawPreset: PromptPresetDefinition): PromptPresetDefinition | null {
+        const rawProfileId = rawPreset.profileId as PromptPresetProfileId | LegacyPromptPresetProfileId;
+        const profileId = normalizePresetProfileId(rawProfileId);
+        if (!isPromptPresetProfileId(profileId)) return null;
+        return {
+            ...rawPreset,
+            profileId,
+            builtIn: false,
+            entries: Array.isArray(rawPreset.entries) ? rawPreset.entries.map(entry => ({ ...entry })) : [],
+            specials: { ...(rawPreset.specials || {}) },
+            generationSettings: sanitizePromptPresetGenerationSettings(rawPreset.generationSettings),
+            forgeAgentResources: cloneForgeAgentResources(
+                resolveForgeAgentResources(rawPreset.id, rawPreset.forgeAgentResources as RawPresetModule['forgeAgentResources'])
+            ),
+            forgeAgentOrchestration: cloneForgeAgentOrchestration(rawPreset.forgeAgentOrchestration),
+            customCharCard: rawPreset.customCharCard ? { ...rawPreset.customCharCard } : undefined
+        };
+    }
+
+    private normalizeStoredBindings(rawBindings: Record<string, unknown>): PromptPresetBindingMap {
+        const bindings = createDefaultBindings();
+        const rawAgentBinding = typeof rawBindings['forge-agent'] === 'string'
+            ? rawBindings['forge-agent']
+            : (typeof rawBindings['forge-main'] === 'string'
+                ? rawBindings['forge-main']
+                : (typeof rawBindings['forge-executor'] === 'string' ? rawBindings['forge-executor'] : undefined));
+        const normalizedAgentBinding = normalizeLegacyPresetId(rawAgentBinding);
+        if (normalizedAgentBinding) {
+            bindings['forge-agent'] = normalizedAgentBinding;
+        }
+        if (typeof rawBindings['forge-test-chat'] === 'string') {
+            bindings['forge-test-chat'] = rawBindings['forge-test-chat'];
+        }
+        return bindings;
     }
 
     private normalizeBindings(): void {

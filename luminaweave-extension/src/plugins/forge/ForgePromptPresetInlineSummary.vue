@@ -3,7 +3,7 @@
     <div class="summary-header">
       <div>
         <div class="summary-title">Agent 预设绑定</div>
-        <div class="summary-subtitle">主模型、执行模型、测试聊天各自绑定独立预设；Forge Agent 使用资源包与提示词编排。</div>
+        <div class="summary-subtitle">Agent 预设绑定主模型与执行模型提示词；测试聊天保留独立预设。</div>
       </div>
       <button class="summary-open-btn" type="button" @click="openDetail">
         打开完整工作台
@@ -54,8 +54,7 @@ const handleStorageChange = (data: { key?: string } | null) => {
 const rows = computed(() => {
     version.value;
     return ([
-        ['forge-main', '主模型'],
-        ['forge-executor', '执行模型'],
+        ['forge-agent', 'Agent'],
         ['forge-test-chat', '测试聊天']
     ] as Array<[PromptPresetProfileId, string]>).map(([profileId, label]) => ({
         profileId,
@@ -122,7 +121,7 @@ onUnmounted(() => {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 

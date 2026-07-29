@@ -527,6 +527,59 @@ export const useForgeStore = defineStore('forge', {
             });
         },
 
+        finishOperationByKey(payload: {
+            dedupeKey: string;
+            status: 'completed' | 'failed' | 'cancelled';
+            operationKind: ForgeTimelineOperationKind;
+            title: string;
+            summary: string;
+            detail?: string | null;
+            sourceTag?: string | null;
+            targetEntryId?: string | null;
+            relatedMessageId?: string | null;
+            layer?: string | null;
+        }): ForgeTimelineOperationItem {
+            const activeIndex = this.timelineItems.findIndex(item =>
+                item.kind === 'operation'
+                && item.dedupeKey === payload.dedupeKey
+                && item.status === 'running'
+            );
+            if (activeIndex >= 0) {
+                const existing = this.timelineItems[activeIndex] as ForgeTimelineOperationItem;
+                const now = Date.now();
+                const next: ForgeTimelineOperationItem = {
+                    ...existing,
+                    operationKind: payload.operationKind,
+                    status: payload.status,
+                    title: payload.title,
+                    summary: payload.summary,
+                    detail: payload.detail ?? existing.detail ?? null,
+                    sourceTag: payload.sourceTag ?? existing.sourceTag ?? null,
+                    targetEntryId: payload.targetEntryId ?? existing.targetEntryId ?? null,
+                    relatedMessageId: payload.relatedMessageId ?? existing.relatedMessageId ?? null,
+                    layer: (payload.layer as ForgeTimelineOperationItem['layer']) ?? existing.layer ?? null,
+                    updatedAt: now,
+                    completedAt: now
+                };
+                this.timelineItems.splice(activeIndex, 1, next);
+                return next;
+            }
+
+            const existingTerminal = [...this.timelineItems].reverse().find(item =>
+                item.kind === 'operation'
+                && item.dedupeKey === payload.dedupeKey
+                && item.status === payload.status
+                && item.title === payload.title
+                && item.summary === payload.summary
+            );
+            if (existingTerminal?.kind === 'operation') return existingTerminal;
+
+            return this.addOperationTimelineItem({
+                ...payload,
+                completedAt: Date.now()
+            });
+        },
+
         /**
          * 将所有仍处于 running 状态的操作条目标记为 failed。
          * 在命令调度结束（无论成功或异常）的 finally 块中调用，

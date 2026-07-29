@@ -58,10 +58,9 @@ const relativeToWorkspace = (path: string): string => {
 const VIRTUAL_FILE_PATHS = new Set([
     './AGENTS.md',
     './.forge/agent/SYSTEM.md',
-    './.forge/agent/PLANNER.md',
-    './.forge/agent/CONVERSATION.md',
-    './.forge/agent/ANALYST.md',
-    './.forge/agent/EXECUTOR.md'
+    './.forge/agent/EXECUTOR.md',
+    './.forge/agent/UI_DSL.md',
+    './.forge/agent/REASONING.md'
 ]);
 
 export const buildForgeStableThreadLabel = (index: number, title: string): string => {

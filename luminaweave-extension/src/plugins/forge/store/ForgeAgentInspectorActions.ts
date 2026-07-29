@@ -9,11 +9,16 @@ import type {
 } from '../../../types/ForgeRuntimeTypes.js';
 import type { ForgeMemoryTree } from '../../../types/ForgeMemoryTypes.js';
 import type { ForgeDraftTree, ForgeStructuredState } from '../../../types/ForgeStructuredTypes.js';
-import type { ForgeWorkflowSnapshot } from '../../../types/ForgeWorkflowTypes.js';
+import type { ForgeModelRoute, ForgeWorkflowIntent, ForgeWorkflowSnapshot } from '../../../types/ForgeWorkflowTypes.js';
 import type { MemorySnapshot } from '../../../types/MemorySnapshotTypes.js';
 import type { CleanedMessage } from '../../../types/nexus.js';
 import type { PromptPresetGenerationSettings } from '../../../types/PromptPresetTypes.js';
 import type { ResolvedLorebookViewState } from '../../../types/LorebookViewTypes.js';
+import type {
+    AgentRuntimeEventFilter,
+    AgentRuntimeEventListener,
+    AgentRuntimeSnapshot
+} from '../../../api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
 export type ForgeAgentInspectorMode = 'planner' | 'executor' | 'analyst' | 'conversation';
 
@@ -40,7 +45,7 @@ export interface ForgeAgentInspectorActionsDeps {
     buildAnalystPrompt(input: Record<string, unknown>): CleanedMessage[];
     buildConversationPrompt(input: Record<string, unknown>): CleanedMessage[];
     cleanMessages(messages: CleanedMessage[]): CleanedMessage[];
-    resolvePromptPresetGenerationSettings(profileId: 'forge-main' | 'forge-executor'): PromptPresetGenerationSettings;
+    resolvePromptPresetGenerationSettings(profileId: 'forge-agent'): PromptPresetGenerationSettings;
     resolveRuntimePresetId(selectedPresetId?: string | null): string;
     buildRuntimeContextSnapshot(
         context: ForgeRuntimeContext,
@@ -57,6 +62,11 @@ export interface ForgeAgentInspectorActionsDeps {
         context: ForgeRuntimeContext;
         request: ForgeExecutionRequest;
     }): Promise<{ events?: ForgeRuntimeEvent[] }>;
+    subscribeAgentRuntimeEvents?: (
+        filter: AgentRuntimeEventFilter,
+        listener: AgentRuntimeEventListener
+    ) => () => void;
+    getAgentRuntimeSnapshot?: (sessionId: string) => AgentRuntimeSnapshot;
     logger?: Pick<Console, 'warn'>;
 }
 
@@ -90,9 +100,7 @@ export class ForgeAgentInspectorActions {
         const contextSnapshot = this.deps.getRuntimeContext(testInput);
         const messages = await this.buildMessages(mode, testInput, contextSnapshot);
         const cleanedMessages = this.deps.cleanMessages(messages);
-        const generationSettings = this.deps.resolvePromptPresetGenerationSettings(
-            mode === 'executor' ? 'forge-executor' : 'forge-main'
-        );
+        const generationSettings = this.deps.resolvePromptPresetGenerationSettings('forge-agent');
         const resolvedLorebookView = this.deps.resolveActiveLorebookView();
         const memorySnapshot = this.deps.buildMemorySnapshot();
         const resolvedPresetId = this.deps.resolveRuntimePresetId(contextSnapshot.selectedPresetId);
@@ -102,26 +110,50 @@ export class ForgeAgentInspectorActions {
             contextSnapshot: this.deps.buildRuntimeContextSnapshot(contextSnapshot, resolvedLorebookView, memorySnapshot, resolvedPresetId),
             nodeSummary: this.deps.summarizeRequestNodeSummary(resolvedPresetId),
             generationSettings,
-            mode,
+            intent: this.resolveIntent(mode),
+            modelRoute: this.resolveModelRoute(mode),
             messages: cleanedMessages,
             sessionChatId: this.deps.getSessionChatId(),
             charName: 'Forge Assistant',
             presetId: resolvedPresetId,
             sourceCommand: { type: 'send_user_input', input: testInput }
         };
-        const result = await this.deps.runPiTurn({
-            command: { type: 'send_user_input', input: testInput },
-            commandInput: testInput,
-            context: contextSnapshot,
-            request
-        });
-        for (const event of result.events ?? []) {
-            if (event.type === 'stream_chunk') {
-                onChunk?.('', event.displayText);
+        const sessionId = `${contextSnapshot.workspaceSessionId}__${request.sessionChatId}`;
+        let latestSnapshot = this.deps.getAgentRuntimeSnapshot?.(sessionId);
+        let lastProjection = '';
+        const unsubscribe = this.deps.subscribeAgentRuntimeEvents?.(
+            { sessionId, turnId: request.requestId },
+            (_event, snapshot) => {
+                latestSnapshot = snapshot;
+                const projection = projectAssistantRuntimeMessage(snapshot, request.requestId);
+                if (!projection || projection === lastProjection) return;
+                lastProjection = projection;
+                onChunk?.('', projection);
             }
+        );
+        try {
+            await this.deps.runPiTurn({
+                command: { type: 'send_user_input', input: testInput },
+                commandInput: testInput,
+                context: contextSnapshot,
+                request
+            });
+        } finally {
+            unsubscribe?.();
         }
-        const done = (result.events ?? []).find(event => event.type === 'stream_done');
-        return { rawText: done?.rawText ?? '' };
+        latestSnapshot = this.deps.getAgentRuntimeSnapshot?.(sessionId) ?? latestSnapshot;
+        return { rawText: projectAssistantRuntimeMessage(latestSnapshot, request.requestId) ?? '' };
+    }
+
+    private resolveIntent(mode: ForgeAgentInspectorMode): ForgeWorkflowIntent {
+        if (mode === 'conversation') return 'conversation';
+        if (mode === 'analyst') return 'analysis';
+        if (mode === 'executor') return 'edit';
+        return 'planning';
+    }
+
+    private resolveModelRoute(mode: ForgeAgentInspectorMode): ForgeModelRoute {
+        return mode === 'executor' ? 'executor' : 'main';
     }
 
     private async buildMessages(
@@ -163,3 +195,17 @@ export class ForgeAgentInspectorActions {
         return this.deps.buildPlannerPrompt(buildShared);
     }
 }
+
+const projectAssistantRuntimeMessage = (
+    snapshot: AgentRuntimeSnapshot | undefined,
+    turnId: string
+): string | null => {
+    const message = snapshot?.messages
+        .filter(item => item.turnId === turnId && item.role === 'assistant')
+        .at(-1);
+    if (!message) return null;
+    return message.blocks
+        .filter(block => block.type === 'text' && typeof block.text === 'string')
+        .map(block => block.text as string)
+        .join('');
+};
