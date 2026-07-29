@@ -27,7 +27,7 @@ const createContext = (): ForgeRuntimeContext => ({
     worldlineNodes: [],
     messages: [],
     timelineItems: [],
-    structuredState: {} as any,
+    structuredState: {} as never,
     draftTree: { nodes: [], lastUpdatedAt: 1 },
     forgeMemoryTree: { entries: [], lastUpdatedAt: 1 },
     stagingEntries: [],
@@ -37,9 +37,18 @@ const createContext = (): ForgeRuntimeContext => ({
     latestUserCommand: { type: 'send_user_input', input: 'hello' }
 });
 
-const createRequest = (mode: ForgeExecutionRequest['mode']): ForgeExecutionRequest => ({
-    requestId: `req_${mode}`,
-    traceSource: mode === 'conversation' ? 'conversation' : 'planner',
+type TestRequestSource = 'planner' | 'analyst' | 'conversation' | 'executor';
+
+const resolveIntent = (source: TestRequestSource): ForgeExecutionRequest['intent'] => {
+    if (source === 'conversation') return 'conversation';
+    if (source === 'analyst') return 'analysis';
+    if (source === 'executor') return 'edit';
+    return 'planning';
+};
+
+const createRequest = (source: TestRequestSource): ForgeExecutionRequest => ({
+    requestId: `req_${source}`,
+    traceSource: source,
     contextSnapshot: {
         kind: 'forge-runtime',
         workspaceTitle: 'Forge Alpha',
@@ -58,7 +67,8 @@ const createRequest = (mode: ForgeExecutionRequest['mode']): ForgeExecutionReque
     },
     nodeSummary: [],
     generationSettings: {},
-    mode,
+    intent: resolveIntent(source),
+    modelRoute: source === 'executor' ? 'executor' : 'main',
     messages: [{ role: 'user', content: 'hello' }],
     sessionChatId: 'conversation_alpha',
     charName: 'Forge',
@@ -68,10 +78,9 @@ const createRequest = (mode: ForgeExecutionRequest['mode']): ForgeExecutionReque
 
 const createPort = () => {
     const effects: ForgeRuntimeEffect[][] = [];
-    const events: ForgeRuntimeEvent[] = [];
     const port: ForgeRuntimePort = {
         getRuntimeContext: vi.fn(() => createContext()),
-        applyRuntimeEffects: vi.fn(async (nextEffects) => {
+        applyRuntimeEffects: vi.fn(async nextEffects => {
             effects.push(nextEffects);
         }),
         buildPlannerExecutionRequest: vi.fn(async () => createRequest('planner')),
@@ -79,214 +88,66 @@ const createPort = () => {
         buildConversationExecutionRequest: vi.fn(async () => createRequest('conversation')),
         buildExecutorExecutionRequest: vi.fn(async () => createRequest('executor')),
         prepareAssistantStream: vi.fn(),
-        handleRuntimeEvent: vi.fn((event) => {
-            events.push(event);
-        }),
         resolveOriginalContent: vi.fn(() => ''),
         resolveEntryComment: vi.fn(() => null)
     };
-    return { port, effects, events };
+    return { port, effects };
 };
+
+const createPiSessionState = () => ({
+    tree: [],
+    entries: [],
+    activeNodeId: null,
+    contextBundleSummary: { files: [], activeSkills: [], loadedExtensions: [] },
+    loadedExtensions: []
+});
 
 describe('ForgeRuntimeOrchestrator pi runtime', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
     });
 
-    it('always sends runtime requests to the pi runtime client', async () => {
+    it('applies Forge-only runtime events and persists the pi session state', async () => {
         vi.spyOn(ForgeWorkflowGraph, 'resolveDecision').mockResolvedValue({
-            workflowSnapshot: {} as any,
+            workflowSnapshot: {} as never,
             executionRequest: createRequest('conversation'),
             effects: [],
             requiresGeneration: true,
             requiresUserDecision: false
         } satisfies ForgeRuntimeDecision);
         const { port, effects } = createPort();
-        const runPiTurn = vi.fn(async () => ({
-            events: [{
-                type: 'stream_done' as const,
-                requestId: 'req_conversation',
-                rawText: 'pi reply',
-                displayText: 'pi reply',
-                thinkingText: '',
-                completedAt: 1
-            }],
-            agentRuntimeSnapshot: {
-                isStreaming: false,
-                pendingToolCalls: [],
-                messages: [{
-                    id: 'req_conversation',
-                    role: 'assistant' as const,
-                    blocks: [{ type: 'text', text: 'pi reply' }],
-                    status: 'complete' as const
-                }],
-                activeTools: [{ name: 'read', description: '读取文件', needsApproval: false }]
-            },
-            piSessionState: {
-                tree: [{
-                    id: 'pi_node_1',
-                    sessionId: 'forge_project_alpha__conversation_alpha',
-                    parentId: null,
-                    kind: 'metadata' as const,
-                    title: 'Forge pi session',
-                    summary: 'metadata',
-                    createdAt: 1,
-                    payload: {},
-                    children: []
-                }],
-                activeNodeId: 'pi_node_1',
-                contextBundleSummary: {
-                    files: [],
-                    activeSkills: ['虚拟世界书编辑'],
-                    loadedExtensions: ['@luminaweave/pi-forge-browser']
-                },
-                loadedExtensions: ['@luminaweave/pi-forge-browser']
-            }
-        }));
+        const requestStarted: ForgeRuntimeEvent = {
+            type: 'request_started',
+            requestId: 'req_conversation',
+            requestedAt: 1,
+            nodeSummary: []
+        };
+        const runPiTurn = vi.fn(async (input: { onRuntimeEvent?: (event: ForgeRuntimeEvent) => void }) => {
+            input.onRuntimeEvent?.(requestStarted);
+            return {
+                events: [requestStarted],
+                piSessionState: createPiSessionState()
+            };
+        });
 
         const orchestrator = new ForgeRuntimeOrchestrator(port, undefined, undefined, { runPiTurn });
-
         await orchestrator.dispatch({ type: 'send_user_input', input: 'hello' });
 
         expect(runPiTurn).toHaveBeenCalledOnce();
         expect(effects.flat()).toEqual(expect.arrayContaining([
+            expect.objectContaining({ type: 'set_active_model_request', requestId: 'req_conversation' }),
             expect.objectContaining({ type: 'set_forge_pi_session_state' }),
-            expect.objectContaining({
-                type: 'set_agent_runtime_snapshot',
-                requestId: 'req_conversation',
-                snapshot: expect.objectContaining({
-                    messages: [expect.objectContaining({ id: 'req_conversation' })]
-                })
-            }),
-            expect.objectContaining({ type: 'complete_model_request', requestId: 'req_conversation' })
+            expect.objectContaining({ type: 'refresh_workflow' }),
+            expect.objectContaining({ type: 'persist_session' })
         ]));
-    });
-
-    it('forwards pi stream chunks to the UI before the turn completes', async () => {
-        vi.spyOn(ForgeWorkflowGraph, 'resolveDecision').mockResolvedValue({
-            workflowSnapshot: {} as any,
-            executionRequest: createRequest('conversation'),
-            effects: [],
-            requiresGeneration: true,
-            requiresUserDecision: false
-        } satisfies ForgeRuntimeDecision);
-        const { port, events } = createPort();
-        const turnGate: { resolve: () => void } = { resolve: () => {} };
-        const turnCanFinish = new Promise<void>((resolve) => {
-            turnGate.resolve = resolve;
-        });
-        const runPiTurn = vi.fn(async (input: any) => {
-            input.onRuntimeEvent?.({
-                type: 'stream_chunk',
-                requestId: 'req_conversation',
-                rawText: 'partial',
-                displayText: 'partial',
-                thinkingText: ''
-            });
-            await turnCanFinish;
-            return {
-                events: [{
-                    type: 'stream_done' as const,
-                    requestId: 'req_conversation',
-                    rawText: 'final',
-                    displayText: 'final',
-                    thinkingText: '',
-                    completedAt: 1
-                }],
-                piSessionState: {
-                    tree: [],
-                    entries: [],
-                    activeNodeId: null,
-                    contextBundleSummary: {
-                        files: [],
-                        activeSkills: [],
-                        loadedExtensions: []
-                    },
-                    loadedExtensions: []
-                }
-            };
-        });
-
-        const orchestrator = new ForgeRuntimeOrchestrator(port, undefined, undefined, { runPiTurn });
-        const dispatchPromise = orchestrator.dispatch({ type: 'send_user_input', input: 'hello' });
-
-        await vi.waitFor(() => expect(runPiTurn).toHaveBeenCalledOnce());
-        expect(events).toEqual([expect.objectContaining({
-            type: 'stream_chunk',
-            displayText: 'partial'
-        })]);
-
-        turnGate.resolve();
-        await dispatchPromise;
-    });
-
-    it('applies pi tool-call effects before the turn completes', async () => {
-        vi.spyOn(ForgeWorkflowGraph, 'resolveDecision').mockResolvedValue({
-            workflowSnapshot: {} as any,
-            executionRequest: createRequest('conversation'),
-            effects: [],
-            requiresGeneration: true,
-            requiresUserDecision: false
-        } satisfies ForgeRuntimeDecision);
-        const { port, effects } = createPort();
-        const turnGate: { resolve: () => void } = { resolve: () => {} };
-        const turnCanFinish = new Promise<void>((resolve) => {
-            turnGate.resolve = resolve;
-        });
-        const runPiTurn = vi.fn(async (input: any) => {
-            input.onRuntimeEvent?.({
-                type: 'tool_call',
-                requestId: 'req_conversation',
-                toolCallId: 'call_read',
-                toolName: 'readFile',
-                args: { path: './AGENTS.md' },
-                source: 'conversation'
-            });
-            await turnCanFinish;
-            return {
-                events: [{
-                    type: 'tool_result' as const,
-                    requestId: 'req_conversation',
-                    toolCallId: 'call_read',
-                    toolName: 'readFile',
-                    result: { content: 'ok' },
-                    isError: false,
-                    source: 'conversation' as const
-                }],
-                piSessionState: {
-                    tree: [],
-                    entries: [],
-                    activeNodeId: null,
-                    contextBundleSummary: {
-                        files: [],
-                        activeSkills: [],
-                        loadedExtensions: []
-                    },
-                    loadedExtensions: []
-                }
-            };
-        });
-
-        const orchestrator = new ForgeRuntimeOrchestrator(port, undefined, undefined, { runPiTurn });
-        const dispatchPromise = orchestrator.dispatch({ type: 'send_user_input', input: 'hello' });
-
-        await vi.waitFor(() => expect(effects.flat()).toEqual(expect.arrayContaining([
-            expect.objectContaining({
-                type: 'upsert_running_operation',
-                dedupeKey: 'forge-operation:tool:call_read',
-                title: '正在调用工具 · readFile'
-            })
-        ])));
         expect(effects.flat()).not.toEqual(expect.arrayContaining([
-            expect.objectContaining({ type: 'complete_operation', dedupeKey: 'forge-operation:tool:call_read' })
+            expect.objectContaining({ type: 'project_agent_message' }),
+            expect.objectContaining({ type: 'append_message' })
         ]));
-
-        turnGate.resolve();
-        await dispatchPromise;
     });
 
-    it('resolves tool approvals through the pi runtime and applies returned events/effects', async () => {
-        const { port, effects, events } = createPort();
+    it('applies a Forge approval event while leaving Agent Runtime message projection to the event bus', async () => {
+        const { port, effects } = createPort();
         const resolvePiToolApproval = vi.fn(async () => ({
             resolved: true,
             events: [{
@@ -297,30 +158,73 @@ describe('ForgeRuntimeOrchestrator pi runtime', () => {
                 toolName: 'stageEntry',
                 approved: false,
                 message: '已拒绝',
-                source: 'conversation' as const
+                source: 'conversation' as const,
+                sessionId: 'forge_project_alpha__conversation_alpha'
             }],
-            effects: []
+            effects: [],
+            piSessionState: createPiSessionState()
         }));
-
         const orchestrator = new ForgeRuntimeOrchestrator(port, undefined, undefined, {
             resolvePiToolApproval
         });
 
-        const handled = await orchestrator.resolveToolApproval('call_write', false, '已拒绝');
+        const handled = await orchestrator.resolveToolApproval(
+            'forge_project_alpha__conversation_alpha',
+            'req_conversation',
+            'call_write',
+            false,
+            '已拒绝'
+        );
 
         expect(handled).toBe(true);
-        expect(resolvePiToolApproval).toHaveBeenCalledWith('call_write', false, '已拒绝');
-        expect(events).toEqual([expect.objectContaining({
-            type: 'tool_approval_resolved',
-            toolCallId: 'call_write',
-            approved: false
-        })]);
+        expect(resolvePiToolApproval).toHaveBeenCalledWith(
+            'forge_project_alpha__conversation_alpha',
+            'req_conversation',
+            'call_write',
+            false,
+            '已拒绝'
+        );
         expect(effects.flat()).toEqual(expect.arrayContaining([
             expect.objectContaining({ type: 'resolve_tool_approval', toolCallId: 'call_write', approved: false }),
             expect.objectContaining({ type: 'persist_session' })
         ]));
+    });
+
+    it('projects Forge approval-needed events without reintroducing legacy stream or tool transport events', async () => {
+        vi.spyOn(ForgeWorkflowGraph, 'resolveDecision').mockResolvedValue({
+            workflowSnapshot: {} as never,
+            executionRequest: createRequest('conversation'),
+            effects: [],
+            requiresGeneration: true,
+            requiresUserDecision: false
+        } satisfies ForgeRuntimeDecision);
+        const { port, effects } = createPort();
+        const approvalNeeded: ForgeRuntimeEvent = {
+            type: 'tool_approval_needed',
+            requestId: 'req_conversation',
+            approvalId: 'approval-call_network',
+            toolCallId: 'call_network',
+            toolName: 'bash',
+            args: { command: 'curl https://example.com' },
+            reason: '需要授权',
+            source: 'conversation',
+            sessionId: 'forge_project_alpha__conversation_alpha'
+        };
+        const runPiTurn = vi.fn(async (input: { onRuntimeEvent?: (event: ForgeRuntimeEvent) => void }) => {
+            input.onRuntimeEvent?.(approvalNeeded);
+            return { events: [], piSessionState: createPiSessionState() };
+        });
+
+        const orchestrator = new ForgeRuntimeOrchestrator(port, undefined, undefined, { runPiTurn });
+        await orchestrator.dispatch({ type: 'send_user_input', input: 'hello' });
+
+        expect(effects.flat()).toEqual(expect.arrayContaining([
+            expect.objectContaining({ type: 'upsert_tool_approval' }),
+            expect.objectContaining({ type: 'add_operation', status: 'blocked' })
+        ]));
         expect(effects.flat()).not.toEqual(expect.arrayContaining([
-            expect.objectContaining({ type: 'upsert_staging_entry' })
+            expect.objectContaining({ type: 'project_agent_message' }),
+            expect.objectContaining({ type: 'append_model_request_tool_event', event: expect.objectContaining({ type: 'tool_call' }) })
         ]));
     });
 });

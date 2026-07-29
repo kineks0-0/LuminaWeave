@@ -6,6 +6,7 @@ allowed-tools: read write edit bash
 metadata:
   title: 导出准备员
   source: built-in
+  defaultWriteScope: /workspaces/forge/<projectId>/export/
 ---
 # 导出准备员
 

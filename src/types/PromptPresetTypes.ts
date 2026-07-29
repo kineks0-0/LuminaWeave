@@ -6,17 +6,17 @@ import type { ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
 import type { ResourceDiagnostic, ResourceRef } from '@shared/resources/index.js';
 import type { ForgePromptSlotPolicy, PromptSourceUnit } from './PromptAssemblyTypes.js';
 
-export type PromptPresetProfileId = 'forge-main' | 'forge-executor' | 'forge-test-chat';
+export type PromptPresetProfileId = 'forge-agent' | 'forge-test-chat';
+export type LegacyPromptPresetProfileId = 'forge-main' | 'forge-executor';
 export type PromptPresetEngine = 'composed' | 'st_preset';
 export type PromptPresetSpecialKey =
-    | 'plannerSystemPrompt'
-    | 'conversationSystemPrompt'
-    | 'analystSystemPrompt'
+    | 'agentSystemPrompt'
     | 'executorSystemPrompt';
 
-export type ForgeAgentPromptMode = 'planner' | 'conversation' | 'analyst' | 'executor';
+export type LegacyForgeAgentPromptMode = 'planner' | 'conversation' | 'analyst' | 'executor';
 
-export type ForgeAgentPromptResourceKind = 'contract' | 'system' | 'mode_prompt' | 'skill';
+export type ForgeAgentPromptResourceKind = 'contract' | 'system' | 'executor_prompt' | 'skill' | 'extension';
+export type ForgeAgentResourceSource = 'base' | 'preset';
 
 export interface ForgeAgentPromptResource {
     path: string;
@@ -34,15 +34,26 @@ export interface ForgeAgentSkillResource {
     title?: string;
     description?: string;
     loadPolicy?: ForgeAgentSkillLoadPolicy;
+    source?: ForgeAgentResourceSource;
+    defaultWriteScope?: string;
+}
+
+export interface ForgeAgentExtensionResource {
+    id: string;
+    path: string;
+    source: ForgeAgentResourceSource;
+    title?: string;
+    description?: string;
 }
 
 export type ForgeAgentPromptOrchestrationStepKind =
     | 'contract'
     | 'system'
-    | 'mode_prompt'
+    | 'executor_prompt'
     | 'ui_dsl'
     | 'reasoning_boundary'
     | 'skills'
+    | 'extensions'
     | 'capabilities'
     | 'memory_index'
     | 'context_files'
@@ -63,8 +74,9 @@ export interface ForgeAgentPromptOrchestration {
 export interface ForgeAgentPromptResourceSet {
     contract: ForgeAgentPromptResource;
     system: ForgeAgentPromptResource;
-    modes: Record<ForgeAgentPromptMode, ForgeAgentPromptResource>;
+    executor: ForgeAgentPromptResource;
     skills?: ForgeAgentSkillResource[];
+    extensions?: ForgeAgentExtensionResource[];
 }
 
 export interface PromptPresetCharCard {
@@ -157,8 +169,7 @@ export interface PromptPresetDefinition {
 }
 
 export interface PromptPresetBindingMap {
-    'forge-main': string;
-    'forge-executor': string;
+    'forge-agent': string;
     'forge-test-chat': string;
 }
 

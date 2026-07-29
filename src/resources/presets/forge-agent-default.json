@@ -1,0 +1,51 @@
+{
+    "id": "built-in:forge-agent-default",
+    "name": "默认 Agent",
+    "profileId": "forge-agent",
+    "builtIn": true,
+    "engine": "composed",
+    "entries": [],
+    "specials": {
+        "agentSystemPrompt": "@FORGE_AGENT_SYSTEM_PROMPT",
+        "executorSystemPrompt": "@FORGE_EXECUTOR_SYSTEM_PROMPT"
+    },
+    "forgeAgentResources": {
+        "contract": {
+            "path": "./AGENTS.md",
+            "kind": "contract",
+            "title": "Forge Agent 工作契约",
+            "content": "@FORGE_AGENT_CONTRACT"
+        },
+        "system": {
+            "path": "./.forge/agent/SYSTEM.md",
+            "kind": "system",
+            "title": "主模型提示词",
+            "content": "@FORGE_AGENT_SYSTEM_PROMPT"
+        },
+        "executor": {
+            "path": "./.forge/agent/EXECUTOR.md",
+            "kind": "executor_prompt",
+            "title": "执行模型提示词",
+            "content": "@FORGE_EXECUTOR_SYSTEM_PROMPT"
+        },
+        "skills": [],
+        "extensions": []
+    },
+    "forgeAgentOrchestration": {
+        "label": "Agent 提示词编排",
+        "steps": [
+            { "kind": "contract", "enabled": true, "path": "./AGENTS.md", "title": "Contract" },
+            { "kind": "system", "enabled": true, "path": "./.forge/agent/SYSTEM.md", "title": "System" },
+            { "kind": "executor_prompt", "enabled": true, "path": "./.forge/agent/EXECUTOR.md", "title": "Executor Prompt" },
+            { "kind": "ui_dsl", "enabled": true, "path": "./.forge/agent/UI_DSL.md", "title": "UI DSL" },
+            { "kind": "reasoning_boundary", "enabled": true, "path": "./.forge/agent/REASONING.md", "title": "Reasoning Boundary" },
+            { "kind": "skills", "enabled": true, "title": "Skills" },
+            { "kind": "extensions", "enabled": true, "title": "Extensions" },
+            { "kind": "capabilities", "enabled": true, "title": "Capabilities" },
+            { "kind": "memory_index", "enabled": true, "path": "./.pi/agent/context/memory-index.md", "title": "Memory Index" },
+            { "kind": "context_files", "enabled": true, "title": "Context Files" },
+            { "kind": "branch_messages", "enabled": true, "title": "Branch Messages" }
+        ]
+    },
+    "generationSettings": {}
+}

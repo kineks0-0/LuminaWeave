@@ -447,10 +447,12 @@ describe('useForgeStore model request traces', () => {
         store.setAgentRuntimeSnapshot({
             requestId: 'req_runtime',
             snapshot: {
+                sessionId: 'session_runtime',
                 isStreaming: false,
                 pendingToolCalls: [],
                 messages: [{
                     id: 'req_runtime',
+                    turnId: 'req_runtime',
                     role: 'assistant',
                     blocks: [{ type: 'text', text: '完成总结' }],
                     status: 'complete'
@@ -472,6 +474,32 @@ describe('useForgeStore model request traces', () => {
         store.clearAll();
 
         expect(store.agentRuntimeSnapshot).toBeNull();
+    });
+
+    it('finishes the matching running operation with the requested terminal status', () => {
+        const store = useForgeStore();
+        const running = store.upsertRunningOperation({
+            dedupeKey: 'forge-agent-tool:session-1:turn-1:tool-1',
+            operationKind: 'execution',
+            title: '正在调用工具 · read',
+            summary: './AGENTS.md'
+        });
+
+        const finished = store.finishOperationByKey({
+            dedupeKey: 'forge-agent-tool:session-1:turn-1:tool-1',
+            status: 'cancelled',
+            operationKind: 'execution',
+            title: '已拒绝工具调用 · read',
+            summary: 'Tool execution denied.'
+        });
+
+        expect(finished.id).toBe(running.id);
+        expect(finished).toEqual(expect.objectContaining({
+            status: 'cancelled',
+            title: '已拒绝工具调用 · read',
+            completedAt: expect.any(Number)
+        }));
+        expect(store.timelineItems).toHaveLength(1);
     });
 
     it('hydrates a persisted pi session into a tree suitable for branch checkout UI', () => {

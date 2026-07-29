@@ -116,11 +116,11 @@ describe('ForgeWorkspaceSearchShell', () => {
             command: 'cat ./AGENTS.md',
             reason: 'Read default agent context'
         });
-        const planner = await shell.execute({
+        const executor = await shell.execute({
             forgeProjectId: 'forge_project_alpha',
             conversationId: 'conversation_alpha',
-            command: 'cat ./.forge/agent/PLANNER.md',
-            reason: 'Read planner prompt'
+            command: 'cat ./.forge/agent/EXECUTOR.md',
+            reason: 'Read executor prompt'
         });
         const system = await shell.execute({
             forgeProjectId: 'forge_project_alpha',
@@ -137,13 +137,14 @@ describe('ForgeWorkspaceSearchShell', () => {
 
         expect(agents.ok).toBe(true);
         expect(agents.result.stdout).toContain('工作契约');
-        expect(planner.ok).toBe(true);
-        expect(planner.result.stdout).toContain('Planner');
+        expect(executor.ok).toBe(true);
+        expect(executor.result.stdout).toContain('执行者');
         expect(system.ok).toBe(true);
         expect(system.result.stdout).toContain('Forge');
         expect(listing.ok).toBe(true);
         expect(listing.result.stdout).toContain('./.forge/agent/SYSTEM.md');
-        expect(listing.result.stdout).toContain('./.forge/agent/PLANNER.md');
+        expect(listing.result.stdout).toContain('./.forge/agent/EXECUTOR.md');
+        expect(listing.result.stdout).not.toContain('./.forge/agent/PLANNER.md');
         expect(listing.result.stdout).not.toContain('./.forge/PLANNER.md');
         expect(listing.result.stdout).not.toContain('./.pi/agent/prompts/');
         expect(listing.result.stdout).not.toContain('./chat/');

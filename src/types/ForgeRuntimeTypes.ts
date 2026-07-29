@@ -19,7 +19,7 @@ import type {
     ForgeStructuredState
 } from './ForgeStructuredTypes.js';
 import type { ForgeTimelineItem, ForgeTimelineOperationKind, ForgeTimelineOperationStatus } from './ForgeTimelineTypes.js';
-import type { ForgeWorkflowPromptMode, ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
+import type { ForgeModelRoute, ForgeWorkflowIntent, ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
 import type { PromptPresetGenerationSettings } from './PromptPresetTypes.js';
 import type { AgentRuntimeSnapshot } from '../api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
@@ -438,7 +438,8 @@ export interface ForgeExecutionRequest {
     contextSnapshot: ForgeRequestContextSnapshot;
     nodeSummary: ForgeRequestNodeSummaryItem[];
     generationSettings: PromptPresetGenerationSettings;
-    mode: ForgeWorkflowPromptMode;
+    intent: ForgeWorkflowIntent;
+    modelRoute: ForgeModelRoute;
     messages: CleanedMessage[];
     sessionChatId: string;
     charName: string;

@@ -194,7 +194,7 @@ describe('PromptBuilder', () => {
                 collectionMode: 'conversation',
                 activeLayer: 'output',
                 subLayer: 'output',
-                promptMode: 'planner',
+                intent: 'planning',
                 reason: '当前已有待审核修改。',
                 recommendedAction: '继续与用户确认 staging 条目。',
                 shouldGenerate: true,

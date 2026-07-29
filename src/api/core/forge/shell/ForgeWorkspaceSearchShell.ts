@@ -175,7 +175,7 @@ const createFallbackRuntimeContext = (input: ForgeWorkspaceSearchShellInput): Fo
     workspaceSessionId: input.forgeProjectId,
     sessionChatId: input.conversationId,
     workspaceTitle: 'Forge Project',
-    selectedPresetId: 'forge-main',
+    selectedPresetId: 'forge-agent',
     selectedChatSessionId: null,
     selectedChatSnapshotId: null,
     detailMode: 'quick',

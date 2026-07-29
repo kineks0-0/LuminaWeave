@@ -61,8 +61,8 @@ describe('PromptPresetRegistry', () => {
         expect(storageSet).toHaveBeenCalled();
     });
 
-    it('应支持复制预设、切换绑定、删除副本并恢复默认绑定', () => {
-        const duplicated = promptPresetRegistry.duplicatePreset('forge-main', 'built-in:forge-main-default');
+    it('应支持复制 Agent 预设、切换绑定、删除副本并恢复默认绑定', () => {
+        const duplicated = promptPresetRegistry.duplicatePreset('forge-agent', 'built-in:forge-agent-default');
 
         expect(duplicated).not.toBeNull();
         expect(duplicated?.builtIn).toBe(false);
@@ -71,61 +71,58 @@ describe('PromptPresetRegistry', () => {
         expect(duplicated?.forgeAgentOrchestration?.steps.map(step => step.kind)).toEqual([
             'contract',
             'system',
-            'mode_prompt',
+            'executor_prompt',
             'ui_dsl',
             'reasoning_boundary',
             'skills',
+            'extensions',
             'capabilities',
             'memory_index',
             'context_files',
             'branch_messages'
         ]);
 
-        promptPresetRegistry.setActivePreset('forge-main', duplicated!.id);
-        expect(promptPresetRegistry.getActivePresetId('forge-main')).toBe(duplicated!.id);
+        promptPresetRegistry.setActivePreset('forge-agent', duplicated!.id);
+        expect(promptPresetRegistry.getActivePresetId('forge-agent')).toBe(duplicated!.id);
 
-        promptPresetRegistry.deletePreset('forge-main', duplicated!.id);
-        expect(promptPresetRegistry.listPresets('forge-main').some(preset => preset.id === duplicated!.id)).toBe(false);
-        expect(promptPresetRegistry.getActivePresetId('forge-main')).toBe('built-in:forge-main-default');
+        promptPresetRegistry.deletePreset('forge-agent', duplicated!.id);
+        expect(promptPresetRegistry.listPresets('forge-agent').some(preset => preset.id === duplicated!.id)).toBe(false);
+        expect(promptPresetRegistry.getActivePresetId('forge-agent')).toBe('built-in:forge-agent-default');
 
-        promptPresetRegistry.restoreProfileDefault('forge-main');
-        expect(promptPresetRegistry.getActivePresetId('forge-main')).toBe('built-in:forge-main-default');
+        promptPresetRegistry.restoreProfileDefault('forge-agent');
+        expect(promptPresetRegistry.getActivePresetId('forge-agent')).toBe('built-in:forge-agent-default');
     });
 
-    it('不再注册参考提炼内置预设且不修改默认 bindings', () => {
-        const mainPresets = promptPresetRegistry.listPresets('forge-main');
-        const executorPresets = promptPresetRegistry.listPresets('forge-executor');
+    it('只注册 Agent 与测试聊天内置预设且不修改默认 bindings', () => {
+        const agentPresets = promptPresetRegistry.listPresets('forge-agent');
         const testChatPresets = promptPresetRegistry.listPresets('forge-test-chat');
 
-        expect(mainPresets.some(preset => preset.id === 'built-in:forge-main-reference-extract')).toBe(false);
-        expect(executorPresets.some(preset => preset.id === 'built-in:forge-executor-reference-extract')).toBe(false);
+        expect(agentPresets.some(preset => preset.id === 'built-in:forge-agent-default')).toBe(true);
+        expect(agentPresets.some(preset => preset.id === 'built-in:forge-main-reference-extract')).toBe(false);
+        expect(agentPresets.some(preset => preset.id === 'built-in:forge-executor-reference-extract')).toBe(false);
         expect(testChatPresets.some(preset => preset.id === 'built-in:forge-test-chat-reference-extract')).toBe(false);
 
-        expect(promptPresetRegistry.getActivePresetId('forge-main')).toBe('built-in:forge-main-default');
-        expect(promptPresetRegistry.getActivePresetId('forge-executor')).toBe('built-in:forge-executor-default');
+        expect(promptPresetRegistry.getActivePresetId('forge-agent')).toBe('built-in:forge-agent-default');
         expect(promptPresetRegistry.getActivePresetId('forge-test-chat')).toBe('built-in:forge-test-chat-st-preset');
     });
 
-    it('Forge 主预设应暴露 agent 资源包和提示词编排，而不是依赖 slot 列表', () => {
-        const preset = promptPresetRegistry.getPreset('forge-main', 'built-in:forge-main-default');
+    it('Forge Agent 预设只暴露主模型与执行模型提示词资源', () => {
+        const preset = promptPresetRegistry.getPreset('forge-agent', 'built-in:forge-agent-default');
 
         expect(preset?.forgeAgentResources).toEqual(expect.objectContaining({
             contract: expect.objectContaining({ path: './AGENTS.md' }),
             system: expect.objectContaining({ path: './.forge/agent/SYSTEM.md' }),
-            modes: expect.objectContaining({
-                planner: expect.objectContaining({ path: './.forge/agent/PLANNER.md' }),
-                conversation: expect.objectContaining({ path: './.forge/agent/CONVERSATION.md' }),
-                analyst: expect.objectContaining({ path: './.forge/agent/ANALYST.md' }),
-                executor: expect.objectContaining({ path: './.forge/agent/EXECUTOR.md' })
-            })
+            executor: expect.objectContaining({ path: './.forge/agent/EXECUTOR.md' })
         }));
+        expect((preset?.forgeAgentResources as unknown as { modes?: unknown })?.modes).toBeUndefined();
         expect(preset?.forgeAgentOrchestration?.steps.map(step => step.kind)).toEqual([
             'contract',
             'system',
-            'mode_prompt',
+            'executor_prompt',
             'ui_dsl',
             'reasoning_boundary',
             'skills',
+            'extensions',
             'capabilities',
             'memory_index',
             'context_files',
@@ -149,7 +146,7 @@ describe('PromptPresetRegistry', () => {
             }),
             expect.objectContaining({
                 name: 'reference-xp-capture',
-                title: 'XP 捕捉附加条目',
+                title: '性癖捕捉附加条目',
                 path: './agent/skills/reference-xp-capture/SKILL.md',
                 loadPolicy: 'on_demand',
                 content: expect.stringContaining('性癖捕捉附加条目')
@@ -158,13 +155,13 @@ describe('PromptPresetRegistry', () => {
     });
 
     it('复制已移除的参考提炼内置预设时返回 null', () => {
-        const duplicated = promptPresetRegistry.duplicatePreset('forge-main', 'built-in:forge-main-reference-extract');
+        const duplicated = promptPresetRegistry.duplicatePreset('forge-agent', 'built-in:forge-main-reference-extract');
 
         expect(duplicated).toBeNull();
     });
 
     it('应持久化并归一化预设生成参数', () => {
-        const created = promptPresetRegistry.createPreset('forge-main', {
+        const created = promptPresetRegistry.createPreset('forge-agent', {
             name: '带参数预设',
             generationSettings: {
                 temperature: 0.55,
@@ -180,7 +177,7 @@ describe('PromptPresetRegistry', () => {
             top_k: 48
         });
 
-        const updated = promptPresetRegistry.updatePreset('forge-main', created.id, {
+        const updated = promptPresetRegistry.updatePreset('forge-agent', created.id, {
             generationSettings: {
                 temperature: 0.72,
                 max_tokens: 640
@@ -200,8 +197,7 @@ describe('PromptPresetRegistry', () => {
                     return [];
                 case 'lumina-prompt-presets.bindings':
                     return {
-                        'forge-main': 'built-in:forge-main-default',
-                        'forge-executor': 'built-in:forge-executor-default',
+                        'forge-agent': 'built-in:forge-agent-default',
                         'forge-test-chat': 'built-in:forge-test-chat-st-preset'
                     };
                 default:
@@ -209,12 +205,12 @@ describe('PromptPresetRegistry', () => {
             }
         });
 
-        promptPresetRegistry.listPresets('forge-main');
+        promptPresetRegistry.listPresets('forge-agent');
 
         expect(storageSet).not.toHaveBeenCalled();
     });
 
-    it('旧绑定指向已移除参考提炼预设时应回落到默认预设', () => {
+    it('旧绑定指向已移除或已合并预设时应回落到 Agent 默认预设', () => {
         storageGet.mockImplementation((key: string, defaultValue?: unknown) => {
             switch (key) {
                 case 'lumina-prompt-presets.registry':
@@ -222,7 +218,7 @@ describe('PromptPresetRegistry', () => {
                 case 'lumina-prompt-presets.bindings':
                     return {
                         'forge-main': 'built-in:forge-main-reference-extract',
-                        'forge-executor': 'built-in:forge-executor-reference-extract',
+                        'forge-executor': 'built-in:forge-executor-default',
                         'forge-test-chat': 'built-in:forge-test-chat-reference-extract'
                     };
                 default:
@@ -230,16 +226,14 @@ describe('PromptPresetRegistry', () => {
             }
         });
 
-        promptPresetRegistry.listPresets('forge-main');
+        promptPresetRegistry.listPresets('forge-agent');
 
-        expect(promptPresetRegistry.getActivePresetId('forge-main')).toBe('built-in:forge-main-default');
-        expect(promptPresetRegistry.getActivePresetId('forge-executor')).toBe('built-in:forge-executor-default');
+        expect(promptPresetRegistry.getActivePresetId('forge-agent')).toBe('built-in:forge-agent-default');
         expect(promptPresetRegistry.getActivePresetId('forge-test-chat')).toBe('built-in:forge-test-chat-st-preset');
         expect(storageSet).toHaveBeenCalledWith(
             'lumina-prompt-presets.bindings',
             {
-                'forge-main': 'built-in:forge-main-default',
-                'forge-executor': 'built-in:forge-executor-default',
+                'forge-agent': 'built-in:forge-agent-default',
                 'forge-test-chat': 'built-in:forge-test-chat-st-preset'
             },
             'Global'
@@ -275,7 +269,7 @@ describe('PromptPresetRegistry', () => {
             }
         });
 
-        promptPresetRegistry.listPresets('forge-main');
+        promptPresetRegistry.listPresets('forge-agent');
 
         expect(storageSet).toHaveBeenCalledWith(
             'lumina-prompt-presets.builtin-overrides',
@@ -286,7 +280,7 @@ describe('PromptPresetRegistry', () => {
 
     it('移除参考提炼预设后不再支持内置条目启停覆写', () => {
         const updated = promptPresetRegistry.setBuiltInEntryEnabled(
-            'forge-main',
+            'forge-agent',
             'built-in:forge-main-reference-extract',
             'custom:xp_capture',
             true

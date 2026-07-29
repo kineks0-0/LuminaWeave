@@ -8,6 +8,8 @@ import {
     type ForgePiAgentTool,
     type ForgePiToolBridge
 } from '../tools/ForgePiToolBridge.js';
+import { promptPresetRegistry } from '../../../hal/prompt/PromptPresetRegistry.js';
+import { forgeAgentPresetResourceRegistry } from '../../presets/ForgeAgentPresetResourceRegistry.js';
 
 export interface ForgePiExtensionRunnerDeps {
     toolBridge?: ForgePiToolBridge;
@@ -31,7 +33,11 @@ export class ForgePiExtensionRunner {
     }
 
     getLoadedExtensions(): string[] {
-        return ['@luminaweave/pi-forge-browser'];
+        const presetId = promptPresetRegistry.getActivePresetId('forge-agent');
+        return forgeAgentPresetResourceRegistry
+            .resolve(presetId)
+            .extensions
+            .map(extension => `${extension.source}:${extension.id}`);
     }
 }
 

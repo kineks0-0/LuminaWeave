@@ -501,7 +501,7 @@ type GenerationSettingField = {
 const STORAGE_KEY_BUILTIN_OVERRIDES = 'lumina-prompt-presets.builtin-overrides';
 
 const profiles = promptPresetRegistry.listProfiles();
-const activeProfileId = ref<PromptPresetProfileId>('forge-main');
+const activeProfileId = ref<PromptPresetProfileId>('forge-agent');
 const presets = ref<PromptPresetDefinition[]>([]);
 const activePresetId = ref('');
 const selectedSlotToAdd = ref('');
@@ -521,7 +521,7 @@ const generationSettingFields: GenerationSettingField[] = [
 const draft = reactive<EditablePreset>({
     id: '',
     name: '',
-    profileId: 'forge-main',
+    profileId: 'forge-agent',
     builtIn: true,
     engine: 'composed',
     charCardMode: undefined,
@@ -571,13 +571,9 @@ const clonePreset = (preset: PromptPresetDefinition): EditablePreset => ({
         ? {
             contract: { ...preset.forgeAgentResources.contract },
             system: { ...preset.forgeAgentResources.system },
-            modes: {
-                planner: { ...preset.forgeAgentResources.modes.planner },
-                conversation: { ...preset.forgeAgentResources.modes.conversation },
-                analyst: { ...preset.forgeAgentResources.modes.analyst },
-                executor: { ...preset.forgeAgentResources.modes.executor }
-            },
-            skills: preset.forgeAgentResources.skills?.map(skill => ({ ...skill }))
+            executor: { ...preset.forgeAgentResources.executor },
+            skills: preset.forgeAgentResources.skills?.map(skill => ({ ...skill })),
+            extensions: preset.forgeAgentResources.extensions?.map(extension => ({ ...extension }))
         }
         : undefined,
     forgeAgentOrchestration: preset.forgeAgentOrchestration
@@ -788,11 +784,8 @@ const updateResourceContent = (resourceId: string, event: Event) => {
         resources.system.content = content;
         return;
     }
-    if (resourceId.startsWith('mode:')) {
-        const mode = resourceId.slice('mode:'.length) as keyof typeof resources.modes;
-        if (resources.modes[mode]) {
-            resources.modes[mode].content = content;
-        }
+    if (resourceId === 'executor') {
+        resources.executor.content = content;
         return;
     }
     if (resourceId.startsWith('skill:')) {

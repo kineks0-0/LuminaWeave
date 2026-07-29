@@ -7,8 +7,7 @@ import type { CleanedMessage } from '../../../types/nexus.js';
 import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type {
     ForgeRequestLorebookEntrySummary,
-    ForgeRequestNodeSummaryItem,
-    ForgeRuntimeEvent
+    ForgeRequestNodeSummaryItem
 } from '../../../types/ForgeRuntimeTypes.js';
 import type { PromptPresetProfileId } from '../../../types/PromptPresetTypes.js';
 import type {
@@ -410,61 +409,6 @@ export const summarizeLorebookEntries = (entries: LuminaLorebookEntry[]): ForgeR
             disabled: Boolean(entry?.disable)
         };
     });
-
-type ForgeAssistantStreamEvent = Extract<ForgeRuntimeEvent, { type: 'stream_chunk' | 'stream_done' }>;
-
-export interface ForgeAssistantStreamMessageUpdate {
-    streamText: string;
-    streamThinkingText: string;
-    isDone: boolean;
-    message: LuminaChatMessage;
-}
-
-export interface ForgeAssistantStreamCommitPolicy {
-    silentWorldlineUpdate: boolean;
-    bumpTimelineRevision: boolean;
-}
-
-export const resolveAssistantStreamCommitPolicy = (
-    event: ForgeAssistantStreamEvent
-): ForgeAssistantStreamCommitPolicy => {
-    const isDone = event.type === 'stream_done';
-    return {
-        silentWorldlineUpdate: !isDone,
-        bumpTimelineRevision: isDone
-    };
-};
-
-export const createAssistantStreamMessageUpdate = (
-    event: ForgeAssistantStreamEvent,
-    assistantNode: LuminaChatMessage,
-    timestamp: number = Date.now()
-): ForgeAssistantStreamMessageUpdate => {
-    const isDone = event.type === 'stream_done';
-    return {
-        streamText: event.displayText,
-        streamThinkingText: event.thinkingText,
-        isDone,
-        message: {
-            ...assistantNode,
-            mesRaw: event.displayText,
-            mes: event.displayText,
-            thinkingText: event.thinkingText || null,
-            pluginRaw: event.rawText,
-            fingerprint: MessageUtils.getFingerprint(event.rawText),
-            syncStatus: isDone ? 'local' : 'streaming',
-            extra: {
-                ...assistantNode.extra,
-                ...(isDone
-                    ? { completedAt: timestamp }
-                    : {
-                        send_date: assistantNode.extra?.send_date,
-                        lastChunkAt: timestamp
-                    })
-            }
-        }
-    };
-};
 
 export const resolvePromptPresetGenerationSettings = (profileId: PromptPresetProfileId) => (
     clonePromptPresetGenerationSettings(

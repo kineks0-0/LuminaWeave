@@ -140,7 +140,7 @@ export class ForgePromptPayloadResolver {
             collectionMode: snapshot.collectionMode || 'conversation',
             activeLayer: snapshot.activeLayer,
             subLayer: snapshot.subLayer || 'none',
-            promptMode: snapshot.promptMode,
+            intent: snapshot.intent,
             reason: snapshot.reason,
             recommendedAction: snapshot.recommendedAction,
             shouldGenerate: snapshot.shouldGenerate,

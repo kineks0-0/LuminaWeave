@@ -13,7 +13,7 @@ const createContext = (): ForgeRuntimeContext => ({
     workspaceSessionId: 'forge_project_alpha',
     sessionChatId: 'conversation_alpha',
     workspaceTitle: 'Alpha Project',
-    selectedPresetId: 'forge-main',
+    selectedPresetId: 'forge-agent',
     selectedChatSessionId: null,
     selectedChatSnapshotId: null,
     detailMode: 'quick',
@@ -21,7 +21,7 @@ const createContext = (): ForgeRuntimeContext => ({
     entryMode: null,
     activeLayer: 'concept',
     completedLayers: [],
-    workflowSnapshot: { promptMode: 'planner' } as ForgeRuntimeContext['workflowSnapshot'],
+    workflowSnapshot: { intent: 'planning' } as unknown as ForgeRuntimeContext['workflowSnapshot'],
     publishState: 'drafting',
     activeLeafId: 'leaf_1',
     worldlineNodes: [],
@@ -111,7 +111,8 @@ describe('ForgeSemanticVfsProvider', () => {
 
         await expect(provider.readFile(context, './AGENTS.md')).resolves.toContain('工作契约');
         await expect(provider.readFile(context, './.forge/agent/SYSTEM.md')).resolves.toContain('Forge');
-        await expect(provider.readFile(context, './.forge/agent/PLANNER.md')).resolves.toContain('Planner');
+        await expect(provider.readFile(context, './.forge/agent/EXECUTOR.md')).resolves.toContain('执行者');
+        await expect(provider.readFile(context, './.forge/agent/PLANNER.md')).rejects.toThrow();
         await expect(provider.readFile(context, './.forge/PLANNER.md')).rejects.toThrow();
         await expect(provider.readFile(context, './agent/skills/virtual-lorebook-editor/SKILL.md')).resolves.toContain('虚拟世界书编辑器');
         await expect(provider.readFile(context, './memory/用户偏好.md')).resolves.toContain('偏好：克制。');

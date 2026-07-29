@@ -50,7 +50,7 @@ describe('Forge prompt layout slots', () => {
     });
 
     it('declares preset slot policies for static, skill, resources, working statement, and live input regions', () => {
-        const slots = new Map(getPromptPresetProfile('forge-main').slots.map(item => [item.slot.id, item.slot]));
+        const slots = new Map(getPromptPresetProfile('forge-agent').slots.map(item => [item.slot.id, item.slot]));
 
         expect(slots.get('base_system_prompt')?.forgeSlotPolicy).toMatchObject({
             slot: 'system_static',
@@ -77,7 +77,7 @@ describe('Forge prompt layout slots', () => {
         const preset: PromptPresetDefinition = {
             id: 'agent-layout-test',
             name: 'Agent Layout Test',
-            profileId: 'forge-main',
+            profileId: 'forge-agent',
             engine: 'composed',
             entries: [
                 { id: 'slot:base_system_prompt', type: 'slot', enabled: true, slotId: 'base_system_prompt' },
@@ -92,10 +92,10 @@ describe('Forge prompt layout slots', () => {
             updatedAt: 1
         };
 
-        const result = PromptPresetComposer.composeWithTrace('forge-main', preset, {
-            baseSystemPromptKey: 'plannerSystemPrompt',
+        const result = PromptPresetComposer.composeWithTrace('forge-agent', preset, {
+            baseSystemPromptKey: 'agentSystemPrompt',
             macroContext: {
-                plannerSystemPrompt: 'STATIC FORGE SYSTEM'
+                agentSystemPrompt: 'STATIC FORGE SYSTEM'
             },
             forgeAgentSourceUnits: [
                 createAgentUnit({

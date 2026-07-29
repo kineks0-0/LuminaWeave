@@ -15,7 +15,7 @@ const createContext = (): ForgeRuntimeContext => ({
     workspaceSessionId: 'forge_project_alpha',
     sessionChatId: 'conversation_alpha',
     workspaceTitle: 'Forge Alpha',
-    selectedPresetId: 'forge-main',
+    selectedPresetId: 'forge-agent',
     selectedChatSessionId: null,
     selectedChatSnapshotId: null,
     detailMode: 'quick',
@@ -120,7 +120,8 @@ describe('ForgePiCoreRuntime', () => {
             context: createContext(),
             request: {
                 requestId: 'req_preview',
-                mode: 'conversation',
+                intent: 'conversation',
+                modelRoute: 'main',
                 traceSource: 'conversation',
                 messages: [
                     { role: 'system', content: 'legacy system fragment' },
@@ -234,7 +235,8 @@ describe('ForgePiCoreRuntime', () => {
             context: createContext(),
             request: {
                 requestId: 'req_sdk_extension_preview',
-                mode: 'conversation',
+                intent: 'conversation',
+                modelRoute: 'main',
                 traceSource: 'conversation',
                 messages: [{ role: 'user', content: '使用 SDK 扩展' }],
                 nodeSummary: []
@@ -344,7 +346,8 @@ describe('ForgePiCoreRuntime', () => {
             context: createContext(),
             request: {
                 requestId: 'req_sdk_tool_run',
-                mode: 'conversation',
+                intent: 'conversation',
+                modelRoute: 'main',
                 traceSource: 'conversation',
                 messages: [{ role: 'user', content: '调用 SDK 工具' }],
                 nodeSummary: []
@@ -415,7 +418,8 @@ describe('ForgePiCoreRuntime', () => {
             context: createContext(),
             request: {
                 requestId: 'req_1',
-                mode: 'conversation',
+                intent: 'conversation',
+                modelRoute: 'main',
                 traceSource: 'conversation',
                 messages: [{ role: 'user', content: 'hello' }],
                 nodeSummary: []
@@ -560,7 +564,8 @@ describe('ForgePiCoreRuntime', () => {
             context: createContext(),
             request: {
                 requestId: 'req_approval',
-                mode: 'conversation',
+                intent: 'conversation',
+                modelRoute: 'main',
                 traceSource: 'conversation',
                 messages: [{ role: 'user', content: 'hello' }],
                 nodeSummary: []

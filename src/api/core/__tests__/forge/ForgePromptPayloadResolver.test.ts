@@ -36,7 +36,7 @@ describe('ForgePromptPayloadResolver', () => {
             collectionMode: 'conversation',
             activeLayer: 'output',
             subLayer: 'output',
-            promptMode: 'planner',
+            intent: 'planning',
             reason: '等待最终确认',
             recommendedAction: '确认提交范围',
             shouldGenerate: true,

@@ -122,6 +122,7 @@ describe('ForgeWorkflowGraph', () => {
 
         expect(result.stage).toBe('kickoff');
         expect(result.collectionMode).toBe('conversation');
+        expect(result.intent).toBe('planning');
         expect(result.allowedActions).toContain('choose_detail_mode');
         expect(result.missingFields).toEqual(['direction', 'facets']);
     });
@@ -290,13 +291,15 @@ describe('ForgeWorkflowGraph', () => {
         }));
 
         expect(result.requiresGeneration).toBe(true);
-        expect(result.executionRequest?.mode).toBe('planner');
+        expect(result.workflowSnapshot.intent).toBe('planning');
+        expect(result.executionRequest?.modelRoute).toBe('main');
+        expect(result.executionRequest?.traceSource).toBe('planner');
         expect(result.effects).toEqual(expect.arrayContaining([
             expect.objectContaining({ type: 'submit_form_result', formId: 'kickoff_intent' })
         ]));
     });
 
-    it('resolveDecision 在上下文检索意图下应走 analyst', async () => {
+    it('resolveDecision 在上下文检索意图下应保留 analysis intent 并走主模型', async () => {
         const result = await ForgeWorkflowGraph.resolveDecision(createRuntimeContext({
             detailMode: 'detailed',
             entryMode: 'structured',
@@ -318,10 +321,12 @@ describe('ForgeWorkflowGraph', () => {
         }));
 
         expect(result.requiresGeneration).toBe(true);
-        expect(result.executionRequest?.mode).toBe('analyst');
+        expect(result.workflowSnapshot.intent).toBe('analysis');
+        expect(result.executionRequest?.modelRoute).toBe('main');
+        expect(result.executionRequest?.traceSource).toBe('analyst');
     });
 
-    it('resolveDecision 在普通问答下应走 conversation 而不是 planner', async () => {
+    it('resolveDecision 在普通问答下应保留 conversation intent 并走主模型', async () => {
         const result = await ForgeWorkflowGraph.resolveDecision(createRuntimeContext({
             detailMode: 'quick',
             entryMode: 'structured',
@@ -332,7 +337,7 @@ describe('ForgeWorkflowGraph', () => {
                 collectionMode: 'temporary',
                 activeLayer: 'concept',
                 subLayer: 'concept',
-                promptMode: 'planner',
+                intent: 'planning',
                 reason: '当前正在 concept 层收敛设定。',
                 recommendedAction: '继续讨论角色动机。',
                 shouldGenerate: true,
@@ -355,6 +360,8 @@ describe('ForgeWorkflowGraph', () => {
         }));
 
         expect(result.requiresGeneration).toBe(true);
-        expect(result.executionRequest?.mode).toBe('conversation');
+        expect(result.workflowSnapshot.intent).toBe('conversation');
+        expect(result.executionRequest?.modelRoute).toBe('main');
+        expect(result.executionRequest?.traceSource).toBe('conversation');
     });
 });

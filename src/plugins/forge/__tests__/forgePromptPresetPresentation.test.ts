@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PromptPresetDefinition } from '../../../types/PromptPresetTypes.js';
-import forgeExecutorDefault from '../../../resources/presets/forge-executor-default.json';
-import forgeMainDefault from '../../../resources/presets/forge-main-default.json';
+import forgeAgentDefault from '../../../resources/presets/forge-agent-default.json';
 import {
     buildForgeAgentSkillPath,
     buildForgePromptPresetResourceGroups,
@@ -14,9 +13,9 @@ import {
 } from '../store/forgePromptPresetPresentation.js';
 
 const preset: PromptPresetDefinition = {
-    id: 'built-in:forge-main-default',
-    name: '默认主模型',
-    profileId: 'forge-main',
+    id: 'built-in:forge-agent-default',
+    name: '默认 Agent',
+    profileId: 'forge-agent',
     builtIn: true,
     engine: 'composed',
     entries: [],
@@ -34,31 +33,11 @@ const preset: PromptPresetDefinition = {
             title: '默认系统提示词',
             content: 'System'
         },
-        modes: {
-            planner: {
-                path: './.forge/agent/PLANNER.md',
-                kind: 'mode_prompt',
-                title: 'Planner 模式提示词',
-                content: 'Planner'
-            },
-            conversation: {
-                path: './.forge/agent/CONVERSATION.md',
-                kind: 'mode_prompt',
-                title: 'Conversation 模式提示词',
-                content: 'Conversation'
-            },
-            analyst: {
-                path: './.forge/agent/ANALYST.md',
-                kind: 'mode_prompt',
-                title: 'Analyst 模式提示词',
-                content: 'Analyst'
-            },
-            executor: {
-                path: './.forge/agent/EXECUTOR.md',
-                kind: 'mode_prompt',
-                title: 'Executor 模式提示词',
-                content: 'Executor'
-            }
+        executor: {
+            path: './.forge/agent/EXECUTOR.md',
+            kind: 'executor_prompt',
+            title: '执行模型提示词',
+            content: 'Executor'
         },
         skills: [{
             name: 'virtual-lorebook-editor',
@@ -74,10 +53,11 @@ const preset: PromptPresetDefinition = {
         steps: [
             { kind: 'contract', enabled: true, path: './AGENTS.md', title: 'Contract' },
             { kind: 'system', enabled: true, path: './.forge/agent/SYSTEM.md', title: 'System' },
-            { kind: 'mode_prompt', enabled: true, path: './.forge/agent/<MODE>.md', title: 'Mode Prompt' },
+            { kind: 'executor_prompt', enabled: true, path: './.forge/agent/EXECUTOR.md', title: 'Executor Prompt' },
             { kind: 'ui_dsl', enabled: true, path: './.forge/agent/UI_DSL.md', title: 'UI DSL' },
             { kind: 'reasoning_boundary', enabled: true, path: './.forge/agent/REASONING.md', title: 'Reasoning Boundary' },
             { kind: 'skills', enabled: true, title: 'Skills' },
+            { kind: 'extensions', enabled: true, title: 'Extensions' },
             { kind: 'capabilities', enabled: true, title: 'Capabilities' },
             { kind: 'memory_index', enabled: true, path: './.pi/agent/context/memory-index.md', title: 'Memory Index' },
             { kind: 'context_files', enabled: true, title: 'Context Files' },
@@ -94,18 +74,18 @@ describe('forgePromptPresetPresentation', () => {
         const expectedKinds = [
             'contract',
             'system',
-            'mode_prompt',
+            'executor_prompt',
             'ui_dsl',
             'reasoning_boundary',
             'skills',
+            'extensions',
             'capabilities',
             'memory_index',
             'context_files',
             'branch_messages'
         ];
 
-        expect(forgeMainDefault.forgeAgentOrchestration.steps.map(step => step.kind)).toEqual(expectedKinds);
-        expect(forgeExecutorDefault.forgeAgentOrchestration.steps.map(step => step.kind)).toEqual(expectedKinds);
+        expect(forgeAgentDefault.forgeAgentOrchestration.steps.map(step => step.kind)).toEqual(expectedKinds);
     });
 
     it('projects Forge agent preset resources into user-facing rows', () => {
@@ -116,9 +96,6 @@ describe('forgePromptPresetPresentation', () => {
         expect(rows.map(row => row.path)).toEqual([
             './AGENTS.md',
             './.forge/agent/SYSTEM.md',
-            './.forge/agent/PLANNER.md',
-            './.forge/agent/CONVERSATION.md',
-            './.forge/agent/ANALYST.md',
             './.forge/agent/EXECUTOR.md',
             './agent/skills/virtual-lorebook-editor/SKILL.md'
         ]);
@@ -134,10 +111,11 @@ describe('forgePromptPresetPresentation', () => {
         expect(rows.map(row => row.kind)).toEqual([
             'contract',
             'system',
-            'mode_prompt',
+            'executor_prompt',
             'ui_dsl',
             'reasoning_boundary',
             'skills',
+            'extensions',
             'capabilities',
             'memory_index',
             'context_files',
@@ -146,10 +124,11 @@ describe('forgePromptPresetPresentation', () => {
         expect(rows.map(row => row.label)).toEqual([
             'Contract',
             'System',
-            'Mode Prompt',
+            'Executor Prompt',
             'UI DSL',
             'Reasoning Boundary',
             'Skills',
+            'Extensions',
             'Capabilities',
             'Memory Index',
             'Context Files',
@@ -160,7 +139,7 @@ describe('forgePromptPresetPresentation', () => {
     it('summarizes resource presets separately from legacy composed entries', () => {
         expect(summarizeForgePromptPreset(preset)).toEqual({
             primary: 'Agent 资源包',
-            details: ['10 步编排', '1 技能']
+            details: ['11 步编排', '1 技能']
         });
 
         expect(summarizeForgePromptPreset({
@@ -183,8 +162,8 @@ describe('forgePromptPresetPresentation', () => {
             editLabel: '内置只读',
             primaryActionLabel: '复制为自定义预设',
             sourcePriority: '项目覆盖 > 当前预设 > 内置 fallback',
-            resourceCount: 7,
-            orchestrationCount: 10,
+            resourceCount: 4,
+            orchestrationCount: 11,
             skillCount: 1
         });
     });
@@ -192,11 +171,8 @@ describe('forgePromptPresetPresentation', () => {
     it('groups agent resources by editing task instead of a flat textarea list', () => {
         const groups = buildForgePromptPresetResourceGroups(preset);
 
-        expect(groups.map(group => group.id)).toEqual(['contract', 'system', 'mode', 'skills']);
-        expect(groups.find(group => group.id === 'mode')?.resources.map(resource => resource.path)).toEqual([
-            './.forge/agent/PLANNER.md',
-            './.forge/agent/CONVERSATION.md',
-            './.forge/agent/ANALYST.md',
+        expect(groups.map(group => group.id)).toEqual(['contract', 'system', 'executor', 'skills', 'extensions']);
+        expect(groups.find(group => group.id === 'executor')?.resources.map(resource => resource.path)).toEqual([
             './.forge/agent/EXECUTOR.md'
         ]);
         expect(groups.find(group => group.id === 'skills')?.resources[0]).toEqual(expect.objectContaining({

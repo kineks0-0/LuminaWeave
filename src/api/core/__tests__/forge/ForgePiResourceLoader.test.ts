@@ -7,7 +7,7 @@ const createContext = (): ForgeRuntimeContext => ({
     workspaceSessionId: 'forge_project_alpha',
     sessionChatId: 'conversation_alpha',
     workspaceTitle: 'Forge Alpha',
-    selectedPresetId: 'forge-main',
+    selectedPresetId: 'forge-agent',
     selectedChatSessionId: null,
     selectedChatSnapshotId: null,
     detailMode: 'quick',
@@ -17,7 +17,7 @@ const createContext = (): ForgeRuntimeContext => ({
     completedLayers: ['concept'],
     workflowSnapshot: {
         currentStage: 'narrative',
-        promptMode: 'conversation',
+        intent: 'conversation',
         reason: '用户继续细化角色',
         completedStages: ['kickoff', 'skeleton']
     } as any,
@@ -37,12 +37,11 @@ const createContext = (): ForgeRuntimeContext => ({
 });
 
 describe('ForgePiResourceLoader', () => {
-    it('reads AGENTS and mode prompt content from the semantic VFS reader', async () => {
+    it('reads AGENTS and main prompt content from the semantic VFS reader', async () => {
         const semanticVfs: ForgeSemanticVfsReader = {
             readFile: vi.fn(async (_context, path) => {
                 if (path === './AGENTS.md') return '# Custom Contract';
                 if (path === './.forge/agent/SYSTEM.md') return '# Custom System Prompt';
-                if (path === './.forge/agent/CONVERSATION.md') return '# Custom Conversation Prompt';
                 throw new Error(`Unexpected path: ${path}`);
             }),
             listEntries: vi.fn(async () => [])
@@ -61,10 +60,10 @@ describe('ForgePiResourceLoader', () => {
 
         expect(semanticVfs.readFile).toHaveBeenCalledWith(createContext(), './AGENTS.md');
         expect(semanticVfs.readFile).toHaveBeenCalledWith(createContext(), './.forge/agent/SYSTEM.md');
-        expect(semanticVfs.readFile).toHaveBeenCalledWith(createContext(), './.forge/agent/CONVERSATION.md');
+        expect(semanticVfs.readFile).not.toHaveBeenCalledWith(createContext(), './.forge/agent/CONVERSATION.md');
         expect(systemPrompt).toContain('# Custom Contract');
         expect(systemPrompt).toContain('# Custom System Prompt');
-        expect(systemPrompt).toContain('# Custom Conversation Prompt');
+        expect(systemPrompt).not.toContain('Conversation Prompt');
     });
 
     it('builds Chinese context files and capability index without loading full skill text', async () => {
@@ -95,13 +94,12 @@ describe('ForgePiResourceLoader', () => {
 
         const bundle = await loader.buildContextBundle(createContext());
 
-        expect(bundle.loadedExtensions).toEqual(['@luminaweave/pi-forge-browser']);
+        expect(bundle.loadedExtensions).toEqual([]);
         expect(bundle.activeSkills).toContain('虚拟世界书编辑器 (skillName: virtual-lorebook-editor, path: ./agent/skills/virtual-lorebook-editor/SKILL.md)');
-        expect(bundle.activeSkills).toContain('需求捕捉与支撑点识别 (skillName: reference-needs-capture, path: ./agent/skills/reference-needs-capture/SKILL.md)');
+        expect(bundle.activeSkills).toContain('[preset] 需求捕捉与支撑点识别 (skillName: reference-needs-capture, path: ./agent/skills/reference-needs-capture/SKILL.md)');
         expect(bundle.files.map(file => file.path)).toEqual(expect.arrayContaining([
             './AGENTS.md',
             './.forge/agent/SYSTEM.md',
-            './.forge/agent/CONVERSATION.md',
             './.forge/agent/UI_DSL.md',
             './.forge/agent/REASONING.md',
             './.pi/agent/context/project.md',
@@ -117,8 +115,8 @@ describe('ForgePiResourceLoader', () => {
         expect(bundle.files.find(file => file.path === './.pi/agent/context/capability-index.md')?.content)
             .toContain('./agent/skills/virtual-lorebook-editor/SKILL.md');
         expect(bundle.files.find(file => file.path === './AGENTS.md')?.title).toContain('工作契约');
-        expect(bundle.files.find(file => file.path === './.forge/agent/SYSTEM.md')?.title).toContain('默认系统提示词');
-        expect(bundle.files.find(file => file.path === './.forge/agent/CONVERSATION.md')?.title).toContain('模式提示词');
+        expect(bundle.files.find(file => file.path === './.forge/agent/SYSTEM.md')?.title).toContain('主模型提示词');
+        expect(bundle.files.find(file => file.path === './.forge/agent/CONVERSATION.md')).toBeUndefined();
         expect(bundle.files.find(file => file.path === './.forge/agent/UI_DSL.md')?.content).toContain('Forge <V> DSL');
         expect(bundle.files.find(file => file.path === './.forge/agent/UI_DSL.md')?.content).toContain('ForgeChoiceGroup(');
         expect(bundle.files.find(file => file.path === './.forge/agent/REASONING.md')?.content).toContain('隐藏思维链');

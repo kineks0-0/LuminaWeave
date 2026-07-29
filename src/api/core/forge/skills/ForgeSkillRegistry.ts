@@ -5,12 +5,8 @@ import {
     type ShellWorkspaceService,
     shellWorkspaceService
 } from '../../hal/shell/ShellWorkspaceService.js';
-import _exportPreparer from '../../../../resources/forge-agent/base/skills/export-preparer/SKILL.md?raw';
-import _forgeProjectWriter from '../../../../resources/forge-agent/base/skills/forge-project-writer/SKILL.md?raw';
-import _materialAnalyzer from '../../../../resources/forge-agent/base/skills/material-analyzer/SKILL.md?raw';
-import _memoryCurator from '../../../../resources/forge-agent/base/skills/memory-curator/SKILL.md?raw';
-import _testChatRunner from '../../../../resources/forge-agent/base/skills/test-chat-runner/SKILL.md?raw';
-import _virtualLorebookEditor from '../../../../resources/forge-agent/base/skills/virtual-lorebook-editor/SKILL.md?raw';
+import { forgeAgentPresetResourceRegistry } from '../presets/ForgeAgentPresetResourceRegistry.js';
+import type { ForgeAgentPresetLayerSkillResource } from '../presets/ForgeAgentPresetResourceRegistry.js';
 
 export interface ForgeSkillMetadata {
     name: string;
@@ -43,63 +39,18 @@ const stripWorkspaceRoot = (path: string): string =>
 const semanticSkillPath = (skillName: string): string =>
     `./agent/skills/${skillName}/SKILL.md`;
 
-const builtInSkill = (
-    input: Omit<ForgeSkillMetadata, 'builtIn'> & { instructions: string }
-): ForgeSkillMetadata & { instructions: string } => ({
-    ...input,
+const baseSkillResources = (): ForgeAgentPresetLayerSkillResource[] =>
+    forgeAgentPresetResourceRegistry.resolve('__base_only__').skills
+        .filter(skill => skill.source === 'base');
+
+const toMetadata = (skill: ForgeAgentPresetLayerSkillResource): ForgeSkillMetadata => ({
+    name: skill.name,
+    title: skill.title ?? skill.name,
+    description: skill.description ?? skill.title ?? skill.name,
+    defaultWriteScope: skill.defaultWriteScope ?? 'read-only by default',
+    resourcePath: skill.path,
     builtIn: true
 });
-
-const BUILT_IN_SKILLS = [
-    builtInSkill({
-        name: 'forge-project-writer',
-        title: 'Forge 项目写入员',
-        description: '通过 direct write tools 写入项目 VFS，并让 Git 记录版本历史。',
-        defaultWriteScope: '/workspaces/forge/<projectId>/',
-        resourcePath: 'src/resources/forge-agent/base/skills/forge-project-writer/SKILL.md',
-        instructions: _forgeProjectWriter
-    }),
-    builtInSkill({
-        name: 'virtual-lorebook-editor',
-        title: '虚拟世界书编辑器',
-        description: '在 Forge 项目工作区内创建、拆分、合并、重写虚拟世界书条目。',
-        defaultWriteScope: '/workspaces/forge/<projectId>/lorebook/entries/',
-        resourcePath: 'src/resources/forge-agent/base/skills/virtual-lorebook-editor/SKILL.md',
-        instructions: _virtualLorebookEditor
-    }),
-    builtInSkill({
-        name: 'memory-curator',
-        title: '项目记忆整理员',
-        description: '把用户偏好、硬性约束、禁忌和设定决议整理进项目记忆树。',
-        defaultWriteScope: '/workspaces/forge/<projectId>/memory/tree.json',
-        resourcePath: 'src/resources/forge-agent/base/skills/memory-curator/SKILL.md',
-        instructions: _memoryCurator
-    }),
-    builtInSkill({
-        name: 'test-chat-runner',
-        title: '测试聊天验证员',
-        description: '基于项目资源运行验证对话，并记录 trace 与测试发现。',
-        defaultWriteScope: 'trace only',
-        resourcePath: 'src/resources/forge-agent/base/skills/test-chat-runner/SKILL.md',
-        instructions: _testChatRunner
-    }),
-    builtInSkill({
-        name: 'export-preparer',
-        title: '导出准备员',
-        description: '准备导出包 metadata 与检查项，不写真实 ST 世界书。',
-        defaultWriteScope: '/workspaces/forge/<projectId>/export/',
-        resourcePath: 'src/resources/forge-agent/base/skills/export-preparer/SKILL.md',
-        instructions: _exportPreparer
-    }),
-    builtInSkill({
-        name: 'material-analyzer',
-        title: '素材分析员',
-        description: '检查上传素材或项目素材文件，提取可复用设定片段。',
-        defaultWriteScope: 'read-only by default',
-        resourcePath: 'src/resources/forge-agent/base/skills/material-analyzer/SKILL.md',
-        instructions: _materialAnalyzer
-    })
-] as const;
 
 export class ForgeSkillRegistry {
     private readonly skillParser = new AgentSkillParser();
@@ -107,18 +58,18 @@ export class ForgeSkillRegistry {
     constructor(private readonly workspaces: ShellWorkspaceService = shellWorkspaceService) {}
 
     listBuiltInSkills(): ForgeSkillMetadata[] {
-        return BUILT_IN_SKILLS.map(({ instructions: _instructions, ...metadata }) => ({ ...metadata }));
+        return baseSkillResources().map(toMetadata);
     }
 
     getBuiltInSkill(name: string): AgentSkillDefinition | null {
-        const skill = BUILT_IN_SKILLS.find(item => item.name === normalizeSkillName(name));
+        const skill = baseSkillResources().find(item => item.name === normalizeSkillName(name));
         if (!skill) return null;
         return {
             name: skill.name,
-            description: skill.description,
+            description: skill.description ?? skill.title ?? skill.name,
             files: [{
                 path: 'SKILL.md',
-                content: skill.instructions
+                content: skill.content
             }]
         };
     }
@@ -129,7 +80,8 @@ export class ForgeSkillRegistry {
         skillNames?: string[];
         overwrite?: boolean;
     }): Promise<ForgeSkillLoadResult[]> {
-        const selected = new Set((input.skillNames ?? BUILT_IN_SKILLS.map(skill => skill.name)).map(assertSkillName));
+        const builtInSkills = baseSkillResources();
+        const selected = new Set((input.skillNames ?? builtInSkills.map(skill => skill.name)).map(assertSkillName));
         const fs = await this.workspaces.getFileSystem({
             projectId: input.forgeProjectId,
             conversationId: input.conversationId
@@ -138,14 +90,14 @@ export class ForgeSkillRegistry {
         const projectRoot = stripWorkspaceRoot(forgeWorkspacePath(input.forgeProjectId));
         await fs.mkdir(`${projectRoot}/agent/skills`, { recursive: true });
 
-        for (const metadata of BUILT_IN_SKILLS) {
+        for (const metadata of builtInSkills) {
             if (!selected.has(metadata.name)) continue;
             const root = `${projectRoot}/agent/skills/${metadata.name}`;
             const skillPath = `${root}/SKILL.md`;
             await fs.mkdir(root, { recursive: true });
             const exists = await fs.exists(skillPath);
             if (input.overwrite || !exists) {
-                await fs.writeFile(skillPath, metadata.instructions);
+                await fs.writeFile(skillPath, metadata.content);
             }
             const loaded = await this.loadProjectSkill(input.forgeProjectId, metadata.name, input.conversationId);
             if (loaded) installed.push(loaded);
@@ -174,7 +126,7 @@ export class ForgeSkillRegistry {
         const skillPath = `${root}/SKILL.md`;
         const content = await fs.readFile(skillPath).catch(() => null);
         if (typeof content !== 'string') return null;
-        const builtIn = BUILT_IN_SKILLS.find(skill => skill.name === normalizedName);
+        const builtIn = baseSkillResources().find(skill => skill.name === normalizedName);
         const parsed = this.skillParser.parse({
             path: semanticSkillPath(normalizedName),
             content

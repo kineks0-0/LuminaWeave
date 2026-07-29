@@ -180,8 +180,8 @@
           <div v-if="store.workflowSnapshot" class="ai-snapshot-body">
             <dl class="ai-dl">
               <div class="ai-dl-row">
-                <dt>Prompt 模式</dt>
-                <dd>{{ store.workflowSnapshot.promptMode }}</dd>
+                <dt>工作流意图</dt>
+                <dd>{{ store.workflowSnapshot.intent }}</dd>
               </div>
               <div class="ai-dl-row">
                 <dt>推荐动作</dt>
@@ -326,7 +326,7 @@ import { useCardMakerStore } from '../../CardMakerStore.js';
 import { forgeSkillRegistry } from '../../../../api/core/forge/skills/ForgeSkillRegistry.js';
 import { forgeCapabilityRegistry } from '../../../../api/core/forge/skills/ForgeCapabilityRegistry.js';
 import ForgeAuxPanelShell from '../../app/ForgeAuxPanelShell.vue';
-import type { ForgePromptPreviewTab } from '../../../../types/ForgePromptTypes.js';
+import type { ForgePromptPreviewBundle, ForgePromptPreviewTab } from '../../../../types/ForgePromptTypes.js';
 import type { AgentRuntimeMessage } from '../../../../api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
 const store = useCardMakerStore();
@@ -341,16 +341,19 @@ const lastGraphResult = computed(() => store.lastAgentGraphResult);
 const agentRuntimeSnapshot = computed(() => store.agentRuntimeSnapshot);
 
 const currentMode = computed(() => {
-  const mode = store.workflowSnapshot?.promptMode;
-  return mode || 'planner';
+  const intent = store.workflowSnapshot?.intent;
+  return intent || 'planning';
 });
 
 const currentModeLabel = computed(() => {
   switch (currentMode.value) {
-    case 'planner': return 'Planner';
-    case 'analyst': return 'Analyst';
+    case 'planning': return 'Planning';
+    case 'analysis': return 'Analysis';
     case 'conversation': return 'Conversation';
-    case 'executor': return 'Executor';
+    case 'edit': return 'Edit';
+    case 'review': return 'Review';
+    case 'test': return 'Test';
+    case 'export': return 'Export';
     default: return currentMode.value;
   }
 });
@@ -378,7 +381,7 @@ function formatRuntimeMessage(message: AgentRuntimeMessage) {
 const promptModel = ref<'primary' | 'executor'>('primary');
 const promptLoading = ref(false);
 const promptError = ref<string | null>(null);
-const promptBundle = ref<any>(null);
+const promptBundle = ref<ForgePromptPreviewBundle | null>(null);
 
 const activePromptTab = computed<ForgePromptPreviewTab | null>(() => {
   if (!promptBundle.value) return null;
@@ -392,8 +395,8 @@ async function refreshPrompts() {
   promptError.value = null;
   try {
     promptBundle.value = await store.buildPromptPreviewPayload();
-  } catch (e: any) {
-    promptError.value = e?.message || '加载提示词失败';
+  } catch (e: unknown) {
+    promptError.value = e instanceof Error ? e.message : '加载提示词失败';
   } finally {
     promptLoading.value = false;
   }
@@ -448,8 +451,8 @@ async function runTest() {
     if (testHistory.value.length > 20) {
       testHistory.value = testHistory.value.slice(0, 20);
     }
-  } catch (e: any) {
-    testError.value = e?.message || '测试执行失败';
+  } catch (e: unknown) {
+    testError.value = e instanceof Error ? e.message : '测试执行失败';
   } finally {
     testRunning.value = false;
   }
@@ -632,9 +635,12 @@ async function runTest() {
   flex-shrink: 0;
 }
 
+.ai-badge.mode-planning,
 .ai-badge.mode-planner       { background: rgba(var(--lw-primary-rgb), 0.12); color: var(--lw-primary); }
+.ai-badge.mode-analysis,
 .ai-badge.mode-analyst       { background: color-mix(in srgb, var(--lw-primary) 14%, transparent); color: var(--lw-primary); }
 .ai-badge.mode-conversation  { background: color-mix(in srgb, var(--lw-success) 14%, transparent); color: var(--lw-success); }
+.ai-badge.mode-edit,
 .ai-badge.mode-executor      { background: color-mix(in srgb, var(--lw-warning) 14%, transparent); color: var(--lw-warning); }
 .ai-badge.mode-test_chat     { background: color-mix(in srgb, var(--lw-success) 14%, transparent); color: var(--lw-success); }
 .ai-badge.mode-batch_creative{ background: color-mix(in srgb, var(--lw-warning) 14%, transparent); color: var(--lw-warning); }

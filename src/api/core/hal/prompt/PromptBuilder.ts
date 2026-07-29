@@ -162,7 +162,7 @@ export class PromptBuilder {
             ]
         };
 
-        const profileId: PromptPresetProfileId = promptContext === 'forge' ? 'forge-main' : 'forge-test-chat';
+        const profileId: PromptPresetProfileId = promptContext === 'forge' ? 'forge-agent' : 'forge-test-chat';
         const profile = getPromptPresetProfile(profileId);
         const preset = promptPresetRegistry.getActivePreset(profileId);
 
@@ -176,8 +176,7 @@ export class PromptBuilder {
             const systemBlocks = [
                 processedSystem,
                 resources.contract.content,
-                resources.system.content,
-                resources.modes.planner.content
+                resources.system.content
             ].filter((block): block is string => Boolean(block && block.trim()));
             return this.collapseLeadingSystemMessages([
                 { role: 'system', content: systemBlocks.join('\n\n') },
@@ -223,7 +222,7 @@ export class PromptBuilder {
 
     public static buildActiveMessagesTrace(options: BuildActiveMessagesOptions): PromptAssemblyResult {
         const sources = this.buildComposeSources(options);
-        const profileId: PromptPresetProfileId = (options.promptContext ?? 'chat') === 'forge' ? 'forge-main' : 'forge-test-chat';
+        const profileId: PromptPresetProfileId = (options.promptContext ?? 'chat') === 'forge' ? 'forge-agent' : 'forge-test-chat';
         const profile = getPromptPresetProfile(profileId);
         const preset = promptPresetRegistry.getActivePreset(profileId);
 

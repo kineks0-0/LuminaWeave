@@ -55,15 +55,12 @@ interface SemanticFileSeed {
 }
 
 const DEFAULT_PROMPT_FILES = [
+    './.forge/agent/EXECUTOR.md',
     './.forge/agent/UI_DSL.md',
-    './.forge/agent/REASONING.md',
-    './.forge/agent/PLANNER.md',
-    './.forge/agent/CONVERSATION.md',
-    './.forge/agent/ANALYST.md',
-    './.forge/agent/EXECUTOR.md'
+    './.forge/agent/REASONING.md'
 ];
 
-const MANAGED_AGENT_PROMPT_PATH_PATTERN = /^\.\/\.forge\/agent\/(?:SYSTEM|PLANNER|CONVERSATION|ANALYST|EXECUTOR)\.md$/;
+const MANAGED_AGENT_PROMPT_PATH_PATTERN = /^\.\/\.forge\/agent\/(?:SYSTEM|EXECUTOR)\.md$/;
 const MANAGED_AGENT_SKILL_PATH_PATTERN = /^\.\/agent\/skills\/[a-z0-9][a-z0-9-]*\/SKILL\.md$/;
 
 const normalizeForgeProjectPath = (path: string): string => {
@@ -98,7 +95,7 @@ const DEFAULT_FILE_SEEDS: SemanticFileSeed[] = [
         path,
         source: 'virtual' as const,
         writePolicy: 'protected' as const,
-        preview: 'Forge mode prompt'
+        preview: 'Forge prompt resource'
     })),
     {
         path: './memory/AUTO/Checklist.md',

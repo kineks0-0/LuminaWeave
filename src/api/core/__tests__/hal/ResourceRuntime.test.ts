@@ -1327,9 +1327,9 @@ describe('Resource Runtime', () => {
         expect(service.resolveBindings(owner).excludedRefs).toEqual([]);
         expect(() => service.includeWorldbook(owner, character)).toThrow(/worldbook refs/);
 
-        expect(PromptResourceBindingService.promptPresetOwner('forge-main', 'preset-a')).toEqual({
+        expect(PromptResourceBindingService.promptPresetOwner('forge-agent', 'preset-a')).toEqual({
             kind: 'prompt-preset',
-            id: 'forge-main/preset-a'
+            id: 'forge-agent/preset-a'
         });
     });
 

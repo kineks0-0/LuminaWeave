@@ -140,7 +140,7 @@ const forgeMainSlots: PromptPresetSlotResolver[] = [
         if (!key) return null;
         const content = trimText(sources.macroContext?.[key]);
         return content ? [{ role: 'system', content }] : null;
-    }, '从当前预设的 special prompt 中选择主模型基础 system prompt。'),
+    }, '从当前预设的 agentSystemPrompt 中选择主模型基础 system prompt。'),
     createSlot('agent_runtime_contract', 'Agent 运行契约', 'system', (sources) =>
         agentSourceMessagesFor(sources, 'agent_runtime_contract'), 'Agent 框架注入的稳定运行契约。', false, getForgePromptSlotPolicy('runtime_contract')),
     createSlot('agent_skill_context', 'Agent Skill 上下文', 'system', (sources) =>
@@ -214,29 +214,6 @@ const forgeMainSlots: PromptPresetSlotResolver[] = [
         agentSourceMessagesFor(sources, 'agent_user_input'), '当前轮用户请求，固定进入 live input 区。', false, getForgePromptSlotPolicy('user_input'))
 ];
 
-const forgeExecutorSlots: PromptPresetSlotResolver[] = [
-    createSlot('base_system_prompt', '基础 System Prompt', 'system', (sources) => {
-        const key = sources.baseSystemPromptKey;
-        if (!key) return null;
-        const content = trimText(sources.macroContext?.[key]);
-        return content ? [{ role: 'system', content }] : null;
-    }),
-    createSlot('executor_task', '执行任务', 'user', (sources) => {
-        const instruction = trimText(sources.executorTask?.instruction);
-        return instruction ? [{ role: 'user', content: `【修改指令】: ${instruction}` }] : null;
-    }),
-    createSlot('original_entry', '目标条目原文', 'user', (sources) => {
-        const task = sources.executorTask;
-        const originalContent = trimText(task?.originalContent);
-        const entryId = trimText(task?.entryId);
-        if (!originalContent || !entryId) return null;
-        return [{
-            role: 'user',
-            content: `【原文】:\n${originalContent}\n\n请通过 writeFile 或 editFile 写入修改后的完整条目内容。\n- 建议路径: "./lorebook/entries/${entryId}.md"\n- 标题: 使用能在世界书列表中识别的中文备注名\n- 正文: 修改后的完整条目正文\n\n不要输出旧 XML 标签；不要发布或覆盖真实 ST 世界书。`
-        }];
-    })
-];
-
 const forgeTestChatSlots: PromptPresetSlotResolver[] = [
     createSlot('char_system_prompt', '角色 System Prompt', 'system', (sources) => {
         const content = trimText(sources.charCard?.systemPrompt);
@@ -265,23 +242,13 @@ const forgeTestChatSlots: PromptPresetSlotResolver[] = [
 ];
 
 const PROFILES: Record<PromptPresetProfileId, PromptPresetProfileDefinition> = {
-    'forge-main': {
-        id: 'forge-main',
-        label: '主模型',
-        defaultPresetId: 'built-in:forge-main-default',
+    'forge-agent': {
+        id: 'forge-agent',
+        label: 'Agent',
+        defaultPresetId: 'built-in:forge-agent-default',
         slots: forgeMainSlots,
         specials: [
-            { key: 'plannerSystemPrompt', label: 'Planner 指令' },
-            { key: 'conversationSystemPrompt', label: 'Conversation 指令' },
-            { key: 'analystSystemPrompt', label: 'Analyst 指令' }
-        ]
-    },
-    'forge-executor': {
-        id: 'forge-executor',
-        label: '执行模型',
-        defaultPresetId: 'built-in:forge-executor-default',
-        slots: forgeExecutorSlots,
-        specials: [
+            { key: 'agentSystemPrompt', label: '主模型指令' },
             { key: 'executorSystemPrompt', label: 'Executor 指令' }
         ]
     },

@@ -89,9 +89,9 @@ describe('ForgePromptContextService', () => {
         vi.clearAllMocks();
     });
 
-    it('应在预览模式下根据 mode 生成 conversation prompt', () => {
+    it('应在预览模式下根据 intent 生成 conversation prompt', () => {
         const messages = ForgePromptContextService.buildPromptPreviewPayload({
-            mode: 'conversation',
+            intent: 'conversation',
             presetData: null,
             messages: [],
             resolvedLorebookEntries: [],
@@ -110,8 +110,8 @@ describe('ForgePromptContextService', () => {
         });
 
         expect(messages[0].role).toBe('system');
-        expect(messages[0].content).toContain('你是 Lumina Forge 的“协作助手”');
-        expect(messages[0].content).toContain('组件内容必须根据用户当前输入动态生成');
+        expect(messages[0].content).toContain('Forge Agent 工作契约');
+        expect(messages[0].content).toContain('你是 LuminaWeave Forge 的制卡协作 Agent');
         expect(messages[0].content).toContain('./.forge/agent/UI_DSL.md');
         expect(messages[0].content).not.toContain('<forge_choice_group');
         expect(messages[0].content).not.toContain('<ForgeSelect');
@@ -139,8 +139,8 @@ describe('ForgePromptContextService', () => {
         });
 
         expect(messages[0].content).toContain('./.forge/agent/UI_DSL.md');
-        expect(messages[0].content).toContain('原生 tool calling');
-        expect(messages[0].content).toContain('<V>');
+        expect(messages[0].content).toContain('语义 VFS');
+        expect(messages[0].content).toContain('项目 VFS');
         expect(messages[0].content).not.toContain('<ForgeSelect');
         expect(messages[0].content).not.toContain('<forge_choice_group');
         expect(messages[0].content).not.toContain('ForgeMissingFields(formId=');
@@ -186,7 +186,7 @@ describe('ForgePromptContextService', () => {
 
     it('应为 Forge 主模型预览生成来源 trace', () => {
         const assembly = ForgePromptContextService.buildPromptPreviewAssembly({
-            mode: 'planner',
+            intent: 'planning',
             presetData: null,
             messages: [{ role: 'user', content: '帮我做一张卡' }],
             resolvedLorebookEntries: [

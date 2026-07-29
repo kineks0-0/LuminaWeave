@@ -4,9 +4,9 @@ import type {
     PromptSourceKind,
     PromptUnitInclusion
 } from './PromptAssemblyTypes.js';
-import type { ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
+import type { ForgeWorkflowIntent, ForgeWorkflowSnapshot } from './ForgeWorkflowTypes.js';
 
-export type ForgeAgentIntent = 'conversation' | 'planning' | 'edit' | 'review' | 'test' | 'export';
+export type ForgeAgentIntent = ForgeWorkflowIntent;
 
 export interface ForgeAgentProjectResourceSnapshot {
     lorebookEntryCount: number;
@@ -25,7 +25,7 @@ export interface ForgeWorkingStatement {
     visiblePhase: ForgeWorkflowSnapshot['visiblePhase'] | 'unknown';
     activeLayer: ForgeWorkflowSnapshot['activeLayer'] | 'unknown';
     detailMode: ForgeWorkflowSnapshot['detailMode'] | 'unknown';
-    promptMode: ForgeWorkflowSnapshot['promptMode'] | 'unknown';
+    workflowIntent: ForgeWorkflowIntent | 'unknown';
     selectedSkills: string[];
     loadedCapabilities: string[];
     shellProfiles: string[];

@@ -6,6 +6,7 @@ allowed-tools: read bash
 metadata:
   title: 测试聊天验证员
   source: built-in
+  defaultWriteScope: trace only
 ---
 # 测试聊天验证员
 

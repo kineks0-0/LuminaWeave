@@ -19,7 +19,7 @@ import type { TimelineNode } from '../../api/core/storage/TimelineManager.js';
 import type { MemorySnapshot } from '../../types/MemorySnapshotTypes.js';
 import type { ResolvedLorebookViewState } from '../../types/LorebookViewTypes.js';
 import type { ForgeMemoryTree } from '../../types/ForgeMemoryTypes.js';
-import { FORGE_PLANNER_PROMPT, FORGE_EXECUTOR_SYSTEM_PROMPT } from '../../resources/prompts/forgePrompts.js';
+import { FORGE_AGENT_SYSTEM_PROMPT, FORGE_EXECUTOR_SYSTEM_PROMPT } from '../../resources/prompts/forgePrompts.js';
 import { ForgePromptContextService } from '../../api/core/forge/prompt/ForgePromptContextService.js';
 import {
     ForgeAgentGraph,
@@ -122,7 +122,7 @@ import { ForgeFormSubmissionController } from './store/ForgeFormSubmissionContro
 import { ForgePromptPreviewPayloadBuilder } from './store/ForgePromptPreviewPayloadBuilder.js';
 import { ForgeAgentInspectorActions, type ForgeAgentInspectorMode } from './store/ForgeAgentInspectorActions.js';
 import { buildForgeAgentRuntimePresentationEffects } from './store/forgeAgentRuntimePresentation.js';
-export const DEFAULT_PLANNER_PROMPT = FORGE_PLANNER_PROMPT;
+export const DEFAULT_PLANNER_PROMPT = FORGE_AGENT_SYSTEM_PROMPT;
 export const DEFAULT_EXECUTOR_PROMPT = FORGE_EXECUTOR_SYSTEM_PROMPT;
 let forgeControllerBridgeBound = false;
 
@@ -1325,11 +1325,11 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         fetchPresetDetail: (presetId) => fetchPresetDetail(presetId),
         resolveActiveLorebookView: () => resolveActiveLorebookView(),
         buildMemorySnapshot: () => buildMemorySnapshot(),
-        getPrimaryMode: () => workflowSnapshot.value?.promptMode === 'conversation'
+        getPrimaryIntent: () => workflowSnapshot.value?.intent === 'conversation'
             ? 'conversation'
-            : workflowSnapshot.value?.promptMode === 'analyst'
-                ? 'analyst'
-                : 'planner',
+            : workflowSnapshot.value?.intent === 'analysis'
+                ? 'analysis'
+                : 'planning',
         getMessages: () => messages.value,
         runAgentGraph: async () => ForgeAgentGraph.run({
             session: serializeSession(),
@@ -1540,7 +1540,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         const requestId = generateForgeRequestTraceId();
         const resolvedPresetId = resolveRuntimePresetId(context.selectedPresetId);
         const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
-        const generationSettings = resolvePromptPresetGenerationSettings('forge-main');
+        const generationSettings = resolvePromptPresetGenerationSettings('forge-agent');
         const agentGraph = await buildRuntimeAgentGraph(context);
         const request = ForgePromptContextService.buildPlannerExecutionRequest({
             context,
@@ -1579,7 +1579,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         const resolvedPresetId = resolveRuntimePresetId(context.selectedPresetId);
         const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
         const contextSnapshot = buildRuntimeContextSnapshot(context, resolvedLorebookView, memorySnapshot, resolvedPresetId);
-        const generationSettings = resolvePromptPresetGenerationSettings('forge-main');
+        const generationSettings = resolvePromptPresetGenerationSettings('forge-agent');
         const agentGraph = await buildRuntimeAgentGraph(context);
         const request = ForgePromptContextService.buildConversationExecutionRequest({
             context,
@@ -1618,7 +1618,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         const resolvedPresetId = resolveRuntimePresetId(context.selectedPresetId);
         const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
         const contextSnapshot = buildRuntimeContextSnapshot(context, resolvedLorebookView, memorySnapshot, resolvedPresetId);
-        const generationSettings = resolvePromptPresetGenerationSettings('forge-main');
+        const generationSettings = resolvePromptPresetGenerationSettings('forge-agent');
         const agentGraph = await buildRuntimeAgentGraph(context);
         const request = ForgePromptContextService.buildAnalystExecutionRequest({
             context,
@@ -1658,7 +1658,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         const requestId = generateForgeRequestTraceId();
         const resolvedPresetId = resolveRuntimePresetId(selectedPresetId.value);
         const nodeSummary = summarizeRequestNodeSummary(resolvedPresetId);
-        const generationSettings = resolvePromptPresetGenerationSettings('forge-executor');
+        const generationSettings = resolvePromptPresetGenerationSettings('forge-agent');
         const contextSnapshot: ForgeRequestContextSnapshot = {
             kind: 'forge-runtime',
             workspaceTitle: workspaceTitle.value || null,

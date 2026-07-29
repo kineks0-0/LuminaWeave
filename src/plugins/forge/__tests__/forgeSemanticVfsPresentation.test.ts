@@ -24,9 +24,9 @@ const contextBundle: ForgePiContextBundleSummary = {
             content: 'User: 测试语义 VFS'
         },
         {
-            path: './.forge/agent/PLANNER.md',
-            title: 'Planner',
-            content: 'Planner prompt'
+            path: './.forge/agent/EXECUTOR.md',
+            title: 'Executor',
+            content: 'Executor prompt'
         }
     ],
     activeSkills: ['virtual-lorebook-editor'],
@@ -169,18 +169,17 @@ describe('forgeSemanticVfsPresentation', () => {
             './',
             './AGENTS.md',
             './.forge/agent/SYSTEM.md',
+            './.forge/agent/EXECUTOR.md',
             './.forge/agent/UI_DSL.md',
             './.forge/agent/REASONING.md',
-            './.forge/agent/PLANNER.md',
-            './.forge/agent/CONVERSATION.md',
-            './.forge/agent/ANALYST.md',
-            './.forge/agent/EXECUTOR.md',
             './agent/skills/virtual-lorebook-editor/SKILL.md',
             './threads/目前/messages.md',
             '/library/',
             '/sources/'
         ]));
-        expect(rows.map(row => row.path)).not.toContain('./.forge/PLANNER.md');
+        expect(rows.map(row => row.path)).not.toContain('./.forge/agent/PLANNER.md');
+        expect(rows.map(row => row.path)).not.toContain('./.forge/agent/CONVERSATION.md');
+        expect(rows.map(row => row.path)).not.toContain('./.forge/agent/ANALYST.md');
         expect(rows.find(row => row.path === './threads/目前/messages.md')).toEqual(expect.objectContaining({
             source: 'context',
             writePolicy: 'read-only',
@@ -227,9 +226,10 @@ describe('forgeSemanticVfsPresentation', () => {
     it('recognizes only managed Forge agent resources as project override paths', () => {
         expect(isForgeAgentResourceOverridePath('./AGENTS.md')).toBe(true);
         expect(isForgeAgentResourceOverridePath('./.forge/agent/SYSTEM.md')).toBe(true);
-        expect(isForgeAgentResourceOverridePath('./.forge/agent/CONVERSATION.md')).toBe(true);
+        expect(isForgeAgentResourceOverridePath('./.forge/agent/EXECUTOR.md')).toBe(true);
         expect(isForgeAgentResourceOverridePath('./agent/skills/reference-needs-capture/SKILL.md')).toBe(true);
 
+        expect(isForgeAgentResourceOverridePath('./.forge/agent/CONVERSATION.md')).toBe(false);
         expect(isForgeAgentResourceOverridePath('./.forge/agent/UI_DSL.md')).toBe(false);
         expect(isForgeAgentResourceOverridePath('./.forge/agent/REASONING.md')).toBe(false);
         expect(isForgeAgentResourceOverridePath('./memory/用户偏好.md')).toBe(false);

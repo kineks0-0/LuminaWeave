@@ -36,6 +36,7 @@ import {
     type ForgePiAgentSessionDeps,
     type ForgePiAgentSessionPromptPreview
 } from './session/ForgePiAgentSession.js';
+import { createForgePiPresetExtensionRuntimeDeps } from './extensions/ForgePiPresetExtensionLoader.js';
 
 export interface ForgePiCoreRuntimeTurnInput {
     command: ForgeUserCommand;
@@ -98,6 +99,7 @@ export class ForgePiCoreRuntime {
     >;
 
     constructor(private readonly deps: ForgePiCoreRuntimeDeps = {}) {
+        const presetExtensionRuntimeDeps = createForgePiPresetExtensionRuntimeDeps();
         // Forge 只把通用生命周期托管给 SDK façade；Forge 专属 session、VFS、工具和发布边界仍留在 adapter 内。
         this.runtime = new AgentRuntime({
             id: 'forge-pi-core-runtime',
@@ -105,8 +107,8 @@ export class ForgePiCoreRuntime {
             modelProvider: deps.modelProvider,
             tools: deps.tools,
             extensions: deps.extensions,
-            extensionLoader: deps.extensionLoader,
-            resourceScanner: deps.resourceScanner,
+            extensionLoader: deps.extensionLoader ?? presetExtensionRuntimeDeps.extensionLoader,
+            resourceScanner: deps.resourceScanner ?? presetExtensionRuntimeDeps.resourceScanner,
             workspace: deps.workspace,
             approvals: deps.approvals,
             permissions: deps.permissions,

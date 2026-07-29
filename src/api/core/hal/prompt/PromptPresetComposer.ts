@@ -102,7 +102,7 @@ const FORGE_MAIN_ORCHESTRATION_ENTRIES: PromptPresetEntry[] = [
 
 const resolveComposableEntries = (preset: PromptPresetDefinition): PromptPresetEntry[] => {
     if (preset.entries.length > 0) return preset.entries;
-    if (preset.profileId === 'forge-main' && preset.forgeAgentOrchestration) {
+    if (preset.profileId === 'forge-agent' && preset.forgeAgentOrchestration) {
         return FORGE_MAIN_ORCHESTRATION_ENTRIES.map(entry => ({ ...entry }));
     }
     return [];

@@ -16,7 +16,7 @@ const createContext = (): ForgeRuntimeContext => ({
     workspaceSessionId: 'forge_project_alpha',
     sessionChatId: 'conversation_alpha',
     workspaceTitle: 'Alpha Project',
-    selectedPresetId: 'forge-main',
+    selectedPresetId: 'forge-agent',
     selectedChatSessionId: null,
     selectedChatSnapshotId: null,
     detailMode: 'quick',
@@ -171,9 +171,6 @@ describe('ForgeProjectSemanticVfsService', () => {
         expect(paths).toEqual(expect.arrayContaining([
             './AGENTS.md',
             './.forge/agent/SYSTEM.md',
-            './.forge/agent/PLANNER.md',
-            './.forge/agent/CONVERSATION.md',
-            './.forge/agent/ANALYST.md',
             './.forge/agent/EXECUTOR.md',
             './.forge/agent/UI_DSL.md',
             './.forge/agent/REASONING.md',
@@ -201,7 +198,10 @@ describe('ForgeProjectSemanticVfsService', () => {
         expect(agentsContent).toContain('Git 版本历史');
         expect(agentsContent).not.toContain('基础身份');
         expect(entries.find(entry => entry.path === './.forge/agent/SYSTEM.md')?.content).toContain('Forge');
-        expect(entries.find(entry => entry.path === './.forge/agent/CONVERSATION.md')?.content).toContain('Forge');
+        expect(entries.find(entry => entry.path === './.forge/agent/EXECUTOR.md')?.content).toContain('Forge');
+        expect(entries.find(entry => entry.path === './.forge/agent/PLANNER.md')).toBeUndefined();
+        expect(entries.find(entry => entry.path === './.forge/agent/CONVERSATION.md')).toBeUndefined();
+        expect(entries.find(entry => entry.path === './.forge/agent/ANALYST.md')).toBeUndefined();
         expect(entries.find(entry => entry.path === './.forge/agent/UI_DSL.md')).toEqual(expect.objectContaining({
             writePolicy: 'protected',
             content: expect.stringContaining('ForgeChoiceGroup(')
@@ -291,7 +291,7 @@ describe('ForgeProjectSemanticVfsService', () => {
 
         const entries = await service.listEntries(createContext());
         const system = entries.find(entry => entry.path === './.forge/agent/SYSTEM.md');
-        const conversation = entries.find(entry => entry.path === './.forge/agent/CONVERSATION.md');
+        const executor = entries.find(entry => entry.path === './.forge/agent/EXECUTOR.md');
         const uiDsl = entries.find(entry => entry.path === './.forge/agent/UI_DSL.md');
 
         expect(system).toEqual(expect.objectContaining({
@@ -299,7 +299,7 @@ describe('ForgeProjectSemanticVfsService', () => {
             writePolicy: 'direct-write',
             content: expect.stringContaining('项目级系统提示词覆盖')
         }));
-        expect(conversation).toEqual(expect.objectContaining({
+        expect(executor).toEqual(expect.objectContaining({
             source: 'resource',
             writePolicy: 'protected',
             content: expect.stringContaining('Forge')

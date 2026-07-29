@@ -9,7 +9,7 @@ const workflowSnapshot: ForgeWorkflowSnapshot = {
     collectionMode: 'conversation',
     activeLayer: 'concept',
     subLayer: null,
-    promptMode: 'planner',
+    intent: 'planning',
     reason: 'Need world foundation.',
     recommendedAction: 'draft faction anchors',
     shouldGenerate: true,
