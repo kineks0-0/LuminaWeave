@@ -258,11 +258,54 @@ export interface ForgeRuntimeContext {
     piSession?: ForgePiPersistedSessionState | null;
 }
 
+export type ForgeAgentRuntimeMessageBlock =
+    | { type: 'text'; contentIndex: number; text: string }
+    | { type: 'thinking'; contentIndex: number; text: string }
+    | {
+        type: 'toolCall';
+        contentIndex: number;
+        toolCallId: string;
+        toolName: string;
+        args: unknown;
+    };
+
 export type ForgeRuntimeEffect =
     | { type: 'append_message'; role: 'user' | 'assistant'; content: string; sourceTag?: string | null }
     | {
+        type: 'project_agent_message';
+        sessionId: string;
+        turnId: string;
+        messageId: string;
+        rawText: string;
+        displayText: string;
+        thinkingText: string;
+        blocks: ForgeAgentRuntimeMessageBlock[];
+        status: 'streaming' | 'complete';
+        commit: boolean;
+        timestamp: number;
+    }
+    | {
+        type: 'project_agent_turn_error';
+        sessionId: string;
+        turnId: string;
+        message: string;
+    }
+    | {
         type: 'upsert_running_operation';
         dedupeKey: string;
+        operationKind: ForgeTimelineOperationKind;
+        title: string;
+        summary: string;
+        detail?: string | null;
+        sourceTag?: string | null;
+        targetEntryId?: string | null;
+        relatedMessageId?: string | null;
+        layer?: ForgeLayer | null;
+    }
+    | {
+        type: 'finish_operation';
+        dedupeKey: string;
+        status: 'completed' | 'failed' | 'cancelled';
         operationKind: ForgeTimelineOperationKind;
         title: string;
         summary: string;
@@ -409,23 +452,6 @@ export type ForgeRuntimeEvent =
     | { type: 'request_started'; requestId: string; requestedAt: number; nodeSummary: ForgeRequestNodeSummaryItem[] }
     | { type: 'trace'; requestId: string; tag: string; status: string; timestamp: number }
     | {
-        type: 'tool_call';
-        requestId: string;
-        toolCallId: string;
-        toolName: string;
-        args: unknown;
-        source: ForgeRuntimeEventSource;
-    }
-    | {
-        type: 'tool_result';
-        requestId: string;
-        toolCallId: string;
-        toolName: string;
-        result: unknown;
-        isError?: boolean;
-        source: ForgeRuntimeEventSource;
-    }
-    | {
         type: 'tool_approval_needed';
         requestId: string;
         approvalId?: string;
@@ -459,10 +485,7 @@ export type ForgeRuntimeEvent =
     }
     | { type: 'model_request_trace'; requestId: string; trace: ForgePiModelRequestTrace }
     | { type: 'prompt_ready'; requestId: string; prompt: ForgeRuntimePromptMessage[] }
-    | { type: 'first_response'; requestId: string; firstResponseAt: number }
-    | { type: 'stream_chunk'; requestId: string; displayText: string; thinkingText: string; rawText: string }
-    | { type: 'stream_done'; requestId: string; rawText: string; displayText: string; thinkingText: string; completedAt: number }
-    | { type: 'stream_error'; requestId: string; message: string };
+    | { type: 'first_response'; requestId: string; firstResponseAt: number };
 
 export interface ForgeExecutionResult {
     rawText: string;

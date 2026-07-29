@@ -55,6 +55,7 @@ import {
 import type { AgentRuntimeToolResult } from '../../../agent-runtime/tools/AgentToolRegistry.js';
 import type {
     AgentToolRegistry,
+    AgentToolApprovalResolution,
     AgentRuntimeTool
 } from '../../../agent-runtime/tools/AgentToolRegistry.js';
 import type {
@@ -132,7 +133,7 @@ interface ForgePiEventSink {
     emitFirstResponse: boolean;
     firstResponseMarked: boolean;
     runtimeEvents: AgentRuntimeEventBus | null;
-    runtimeMessageStarted: boolean;
+    runtimeMessageId: string | null;
     runtimeLastText: string | null;
     onRuntimeEvent?: (event: ForgeRuntimeEvent) => void;
 }
@@ -194,7 +195,16 @@ export class ForgePiAgentSession {
     private agentRuntimeEvents: AgentRuntimeEventBus | null = null;
     private agentRuntimeExtensionContext: ForgePiAgentRuntimeExtensionContext | null = null;
     private readonly pendingApprovalBlockedToolCallIds = new Set<string>();
-    private readonly pendingApprovalWaits = new Map<string, { requestId: string }>();
+    private readonly pendingApprovalWaits = new Map<string, {
+        requestId: string;
+        toolName: string;
+        kind: 'forge' | 'sdk';
+        source: ForgeRuntimeEventSource;
+        args: unknown;
+        approvalId?: string;
+    }>();
+    private readonly messageSequences = new Map<string, number>();
+    private readonly endedTurnIds = new Set<string>();
 
     constructor(
         private readonly sessionId: string,
@@ -230,6 +240,7 @@ export class ForgePiAgentSession {
     }
 
     async prompt(input: ForgePiAgentSessionTurnInput): Promise<ForgePiAgentSessionTurnResult> {
+        this.endedTurnIds.delete(input.request.requestId);
         this.latestContext = input.context;
         this.latestRequest = input.request;
         const effects: ForgeRuntimeEffect[] = [];
@@ -255,10 +266,12 @@ export class ForgePiAgentSession {
         });
         this.agentRuntimeEvents?.emit({
             type: 'agent_start',
-            sessionId: this.sessionId
+            sessionId: this.sessionId,
+            turnId: input.request.requestId
         });
         this.agentRuntimeEvents?.emit({
             type: 'turn_start',
+            sessionId: this.sessionId,
             turnId: input.request.requestId
         });
 
@@ -295,11 +308,19 @@ export class ForgePiAgentSession {
             emitFirstResponse: true,
             firstResponseMarked: false,
             runtimeEvents: this.agentRuntimeEvents,
-            runtimeMessageStarted: false,
+            runtimeMessageId: null,
             runtimeLastText: null,
             onRuntimeEvent: input.onRuntimeEvent
         };
-        await agent.prompt(userMessage);
+        try {
+            await agent.prompt(userMessage);
+        } catch (error: unknown) {
+            await this.finishAgentRuntimeTurn(
+                input.request.requestId,
+                this.resolveRuntimeErrorMessage(error)
+            );
+            throw error;
+        }
 
         if (this.hasPendingApprovalForRequest(input.request.requestId)) {
             for (const modelTrace of this.resolveModelTraces(input.request.requestId)) {
@@ -334,23 +355,7 @@ export class ForgePiAgentSession {
                 trace: modelTrace
             });
         }
-        emitEvent({
-            type: 'stream_done',
-            requestId: input.request.requestId,
-            rawText: finalProjection.rawText,
-            displayText: finalProjection.finalText,
-            thinkingText: finalProjection.thinkingText,
-            completedAt: Date.now()
-        });
-        this.agentRuntimeEvents?.emit({
-            type: 'turn_end',
-            turnId: input.request.requestId
-        });
-        this.agentRuntimeEvents?.emit({
-            type: 'agent_end',
-            sessionId: this.sessionId
-        });
-        await this.emitAgentRuntimeAgentEnd({
+        await this.finishAgentRuntimeTurn(input.request.requestId, undefined, {
             messages: agent.state.messages,
             result: finalProjection
         });
@@ -409,23 +414,38 @@ export class ForgePiAgentSession {
         };
     }
 
-    async approveToolCall(toolCallId: string, message?: string): Promise<ForgePiAgentSessionApprovalResult> {
-        return this.resolveToolApproval(toolCallId, true, message);
+    async approveToolCall(turnId: string, toolCallId: string, message?: string): Promise<ForgePiAgentSessionApprovalResult> {
+        return this.resolveToolApproval(turnId, toolCallId, true, message);
     }
 
-    async rejectToolCall(toolCallId: string, message?: string): Promise<ForgePiAgentSessionApprovalResult> {
-        return this.resolveToolApproval(toolCallId, false, message);
+    async rejectToolCall(turnId: string, toolCallId: string, message?: string): Promise<ForgePiAgentSessionApprovalResult> {
+        return this.resolveToolApproval(turnId, toolCallId, false, message);
     }
 
     async resolveToolApproval(
+        turnId: string,
         toolCallId: string,
         approved: boolean,
         message?: string,
         options?: ForgeToolApprovalResolutionOptions
     ): Promise<ForgePiAgentSessionApprovalResult> {
-        const resolved = await this.toolBridge.resolveToolApproval(toolCallId, approved, message, options);
+        const pendingWait = this.pendingApprovalWaits.get(toolCallId);
+        if (!pendingWait || pendingWait.requestId !== turnId) {
+            return { resolved: false, events: [], effects: [] };
+        }
+        const resolved = pendingWait.kind === 'sdk'
+            ? await this.resolveAgentRuntimeToolApproval(pendingWait, turnId, toolCallId, approved, message)
+            : await this.toolBridge.resolveToolApproval(
+                this.sessionId,
+                turnId,
+                toolCallId,
+                approved,
+                message,
+                options
+            );
         if (!resolved.resolved) return resolved;
         this.pendingApprovalWaits.delete(toolCallId);
+        this.pendingApprovalBlockedToolCallIds.delete(toolCallId);
 
         for (const event of resolved.events) {
             if (event.type === 'tool_approval_resolved') {
@@ -436,45 +456,59 @@ export class ForgePiAgentSession {
                     event
                 );
             }
-            if (event.type === 'tool_result') {
-                this.sessionManager.append(
-                    'tool_result',
-                    `Tool result · ${event.toolName}`,
-                    JSON.stringify(event.result).slice(0, 160),
-                    resolved.toolResultMessage?.toolCallId === event.toolCallId
-                        ? { ...event, agentMessage: resolved.toolResultMessage }
-                        : event
-                );
-            }
         }
 
-        if (!approved && this.latestRequest) {
+        if (resolved.toolResultMessage) {
+            this.sessionManager.append(
+                'tool_result',
+                `Tool result · ${resolved.toolResultMessage.toolName}`,
+                this.summarizeToolResultMessage(resolved.toolResultMessage),
+                {
+                    toolCallId: resolved.toolResultMessage.toolCallId,
+                    toolName: resolved.toolResultMessage.toolName,
+                    isError: resolved.toolResultMessage.isError,
+                    agentMessage: resolved.toolResultMessage
+                }
+            );
+        }
+
+        if (pendingWait.kind === 'forge') {
             this.agentRuntimeEvents?.emit({
-                type: 'turn_end',
-                turnId: this.latestRequest.requestId
+                type: 'tool_execution_end',
+                sessionId: this.sessionId,
+                turnId,
+                toolCallId,
+                toolName: pendingWait.toolName,
+                status: !approved
+                    ? 'denied'
+                    : resolved.toolResultMessage?.isError === true
+                        ? 'failed'
+                        : 'completed',
+                result: resolved.toolResultMessage
+                    ? this.toAgentRuntimeToolResult(resolved.toolResultMessage)
+                    : undefined,
+                errorMessage: resolved.toolResultMessage?.isError === true
+                    ? this.summarizeToolResultMessage(resolved.toolResultMessage)
+                    : message
             });
-            this.agentRuntimeEvents?.emit({
-                type: 'agent_end',
-                sessionId: this.sessionId
-            });
-            await this.emitAgentRuntimeAgentEnd({
+        }
+
+        if (!approved) {
+            await this.finishAgentRuntimeTurn(turnId, undefined, {
                 messages: this.agent?.state.messages ?? [],
                 result: { approved, toolCallId }
             });
         }
 
-        if (approved && resolved.toolResultMessage && this.agent && this.latestRequest) {
+        if (approved && resolved.toolResultMessage && this.agent && this.latestRequest?.requestId === turnId) {
             const restoredToolPair = this.replacePendingApprovalWithToolResult(resolved.toolResultMessage);
             if (!restoredToolPair) {
+                await this.finishAgentRuntimeTurn(turnId, 'Forge tool result could not be restored.');
                 return {
                     ...resolved,
                     piSessionState: this.sessionManager.getSnapshot()
                 };
             }
-            this.agentRuntimeEvents?.emit({
-                type: 'turn_start',
-                turnId: this.latestRequest.requestId
-            });
             this.eventSink = {
                 source: this.resolveEventSource(this.latestRequest),
                 events: resolved.events,
@@ -482,10 +516,15 @@ export class ForgePiAgentSession {
                 emitFirstResponse: false,
                 firstResponseMarked: true,
                 runtimeEvents: this.agentRuntimeEvents,
-                runtimeMessageStarted: false,
+                runtimeMessageId: null,
                 runtimeLastText: null
             };
-            await this.agent.continue();
+            try {
+                await this.agent.continue();
+            } catch (error: unknown) {
+                await this.finishAgentRuntimeTurn(turnId, this.resolveRuntimeErrorMessage(error));
+                throw error;
+            }
             const finalMessage = this.resolveLastAssistantMessage(this.agent.state.messages);
             const finalProjection = finalMessage
                 ? this.projectAssistantMessage(finalMessage)
@@ -497,23 +536,7 @@ export class ForgePiAgentSession {
                     trace: modelTrace
                 });
             }
-            resolved.events.push({
-                type: 'stream_done',
-                requestId: this.latestRequest.requestId,
-                rawText: finalProjection.rawText,
-                displayText: finalProjection.finalText,
-                thinkingText: finalProjection.thinkingText,
-                completedAt: Date.now()
-            });
-            this.agentRuntimeEvents?.emit({
-                type: 'turn_end',
-                turnId: this.latestRequest.requestId
-            });
-            this.agentRuntimeEvents?.emit({
-                type: 'agent_end',
-                sessionId: this.sessionId
-            });
-            await this.emitAgentRuntimeAgentEnd({
+            await this.finishAgentRuntimeTurn(turnId, undefined, {
                 messages: this.agent.state.messages,
                 result: finalProjection
             });
@@ -527,10 +550,8 @@ export class ForgePiAgentSession {
 
     abort(): void {
         this.agent?.abort();
-        this.agentRuntimeEvents?.emit({
-            type: 'agent_end',
-            sessionId: this.sessionId
-        });
+        const turnId = this.latestRequest?.requestId;
+        if (turnId) void this.finishAgentRuntimeTurn(turnId, 'Agent runtime aborted.');
     }
 
     getSnapshot() {
@@ -652,20 +673,174 @@ export class ForgePiAgentSession {
         if (!tools) {
             throw new Error('Agent runtime tool registry is not attached.');
         }
-        const execution = await tools.execute({ toolCallId, toolName, args });
+        const turnId = this.latestRequest?.requestId;
+        if (!turnId) {
+            throw new Error('Agent runtime tool execution has no active turn.');
+        }
+        const execution = await tools.execute({
+            sessionId: this.sessionId,
+            turnId,
+            toolCallId,
+            toolName,
+            args
+        });
         if (execution.status === 'executed' || execution.status === 'blocked') {
             return this.toPiAgentToolResult(execution.result);
         }
+        this.pendingApprovalWaits.set(toolCallId, {
+            requestId: turnId,
+            toolName,
+            kind: 'sdk',
+            source: this.eventSink?.source ?? 'system',
+            args,
+            approvalId: execution.approval.approvalId
+        });
+        const approvalEvent: ForgeToolApprovalNeededEvent = {
+            type: 'tool_approval_needed',
+            requestId: turnId,
+            approvalId: execution.approval.approvalId,
+            toolCallId,
+            toolName,
+            args: execution.approval.args,
+            reason: '工具调用需要用户授权。',
+            source: this.eventSink?.source ?? 'system',
+            approvalKind: 'tool',
+            displaySurface: 'composer',
+            forgeProjectId: this.latestContext?.workspaceSessionId ?? null,
+            conversationId: this.latestContext?.sessionChatId ?? null,
+            sessionId: this.sessionId
+        };
+        const sink = this.eventSink;
+        if (sink) this.emitToolApprovalNeeded(sink, approvalEvent);
         return {
             content: [{
                 type: 'text',
-                text: '工具调用需要授权，但 Forge 适配层尚未接入 SDK approval resolution。'
+                text: '工具调用等待用户授权。'
             }],
             details: {
                 status: execution.status,
                 approval: execution.approval
             },
             terminate: true
+        };
+    }
+
+    private async resolveAgentRuntimeToolApproval(
+        pending: {
+            requestId: string;
+            toolName: string;
+            source: ForgeRuntimeEventSource;
+            args: unknown;
+            approvalId?: string;
+        },
+        turnId: string,
+        toolCallId: string,
+        approved: boolean,
+        message?: string
+    ): Promise<{
+        resolved: boolean;
+        events: ForgeRuntimeEvent[];
+        effects: ForgeRuntimeEffect[];
+        toolResultMessage?: ToolResultMessage;
+    }> {
+        const tools = this.agentRuntimeExtensionContext?.tools;
+        if (!tools) return { resolved: false, events: [], effects: [] };
+        let resolution: AgentToolApprovalResolution;
+        try {
+            resolution = await tools.resolveToolApproval(
+                this.sessionId,
+                turnId,
+                toolCallId,
+                approved,
+                message
+            );
+        } catch (error: unknown) {
+            const errorMessage = this.resolveRuntimeErrorMessage(error);
+            resolution = {
+                status: 'approved',
+                approval: {
+                    approvalId: pending.approvalId ?? `approval-${toolCallId}`,
+                    sessionId: this.sessionId,
+                    turnId,
+                    toolCallId,
+                    toolName: pending.toolName,
+                    args: pending.args
+                },
+                result: {
+                    content: [{ type: 'text', text: errorMessage }],
+                    details: { error: errorMessage }
+                },
+                message: errorMessage
+            };
+            return {
+                resolved: true,
+                events: [this.createAgentRuntimeToolApprovalResolvedEvent(pending, turnId, toolCallId, approved, message)],
+                effects: [],
+                toolResultMessage: {
+                    role: 'toolResult',
+                    toolCallId,
+                    toolName: pending.toolName,
+                    content: resolution.result.content as AgentToolResult<unknown>['content'],
+                    details: resolution.result.details,
+                    isError: true,
+                    timestamp: Date.now()
+                }
+            };
+        }
+        if (resolution.status === 'not_found') {
+            return { resolved: false, events: [], effects: [] };
+        }
+        const event = this.createAgentRuntimeToolApprovalResolvedEvent(
+            pending,
+            turnId,
+            toolCallId,
+            approved,
+            message
+        );
+        if (resolution.status === 'denied') {
+            return { resolved: true, events: [event], effects: [] };
+        }
+        return {
+            resolved: true,
+            events: [event],
+            effects: [],
+            toolResultMessage: {
+                role: 'toolResult',
+                toolCallId,
+                toolName: pending.toolName,
+                content: resolution.result.content as AgentToolResult<unknown>['content'],
+                details: resolution.result.details,
+                isError: false,
+                timestamp: Date.now()
+            }
+        };
+    }
+
+    private createAgentRuntimeToolApprovalResolvedEvent(
+        pending: {
+            source: ForgeRuntimeEventSource;
+            approvalId?: string;
+            toolName: string;
+        },
+        turnId: string,
+        toolCallId: string,
+        approved: boolean,
+        message?: string
+    ): Extract<ForgeRuntimeEvent, { type: 'tool_approval_resolved' }> {
+        return {
+            type: 'tool_approval_resolved',
+            requestId: turnId,
+            approvalId: pending.approvalId ?? `approval-${toolCallId}`,
+            toolCallId,
+            toolName: pending.toolName,
+            approved,
+            message,
+            source: pending.source,
+            approvalKind: 'tool',
+            displaySurface: 'composer',
+            forgeProjectId: this.latestContext?.workspaceSessionId ?? null,
+            conversationId: this.latestContext?.sessionChatId ?? null,
+            sessionId: this.sessionId
         };
     }
 
@@ -796,27 +971,29 @@ export class ForgePiAgentSession {
         if (event.type === 'message_end' && event.message.role === 'toolResult') {
             if (this.discardPendingApprovalToolResult(event.message)) return;
         }
+        if (event.type === 'message_start' && event.message.role === 'assistant') {
+            this.emitAgentRuntimeMessageStart(input);
+        }
         if (event.type === 'message_update') {
             markFirstResponse();
             const projection = this.projectAssistantMessage(event.message);
-            if (!this.emitAgentRuntimeTextUpdate(input, projection)) return;
-            const runtimeEvent: ForgeRuntimeEvent = {
-                type: 'stream_chunk',
-                requestId: input.request.requestId,
-                displayText: projection.finalText,
-                thinkingText: projection.thinkingText,
-                rawText: projection.rawText
-            };
-            input.events.push(runtimeEvent);
-            input.onRuntimeEvent?.(runtimeEvent);
+            this.emitAgentRuntimeTextUpdate(input, projection);
         }
         if (event.type === 'message_end' && event.message.role === 'assistant') {
             const projection = this.projectAssistantMessage(event.message);
+            this.emitAgentRuntimeTextUpdate(input, projection);
             this.emitAgentRuntimeMessageStart(input);
-            input.runtimeEvents?.emit({
-                type: 'message_end',
-                messageId: input.request.requestId
-            });
+            const messageId = input.runtimeMessageId;
+            if (messageId) {
+                input.runtimeEvents?.emit({
+                    type: 'message_end',
+                    sessionId: this.sessionId,
+                    turnId: input.request.requestId,
+                    messageId
+                });
+                input.runtimeMessageId = null;
+                input.runtimeLastText = null;
+            }
             for (const processText of projection.thinkingBlocks) {
                 this.sessionManager.append('process', 'Process', processText, {
                     role: 'process',
@@ -847,21 +1024,20 @@ export class ForgePiAgentSession {
             if (!this.isAgentRuntimeRegisteredTool(event.toolName)) {
                 input.runtimeEvents?.emit({
                     type: 'tool_execution_start',
+                    sessionId: this.sessionId,
+                    turnId: input.request.requestId,
                     toolCallId: event.toolCallId,
                     toolName: event.toolName,
                     args: event.args
                 });
             }
-            const runtimeEvent: ForgeRuntimeEvent = {
-                type: 'tool_call',
+            const toolCallRecord = {
                 requestId: input.request.requestId,
                 toolCallId: event.toolCallId,
                 toolName: event.toolName,
                 args: event.args,
                 source: input.source
             };
-            input.events.push(runtimeEvent);
-            input.onRuntimeEvent?.(runtimeEvent);
             const replayAgentMessage = this.createToolCallReplayMessage({
                 toolCallId: event.toolCallId,
                 toolName: event.toolName,
@@ -872,8 +1048,8 @@ export class ForgePiAgentSession {
                 `Tool call · ${event.toolName}`,
                 JSON.stringify(event.args).slice(0, 160),
                 replayAgentMessage
-                    ? { ...runtimeEvent, agentMessage: replayAgentMessage, replayAgentMessage }
-                    : runtimeEvent
+                    ? { ...toolCallRecord, agentMessage: replayAgentMessage, replayAgentMessage }
+                    : toolCallRecord
             );
         }
         if (event.type === 'tool_execution_end') {
@@ -905,14 +1081,23 @@ export class ForgePiAgentSession {
             if (!this.isAgentRuntimeRegisteredTool(event.toolName)) {
                 input.runtimeEvents?.emit({
                     type: 'tool_execution_end',
+                    sessionId: this.sessionId,
+                    turnId: input.request.requestId,
                     toolCallId: event.toolCallId,
+                    toolName: event.toolName,
                     status: event.isError ? 'failed' : 'completed',
                     result: this.toAgentRuntimeToolResult(event.result),
                     errorMessage: event.isError ? 'Tool execution failed.' : undefined
                 });
+                this.pendingApprovalWaits.set(event.toolCallId, {
+                    requestId: input.request.requestId,
+                    toolName: event.toolName,
+                    kind: 'forge',
+                    source: input.source,
+                    args: event.result
+                });
             }
-            const runtimeEvent: ForgeRuntimeEvent = {
-                type: 'tool_result',
+            const toolResultRecord = {
                 requestId: input.request.requestId,
                 toolCallId: event.toolCallId,
                 toolName: event.toolName,
@@ -920,9 +1105,12 @@ export class ForgePiAgentSession {
                 isError: event.isError,
                 source: input.source
             };
-            input.events.push(runtimeEvent);
-            input.onRuntimeEvent?.(runtimeEvent);
-            this.sessionManager.append('tool_result', `Tool result · ${event.toolName}`, JSON.stringify(runtimeEvent.result).slice(0, 160), runtimeEvent);
+            this.sessionManager.append(
+                'tool_result',
+                `Tool result · ${event.toolName}`,
+                JSON.stringify(toolResultRecord.result).slice(0, 160),
+                toolResultRecord
+            );
         }
     }
 
@@ -949,7 +1137,13 @@ export class ForgePiAgentSession {
         if (!approval) return undefined;
 
         this.pendingApprovalBlockedToolCallIds.add(context.toolCall.id);
-        this.pendingApprovalWaits.set(context.toolCall.id, { requestId: sink.request.requestId });
+        this.pendingApprovalWaits.set(context.toolCall.id, {
+            requestId: sink.request.requestId,
+            toolName: context.toolCall.name,
+            kind: 'forge',
+            source: sink.source,
+            args: context.args
+        });
         this.emitToolApprovalNeeded(
             sink,
             this.createToolApprovalNeededEvent({
@@ -1068,12 +1262,16 @@ export class ForgePiAgentSession {
     }
 
     private emitAgentRuntimeMessageStart(input: ForgePiEventSink): void {
-        if (!input.runtimeEvents || input.runtimeMessageStarted) return;
-        input.runtimeMessageStarted = true;
+        if (!input.runtimeEvents || input.runtimeMessageId) return;
+        const messageId = this.createAgentRuntimeMessageId(input.request.requestId);
+        input.runtimeMessageId = messageId;
         input.runtimeEvents.emit({
             type: 'message_start',
+            sessionId: this.sessionId,
+            turnId: input.request.requestId,
             message: {
-                id: input.request.requestId,
+                id: messageId,
+                turnId: input.request.requestId,
                 role: 'assistant',
                 blocks: []
             }
@@ -1088,14 +1286,24 @@ export class ForgePiAgentSession {
         input.runtimeLastText = projection.streamKey;
         if (!input.runtimeEvents) return true;
         this.emitAgentRuntimeMessageStart(input);
+        const messageId = input.runtimeMessageId;
+        if (!messageId) return false;
         for (const block of projection.runtimeBlocks) {
             input.runtimeEvents.emit({
                 type: 'message_update',
-                messageId: input.request.requestId,
+                sessionId: this.sessionId,
+                turnId: input.request.requestId,
+                messageId,
                 block
             });
         }
         return true;
+    }
+
+    private createAgentRuntimeMessageId(turnId: string): string {
+        const sequence = (this.messageSequences.get(turnId) ?? 0) + 1;
+        this.messageSequences.set(turnId, sequence);
+        return `agent-message:${this.sessionId}:${turnId}:${sequence}`;
     }
 
     private toAgentRuntimeToolResult(result: unknown): AgentRuntimeToolResult | undefined {
@@ -1114,6 +1322,43 @@ export class ForgePiAgentSession {
                 Boolean(part) && typeof part === 'object' && typeof (part as { type?: unknown }).type === 'string'
             )
             .map(part => ({ ...part }));
+    }
+
+    private async finishAgentRuntimeTurn(
+        turnId: string,
+        errorMessage?: string,
+        extensionEvent?: AgentRuntimeAgentEndEvent
+    ): Promise<void> {
+        if (this.endedTurnIds.has(turnId)) return;
+        this.endedTurnIds.add(turnId);
+        this.agentRuntimeEvents?.emit({
+            type: 'turn_end',
+            sessionId: this.sessionId,
+            turnId,
+            errorMessage
+        });
+        this.agentRuntimeEvents?.emit({
+            type: 'agent_end',
+            sessionId: this.sessionId,
+            turnId
+        });
+        await this.emitAgentRuntimeAgentEnd(extensionEvent ?? {
+            messages: this.agent?.state.messages ?? [],
+            result: errorMessage === undefined ? null : { errorMessage }
+        });
+    }
+
+    private resolveRuntimeErrorMessage(error: unknown): string {
+        if (error instanceof Error && error.message.trim().length > 0) return error.message;
+        return 'Forge agent runtime failed.';
+    }
+
+    private summarizeToolResultMessage(message: ToolResultMessage): string {
+        const text = this.toAgentRuntimeContent(message.content)
+            .map(block => block.text)
+            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+            .join('\n');
+        return text || (message.isError ? 'Tool execution failed.' : 'Tool execution completed.');
     }
 
     private isRecord(value: unknown): value is Record<string, unknown> {

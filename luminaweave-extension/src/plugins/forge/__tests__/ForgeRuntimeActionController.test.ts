@@ -82,7 +82,7 @@ describe('ForgeRuntimeActionController', () => {
             } as unknown as ForgeRuntimeOrchestrator)
         });
 
-        const resolved = await harness.controller.resolveToolApproval('tool-1', false, '拒绝联网');
+        const resolved = await harness.controller.resolveToolApproval('session-1', 'turn-1', 'tool-1', false, '拒绝联网');
 
         expect(resolved).toBe(true);
         expect(harness.generating).toBe(false);
@@ -103,7 +103,7 @@ describe('ForgeRuntimeActionController', () => {
             markToolApprovalResolved
         });
 
-        const resolved = harness.controller.resolveToolApproval('tool-1', true, '允许此域名');
+        const resolved = harness.controller.resolveToolApproval('session-1', 'turn-1', 'tool-1', true, '允许此域名');
 
         expect(markToolApprovalResolved).toHaveBeenCalledWith('tool-1', true, '允许此域名');
         resumeRuntime(true);
@@ -113,10 +113,10 @@ describe('ForgeRuntimeActionController', () => {
     it('falls back to store approval resolution when runtime has no pending approval', async () => {
         const harness = createController();
 
-        const resolved = await harness.controller.resolveToolApproval('tool-1', true, 'ok');
+        const resolved = await harness.controller.resolveToolApproval('session-1', 'turn-1', 'tool-1', true, 'ok');
 
         expect(resolved).toBe(false);
-        expect(harness.resolveToolApproval).toHaveBeenCalledWith('tool-1', true, 'ok');
+        expect(harness.resolveToolApproval).toHaveBeenCalledWith('session-1', 'turn-1', 'tool-1', true, 'ok');
         expect(harness.fallbackResolveToolApproval).toHaveBeenCalledWith('tool-1', true, 'ok');
     });
 });

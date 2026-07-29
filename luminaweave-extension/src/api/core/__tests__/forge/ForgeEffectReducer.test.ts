@@ -11,8 +11,11 @@ const createTarget = () => {
     const target: ForgeEffectTarget = {
         addAssistantViewMessage: vi.fn(() => record('addAssistantViewMessage')),
         createAndAppendUserMessage: vi.fn(() => record('createAndAppendUserMessage')),
+        projectAgentMessage: vi.fn(() => record('projectAgentMessage')),
+        projectAgentTurnError: vi.fn(() => record('projectAgentTurnError')),
         upsertRunningOperation: vi.fn(() => record('upsertRunningOperation')),
         completeOperationByKey: vi.fn(() => record('completeOperationByKey')),
+        finishOperationByKey: vi.fn(() => record('finishOperationByKey')),
         addOperationTimelineItem: vi.fn(() => record('addOperationTimelineItem')),
         updateOperationPrompt: vi.fn(() => record('updateOperationPrompt')),
         setActiveModelRequestTrace: vi.fn(() => record('setActiveModelRequestTrace')),
@@ -122,6 +125,7 @@ describe('ForgeEffectReducer', () => {
                 type: 'set_agent_runtime_snapshot',
                 requestId: 'req-1',
                 snapshot: {
+                    sessionId: 'session-1',
                     isStreaming: false,
                     pendingToolCalls: [],
                     messages: [],
@@ -139,6 +143,55 @@ describe('ForgeEffectReducer', () => {
             requestId: 'req-1',
             snapshot: expect.objectContaining({ isStreaming: false })
         }));
+    });
+
+    it('applies agent message, error, and terminal tool projection effects without persisting', async () => {
+        const { target } = createTarget();
+
+        await applyForgeEffects([
+            {
+                type: 'project_agent_message',
+                sessionId: 'session-1',
+                turnId: 'turn-1',
+                messageId: 'agent-message:session-1:turn-1:1',
+                rawText: '完成',
+                displayText: '完成',
+                thinkingText: '处理中',
+                blocks: [{ type: 'text', contentIndex: 0, text: '完成' }],
+                status: 'streaming',
+                commit: false,
+                timestamp: 100
+            },
+            {
+                type: 'project_agent_turn_error',
+                sessionId: 'session-1',
+                turnId: 'turn-1',
+                message: 'Agent runtime failed.'
+            },
+            {
+                type: 'finish_operation',
+                dedupeKey: 'forge-agent-tool:session-1:turn-1:tool-1',
+                status: 'failed',
+                operationKind: 'system',
+                title: '工具调用失败 · read',
+                summary: 'Tool execution failed.'
+            }
+        ], target);
+
+        expect(target.projectAgentMessage).toHaveBeenCalledWith(expect.objectContaining({
+            messageId: 'agent-message:session-1:turn-1:1',
+            commit: false
+        }));
+        expect(target.projectAgentTurnError).toHaveBeenCalledWith({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+            message: 'Agent runtime failed.'
+        });
+        expect(target.finishOperationByKey).toHaveBeenCalledWith(expect.objectContaining({
+            status: 'failed',
+            dedupeKey: 'forge-agent-tool:session-1:turn-1:tool-1'
+        }));
+        expect(target.persistSession).not.toHaveBeenCalled();
     });
 
     it('applies tool approval effects without persisting project resources', async () => {

@@ -272,7 +272,12 @@ describe('ForgePiToolBridge', () => {
             source: 'conversation'
         });
 
-        const result = await bridge.resolveToolApproval('call_history_write', true);
+        const result = await bridge.resolveToolApproval(
+            'forge_project_alpha__conversation_alpha',
+            'req_history',
+            'call_history_write',
+            true
+        );
         const fs = await workspaces.getFileSystem({
             projectId: 'forge_project_alpha',
             conversationId: 'conversation_alpha'
@@ -283,13 +288,10 @@ describe('ForgePiToolBridge', () => {
         expect(result.resolved).toBe(true);
         expect(result.events).toEqual(expect.arrayContaining([
             expect.objectContaining({
-                type: 'tool_result',
+                type: 'tool_approval_resolved',
                 toolCallId: 'call_history_write',
                 toolName: 'writeFile',
-                result: expect.objectContaining({
-                    applied: true,
-                    command: 'write ./history.md'
-                })
+                approved: true
             })
         ]));
         expect(result.toolResultMessage).toMatchObject({
@@ -342,7 +344,13 @@ describe('ForgePiToolBridge', () => {
             status: 'pending'
         })]);
 
-        const rejected = await bridge.resolveToolApproval('call_network', false, '不允许联网');
+        const rejected = await bridge.resolveToolApproval(
+            'forge_project_alpha__conversation_alpha',
+            'req_network',
+            'call_network',
+            false,
+            '不允许联网'
+        );
 
         expect(rejected.resolved).toBe(true);
         expect(rejected.events).toEqual([expect.objectContaining({
@@ -393,7 +401,7 @@ describe('ForgePiToolBridge', () => {
             displaySurface: 'composer'
         }));
 
-        const approved = await bridge.resolveToolApproval('call_network_write', true, '允许下载参考', {
+        const approved = await bridge.resolveToolApproval('forge_project_alpha__conversation_alpha', 'req_network_write', 'call_network_write', true, '允许下载参考', {
             grantMode: 'single_use'
         });
         const fs = await workspaces.getFileSystem({
@@ -407,17 +415,9 @@ describe('ForgePiToolBridge', () => {
         }));
         await expect(fs.readFile('/forge/forge_project_alpha/fetched.txt')).resolves.toBe('approved download');
         expect(approved.events).toEqual(expect.arrayContaining([expect.objectContaining({
-            type: 'tool_result',
+            type: 'tool_approval_resolved',
             toolCallId: 'call_network_write',
-            result: expect.objectContaining({
-                writeCount: 1,
-                workspaceWriteSummary: expect.objectContaining({
-                    changedFiles: [expect.objectContaining({
-                        path: './fetched.txt',
-                        kind: 'create'
-                    })]
-                })
-            })
+            approved: true
         })]));
         expect(approved.toolResultMessage).toMatchObject({
             toolCallId: 'call_network_write',
@@ -462,7 +462,7 @@ describe('ForgePiToolBridge', () => {
             displaySurface: 'composer'
         }));
 
-        const approved = await bridge.resolveToolApproval('call_network_domain', true, '允许后续访问此域名', {
+        const approved = await bridge.resolveToolApproval('forge_project_alpha__conversation_alpha', 'req_network_domain', 'call_network_domain', true, '允许后续访问此域名', {
             grantMode: 'domain'
         });
         const second = await bash?.execute('call_network_domain_second', {
@@ -524,7 +524,7 @@ describe('ForgePiToolBridge', () => {
             displaySurface: 'composer'
         }));
 
-        const approved = await bridge.resolveToolApproval('call_network_all', true, '允许后续所有网络请求', {
+        const approved = await bridge.resolveToolApproval('forge_project_alpha__conversation_alpha', 'req_network_all', 'call_network_all', true, '允许后续所有网络请求', {
             grantMode: 'all_network'
         });
         const second = await bash?.execute('call_network_all_second', {
@@ -720,7 +720,7 @@ describe('ForgePiToolBridge', () => {
 
         const agents = await read?.execute('call_agents', { path: './AGENTS.md' });
         const systemPrompt = await read?.execute('call_system', { path: './.forge/agent/SYSTEM.md' });
-        const conversationPrompt = await read?.execute('call_prompt', { path: './.forge/agent/CONVERSATION.md' });
+        const executorPrompt = await read?.execute('call_prompt', { path: './.forge/agent/EXECUTOR.md' });
         const skill = await read?.execute('call_skill', { path: './agent/skills/memory-curator/SKILL.md' });
 
         expect(agents?.details).toMatchObject({
@@ -731,13 +731,12 @@ describe('ForgePiToolBridge', () => {
             path: './.forge/agent/SYSTEM.md',
             content: expect.any(String)
         });
-        expect(conversationPrompt?.details).toMatchObject({
-            path: './.forge/agent/CONVERSATION.md',
+        expect(executorPrompt?.details).toMatchObject({
+            path: './.forge/agent/EXECUTOR.md',
             content: expect.any(String)
         });
         expect(skill?.details).toMatchObject({
             path: './agent/skills/memory-curator/SKILL.md',
-            source: 'built-in',
             content: expect.stringContaining('项目记忆整理员')
         });
     });

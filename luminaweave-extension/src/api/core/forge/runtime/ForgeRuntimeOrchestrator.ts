@@ -14,7 +14,6 @@ import type {
     ForgePiSessionEntry,
     ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
-import type { AgentRuntimeSnapshot } from '../../agent-runtime/events/AgentRuntimeEventBus.js';
 import { ForgeWorkflowGraph } from '../graph/ForgeWorkflowGraph.js';
 
 export interface ForgeRuntimePort {
@@ -30,7 +29,6 @@ export interface ForgeRuntimePort {
         sourceCommand: ForgeUserCommand;
     }): Promise<ForgeExecutionRequest>;
     prepareAssistantStream(): void;
-    handleRuntimeEvent(event: ForgeRuntimeEvent): void;
     resolveOriginalContent(targetEntryId: string | null): string;
     resolveEntryComment(targetEntryId: string | null): string | null;
 }
@@ -45,7 +43,6 @@ export interface ForgeRuntimeOrchestratorOptions {
     }) => Promise<{
         events?: ForgeRuntimeEvent[];
         effects?: ForgeRuntimeEffect[];
-        agentRuntimeSnapshot?: AgentRuntimeSnapshot;
         piSessionState?: {
             tree: ForgePiTreeNode[];
             entries?: ForgePiSessionEntry[];
@@ -55,6 +52,8 @@ export interface ForgeRuntimeOrchestratorOptions {
         };
     }>;
     resolvePiToolApproval?: (
+        sessionId: string,
+        turnId: string,
         toolCallId: string,
         approved: boolean,
         message?: string,
@@ -63,7 +62,6 @@ export interface ForgeRuntimeOrchestratorOptions {
         resolved: boolean;
         events?: ForgeRuntimeEvent[];
         effects?: ForgeRuntimeEffect[];
-        agentRuntimeSnapshot?: AgentRuntimeSnapshot;
         piSessionState?: {
             tree: ForgePiTreeNode[];
             entries?: ForgePiSessionEntry[];
@@ -87,6 +85,8 @@ export class ForgeRuntimeOrchestrator {
     }
 
     async resolveToolApproval(
+        sessionId: string,
+        turnId: string,
         toolCallId: string,
         approved: boolean,
         message?: string,
@@ -94,8 +94,8 @@ export class ForgeRuntimeOrchestrator {
     ): Promise<boolean> {
         if (!this.options.resolvePiToolApproval) return false;
         const result = options === undefined
-            ? await this.options.resolvePiToolApproval(toolCallId, approved, message)
-            : await this.options.resolvePiToolApproval(toolCallId, approved, message, options);
+            ? await this.options.resolvePiToolApproval(sessionId, turnId, toolCallId, approved, message)
+            : await this.options.resolvePiToolApproval(sessionId, turnId, toolCallId, approved, message, options);
         if (!result.resolved) return false;
 
         const context = this.port.getRuntimeContext({ type: 'noop' });
@@ -110,15 +110,7 @@ export class ForgeRuntimeOrchestrator {
                 loadedExtensions: result.piSessionState.loadedExtensions
             });
         }
-        if (result.agentRuntimeSnapshot) {
-            effects.push({
-                type: 'set_agent_runtime_snapshot',
-                requestId: this.resolveRequestId(result.events ?? []),
-                snapshot: result.agentRuntimeSnapshot
-            });
-        }
         for (const event of result.events ?? []) {
-            this.port.handleRuntimeEvent(event);
             effects.push(...this.buildEventEffects(event, context));
         }
         effects.push(...(result.effects ?? []));
@@ -210,7 +202,6 @@ export class ForgeRuntimeOrchestrator {
             let liveEffectError: unknown = null;
             const applyLiveEvent = (event: ForgeRuntimeEvent): void => {
                 liveEvents.add(event);
-                this.port.handleRuntimeEvent(event);
                 const effects = this.buildEventEffects(event, context);
                 if (effects.length === 0) return;
                 liveEffectQueue = liveEffectQueue
@@ -241,18 +232,10 @@ export class ForgeRuntimeOrchestrator {
                     loadedExtensions: result.piSessionState.loadedExtensions
                 });
             }
-            if (result.agentRuntimeSnapshot) {
-                effects.push({
-                    type: 'set_agent_runtime_snapshot',
-                    requestId: request.requestId,
-                    snapshot: result.agentRuntimeSnapshot
-                });
-            }
             for (const event of result.events ?? []) {
                 if (liveEvents.has(event)) {
                     continue;
                 }
-                this.port.handleRuntimeEvent(event);
                 effects.push(...this.buildEventEffects(event, context));
             }
             effects.push(...(result.effects ?? []));
@@ -285,76 +268,12 @@ export class ForgeRuntimeOrchestrator {
         if (event.type === 'first_response') {
             return [{ type: 'mark_model_request_first_response', requestId: event.requestId, firstResponseAt: event.firstResponseAt }];
         }
-        if (event.type === 'stream_chunk') {
-            return [{
-                type: 'update_model_request_stream',
-                requestId: event.requestId,
-                responseRaw: event.rawText,
-                responseDisplay: event.displayText,
-                responseThinking: event.thinkingText
-            }];
-        }
-        if (event.type === 'stream_done') {
-            return [{
-                type: 'complete_model_request',
-                requestId: event.requestId,
-                responseRaw: event.rawText,
-                responseDisplay: event.displayText,
-                responseThinking: event.thinkingText,
-                completedAt: event.completedAt
-            }];
-        }
-        if (event.type === 'stream_error') {
-            return [{ type: 'fail_model_request', requestId: event.requestId, message: event.message }];
-        }
         if (event.type === 'model_request_trace') {
             return [{
                 type: 'set_model_request_pi_trace',
                 requestId: event.requestId,
                 trace: event.trace
             }];
-        }
-        if (event.type === 'tool_call') {
-            return [
-                {
-                    type: 'upsert_running_operation',
-                    dedupeKey: this.getOperationDedupeKey(`tool:${event.toolCallId}`),
-                    operationKind: 'execution',
-                    title: `正在调用工具 · ${event.toolName}`,
-                    summary: JSON.stringify(event.args).slice(0, 240),
-                    detail: JSON.stringify(event.args, null, 2),
-                    sourceTag: `tool:${event.toolName}`,
-                    layer: context.activeLayer
-                },
-                this.createModelRequestToolEvent({
-                    requestId: event.requestId,
-                    type: 'tool_call',
-                    toolCallId: event.toolCallId,
-                    toolName: event.toolName,
-                    payload: event.args
-                })
-            ];
-        }
-        if (event.type === 'tool_result') {
-            return [
-                {
-                    type: 'complete_operation',
-                    dedupeKey: this.getOperationDedupeKey(`tool:${event.toolCallId}`),
-                    operationKind: event.isError ? 'system' : 'execution',
-                    title: `${event.isError ? '工具调用失败' : '已完成工具'} · ${event.toolName}`,
-                    summary: JSON.stringify(event.result).slice(0, 240),
-                    detail: JSON.stringify(event.result, null, 2),
-                    sourceTag: `tool:${event.toolName}`,
-                    layer: context.activeLayer
-                },
-                this.createModelRequestToolEvent({
-                    requestId: event.requestId,
-                    type: 'tool_result',
-                    toolCallId: event.toolCallId,
-                    toolName: event.toolName,
-                    payload: event.result
-                })
-            ];
         }
         if (event.type === 'tool_approval_needed') {
             return [

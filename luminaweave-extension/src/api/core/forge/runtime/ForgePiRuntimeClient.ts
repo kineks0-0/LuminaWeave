@@ -3,7 +3,12 @@ import type {
     ForgePiSessionEntry,
     ForgePiTurnResponse
 } from '@shared/ForgePiTypes.js';
-import type { AgentRuntimeSnapshot } from '../../agent-runtime/events/AgentRuntimeEventBus.js';
+import type {
+    AgentRuntimeEvent,
+    AgentRuntimeEventFilter,
+    AgentRuntimeEventListener,
+    AgentRuntimeSnapshot
+} from '../../agent-runtime/events/AgentRuntimeEventBus.js';
 import type {
     ForgeExecutionRequest,
     ForgeRuntimeContext,
@@ -36,7 +41,6 @@ export interface ForgePiRuntimeClientTurnInput {
 export interface ForgePiRuntimeClientTurnResult {
     events: ForgeRuntimeEventType[];
     effects?: ForgePiCoreRuntimeTurnResult['effects'];
-    agentRuntimeSnapshot?: AgentRuntimeSnapshot;
     piSessionState: {
         tree: ForgePiTurnResponse['tree'];
         entries: ForgePiSessionEntry[];
@@ -64,7 +68,6 @@ export class ForgePiRuntimeClient {
         return {
             events: result.events,
             effects: result.effects,
-            agentRuntimeSnapshot: result.agentRuntimeSnapshot,
             piSessionState: {
                 tree: result.piSessionState.tree,
                 entries: result.piSessionState.entries,
@@ -80,14 +83,31 @@ export class ForgePiRuntimeClient {
     }
 
     async resolveToolApproval(
+        sessionId: string,
+        turnId: string,
         toolCallId: string,
         approved: boolean,
         message?: string,
         options?: ForgeToolApprovalResolutionOptions
     ): Promise<ForgePiRuntimeClientApprovalResult> {
         return options === undefined
-            ? this.runtime.resolveToolApproval(toolCallId, approved, message)
-            : this.runtime.resolveToolApproval(toolCallId, approved, message, options);
+            ? this.runtime.resolveToolApproval(sessionId, turnId, toolCallId, approved, message)
+            : this.runtime.resolveToolApproval(sessionId, turnId, toolCallId, approved, message, options);
+    }
+
+    subscribeToAgentRuntimeEvents(
+        filter: AgentRuntimeEventFilter,
+        listener: AgentRuntimeEventListener
+    ): () => void {
+        return this.runtime.subscribeToAgentRuntimeEvents(filter, listener);
+    }
+
+    getAgentRuntimeSnapshot(sessionId: string): AgentRuntimeSnapshot {
+        return this.runtime.getAgentRuntimeSnapshot(sessionId);
+    }
+
+    getAgentRuntimeEvents(filter: AgentRuntimeEventFilter = {}): AgentRuntimeEvent[] {
+        return this.runtime.getAgentRuntimeEvents(filter);
     }
 
     checkout(input: {
