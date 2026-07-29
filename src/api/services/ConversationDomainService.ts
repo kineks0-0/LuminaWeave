@@ -17,12 +17,28 @@ import type {
 } from '../../types/ConversationContextTypes.js';
 
 export type RuntimeReadyGate = () => Promise<boolean>;
+export type ConversationDomainEvent =
+    | { type: 'context_changed'; context: ConversationViewContext }
+    | { type: 'sessions_updated'; sources: ConversationContextOption[]; sessions: ConversationSessionRef[] }
+    | { type: 'timeline_updated'; context: ConversationViewContext; targetNodeId?: string }
+    | { type: 'timeline_switched'; context: ConversationViewContext; targetNodeId?: string }
+    | { type: 'timeline_rolled_back'; context: ConversationViewContext; targetNodeId?: string };
+export type ConversationDomainEventListener = (event: ConversationDomainEvent) => void;
+
+export interface ConversationDomainEventSource {
+    subscribe(listener: ConversationDomainEventListener): () => void;
+}
 
 export class ConversationDomainService {
     constructor(
         private readonly conversationService: ConversationService,
-        private readonly waitForReady: RuntimeReadyGate
+        private readonly waitForReady: RuntimeReadyGate,
+        private readonly eventSource: ConversationDomainEventSource
     ) {}
+
+    subscribe(listener: ConversationDomainEventListener): () => void {
+        return this.eventSource.subscribe(listener);
+    }
 
     async listSources(): Promise<ConversationContextOption[]> {
         await this.waitForReady();

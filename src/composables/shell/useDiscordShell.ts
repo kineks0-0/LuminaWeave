@@ -1,8 +1,7 @@
 import { computed, nextTick, ref, watch, type CSSProperties, type ComputedRef, type Ref } from 'vue';
-import { CharacterChannelService } from '../../api/core/conversation/CharacterChannelService.js';
-import { luminaWeaveApi as lwApi } from '../../api/index.js';
+import type { DesktopExperienceRuntime } from '../../api/services/DesktopExperienceRuntime.js';
 import { getDesktopModeSettingStorageKey, getDesktopModeSettingValue } from '../../desktop-modes/core/registry.js';
-import { useConversationContextStore } from '../../stores/useConversationContextStore.js';
+import type { useConversationContextStore } from '../../stores/useConversationContextStore.js';
 import type { DynamicTabConfig } from '../../shell/types.js';
 import type { LuminaPlugin } from '../../types/plugin.js';
 import type {
@@ -33,6 +32,8 @@ export const useDiscordShell = ({
   dynamicTabs,
   activeMainTab,
   shouldShowForgeSidebar,
+  desktopExperienceRuntime,
+  contextStore,
   updateSetting,
   onSwitchMainView
 }: {
@@ -45,11 +46,12 @@ export const useDiscordShell = ({
   dynamicTabs: Ref<DynamicTabConfig[]>;
   activeMainTab: Ref<string>;
   shouldShowForgeSidebar: ComputedRef<boolean>;
+  desktopExperienceRuntime: DesktopExperienceRuntime;
+  contextStore: ReturnType<typeof useConversationContextStore>;
   updateSetting: (key: string, value: unknown) => Promise<void> | void;
   onSwitchMainView: (tabId: string) => void;
 }) => {
-  const contextStore = useConversationContextStore();
-  const characterChannelService = new CharacterChannelService(lwApi as any, contextStore as any);
+  const characterChannelService = desktopExperienceRuntime.character;
   const pendingDiscordAction = ref<PendingDiscordAction | null>(null);
   const showDiscordMobileCharacterRail = ref(false);
 
@@ -354,7 +356,6 @@ export const useDiscordShell = ({
   };
 
   return {
-    contextStore,
     characterChannelState,
     discordChannelMarkVisible,
     isDiscordMobileMode,

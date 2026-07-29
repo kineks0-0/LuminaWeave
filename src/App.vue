@@ -40,6 +40,7 @@ import { useWidgetPanels } from './composables/shell/useWidgetPanels.js';
 import { useWorkspaceNavigation } from './composables/shell/useWorkspaceNavigation.js';
 import { useActivityLaunchState } from './composables/shell/useActivityLaunchState.js';
 import { useDiscordShell } from './composables/shell/useDiscordShell.js';
+import { useDesktopExperienceRuntime } from './composables/useDesktopExperienceRuntime.js';
 import { resolveActivityLaunchPlacement } from './platform/activity/activityLaunchResolver.js';
 import {
   createActivityStatusBarStyle,
@@ -282,7 +283,10 @@ const shouldShowForgeSidebar = computed(() =>
   isForgeActiveInTraditional.value && sidebarMode.value === 'left' && !isMobile.value
 );
 const {
-  contextStore,
+  runtime: desktopExperienceRuntime,
+  contextStore
+} = useDesktopExperienceRuntime();
+const {
   characterChannelState,
   discordChannelMarkVisible,
   isDiscordMobileMode,
@@ -315,6 +319,8 @@ const {
   dynamicTabs,
   activeMainTab,
   shouldShowForgeSidebar,
+  desktopExperienceRuntime,
+  contextStore,
   updateSetting,
   onSwitchMainView: (tabId) => {
     handleSwitchMainView(tabId);

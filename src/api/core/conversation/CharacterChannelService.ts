@@ -18,8 +18,19 @@ import {
     type CompositeChatHostProvider
 } from './ChatHostPorts.js';
 
-type ConversationContextStoreLike = {
-    chatSessions: Array<ChatSessionRef & { sourceId?: 'chat' }>;
+export type CharacterChannelApiPort = Pick<LuminaWeaveAPI,
+    'on'
+    | 'off'
+    | 'waitForReady'
+    | 'createChatSession'
+    | 'renameChatSession'
+    | 'deleteChatSession'
+    | 'getAssistantName'
+    | 'getCharAvatar'
+    | 'DEFAULT_AVATAR'
+>;
+
+export type CharacterChannelContextPort = {
     activeSourceId: 'chat' | 'forge';
     activeSessionId: string | null;
     selectedViewSessionId: string | null;
@@ -102,19 +113,11 @@ export class CharacterChannelService {
     private readonly stableCharacterOrder = ref<string[]>([]);
     private refreshPromise: Promise<void> | null = null;
     private isBound = false;
+    private readonly eventSubscriptions: Array<{ event: string; listener: () => void }> = [];
 
     constructor(
-        private readonly api: Pick<LuminaWeaveAPI,
-            'on'
-            | 'waitForReady'
-            | 'createChatSession'
-            | 'renameChatSession'
-            | 'deleteChatSession'
-            | 'getAssistantName'
-            | 'getCharAvatar'
-            | 'DEFAULT_AVATAR'
-        >,
-        private readonly contextStore: ConversationContextStoreLike,
+        private readonly api: CharacterChannelApiPort,
+        private readonly contextStore: CharacterChannelContextPort,
         private readonly hostProvider: CompositeChatHostProvider = compositeChatHostProvider
     ) {
         this.state = ref(createEmptyState(this.hostProvider.getCapabilityFlags()));
@@ -131,15 +134,27 @@ export class CharacterChannelService {
             void this.refresh();
         };
 
-        this.api.on('CONVERSATION_SESSIONS_UPDATED', triggerRefresh);
-        this.api.on('CONVERSATION_CONTEXT_CHANGED', triggerRefresh);
-        this.api.on('CHAT_CHANGED', triggerRefresh);
+        for (const event of ['CONVERSATION_SESSIONS_UPDATED', 'CONVERSATION_CONTEXT_CHANGED', 'CHAT_CHANGED']) {
+            this.api.on(event, triggerRefresh);
+            this.eventSubscriptions.push({ event, listener: triggerRefresh });
+        }
         void this.api.waitForReady().then((ready) => {
-            if (ready) {
+            if (ready && this.isBound) {
                 return this.refresh();
             }
             return undefined;
         });
+    }
+
+    dispose(): void {
+        if (!this.isBound) {
+            return;
+        }
+
+        this.isBound = false;
+        for (const subscription of this.eventSubscriptions.splice(0)) {
+            this.api.off(subscription.event, subscription.listener);
+        }
     }
 
     private setBusy(sessionId: string, busy: boolean): void {

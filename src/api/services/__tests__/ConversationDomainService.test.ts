@@ -16,11 +16,15 @@ const createCoreConversationService = () => ({
     rollbackConversationNode: vi.fn(async () => true)
 });
 
+const createEventSource = () => ({
+    subscribe: vi.fn(() => vi.fn())
+});
+
 describe('ConversationDomainService', () => {
     it('waits for runtime readiness before reading conversation context', async () => {
         const core = createCoreConversationService();
         const waitForReady = vi.fn(async () => true);
-        const service = new ConversationDomainService(core as any, waitForReady);
+        const service = new ConversationDomainService(core as any, waitForReady, createEventSource());
 
         await expect(service.getContext({ sourceId: 'chat' })).resolves.toEqual({
             source: 'chat',
@@ -34,7 +38,7 @@ describe('ConversationDomainService', () => {
 
     it('delegates session listing and context switching to the core conversation service', async () => {
         const core = createCoreConversationService();
-        const service = new ConversationDomainService(core as any, vi.fn(async () => true));
+        const service = new ConversationDomainService(core as any, vi.fn(async () => true), createEventSource());
 
         await service.listSessions('forge');
         await service.switchContext({ sourceId: 'forge', sessionId: 'forge-1' });
@@ -45,7 +49,7 @@ describe('ConversationDomainService', () => {
 
     it('delegates worldline commands without owning mutation logic', async () => {
         const core = createCoreConversationService();
-        const service = new ConversationDomainService(core as any, vi.fn(async () => true));
+        const service = new ConversationDomainService(core as any, vi.fn(async () => true), createEventSource());
         const input = { sourceId: 'chat' as const, targetNodeId: 'node-1' };
 
         await expect(service.switchNode(input)).resolves.toBe(true);
@@ -55,5 +59,18 @@ describe('ConversationDomainService', () => {
         expect(core.switchConversationNode).toHaveBeenCalledWith(input);
         expect(core.branchConversationNode).toHaveBeenCalledWith(input);
         expect(core.rollbackConversationNode).toHaveBeenCalledWith(input);
+    });
+
+    it('returns the event source unsubscribe function to runtime consumers', () => {
+        const core = createCoreConversationService();
+        const unsubscribe = vi.fn();
+        const eventSource = {
+            subscribe: vi.fn(() => unsubscribe)
+        };
+        const listener = vi.fn();
+        const service = new ConversationDomainService(core as any, vi.fn(async () => true), eventSource);
+
+        expect(service.subscribe(listener)).toBe(unsubscribe);
+        expect(eventSource.subscribe).toHaveBeenCalledWith(listener);
     });
 });
