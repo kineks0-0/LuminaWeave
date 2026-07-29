@@ -19,6 +19,7 @@ const settingsSchema = {
 const platformManifest: PluginManifestV2 = {
   id: 'lumina-dev',
   name: '开发菜单',
+  primarySurface: 'dev.tools',
   capabilities: [
     { id: 'dev.tools', description: '暴露开发和调试工具。' }
   ],

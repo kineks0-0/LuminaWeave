@@ -25,6 +25,7 @@ import { computed, inject, provide, ref, watch, type CSSProperties } from 'vue';
 import { luminaWeaveApi as lwApi } from './api/index.js';
 import { lwStorage } from './api/storage.js';
 import { pluginManager } from './core/PluginManager.js';
+import { getPrimarySurfaceContractIdForPlugin } from './platform/plugin/officialPluginSurfaces.js';
 import { useSettings, currentDetailedView } from './plugins/settings/useSettings.js';
 import { useResponsiveLayout } from './composables/useResponsiveLayout.js';
 import { useWorkspaceManager } from './composables/useWorkspaceManager.js';
@@ -201,6 +202,7 @@ const {
   dynamicTabs,
   activeMainTab,
   activeRightPanel,
+  activeDesktopModeId,
   isMobile,
   freeformStageRef,
   workspaceNavigationVisible: workspaceNavigationVisibleState,
@@ -212,6 +214,11 @@ function getPluginName(pluginId: string | null) {
   const plugin = pluginManager.getPlugin(pluginId);
   return plugin ? plugin.name : pluginId;
 }
+
+const resolvePluginPrimarySurface = (pluginId: string) => {
+  const plugin = pluginManager.getPlugin(pluginId);
+  return plugin ? getPrimarySurfaceContractIdForPlugin(plugin) : null;
+};
 
 const {
   widgetWidth,
@@ -942,6 +949,7 @@ const {
   },
   actions: {
     getPluginName,
+    resolvePluginPrimarySurface,
     navigation: {
       switchMainView: handleSwitchMainView,
       closeTab,

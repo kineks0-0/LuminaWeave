@@ -6,6 +6,8 @@ export interface DynamicTabResolution {
   surfaceContractId: SurfaceContractId | null;
   component: Component | null;
   props: Record<string, unknown>;
+  error?: 'unregistered-component' | 'missing-target';
+  unresolvedTargetId?: string;
 }
 
 export const resolveDynamicTabTarget = (
@@ -36,9 +38,11 @@ export const resolveDynamicTabTarget = (
     }
 
     return {
-      surfaceContractId: tab.component as SurfaceContractId,
+      surfaceContractId: null,
       component: null,
-      props: resolvedProps
+      props: resolvedProps,
+      error: 'unregistered-component',
+      unresolvedTargetId: tab.component
     };
   }
 
@@ -51,8 +55,10 @@ export const resolveDynamicTabTarget = (
   }
 
   return {
-    surfaceContractId: tab.id as SurfaceContractId,
+    surfaceContractId: null,
     component: null,
-    props: resolvedProps
+    props: resolvedProps,
+    error: 'missing-target',
+    unresolvedTargetId: tab.id
   };
 };

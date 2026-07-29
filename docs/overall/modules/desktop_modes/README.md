@@ -4,6 +4,8 @@ Desktop Modes 定义 LuminaWeave 的平台级桌面模式。桌面模式不是�
 
 桌面模式采用单注册源：`DesktopModeManifest` 是公开事实源，`registerDesktopMode()` 会同时进入模式列表、设置详情和 Desktop Mode Runtime。运行时内部只派生 `DesktopModeRuntimeDescriptor`，用于解析 shell renderer、`shellKind`、navigation model、interaction policy 与受控 desktop overrides。
 
+插件主 Surface 只由 `PluginManifestV2.primarySurface` 声明。Shell、Workspace 和移动路由不得根据插件 ID 推断 contract。Surface contract、plugin renderer 与 desktop override 在写入 registry 前必须完成整批校验；任一条目失败时不得留下部分注册状态。
+
 当前项目仍处于早期阶段，桌面模式不保留旧 Theme Pack 兼容层。代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`；`ThemePack`、`activeThemePack`、`theme-pack-*`、`themePackId`、`useThemePack()` 和 `getThemePack*` 不再作为公开或内部入口。
 
 代码目录边界：
@@ -12,6 +14,7 @@ Desktop Modes 定义 LuminaWeave 的平台级桌面模式。桌面模式不是�
 - `luminaweave-extension/src/desktop-modes/builtins/<mode>/`：classic / stage / discord / telegram 的 manifest、settings、tokens、skins 与受控模式 policy。每个模式的 settings、design token resolver 和 surface skin map 必须由自己的目录直接拥有。
 - `luminaweave-extension/src/desktop-modes/builtins/shared.ts`：跨模式共享 helper、基础 settings factory 与基础 skin factory；新增模式不应把专属逻辑继续塞入该文件。
 - `luminaweave-extension/src/platform/desktop-mode-runtime/`：运行时 descriptor 派生与 registry，不承载具体模式主题值。
+- `luminaweave-extension/src/platform/surface/`：`SurfaceContractMap`、Zod input schema、renderer 解析、typed context、局部错误边界与 disposer 生命周期。
 - `luminaweave-extension/src/composables/shell/useShellRuntimePayload.ts`：把 `App.vue` 拥有的 refs、computed 与 actions 组装为 `ShellRuntimeContext / ShellRuntimeSurfaces / ShellRuntimeActions / ShellRuntimeFrame`；`App.vue` 仍负责状态、生命周期、bootstrap、host layout 与 activity launch。
 - `luminaweave-extension/src/shell/`：traditional / freeform 通用壳层渲染、root shell 分发与 legacy global panel 挂载。
 - `luminaweave-extension/src/shell/modes/<mode>/`：Discord / Telegram 等模式专属 shell UI 组件；这些组件属于壳层实现，不放入 `desktop-modes/builtins/<mode>/`。
@@ -43,3 +46,5 @@ Desktop Mode Runtime 负责解析 LaunchIntent：
 ## 维护提示
 
 修改桌面模式 manifest、surface override、导航结构、移动端壳层或设计 token 时，应同步更新本目录和 `docs/overall/design/`。
+
+Desktop Experience SDK 重构不改变 runtime extension store 的物理实现。普通 Tauri 保留 SQLite，浏览器与 standalone-local 的既有 IndexedDB 路径保持不变。

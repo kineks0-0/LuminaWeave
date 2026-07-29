@@ -463,6 +463,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { promptPresetRegistry } from '../../api/core/hal/prompt/PromptPresetRegistry.js';
 import { clonePromptPresetGenerationSettings } from '../../api/core/utils/promptPresetGenerationSettings.js';
 import { lwStorage } from '../../api/storage.js';
+import { useSurfaceInput } from '../../platform/surface/useSurfaceRuntimeContext.js';
 import {
     buildForgeAgentSkillPath,
     buildForgePromptPresetOrchestrationRows,
@@ -483,9 +484,7 @@ import type {
     PromptPresetSlotDefinition
 } from '../../types/PromptPresetTypes.js';
 
-defineProps<{
-  pluginId?: string;
-}>();
+useSurfaceInput('forge.settings.workbench');
 
 type EditablePreset = PromptPresetDefinition & {
     customCharCard: NonNullable<PromptPresetDefinition['customCharCard']>;

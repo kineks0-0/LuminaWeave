@@ -121,12 +121,12 @@
     />
 
     <template v-else>
-      <template v-for="plugin in mainPlugins" :key="plugin.id">
+      <template v-for="entry in mainSurfaceEntries" :key="entry.plugin.id">
         <div
-          v-show="activeMainTab === plugin.id"
+          v-show="activeMainTab === entry.plugin.id"
           class="lw-main-wrapper"
           :class="{
-            'lw-main-timeline-wrapper': plugin.id === 'lumina-timeline',
+            'lw-main-timeline-wrapper': entry.plugin.id === 'lumina-timeline',
             'has-discord-mobile-shell': isDiscordMobileMode,
             'has-telegram-mobile-nav': isTelegramMobileMode
           }"
@@ -134,7 +134,7 @@
           :style="[shellMainSurfaceStyle, discordMobileMainStyle]"
         >
           <TelegramCharacterOverview
-            v-if="isTelegramCharacterOverviewVisible(plugin.id)"
+            v-if="isTelegramCharacterOverviewVisible(entry.plugin.id)"
             :state="characterChannelState"
             :selectedCharacterKey="telegramSelectedCharacterKey"
             :isMobile="isMobile"
@@ -144,12 +144,10 @@
           />
           <template v-else>
             <SurfaceOutlet
-              v-if="plugin.id !== 'lumina-timeline' || activeMainTab === 'lumina-timeline' || isTimelineLoadedOnce"
-              :contract-id="getPrimarySurfaceContractIdForPlugin(plugin.id)"
-              :activity="{ size: 'default', pageType: 'nested' }"
-              :isMobile="isMobile"
-              :auxSidebarMode="effectiveForgeAuxSidebarMode"
-              :activeRightPanelId="isForgeActiveInTraditional ? activeRightPanel : undefined"
+              v-if="entry.plugin.id !== 'lumina-timeline' || activeMainTab === 'lumina-timeline' || isTimelineLoadedOnce"
+              :contract-id="entry.contractId"
+              :input="getMainSurfaceInput(entry.contractId)"
+              :desktop-mode-id="activeDesktopModeId"
             />
           </template>
         </div>
@@ -166,14 +164,17 @@
       >
         <DynamicTabOutlet
           :tab="tab"
-          :auxSidebarMode="effectiveForgeAuxSidebarMode"
-          :activeRightPanelId="isForgeActiveInTraditional ? activeRightPanel : undefined"
+          :desktop-mode-id="activeDesktopModeId"
+          :is-mobile="isMobile"
+          :aux-sidebar-mode="effectiveForgeAuxSidebarMode"
+          :active-right-panel-id="isForgeActiveInTraditional ? activeRightPanel : undefined"
         />
       </div>
     </template>
 
     <WidgetPanelHost
       :activeRightPanel="activeRightPanel"
+      :desktopModeId="activeDesktopModeId"
       :isMobile="isMobile"
       :characterChannelState="characterChannelState"
       :surfaceVariant="shellWidgetSurfaceVariant"
@@ -236,9 +237,11 @@ import {
 } from '../modes/telegram/telegramRouteViewModel.js';
 import WidgetPanelHost from './WidgetPanelHost.vue';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
+import { projectSurfaceInput } from '../../platform/surface/surfaceInputProjection.js';
 import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
 import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
 import DynamicTabOutlet from '../DynamicTabOutlet.vue';
+import type { SurfaceContractId } from '../../platform/surface/types.js';
 
 const props = defineProps<{
   runtimeContext: ShellRuntimeContext;
@@ -275,6 +278,14 @@ const telegramDesktopLeftRoute = computed(() => props.runtimeContext.traditional
 const telegramMobileActiveTab = computed(() => props.runtimeContext.traditional.telegramMobileActiveTab);
 const telegramMobileCurrentRoute = computed(() => props.runtimeContext.traditional.telegramMobileCurrentRoute);
 const mainPlugins = computed(() => props.runtimeSurfaces.traditional.mainPlugins);
+const mainSurfaceEntries = computed(() => mainPlugins.value.flatMap(plugin => {
+  const contractId = getPrimarySurfaceContractIdForPlugin(plugin);
+  if (!contractId) {
+    console.error('[SurfaceRuntime] Plugin primary surface unavailable', { pluginId: plugin.id });
+    return [];
+  }
+  return [{ plugin, contractId }];
+}));
 const shellMainSurfaceVariant = computed(() => props.runtimeSurfaces.traditional.mainSurfaceVariant);
 const shellMainSurfaceStyle = computed(() => props.runtimeSurfaces.traditional.mainSurfaceStyle);
 const discordMobileMainStyle = computed(() => props.runtimeSurfaces.traditional.mobileMainStyle);
@@ -299,6 +310,15 @@ const effectiveForgeAuxSidebarMode = computed(() => {
   if (!isForgeActiveInTraditional.value) return undefined;
   return isMobile.value ? 'hidden' : sidebarMode.value;
 });
+
+const getMainSurfaceInput = (contractId: SurfaceContractId) => {
+  return projectSurfaceInput(contractId, {}, {
+    activity: { size: 'default', pageType: 'nested' },
+    isMobile: isMobile.value,
+    auxSidebarMode: effectiveForgeAuxSidebarMode.value,
+    activeRightPanelId: isForgeActiveInTraditional.value ? activeRightPanel.value : undefined
+  });
+};
 
 const getPluginName = (pluginId: string | null) => props.runtimeActions.getPluginName(pluginId);
 const onSwitchMainView = (tabId: string) => props.runtimeActions.navigation.switchMainView(tabId);
@@ -369,7 +389,7 @@ const telegramMobileStackTitle = computed(() =>
 const telegramMobileToolContractId = computed(() =>
   resolveTelegramMobileToolContractId(telegramMobileCurrentRoute.value, {
     resolveRegisteredPanelContractId: getSurfaceContractIdForRegisteredPanel,
-    resolvePluginContractId: getPrimarySurfaceContractIdForPlugin
+    resolvePluginContractId: props.runtimeActions.resolvePluginPrimarySurface
   })
 );
 const telegramMobileToolActivity = computed(() =>
@@ -379,7 +399,9 @@ const telegramMobileToolProps = computed(() =>
   resolveTelegramMobileToolProps(telegramMobileCurrentRoute.value)
 );
 const telegramMobileToolAuxSidebarMode = computed(() =>
-  resolveTelegramMobileToolAuxSidebarMode(telegramMobileToolContractId.value)
+  telegramMobileToolContractId.value
+    ? resolveTelegramMobileToolAuxSidebarMode(telegramMobileToolContractId.value)
+    : undefined
 );
 const onOpenTelegramMobileCharacterOverview = (groupKey: string | null) => {
   if (!groupKey) return;

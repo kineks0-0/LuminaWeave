@@ -1,71 +1,108 @@
 import type { Component } from 'vue';
-
-export type SurfaceContractId =
-    | 'chat.main'
-    | 'chat.preview'
-    | 'chat.composer'
-    | 'settings.root'
-    | 'settings.control'
-    | 'forge.workspace'
-    | 'forge.settings.summary'
-    | 'forge.settings.workbench'
-    | 'timeline.navigator'
-    | 'stats.panel'
-    | 'director.panel'
-    | 'lorebook.workspace'
-    | 'launcher.root'
-    | 'dev.tools'
-    | 'telegram.infoPanel'
-    | (string & {});
+import type { z } from 'zod';
+import type { DesktopExperienceRuntime } from '../../api/services/DesktopExperienceRuntime.js';
 
 export type SurfaceRendererKind = 'desktop-override' | 'plugin-business' | 'core-default' | 'empty';
+
+export type SurfaceDisposer = () => void;
+
+export type EmptySurfaceData = Readonly<Record<never, never>>;
+
+export interface SurfaceContractSpec<
+    TInput extends object,
+    TState = EmptySurfaceData,
+    TIntentMap extends object = EmptySurfaceData
+> {
+    input: TInput;
+    state: TState;
+    intents: TIntentMap;
+}
+
+/**
+ * 第三方受信任插件必须通过 module augmentation 显式声明自己的 contract。
+ */
+export interface SurfaceContractMap {}
+
+export type SurfaceContractId = Extract<keyof SurfaceContractMap, string>;
+
+export type SurfaceInput<K extends SurfaceContractId> = SurfaceContractMap[K]['input'];
+export type SurfaceState<K extends SurfaceContractId> = SurfaceContractMap[K]['state'];
+export type SurfaceIntents<K extends SurfaceContractId> = SurfaceContractMap[K]['intents'];
+export type SurfaceInputSchema<K extends SurfaceContractId> = z.ZodType<SurfaceInput<K>>;
 
 export interface SurfaceThemeContext {
     desktopModeId: string;
     variant?: string;
     tokens?: Record<string, string | number>;
     cssVars?: Record<string, string | number>;
-    containerProps?: Record<string, unknown>;
 }
 
-export interface SurfaceRuntimeContext<TState = unknown, TIntentMap extends Record<string, unknown> = Record<string, unknown>> {
-    state: TState;
-    intents: TIntentMap;
+export interface SurfaceRuntimeContext<K extends SurfaceContractId> {
+    contractId: K;
+    input: SurfaceInput<K>;
+    state: SurfaceState<K>;
+    intents: SurfaceIntents<K>;
+    runtime: DesktopExperienceRuntime;
     theme: SurfaceThemeContext;
+    onDispose(disposer: SurfaceDisposer): void;
 }
 
-export interface SurfaceRendererRuntimeBridge {
-    getSetting: <TValue>(key: string, fallback: TValue) => TValue;
-    updateSetting: <TValue>(key: string, value: TValue) => void | Promise<void>;
-    openSurface: (contractId: SurfaceContractId, props?: Record<string, unknown>) => void;
+export interface SurfaceRendererContextFactoryInput<K extends SurfaceContractId> {
+    input: SurfaceInput<K>;
+    runtime: DesktopExperienceRuntime;
+    onDispose(disposer: SurfaceDisposer): void;
 }
 
-export interface SurfaceRendererDefinition<TState = unknown, TIntentMap extends Record<string, unknown> = Record<string, unknown>> {
-    contractId: SurfaceContractId;
+export interface SurfaceRendererContextValues<K extends SurfaceContractId> {
+    state: SurfaceState<K>;
+    intents: SurfaceIntents<K>;
+}
+
+export interface SurfaceRendererDefinition<K extends SurfaceContractId = SurfaceContractId> {
+    contractId: K;
     component: Component;
     ownerId: string;
     kind: SurfaceRendererKind;
     variant?: string;
-    createContext?: (runtime: SurfaceRendererRuntimeBridge) => SurfaceRuntimeContext<TState, TIntentMap>;
+    createContext?: (
+        context: SurfaceRendererContextFactoryInput<K>
+    ) => SurfaceRendererContextValues<K>;
 }
 
-export interface SurfaceContractDefinition<TState = unknown, TIntentMap extends Record<string, unknown> = Record<string, unknown>> {
-    id: SurfaceContractId;
+export type SurfaceRendererDefinitionUnion = {
+    [K in SurfaceContractId]: SurfaceRendererDefinition<K>;
+}[SurfaceContractId];
+
+export interface EmptySurfaceRendererDefinition {
+    contractId: '__empty__';
+    component: Component;
+    ownerId: string;
+    kind: 'empty';
+    variant?: string;
+}
+
+export interface SurfaceContractDefinition<K extends SurfaceContractId = SurfaceContractId> {
+    id: K;
+    inputSchema?: SurfaceInputSchema<K>;
     ownerPluginId?: string;
     description?: string;
-    requiredIntents?: Array<keyof TIntentMap & string>;
-    defaultRenderer?: SurfaceRendererDefinition<TState, TIntentMap>;
-    businessRenderer?: SurfaceRendererDefinition<TState, TIntentMap>;
+    requiredIntents?: Array<keyof SurfaceIntents<K> & string>;
+    defaultRenderer?: SurfaceRendererDefinition<K>;
+    businessRenderer?: SurfaceRendererDefinition<K>;
 }
 
-export interface SurfaceResolutionRequest {
-    contractId: SurfaceContractId;
+export type SurfaceContractDefinitionUnion = {
+    [K in SurfaceContractId]: SurfaceContractDefinition<K>;
+}[SurfaceContractId];
+
+export interface SurfaceResolutionRequest<K extends SurfaceContractId = SurfaceContractId> {
+    contractId: K;
     desktopModeId: string;
     preferredVariant?: string;
 }
 
-export interface SurfaceResolutionResult<TState = unknown, TIntentMap extends Record<string, unknown> = Record<string, unknown>> {
-    contractId: SurfaceContractId;
-    renderer: SurfaceRendererDefinition<TState, TIntentMap>;
+export interface SurfaceResolutionResult<K extends SurfaceContractId = SurfaceContractId> {
+    contractId: K;
+    renderer: SurfaceRendererDefinition<K>;
     source: SurfaceRendererKind;
 }

@@ -27,8 +27,16 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 - `DesktopExperienceRuntime` 统一拥有五组领域能力和 `dispose()` 生命周期。
 - `SurfaceContractMap` 为每个 contract 声明 input、state 与 intents。
 - `SurfaceRuntimeContext<K>` 提供 typed runtime、input、state、intents、theme 与销毁注册。
+- `PluginManifestV2.primarySurface` 是插件主 Surface 的唯一来源；不得根据插件 ID 推断 contract。
+- contract、renderer 与 desktop override 必须先完成整批校验再原子注册。
 - `DesktopModeManifest.composition` 固定为版本 1，desktop/mobile 根节点只允许 group、surface、activity-slot。
 - Composition 不接受任意组件引用、任意 attrs、任意 CSS 或宿主全局对象。
+
+## 非目标
+
+- 不调整 runtime extension store 的物理实现。普通 Tauri 保留 SQLite；浏览器与 standalone-local 的既有 IndexedDB 路径保持不变。
+- 不修改 `tauri-plugin-sql`、`TauriSqliteExtensionStore`、SQL capability 或 SQLite 数据路径。
+- 不以数据库替换解决 Surface、Shell 或 Chat 的职责耦合。
 
 ## 任务分解
 

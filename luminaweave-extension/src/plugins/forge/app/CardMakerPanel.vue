@@ -464,8 +464,7 @@ import type { ForgeTimelineOperationItem } from '../../../types/ForgeTimelineTyp
 import type { ForgeToolApprovalGrantMode, ForgeToolApprovalRequest } from '../../../types/ForgeRuntimeTypes.js';
 import type { ForgeAuxPanelKind, ForgeVisiblePhase } from '../../../types/ForgeWorkflowTypes.js';
 import type { ForgeWorkspaceChangedFile } from '@shared/ForgePiTypes.js';
-import type { ActivityDescriptor } from '../../../platform/activity/types.js';
-import type { SidebarMode } from '../../../composables/useResponsiveLayout.js';
+import { useSurfaceInput } from '../../../platform/surface/useSurfaceRuntimeContext.js';
 import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../forgeAuxPanels.js';
 import {
   buildWorkspaceWriteGroupsByAssistantTurn,
@@ -477,20 +476,7 @@ import {
 } from '../project/forgeAgentProcessPresentation.js';
 import { ForgeAuxPanelView } from './forgeAsyncComponents.js';
 
-const props = withDefaults(defineProps<{
-  mode?: 'large' | 'small';
-  activity?: ActivityDescriptor;
-  isMobile?: boolean;
-  workspaceCompact?: boolean;
-  embeddedInWorkspaceWindow?: boolean;
-  auxSidebarMode?: SidebarMode;
-  activeRightPanelId?: string;
-}>(), {
-  mode: 'large',
-  isMobile: false,
-  workspaceCompact: false,
-  embeddedInWorkspaceWindow: false
-});
+const props = useSurfaceInput('forge.workspace');
 
 const store = useCardMakerStore();
 const forgeStore = useForgeStore();

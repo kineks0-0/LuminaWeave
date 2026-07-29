@@ -21,7 +21,7 @@
         <div class="tw:grid tw:grid-cols-[repeat(auto-fill,minmax(280px,1fr))] tw:gap-3.5">
           <button v-for="plugin in mainViewPlugins" :key="plugin.id"
                type="button"
-               :class="launcherItemClass(activeMainTab === plugin.id)"
+               :class="launcherItemClass(props.activeMainTab === plugin.id)"
                @click="openMainPlugin(plugin)">
             <div :class="iconBoxClass(false)" v-html="plugin.icon"></div>
             <div class="tw:flex tw:min-w-0 tw:flex-col tw:gap-1 tw:text-left">
@@ -92,18 +92,12 @@ import { pluginManager } from '../../core/PluginManager.js';
 import { LuminaWeaveAPI } from '../../api';
 import { cn } from '../../ui/cn.js';
 import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
+import { useSurfaceInput } from '../../platform/surface/useSurfaceRuntimeContext.js';
+import type { LuminaPlugin } from '../../types/plugin.js';
 
 const lwApi = inject('lwApi') as LuminaWeaveAPI;
 
-const props = defineProps<{
-  activeMainTab?: string;
-  presentation?: 'window' | 'launchpad';
-  dismissOnSelect?: boolean;
-}>();
-
-const emit = defineEmits<{
-  (e: 'dismiss'): void;
-}>();
+const props = useSurfaceInput('launcher.root');
 
 const mainViewPlugins = computed(() => {
   return pluginManager.getPluginsInSlot('mainView').filter(p => p.id !== 'lumina-launcher' && p.id !== 'lumina-forge');
@@ -129,7 +123,12 @@ const iconBoxClass = (compact: boolean) => cn(
   compact ? 'tw:size-10 tw:rounded-lw-sm' : 'tw:size-[46px] tw:rounded-lw-sm'
 );
 
-const openMainPlugin = (plugin: any) => {
+const openMainPlugin = (plugin: LuminaPlugin): void => {
+  const contractId = getPrimarySurfaceContractIdForPlugin(plugin);
+  if (!contractId) {
+    console.error('[SurfaceRuntime] Plugin primary surface unavailable', { pluginId: plugin.id });
+    return;
+  }
   lwApi.services.desktopSurface.launchActivity({
     id: plugin.id,
     title: plugin.name,
@@ -138,7 +137,7 @@ const openMainPlugin = (plugin: any) => {
     target: {
       kind: 'plugin',
       pluginId: plugin.id,
-      contractId: getPrimarySurfaceContractIdForPlugin(plugin.id)
+      contractId
     },
     activity: {
       size: 'default',
@@ -147,11 +146,16 @@ const openMainPlugin = (plugin: any) => {
     dedupeKey: `plugin:${plugin.id}`
   });
   if (props.dismissOnSelect) {
-    emit('dismiss');
+    props.onDismiss?.();
   }
 };
 
-const openToolPlugin = (plugin: any) => {
+const openToolPlugin = (plugin: LuminaPlugin): void => {
+  const contractId = getPrimarySurfaceContractIdForPlugin(plugin);
+  if (!contractId) {
+    console.error('[SurfaceRuntime] Plugin primary surface unavailable', { pluginId: plugin.id });
+    return;
+  }
   lwApi.services.desktopSurface.launchActivity({
     id: plugin.id,
     title: plugin.name,
@@ -160,7 +164,7 @@ const openToolPlugin = (plugin: any) => {
     target: {
       kind: 'plugin',
       pluginId: plugin.id,
-      contractId: getPrimarySurfaceContractIdForPlugin(plugin.id)
+      contractId
     },
     activity: {
       size: 'small',
@@ -169,7 +173,7 @@ const openToolPlugin = (plugin: any) => {
     dedupeKey: `plugin:${plugin.id}`
   });
   if (props.dismissOnSelect) {
-    emit('dismiss');
+    props.onDismiss?.();
   }
 };
 
@@ -199,7 +203,7 @@ const openCardMaker = () => {
     dedupeKey: 'panel:card_maker'
   });
   if (props.dismissOnSelect) {
-    emit('dismiss');
+    props.onDismiss?.();
   }
 };
 
@@ -220,7 +224,7 @@ const openContextSwitcher = () => {
     dedupeKey: 'panel:context-switcher'
   });
   if (props.dismissOnSelect) {
-    emit('dismiss');
+    props.onDismiss?.();
   }
 };
 </script>

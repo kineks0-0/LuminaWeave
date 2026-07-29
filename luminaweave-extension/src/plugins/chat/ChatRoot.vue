@@ -2,10 +2,10 @@
   <div class="chat-root-container">
     <ChatStream
       :messages="messages"
-      :isMobile="isMobile"
-      :workspaceCompact="workspaceCompact"
-      :onTelegramBack="onTelegramBack"
-      :onTelegramOpenRoleProfile="onTelegramOpenRoleProfile"
+      :isMobile="props.isMobile"
+      :workspaceCompact="props.workspaceCompact"
+      :onTelegramBack="props.onTelegramBack"
+      :onTelegramOpenRoleProfile="props.onTelegramOpenRoleProfile"
     />
   </div>
 </template>
@@ -14,18 +14,9 @@
 import { storeToRefs } from 'pinia';
 import ChatStream from './ChatStream.vue';
 import { useConversationContextStore } from '../../stores/useConversationContextStore.js';
+import { useSurfaceInput } from '../../platform/surface/useSurfaceRuntimeContext.js';
 
-withDefaults(defineProps<{
-  isMobile?: boolean;
-  workspaceCompact?: boolean;
-  onTelegramBack?: () => void;
-  onTelegramOpenRoleProfile?: () => void;
-}>(), {
-  isMobile: false,
-  workspaceCompact: false,
-  onTelegramBack: undefined,
-  onTelegramOpenRoleProfile: undefined
-});
+const props = useSurfaceInput('chat.main');
 
 const contextStore = useConversationContextStore();
 const { activeMessages: messages } = storeToRefs(contextStore);

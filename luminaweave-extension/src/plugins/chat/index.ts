@@ -198,6 +198,7 @@ const settingsSchema = {
 const platformManifest: PluginManifestV2 = {
     id: 'lumina-chat',
     name: '剧情演播',
+    primarySurface: 'chat.main',
     capabilities: [
         { id: 'conversation.playback', description: '渲染当前会话消息流。' },
         { id: 'conversation.generation', description: '通过聊天 intent 触发生成。' }

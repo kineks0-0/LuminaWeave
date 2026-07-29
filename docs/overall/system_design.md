@@ -167,8 +167,10 @@ Plugin Domain 描述插件能力，而不是直接定义固定 UI 插槽。
 - surfaces
 - business renderers
 - navigation slots
+- primary surface
 
 插件特殊 UI 通过 business renderer 暴露给 Surface Runtime。插件不得把同步、存储、Prompt 或事务逻辑复制到组件内部。
+`PluginManifestV2.primarySurface` 是 Shell、Workspace 和路由解析插件主 Surface 的唯一来源，不允许根据插件 ID 拼接或推断 contract。
 
 ### 2.5 Desktop Mode Runtime
 
@@ -188,6 +190,7 @@ Desktop Mode Runtime 定义完整工作方式。
 - settings schema
 - root safe-area padding 契约。普通 Tauri Android 的 safe-area 默认由 root shell 统一消费，`--lw-safe-*` 保持可观测原值，`--lw-content-safe-*` 表示 root 消费后的剩余量；Activity 可声明独立页面的状态栏背景、图标颜色和 `safeArea` 所有权。Desktop Mode Runtime 先把 `iconColor: auto` 解析为实际 `light` / `dark`：深色外观映射白色图标，浅色外观映射黑色图标；状态栏背景只进入 Web/root shell CSS 层，不进入 native bridge；Lumina 原生 Android 客户端只消费解析后的状态栏图标颜色，TauriTavern 不新增 ABI 且图标颜色 no-op。
 - Web / PWA safe-area fallback 同样先进入 `--lw-safe-*` 归一化层，再由 root / residual 变量分发；桌面模式和插件不得绕过该层直接读取浏览器 `env()`。
+- component overrides 在写入 desktop mode registry 前整批预检；任一 override 无效时不得留下部分 Surface 或 mode 注册状态。
 
 约束：
 
@@ -206,12 +209,18 @@ desktop override > plugin business renderer > core default renderer > empty rend
 
 Renderer 接收：
 
+- contract 对应的 typed input
 - state snapshot
 - intents
+- `DesktopExperienceRuntime`
 - theme context
-- runtime bridge
+- disposer 注册入口
 
-Renderer 不直接写 Core 内部状态。如需打开其他页面，必须通过 runtime bridge 发起 Activity LaunchIntent；不得直接决定 tab、右栏、workspace window 或移动页面栈。
+`SurfaceContractMap` 是进程内 contract 类型事实源；每个可注册 contract 必须提供 Zod input schema。contract、plugin renderer 和 desktop override 均先整批校验再原子写入 registry，未知 contract、map key/owner 不一致、重复注册或非法 input 在节点边界返回稳定错误。
+
+`SurfaceOutlet` 解析 renderer 后创建独立 context。等价 input/theme 不重建 context；input、theme 或 renderer 变化时先销毁旧 context。renderer 创建或渲染异常只替换对应节点，并立即逐项执行已注册 disposer；单个 disposer 抛错不得覆盖原始错误或阻断其他清理。
+
+Renderer 不直接写 Core 内部状态。如需打开其他页面，必须通过 runtime 的 activity 能力发起 Activity LaunchIntent；不得直接决定 tab、右栏、workspace window 或移动页面栈。Surface Runtime 不改变持久化边界，普通 Tauri 的 runtime extension store 继续使用 SQLite，浏览器与 standalone-local 的既有 IndexedDB 实现保持不变。
 
 ## 3. 启动与运行流程
 

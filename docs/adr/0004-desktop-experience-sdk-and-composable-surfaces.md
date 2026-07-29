@@ -31,6 +31,9 @@
 6. Shell 只拥有安全区、窗口、焦点、移动导航和 Activity 容器，不拥有 conversation、generation 或具体业务组件。
 7. 单个 manifest、renderer 或订阅失败必须局部隔离，并输出稳定低基数日志。
 8. 不保留旧 Surface context、旧 Chat store 或内置模式业务分支的兼容层。
+9. `PluginManifestV2.primarySurface` 是插件主 Surface 的唯一来源，Shell、Workspace 和路由不得根据插件 ID 推断 contract。
+10. Surface contract、plugin renderer 与 desktop override 采用整批预检和原子注册；renderer context 销毁时逐项隔离 disposer 异常。
+11. 保留现有 runtime extension store 物理实现。普通 Tauri 继续使用 SQLite，浏览器与 standalone-local 的既有 IndexedDB 路径保持不变；数据库迁移不属于本决策范围。
 
 ## OpenAPI 取舍
 
@@ -43,4 +46,4 @@ Desktop Experience SDK、Surface contract 和 renderer 注册是浏览器进程�
 - `DesktopModeManifest` 与 Surface 公共类型会发生破坏式变化，所有内置模式和官方 renderer 必须在同一任务中迁移。
 - Chat presentation 不再直接访问 Pinia、API、宿主全局对象或具体桌面模式。
 - Workspace 应由插件注册信息与 Activity descriptor 派生，不再维护 Forge、Launcher 等硬编码应用目录。
-- 本决策不改变微内核、Semantic VFS、Git 工作区版本、SillyTavern 宿主适配或服务端 HTTP 协议。
+- 本决策不改变微内核、Semantic VFS、Git 工作区版本、SillyTavern 宿主适配、服务端 HTTP 协议或 runtime extension store 的 SQLite/IndexedDB 物理边界。

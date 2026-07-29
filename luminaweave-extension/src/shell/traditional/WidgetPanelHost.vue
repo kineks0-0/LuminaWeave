@@ -14,11 +14,8 @@
     <SurfaceOutlet
       v-if="surfaceVariant === 'telegram' && activeRightPanel === 'telegram-profile'"
       contract-id="telegram.infoPanel"
-      :state="characterChannelState"
-      :isMobile="isMobile"
-      @openTool="emit('switchRightPanel', $event)"
-      @createSession="onCreateChatSession?.($event)"
-      @openSession="onOpenSession?.($event)"
+      :input="telegramInfoPanelInput"
+      :desktop-mode-id="desktopModeId"
     />
     <template v-else>
     <div class="widget-container-header">
@@ -113,14 +110,13 @@
     <div class="widget-container-body">
       <div class="widget-main-content">
         <SurfaceOutlet
-          v-if="activeWidgetPlugin"
+          v-if="activeWidgetPlugin && activeWidgetSurfaceContractId"
           :contract-id="activeWidgetSurfaceContractId"
-          v-bind="activePanelProps"
-          :activity="activePanelActivity"
-          :isMobile="isMobile"
+          :input="getActivePanelSurfaceInput(activeWidgetSurfaceContractId)"
+          :desktop-mode-id="desktopModeId"
         />
         <component
-          v-else-if="activeRegisteredPanel && !getSurfaceContractIdForRegisteredPanel(activeRegisteredPanel.id)"
+          v-else-if="activeRegisteredPanel && !activeRegisteredPanelSurfaceContractId"
           :is="activeRegisteredPanel.component"
           v-bind="activePanelProps"
           :kind="activePanelKind"
@@ -128,12 +124,10 @@
           :isMobile="isMobile"
         />
         <SurfaceOutlet
-          v-else-if="activeRegisteredPanel"
+          v-else-if="activeRegisteredPanel && activeRegisteredPanelSurfaceContractId"
           :contract-id="activeRegisteredPanelSurfaceContractId"
-          v-bind="activePanelProps"
-          :kind="activePanelKind"
-          :activity="activePanelActivity"
-          :isMobile="isMobile"
+          :input="getActivePanelSurfaceInput(activeRegisteredPanelSurfaceContractId)"
+          :desktop-mode-id="desktopModeId"
         />
       </div>
     </div>
@@ -148,11 +142,14 @@ import type { CharacterChannelState, CreateChatConversationInput } from '../../t
 import type { RegisteredPanelEntry, WidgetPanelGroup } from '../types.js';
 import type { ActivityPanelPayload } from '../../platform/activity/types.js';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
+import { projectSurfaceInput } from '../../platform/surface/surfaceInputProjection.js';
+import type { SurfaceContractId } from '../../platform/surface/types.js';
 import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
 import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
 
 const props = defineProps<{
   activeRightPanel: string;
+  desktopModeId: string;
   isMobile: boolean;
   characterChannelState: CharacterChannelState;
   surfaceVariant: string;
@@ -170,8 +167,8 @@ const props = defineProps<{
   widgetGroups: WidgetPanelGroup[];
   showWidgetDropdown: boolean;
   getPluginName: (pluginId: string | null) => string;
-  onCreateChatSession?: (payload: CreateChatConversationInput) => void;
-  onOpenSession?: (sessionId: string) => void;
+  onCreateChatSession: (payload: CreateChatConversationInput) => void;
+  onOpenSession: (sessionId: string) => void;
 }>();
 
 const defaultPanelActivity = { size: 'small', pageType: 'nested' } as const;
@@ -188,16 +185,35 @@ const activePanelKind = computed(() => {
     ? payloadKind
     : props.activeForgeAuxKind || undefined;
 });
-const activeWidgetSurfaceContractId = computed(() => (
+const activeWidgetSurfaceContractId = computed<SurfaceContractId | null>(() => (
   activePanelPayload.value?.contractId
-  || (props.activeWidgetPlugin ? getPrimarySurfaceContractIdForPlugin(props.activeWidgetPlugin.id) : '')
+  || (props.activeWidgetPlugin ? getPrimarySurfaceContractIdForPlugin(props.activeWidgetPlugin) : null)
 ));
-const activeRegisteredPanelSurfaceContractId = computed(() => (
+const activeRegisteredPanelSurfaceContractId = computed<SurfaceContractId | null>(() => (
   activePanelPayload.value?.contractId
   || (props.activeRegisteredPanel
-    ? getSurfaceContractIdForRegisteredPanel(props.activeRegisteredPanel.id) || props.activeRegisteredPanel.id
-    : '')
+    ? getSurfaceContractIdForRegisteredPanel(props.activeRegisteredPanel.id)
+    : null)
 ));
+
+const telegramInfoPanelInput = computed(() => ({
+  state: props.characterChannelState,
+  isMobile: props.isMobile,
+  onOpenTool: (panelId: string): void => emit('switchRightPanel', panelId),
+  onCreateSession: props.onCreateChatSession,
+  onOpenSession: props.onOpenSession
+}));
+
+const getActivePanelSurfaceInput = (contractId: SurfaceContractId) => projectSurfaceInput(
+  contractId,
+  activePanelProps.value,
+  {
+    activity: activePanelActivity.value,
+    isMobile: props.isMobile,
+    auxSidebarMode: props.isForgeActiveInTraditional ? props.rawSidebarMode : undefined,
+    activeRightPanelId: props.isForgeActiveInTraditional ? props.activeRightPanel : undefined
+  }
+);
 
 const emit = defineEmits<{
   (e: 'resizeStart', event: MouseEvent): void;

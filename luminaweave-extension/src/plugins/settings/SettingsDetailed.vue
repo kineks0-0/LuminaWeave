@@ -14,8 +14,13 @@
       v-if="manifest && pluginId"
       class="block-content tw:flex tw:flex-col tw:rounded-[var(--lw-settings-detail-radius,24px)] tw:border tw:border-lw-border tw:bg-lw-elevated tw:p-[var(--lw-settings-detail-content-padding,24px)] tw:shadow-lw-card"
     >
-      <SurfaceOutlet contract-id="settings.control" v-for="key in Object.keys(manifest)" :key="key" :pluginId="pluginId" :settingKey="key"
-        :config="manifest[key]" />
+      <SurfaceOutlet
+        v-for="key in Object.keys(manifest)"
+        :key="key"
+        contract-id="settings.control"
+        :input="createControlInput(pluginId, key, manifest[key])"
+        :desktop-mode-id="props.desktopModeId"
+      />
     </div>
   </div>
 </template>
@@ -23,13 +28,22 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
+import type { SettingsControlSurfaceInput } from '../../platform/surface/officialContracts.js';
 import { useSettings } from './useSettings.js';
 import { getSettingsEntry } from './settingsRegistry.js';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import type { SettingDefinition } from '../../types/plugin.js';
 
-const props = defineProps({
-  pluginId: String
-});
+const props = defineProps<{
+  pluginId?: string;
+  desktopModeId: string;
+}>();
+
+const createControlInput = (
+  pluginId: string,
+  settingKey: string,
+  config: SettingDefinition
+): SettingsControlSurfaceInput => ({ pluginId, settingKey, config });
 
 const { initSettings } = useSettings();
 const { cssVars, variant: detailVariant } = useSurfaceSkin('settings.detailed');

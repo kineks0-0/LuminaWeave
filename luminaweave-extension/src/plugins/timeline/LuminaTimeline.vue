@@ -6,19 +6,15 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent } from 'vue';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../platform/activity/activityLaunchResolver.js';
-import type { ActivityDescriptor } from '../../platform/activity/types.js';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import { useSurfaceInput } from '../../platform/surface/useSurfaceRuntimeContext.js';
 import TimelineSmallList from './TimelineSmallList.vue';
 
 const TimelineLargeCanvas = defineAsyncComponent(() => import('./TimelineLargeCanvas.vue'));
 
 type TimelineMode = 'small' | 'large';
 
-const props = defineProps<{
-  mode?: TimelineMode;
-  activity?: ActivityDescriptor;
-  isMobile?: boolean;
-}>();
+const props = useSurfaceInput('timeline.navigator');
 
 const { variant: timelineVariant } = useSurfaceSkin('timeline.root');
 const normalizedActivity = computed(() => normalizeActivityDescriptor(props.activity, activityFromLegacyMode(props.mode)));

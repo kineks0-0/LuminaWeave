@@ -205,14 +205,18 @@ Desktop Modes 定义完整工作方式，不只是皮肤。
 - 由 desktop mode 决定导航、surface 映射、交互策略和设计 tokens。
 - `DesktopModeManifest` 是桌面模式的唯一公开事实源；Desktop Mode Runtime、设置详情、surface overrides 与 Activity placement 都应从该 manifest 派生运行时描述，不再维护并行的第二份公开 manifest。
 - 当前早期阶段不保留旧 Theme Pack 兼容层；代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`，旧 `activeThemePack` / `theme-pack-*` 配置可直接失效。
-- 插件通过 surface contract 暴露业务 renderer，桌面模式可以包裹、替换布局或提供 variant。
+- `DesktopExperienceRuntime` 统一暴露 conversation、generation、character、timeline、activity 五组 headless 领域能力，并拥有显式 `dispose()` 生命周期。
+- 插件通过 `SurfaceContractMap` 声明 input、state 与 intents，通过 surface contract 暴露业务 renderer；桌面模式可以包裹、替换布局或提供 variant。
+- `PluginManifestV2.primarySurface` 是插件主 Surface 的唯一来源；Shell、Workspace 与路由不得从插件 ID 推断 contract。
+- contract、plugin renderer 与 desktop override 必须先完成整批校验再原子注册，单个 renderer 失败只影响对应节点。
 - 插件或业务组件通过 Activity LaunchIntent 启动页面，只声明目标、默认/小窗偏好、嵌套/独立页面和可选状态栏/标题栏/二级菜单 metadata；具体落到主区、右侧栏、临时移动页、Telegram 移动页面栈或自由工作台窗口，由 desktop mode 解析。
 
 边界：
 
 - 桌面模式不得越权修改会话状态机、同步协议、Prompt 或持久化逻辑。
-- Surface renderer 只消费受控 state snapshot、intents 和 theme context。
+- Surface renderer 只消费受控 typed input、state、intents、runtime 与 theme context；销毁时必须取消自身订阅。
 - 业务组件不得直接把“大窗口/小窗口”绑定为具体容器；旧 `mode: large/small` 仅作为迁移期兼容输入。
+- 本阶段不改变 runtime extension store 的物理实现：普通 Tauri 保留 SQLite，浏览器与 standalone-local 的既有 IndexedDB 路径保持不变。
 
 ### 4.8 Server
 

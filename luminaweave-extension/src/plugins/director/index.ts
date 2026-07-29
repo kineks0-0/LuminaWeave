@@ -250,6 +250,7 @@ export const DirectorPlugin: LuminaPlugin = {
 DirectorPlugin.platformManifest = {
     id: 'lumina-director',
     name: '导演核心引擎',
+    primarySurface: 'director.panel',
     capabilities: [
         { id: 'context.director', description: '维护导演规划、记忆与增量世界状态。' }
     ],

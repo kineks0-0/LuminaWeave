@@ -196,12 +196,17 @@ export const useWidgetPanels = ({
   const openTemporaryWidgetTab = (panelId: string) => {
     const plugin = widgetPlugins.value.find((item) => item.id === panelId);
     if (plugin) {
+      const surfaceContractId = getPrimarySurfaceContractIdForPlugin(plugin);
+      if (!surfaceContractId) {
+        console.error('[SurfaceRuntime] Plugin primary surface unavailable', { pluginId: plugin.id });
+        return;
+      }
       activeRightPanel.value = panelId;
       desktopSurfaceService.openTab({
         id: `mobile-widget:${panelId}`,
         name: plugin.name,
         icon: plugin.icon,
-        surfaceContractId: getPrimarySurfaceContractIdForPlugin(plugin.id),
+        surfaceContractId,
         props: {
           activity: { size: 'small', pageType: 'nested' },
           isMobile: true,

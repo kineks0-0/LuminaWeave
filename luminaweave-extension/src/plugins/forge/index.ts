@@ -169,6 +169,7 @@ const settingsSchema = {
 const platformManifest: PluginManifestV2 = {
     id: 'lumina-forge',
     name: '制卡工坊',
+    primarySurface: 'forge.workspace',
     capabilities: [
         { id: 'forge.workspace', description: '运行 Forge 制卡工作流与工作台。' },
         { id: 'forge.prompt-presets', description: '管理 Forge 主模型、执行模型和测试聊天预设。' }

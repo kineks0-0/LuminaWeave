@@ -235,13 +235,13 @@
             <span aria-hidden="true" class="tw:ml-2.5 tw:h-px tw:flex-1 tw:bg-lw-border-subtle tw:opacity-50"></span>
           </div>
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullMode']"
-            pluginId="lumina-chat" settingKey="contextControl.fullMode" :config="chatManifest['contextControl.fullMode']" />
+            :input="createControlInput('lumina-chat', 'contextControl.fullMode', chatManifest['contextControl.fullMode'])" :desktop-mode-id="props.desktopModeId" />
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullValueCount']"
-            pluginId="lumina-chat" settingKey="contextControl.fullValueCount" :config="chatManifest['contextControl.fullValueCount']" />
+            :input="createControlInput('lumina-chat', 'contextControl.fullValueCount', chatManifest['contextControl.fullValueCount'])" :desktop-mode-id="props.desktopModeId" />
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullValueToken']"
-            pluginId="lumina-chat" settingKey="contextControl.fullValueToken" :config="chatManifest['contextControl.fullValueToken']" />
+            :input="createControlInput('lumina-chat', 'contextControl.fullValueToken', chatManifest['contextControl.fullValueToken'])" :desktop-mode-id="props.desktopModeId" />
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.fullValueChar']"
-            pluginId="lumina-chat" settingKey="contextControl.fullValueChar" :config="chatManifest['contextControl.fullValueChar']" />
+            :input="createControlInput('lumina-chat', 'contextControl.fullValueChar', chatManifest['contextControl.fullValueChar'])" :desktop-mode-id="props.desktopModeId" />
         </div>
         
         <!-- 2. 概览区设置 -->
@@ -251,24 +251,24 @@
             <span aria-hidden="true" class="tw:ml-2.5 tw:h-px tw:flex-1 tw:bg-lw-border-subtle tw:opacity-50"></span>
           </div>
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryMode']"
-            pluginId="lumina-chat" settingKey="contextControl.summaryMode" :config="chatManifest['contextControl.summaryMode']" />
+            :input="createControlInput('lumina-chat', 'contextControl.summaryMode', chatManifest['contextControl.summaryMode'])" :desktop-mode-id="props.desktopModeId" />
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryValueCount']"
-            pluginId="lumina-chat" settingKey="contextControl.summaryValueCount" :config="chatManifest['contextControl.summaryValueCount']" />
+            :input="createControlInput('lumina-chat', 'contextControl.summaryValueCount', chatManifest['contextControl.summaryValueCount'])" :desktop-mode-id="props.desktopModeId" />
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryValueToken']"
-            pluginId="lumina-chat" settingKey="contextControl.summaryValueToken" :config="chatManifest['contextControl.summaryValueToken']" />
+            :input="createControlInput('lumina-chat', 'contextControl.summaryValueToken', chatManifest['contextControl.summaryValueToken'])" :desktop-mode-id="props.desktopModeId" />
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.summaryValueChar']"
-            pluginId="lumina-chat" settingKey="contextControl.summaryValueChar" :config="chatManifest['contextControl.summaryValueChar']" />
+            :input="createControlInput('lumina-chat', 'contextControl.summaryValueChar', chatManifest['contextControl.summaryValueChar'])" :desktop-mode-id="props.desktopModeId" />
         </div>
         
         <!-- 3. 进阶参数 -->
         <div class="dcc-section dcc-section-advanced tw:mt-[18px] tw:flex tw:flex-col tw:gap-1 tw:rounded-[18px] tw:border tw:border-lw-border-subtle tw:bg-lw-subtle tw:px-4 tw:py-3.5">
           <SurfaceOutlet contract-id="settings.control" v-if="chatManifest['contextControl.tokenMaxFloat']"
-            pluginId="lumina-chat" settingKey="contextControl.tokenMaxFloat" :config="chatManifest['contextControl.tokenMaxFloat']" />
+            :input="createControlInput('lumina-chat', 'contextControl.tokenMaxFloat', chatManifest['contextControl.tokenMaxFloat'])" :desktop-mode-id="props.desktopModeId" />
           <div class="dcc-paired-settings tw:mt-2.5 tw:grid tw:grid-cols-2 tw:gap-x-[18px] tw:gap-y-3 tw:border-t tw:border-dashed tw:border-lw-border-subtle tw:pt-3 tw:max-[920px]:grid-cols-1">
             <SurfaceOutlet contract-id="settings.control" v-if="directorManifest['fullSplit']"
-              pluginId="lumina-director" settingKey="fullSplit" :config="directorManifest['fullSplit']" />
+              :input="createControlInput('lumina-director', 'fullSplit', directorManifest['fullSplit'])" :desktop-mode-id="props.desktopModeId" />
             <SurfaceOutlet contract-id="settings.control" v-if="directorManifest['fullFloating']"
-              pluginId="lumina-director" settingKey="fullFloating" :config="directorManifest['fullFloating']" />
+              :input="createControlInput('lumina-director', 'fullFloating', directorManifest['fullFloating'])" :desktop-mode-id="props.desktopModeId" />
           </div>
         </div>
       </div>
@@ -302,9 +302,8 @@
         <SurfaceOutlet contract-id="settings.control"
           v-for="key in activeDesktopModeBlock.commonKeys"
           :key="key"
-          :pluginId="activeDesktopModeBlock.pluginId"
-          :settingKey="key"
-          :config="activeDesktopModeBlock.manifest[key]"
+          :input="createControlInput(activeDesktopModeBlock.pluginId, key, activeDesktopModeBlock.manifest[key])"
+          :desktop-mode-id="props.desktopModeId"
         />
       </div>
     </SettingsSectionPanel>
@@ -327,8 +326,8 @@
       </SettingsBlockHeader>
 
       <div class="block-content tw:flex tw:flex-col tw:pt-1">
-        <SurfaceOutlet contract-id="settings.control" v-for="key in block.commonKeys" :key="key" :pluginId="block.pluginId" :settingKey="key"
-          :config="block.manifest[key]" />
+        <SurfaceOutlet contract-id="settings.control" v-for="key in block.commonKeys" :key="key"
+          :input="createControlInput(block.pluginId, key, block.manifest[key])" :desktop-mode-id="props.desktopModeId" />
         <component
           v-if="block.inlineComponent"
           :is="block.inlineComponent"
@@ -353,6 +352,18 @@ import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry.
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import { getActiveDesktopModeIdFromSettings, getDesktopModeOrDefault, getDesktopModeSettingsPluginId } from '../../desktop-modes/core/registry.js';
 import { LuminaButton, LuminaIconButton, LuminaSelect, LuminaToggle } from '../../ui/primitives';
+import type { SettingsControlSurfaceInput } from '../../platform/surface/officialContracts.js';
+import type { SettingDefinition } from '../../types/plugin.js';
+
+const props = defineProps<{
+  desktopModeId: string;
+}>();
+
+const createControlInput = (
+  pluginId: string,
+  settingKey: string,
+  config: SettingDefinition
+): SettingsControlSurfaceInput => ({ pluginId, settingKey, config });
 
 const { initSettings } = useSettings();
 const { cssVars, variant: unifiedVariant } = useSurfaceSkin('settings.unified');

@@ -26,6 +26,7 @@
 - 受信任插件继续通过 `PluginManifestV2.businessRenderers` 注册 Vue/TypeScript renderer。
 - 不保留旧 Surface context、旧 Chat store 或 Shell 业务硬编码的兼容层。
 - 本任务不改变服务端 HTTP API、Semantic VFS、Git 工作区版本和 SillyTavern 宿主边界。
+- 保留现有 runtime extension store 物理实现：普通 Tauri 继续使用 SQLite，浏览器与 standalone-local 的既有 IndexedDB 路径保持不变；本任务不迁移数据库、不修改 SQL capability 或数据路径。
 
 ## 实施顺序
 
@@ -38,14 +39,18 @@
 
 ## 当前状态
 
-已完成架构基线与 Headless Domain Runtime：
+已完成架构基线、Headless Domain Runtime 与 Typed Surface Runtime 实现：
 
 - `DesktopExperienceRuntime` 已统一暴露 conversation、generation、character、timeline、activity 五组领域能力。
 - App scope 负责创建并提供 runtime，scope 销毁时统一释放角色会话订阅。
 - Conversation 与 Generation 已提供显式订阅取消函数，Generation 已提供停止能力。
 - Discord Shell 已改为消费 runtime-owned 角色会话服务，不再自行构造服务或使用 `any` 强转。
+- `SurfaceContractMap` 已为官方 contract 固定 input、state 与 intents 类型，注册时通过严格 Zod schema 校验 input。
+- Surface contract、plugin renderer 与 desktop override 改为批量预检后原子注册，失败不会留下部分注册状态。
+- renderer context 只接收 typed input、runtime 与 disposer 注册；`SurfaceOutlet` 负责 theme 注入、等价输入复用、异常隔离和销毁。
+- 插件主 Surface 只读取 `PluginManifestV2.primarySurface`，Shell 与 Workspace 不再从插件 ID 推断 contract。
 
-任务 2 定向验证：4 个测试文件、15 个测试通过；`npm run type-check` 通过。下一步实施 Typed Surface Runtime。
+任务 2 定向验证：4 个测试文件、15 个测试通过；`npm run type-check` 通过。任务 3 定向验证：19 个测试文件、89 个测试通过；`npm run type-check` 通过。下一步是提交 Typed Surface Runtime，再进入 Chat Application Controller。
 
 ## 恢复入口
 

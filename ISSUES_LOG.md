@@ -191,10 +191,13 @@
 ## 24. 主题桌面组合能力被 Shell 与 Chat 耦合阻断 (2026-07-29)
 
 - **错误表现**: `DesktopModeManifest` 只能描述 shell、preset、skin 和 renderer variant，无法声明角色列表、会话列表、消息流、输入区与 Activity slot 的组合。Traditional/Freeform Shell、Workspace 和 `ChatStream.vue` 仍直接持有业务组件与模式分支，第三方桌面模式不能在稳定契约下自由组合官方组件。
-- **根本原因假设**: 桌面模式、Surface Runtime 和 Chat presentation 缺少共同的 headless domain runtime；`SurfaceRuntimeContext` 使用开放 contract、`unknown` state 和任意属性透传；`useChatStore` 与 `useConversationContextStore` 并存，使状态和命令所有权无法收敛。
+- **根本原因假设**: 已通过代码与结构测试确认三条结构性根因：桌面模式、Surface Runtime 和 Chat presentation 缺少共同的 headless domain runtime；旧 `SurfaceRuntimeContext` 使用开放 contract、`unknown` state 和任意属性透传；`useChatStore` 与 `useConversationContextStore` 并存，使状态和命令所有权无法收敛。
 - **验证手段**: 先以结构测试固定 typed runtime、surface contract、composition schema、订阅销毁和错误隔离行为，再逐层迁移 Chat、Shell、Workspace 与四个内置模式；每层迁移后运行定向测试与 type-check。
-- **什么起作用了**: 规划阶段已采纳 ADR-0004，锁定 `DesktopExperienceRuntime + Official Surface Kit + DesktopModeManifest.composition` 三层结构，并明确不在进程内 SDK 引入 OpenAPI。运行时代码尚未开始迁移。
+- **任务 3 验证中发现的错误消息**: `npm run type-check` 在 `src/App.vue(946,7)` 报 `TS2322`：`WorkspaceSurfaceOutletProps<SurfaceContractId>` 不能赋给 `WorkspaceWindowEntry.props` 的 `Record<string, unknown>`，因为封闭的强类型 props 没有任意字符串索引签名。
+- **任务 3 类型错误根本原因假设**: `WorkspaceWindowEntry` 沿用旧 Surface 任意 attrs 时期的 `Record<string, unknown>`，但该容器只把 props 整体交给 Vue `v-bind`，不读取任意键；Typed Surface Runtime 返回封闭 props 后，旧容器约束反而要求开放索引签名。
+- **什么起作用了**: 规划阶段采纳 ADR-0004，锁定 `DesktopExperienceRuntime + Official Surface Kit + DesktopModeManifest.composition` 三层结构，并明确不在进程内 SDK 引入 OpenAPI。任务 2 已落地五组 headless 领域能力和统一销毁生命周期。任务 3 已以 `SurfaceContractMap`、严格 Zod input schema、显式 `primarySurface`、批量原子注册、局部 renderer 错误边界和 disposer 隔离替换旧开放 Surface context；Shell 与 Workspace 已停止从插件 ID 推断主 contract。将 `WorkspaceWindowEntry.props` 收窄为容器实际需要的 `object` 后，封闭 Surface props 不再被迫声明任意索引签名；19 个定向测试文件、89 个用例通过，`npm run type-check` 通过。现有 runtime extension store 保持不变，普通 Tauri 继续使用 SQLite，本任务不迁移为 IndexedDB。
 - **失败尝试**: 既有桌面模式重构已经收敛单注册源、目录和 shell payload，但只解决模式归属与外观分发，没有建立组件组合树和强类型业务能力边界，因此没有消除 Chat/Shell/Workspace 耦合。
+  任务 3 首次 `npm run type-check` 暴露旧 `Record<string, unknown>` 容器约束与封闭 Surface props 不兼容；未向 Surface props 添加开放索引签名，而是修正 Shell 容器的真实类型边界。
 
 ## 2026-06-27 AgentRuntime pi compat review fixes
 

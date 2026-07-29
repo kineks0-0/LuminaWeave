@@ -30,7 +30,9 @@ export interface DesktopModeRuntimeDescriptor {
     shellRenderer?: Component;
     navigationModel: DesktopNavigationModel;
     surfaceMap?: Partial<Record<SurfaceContractId, SurfaceContractId>>;
-    componentOverrides?: Partial<Record<SurfaceContractId, SurfaceRendererDefinition>>;
+    componentOverrides?: Partial<{
+        [K in SurfaceContractId]: SurfaceRendererDefinition<K>;
+    }>;
     interactionPolicy: DesktopInteractionPolicy;
     tokens?: Record<string, string | number>;
     settingsSchema?: Record<string, SettingDefinition>;

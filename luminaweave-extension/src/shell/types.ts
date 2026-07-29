@@ -108,7 +108,7 @@ export interface WorkspaceWindowEntry {
   title: string;
   icon: string;
   component: Component;
-  props: Record<string, unknown>;
+  props: object;
   kind: 'launcher' | 'main' | 'widget' | 'panel';
   eyebrow: string;
   minWidth: number;
@@ -218,6 +218,7 @@ export interface ShellRuntimeSurfaces {
 
 export interface ShellRuntimeActions {
   getPluginName: (pluginId: string | null) => string;
+  resolvePluginPrimarySurface: (pluginId: string) => SurfaceContractId | null;
   navigation: {
     switchMainView: (tabId: string) => void;
     closeTab: (tabId: string) => void;

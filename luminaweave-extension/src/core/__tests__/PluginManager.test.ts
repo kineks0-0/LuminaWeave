@@ -1,13 +1,30 @@
 import { defineComponent } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { PluginManager } from '../PluginManager.js';
 import type { LuminaPlugin } from '../../types/plugin.js';
 import { pluginDomainRegistry } from '../../platform/plugin/PluginDomainRegistry.js';
-import type { SurfaceRendererDefinition } from '../../platform/surface/types.js';
+import { surfaceRegistry } from '../../platform/surface/SurfaceRegistry.js';
+import type {
+    EmptySurfaceData,
+    SurfaceContractSpec,
+    SurfaceRendererDefinition
+} from '../../platform/surface/types.js';
+
+declare module '../../platform/surface/types.js' {
+    interface SurfaceContractMap {
+        'test.conflict.surface': SurfaceContractSpec<EmptySurfaceData>;
+        'test.duplicate-within-manifest.surface': SurfaceContractSpec<EmptySurfaceData>;
+        'test.atomic-contract.surface': SurfaceContractSpec<EmptySurfaceData>;
+    }
+}
 
 const StubComponent = defineComponent({ name: 'StubPluginRoot', template: '<div />' });
 
-const createRenderer = (contractId: string, ownerId: string): SurfaceRendererDefinition => ({
+const createRenderer = <K extends 'test.conflict.surface' | 'test.duplicate-within-manifest.surface'>(
+    contractId: K,
+    ownerId: string
+): SurfaceRendererDefinition<K> => ({
     contractId,
     component: StubComponent,
     ownerId,
@@ -73,8 +90,13 @@ describe('PluginManager', () => {
             platformManifest: {
                 id: 'owner-plugin',
                 name: 'Owner Plugin',
+                surfaces: [{
+                    id: contractId,
+                    ownerPluginId: 'owner-plugin',
+                    inputSchema: z.object({}).strict()
+                }],
                 businessRenderers: {
-                    main: createRenderer(contractId, 'owner-plugin')
+                    [contractId]: createRenderer(contractId, 'owner-plugin')
                 }
             }
         });
@@ -88,7 +110,7 @@ describe('PluginManager', () => {
                 id: 'conflicting-plugin',
                 name: 'Conflicting Plugin',
                 businessRenderers: {
-                    main: createRenderer(contractId, 'conflicting-plugin')
+                    [contractId]: createRenderer(contractId, 'conflicting-plugin')
                 }
             }
         })).toThrow(/Duplicate plugin business renderer/);
@@ -111,15 +133,49 @@ describe('PluginManager', () => {
                 name: 'Duplicate Manifest Plugin',
                 surfaces: [{
                     id: contractId,
+                    inputSchema: z.object({}).strict(),
                     businessRenderer: createRenderer(contractId, 'duplicate-manifest-plugin')
                 }],
                 businessRenderers: {
-                    main: createRenderer(contractId, 'duplicate-manifest-plugin')
+                    [contractId]: createRenderer(contractId, 'duplicate-manifest-plugin')
                 }
             }
         })).toThrow(/Duplicate business renderer in manifest/);
 
         expect(manager.getPlugin('duplicate-manifest-plugin')).toBeUndefined();
         expect(pluginDomainRegistry.get('duplicate-manifest-plugin')).toBeUndefined();
+    });
+
+    it('rejects duplicate contract ids before writing any manifest state', () => {
+        const manager = new PluginManager();
+        const contractId = 'test.atomic-contract.surface';
+
+        expect(() => manager.register({
+            id: 'atomic-contract-plugin',
+            name: 'Atomic Contract Plugin',
+            icon: '',
+            component: StubComponent,
+            platformManifest: {
+                id: 'atomic-contract-plugin',
+                name: 'Atomic Contract Plugin',
+                surfaces: [
+                    {
+                        id: contractId,
+                        ownerPluginId: 'atomic-contract-plugin',
+                        inputSchema: z.object({}).strict()
+                    },
+                    {
+                        id: contractId,
+                        ownerPluginId: 'atomic-contract-plugin',
+                        inputSchema: z.object({}).strict()
+                    }
+                ]
+            }
+        })).toThrow(/Duplicate surface contract in manifest/);
+
+        expect(surfaceRegistry.hasContract(contractId)).toBe(false);
+        expect(manager.getPlugin('atomic-contract-plugin')).toBeUndefined();
+        expect(pluginDomainRegistry.get('atomic-contract-plugin')).toBeUndefined();
+        expect(manager.registeredSettings['atomic-contract-plugin']).toBeUndefined();
     });
 });

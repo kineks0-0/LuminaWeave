@@ -1,9 +1,12 @@
 import { markRaw } from 'vue';
-import { surfaceRegistry } from '../surface/SurfaceRegistry.js';
+import { SurfaceRegistry, surfaceRegistry } from '../surface/SurfaceRegistry.js';
+import type { SurfaceRendererDefinitionUnion } from '../surface/types.js';
 import type { DesktopModeRuntimeDescriptor } from './types.js';
 
 export class DesktopModeRuntimeRegistry {
     private readonly modes = new Map<string, DesktopModeRuntimeDescriptor>();
+
+    constructor(private readonly surfaces: SurfaceRegistry = surfaceRegistry) {}
 
     register(manifest: DesktopModeRuntimeDescriptor): void {
         if (this.modes.has(manifest.id)) {
@@ -15,15 +18,15 @@ export class DesktopModeRuntimeRegistry {
             shellRenderer: manifest.shellRenderer ? markRaw(manifest.shellRenderer) : undefined
         };
 
-        this.modes.set(manifest.id, normalizedManifest);
-
-        Object.values(manifest.componentOverrides || {}).forEach(renderer => {
-            if (!renderer) return;
-            surfaceRegistry.registerDesktopOverride(manifest.id, {
+        const overrides = Object.values(manifest.componentOverrides || {})
+            .filter((renderer): renderer is SurfaceRendererDefinitionUnion => Boolean(renderer))
+            .map(renderer => ({
                 ...renderer,
                 component: markRaw(renderer.component)
-            });
-        });
+            } as SurfaceRendererDefinitionUnion));
+
+        this.surfaces.registerDesktopOverrides(manifest.id, overrides);
+        this.modes.set(manifest.id, normalizedManifest);
     }
 
     get(desktopModeId: string): DesktopModeRuntimeDescriptor | undefined {
@@ -36,7 +39,7 @@ export class DesktopModeRuntimeRegistry {
 
     clearForTests(): void {
         this.modes.clear();
-        surfaceRegistry.clearDesktopOverridesForTests();
+        this.surfaces.clearDesktopOverridesForTests();
     }
 }
 

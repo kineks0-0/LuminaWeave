@@ -7,6 +7,7 @@ const LauncherRoot = defineAsyncComponent(() => import('./LauncherRoot.vue'));
 const platformManifest: PluginManifestV2 = {
   id: 'lumina-launcher',
   name: '启动台',
+  primarySurface: 'launcher.root',
   capabilities: [
     { id: 'launcher.app-grid', description: '展示可打开的插件和工作区入口。' }
   ],
