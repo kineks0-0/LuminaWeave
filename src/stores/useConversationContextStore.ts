@@ -2,10 +2,10 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { luminaWeaveApi } from '../api';
 import type {
-    ConversationContext,
     ConversationContextOption,
     ConversationSessionRef,
-    ConversationSourceId
+    ConversationSourceId,
+    ConversationViewContext
 } from '../types/ConversationContextTypes.js';
 
 type SessionSwitchState = {
@@ -16,25 +16,36 @@ type SessionSwitchState = {
     startedAt: number | null;
 };
 
-const EMPTY_CONTEXT: ConversationContext = {
+type ChatConversationSessionRef = Extract<ConversationSessionRef, { sourceId: 'chat' }>;
+type ForgeConversationSessionRef = Extract<ConversationSessionRef, { sourceId: 'forge' }>;
+type ConversationSelectionContext = Pick<
+    ConversationViewContext,
+    'source' | 'sessionId' | 'activeLeafId' | 'meta'
+>;
+
+const EMPTY_CONTEXT: ConversationSelectionContext = {
     source: 'chat',
     sessionId: null,
     activeLeafId: null,
-    messages: [],
-    timelineGraph: {},
-    focusedMessage: null,
     meta: {
         currentChatSessionId: null,
         isLive: false
     }
 };
 
+const projectConversationSelection = (context: ConversationViewContext): ConversationSelectionContext => ({
+    source: context.source,
+    sessionId: context.sessionId,
+    activeLeafId: context.activeLeafId,
+    ...(context.meta ? { meta: { ...context.meta } } : {})
+});
+
 export const useConversationContextStore = defineStore('lumina-conversation-context', () => {
     const conversationService = luminaWeaveApi.services.conversation;
-    const currentContext = ref<ConversationContext>(EMPTY_CONTEXT);
+    const currentContext = ref<ConversationSelectionContext>(EMPTY_CONTEXT);
     const sources = ref<ConversationContextOption[]>([]);
-    const chatSessions = ref<ConversationSessionRef[]>([]);
-    const forgeSessions = ref<ConversationSessionRef[]>([]);
+    const chatSessions = ref<ChatConversationSessionRef[]>([]);
+    const forgeSessions = ref<ForgeConversationSessionRef[]>([]);
     const selectedViewSessionId = ref<string | null>(null);
     const hasBound = ref(false);
     const isRefreshing = ref(false);
@@ -50,7 +61,7 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
 
     const refreshContext = async (): Promise<void> => {
         const context = await conversationService.getContext();
-        currentContext.value = context;
+        currentContext.value = projectConversationSelection(context);
     };
 
     const refreshSessionOptions = async (): Promise<void> => {
@@ -83,8 +94,8 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
         if (hasBound.value) return;
         hasBound.value = true;
 
-        luminaWeaveApi.on('CONVERSATION_CONTEXT_CHANGED', ({ context }: { context: ConversationContext }) => {
-            currentContext.value = context;
+        luminaWeaveApi.on('CONVERSATION_CONTEXT_CHANGED', ({ context }: { context: ConversationViewContext }) => {
+            currentContext.value = projectConversationSelection(context);
         });
         luminaWeaveApi.on('CONVERSATION_SESSIONS_UPDATED', ({ sources: nextSources, sessions }: {
             sources: ConversationContextOption[];
@@ -94,14 +105,14 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
             chatSessions.value = sessions.filter((session) => session.sourceId === 'chat');
             forgeSessions.value = sessions.filter((session) => session.sourceId === 'forge');
         });
-        luminaWeaveApi.on('CONVERSATION_WORLDLINE_UPDATED', ({ context }: { context: ConversationContext }) => {
-            currentContext.value = context;
+        luminaWeaveApi.on('CONVERSATION_WORLDLINE_UPDATED', ({ context }: { context: ConversationViewContext }) => {
+            currentContext.value = projectConversationSelection(context);
         });
-        luminaWeaveApi.on('CONVERSATION_WORLDLINE_SWITCHED', ({ context }: { context: ConversationContext }) => {
-            currentContext.value = context;
+        luminaWeaveApi.on('CONVERSATION_WORLDLINE_SWITCHED', ({ context }: { context: ConversationViewContext }) => {
+            currentContext.value = projectConversationSelection(context);
         });
-        luminaWeaveApi.on('CONVERSATION_WORLDLINE_ROLLED_BACK', ({ context }: { context: ConversationContext }) => {
-            currentContext.value = context;
+        luminaWeaveApi.on('CONVERSATION_WORLDLINE_ROLLED_BACK', ({ context }: { context: ConversationViewContext }) => {
+            currentContext.value = projectConversationSelection(context);
         });
 
         void luminaWeaveApi.waitForReady().then((ready) => {
@@ -113,9 +124,6 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
     const activeSourceId = computed<ConversationSourceId>(() => currentContext.value.source);
     const activeSessionId = computed(() => currentContext.value.sessionId);
     const activeLeafId = computed(() => currentContext.value.activeLeafId);
-    const activeMessages = computed(() => currentContext.value.messages);
-    const activeTimelineGraph = computed(() => currentContext.value.timelineGraph);
-    const focusedMessage = computed(() => currentContext.value.focusedMessage);
     const currentChatSessionId = computed(() => {
         return currentContext.value.meta?.currentChatSessionId
             || sources.value.find((source) => source.id === 'chat')?.sessionId
@@ -124,36 +132,40 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
 
     const switchSource = async (sourceId: ConversationSourceId): Promise<void> => {
         selectedViewSessionId.value = null;
-        currentContext.value = await conversationService.switchContext({
+        const context = await conversationService.switchContext({
             sourceId,
             sessionId: null
         });
+        currentContext.value = projectConversationSelection(context);
     };
 
     const selectForgeSession = async (id: string | null): Promise<void> => {
         selectedViewSessionId.value = id;
-        currentContext.value = await conversationService.switchContext({
+        const context = await conversationService.switchContext({
             sourceId: 'forge',
             sessionId: id
         });
+        currentContext.value = projectConversationSelection(context);
     };
 
     const selectViewSession = async (id: string | null): Promise<void> => {
         if (!id) {
             selectedViewSessionId.value = null;
-            currentContext.value = await conversationService.switchContext({
+            const context = await conversationService.switchContext({
                 sourceId: 'chat',
                 sessionId: null
             });
+            currentContext.value = projectConversationSelection(context);
             return;
         }
 
         selectedViewSessionId.value = id;
         const isForge = forgeSessions.value.some((session) => session.id === id);
-        currentContext.value = await conversationService.switchContext({
+        const context = await conversationService.switchContext({
             sourceId: isForge ? 'forge' : 'chat',
             sessionId: id
         });
+        currentContext.value = projectConversationSelection(context);
     };
 
     const syncCurrentChatSelection = (): void => {
@@ -172,7 +184,7 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
             sourceId: nextSource,
             sessionId: null
         }).then((context) => {
-            currentContext.value = context;
+            currentContext.value = projectConversationSelection(context);
         });
     };
 
@@ -226,14 +238,10 @@ export const useConversationContextStore = defineStore('lumina-conversation-cont
         activeSourceId,
         activeSessionId,
         activeLeafId,
-        activeMessages,
-        activeTimelineGraph,
-        focusedMessage,
         sources,
         chatSessions,
         forgeSessions,
         currentChatSessionId,
-        currentContext,
         selectedViewSessionId,
         isRefreshing,
         sessionSwitchState,

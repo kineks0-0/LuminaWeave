@@ -2,6 +2,13 @@
   <div class="chat-root-container">
     <ChatStream
       :messages="messages"
+      :context="snapshot.context"
+      :generation="snapshot.generation"
+      :promptInspectorVisible="snapshot.promptInspectorVisible"
+      :sessionSwitchState="sessionSwitchState"
+      :chatSessions="chatSessions"
+      :intents="controller.intents"
+      :onSelectViewSession="contextStore.selectViewSession"
       :isMobile="props.isMobile"
       :workspaceCompact="props.workspaceCompact"
       :onTelegramBack="props.onTelegramBack"
@@ -12,19 +19,44 @@
 
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
+import { computed, onScopeDispose, shallowRef } from 'vue';
 import ChatStream from './ChatStream.vue';
+import { luminaWeaveApi } from '../../api/index.js';
 import { useConversationContextStore } from '../../stores/useConversationContextStore.js';
-import { useSurfaceInput } from '../../platform/surface/useSurfaceRuntimeContext.js';
+import {
+  useSurfaceInput,
+  useSurfaceRuntimeContext
+} from '../../platform/surface/useSurfaceRuntimeContext.js';
+import {
+  ChatApplicationController,
+  type ChatApplicationSnapshot
+} from './application/ChatApplicationController.js';
 
 const props = useSurfaceInput('chat.main');
+const surfaceContext = useSurfaceRuntimeContext('chat.main');
 
 const contextStore = useConversationContextStore();
-const { activeMessages: messages } = storeToRefs(contextStore);
+const { chatSessions, sessionSwitchState } = storeToRefs(contextStore);
+const runtime = surfaceContext.value.runtime;
+const controller = new ChatApplicationController({
+  conversation: runtime.conversation,
+  generation: runtime.generation,
+  feedback: luminaWeaveApi.services.host
+});
+const snapshot = shallowRef<ChatApplicationSnapshot>(controller.getSnapshot());
+const messages = computed(() => snapshot.value.messages);
+const unsubscribe = controller.subscribe((nextSnapshot) => {
+  snapshot.value = nextSnapshot;
+});
 
-import { watch } from 'vue';
-watch(messages, (newList) => {
-    console.log('[ChatRoot] messages 发生变化，新长度:', newList.length);
-}, { immediate: true });
+void controller.start().catch((error: unknown) => {
+  console.error('[ChatApplicationController] Start failed', { error });
+});
+
+onScopeDispose(() => {
+  unsubscribe();
+  controller.dispose();
+});
 </script>
 
 <style scoped>

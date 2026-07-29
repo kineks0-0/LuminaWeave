@@ -29,11 +29,20 @@ export interface ConversationDomainEventSource {
     subscribe(listener: ConversationDomainEventListener): () => void;
 }
 
+export interface ConversationMessageCommandPort {
+    mutateChatRecord(
+        target: number | string,
+        action: 'edit' | 'delete',
+        newText?: string
+    ): Promise<{ success: boolean }>;
+}
+
 export class ConversationDomainService {
     constructor(
         private readonly conversationService: ConversationService,
         private readonly waitForReady: RuntimeReadyGate,
-        private readonly eventSource: ConversationDomainEventSource
+        private readonly eventSource: ConversationDomainEventSource,
+        private readonly messageCommands: ConversationMessageCommandPort
     ) {}
 
     subscribe(listener: ConversationDomainEventListener): () => void {
@@ -100,5 +109,17 @@ export class ConversationDomainService {
     async rollbackNode(input: ConversationNodeSwitchInput): Promise<boolean> {
         await this.waitForReady();
         return this.conversationService.rollbackConversationNode(input);
+    }
+
+    async editMessage(target: number | string, text: string): Promise<boolean> {
+        await this.waitForReady();
+        const result = await this.messageCommands.mutateChatRecord(target, 'edit', text);
+        return result.success;
+    }
+
+    async deleteMessage(target: number | string): Promise<boolean> {
+        await this.waitForReady();
+        const result = await this.messageCommands.mutateChatRecord(target, 'delete');
+        return result.success;
     }
 }

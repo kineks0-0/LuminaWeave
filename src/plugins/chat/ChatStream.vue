@@ -79,7 +79,7 @@
               v-for="session in telegramRecentSessions"
               :key="session.id"
               type="button"
-              @click="contextStore.selectViewSession(session.id)"
+              @click="props.onSelectViewSession(session.id)"
             >
               <span>{{ session.characterName || session.title }}</span>
               <small>{{ session.previewMessage || session.summary || session.title }}</small>
@@ -273,7 +273,7 @@
     <!-- 提示词查看器展开区域 -->
     <transition name="inspector-slide">
       <div class="prompt-inspector-wrap" v-if="showInspector" :class="{ 'inspector-expanded': inspectorExpanded }">
-        <PromptInspector />
+        <PromptInspector :onRunEditedPrompt="intents.runEditedPrompt" />
       </div>
     </transition>
 
@@ -300,7 +300,7 @@
           </button>
 
           <button class="lw-btn prompt-preview-toggle" :class="showInspector ? 'lw-btn-primary' : 'lw-btn-secondary'"
-            @click="showInspector = !showInspector"
+            @click="togglePromptInspector"
             :title="showInspector ? '隐藏提示词查看器' : '查看/编辑提示词'">
             <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
               <circle cx="11" cy="11" r="8"></circle>
@@ -370,16 +370,39 @@ import { useSettings } from '../settings/useSettings.js';
 import PromptInspector from './PromptInspector.vue';
 import MessageRenderer from './components/MessageRenderer.vue';
 import { LuminaWeaveAPI } from '../../api/index.js';
-import { LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { useConversationContextStore } from '../../stores/useConversationContextStore.js';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { useImeSubmitGuard } from '../../composables/useImeSubmitGuard.js';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import { getDesktopModeSettingValue } from '../../desktop-modes/core/registry.js';
 import { resolveChatSurfaceState, resolveChatViewState } from './chatViewState.js';
-import type { ChatSessionRef } from '../../types/SessionTypes.js';
+import type {
+  ConversationSessionRef,
+  ConversationViewContext
+} from '../../types/ConversationContextTypes.js';
+import type {
+  ChatApplicationIntents,
+  ChatGenerationState
+} from './application/ChatApplicationController.js';
+
+interface ChatSessionSwitchPresentation {
+  isSwitching: boolean;
+  targetSessionId: string | null;
+  targetCharacterName: string;
+  statusText: string;
+  startedAt: number | null;
+}
+
+type ChatConversationSessionRef = Extract<ConversationSessionRef, { sourceId: 'chat' }>;
 
 interface Props {
   messages: LuminaChatMessage[];
+  context: ConversationViewContext;
+  generation: ChatGenerationState;
+  promptInspectorVisible: boolean;
+  sessionSwitchState: ChatSessionSwitchPresentation;
+  chatSessions: ChatConversationSessionRef[];
+  intents: ChatApplicationIntents;
+  onSelectViewSession: (sessionId: string | null) => Promise<void>;
   isMobile?: boolean;
   workspaceCompact?: boolean;
   onTelegramBack?: () => void;
@@ -394,7 +417,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const { activeSettings } = useSettings();
-const contextStore = useConversationContextStore();
 const { cssVars: chatSkinVars, variant: chatVariant, desktopModeId } = useSurfaceSkin('chat.stream');
 const { cssVars: telegramConversationVars } = useSurfaceSkin('telegram.conversation');
 const { cssVars: telegramComposerVars } = useSurfaceSkin('telegram.composer');
@@ -404,28 +426,30 @@ const quickInput = ref('');
 const chatScrollArea = ref<HTMLElement | null>(null);
 const mainImeGuard = useImeSubmitGuard({ debugLabel: 'ChatMainInput' });
 const editImeGuard = useImeSubmitGuard({ debugLabel: 'ChatEditInput' });
-const showInspector = ref(false);     // 提示词查看器开关
 const inspectorExpanded = ref(false); // 展开到全屏模式
 const inputCollapsed = ref(false);    // 输入框折叠状态
 const telegramSearchActive = ref(false);
 const telegramMessageSearchQuery = ref('');
 const showTelegramHeaderToolsMenu = ref(false);
 const showTelegramComposerToolsMenu = ref(false);
-const isGenerating = ref(lwApi?.services.generation.isGenerating() || false);
-const isSyncing = ref(lwApi?.services.generation.isSyncing() || false);
-const streamingBuffer = ref('');      // 实时流式文本缓冲 (正则处理后)
-const streamingRaw = ref('');         // 实时流式文本 (处理前)
-const streamingConfirmed = ref('');   // 已确认显示的文本（无动画）
-const streamingPending = ref('');     // 本帧新增文本（需要动画）
-const streamingFilteredLength = ref(0); // 核心修复：后端计算的过滤字数总额
-const streamingStatusText = ref('');  // 当前生成的 XML 标签状态
-const streamingThinkingText = ref(''); // 独立思维链缓冲
-const generationError = ref('');
 const editingIndex = ref(-1);         // 当前内联编辑的消息索引，-1 表示未编辑
 const editingText = ref('');          // 内联编辑中的文本
-const editingTargetId = ref<string | null>(null);
+const editingMessage = ref<LuminaChatMessage | null>(null);
 const lastStreamingHeight = ref(0);   // 上一次流式气泡的测量高度
 const isAtBottom = ref(true);         // 响应式追踪是否处于底部
+
+const showInspector = computed(() => props.promptInspectorVisible);
+const isGenerating = computed(() => props.context.meta?.isLive === true && props.generation.isGenerating);
+const isSyncing = computed(() => props.context.meta?.isLive === true && props.generation.isSyncing);
+const streamingBuffer = computed(() => props.context.meta?.isLive === true
+  ? props.generation.stream?.processed || ''
+  : '');
+const streamingFilteredLength = computed(() => props.generation.stream?.filteredCount || 0);
+const streamingStatusText = computed(() => props.generation.stream?.statusText || '');
+const streamingThinkingText = computed(() => props.generation.stream?.thinkingText || '');
+const generationError = computed(() => props.context.meta?.isLive === true
+  ? props.generation.errorMessage
+  : '');
 
 // 流式效果模式
 const effectMode = computed(() => {
@@ -446,13 +470,13 @@ const assistantMessageShape = computed(() => String(chatSkinVars.value['--lw-cha
 const userMessageShape = computed(() => String(chatSkinVars.value['--lw-chat-user-shape'] || 'bubble'));
 const assistantAvatarPlacement = computed(() => String(chatSkinVars.value['--lw-chat-assistant-avatar-placement'] || 'inline'));
 const userAvatarPlacement = computed(() => String(chatSkinVars.value['--lw-chat-user-avatar-placement'] || 'inline'));
-const sessionSwitchState = computed(() => contextStore.sessionSwitchState);
+const sessionSwitchState = computed(() => props.sessionSwitchState);
 const isSessionSwitching = computed(() => sessionSwitchState.value.isSwitching);
 const chatViewState = computed(() => resolveChatViewState({
-  sourceId: contextStore.activeSourceId,
-  sessionId: contextStore.currentContext.sessionId,
-  currentChatSessionId: contextStore.currentContext.meta?.currentChatSessionId || null,
-  isLive: contextStore.currentContext.meta?.isLive === true,
+  sourceId: props.context.source,
+  sessionId: props.context.sessionId,
+  currentChatSessionId: props.context.meta?.currentChatSessionId || null,
+  isLive: props.context.meta?.isLive === true,
   isSessionSwitching: isSessionSwitching.value
 }));
 const isLiveChatView = computed(() => chatViewState.value.isLiveChatView);
@@ -498,8 +522,7 @@ const telegramSearchMatchCount = computed(() => {
   )).length;
 });
 const telegramRecentSessions = computed(() => (
-  contextStore.chatSessions
-    .filter((session): session is ChatSessionRef & { sourceId: 'chat' } => session.sourceId === 'chat')
+  props.chatSessions
     .slice()
     .sort((left, right) => right.updatedAt - left.updatedAt)
     .slice(0, 5)
@@ -601,193 +624,53 @@ const handleTelegramRoleProfileClick = () => {
 };
 
 const togglePromptInspector = () => {
-  showInspector.value = !showInspector.value;
+  props.intents.togglePromptInspector();
   closeTelegramMenus();
 };
 
-const resetStreamingState = (forceScroll = false) => {
-  isGenerating.value = false;
-  isSyncing.value = false;
-  streamingBuffer.value = '';
-  streamingRaw.value = '';
-  streamingConfirmed.value = '';
-  streamingPending.value = '';
-  streamingFilteredLength.value = 0;
-  streamingStatusText.value = '';
-  streamingThinkingText.value = '';
-  generationError.value = '';
-
-  if (forceScroll) {
-    scrollToBottom(true);
-  }
-};
-
-// 订阅流式事件
-const onGenerationStarted = () => {
-  if (!isLiveChatView.value) {
-    resetStreamingState(false);
-    return;
-  }
-  isGenerating.value = true;
-  isSyncing.value = false;
-  streamingBuffer.value = '';
-  streamingRaw.value = '';
-  streamingFilteredLength.value = 0; // 重置过滤计数器
-  streamingStatusText.value = '';
-  streamingThinkingText.value = '';
-  generationError.value = '';
-  scrollToBottom(true); // 强制触底以适应新出现的消息气泡
-};
-const onBufferUpdated = (text: string, rawText?: string, filteredCount?: number, statusText?: string, thinkingText?: string, pendingText?: string) => {
-  if (!isLiveChatView.value) {
-    return;
-  }
-
+const updateStreamingMeasurement = (text: string): void => {
   const area = chatScrollArea.value;
-  
-  if (area && lwApi?.measureService) {
-    const fontSize = parseFloat(String(streamStyle.value['--lw-size'])) || 16;
-    const lineHeight = (parseFloat(String(streamStyle.value['--lw-line-height'])) || 1.6) * fontSize;
-    
-    const measureOptions = {
-      width: area.clientWidth - 80, 
-      lineHeight,
-      fontSize,
-      fontFamily: String(streamStyle.value['--lw-font']),
-      fontWeight: streamStyle.value['--lw-font-weight'],
-    };
-    
-    const result = lwApi.measureService.measure(text, measureOptions);
-    lastStreamingHeight.value = result.height;
-  }
+  if (!area || !lwApi?.measureService || !text) return;
 
-  streamingBuffer.value = text;
-  generationError.value = '';
-
-  // 双层输出拆分：confirmed = 全文减去 pending
-  if (pendingText && effectMode.value !== 'instant') {
-    streamingConfirmed.value = text.slice(0, text.length - pendingText.length);
-    streamingPending.value = pendingText;
-  } else {
-    // instant 模式或无 pending：全部作为 confirmed
-    streamingConfirmed.value = text;
-    streamingPending.value = '';
-  }
-
-  if (rawText !== undefined) {
-    streamingRaw.value = rawText;
-  }
-  if (filteredCount !== undefined) {
-    streamingFilteredLength.value = filteredCount;
-  }
-  if (statusText !== undefined) {
-    streamingStatusText.value = statusText;
-  }
-  if (thinkingText !== undefined) {
-    streamingThinkingText.value = thinkingText;
-  }
-
-  // 同步状态追踪
-  isSyncing.value = lwApi?.services.generation.isSyncing() || false;
-  
-  // 仅在之前就贴底的情况下跟随滚动
-  if (isAtBottom.value) {
-    scrollToBottom();
-  }
-};
-const onGenerationEnded = () => {
-  if (!isLiveChatView.value) {
-    resetStreamingState(false);
-    return;
-  }
-
-  console.log('[ChatStream] Generation ended signal received.');
-  isGenerating.value = false;
-  isSyncing.value = false;
-
-  // 核心优化：底层 API 已经通过 EventFlow 阻塞了 GENERATION_ENDED 信号，
-  // 此时 messages 数组已经更新。增加 nextTick 确保 Vue 已完成 DOM 更新渲染，
-  // 从而在物理层面实现两个气泡的无缝衔接，消除闪烁。
-  nextTick(() => {
-    streamingBuffer.value = ''; // 清除流式气泡，正式消息已由 crud 写入
-    streamingRaw.value = '';
-    streamingConfirmed.value = '';
-    streamingPending.value = '';
-    streamingFilteredLength.value = 0;
-    streamingStatusText.value = '';
-    streamingThinkingText.value = '';
-    generationError.value = '';
+  const fontSize = parseFloat(String(streamStyle.value['--lw-size'])) || 16;
+  const lineHeight = (parseFloat(String(streamStyle.value['--lw-line-height'])) || 1.6) * fontSize;
+  const result = lwApi.measureService.measure(text, {
+    width: area.clientWidth - 80,
+    lineHeight,
+    fontSize,
+    fontFamily: String(streamStyle.value['--lw-font']),
+    fontWeight: streamStyle.value['--lw-font-weight']
   });
-  
-  // 核心优化：传输完成后不再强制触底，保持用户当前的滚动位置
-  // 这样用户在生成过程中向上翻阅时，不会在结束那一瞬间被强制拉回底部
-};
-const onGenerationFailed = (message?: string) => {
-  if (!isLiveChatView.value) {
-    resetStreamingState(false);
-    return;
-  }
-
-  isGenerating.value = false;
-  generationError.value = message || '生成失败，请检查后端节点配置或网络状态。';
-  streamingStatusText.value = '';
-  if (!streamingBuffer.value) {
-    streamingRaw.value = '';
-    streamingFilteredLength.value = 0;
-  }
-  streamingThinkingText.value = '';
+  lastStreamingHeight.value = result.height;
 };
 
-const onWorldlineChanged = () => {
-  console.log('[ChatStream] Worldline changed, resetting generation state.');
-  resetStreamingState(true);
+const handleScrollToBottomRequest = (options: { force?: boolean } = {}): void => {
+  void scrollToBottom(options.force);
+};
+
+const handleFocusMainInputRequest = (data: { text?: string }): void => {
+  if (data?.text !== undefined) {
+    quickInput.value = data.text;
+  }
+  inputCollapsed.value = false;
+  void nextTick(() => {
+    const element = document.getElementById('lw-main-input') as HTMLTextAreaElement | null;
+    if (!element) return;
+    element.focus();
+    if (quickInput.value) {
+      element.setSelectionRange(quickInput.value.length, quickInput.value.length);
+    }
+  });
 };
 
 onMounted(() => {
-  lwApi?.on('GENERATION_STARTED', onGenerationStarted);
-  lwApi?.on('BUFFER_UPDATED', onBufferUpdated);
-  lwApi?.on('GENERATION_ENDED', onGenerationEnded);
-  lwApi?.on('GENERATION_FAILED', onGenerationFailed);
-  lwApi?.on('SCROLL_TO_BOTTOM', (opts: { force?: boolean } = {}) => {
-    scrollToBottom(opts.force);
-  });
-  lwApi?.on('FOCUS_MAIN_INPUT', (data: { text?: string }) => {
-    if (data && data.text !== undefined) {
-      quickInput.value = data.text;
-    }
-    inputCollapsed.value = false;
-    nextTick(() => {
-      const el = document.getElementById('lw-main-input') as HTMLTextAreaElement | null;
-      if (el) {
-        el.focus();
-        // 如果有文本，将光标移至末尾
-        if (quickInput.value) {
-          el.setSelectionRange(quickInput.value.length, quickInput.value.length);
-        }
-      }
-    });
-  });
-
-  // 核心增强：专项响应世界线支路变换
-  lwApi?.on('WORLDLINE_SWITCHED', onWorldlineChanged);
-  lwApi?.on('WORLDLINE_ROLLED_BACK', onWorldlineChanged);
-
-  // 核心修复：如果正在生成中重新挂载，立即恢复流式状态
-  const lastStreamState = lwApi?.services.generation.getLastStreamState();
-  if (isLiveChatView.value && lwApi?.services.generation.isGenerating() && lastStreamState) {
-    isGenerating.value = true;
-    const { processed, text, filteredCount, statusText, thinkingText } = lastStreamState;
-    onBufferUpdated(processed, text, filteredCount, statusText, thinkingText);
-  }
+  lwApi?.on('SCROLL_TO_BOTTOM', handleScrollToBottomRequest);
+  lwApi?.on('FOCUS_MAIN_INPUT', handleFocusMainInputRequest);
 });
 
 onUnmounted(() => {
-  lwApi?.off('GENERATION_STARTED', onGenerationStarted);
-  lwApi?.off('BUFFER_UPDATED', onBufferUpdated);
-  lwApi?.off('GENERATION_ENDED', onGenerationEnded);
-  lwApi?.off('GENERATION_FAILED', onGenerationFailed);
-  lwApi?.off('WORLDLINE_SWITCHED', onWorldlineChanged);
-  lwApi?.off('WORLDLINE_ROLLED_BACK', onWorldlineChanged);
+  lwApi?.off('SCROLL_TO_BOTTOM', handleScrollToBottomRequest);
+  lwApi?.off('FOCUS_MAIN_INPUT', handleFocusMainInputRequest);
 });
 
 // 聊天外观由当前桌面模式 skin 和 settingsManifest 统一驱动
@@ -909,7 +792,23 @@ watch(() => props.messages, (newVal, oldVal) => {
 }, { deep: true, immediate: true });
 
 watch(
-  () => [contextStore.activeSourceId, contextStore.activeSessionId] as const,
+  () => props.generation.revision,
+  () => {
+    if (!isLiveChatView.value || props.generation.phase !== 'running') return;
+    updateStreamingMeasurement(streamingBuffer.value);
+    if (!props.generation.stream) {
+      void scrollToBottom(true);
+      return;
+    }
+    if (isAtBottom.value) {
+      void scrollToBottom();
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => [props.context.source, props.context.sessionId] as const,
   async (nextState, prevState) => {
     if (!prevState || nextState[0] !== prevState[0] || nextState[1] !== prevState[1]) {
       await forceScrollToBottomSettled();
@@ -926,9 +825,8 @@ watch(isSessionSwitching, async (switching) => {
 
 watch(isLiveChatView, (isLive) => {
   if (!isLive) {
-    resetStreamingState(false);
     editingIndex.value = -1;
-    editingTargetId.value = null;
+    editingMessage.value = null;
   }
 });
 
@@ -941,15 +839,16 @@ watch(isLiveChatView, (isLive) => {
  */
 const handleSend = async (trigger: 'button' | 'enter' = 'button') => {
   const text = quickInput.value.trim();
-  if (!text || isGenerating.value || !lwApi || !isLiveChatView.value) return;
+  if (!text || isGenerating.value || !isLiveChatView.value) return;
   console.debug('[LuminaWeave][ChatInput] Submitting chat message.', {
     trigger,
     textLength: text.length
   });
+  const accepted = await props.intents.sendMessage(text);
+  if (!accepted) return;
   quickInput.value = '';
-  await lwApi.services.generation.sendMessage(text);
   // 发送后立即触底，确保用户内容可见并为随后的 AI 流式输出占位
-  scrollToBottom(true);
+  void scrollToBottom(true);
 };
 
 const handleSendClick = () => {
@@ -976,7 +875,7 @@ const handleStop = () => {
   if (!isLiveChatView.value) {
     return;
   }
-  lwApi?.abortGenerate();
+  void props.intents.stopGeneration();
 };
 
 const handleEdit = (index: number, msg: LuminaChatMessage) => {
@@ -986,24 +885,28 @@ const handleEdit = (index: number, msg: LuminaChatMessage) => {
   // 内联编辑：使用 mesRaw（原始未经正则处理的文本），如果没有 mesRaw 则回退到 mes
   editingText.value = msg.mesRaw ?? msg.mes ?? '';
   editingIndex.value = index;
-  editingTargetId.value = msg.id || null;
+  editingMessage.value = msg;
 };
 
 const confirmEdit = async (trigger: 'button' | 'ctrl-enter' = 'button') => {
   if (!isLiveChatView.value) {
     return;
   }
-  if (lwApi && editingText.value.trim() !== '') {
-    const target = editingTargetId.value ?? editingIndex.value;
+  const message = editingMessage.value;
+  if (message && editingText.value.trim() !== '') {
     console.debug('[LuminaWeave][ChatInput] Confirming inline edit.', {
       trigger,
-      target: typeof target === 'string' ? target : String(target),
+      target: message.id || String(editingIndex.value),
       textLength: editingText.value.trim().length
     });
-    await lwApi.crudChatRecord(target, 'edit', editingText.value);
+    await props.intents.editMessage({
+      message,
+      index: editingIndex.value,
+      text: editingText.value
+    });
   }
   editingIndex.value = -1;
-  editingTargetId.value = null;
+  editingMessage.value = null;
 };
 
 const handleConfirmEditClick = () => {
@@ -1013,7 +916,7 @@ const handleConfirmEditClick = () => {
 const handleEditTextareaKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Escape') {
     editingIndex.value = -1;
-    editingTargetId.value = null;
+    editingMessage.value = null;
     return;
   }
 
@@ -1033,44 +936,21 @@ const handleRegen = async () => {
   if (!isLiveChatView.value) {
     return;
   }
-  if (lwApi) {
-    await lwApi.services.generation.regenerateLast();
-  }
+  await props.intents.regenerate();
 };
 
 const handleBranch = async (index: number, msg: LuminaChatMessage) => {
   if (!isLiveChatView.value) {
     return;
   }
-  if (lwApi) {
-    const nodeId = msg.id || (lwApi as any)._getMessageFingerprint(msg);
-    if (nodeId) {
-      await lwApi.services.conversation.branchNode({
-        sourceId: 'chat',
-        targetNodeId: nodeId
-      });
-    } else {
-      lwApi.services.host.showToast(`无法解析该节点的坐标信息。楼层：${index}`, 'error');
-    }
-  }
+  await props.intents.branchMessage({ message: msg, index });
 };
 
 const handleDelete = async (index: number, msg: LuminaChatMessage) => {
   if (!isLiveChatView.value) {
     return;
   }
-  if (lwApi) {
-    const isConfirmed = await lwApi.services.host.confirm({
-      title: '删除消息',
-      message: `确定要删除此条消息吗？\n删除后无法撤销 (楼层 ${index})`,
-      confirmText: '确认删除',
-      danger: true
-    });
-
-    if (isConfirmed) {
-      await lwApi.crudChatRecord(msg.id || index, 'delete');
-    }
-  }
+  await props.intents.deleteMessage({ message: msg, index });
 };
 
 </script>

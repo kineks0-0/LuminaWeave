@@ -49,7 +49,9 @@ const createConversation = (): ConversationDomainService => new ConversationDoma
     switchConversationNode: vi.fn(async () => true),
     branchConversationNode: vi.fn(async () => true),
     rollbackConversationNode: vi.fn(async () => true)
-} as never, vi.fn(async () => true), { subscribe: vi.fn(() => vi.fn()) });
+} as never, vi.fn(async () => true), { subscribe: vi.fn(() => vi.fn()) }, {
+    mutateChatRecord: vi.fn(async () => ({ success: true }))
+});
 
 const createGeneration = (): GenerationDomainService => new GenerationDomainService({
     sendMessage: vi.fn(async () => true),
