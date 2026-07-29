@@ -52,6 +52,7 @@
 - [General](./current/tasks/general/)
 - [Agent Runtime SDK](./current/tasks/agent-runtime-sdk/)
 - [Desktop Modes](./current/tasks/desktop-modes/)
+- [Desktop Experience SDK](./current/tasks/desktop-experience-sdk/)
 - [Forge](./current/tasks/forge/)
 - [Standalone Resource Runtime](./current/tasks/standalone-resource-runtime/)
 - [Tauri Client](./current/tasks/tauri-client/)

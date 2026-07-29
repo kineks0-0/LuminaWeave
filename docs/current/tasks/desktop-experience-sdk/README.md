@@ -1,0 +1,46 @@
+# Desktop Experience SDK Current Task
+
+## 目标
+
+把当前由 Shell、Workspace 与 Chat 组件直接组合业务界面的桌面实现，收敛为可声明组合、可校验、可局部隔离的 Desktop Experience SDK。
+
+最终结构由三层组成：
+
+- `DesktopExperienceRuntime`：提供 conversation、generation、character、timeline、activity 五组强类型领域能力。
+- Official Surface Kit：提供角色、会话、消息、输入和 Prompt Inspector 等可组合 surface。
+- `DesktopModeManifest.composition`：作为桌面与移动端组合树的唯一公开事实源。
+
+## 当前事实
+
+- `DesktopModeManifest` 已是桌面模式唯一注册源，但尚未表达组件组合树。
+- Shell 与 `useWorkspaceManager.ts` 仍直接组合业务组件或硬编码应用目录。
+- `SurfaceRuntimeContext` 仍允许 `unknown`、开放字符串 contract 和任意容器属性。
+- `ChatStream.vue` 同时承担消息展示、生成控制、会话命令、滚动、输入、编辑、分支和模式分支。
+- `useChatStore` 与 `useConversationContextStore` 并存，消息与会话状态所有权不唯一。
+
+## 已锁定决策
+
+- 不引入 OpenAPI。进程内 SDK 使用 TypeScript 类型，外部 manifest 使用 Zod 运行时校验。
+- 不新增与 `DesktopModeManifest` 平行的公开 manifest。
+- 声明式桌面只能引用已注册 surface contract，不能引用 Vue 组件或任意 CSS。
+- 受信任插件继续通过 `PluginManifestV2.businessRenderers` 注册 Vue/TypeScript renderer。
+- 不保留旧 Surface context、旧 Chat store 或 Shell 业务硬编码的兼容层。
+- 本任务不改变服务端 HTTP API、Semantic VFS、Git 工作区版本和 SillyTavern 宿主边界。
+
+## 实施顺序
+
+1. 建立 Headless Domain Runtime。
+2. 收紧 Typed Surface Runtime。
+3. 建立 Chat Application Controller 和 Official Surface Kit。
+4. 增加 Composition Runtime。
+5. 迁移 Shell、Workspace 和四个内置桌面模式。
+6. 增加第三方协议示例，删除旧入口并完成文档与验证。
+
+## 当前状态
+
+任务已启动，架构决策与实施计划已经记录。运行时代码尚未开始迁移。
+
+## 恢复入口
+
+- [完整实施计划](./steps/2026-07-29-desktop-experience-sdk-implementation-plan.md)
+- [ADR-0004](../../../adr/0004-desktop-experience-sdk-and-composable-surfaces.md)

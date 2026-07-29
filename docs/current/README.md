@@ -19,6 +19,7 @@ docs/current/tasks/<task-name>/
 - [General](./tasks/general/)
 - [Agent Runtime SDK](./tasks/agent-runtime-sdk/)
 - [Desktop Modes](./tasks/desktop-modes/)
+- [Desktop Experience SDK](./tasks/desktop-experience-sdk/)
 - [Forge](./tasks/forge/)
 - [HAL Architecture Migration](./tasks/hal-architecture-migration/)
 - [Standalone Resource Runtime](./tasks/standalone-resource-runtime/)

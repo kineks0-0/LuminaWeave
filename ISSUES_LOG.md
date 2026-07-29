@@ -187,6 +187,15 @@
 - **验证手段**: 修改前已运行 `npm run type-check` 复现；修复后重新运行 type-check、pi 依赖守卫和 agent-runtime / Forge pi 相关 focused 测试。
 - **什么起作用了**: `PiAiBrowserNexusProvider.ts` 改用 `Model<Api>['provider']` 表达 Nexus provider id；`ForgePiNexusProvider.ts` 从 `@earendil-works/pi-ai/compat` 导入旧 `streamSimple`。`npm run type-check` 通过；`npm run test -- --run src/api/core/__tests__/forge/ForgePiDependencyGuard.test.ts` 通过 1 个测试文件、5 个用例；`npm run test -- --run src/api/core/__tests__/agent-runtime src/api/core/__tests__/forge/ForgePiAgentSession.test.ts src/api/core/__tests__/forge/ForgePiToolBridge.test.ts src/api/core/__tests__/forge/ForgePiNexusProvider.test.ts src/api/core/__tests__/forge/ForgePiModelRegistry.test.ts` 通过 17 个测试文件、86 个用例；`npm run build` 通过。
 - **失败尝试**: 首次 `npm run type-check` 暴露上述 7 个 TypeScript 错误；未尝试修改运行时数据流。
+
+## 24. 主题桌面组合能力被 Shell 与 Chat 耦合阻断 (2026-07-29)
+
+- **错误表现**: `DesktopModeManifest` 只能描述 shell、preset、skin 和 renderer variant，无法声明角色列表、会话列表、消息流、输入区与 Activity slot 的组合。Traditional/Freeform Shell、Workspace 和 `ChatStream.vue` 仍直接持有业务组件与模式分支，第三方桌面模式不能在稳定契约下自由组合官方组件。
+- **根本原因假设**: 桌面模式、Surface Runtime 和 Chat presentation 缺少共同的 headless domain runtime；`SurfaceRuntimeContext` 使用开放 contract、`unknown` state 和任意属性透传；`useChatStore` 与 `useConversationContextStore` 并存，使状态和命令所有权无法收敛。
+- **验证手段**: 先以结构测试固定 typed runtime、surface contract、composition schema、订阅销毁和错误隔离行为，再逐层迁移 Chat、Shell、Workspace 与四个内置模式；每层迁移后运行定向测试与 type-check。
+- **什么起作用了**: 规划阶段已采纳 ADR-0004，锁定 `DesktopExperienceRuntime + Official Surface Kit + DesktopModeManifest.composition` 三层结构，并明确不在进程内 SDK 引入 OpenAPI。运行时代码尚未开始迁移。
+- **失败尝试**: 既有桌面模式重构已经收敛单注册源、目录和 shell payload，但只解决模式归属与外观分发，没有建立组件组合树和强类型业务能力边界，因此没有消除 Chat/Shell/Workspace 耦合。
+
 ## 2026-06-27 AgentRuntime pi compat review fixes
 
 - 错误消息：
