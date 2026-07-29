@@ -29,6 +29,12 @@ export interface ForgeEffectTarget {
     // --- 消息 ---
     addAssistantViewMessage(content: string): void;
     createAndAppendUserMessage(content: string): void;
+    projectAgentMessage(payload: Omit<Extract<ForgeRuntimeEffect, {
+        type: 'project_agent_message';
+    }>, 'type'>): void;
+    projectAgentTurnError(payload: Omit<Extract<ForgeRuntimeEffect, {
+        type: 'project_agent_turn_error';
+    }>, 'type'>): void;
 
     // --- Timeline 操作 ---
     upsertRunningOperation(payload: {
@@ -53,6 +59,9 @@ export interface ForgeEffectTarget {
         relatedMessageId?: string | null;
         layer?: ForgeLayer | null;
     }): void;
+    finishOperationByKey(payload: Omit<Extract<ForgeRuntimeEffect, {
+        type: 'finish_operation';
+    }>, 'type'>): void;
     addOperationTimelineItem(payload: {
         operationKind: ForgeTimelineOperationKind;
         status: ForgeTimelineOperationStatus;
@@ -162,6 +171,27 @@ export async function applyForgeEffects(
             } else {
                 target.createAndAppendUserMessage(effect.content);
             }
+            break;
+        case 'project_agent_message':
+            target.projectAgentMessage({
+                sessionId: effect.sessionId,
+                turnId: effect.turnId,
+                messageId: effect.messageId,
+                rawText: effect.rawText,
+                displayText: effect.displayText,
+                thinkingText: effect.thinkingText,
+                blocks: effect.blocks,
+                status: effect.status,
+                commit: effect.commit,
+                timestamp: effect.timestamp
+            });
+            break;
+        case 'project_agent_turn_error':
+            target.projectAgentTurnError({
+                sessionId: effect.sessionId,
+                turnId: effect.turnId,
+                message: effect.message
+            });
             break;
         case 'upsert_running_operation':
             target.upsertRunningOperation({
@@ -426,6 +456,20 @@ export async function applyForgeEffects(
             target.setAgentRuntimeSnapshot({
                 requestId: effect.requestId,
                 snapshot: effect.snapshot
+            });
+            break;
+        case 'finish_operation':
+            target.finishOperationByKey({
+                dedupeKey: effect.dedupeKey,
+                status: effect.status,
+                operationKind: effect.operationKind,
+                title: effect.title,
+                summary: effect.summary,
+                detail: effect.detail,
+                sourceTag: effect.sourceTag,
+                targetEntryId: effect.targetEntryId,
+                relatedMessageId: effect.relatedMessageId,
+                layer: effect.layer
             });
             break;
         case 'set_forge_pi_session_state':

@@ -87,25 +87,11 @@ describe('ForgePiRuntimeClient', () => {
         const runtime = {
             runTurn: vi.fn(async () => ({
                 events: [{
-                    type: 'stream_done' as const,
+                    type: 'first_response' as const,
                     requestId: 'req_1',
-                    rawText: 'local pi-core reply',
-                    displayText: 'local pi-core reply',
-                    thinkingText: '',
-                    completedAt: 10
+                    firstResponseAt: 10
                 }],
                 effects: [],
-                agentRuntimeSnapshot: {
-                    isStreaming: false,
-                    pendingToolCalls: [],
-                    messages: [{
-                        id: 'req_1',
-                        role: 'assistant',
-                        blocks: [{ type: 'text', text: 'local pi-core reply' }],
-                        status: 'complete'
-                    }],
-                    activeTools: []
-                },
                 piSessionState: {
                     tree: [{
                         id: 'pi_node_1',
@@ -126,6 +112,14 @@ describe('ForgePiRuntimeClient', () => {
                     },
                     loadedExtensions: ['@luminaweave/forge-browser-adapters']
                 }
+            })),
+            getAgentRuntimeSnapshot: vi.fn((sessionId: string) => ({
+                sessionId,
+                activeTurnId: undefined,
+                isStreaming: false,
+                pendingToolCalls: [],
+                messages: [],
+                activeTools: []
             }))
         };
 
@@ -145,15 +139,15 @@ describe('ForgePiRuntimeClient', () => {
         expect(runtime.runTurn).toHaveBeenCalledOnce();
         expect(fetchSpy).not.toHaveBeenCalled();
         expect(result.events).toEqual([expect.objectContaining({
-            type: 'stream_done',
-            requestId: 'req_1',
-            displayText: 'local pi-core reply'
+            type: 'first_response',
+            requestId: 'req_1'
         })]);
         expect(result.piSessionState.activeNodeId).toBe('pi_node_1');
         expect(result.piSessionState.loadedExtensions).toEqual(['@luminaweave/forge-browser-adapters']);
-        expect(result.agentRuntimeSnapshot).toEqual(expect.objectContaining({
+        expect(client.getAgentRuntimeSnapshot('forge_project__conversation_1')).toEqual(expect.objectContaining({
+            sessionId: 'forge_project__conversation_1',
             isStreaming: false,
-            messages: [expect.objectContaining({ id: 'req_1', role: 'assistant' })]
+            messages: []
         }));
     });
 
@@ -178,9 +172,21 @@ describe('ForgePiRuntimeClient', () => {
         };
 
         const client = new ForgePiRuntimeClient({ runtime: runtime as any });
-        const result = await client.resolveToolApproval('call_write', true, '允许进入暂存');
+        const result = await client.resolveToolApproval(
+            'forge_project__conversation_1',
+            'req_1',
+            'call_write',
+            true,
+            '允许进入暂存'
+        );
 
-        expect(runtime.resolveToolApproval).toHaveBeenCalledWith('call_write', true, '允许进入暂存');
+        expect(runtime.resolveToolApproval).toHaveBeenCalledWith(
+            'forge_project__conversation_1',
+            'req_1',
+            'call_write',
+            true,
+            '允许进入暂存'
+        );
         expect(fetchSpy).not.toHaveBeenCalled();
         expect(result.resolved).toBe(true);
         expect(result.events).toEqual([expect.objectContaining({

@@ -50,6 +50,8 @@ export class ForgeRuntimeActionController {
     }
 
     async resolveToolApproval(
+        sessionId: string,
+        turnId: string,
         toolCallId: string,
         approved: boolean,
         message?: string,
@@ -58,8 +60,8 @@ export class ForgeRuntimeActionController {
         const markedLocally = this.deps.markToolApprovalResolved !== undefined;
         this.deps.markToolApprovalResolved?.(toolCallId, approved, message);
         const resumed = options === undefined
-            ? await this.deps.getRuntimeOrchestrator().resolveToolApproval(toolCallId, approved, message)
-            : await this.deps.getRuntimeOrchestrator().resolveToolApproval(toolCallId, approved, message, options);
+            ? await this.deps.getRuntimeOrchestrator().resolveToolApproval(sessionId, turnId, toolCallId, approved, message)
+            : await this.deps.getRuntimeOrchestrator().resolveToolApproval(sessionId, turnId, toolCallId, approved, message, options);
         if (!resumed) {
             if (!markedLocally) {
                 this.deps.fallbackResolveToolApproval(toolCallId, approved, message);

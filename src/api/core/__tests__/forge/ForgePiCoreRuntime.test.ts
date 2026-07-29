@@ -353,13 +353,15 @@ describe('ForgePiCoreRuntime', () => {
 
         expect(executeSdkTool).toHaveBeenCalledWith('call_sdk_inspect', { query: 'alpha' });
         expect(result.events).toEqual(expect.arrayContaining([
-            expect.objectContaining({ type: 'tool_call', toolCallId: 'call_sdk_inspect', toolName: 'sdk.inspect' }),
-            expect.objectContaining({
-                type: 'tool_result',
-                toolCallId: 'call_sdk_inspect',
-                result: expect.objectContaining({ query: 'alpha' })
-            }),
-            expect.objectContaining({ type: 'stream_done', displayText: 'SDK 工具已执行。' })
+            expect.objectContaining({ type: 'request_started', requestId: 'req_sdk_tool_run' }),
+            expect.objectContaining({ type: 'prompt_ready', requestId: 'req_sdk_tool_run' }),
+            expect.objectContaining({ type: 'first_response', requestId: 'req_sdk_tool_run' })
+        ]));
+        expect(result.events).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({ type: 'stream_chunk' }),
+            expect.objectContaining({ type: 'stream_done' }),
+            expect.objectContaining({ type: 'tool_call' }),
+            expect.objectContaining({ type: 'tool_result' })
         ]));
         expect(runtime.getAgentRuntimeEvents()
             .filter(event => 'toolCallId' in event && event.toolCallId === 'call_sdk_inspect')
@@ -424,7 +426,7 @@ describe('ForgePiCoreRuntime', () => {
             expect.objectContaining({ type: 'request_started', requestId: 'req_1' }),
             expect.objectContaining({ type: 'prompt_ready', requestId: 'req_1' }),
             expect.objectContaining({ type: 'first_response', requestId: 'req_1' }),
-            expect.objectContaining({ type: 'stream_done', displayText: '已读取项目上下文。' })
+            expect.objectContaining({ type: 'first_response', requestId: 'req_1' })
         ]));
         expect(result.piSessionState.contextBundleSummary.activeSkills).toEqual(['虚拟世界书编辑器']);
         expect(result.piSessionState.tree.map(node => node.kind)).toEqual([
@@ -434,6 +436,13 @@ describe('ForgePiCoreRuntime', () => {
             'assistant'
         ]);
         expect(result.piSessionState.activeNodeId).toBe('pi_node_4');
+        expect(runtime.getAgentRuntimeSnapshot('forge_project_alpha__conversation_alpha').messages).toEqual([
+            expect.objectContaining({
+                role: 'assistant',
+                status: 'complete',
+                blocks: [expect.objectContaining({ type: 'text', text: '已读取项目上下文。' })]
+            })
+        ]);
         const eventTypes = runtime.getAgentRuntimeEvents().map(event => event.type);
         expect(eventTypes.slice(0, 3)).toEqual([
             'agent_start',
@@ -445,11 +454,11 @@ describe('ForgePiCoreRuntime', () => {
             'turn_end',
             'agent_end'
         ]);
-        expect(runtime.getAgentRuntimeSnapshot()).toMatchObject({
+        expect(runtime.getAgentRuntimeSnapshot('forge_project_alpha__conversation_alpha')).toMatchObject({
             isStreaming: false,
             pendingToolCalls: [],
             messages: [{
-                id: 'req_1',
+                id: 'agent-message:forge_project_alpha__conversation_alpha:req_1:1',
                 role: 'assistant',
                 blocks: [{ type: 'text', text: '已读取项目上下文。' }],
                 status: 'complete'
@@ -558,9 +567,15 @@ describe('ForgePiCoreRuntime', () => {
             } as any
         });
         expect(turn.events).toEqual(expect.arrayContaining([
-            expect.objectContaining({ type: 'tool_call', toolCallId: 'call_write', toolName: 'write' }),
-            expect.objectContaining({ type: 'tool_result', toolCallId: 'call_write', result: expect.objectContaining({ applied: true }) }),
-            expect.objectContaining({ type: 'stream_done', displayText: '已写入项目。' })
+            expect.objectContaining({ type: 'request_started', requestId: 'req_approval' }),
+            expect.objectContaining({ type: 'prompt_ready', requestId: 'req_approval' }),
+            expect.objectContaining({ type: 'first_response', requestId: 'req_approval' })
+        ]));
+        expect(turn.events).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({ type: 'stream_chunk' }),
+            expect.objectContaining({ type: 'stream_done' }),
+            expect.objectContaining({ type: 'tool_call' }),
+            expect.objectContaining({ type: 'tool_result' })
         ]));
         expect(turn.effects).toEqual([]);
         expect(turn.piSessionState.tree.map(node => node.kind)).toContain('tool_result');
@@ -572,7 +587,7 @@ describe('ForgePiCoreRuntime', () => {
             'tool_execution_start',
             'tool_execution_end'
         ]));
-        expect(runtime.getAgentRuntimeSnapshot().pendingToolCalls).toEqual([]);
+        expect(runtime.getAgentRuntimeSnapshot('forge_project_alpha__conversation_alpha').pendingToolCalls).toEqual([]);
         expect(calls).toBe(2);
     });
 });

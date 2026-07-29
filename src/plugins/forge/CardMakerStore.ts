@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { computed, ref, onMounted, shallowRef } from 'vue';
+import { computed, ref, onMounted, onScopeDispose, shallowRef } from 'vue';
 import { luminaWeaveApi } from '../../api';
 import { llmEngine } from '../../api/llmEngine.js';
 import { lwStorage } from '../../api/storage.js';
@@ -55,7 +55,6 @@ import type {
     ForgeRuntimeDecision,
     ForgeRuntimeContext,
     ForgeRuntimeEffect,
-    ForgeRuntimeEvent,
     ForgeToolApprovalResolutionOptions,
     ForgeUserCommand,
     StagingEntry
@@ -112,9 +111,7 @@ import {
     type ForgeTimelineFeedItem,
     buildForgePiConversationProjection,
     buildForgePiTimelineFeed,
-    createAssistantStreamMessageUpdate,
-    createForgeMessageNode,
-    resolveAssistantStreamCommitPolicy
+    createForgeMessageNode
 } from './store/forgeStoreHelpers.js';
 import { ForgeTransientSelectionController } from './store/ForgeTransientSelectionController.js';
 import { ForgeRuntimeActionController } from './store/ForgeRuntimeActionController.js';
@@ -124,6 +121,7 @@ import { ForgeFreezePublishController } from './store/ForgeFreezePublishControll
 import { ForgeFormSubmissionController } from './store/ForgeFormSubmissionController.js';
 import { ForgePromptPreviewPayloadBuilder } from './store/ForgePromptPreviewPayloadBuilder.js';
 import { ForgeAgentInspectorActions, type ForgeAgentInspectorMode } from './store/ForgeAgentInspectorActions.js';
+import { buildForgeAgentRuntimePresentationEffects } from './store/forgeAgentRuntimePresentation.js';
 export const DEFAULT_PLANNER_PROMPT = FORGE_PLANNER_PROMPT;
 export const DEFAULT_EXECUTOR_PROMPT = FORGE_EXECUTOR_SYSTEM_PROMPT;
 let forgeControllerBridgeBound = false;
@@ -1071,60 +1069,6 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             : null
     });
 
-    const handleRuntimeEvent = (event: ForgeRuntimeEvent): void => {
-        if (!streamingAssistantNodeId.value) {
-            if (event.type === 'stream_error') {
-                isGenerating.value = false;
-                streamThinkingText.value = '';
-                lastError.value = event.message;
-            }
-            return;
-        }
-
-        const assistantNode = worldlineStore.value.getNode(streamingAssistantNodeId.value);
-        if (!assistantNode) return;
-
-        if (event.type === 'stream_chunk') {
-            const update = createAssistantStreamMessageUpdate(event, assistantNode);
-            const policy = resolveAssistantStreamCommitPolicy(event);
-            streamText.value = update.streamText;
-            streamThinkingText.value = update.streamThinkingText;
-            if (policy.silentWorldlineUpdate) {
-                upsertStreamingMessage(update.message);
-            } else {
-                upsertMessage(update.message, { bumpTimelineRevision: policy.bumpTimelineRevision });
-            }
-            return;
-        }
-
-        if (event.type === 'stream_done') {
-            const update = createAssistantStreamMessageUpdate(event, assistantNode);
-            const policy = resolveAssistantStreamCommitPolicy(event);
-            streamText.value = update.streamText;
-            streamThinkingText.value = update.streamThinkingText;
-            if (policy.silentWorldlineUpdate) {
-                upsertStreamingMessage(update.message);
-            } else {
-                upsertMessage(update.message, { bumpTimelineRevision: policy.bumpTimelineRevision });
-            }
-            worldlineStore.value.activeLeafId = assistantNode.id;
-            streamText.value = '';
-            streamThinkingText.value = '';
-            isGenerating.value = false;
-            streamingAssistantNodeId.value = null;
-            return;
-        }
-
-        if (event.type === 'stream_error') {
-            isGenerating.value = false;
-            if (event.type === 'stream_error') {
-                streamThinkingText.value = '';
-                lastError.value = event.message;
-            }
-            streamingAssistantNodeId.value = null;
-        }
-    };
-
     const prepareAssistantStream = (): void => {
         const assistantNode = createMessageNode('assistant', '', worldlineStore.value.activeLeafId);
         assistantNode.syncStatus = 'streaming';
@@ -1135,11 +1079,60 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         bumpTimelineRevision();
     };
 
+    const projectAgentMessage: ForgeEffectTarget['projectAgentMessage'] = (payload): void => {
+        const assistantNodeId = streamingAssistantNodeId.value;
+        if (!assistantNodeId) return;
+        const assistantNode = worldlineStore.value.getNode(assistantNodeId);
+        if (!assistantNode) return;
+
+        streamText.value = payload.displayText;
+        streamThinkingText.value = payload.thinkingText;
+        const projectedNode: LuminaChatMessage = {
+            ...assistantNode,
+            mesRaw: payload.displayText,
+            mes: payload.displayText,
+            thinkingText: payload.thinkingText || null,
+            pluginRaw: payload.rawText,
+            fingerprint: MessageUtils.getFingerprint(payload.rawText),
+            syncStatus: payload.commit ? 'local' : 'streaming',
+            extra: {
+                ...assistantNode.extra,
+                agentRuntimeMessageId: payload.messageId,
+                agentRuntimeTurnId: payload.turnId,
+                ...(payload.commit
+                    ? { completedAt: payload.timestamp }
+                    : { lastChunkAt: payload.timestamp })
+            }
+        };
+
+        if (!payload.commit) {
+            upsertStreamingMessage(projectedNode);
+            return;
+        }
+
+        upsertMessage(projectedNode);
+        worldlineStore.value.activeLeafId = projectedNode.id;
+        streamText.value = '';
+        streamThinkingText.value = '';
+        isGenerating.value = false;
+        streamingAssistantNodeId.value = null;
+    };
+
+    const projectAgentTurnError: ForgeEffectTarget['projectAgentTurnError'] = (payload): void => {
+        lastError.value = payload.message;
+        streamText.value = '';
+        streamThinkingText.value = '';
+        isGenerating.value = false;
+        streamingAssistantNodeId.value = null;
+    };
+
     let _effectTarget: ForgeEffectTarget | null = null;
     const getEffectTarget = (): ForgeEffectTarget => {
         if (_effectTarget) return _effectTarget;
         _effectTarget = {
             addAssistantViewMessage,
+            projectAgentMessage,
+            projectAgentTurnError,
             createAndAppendUserMessage(content: string) {
                 const userNode = createMessageNode('user', content, worldlineStore.value.activeLeafId);
                 upsertMessage(userNode);
@@ -1148,6 +1141,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             },
             upsertRunningOperation: (p) => forgeStore.upsertRunningOperation(p),
             completeOperationByKey: (p) => forgeStore.completeOperationByKey(p),
+            finishOperationByKey: (p) => forgeStore.finishOperationByKey(p),
             addOperationTimelineItem: (p) => forgeStore.addOperationTimelineItem(p),
             updateOperationPrompt: (k, p) => forgeStore.updateOperationPrompt(k, p),
             setActiveModelRequestTrace: (requestId) => forgeStore.setActiveModelRequestTrace(requestId),
@@ -1212,6 +1206,34 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const applyRuntimeEffects = (effects: ForgeRuntimeEffect[]): Promise<void> =>
         applyForgeEffects(effects, getEffectTarget());
 
+    let activeAgentRuntimeTurnId: string | null = null;
+    let agentRuntimeProjectionQueue: Promise<void> = Promise.resolve();
+    const unsubscribeAgentRuntimeEvents = forgePiRuntimeClient.subscribeToAgentRuntimeEvents(
+        {},
+        (event, snapshot): void => {
+            const currentSessionId = `${activeForgeProjectId.value}__${sessionChatId.value}`;
+            if (event.sessionId !== currentSessionId) return;
+
+            if (event.type === 'agent_start') {
+                activeAgentRuntimeTurnId = event.turnId;
+            }
+            const eventTurnId = event.type === 'queue_update' ? event.activeTurnId : event.turnId;
+            if (!eventTurnId || eventTurnId !== activeAgentRuntimeTurnId) return;
+
+            const context = getRuntimeContext({ type: 'noop' });
+            agentRuntimeProjectionQueue = agentRuntimeProjectionQueue
+                .then(() => applyRuntimeEffects(buildForgeAgentRuntimePresentationEffects({
+                    event,
+                    snapshot,
+                    context
+                })))
+                .catch((error: unknown) => {
+                    console.error({ error }, 'Forge agent runtime projection failed.');
+                });
+        }
+    );
+    onScopeDispose(unsubscribeAgentRuntimeEvents);
+
     const ensureRuntimeOrchestrator = (): ForgeRuntimeOrchestrator => {
         if (!runtimeOrchestrator) {
             runtimeOrchestrator = new ForgeRuntimeOrchestrator({
@@ -1222,7 +1244,6 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 buildConversationExecutionRequest,
                 buildExecutorExecutionRequest,
                 prepareAssistantStream,
-                handleRuntimeEvent,
                 resolveOriginalContent,
                 resolveEntryComment: (targetEntryId: string | null) => {
                     if (!targetEntryId) return null;
@@ -1231,8 +1252,8 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 }
             }, undefined, undefined, {
                 runPiTurn: (input) => forgePiRuntimeClient.runTurn(input),
-                resolvePiToolApproval: (toolCallId, approved, message, options) =>
-                    forgePiRuntimeClient.resolveToolApproval(toolCallId, approved, message, options)
+                resolvePiToolApproval: (sessionId, turnId, toolCallId, approved, message, options) =>
+                    forgePiRuntimeClient.resolveToolApproval(sessionId, turnId, toolCallId, approved, message, options)
             });
         }
         return runtimeOrchestrator;
@@ -1360,7 +1381,10 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         summarizeRequestNodeSummary: (presetId) => summarizeRequestNodeSummary(presetId),
         generateRequestId: () => generateForgeRequestTraceId(),
         getSessionChatId: () => sessionChatId.value,
-        runPiTurn: (payload) => forgePiRuntimeClient.runTurn(payload)
+        runPiTurn: (payload) => forgePiRuntimeClient.runTurn(payload),
+        subscribeAgentRuntimeEvents: (filter, listener) =>
+            forgePiRuntimeClient.subscribeToAgentRuntimeEvents(filter, listener),
+        getAgentRuntimeSnapshot: (sessionId) => forgePiRuntimeClient.getAgentRuntimeSnapshot(sessionId)
     });
 
     const chooseEntryMode = async (mode: ForgeEntryMode): Promise<void> => {
@@ -1902,7 +1926,18 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         message?: string,
         options?: ForgeToolApprovalResolutionOptions
     ): Promise<boolean> => {
-        return runtimeActionController.resolveToolApproval(toolCallId, approved, message, options);
+        const approval = forgeStore.toolApprovals.find(item =>
+            item.toolCallId === toolCallId && item.status === 'pending'
+        );
+        if (!approval || !approval.sessionId || !approval.requestId) return false;
+        return runtimeActionController.resolveToolApproval(
+            approval.sessionId,
+            approval.requestId,
+            approval.toolCallId,
+            approved,
+            message,
+            options
+        );
     };
 
     const checkoutPiNode = async (nodeId: string | null): Promise<void> => {

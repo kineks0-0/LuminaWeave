@@ -44,8 +44,10 @@ describe('forgePiRuntimePresentation', () => {
             loadedSkills: ['虚拟世界书编辑'],
             loadedExtensions: ['@luminaweave/forge-browser-adapters'],
             agentRuntimeSnapshot: {
+                sessionId: 'session_1',
                 isStreaming: true,
                 pendingToolCalls: [{
+                    turnId: 'turn_1',
                     toolCallId: 'call_read',
                     toolName: 'read',
                     args: { path: './agent/skills/card/SKILL.md' },
@@ -54,6 +56,7 @@ describe('forgePiRuntimePresentation', () => {
                 }],
                 messages: [{
                     id: 'req_1',
+                    turnId: 'turn_1',
                     role: 'assistant',
                     blocks: [
                         { type: 'text', text: '已读取技能。' },

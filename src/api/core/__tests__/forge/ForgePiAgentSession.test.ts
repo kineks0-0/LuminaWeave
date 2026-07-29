@@ -437,6 +437,7 @@ describe('ForgePiAgentSession', () => {
 
     it('emits stream chunks only when assistant text changes during Pi message updates', async () => {
         const { ForgePiAgentSession } = await import('@/api/core/forge/agent-app/session/ForgePiAgentSession.js');
+        const { AgentRuntimeEventBus } = await import('@/api/core/agent-runtime/events/AgentRuntimeEventBus.js');
         agentPromptScript.run = async (agent, message) => {
             const firstAssistantMessage = {
                 role: 'assistant',
@@ -497,7 +498,8 @@ describe('ForgePiAgentSession', () => {
                 } as any
             }
         );
-        const runtimeEvents: any[] = [];
+        const runtimeBus = new AgentRuntimeEventBus();
+        session.setAgentRuntimeEvents(runtimeBus);
 
         const result = await session.prompt({
             command: { type: 'send_user_input', input: '搜索一下' },
@@ -509,18 +511,18 @@ describe('ForgePiAgentSession', () => {
                 traceSource: 'conversation',
                 messages: [{ role: 'user', content: '搜索一下' }],
                 nodeSummary: []
-            } as any,
-            onRuntimeEvent: event => runtimeEvents.push(event)
+            } as any
         });
 
-        expect(runtimeEvents.filter(event => event.type === 'stream_chunk').map(event => event.displayText)).toEqual([
+        expect(runtimeBus.getEvents()
+            .filter(event => event.type === 'message_update')
+            .map(event => event.block.text)).toEqual([
             '正在搜索',
             '正在搜索\n完成整理'
         ]);
-        expect(result.events.filter(event => event.type === 'stream_chunk').map(event => event.displayText)).toEqual([
-            '正在搜索',
-            '正在搜索\n完成整理'
-        ]);
+        expect(result.events).toEqual(expect.arrayContaining([
+            expect.objectContaining({ type: 'first_response', requestId: 'req_stream_update_dedupe' })
+        ]));
     });
 
     it('persists provider-native thinking blocks separately from final assistant replies', async () => {
@@ -596,10 +598,14 @@ describe('ForgePiAgentSession', () => {
             } as any
         });
 
-        expect(result.events.filter(event => event.type === 'stream_done')).toEqual([
+        expect(runtimeBus.getSnapshot('forge-pi-session-process-final').messages).toEqual([
             expect.objectContaining({
-                displayText: '已完成修改，主要调整了说明。',
-                thinkingText: '我需要先读取 xx.md 确认当前结构。'
+                role: 'assistant',
+                status: 'complete',
+                blocks: [
+                    { type: 'thinking', contentIndex: 0, text: '我需要先读取 xx.md 确认当前结构。', redacted: false },
+                    { type: 'text', contentIndex: 1, text: '已完成修改，主要调整了说明。' }
+                ]
             })
         ]);
         expect(result.piSessionState.entries.map(entry => entry.kind)).toEqual([
@@ -714,11 +720,7 @@ describe('ForgePiAgentSession', () => {
         });
 
         expect(result.events).toEqual(expect.arrayContaining([
-            expect.objectContaining({
-                type: 'stream_done',
-                displayText: '没有使用输出协议的回复。',
-                thinkingText: ''
-            })
+            expect.objectContaining({ type: 'first_response', requestId: 'req_invalid_output' })
         ]));
         expect(result.piSessionState.entries.map(entry => entry.kind)).toEqual([
             'metadata',
@@ -1060,7 +1062,7 @@ describe('ForgePiAgentSession', () => {
             context: createContext(),
             request
         });
-        const approval = await session.resolveToolApproval('call_network', true, '允许联网');
+        const approval = await session.resolveToolApproval('req_network_replay', 'call_network', true, '允许联网');
         const preview = await session.preparePrompt({
             command: { type: 'send_user_input', input: '继续' },
             commandInput: '继续',

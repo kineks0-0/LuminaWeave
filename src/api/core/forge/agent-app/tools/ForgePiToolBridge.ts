@@ -283,6 +283,8 @@ export class ForgePiToolBridge {
     }
 
     async resolveToolApproval(
+        sessionId: string,
+        requestId: string,
         toolCallId: string,
         approved: boolean,
         message?: string,
@@ -290,6 +292,9 @@ export class ForgePiToolBridge {
     ): Promise<ForgePiToolApprovalResolution> {
         const pending = this.pendingApprovals.get(toolCallId);
         if (!pending) return { resolved: false, events: [], effects: [] };
+        if (pending.input.sessionId !== sessionId || pending.input.requestId !== requestId) {
+            return { resolved: false, events: [], effects: [] };
+        }
         this.pendingApprovals.delete(toolCallId);
 
         const { input } = pending;
@@ -333,7 +338,6 @@ export class ForgePiToolBridge {
         if (!tool) {
             expireApprovedGrant();
             const errorMessage = `Forge pi tool not found: ${input.toolName}`;
-            events.push(this.createToolErrorEvent(input, errorMessage));
             return {
                 resolved: true,
                 events,
@@ -348,14 +352,6 @@ export class ForgePiToolBridge {
         try {
             const result = await tool.execute(input.toolCallId, input.args as never);
             expireApprovedGrant();
-            events.push({
-                type: 'tool_result',
-                requestId: input.requestId,
-                toolCallId: input.toolCallId,
-                toolName: input.toolName,
-                result: result.details,
-                source: input.source
-            });
             return {
                 resolved: true,
                 events,
@@ -365,7 +361,6 @@ export class ForgePiToolBridge {
         } catch (error: unknown) {
             expireApprovedGrant();
             const errorMessage = error instanceof Error ? error.message : String(error);
-            events.push(this.createToolErrorEvent(input, errorMessage));
             return {
                 resolved: true,
                 events,
@@ -1547,18 +1542,6 @@ export class ForgePiToolBridge {
         if (!normalized || normalized === '.' || normalized === './') return './';
         const prefixed = normalized.startsWith('./') ? normalized : `./${normalized.replace(/^\//, '')}`;
         return prefixed === './' ? './' : `${prefixed}/`;
-    }
-
-    private createToolErrorEvent(input: ForgePiToolCallInput, message: string): ForgeRuntimeEvent {
-        return {
-            type: 'tool_result',
-            requestId: input.requestId,
-            toolCallId: input.toolCallId,
-            toolName: input.toolName,
-            result: { error: message },
-            isError: true,
-            source: input.source
-        };
     }
 
     private createToolResultMessage(
