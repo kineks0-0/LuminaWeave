@@ -38,7 +38,14 @@
 
 ## 当前状态
 
-任务已启动，架构决策与实施计划已经记录。运行时代码尚未开始迁移。
+已完成架构基线与 Headless Domain Runtime：
+
+- `DesktopExperienceRuntime` 已统一暴露 conversation、generation、character、timeline、activity 五组领域能力。
+- App scope 负责创建并提供 runtime，scope 销毁时统一释放角色会话订阅。
+- Conversation 与 Generation 已提供显式订阅取消函数，Generation 已提供停止能力。
+- Discord Shell 已改为消费 runtime-owned 角色会话服务，不再自行构造服务或使用 `any` 强转。
+
+任务 2 定向验证：4 个测试文件、15 个测试通过；`npm run type-check` 通过。下一步实施 Typed Surface Runtime。
 
 ## 恢复入口
 

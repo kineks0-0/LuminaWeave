@@ -7,9 +7,11 @@ describe('GenerationDomainService', () => {
             sendMessage: vi.fn(async () => true),
             regenerateLast: vi.fn(async () => undefined),
             runEditedPrompt: vi.fn(async () => undefined),
+            abortGenerate: vi.fn(async () => undefined),
             isGenerating: vi.fn(() => false),
             isSyncing: vi.fn(() => false),
-            getLastStreamState: vi.fn(() => null)
+            getLastStreamState: vi.fn(() => null),
+            subscribe: vi.fn(() => vi.fn())
         };
         const service = new GenerationDomainService(runtime);
 
@@ -35,9 +37,11 @@ describe('GenerationDomainService', () => {
             sendMessage: vi.fn(async () => true),
             regenerateLast: vi.fn(async () => 'ok'),
             runEditedPrompt: vi.fn(async () => undefined),
+            abortGenerate: vi.fn(async () => undefined),
             isGenerating: vi.fn(() => false),
             isSyncing: vi.fn(() => false),
-            getLastStreamState: vi.fn(() => null)
+            getLastStreamState: vi.fn(() => null),
+            subscribe: vi.fn(() => vi.fn())
         };
         const service = new GenerationDomainService(runtime);
 
@@ -51,9 +55,11 @@ describe('GenerationDomainService', () => {
             sendMessage: vi.fn(async () => true),
             regenerateLast: vi.fn(async () => undefined),
             runEditedPrompt: vi.fn(async () => undefined),
+            abortGenerate: vi.fn(async () => undefined),
             isGenerating: vi.fn(() => false),
             isSyncing: vi.fn(() => false),
-            getLastStreamState: vi.fn(() => null)
+            getLastStreamState: vi.fn(() => null),
+            subscribe: vi.fn(() => vi.fn())
         };
         const service = new GenerationDomainService(runtime);
 
@@ -67,14 +73,36 @@ describe('GenerationDomainService', () => {
             sendMessage: vi.fn(async () => true),
             regenerateLast: vi.fn(async () => undefined),
             runEditedPrompt: vi.fn(async () => undefined),
+            abortGenerate: vi.fn(async () => undefined),
             isGenerating: vi.fn(() => true),
             isSyncing: vi.fn(() => true),
-            getLastStreamState: vi.fn(() => ({ processed: 'p', text: 't', filteredCount: 1 }))
+            getLastStreamState: vi.fn(() => ({ processed: 'p', text: 't', filteredCount: 1 })),
+            subscribe: vi.fn(() => vi.fn())
         };
         const service = new GenerationDomainService(runtime);
 
         expect(service.isGenerating()).toBe(true);
         expect(service.isSyncing()).toBe(true);
         expect(service.getLastStreamState()).toEqual({ processed: 'p', text: 't', filteredCount: 1 });
+    });
+
+    it('delegates stop and event subscription to the generation runtime port', async () => {
+        const unsubscribe = vi.fn();
+        const runtime = {
+            sendMessage: vi.fn(async () => true),
+            regenerateLast: vi.fn(async () => undefined),
+            runEditedPrompt: vi.fn(async () => undefined),
+            abortGenerate: vi.fn(async () => 'stopped'),
+            isGenerating: vi.fn(() => true),
+            isSyncing: vi.fn(() => false),
+            getLastStreamState: vi.fn(() => null),
+            subscribe: vi.fn(() => unsubscribe)
+        };
+        const listener = vi.fn();
+        const service = new GenerationDomainService(runtime);
+
+        await expect(service.stop()).resolves.toBe('stopped');
+        expect(service.subscribe(listener)).toBe(unsubscribe);
+        expect(runtime.subscribe).toHaveBeenCalledWith(listener);
     });
 });

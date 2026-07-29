@@ -54,6 +54,17 @@ class MockCharacterChannelApi {
         bucket.push(callback);
         this.listeners.set(event, bucket);
     }
+
+    off(event: string, callback: Function): void {
+        const bucket = this.listeners.get(event) || [];
+        this.listeners.set(event, bucket.filter((listener) => listener !== callback));
+    }
+
+    emit(event: string): void {
+        for (const listener of this.listeners.get(event) || []) {
+            listener();
+        }
+    }
 }
 
 const createContextStore = () => {
@@ -332,5 +343,18 @@ describe('CharacterChannelService', () => {
         expect(contextStore.refreshSessionOptions).not.toHaveBeenCalled();
         expect(contextStore.refreshFromApi).toHaveBeenCalled();
         expect(service.state.value.busySessionIds).toEqual([]);
+    });
+
+    it('unsubscribes runtime events when disposed', () => {
+        const service = new CharacterChannelService(api as any, contextStore as any, hostProvider);
+        const refresh = vi.spyOn(service, 'refresh').mockResolvedValue();
+
+        api.emit('CHAT_CHANGED');
+        expect(refresh).toHaveBeenCalledTimes(1);
+
+        service.dispose();
+        api.emit('CHAT_CHANGED');
+
+        expect(refresh).toHaveBeenCalledTimes(1);
     });
 });

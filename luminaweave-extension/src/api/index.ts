@@ -35,6 +35,7 @@ import {
 import { ConversationDomainService } from './services/ConversationDomainService.js';
 import {
     GenerationDomainService,
+    type GenerationDomainEventListener,
     type SendMessageOptions
 } from './services/GenerationDomainService.js';
 import { settingsDomainService, type SettingsDomainService } from './services/SettingsDomainService.js';
@@ -49,6 +50,9 @@ import { GenerationCommandService } from './core/generation/GenerationCommandSer
 import { ForgeAgentController } from './core/forge/runtime/ForgeAgentController.js';
 import type {
     ConversationContextOverride,
+    ConversationContextChangedPayload,
+    ConversationSessionsUpdatedPayload,
+    ConversationWorldlineChangedPayload,
     ConversationContextSwitchInput,
     CreateChatConversationInput,
     CreateChatConversationResult,
@@ -190,15 +194,83 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.host = new HostInteractionService();
         this.conversation = new ConversationDomainService(
             this.conversationService,
-            () => this.waitForReady()
+            () => this.waitForReady(),
+            {
+                subscribe: (listener) => {
+                    const onContextChanged = ({ context }: ConversationContextChangedPayload): void => {
+                        listener({ type: 'context_changed', context });
+                    };
+                    const onSessionsUpdated = ({ sources, sessions }: ConversationSessionsUpdatedPayload): void => {
+                        listener({ type: 'sessions_updated', sources, sessions });
+                    };
+                    const onTimelineUpdated = ({ context, targetNodeId }: ConversationWorldlineChangedPayload): void => {
+                        listener({ type: 'timeline_updated', context, targetNodeId });
+                    };
+                    const onTimelineSwitched = ({ context, targetNodeId }: ConversationWorldlineChangedPayload): void => {
+                        listener({ type: 'timeline_switched', context, targetNodeId });
+                    };
+                    const onTimelineRolledBack = ({ context, targetNodeId }: ConversationWorldlineChangedPayload): void => {
+                        listener({ type: 'timeline_rolled_back', context, targetNodeId });
+                    };
+                    const subscriptions: Array<[string, Function]> = [
+                        ['CONVERSATION_CONTEXT_CHANGED', onContextChanged],
+                        ['CONVERSATION_SESSIONS_UPDATED', onSessionsUpdated],
+                        ['CONVERSATION_WORLDLINE_UPDATED', onTimelineUpdated],
+                        ['CONVERSATION_WORLDLINE_SWITCHED', onTimelineSwitched],
+                        ['CONVERSATION_WORLDLINE_ROLLED_BACK', onTimelineRolledBack]
+                    ];
+
+                    for (const [event, handler] of subscriptions) {
+                        this.on(event, handler);
+                    }
+
+                    return () => {
+                        for (const [event, handler] of subscriptions) {
+                            this.off(event, handler);
+                        }
+                    };
+                }
+            }
         );
         this.generation = new GenerationDomainService({
             sendMessage: (text, options) => this.sendMessage(text, options),
             regenerateLast: () => this.regenerateLast(),
             runEditedPrompt: (text) => this.runEditedPrompt(text),
+            abortGenerate: () => this.abortGenerate(),
             isGenerating: () => this.isGenerating,
             isSyncing: () => this.streamHandler.isSyncing,
-            getLastStreamState: () => this.lastStreamState
+            getLastStreamState: () => this.lastStreamState,
+            subscribe: (listener: GenerationDomainEventListener) => {
+                const onStarted = (): void => listener({ type: 'started' });
+                const onUpdated = (
+                    processed: string,
+                    rawText = processed,
+                    filteredCount = 0,
+                    statusText?: string,
+                    thinkingText?: string
+                ): void => listener({
+                    type: 'updated',
+                    state: { processed, text: rawText, filteredCount, statusText, thinkingText }
+                });
+                const onEnded = (finalText: string): void => listener({ type: 'ended', finalText });
+                const onFailed = (message: string, status?: string): void => listener({ type: 'failed', message, status });
+                const subscriptions: Array<[string, Function]> = [
+                    ['GENERATION_STARTED', onStarted],
+                    ['BUFFER_UPDATED', onUpdated],
+                    ['GENERATION_ENDED', onEnded],
+                    ['GENERATION_FAILED', onFailed]
+                ];
+
+                for (const [event, handler] of subscriptions) {
+                    this.on(event, handler);
+                }
+
+                return () => {
+                    for (const [event, handler] of subscriptions) {
+                        this.off(event, handler);
+                    }
+                };
+            }
         });
         this.settings = settingsDomainService;
         this.services = {

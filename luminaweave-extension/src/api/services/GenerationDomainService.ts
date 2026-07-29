@@ -24,10 +24,19 @@ export interface GenerationRuntimePort {
     sendMessage(text: string, options?: SendMessageOptions): Promise<boolean>;
     regenerateLast(): Promise<unknown>;
     runEditedPrompt(text: string): Promise<void>;
+    abortGenerate(): Promise<unknown>;
     isGenerating(): boolean;
     isSyncing(): boolean;
     getLastStreamState(): GenerationStreamState | null;
+    subscribe(listener: GenerationDomainEventListener): () => void;
 }
+
+export type GenerationDomainEvent =
+    | { type: 'started' }
+    | { type: 'updated'; state: GenerationStreamState }
+    | { type: 'ended'; finalText: string }
+    | { type: 'failed'; message: string; status?: string };
+export type GenerationDomainEventListener = (event: GenerationDomainEvent) => void;
 
 export class GenerationDomainService {
     constructor(private readonly runtime: GenerationRuntimePort) {}
@@ -42,6 +51,14 @@ export class GenerationDomainService {
 
     runEditedPrompt(text: string): Promise<void> {
         return this.runtime.runEditedPrompt(text);
+    }
+
+    stop(): Promise<unknown> {
+        return this.runtime.abortGenerate();
+    }
+
+    subscribe(listener: GenerationDomainEventListener): () => void {
+        return this.runtime.subscribe(listener);
     }
 
     isGenerating(): boolean {
