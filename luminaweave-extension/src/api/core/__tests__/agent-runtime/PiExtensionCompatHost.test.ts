@@ -68,6 +68,8 @@ describe('PiExtensionCompatHost', () => {
             models: []
         });
         await expect(tools.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_echo',
             toolName: 'echo',
             args: { value: 'raw' }
@@ -120,6 +122,8 @@ describe('PiExtensionCompatHost', () => {
         await runner.setup();
 
         await expect(tools.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_write',
             toolName: 'write',
             args: { path: '/protected/card.md' }
@@ -157,6 +161,8 @@ describe('PiExtensionCompatHost', () => {
         await runner.setup();
 
         await expect(tools.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_echo',
             toolName: 'echo',
             args: { value: 'raw' }

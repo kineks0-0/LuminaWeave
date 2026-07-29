@@ -21,11 +21,15 @@ describe('AgentWorkspaceTools', () => {
         expect(registry.getToolSummary().map(tool => tool.name)).toEqual(['read', 'write', 'edit', 'delete']);
 
         await registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_write',
             toolName: 'write',
             args: { path: './notes.md', content: 'alpha beta' }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_read',
             toolName: 'read',
             args: { path: './notes.md' }
@@ -34,6 +38,8 @@ describe('AgentWorkspaceTools', () => {
             result: { content: [{ type: 'text', text: 'alpha beta' }] }
         });
         await registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_delete',
             toolName: 'delete',
             args: { path: './notes.md' }
@@ -48,6 +54,8 @@ describe('AgentWorkspaceTools', () => {
         createAgentWorkspaceTools({ fs, tools: ['edit'] }).register(registry);
 
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_edit',
             toolName: 'edit',
             args: {
@@ -73,6 +81,8 @@ describe('AgentWorkspaceTools', () => {
         createAgentWorkspaceTools({ fs, tools: ['edit'] }).register(registry);
 
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_edit',
             toolName: 'edit',
             args: {
@@ -96,6 +106,8 @@ describe('AgentWorkspaceTools', () => {
 
         expect(registry.getToolSummary().map(tool => tool.name)).toEqual(['ls', 'find', 'grep', 'search']);
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_ls',
             toolName: 'ls',
             args: { path: './docs' }
@@ -104,6 +116,8 @@ describe('AgentWorkspaceTools', () => {
             result: { content: [{ type: 'text', text: './docs/alpha.md\n./docs/beta.txt' }] }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_find',
             toolName: 'find',
             args: { query: 'auth' }
@@ -112,6 +126,8 @@ describe('AgentWorkspaceTools', () => {
             result: { content: [{ type: 'text', text: './src/auth.ts' }] }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_grep',
             toolName: 'grep',
             args: { pattern: 'passkeys', path: './docs' }
@@ -120,6 +136,8 @@ describe('AgentWorkspaceTools', () => {
             result: { content: [{ type: 'text', text: './docs/alpha.md:2:Use passkeys.' }] }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_search',
             toolName: 'search',
             args: { query: 'authentication', limit: 1 }
@@ -151,6 +169,8 @@ describe('AgentWorkspaceTools', () => {
         }).register(registry);
 
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_write',
             toolName: 'write',
             args: { path: './notes.md', content: 'hello' }
@@ -159,6 +179,8 @@ describe('AgentWorkspaceTools', () => {
             result: { details: { path: './notes.md', audit: { auditId: 'write:./notes.md', changeCount: 1 } } }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_edit',
             toolName: 'edit',
             args: {
@@ -170,6 +192,8 @@ describe('AgentWorkspaceTools', () => {
             result: { details: { path: './card.md', audit: { auditId: 'edit:./card.md', changeCount: 1 } } }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_delete',
             toolName: 'delete',
             args: { path: './notes.md' }
@@ -198,6 +222,8 @@ describe('AgentWorkspaceTools', () => {
         }).register(registry);
 
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_bash',
             toolName: 'bash',
             args: { command: 'echo first line', cwd: './' }
@@ -296,6 +322,8 @@ describe('AgentWorkspaceTools', () => {
             'search'
         ]);
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_read',
             toolName: 'read',
             args: { path: './docs/alpha.md' },
@@ -305,6 +333,8 @@ describe('AgentWorkspaceTools', () => {
             result: { content: [{ type: 'text', text: 'Authentication guide\nUse passkeys.\n' }] }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_ls',
             toolName: 'ls',
             args: { path: './docs' },
@@ -314,6 +344,8 @@ describe('AgentWorkspaceTools', () => {
             result: { content: [{ type: 'text', text: './docs/alpha.md\n./docs/beta.txt' }] }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_grep',
             toolName: 'grep',
             args: { pattern: 'passkeys', path: './docs' },
@@ -323,6 +355,8 @@ describe('AgentWorkspaceTools', () => {
             result: { content: [{ type: 'text', text: './docs/alpha.md:2:Use passkeys.' }] }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_write',
             toolName: 'write',
             args: { path: './notes/result.md', content: 'status: draft\n' },
@@ -332,6 +366,8 @@ describe('AgentWorkspaceTools', () => {
             result: { details: { audit: { auditId: 'write:./notes/result.md' } } }
         });
         await registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_edit',
             toolName: 'edit',
             args: {
@@ -341,12 +377,16 @@ describe('AgentWorkspaceTools', () => {
             visibility: { phaseId: 'write' }
         });
         await registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_delete',
             toolName: 'delete',
             args: { path: './docs/beta.txt' },
             visibility: { phaseId: 'write' }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_bash',
             toolName: 'bash',
             args: { command: 'cat /data/docs/alpha.md && search -n 1 authentication', cwd: '/' },
@@ -364,6 +404,8 @@ describe('AgentWorkspaceTools', () => {
             }
         });
         await expect(registry.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_bash_blocked',
             toolName: 'bash',
             args: { command: 'cat /data/docs/alpha.md' },

@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentToolRegistry, type AgentRuntimeTool } from '@/api/core/agent-runtime/tools/AgentToolRegistry.js';
 import { AgentRuntimeEventBus } from '@/api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
+const scope = { sessionId: 'session_1', turnId: 'turn_1' } as const;
+
 describe('AgentToolRegistry', () => {
     it('starts empty and only exposes tools registered by the adapter', () => {
         const registry = new AgentToolRegistry();
@@ -26,6 +28,7 @@ describe('AgentToolRegistry', () => {
         registry.register(tool);
 
         await expect(registry.execute({
+            ...scope,
             toolCallId: 'call_search',
             toolName: 'search',
             args: { query: 'auth' }
@@ -34,6 +37,7 @@ describe('AgentToolRegistry', () => {
             result: { details: { query: 'auth' } }
         });
         await expect(registry.execute({
+            ...scope,
             toolCallId: 'call_missing',
             toolName: 'missing',
             args: {}
@@ -56,6 +60,7 @@ describe('AgentToolRegistry', () => {
         registry.register(tool);
 
         const paused = await registry.execute({
+            ...scope,
             toolCallId: 'call_write',
             toolName: 'writeFile',
             args: { path: './card.md' }
@@ -64,6 +69,7 @@ describe('AgentToolRegistry', () => {
             status: 'approval_required',
             approval: {
                 approvalId: 'approval-call_write',
+                ...scope,
                 toolCallId: 'call_write',
                 toolName: 'writeFile',
                 args: { path: './card.md' }
@@ -71,7 +77,7 @@ describe('AgentToolRegistry', () => {
         });
         expect(execute).not.toHaveBeenCalled();
 
-        await expect(registry.resolveToolApproval('call_write', true, 'ok')).resolves.toMatchObject({
+        await expect(registry.resolveToolApproval(scope.sessionId, scope.turnId, 'call_write', true, 'ok')).resolves.toMatchObject({
             status: 'approved',
             result: { details: { path: './card.md' } }
         });
@@ -90,15 +96,17 @@ describe('AgentToolRegistry', () => {
         });
 
         await registry.execute({
+            ...scope,
             toolCallId: 'call_delete',
             toolName: 'deleteFile',
             args: { path: './card.md' }
         });
 
-        await expect(registry.resolveToolApproval('call_delete', false, 'no')).resolves.toEqual({
+        await expect(registry.resolveToolApproval(scope.sessionId, scope.turnId, 'call_delete', false, 'no')).resolves.toEqual({
             status: 'denied',
             approval: {
                 approvalId: 'approval-call_delete',
+                ...scope,
                 toolCallId: 'call_delete',
                 toolName: 'deleteFile',
                 args: { path: './card.md' }
@@ -129,6 +137,7 @@ describe('AgentToolRegistry', () => {
         expect(registry.getToolSummary({ phaseId: 'inspect' }).map(tool => tool.name)).toEqual(['readFile']);
         expect(registry.getToolSummary({ phaseId: 'write' }).map(tool => tool.name)).toEqual(['readFile', 'writeFile']);
         await expect(registry.execute({
+            ...scope,
             toolCallId: 'call_write',
             toolName: 'writeFile',
             args: { path: './card.md' },
@@ -150,6 +159,7 @@ describe('AgentToolRegistry', () => {
         });
 
         await expect(registry.execute({
+            ...scope,
             toolCallId: 'call_search',
             toolName: 'search',
             args: { query: 'auth' }
@@ -158,21 +168,26 @@ describe('AgentToolRegistry', () => {
             result: { details: { query: 'auth' } }
         });
 
-        expect(events.getEvents()).toEqual([
+        expect(events.getEvents({ sessionId: scope.sessionId, turnId: scope.turnId })).toEqual([
             {
                 type: 'tool_execution_start',
+                ...scope,
                 toolCallId: 'call_search',
                 toolName: 'search',
                 args: { query: 'auth' }
             },
             {
                 type: 'tool_execution_update',
+                ...scope,
                 toolCallId: 'call_search',
+                toolName: 'search',
                 content: [{ type: 'text', text: 'found:auth' }]
             },
             {
                 type: 'tool_execution_end',
+                ...scope,
                 toolCallId: 'call_search',
+                toolName: 'search',
                 status: 'completed',
                 result: {
                     content: [{ type: 'text', text: 'found:auth' }],
@@ -180,7 +195,7 @@ describe('AgentToolRegistry', () => {
                 }
             }
         ]);
-        expect(events.getSnapshot().pendingToolCalls).toEqual([]);
+        expect(events.getSnapshot(scope.sessionId).pendingToolCalls).toEqual([]);
     });
 
     it('lets extension hooks modify tool args and final results', async () => {
@@ -211,6 +226,7 @@ describe('AgentToolRegistry', () => {
         });
 
         await expect(registry.execute({
+            ...scope,
             toolCallId: 'call_search',
             toolName: 'search',
             args: { query: 'raw' }
@@ -248,6 +264,7 @@ describe('AgentToolRegistry', () => {
         });
 
         await expect(registry.execute({
+            ...scope,
             toolCallId: 'call_write',
             toolName: 'write',
             args: { path: '/protected/card.md' }

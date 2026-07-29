@@ -70,13 +70,15 @@ export class AgentRuntime<TTurnInput, TRunResult, TPreviewResult, TApprovalResul
     }
 
     async resolveToolApproval(
+        sessionId: string,
+        turnId: string,
         toolCallId: string,
         approved: boolean,
         message?: string,
         options?: unknown
     ): Promise<TApprovalResult | null> {
         await this.setup();
-        return this.core.resolveToolApproval(toolCallId, approved, message, options);
+        return this.core.resolveToolApproval(sessionId, turnId, toolCallId, approved, message, options);
     }
 
     abortActiveGeneration(): void {
@@ -90,8 +92,8 @@ export class AgentRuntime<TTurnInput, TRunResult, TPreviewResult, TApprovalResul
         return this.extensionHost.discoverResources(input);
     }
 
-    getSnapshot(): AgentRuntimeSnapshot {
-        return this.events.getSnapshot();
+    getSnapshot(sessionId: string): AgentRuntimeSnapshot {
+        return this.events.getSnapshot(sessionId);
     }
 
     private async setupTools(): Promise<void> {

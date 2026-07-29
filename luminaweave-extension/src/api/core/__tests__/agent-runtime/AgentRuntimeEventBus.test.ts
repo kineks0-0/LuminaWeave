@@ -1,213 +1,193 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AgentRuntimeEventBus } from '@/api/core/agent-runtime/events/AgentRuntimeEventBus.js';
 
 describe('AgentRuntimeEventBus', () => {
-    it('records lifecycle events in order and projects streaming message snapshot state', () => {
-        const bus = new AgentRuntimeEventBus({
-            activeTools: [
-                { name: 'read', description: 'Read files.', needsApproval: false },
-                { name: 'write', description: 'Write files.', needsApproval: true }
-            ]
-        });
+    it('isolates snapshots, events, and subscriptions by session and turn', () => {
+        const bus = new AgentRuntimeEventBus();
         const observed: string[] = [];
-        bus.subscribe(event => {
+        const unsubscribe = bus.subscribe({ sessionId: 'session_1', turnId: 'turn_1' }, event => {
             observed.push(event.type);
         });
 
-        bus.emit({ type: 'agent_start', sessionId: 'session_1' });
-        bus.emit({ type: 'turn_start', turnId: 'turn_1' });
-        bus.emit({
-            type: 'message_start',
-            message: { id: 'message_1', role: 'assistant', blocks: [] }
-        });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'thinking', text: 'checking context' }
-        });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'text', text: 'answer' }
-        });
-        bus.emit({ type: 'message_end', messageId: 'message_1' });
-        bus.emit({ type: 'turn_end', turnId: 'turn_1' });
-        bus.emit({ type: 'agent_end', sessionId: 'session_1' });
+        emitMessage(bus, 'session_1', 'turn_1', 'message_1', 'session one');
+        emitMessage(bus, 'session_2', 'turn_2', 'message_2', 'session two');
 
-        expect(observed).toEqual([
-            'agent_start',
-            'turn_start',
-            'message_start',
-            'message_update',
-            'message_update',
-            'message_end',
-            'turn_end',
-            'agent_end'
-        ]);
-        expect(bus.getEvents().map(event => event.type)).toEqual(observed);
-        expect(bus.getSnapshot()).toEqual({
-            isStreaming: false,
-            streamingMessage: undefined,
-            pendingToolCalls: [],
-            messages: [
-                {
-                    id: 'message_1',
-                    role: 'assistant',
-                    blocks: [
-                        { type: 'thinking', text: 'checking context' },
-                        { type: 'text', text: 'answer' }
-                    ],
-                    status: 'complete'
-                }
-            ],
-            errorMessage: undefined,
-            activeTools: [
-                { name: 'read', description: 'Read files.', needsApproval: false },
-                { name: 'write', description: 'Write files.', needsApproval: true }
-            ],
-            queue: undefined
+        expect(bus.getSnapshot('session_1')).toMatchObject({
+            sessionId: 'session_1',
+            activeTurnId: 'turn_1',
+            messages: [expect.objectContaining({ id: 'message_1', turnId: 'turn_1' })]
         });
+        expect(bus.getSnapshot('session_2')).toMatchObject({
+            sessionId: 'session_2',
+            activeTurnId: 'turn_2',
+            messages: [expect.objectContaining({ id: 'message_2', turnId: 'turn_2' })]
+        });
+        expect(bus.getEvents({ sessionId: 'session_1', turnId: 'turn_1' })).toHaveLength(3);
+        expect(observed).toEqual(['turn_start', 'message_start', 'message_update']);
+
+        unsubscribe();
+        bus.emit({ type: 'turn_end', sessionId: 'session_1', turnId: 'turn_1' });
+        expect(observed).toEqual(['turn_start', 'message_start', 'message_update']);
     });
 
-    it('tracks tool execution, queue state, and cleanup on agent end', () => {
+    it('does not let a stale turn mutate the active turn snapshot', () => {
         const bus = new AgentRuntimeEventBus();
-
-        bus.emit({
-            type: 'queue_update',
-            queuedTurns: 2,
-            activeTurnId: 'turn_1'
-        });
+        bus.emit({ type: 'turn_start', sessionId: 'session_1', turnId: 'turn_1' });
+        bus.emit({ type: 'turn_start', sessionId: 'session_1', turnId: 'turn_2' });
         bus.emit({
             type: 'tool_execution_start',
-            toolCallId: 'call_1',
+            sessionId: 'session_1',
+            turnId: 'turn_2',
+            toolCallId: 'call_2',
             toolName: 'read',
-            args: { path: './agent/skills/writer/SKILL.md' }
+            args: {}
+        });
+        bus.emit({
+            type: 'turn_end',
+            sessionId: 'session_1',
+            turnId: 'turn_1',
+            errorMessage: 'stale failure'
+        });
+
+        expect(bus.getSnapshot('session_1')).toMatchObject({
+            activeTurnId: 'turn_2',
+            isStreaming: true,
+            pendingToolCalls: [expect.objectContaining({ toolCallId: 'call_2', turnId: 'turn_2' })]
+        });
+        expect(bus.getSnapshot('session_1').errorMessage).toBeUndefined();
+    });
+
+    it('projects content blocks by contentIndex and keeps messages from the same turn independent', () => {
+        const bus = new AgentRuntimeEventBus();
+        emitMessage(bus, 'session_1', 'turn_1', 'message_1', 'first');
+        emitMessage(bus, 'session_1', 'turn_1', 'message_2', 'second');
+        bus.emit({
+            type: 'message_update',
+            sessionId: 'session_1',
+            turnId: 'turn_1',
+            messageId: 'message_1',
+            block: { type: 'thinking', contentIndex: 1, text: 'checking' }
+        });
+        bus.emit({
+            type: 'message_update',
+            sessionId: 'session_1',
+            turnId: 'turn_1',
+            messageId: 'message_1',
+            block: { type: 'text', contentIndex: 0, text: 'first updated' }
+        });
+        bus.emit({ type: 'message_end', sessionId: 'session_1', turnId: 'turn_1', messageId: 'message_1' });
+
+        expect(bus.getSnapshot('session_1').messages).toEqual([
+            expect.objectContaining({
+                id: 'message_1',
+                status: 'complete',
+                blocks: [
+                    { type: 'text', contentIndex: 0, text: 'first updated' },
+                    { type: 'thinking', contentIndex: 1, text: 'checking' }
+                ]
+            }),
+            expect.objectContaining({
+                id: 'message_2',
+                status: 'streaming',
+                blocks: [{ type: 'text', contentIndex: 0, text: 'second' }]
+            })
+        ]);
+    });
+
+    it('keeps a pending tool running until its matching lifecycle end', () => {
+        const bus = new AgentRuntimeEventBus();
+        bus.emit({ type: 'turn_start', sessionId: 'session_1', turnId: 'turn_1' });
+        bus.emit({
+            type: 'tool_execution_start',
+            sessionId: 'session_1',
+            turnId: 'turn_1',
+            toolCallId: 'call_1',
+            toolName: 'write',
+            args: { path: './card.md' }
         });
         bus.emit({
             type: 'tool_execution_update',
+            sessionId: 'session_1',
+            turnId: 'turn_1',
             toolCallId: 'call_1',
+            toolName: 'write',
             content: [{ type: 'text', text: 'partial' }]
         });
 
-        expect(bus.getSnapshot().pendingToolCalls).toEqual([
-            {
+        expect(bus.getSnapshot('session_1').pendingToolCalls).toEqual([
+            expect.objectContaining({
+                turnId: 'turn_1',
                 toolCallId: 'call_1',
-                toolName: 'read',
-                args: { path: './agent/skills/writer/SKILL.md' },
-                status: 'running',
+                toolName: 'write',
                 updates: [[{ type: 'text', text: 'partial' }]]
-            }
+            })
         ]);
-        expect(bus.getSnapshot().queue).toEqual({
-            queuedTurns: 2,
-            activeTurnId: 'turn_1'
-        });
 
         bus.emit({
             type: 'tool_execution_end',
+            sessionId: 'session_1',
+            turnId: 'turn_1',
             toolCallId: 'call_1',
-            status: 'completed',
-            result: {
-                content: [{ type: 'text', text: 'done' }],
-                details: { path: './agent/skills/writer/SKILL.md' }
-            }
+            toolName: 'write',
+            status: 'denied'
         });
-        bus.emit({ type: 'agent_end', sessionId: 'session_1' });
-
-        expect(bus.getSnapshot().pendingToolCalls).toEqual([]);
-        expect(bus.getEvents().map(event => event.type)).toEqual([
-            'queue_update',
-            'tool_execution_start',
-            'tool_execution_update',
-            'tool_execution_end',
-            'agent_end'
-        ]);
+        expect(bus.getSnapshot('session_1').pendingToolCalls).toEqual([]);
     });
 
-    it('replaces streaming text blocks of the same type instead of accumulating full prefixes', () => {
+    it('returns immutable scoped snapshots and events', () => {
         const bus = new AgentRuntimeEventBus();
+        emitMessage(bus, 'session_1', 'turn_1', 'message_1', 'answer');
+        const snapshot = bus.getSnapshot('session_1');
+        snapshot.messages.length = 0;
+        const events = bus.getEvents({ sessionId: 'session_1' });
+        events.length = 0;
 
-        bus.emit({ type: 'turn_start', turnId: 'turn_1' });
-        bus.emit({
-            type: 'message_start',
-            message: { id: 'message_1', role: 'assistant', blocks: [] }
-        });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'text', text: '需要' }
-        });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'text', text: '需要搜索可抓取的资料' }
-        });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'thinking', text: '先搜索' }
-        });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'thinking', text: '先搜索并整理来源' }
-        });
-
-        expect(bus.getSnapshot().streamingMessage?.blocks).toEqual([
-            { type: 'text', text: '需要搜索可抓取的资料' },
-            { type: 'thinking', text: '先搜索并整理来源' }
-        ]);
+        expect(bus.getSnapshot('session_1').messages).toHaveLength(1);
+        expect(bus.getEvents({ sessionId: 'session_1' })).toHaveLength(3);
     });
 
-    it('updates provider-native content blocks by content index without collapsing same-type blocks', () => {
+    it('isolates subscription failures so later listeners and events keep flowing', () => {
         const bus = new AgentRuntimeEventBus();
-
-        bus.emit({ type: 'turn_start', turnId: 'turn_1' });
-        bus.emit({
-            type: 'message_start',
-            message: { id: 'message_1', role: 'assistant', blocks: [] }
+        const logger = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const observed: string[] = [];
+        bus.subscribe({ sessionId: 'session_1' }, () => {
+            throw new Error('projection failed');
         });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'text', contentIndex: 0, text: 'intro' }
-        });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'thinking', contentIndex: 1, text: 'checking source' }
-        });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'text', contentIndex: 2, text: 'answer' }
-        });
-        bus.emit({
-            type: 'message_update',
-            messageId: 'message_1',
-            block: { type: 'thinking', contentIndex: 1, text: 'checking source and policy' }
+        bus.subscribe({ sessionId: 'session_1' }, event => {
+            observed.push(event.type);
         });
 
-        expect(bus.getSnapshot().streamingMessage?.blocks).toEqual([
-            { type: 'text', contentIndex: 0, text: 'intro' },
-            { type: 'thinking', contentIndex: 1, text: 'checking source and policy' },
-            { type: 'text', contentIndex: 2, text: 'answer' }
-        ]);
-    });
+        bus.emit({ type: 'turn_start', sessionId: 'session_1', turnId: 'turn_1' });
+        bus.emit({ type: 'turn_end', sessionId: 'session_1', turnId: 'turn_1' });
 
-    it('sets error state on turn end and returns immutable snapshots', () => {
-        const bus = new AgentRuntimeEventBus();
-        bus.emit({ type: 'turn_start', turnId: 'turn_1' });
-        bus.emit({ type: 'turn_end', turnId: 'turn_1', errorMessage: 'model failed' });
-
-        const snapshot = bus.getSnapshot();
-        snapshot.messages.push({
-            id: 'local_mutation',
-            role: 'assistant',
-            blocks: []
-        });
-
-        expect(bus.getSnapshot().errorMessage).toBe('model failed');
-        expect(bus.getSnapshot().messages).toEqual([]);
+        expect(observed).toEqual(['turn_start', 'turn_end']);
+        expect(logger).toHaveBeenCalledWith(
+            expect.objectContaining({ error: expect.any(Error) }),
+            'Agent runtime event subscription failed.'
+        );
+        logger.mockRestore();
     });
 });
+
+const emitMessage = (
+    bus: AgentRuntimeEventBus,
+    sessionId: string,
+    turnId: string,
+    messageId: string,
+    text: string
+): void => {
+    bus.emit({ type: 'turn_start', sessionId, turnId });
+    bus.emit({
+        type: 'message_start',
+        sessionId,
+        turnId,
+        message: { id: messageId, turnId, role: 'assistant', blocks: [] }
+    });
+    bus.emit({
+        type: 'message_update',
+        sessionId,
+        turnId,
+        messageId,
+        block: { type: 'text', contentIndex: 0, text }
+    });
+};
