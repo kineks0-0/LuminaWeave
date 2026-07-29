@@ -7,6 +7,7 @@ const LuminaTimeline = defineAsyncComponent(() => import('./LuminaTimeline.vue')
 const platformManifest: PluginManifestV2 = {
     id: 'lumina-timeline',
     name: '世界线',
+    primarySurface: 'timeline.navigator',
     capabilities: [
         { id: 'conversation.timeline', description: '浏览和切换当前会话世界线。' }
     ],

@@ -33,7 +33,7 @@ describe('resolveDynamicTabTarget', () => {
     expect(resolved.component).toBe(LegacyComponent);
   });
 
-  it('treats unknown string components as surface contracts', () => {
+  it('rejects unknown string components instead of inferring a surface contract', () => {
     const resolved = resolveDynamicTabTarget({
       id: 'custom-settings',
       name: 'Custom Settings',
@@ -41,8 +41,10 @@ describe('resolveDynamicTabTarget', () => {
       component: 'settings.root'
     }, {});
 
-    expect(resolved.surfaceContractId).toBe('settings.root');
+    expect(resolved.surfaceContractId).toBeNull();
     expect(resolved.component).toBeNull();
+    expect(resolved.error).toBe('unregistered-component');
+    expect(resolved.unresolvedTargetId).toBe('settings.root');
   });
 
   it('keeps inline component tabs as legacy component tabs', () => {
@@ -57,14 +59,16 @@ describe('resolveDynamicTabTarget', () => {
     expect(resolved.component).toBe(InlineComponent);
   });
 
-  it('falls back component-less tabs to their id as a surface contract', () => {
+  it('rejects component-less tabs instead of inferring a surface contract from the tab id', () => {
     const resolved = resolveDynamicTabTarget({
       id: 'launcher.root',
       name: 'Launcher',
       icon: ''
     }, {});
 
-    expect(resolved.surfaceContractId).toBe('launcher.root');
+    expect(resolved.surfaceContractId).toBeNull();
     expect(resolved.component).toBeNull();
+    expect(resolved.error).toBe('missing-target');
+    expect(resolved.unresolvedTargetId).toBe('launcher.root');
   });
 });

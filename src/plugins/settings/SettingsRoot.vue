@@ -75,6 +75,7 @@
           v-else
           :is="currentDetailedView ? SettingsDetailed : SettingsUnified"
           :pluginId="currentDetailedView"
+          :desktopModeId="surfaceContext.theme.desktopModeId"
           @open-detail="openDetailedView"
         />
       </div>
@@ -83,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, type PropType } from 'vue';
+import { computed } from 'vue';
 import { ChevronLeft, LayoutGrid } from 'lucide-vue-next';
 import SettingsUnified from './SettingsUnified.vue';
 import SettingsDetailed from './SettingsDetailed.vue';
@@ -92,21 +93,13 @@ import { activeSettings, currentDetailedView } from './useSettings.js';
 import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry.js';
 import { getActiveDesktopModeIdFromSettings } from '../../desktop-modes/core/registry.js';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../platform/activity/activityLaunchResolver.js';
-import type { ActivityDescriptor } from '../../platform/activity/types.js';
+import { useSurfaceInput, useSurfaceRuntimeContext } from '../../platform/surface/useSurfaceRuntimeContext.js';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import { cn } from '../../ui/cn.js';
 import { LuminaButton } from '../../ui/primitives';
 
-const props = defineProps({
-  mode: {
-    type: String,
-    default: 'small'
-  },
-  activity: {
-    type: Object as PropType<ActivityDescriptor>,
-    default: undefined
-  }
-});
+const props = useSurfaceInput('settings.root');
+const surfaceContext = useSurfaceRuntimeContext('settings.root');
 
 const { cssVars, variant: settingsVariant } = useSurfaceSkin('settings.root');
 const settingsSkinStyle = computed(() => cssVars.value);

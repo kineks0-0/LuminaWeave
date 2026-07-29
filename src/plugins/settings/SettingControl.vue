@@ -17,16 +17,16 @@
   >
     <div class="setting-left">
       <div class="label-row">
-        <label class="setting-label">{{ config.label }}</label>
+        <label class="setting-label">{{ props.config.label }}</label>
         <div v-if="hasScopeSelector" class="setting-meta-control setting-scope">
           <LuminaSelect class="scope-select compact-scope" size="sm" :modelValue="currentScope" @update:modelValue="onScopeValueChange" aria-label="设置作用域" title="作用域">
-            <option v-for="scope in config.allowedScopes" :key="scope" :value="scope">
+            <option v-for="scope in props.config.allowedScopes" :key="scope" :value="scope">
               {{ scopeLabels[scope] || scope }}
             </option>
           </LuminaSelect>
         </div>
       </div>
-      <div class="setting-description" v-if="config.description">{{ config.description }}</div>
+      <div class="setting-description" v-if="props.config.description">{{ props.config.description }}</div>
     </div>
 
     <div
@@ -35,7 +35,7 @@
     >
       <div class="setting-control-body" :class="controlBodyClass">
         <!-- Theme Color Buttons -->
-        <template v-if="config.type === 'theme'">
+        <template v-if="props.config.type === 'theme'">
           <button v-for="theme in themes" :key="theme.value" :class="getThemeColorButtonClass(theme.value)"
             :style="{ background: theme.color }" :aria-label="`切换到 ${theme.value} 主题`"
             @click="updateValue(theme.value)">
@@ -48,8 +48,8 @@
         </template>
 
         <!-- Options (Segmented Control) -->
-        <template v-else-if="config.type === 'options'">
-          <template v-if="settingKey === 'fontFamily'">
+        <template v-else-if="props.config.type === 'options'">
+          <template v-if="props.settingKey === 'fontFamily'">
             <div class="font-selector-wrap">
               <LuminaSelect class="lw-select font-preset-select" :modelValue="isRemoteOrCustom ? 'remote' : currentValue"
                 @update:modelValue="handleFontPresetChange">
@@ -106,28 +106,28 @@
         </template>
 
         <!-- Boolean (Toggle Switch) -->
-        <template v-else-if="config.type === 'boolean'">
+        <template v-else-if="props.config.type === 'boolean'">
           <LuminaToggle class="lw-toggle" :modelValue="Boolean(currentValue)" @update:modelValue="updateValue" />
         </template>
 
         <!-- Stepper (LuminaStepper) 通用步进器 -->
-        <template v-else-if="config.type === 'stepper'">
-          <LuminaStepper :modelValue="currentValue" :min="config.min" :max="config.max" :step="config.step"
+        <template v-else-if="props.config.type === 'stepper'">
+          <LuminaStepper :modelValue="currentValue" :min="props.config.min" :max="props.config.max" :step="props.config.step"
             @update:modelValue="updateValue" />
         </template>
 
         <!-- Slider -->
-        <template v-else-if="config.type === 'slider'">
+        <template v-else-if="props.config.type === 'slider'">
           <div class="slider-wrapper">
-            <LuminaSlider :min="config.min" :max="config.max" :step="config.step" :modelValue="Number(currentValue)"
+            <LuminaSlider :min="props.config.min" :max="props.config.max" :step="props.config.step" :modelValue="Number(currentValue)"
               @update:modelValue="updateValue" class="lw-slider-input" />
-            <LuminaInput type="number" :min="config.min" :max="config.max" :step="config.step" :modelValue="currentValue"
+            <LuminaInput type="number" :min="props.config.min" :max="props.config.max" :step="props.config.step" :modelValue="currentValue"
               @update:modelValue="handleNumberInput" class="slider-number-input" />
           </div>
         </template>
 
         <!-- Nexus Select -->
-        <template v-else-if="config.type === 'nexus-select'">
+        <template v-else-if="props.config.type === 'nexus-select'">
           <LuminaSelect class="lw-select" :modelValue="currentValue" @update:modelValue="updateValue">
             <option value="">未指定 (使用 ST 全局模型)</option>
             <option v-for="preset in availableNexusPresets" :key="preset.id" :value="preset.id">
@@ -137,15 +137,15 @@
         </template>
 
         <!-- Text Input -->
-        <template v-else-if="config.type === 'text'">
+        <template v-else-if="props.config.type === 'text'">
           <LuminaInput type="text" class="lw-input" :modelValue="currentValue" @update:modelValue="updateValue"
-            :placeholder="config.default || '请输入...'" />
+            :placeholder="props.config.default || '请输入...'" />
         </template>
 
         <!-- Password Input -->
-        <template v-else-if="config.type === 'password'">
+        <template v-else-if="props.config.type === 'password'">
           <LuminaInput type="password" autocomplete="off" class="lw-input" :modelValue="currentValue"
-            @update:modelValue="updateValue" :placeholder="config.default || '请输入...'" />
+            @update:modelValue="updateValue" :placeholder="props.config.default || '请输入...'" />
         </template>
       </div>
     </div>
@@ -160,6 +160,7 @@ import LuminaStepper from './LuminaStepper.vue';
 import { LuminaInput, LuminaSelect, LuminaSlider, LuminaToggle } from '../../ui/primitives';
 import { cn } from '../../ui/cn.js';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import { useSurfaceInput } from '../../platform/surface/useSurfaceRuntimeContext.js';
 import {
   clampSettingNumber,
   getActiveSettingOptionDescription,
@@ -173,18 +174,13 @@ import {
   isSettingVisible,
   resolveSettingOptions,
   settingScopeLabels,
-  shouldUseVerticalSettingLayout,
-  type SettingControlConfig
+  shouldUseVerticalSettingLayout
 } from './settingControlModel.js';
 
 const { updateSetting, updateScope } = useSettings();
 const { cssVars: settingsControlSkinVars, variant: settingsControlVariant } = useSurfaceSkin('settings.control');
 
-const props = defineProps<{
-  pluginId: string;
-  settingKey: string;
-  config: SettingControlConfig;
-}>();
+const props = useSurfaceInput('settings.control');
 
 const storageKey = computed(() => getSettingStorageKey(props.pluginId, props.settingKey));
 

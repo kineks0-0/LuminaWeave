@@ -6,7 +6,7 @@ type SurfaceContractResolver = (id: string) => SurfaceContractId | null;
 
 export interface TelegramToolContractResolvers {
   resolveRegisteredPanelContractId: SurfaceContractResolver;
-  resolvePluginContractId: (pluginId: string) => SurfaceContractId;
+  resolvePluginContractId: SurfaceContractResolver;
 }
 
 const telegramMobileRootRouteNames = new Set<TelegramStackRoute['name']>([
@@ -41,7 +41,7 @@ export const resolveTelegramMobileRouteTitle = (route: TelegramStackRoute): stri
 export const resolveTelegramMobileToolContractId = (
   route: TelegramStackRoute,
   resolvers: TelegramToolContractResolvers
-): SurfaceContractId => {
+): SurfaceContractId | null => {
   if (route.contractId) {
     return route.contractId;
   }

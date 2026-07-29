@@ -81,11 +81,10 @@ export class DesktopSurfaceService {
         const mode = options.mode || panel.config.defaultMode || 'modal';
 
         if (mode === 'tab') {
-            const inferredContractId = id as SurfaceContractId;
             const surfaceContractId =
                 panel.config.surfaceContractId ||
                 getSurfaceContractIdForRegisteredPanel(panel.id) ||
-                (surfaceRegistry.getContract(inferredContractId) ? inferredContractId : null);
+                (surfaceRegistry.hasContract(id) ? id : null);
             const activity = mergeActivityDescriptors(options.activity, { size: 'default', pageType: 'nested' });
             const role: ActivityLaunchRole = options.role || (activity.size === 'small' ? 'support' : 'primary');
             this.launchActivity({
@@ -113,6 +112,17 @@ export class DesktopSurfaceService {
 
     openTab(tabConfig: DynamicTabConfig) {
         console.log(`[DesktopSurfaceService] 请求打开标签页: ${tabConfig.name} (${tabConfig.id})`);
+        const target = tabConfig.surfaceContractId
+            ? { kind: 'surface' as const, contractId: tabConfig.surfaceContractId }
+            : tabConfig.component
+                ? { kind: 'component' as const, component: tabConfig.component }
+                : null;
+        if (!target) {
+            console.error('[DesktopSurfaceService] Tab target unavailable', {
+                tabId: tabConfig.id
+            });
+            return;
+        }
         const props = tabConfig.props || {};
         const legacyActivity = activityFromLegacyMode(props.mode as LegacyActivityMode | undefined);
         const activity = mergeActivityDescriptors(tabConfig.activity || props.activity as ActivityDescriptor | undefined, legacyActivity);
@@ -122,11 +132,7 @@ export class DesktopSurfaceService {
             title: tabConfig.name,
             icon: tabConfig.icon,
             role,
-            target: tabConfig.surfaceContractId
-                ? { kind: 'surface', contractId: tabConfig.surfaceContractId }
-                : tabConfig.component
-                    ? { kind: 'component', component: tabConfig.component }
-                    : { kind: 'surface', contractId: tabConfig.id as SurfaceContractId },
+            target,
             activity,
             props,
             dedupeKey: `tab:${tabConfig.id}`

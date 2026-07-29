@@ -5,6 +5,7 @@ import TraditionalShell from '../../shell/traditional/TraditionalShell.vue';
 import TelegramUserInfoPanel from '../../shell/modes/telegram/TelegramUserInfoPanel.vue';
 import { desktopModeRuntimeRegistry } from './DesktopModeRuntimeRegistry.js';
 import type { DesktopModeRuntimeDescriptor, DesktopShellKind } from './types.js';
+import type { SurfaceContractId } from '../surface/types.js';
 
 const getShellKind = (mode: DesktopModeManifest): DesktopShellKind =>
     mode.shell.kind;
@@ -14,7 +15,7 @@ const getShellRenderer = (shellKind: DesktopShellKind) =>
 
 export const createDesktopModeRuntimeDescriptor = (mode: DesktopModeManifest): DesktopModeRuntimeDescriptor => {
     const shellKind = getShellKind(mode);
-    const primarySurfaces = shellKind === 'freeform'
+    const primarySurfaces: SurfaceContractId[] = shellKind === 'freeform'
         ? ['chat.main', 'settings.root', 'forge.workspace', 'timeline.navigator']
         : ['chat.main'];
 

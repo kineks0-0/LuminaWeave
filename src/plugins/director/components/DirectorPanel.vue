@@ -187,17 +187,10 @@ import { useTier1Store } from '../Tier1Store.js';
 import { lwStorage } from '../../../api/storage.js';
 import { LuminaWeaveAPI } from '../../../api';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../../platform/activity/activityLaunchResolver.js';
-import type { ActivityDescriptor } from '../../../platform/activity/types.js';
 import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
+import { useSurfaceInput } from '../../../platform/surface/useSurfaceRuntimeContext.js';
 
-const props = withDefaults(defineProps<{
-  mode?: 'large' | 'small';
-  activity?: ActivityDescriptor;
-  isMobile?: boolean;
-}>(), {
-  mode: 'small',
-  isMobile: false
-});
+const props = useSurfaceInput('director.panel');
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const { cssVars: directorCssVars, variant: directorVariant } = useSurfaceSkin('director.panel');

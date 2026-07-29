@@ -4,6 +4,13 @@ import type { LuminaPlugin } from '../../../types/plugin.js';
 import { getPrimarySurfaceContractIdForPlugin } from '../officialPluginSurfaces.js';
 import { getSurfaceContractIdForRegisteredPanel } from '../officialPanelSurfaces.js';
 import { deriveNavigationSlotsFromManifest, getPluginNavigationSlots } from '../pluginNavigationSlots.js';
+import type { EmptySurfaceData, SurfaceContractSpec } from '../../surface/types.js';
+
+declare module '../../surface/types.js' {
+    interface SurfaceContractMap {
+        'third-party.surface': SurfaceContractSpec<EmptySurfaceData>;
+    }
+}
 
 let officialPlugins: LuminaPlugin[] = [];
 
@@ -74,9 +81,34 @@ describe('official plugin platform manifests', () => {
 
     it('maps every official plugin to one declared primary surface', () => {
         officialPlugins.forEach(plugin => {
-            const primarySurface = getPrimarySurfaceContractIdForPlugin(plugin.id);
+            const primarySurface = getPrimarySurfaceContractIdForPlugin(plugin);
+            expect(primarySurface).not.toBeNull();
             expect(plugin.platformManifest?.surfaces?.some(surface => surface.id === primarySurface)).toBe(true);
         });
+    });
+
+    it('uses only the manifest primary surface and never infers it from the plugin id', () => {
+        const thirdPartyPlugin: LuminaPlugin = {
+            id: 'third-party-panel',
+            name: 'Third Party Panel',
+            icon: '',
+            component: StubComponent,
+            platformManifest: {
+                id: 'third-party-panel',
+                name: 'Third Party Panel',
+                primarySurface: 'third-party.surface',
+                surfaces: [{ id: 'third-party.surface' }]
+            }
+        };
+
+        expect(getPrimarySurfaceContractIdForPlugin(thirdPartyPlugin)).toBe('third-party.surface');
+        expect(getPrimarySurfaceContractIdForPlugin({
+            ...thirdPartyPlugin,
+            platformManifest: {
+                ...thirdPartyPlugin.platformManifest!,
+                primarySurface: undefined
+            }
+        })).toBeNull();
     });
 
     it('derives current navigation slots from primary surfaces', () => {

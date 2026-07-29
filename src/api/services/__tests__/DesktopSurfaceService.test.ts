@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Component } from 'vue';
 import { DesktopSurfaceService } from '../DesktopSurfaceService.js';
+import type { EmptySurfaceData, SurfaceContractSpec } from '../../../platform/surface/types.js';
+
+declare module '../../../platform/surface/types.js' {
+    interface SurfaceContractMap {
+        'custom.surface': SurfaceContractSpec<EmptySurfaceData>;
+    }
+}
 
 const DummyPanel = { name: 'DummyPanel' } as Component;
 
@@ -156,5 +163,24 @@ describe('DesktopSurfaceService', () => {
                 pageType: 'nested'
             }
         }));
+    });
+
+    it('rejects tabs without an explicit surface contract or component', () => {
+        const emit = vi.fn();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const service = new DesktopSurfaceService(emit);
+
+        service.openTab({
+            id: 'unregistered-tab',
+            name: 'Unregistered',
+            icon: ''
+        });
+
+        expect(emit).not.toHaveBeenCalled();
+        expect(consoleError).toHaveBeenCalledWith(
+            '[DesktopSurfaceService] Tab target unavailable',
+            { tabId: 'unregistered-tab' }
+        );
+        consoleError.mockRestore();
     });
 });

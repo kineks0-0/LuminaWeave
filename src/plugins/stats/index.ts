@@ -11,6 +11,7 @@ const settingsSchema = {
 const platformManifest: PluginManifestV2 = {
     id: 'lumina-stats',
     name: '状态',
+    primarySurface: 'stats.panel',
     capabilities: [
         { id: 'context.stats', description: '展示当前会话派生状态与数值面板。' }
     ],

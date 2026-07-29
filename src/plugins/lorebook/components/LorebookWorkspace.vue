@@ -270,18 +270,10 @@ import { useConversationContextStore } from '../../../stores/useConversationCont
 import { LorebookTimelineResolver } from '../../../api/core/lorebook/LorebookTimelineResolver.js';
 import type { LorebookVersionMode } from '../../../types/LorebookViewTypes.js';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../../platform/activity/activityLaunchResolver.js';
-import type { ActivityDescriptor } from '../../../platform/activity/types.js';
+import { useSurfaceInput } from '../../../platform/surface/useSurfaceRuntimeContext.js';
 import LorebookEditor from '../LorebookEditor.vue';
 
-const props = defineProps<{
-  mode?: 'large' | 'small',
-  activity?: ActivityDescriptor,
-  isMobile?: boolean
-  timelineSourceId?: TimelineSourceId
-  showTimelineChrome?: boolean
-  skinVariant?: string
-  skinStyle?: Record<string, string | number>
-}>();
+const props = useSurfaceInput('lorebook.workspace');
 
 const lwApi = inject('lwApi') as LuminaWeaveAPI;
 const lorebookManager = lwApi.lorebookManager;

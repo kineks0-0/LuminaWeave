@@ -1,20 +1,101 @@
+import { z } from 'zod';
 import type {
     SurfaceContractDefinition,
+    SurfaceContractDefinitionUnion,
     SurfaceContractId,
+    EmptySurfaceRendererDefinition,
+    SurfaceInput,
     SurfaceRendererDefinition,
+    SurfaceRendererDefinitionUnion,
     SurfaceResolutionRequest,
     SurfaceResolutionResult
 } from './types.js';
 
 type DesktopOverrideKey = `${string}:${string}`;
 
+export type SurfaceRegistryErrorCode =
+    | 'invalid-contract-registration'
+    | 'invalid-renderer-registration'
+    | 'missing-input-schema'
+    | 'duplicate-contract'
+    | 'input-schema-conflict'
+    | 'duplicate-renderer'
+    | 'duplicate-empty-renderer'
+    | 'renderer-contract-unavailable'
+    | 'renderer-contract-mismatch'
+    | 'unknown-contract'
+    | 'invalid-input'
+    | 'renderer-unavailable';
+
+export class SurfaceRegistryError extends Error {
+    constructor(
+        public readonly code: SurfaceRegistryErrorCode,
+        message: string
+    ) {
+        super(message);
+        this.name = 'SurfaceRegistryError';
+    }
+}
+
 const createDesktopOverrideKey = (desktopModeId: string, contractId: SurfaceContractId): DesktopOverrideKey =>
     `${desktopModeId}:${contractId}`;
 
-const selectRenderer = (
-    renderers: SurfaceRendererDefinition[] | undefined,
+const surfaceRendererRegistrationSchema = z.object({
+    contractId: z.string().min(1),
+    component: z.custom<object | ((...args: never[]) => object)>(value => (
+        (typeof value === 'object' && value !== null) || typeof value === 'function'
+    )),
+    ownerId: z.string().min(1),
+    kind: z.enum(['desktop-override', 'plugin-business', 'core-default', 'empty']),
+    variant: z.string().min(1).optional(),
+    createContext: z.custom<(...args: never[]) => object>(value => typeof value === 'function').optional()
+}).strict();
+
+const surfaceContractRegistrationSchema = z.object({
+    id: z.string().min(1),
+    inputSchema: z.custom<z.ZodType>(value => (
+        typeof value === 'object'
+        && value !== null
+        && 'safeParse' in value
+        && typeof value.safeParse === 'function'
+    )).optional(),
+    ownerPluginId: z.string().min(1).optional(),
+    description: z.string().optional(),
+    requiredIntents: z.array(z.string().min(1)).optional(),
+    defaultRenderer: surfaceRendererRegistrationSchema.optional(),
+    businessRenderer: surfaceRendererRegistrationSchema.optional()
+}).strict();
+
+type SurfaceRendererRegistrationDefinition = SurfaceRendererDefinitionUnion | EmptySurfaceRendererDefinition;
+
+export interface SurfaceRegistrationBatch {
+    contracts?: SurfaceContractDefinitionUnion[];
+    defaultRenderers?: SurfaceRendererDefinitionUnion[];
+    businessRenderers?: SurfaceRendererDefinitionUnion[];
+}
+
+const assertValidRendererRegistration = (renderer: SurfaceRendererRegistrationDefinition): void => {
+    const validation = surfaceRendererRegistrationSchema.safeParse(renderer);
+    if (validation.success) return;
+    throw new SurfaceRegistryError(
+        'invalid-renderer-registration',
+        '[SurfaceRegistry] Invalid surface renderer registration'
+    );
+};
+
+const assertValidContractRegistration = (contract: SurfaceContractDefinitionUnion): void => {
+    const validation = surfaceContractRegistrationSchema.safeParse(contract);
+    if (validation.success) return;
+    throw new SurfaceRegistryError(
+        'invalid-contract-registration',
+        '[SurfaceRegistry] Invalid surface contract registration'
+    );
+};
+
+const selectRenderer = <K extends SurfaceContractId>(
+    renderers: SurfaceRendererDefinition<K>[] | undefined,
     preferredVariant?: string
-): SurfaceRendererDefinition | undefined => {
+): SurfaceRendererDefinition<K> | undefined => {
     if (!renderers?.length) return undefined;
     if (preferredVariant) {
         const exact = renderers.find(renderer => renderer.variant === preferredVariant);
@@ -24,179 +105,319 @@ const selectRenderer = (
 };
 
 const assertNoRendererConflict = (
-    renderers: SurfaceRendererDefinition[] | undefined,
-    renderer: SurfaceRendererDefinition,
+    renderers: SurfaceRendererDefinitionUnion[] | undefined,
+    renderer: SurfaceRendererDefinitionUnion,
     source: string
 ): void => {
     const duplicate = renderers?.find(existing => (existing.variant || '') === (renderer.variant || ''));
     if (!duplicate) return;
-    throw new Error(
-        `[SurfaceRegistry] Duplicate ${source} renderer for surface contract: ${renderer.contractId}` +
-        ` (variant: ${renderer.variant || 'default'}, owners: ${duplicate.ownerId}, ${renderer.ownerId})`
+    throw new SurfaceRegistryError(
+        'duplicate-renderer',
+        `[SurfaceRegistry] Duplicate ${source} renderer for surface contract: ${renderer.contractId}`
+        + ` (variant: ${renderer.variant || 'default'}, owners: ${duplicate.ownerId}, ${renderer.ownerId})`
     );
 };
 
 export class SurfaceRegistry {
-    private readonly contracts = new Map<SurfaceContractId, SurfaceContractDefinition>();
-    private readonly defaultRenderers = new Map<SurfaceContractId, SurfaceRendererDefinition[]>();
-    private readonly businessRenderers = new Map<SurfaceContractId, SurfaceRendererDefinition[]>();
-    private readonly desktopOverrides = new Map<DesktopOverrideKey, SurfaceRendererDefinition[]>();
-    private emptyRenderer: SurfaceRendererDefinition | null = null;
+    private readonly contracts = new Map<SurfaceContractId, SurfaceContractDefinitionUnion>();
+    private readonly defaultRenderers = new Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>();
+    private readonly businessRenderers = new Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>();
+    private readonly desktopOverrides = new Map<DesktopOverrideKey, SurfaceRendererDefinitionUnion[]>();
+    private emptyRenderer: EmptySurfaceRendererDefinition | null = null;
 
-    assertCanRegisterContract(contract: SurfaceContractDefinition): void {
+    private assertContractMetadataCanRegister(contract: SurfaceContractDefinitionUnion): void {
+        assertValidContractRegistration(contract);
         const existing = this.contracts.get(contract.id);
-        if (existing?.ownerPluginId && contract.ownerPluginId && existing.ownerPluginId !== contract.ownerPluginId) {
-            throw new Error(
-                `[SurfaceRegistry] Surface contract ${contract.id} already belongs to ${existing.ownerPluginId}; ` +
-                `cannot register owner ${contract.ownerPluginId}`
+        if (!existing && !contract.inputSchema) {
+            throw new SurfaceRegistryError(
+                'missing-input-schema',
+                `[SurfaceRegistry] Surface contract requires an input schema: ${contract.id}`
             );
         }
-        if (contract.defaultRenderer) {
-            this.assertCanRegisterDefaultRenderer(contract.defaultRenderer);
+        const enrichesUnownedContract = Boolean(existing && !existing.ownerPluginId && contract.ownerPluginId);
+        if (existing && !enrichesUnownedContract) {
+            throw new SurfaceRegistryError(
+                'duplicate-contract',
+                `[SurfaceRegistry] Duplicate surface contract registration: ${contract.id}`
+            );
         }
-        if (contract.businessRenderer) {
-            this.assertCanRegisterBusinessRenderer(contract.businessRenderer);
+        if (existing?.inputSchema && contract.inputSchema && existing.inputSchema !== contract.inputSchema) {
+            throw new SurfaceRegistryError(
+                'input-schema-conflict',
+                `[SurfaceRegistry] Surface contract input schema conflict: ${contract.id}`
+            );
+        }
+        if (contract.defaultRenderer && contract.defaultRenderer.contractId !== contract.id) {
+            throw new SurfaceRegistryError(
+                'renderer-contract-mismatch',
+                `[SurfaceRegistry] Embedded renderer contract mismatch: ${contract.id}`
+            );
+        }
+        if (contract.businessRenderer && contract.businessRenderer.contractId !== contract.id) {
+            throw new SurfaceRegistryError(
+                'renderer-contract-mismatch',
+                `[SurfaceRegistry] Embedded renderer contract mismatch: ${contract.id}`
+            );
         }
     }
 
-    registerContract(contract: SurfaceContractDefinition): void {
-        this.assertCanRegisterContract(contract);
-        const existing = this.contracts.get(contract.id);
-
-        this.contracts.set(contract.id, {
-            ...existing,
-            ...contract,
-            ownerPluginId: contract.ownerPluginId || existing?.ownerPluginId
+    private assertRendererBatch(
+        renderers: SurfaceRendererDefinitionUnion[],
+        availableContractIds: ReadonlySet<SurfaceContractId>,
+        existingRenderers: Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>,
+        source: string
+    ): void {
+        const batchKeys = new Set<string>();
+        renderers.forEach(renderer => {
+            assertValidRendererRegistration(renderer);
+            if (!availableContractIds.has(renderer.contractId)) {
+                throw new SurfaceRegistryError(
+                    'renderer-contract-unavailable',
+                    `[SurfaceRegistry] Renderer target contract is unavailable: ${renderer.contractId}`
+                );
+            }
+            const rendererKey = `${renderer.contractId}:${renderer.variant || ''}`;
+            if (batchKeys.has(rendererKey)) {
+                throw new SurfaceRegistryError(
+                    'duplicate-renderer',
+                    `[SurfaceRegistry] Duplicate ${source} renderer for surface contract: ${renderer.contractId}`
+                    + ` (variant: ${renderer.variant || 'default'})`
+                );
+            }
+            batchKeys.add(rendererKey);
+            assertNoRendererConflict(existingRenderers.get(renderer.contractId), renderer, source);
         });
-        if (contract.defaultRenderer) {
-            this.registerDefaultRenderer(contract.defaultRenderer);
-        }
-        if (contract.businessRenderer) {
-            this.registerBusinessRenderer(contract.businessRenderer);
-        }
     }
 
-    assertCanRegisterDefaultRenderer(renderer: SurfaceRendererDefinition): void {
-        const normalized = {
-            ...renderer,
-            kind: 'core-default'
-        } satisfies SurfaceRendererDefinition;
-        const renderers = this.defaultRenderers.get(renderer.contractId);
-        assertNoRendererConflict(renderers, normalized, 'core default');
+    assertCanRegisterBatch(batch: SurfaceRegistrationBatch): void {
+        const contracts = batch.contracts || [];
+        const batchContractIds = new Set<SurfaceContractId>();
+        contracts.forEach(contract => {
+            if (batchContractIds.has(contract.id)) {
+                throw new SurfaceRegistryError(
+                    'duplicate-contract',
+                    `[SurfaceRegistry] Duplicate surface contract in registration batch: ${contract.id}`
+                );
+            }
+            batchContractIds.add(contract.id);
+            this.assertContractMetadataCanRegister(contract);
+        });
+
+        const availableContractIds = new Set<SurfaceContractId>([
+            ...this.contracts.keys(),
+            ...batchContractIds
+        ]);
+        const defaultRenderers = [
+            ...contracts.flatMap(contract => contract.defaultRenderer ? [contract.defaultRenderer] : []),
+            ...(batch.defaultRenderers || [])
+        ];
+        const businessRenderers = [
+            ...contracts.flatMap(contract => contract.businessRenderer ? [contract.businessRenderer] : []),
+            ...(batch.businessRenderers || [])
+        ];
+
+        this.assertRendererBatch(defaultRenderers, availableContractIds, this.defaultRenderers, 'core default');
+        this.assertRendererBatch(businessRenderers, availableContractIds, this.businessRenderers, 'plugin business');
     }
 
-    registerDefaultRenderer(renderer: SurfaceRendererDefinition): void {
-        this.assertCanRegisterDefaultRenderer(renderer);
-        const normalized = {
-            ...renderer,
-            kind: 'core-default'
-        } satisfies SurfaceRendererDefinition;
-        const renderers = this.defaultRenderers.get(renderer.contractId);
-        this.defaultRenderers.set(renderer.contractId, [...(renderers || []), normalized]);
+    private appendRenderer(
+        target: Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>,
+        renderer: SurfaceRendererDefinitionUnion,
+        kind: 'core-default' | 'plugin-business'
+    ): void {
+        const normalized = { ...renderer, kind } satisfies SurfaceRendererDefinitionUnion;
+        const renderers = target.get(renderer.contractId);
+        target.set(renderer.contractId, [...(renderers || []), normalized]);
     }
 
-    assertCanRegisterBusinessRenderer(renderer: SurfaceRendererDefinition): void {
-        const normalized = {
-            ...renderer,
-            kind: 'plugin-business'
-        } satisfies SurfaceRendererDefinition;
-        const renderers = this.businessRenderers.get(renderer.contractId);
-        assertNoRendererConflict(renderers, normalized, 'plugin business');
+    registerBatch(batch: SurfaceRegistrationBatch): void {
+        this.assertCanRegisterBatch(batch);
+        const contracts = batch.contracts || [];
+        contracts.forEach(contract => {
+            const existing = this.contracts.get(contract.id);
+
+            this.contracts.set(contract.id, {
+                ...existing,
+                ...contract,
+                inputSchema: contract.inputSchema || existing?.inputSchema,
+                ownerPluginId: contract.ownerPluginId || existing?.ownerPluginId
+            } as SurfaceContractDefinitionUnion);
+        });
+        contracts.forEach(contract => {
+            if (contract.defaultRenderer) {
+                this.appendRenderer(this.defaultRenderers, contract.defaultRenderer, 'core-default');
+            }
+            if (contract.businessRenderer) {
+                this.appendRenderer(this.businessRenderers, contract.businessRenderer, 'plugin-business');
+            }
+        });
+        (batch.defaultRenderers || []).forEach(renderer => {
+            this.appendRenderer(this.defaultRenderers, renderer, 'core-default');
+        });
+        (batch.businessRenderers || []).forEach(renderer => {
+            this.appendRenderer(this.businessRenderers, renderer, 'plugin-business');
+        });
     }
 
-    registerBusinessRenderer(renderer: SurfaceRendererDefinition): void {
-        this.assertCanRegisterBusinessRenderer(renderer);
-        const normalized = {
-            ...renderer,
-            kind: 'plugin-business'
-        } satisfies SurfaceRendererDefinition;
-        const renderers = this.businessRenderers.get(renderer.contractId);
-        this.businessRenderers.set(renderer.contractId, [...(renderers || []), normalized]);
+    assertCanRegisterContract(contract: SurfaceContractDefinitionUnion): void {
+        this.assertCanRegisterBatch({ contracts: [contract] });
     }
 
-    assertCanRegisterDesktopOverride(desktopModeId: string, renderer: SurfaceRendererDefinition): void {
-        const key = createDesktopOverrideKey(desktopModeId, renderer.contractId);
-        const normalized = {
-            ...renderer,
-            kind: 'desktop-override'
-        } satisfies SurfaceRendererDefinition;
-        const renderers = this.desktopOverrides.get(key);
-        assertNoRendererConflict(renderers, normalized, `desktop override for ${desktopModeId}`);
+    registerContract(contract: SurfaceContractDefinitionUnion): void {
+        this.registerBatch({ contracts: [contract] });
     }
 
-    registerDesktopOverride(desktopModeId: string, renderer: SurfaceRendererDefinition): void {
-        this.assertCanRegisterDesktopOverride(desktopModeId, renderer);
-        const key = createDesktopOverrideKey(desktopModeId, renderer.contractId);
-        const normalized = {
-            ...renderer,
-            kind: 'desktop-override'
-        } satisfies SurfaceRendererDefinition;
-        const renderers = this.desktopOverrides.get(key);
-        this.desktopOverrides.set(key, [...(renderers || []), normalized]);
+    assertCanRegisterDefaultRenderer(renderer: SurfaceRendererDefinitionUnion): void {
+        this.assertCanRegisterBatch({ defaultRenderers: [renderer] });
+    }
+
+    registerDefaultRenderer(renderer: SurfaceRendererDefinitionUnion): void {
+        this.registerBatch({ defaultRenderers: [renderer] });
+    }
+
+    assertCanRegisterBusinessRenderer(renderer: SurfaceRendererDefinitionUnion): void {
+        this.assertCanRegisterBatch({ businessRenderers: [renderer] });
+    }
+
+    registerBusinessRenderer(renderer: SurfaceRendererDefinitionUnion): void {
+        this.registerBatch({ businessRenderers: [renderer] });
+    }
+
+    assertCanRegisterDesktopOverride(desktopModeId: string, renderer: SurfaceRendererDefinitionUnion): void {
+        this.assertCanRegisterDesktopOverrides(desktopModeId, [renderer]);
+    }
+
+    registerDesktopOverride(desktopModeId: string, renderer: SurfaceRendererDefinitionUnion): void {
+        this.registerDesktopOverrides(desktopModeId, [renderer]);
+    }
+
+    assertCanRegisterDesktopOverrides(
+        desktopModeId: string,
+        renderers: SurfaceRendererDefinitionUnion[]
+    ): void {
+        const batchKeys = new Set<string>();
+        renderers.forEach(renderer => {
+            assertValidRendererRegistration(renderer);
+            if (!this.contracts.has(renderer.contractId)) {
+                throw new SurfaceRegistryError(
+                    'renderer-contract-unavailable',
+                    `[SurfaceRegistry] Renderer target contract is unavailable: ${renderer.contractId}`
+                );
+            }
+            const rendererKey = `${renderer.contractId}:${renderer.variant || ''}`;
+            if (batchKeys.has(rendererKey)) {
+                throw new SurfaceRegistryError(
+                    'duplicate-renderer',
+                    `[SurfaceRegistry] Duplicate desktop override renderer for surface contract: ${renderer.contractId}`
+                );
+            }
+            batchKeys.add(rendererKey);
+            const key = createDesktopOverrideKey(desktopModeId, renderer.contractId);
+            assertNoRendererConflict(
+                this.desktopOverrides.get(key),
+                renderer,
+                `desktop override for ${desktopModeId}`
+            );
+        });
+    }
+
+    registerDesktopOverrides(desktopModeId: string, renderers: SurfaceRendererDefinitionUnion[]): void {
+        this.assertCanRegisterDesktopOverrides(desktopModeId, renderers);
+        renderers.forEach(renderer => {
+            const key = createDesktopOverrideKey(desktopModeId, renderer.contractId);
+            const normalized = { ...renderer, kind: 'desktop-override' } satisfies SurfaceRendererDefinitionUnion;
+            const registeredRenderers = this.desktopOverrides.get(key);
+            this.desktopOverrides.set(key, [...(registeredRenderers || []), normalized]);
+        });
     }
 
     clearDesktopOverridesForTests(): void {
         this.desktopOverrides.clear();
     }
 
-    registerEmptyRenderer(renderer: SurfaceRendererDefinition): void {
-        this.emptyRenderer = {
-            ...renderer,
-            kind: 'empty'
-        };
+    registerEmptyRenderer(renderer: EmptySurfaceRendererDefinition): void {
+        assertValidRendererRegistration(renderer);
+        if (this.emptyRenderer) {
+            throw new SurfaceRegistryError(
+                'duplicate-empty-renderer',
+                '[SurfaceRegistry] Duplicate empty renderer registration'
+            );
+        }
+        this.emptyRenderer = { ...renderer, kind: 'empty' };
     }
 
-    getContract(contractId: SurfaceContractId): SurfaceContractDefinition | undefined {
-        return this.contracts.get(contractId);
+    getContract<K extends SurfaceContractId>(contractId: K): SurfaceContractDefinition<K> | undefined {
+        return this.contracts.get(contractId) as SurfaceContractDefinition<K> | undefined;
     }
 
-    listContracts(): SurfaceContractDefinition[] {
+    hasContract(contractId: string): contractId is SurfaceContractId {
+        return this.contracts.has(contractId as SurfaceContractId);
+    }
+
+    listContracts(): SurfaceContractDefinitionUnion[] {
         return Array.from(this.contracts.values());
     }
 
-    resolve<TState = unknown, TIntentMap extends Record<string, unknown> = Record<string, unknown>>(
-        request: SurfaceResolutionRequest
-    ): SurfaceResolutionResult<TState, TIntentMap> {
+    parseInput<K extends SurfaceContractId>(contractId: K, input: object): SurfaceInput<K> {
+        const contract = this.getContract(contractId);
+        if (!contract?.inputSchema) {
+            throw new SurfaceRegistryError(
+                'unknown-contract',
+                `[SurfaceRegistry] Unknown surface contract: ${contractId}`
+            );
+        }
+        const result = contract.inputSchema.safeParse(input);
+        if (!result.success) {
+            throw new SurfaceRegistryError(
+                'invalid-input',
+                `[SurfaceRegistry] Invalid input for surface contract: ${contractId}`
+            );
+        }
+        return result.data;
+    }
+
+    resolve<K extends SurfaceContractId>(request: SurfaceResolutionRequest<K>): SurfaceResolutionResult<K> {
+        if (!this.contracts.has(request.contractId)) {
+            throw new SurfaceRegistryError(
+                'unknown-contract',
+                `[SurfaceRegistry] Unknown surface contract: ${request.contractId}`
+            );
+        }
         const desktopOverride = selectRenderer(
-            this.desktopOverrides.get(createDesktopOverrideKey(request.desktopModeId, request.contractId)),
+            this.desktopOverrides.get(createDesktopOverrideKey(request.desktopModeId, request.contractId)) as
+                SurfaceRendererDefinition<K>[] | undefined,
             request.preferredVariant
         );
         if (desktopOverride) {
-            return {
-                contractId: request.contractId,
-                renderer: desktopOverride as SurfaceRendererDefinition<TState, TIntentMap>,
-                source: 'desktop-override'
-            };
+            return { contractId: request.contractId, renderer: desktopOverride, source: 'desktop-override' };
         }
 
-        const businessRenderer = selectRenderer(this.businessRenderers.get(request.contractId), request.preferredVariant);
+        const businessRenderer = selectRenderer(
+            this.businessRenderers.get(request.contractId) as SurfaceRendererDefinition<K>[] | undefined,
+            request.preferredVariant
+        );
         if (businessRenderer) {
-            return {
-                contractId: request.contractId,
-                renderer: businessRenderer as SurfaceRendererDefinition<TState, TIntentMap>,
-                source: 'plugin-business'
-            };
+            return { contractId: request.contractId, renderer: businessRenderer, source: 'plugin-business' };
         }
 
-        const defaultRenderer = selectRenderer(this.defaultRenderers.get(request.contractId), request.preferredVariant);
+        const defaultRenderer = selectRenderer(
+            this.defaultRenderers.get(request.contractId) as SurfaceRendererDefinition<K>[] | undefined,
+            request.preferredVariant
+        );
         if (defaultRenderer) {
-            return {
-                contractId: request.contractId,
-                renderer: defaultRenderer as SurfaceRendererDefinition<TState, TIntentMap>,
-                source: 'core-default'
-            };
+            return { contractId: request.contractId, renderer: defaultRenderer, source: 'core-default' };
         }
 
         if (!this.emptyRenderer) {
-            throw new Error(`[SurfaceRegistry] No renderer registered for surface contract: ${request.contractId}`);
+            throw new SurfaceRegistryError(
+                'renderer-unavailable',
+                `[SurfaceRegistry] No renderer registered for surface contract: ${request.contractId}`
+            );
         }
 
         return {
             contractId: request.contractId,
-            renderer: {
-                ...this.emptyRenderer,
-                contractId: request.contractId
-            } as SurfaceRendererDefinition<TState, TIntentMap>,
+            renderer: { ...this.emptyRenderer, contractId: request.contractId } as SurfaceRendererDefinition<K>,
             source: 'empty'
         };
     }

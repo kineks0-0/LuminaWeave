@@ -51,17 +51,10 @@
 import { computed, inject, type CSSProperties } from 'vue';
 import { LuminaWeaveAPI } from '../../api/index.js';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../platform/activity/activityLaunchResolver.js';
-import type { ActivityDescriptor } from '../../platform/activity/types.js';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import { useSurfaceInput } from '../../platform/surface/useSurfaceRuntimeContext.js';
 
-const props = withDefaults(defineProps<{
-  mode?: 'large' | 'small';
-  activity?: ActivityDescriptor;
-  isMobile?: boolean;
-}>(), {
-  mode: 'small',
-  isMobile: false
-});
+const props = useSurfaceInput('stats.panel');
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const { cssVars: statsCssVars, variant: statsVariant } = useSurfaceSkin('stats.panel');

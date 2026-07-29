@@ -1,9 +1,11 @@
 import { defineComponent } from 'vue';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { DesktopModeRuntimeRegistry } from '../DesktopModeRuntimeRegistry.js';
 import { desktopModeRuntimeRegistry } from '../DesktopModeRuntimeRegistry.js';
 import { initializeDesktopModeRuntime } from '../initializeDesktopModeRuntime.js';
 import { SurfaceRegistry } from '../../surface/SurfaceRegistry.js';
+import { OFFICIAL_SURFACE_INPUT_SCHEMAS } from '../../surface/officialContracts.js';
+import { initializeSurfaceRuntime } from '../../surface/initializeSurfaceRuntime.js';
 import type { SurfaceRendererDefinition } from '../../surface/types.js';
 import { registerDesktopMode } from '../../../desktop-modes/core/registry.js';
 
@@ -17,16 +19,32 @@ vi.mock('../../../shell/freeform/FreeformShell.vue', () => ({
     default: defineComponent({ name: 'FreeformShellStub', template: '<div />' })
 }));
 
-const createRenderer = (ownerId: string): SurfaceRendererDefinition => ({
+const createRenderer = (ownerId: string): SurfaceRendererDefinition<'settings.root'> => ({
     contractId: 'settings.root',
     component: defineComponent({ name: `${ownerId}SettingsRoot`, template: '<div />' }),
     ownerId,
     kind: 'desktop-override'
 });
 
+const createChatRenderer = (ownerId: string): SurfaceRendererDefinition<'chat.main'> => ({
+    contractId: 'chat.main',
+    component: defineComponent({ name: `${ownerId}ChatMain`, template: '<div />' }),
+    ownerId,
+    kind: 'desktop-override'
+});
+
 describe('DesktopModeRuntimeRegistry', () => {
+    beforeAll(() => {
+        initializeSurfaceRuntime();
+    });
+
     it('registers desktop component overrides into the provided surface registry shape', () => {
-        const desktopRegistry = new DesktopModeRuntimeRegistry();
+        const isolatedSurfaceRegistry = new SurfaceRegistry();
+        isolatedSurfaceRegistry.registerContract({
+            id: 'settings.root',
+            inputSchema: OFFICIAL_SURFACE_INPUT_SCHEMAS['settings.root']
+        });
+        const desktopRegistry = new DesktopModeRuntimeRegistry(isolatedSurfaceRegistry);
         const renderer = createRenderer('telegram');
 
         desktopRegistry.register({
@@ -79,10 +97,51 @@ describe('DesktopModeRuntimeRegistry', () => {
         expect(() => desktopRegistry.register(manifest)).toThrow(/Duplicate desktop mode id: stage/);
     });
 
+    it('does not retain a mode or earlier overrides when override validation fails', () => {
+        const isolatedSurfaceRegistry = new SurfaceRegistry();
+        isolatedSurfaceRegistry.registerContract({
+            id: 'chat.main',
+            inputSchema: OFFICIAL_SURFACE_INPUT_SCHEMAS['chat.main']
+        });
+        isolatedSurfaceRegistry.registerContract({
+            id: 'settings.root',
+            inputSchema: OFFICIAL_SURFACE_INPUT_SCHEMAS['settings.root']
+        });
+        isolatedSurfaceRegistry.registerDesktopOverride('atomic-mode', createRenderer('existing-settings'));
+        const desktopRegistry = new DesktopModeRuntimeRegistry(isolatedSurfaceRegistry);
+
+        expect(() => desktopRegistry.register({
+            manifest: {
+                id: 'atomic-mode',
+                name: 'Atomic Mode',
+                shell: { kind: 'traditional' }
+            },
+            id: 'atomic-mode',
+            name: 'Atomic Mode',
+            shellKind: 'traditional',
+            navigationModel: { id: 'atomic-mode.navigation' },
+            componentOverrides: {
+                'chat.main': createChatRenderer('atomic-chat'),
+                'settings.root': createRenderer('conflicting-settings')
+            },
+            interactionPolicy: { id: 'atomic-mode.policy' }
+        })).toThrow(/Duplicate desktop override/);
+
+        expect(desktopRegistry.get('atomic-mode')).toBeUndefined();
+        expect(() => isolatedSurfaceRegistry.registerDesktopOverride(
+            'atomic-mode',
+            createChatRenderer('probe-chat')
+        )).not.toThrow();
+    });
+
     it('keeps surface registry override semantics compatible with desktop overrides', () => {
         const surfaceRegistry = new SurfaceRegistry();
         const renderer = createRenderer('discord');
 
+        surfaceRegistry.registerContract({
+            id: 'settings.root',
+            inputSchema: OFFICIAL_SURFACE_INPUT_SCHEMAS['settings.root']
+        });
         surfaceRegistry.registerDesktopOverride('discord', renderer);
 
         const resolved = surfaceRegistry.resolve({

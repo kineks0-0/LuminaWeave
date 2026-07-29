@@ -148,6 +148,7 @@ const settingsSchema = {
 const platformManifest: PluginManifestV2 = {
     id: 'lumina-settings',
     name: '设置面板',
+    primarySurface: 'settings.root',
     capabilities: [
         { id: 'settings.schema-host', description: '聚合核心、桌面模式与插件设置 schema。' }
     ],

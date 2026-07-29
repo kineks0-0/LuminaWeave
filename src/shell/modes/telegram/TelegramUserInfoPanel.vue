@@ -1,21 +1,21 @@
 <template>
   <aside
     class="lw-telegram-profile"
-    :class="{ 'is-mobile': isMobile }"
+    :class="{ 'is-mobile': props.isMobile }"
     :style="infoPanelStyle"
     aria-label="Telegram role profile"
   >
     <header class="lw-telegram-profile__topbar">
-      <button type="button" title="返回" @click="emit('openTool', 'none')">
+      <button type="button" title="返回" @click="props.onOpenTool('none')">
         <component :is="getTelegramIconComponent('back')" :size="22" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
       </button>
       <div>
-        <strong>{{ isMobile ? profile.name : '角色资料' }}</strong>
+        <strong>{{ props.isMobile ? profile.name : '角色资料' }}</strong>
         <span>{{ syncText }}</span>
       </div>
       <button type="button" title="更多" @click="handleTopbarTrailingClick">
         <component
-          :is="getTelegramIconComponent(isMobile ? 'more' : 'close')"
+          :is="getTelegramIconComponent(props.isMobile ? 'more' : 'close')"
           :size="22"
           :stroke-width="TELEGRAM_ICON_STROKE_WIDTH"
           aria-hidden="true"
@@ -47,7 +47,7 @@
     <div class="lw-telegram-profile__actions" aria-label="角色操作">
       <button type="button" :disabled="!activeGroup" @click="createSession">
         <component :is="getTelegramIconComponent('chat')" :size="26" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
-        <span>{{ isMobile ? '消息' : '新聊天' }}</span>
+        <span>{{ props.isMobile ? '消息' : '新聊天' }}</span>
       </button>
       <button type="button" @click="activeTab = 'history'">
         <component :is="getTelegramIconComponent('history')" :size="26" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
@@ -71,7 +71,7 @@
           v-for="tool in contextTools"
           :key="tool.id"
           type="button"
-          @click="emit('openTool', tool.panelId)"
+          @click="props.onOpenTool(tool.panelId)"
         >
           <span class="tool-icon">
             <component :is="getTelegramIconComponent(tool.icon)" :size="22" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
@@ -91,7 +91,7 @@
           v-for="session in recentSessions"
           :key="session.id"
           type="button"
-          @click="emit('openSession', session.id)"
+          @click="props.onOpenSession(session.id)"
         >
           <span class="chat-icon">
             <component :is="getTelegramIconComponent('chat')" :size="20" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
@@ -109,7 +109,7 @@
           v-for="session in allSessions.slice(recentSessions.length)"
           :key="session.id"
           type="button"
-          @click="emit('openSession', session.id)"
+          @click="props.onOpenSession(session.id)"
         >
           <span class="history-icon">
             <component :is="getTelegramIconComponent('chat')" :size="18" :stroke-width="TELEGRAM_ICON_STROKE_WIDTH" aria-hidden="true" />
@@ -131,10 +131,9 @@ import type { CSSProperties } from 'vue';
 import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
 import type {
   CharacterChannelGroup,
-  CharacterChannelSessionItem,
-  CharacterChannelState,
-  CreateChatConversationInput
+  CharacterChannelSessionItem
 } from '../../../types/ConversationContextTypes.js';
+import { useSurfaceInput } from '../../../platform/surface/useSurfaceRuntimeContext.js';
 import {
   TELEGRAM_ICON_STROKE_WIDTH,
   type TelegramIconName,
@@ -151,18 +150,7 @@ interface ContextTool {
   icon: TelegramIconName;
 }
 
-const props = withDefaults(defineProps<{
-  state: CharacterChannelState;
-  isMobile?: boolean;
-}>(), {
-  isMobile: false
-});
-
-const emit = defineEmits<{
-  (e: 'openTool', panelId: string): void;
-  (e: 'createSession', payload: CreateChatConversationInput): void;
-  (e: 'openSession', sessionId: string): void;
-}>();
+const props = useSurfaceInput('telegram.infoPanel');
 
 const { cssVars: infoPanelVars } = useSurfaceSkin('telegram.infoPanel');
 const infoPanelStyle = computed<CSSProperties>(() => infoPanelVars.value as CSSProperties);
@@ -229,7 +217,7 @@ const contextTools = computed<ContextTool[]>(() => [
 const createSession = () => {
   const group = activeGroup.value;
   if (!group) return;
-  emit('createSession', {
+  props.onCreateSession({
     characterId: group.characterId,
     characterName: group.characterName,
     characterAvatarUrl: group.characterAvatarUrl
@@ -239,13 +227,13 @@ const createSession = () => {
 const openFirstSession = () => {
   const session = allSessions.value[0];
   if (session) {
-    emit('openSession', session.id);
+    props.onOpenSession(session.id);
   }
 };
 
 const handleTopbarTrailingClick = () => {
   if (!props.isMobile) {
-    emit('openTool', 'none');
+    props.onOpenTool('none');
     return;
   }
   activeTab.value = activeTab.value === 'tools' ? 'history' : 'tools';

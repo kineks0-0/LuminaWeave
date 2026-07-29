@@ -50,26 +50,30 @@
     <SurfaceOutlet
       v-else-if="route.name === 'roleProfile'"
       contract-id="telegram.infoPanel"
-      :state="state"
-      :activity="{ size: 'default', pageType: 'standalone' }"
-      :isMobile="true"
-      @openSession="onOpenSession"
-      @createSession="onCreateSession"
-      @openTool="onHandleRoleProfileTool"
+      :input="{
+        state,
+        isMobile: true,
+        onOpenSession,
+        onCreateSession,
+        onOpenTool: onHandleRoleProfileTool
+      }"
+      :desktop-mode-id="activeDesktopModeId"
     />
     <SurfaceOutlet
       v-else-if="route.name === 'chat'"
       contract-id="chat.main"
-      :activity="{ size: 'default', pageType: 'standalone' }"
-      :isMobile="true"
-      :onTelegramBack="onPopRoute"
-      :onTelegramOpenRoleProfile="onOpenRoleProfile"
+      :input="{
+        isMobile: true,
+        onTelegramBack: onPopRoute,
+        onTelegramOpenRoleProfile: onOpenRoleProfile
+      }"
+      :desktop-mode-id="activeDesktopModeId"
     />
     <SurfaceOutlet
       v-else-if="route.name === 'settings'"
       contract-id="settings.root"
-      :activity="{ size: 'small', pageType: 'standalone' }"
-      :isMobile="true"
+      :input="{ activity: { size: 'small', pageType: 'standalone' } }"
+      :desktop-mode-id="activeDesktopModeId"
     />
     <TelegramUserProfilePage
       v-else-if="route.name === 'profile'"
@@ -82,12 +86,18 @@
       @close="onClose"
     />
     <SurfaceOutlet
-      v-else-if="route.name === 'tool'"
+      v-else-if="route.name === 'tool' && toolContractId"
       :contract-id="toolContractId"
-      v-bind="toolProps"
-      :activity="toolActivity"
-      :isMobile="true"
-      :auxSidebarMode="toolAuxSidebarMode"
+      :input="projectSurfaceInput(toolContractId, toolProps, {
+        activity: toolActivity,
+        isMobile: true,
+        auxSidebarMode: toolAuxSidebarMode
+      })"
+      :desktop-mode-id="activeDesktopModeId"
+    />
+    <SurfaceFailure
+      v-else-if="route.name === 'tool'"
+      contract-id="tool-surface-unavailable"
     />
   </div>
 </template>
@@ -97,6 +107,8 @@ import type { CSSProperties } from 'vue';
 import type { ActivityDescriptor } from '../../../platform/activity/types.js';
 import type { SurfaceContractId } from '../../../platform/surface/types.js';
 import SurfaceOutlet from '../../../platform/surface/SurfaceOutlet.vue';
+import SurfaceFailure from '../../../platform/surface/SurfaceFailure.vue';
+import { projectSurfaceInput } from '../../../platform/surface/surfaceInputProjection.js';
 import DiscordCharacterRail from '../../../components/DiscordCharacterRail.vue';
 import type { CharacterChannelState } from '../../../types/ConversationContextTypes.js';
 import type {
@@ -126,7 +138,7 @@ defineProps<{
   desktopModes: Array<{ value: string; label: string; description?: string }>;
   activeDesktopModeId: string;
   widgetGroups: WidgetPanelGroup[];
-  toolContractId: SurfaceContractId;
+  toolContractId: SurfaceContractId | null;
   toolProps: Record<string, unknown>;
   toolActivity: ActivityDescriptor;
   toolAuxSidebarMode?: 'hidden';

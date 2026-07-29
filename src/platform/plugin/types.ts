@@ -1,10 +1,11 @@
 import type { Component } from 'vue';
 import type { SettingDefinition } from '../../types/plugin.js';
 import type {
-    SurfaceContractDefinition,
+    SurfaceContractDefinitionUnion,
     SurfaceContractId,
+    SurfaceInput,
     SurfaceRendererDefinition,
-    SurfaceRuntimeContext
+    SurfaceRendererDefinitionUnion
 } from '../surface/types.js';
 
 export interface PluginCapabilityDefinition {
@@ -24,14 +25,30 @@ export interface PluginRuntimeReadContext {
 
 export interface PluginRuntimeWriteContext extends PluginRuntimeReadContext {
     updateSetting: <TValue>(key: string, value: TValue) => void | Promise<void>;
-    openSurface: (contractId: SurfaceContractId, props?: Record<string, unknown>) => void;
+    openSurface: <K extends SurfaceContractId>(contractId: K, input: SurfaceInput<K>) => void;
 }
 
-export interface PluginBusinessRendererDefinition<TState = unknown, TIntentMap extends Record<string, unknown> = Record<string, unknown>> {
-    contractId: SurfaceContractId;
+export interface PluginBusinessRendererDefinition<K extends SurfaceContractId = SurfaceContractId> {
+    contractId: K;
     component: Component;
-    createContext?: (runtime: PluginRuntimeReadContext) => SurfaceRuntimeContext<TState, TIntentMap>;
+    createContext?: SurfaceRendererDefinition<K>['createContext'];
 }
+
+export type PluginBusinessRendererDefinitionUnion = {
+    [K in SurfaceContractId]: PluginBusinessRendererDefinition<K>;
+}[SurfaceContractId];
+
+export type PluginRendererDefinitionUnion =
+    | PluginBusinessRendererDefinitionUnion
+    | SurfaceRendererDefinitionUnion;
+
+export type PluginBusinessRendererMap = Partial<{
+    [K in SurfaceContractId]: PluginBusinessRendererDefinition<K> | SurfaceRendererDefinition<K>;
+}>;
+
+export type PluginFallbackRendererMap = Partial<{
+    [K in SurfaceContractId]: SurfaceRendererDefinition<K>;
+}>;
 
 export interface PluginManifestV2 {
     id: string;
@@ -44,8 +61,8 @@ export interface PluginManifestV2 {
     selectors?: Record<string, PluginStateSelector>;
     intents?: Record<string, PluginIntentHandler>;
     settingsSchema?: Record<string, SettingDefinition>;
-    surfaces?: SurfaceContractDefinition[];
-    businessRenderers?: Record<string, PluginBusinessRendererDefinition | SurfaceRendererDefinition>;
-    fallbackRenderers?: Record<string, SurfaceRendererDefinition>;
+    surfaces?: SurfaceContractDefinitionUnion[];
+    businessRenderers?: PluginBusinessRendererMap;
+    fallbackRenderers?: PluginFallbackRendererMap;
     init?: () => void | Promise<void>;
 }

@@ -26,6 +26,7 @@ const settingsSchema = {
 const platformManifest: PluginManifestV2 = {
     id: 'lumina-lorebook',
     name: '世界书',
+    primarySurface: 'lorebook.workspace',
     capabilities: [
         { id: 'context.lorebook', description: '管理当前会话相关世界书条目。' }
     ],

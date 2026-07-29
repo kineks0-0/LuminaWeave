@@ -1,110 +1,158 @@
 <template>
-  <component
-    :is="resolved.renderer.component"
-    v-bind="componentProps"
+  <SurfaceFailure
+    v-if="nodeError"
+    :contract-id="props.contractId"
   />
+  <SurfaceRendererBoundary
+    v-else-if="resolution"
+    :key="surfaceRevision"
+    :contract-id="props.contractId"
+    :owner-id="resolution.renderer.ownerId"
+    @renderer-failed="handleRendererFailure"
+  >
+    <component
+      :is="resolution.renderer.component"
+      v-if="activeSurface && resolution.source !== 'empty'"
+    />
+    <component
+      :is="resolution.renderer.component"
+      v-else-if="activeSurface"
+      :contract-id="props.contractId"
+    />
+  </SurfaceRendererBoundary>
 </template>
 
-<script setup lang="ts">
-import { computed, provide, useAttrs } from 'vue';
-import { lwStorage } from '../../api/storage.js';
-import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
-import { activeSettings } from '../../plugins/settings/useSettings.js';
-import { getActiveDesktopModeIdFromSettings } from '../../desktop-modes/core/registry.js';
-import { surfaceRegistry } from './SurfaceRegistry.js';
-import type { SurfaceContractId, SurfaceRendererRuntimeBridge, SurfaceRuntimeContext, SurfaceThemeContext } from './types.js';
+<script setup lang="ts" generic="K extends SurfaceContractId">
+import {
+  computed,
+  inject,
+  onBeforeUnmount,
+  provide,
+  ref,
+  shallowRef,
+  watch
+} from 'vue';
+import { desktopExperienceRuntimeKey } from '../../composables/useDesktopExperienceRuntime.js';
+import { createSurfaceRuntimeContext, type CreatedSurfaceRuntimeContext } from './createSurfaceRuntimeContext.js';
+import SurfaceFailure from './SurfaceFailure.vue';
+import SurfaceRendererBoundary from './SurfaceRendererBoundary.vue';
+import { SurfaceRegistryError, surfaceRegistry } from './SurfaceRegistry.js';
+import { surfaceRuntimeContextKey } from './useSurfaceRuntimeContext.js';
+import { isSurfaceValueEquivalent } from './surfaceValueEquality.js';
+import type {
+  SurfaceContractId,
+  SurfaceInput,
+  SurfaceResolutionResult,
+  SurfaceRuntimeContext,
+  SurfaceThemeContext
+} from './types.js';
 
-const props = withDefaults(defineProps<{
-  contractId: SurfaceContractId;
-  desktopModeId?: string;
-  state?: unknown;
-  intents?: Record<string, unknown>;
+defineOptions({
+  inheritAttrs: false
+});
+
+const props = defineProps<{
+  contractId: K;
+  input: SurfaceInput<K>;
+  desktopModeId: string;
   variant?: string;
   tokens?: Record<string, string | number>;
   cssVars?: Record<string, string | number>;
-  containerProps?: Record<string, unknown>;
-}>(), {
-  state: undefined,
-  intents: () => ({})
-});
-const attrs = useAttrs();
+}>();
 
-const effectiveDesktopModeId = computed(() =>
-  props.desktopModeId || getActiveDesktopModeIdFromSettings(activeSettings)
+const runtime = inject(desktopExperienceRuntimeKey, null);
+const activeSurface = shallowRef<CreatedSurfaceRuntimeContext<K> | null>(null);
+const resolution = shallowRef<SurfaceResolutionResult<K> | null>(null);
+const activeInput = shallowRef<SurfaceInput<K> | null>(null);
+const activeTheme = shallowRef<SurfaceThemeContext | null>(null);
+const surfaceRevision = ref(0);
+const nodeError = shallowRef<'runtime-unavailable' | 'registry' | 'context'>();
+
+const providedContext = computed<SurfaceRuntimeContext<SurfaceContractId> | null>(() =>
+  activeSurface.value?.context as SurfaceRuntimeContext<SurfaceContractId> | null
 );
+provide(surfaceRuntimeContextKey, providedContext);
 
-const resolved = computed(() => surfaceRegistry.resolve({
-  contractId: props.contractId,
-  desktopModeId: effectiveDesktopModeId.value,
-  preferredVariant: props.variant
-}));
+const disposeActiveSurface = (): void => {
+  activeSurface.value?.dispose();
+  activeSurface.value = null;
+  activeInput.value = null;
+  activeTheme.value = null;
+};
 
-const themeContext = computed<SurfaceThemeContext>(() => ({
-  desktopModeId: effectiveDesktopModeId.value,
-  variant: props.variant || resolved.value.renderer.variant,
-  tokens: props.tokens,
-  cssVars: props.cssVars,
-  containerProps: props.containerProps
-}));
+const handleRendererFailure = (): void => {
+  disposeActiveSurface();
+};
 
-const rendererRuntime: SurfaceRendererRuntimeBridge = {
-  getSetting: (key, fallback) => {
-    const trackedValue = activeSettings[key];
-    return trackedValue !== undefined && trackedValue !== null
-      ? trackedValue
-      : lwStorage.get(key, fallback);
-  },
-  updateSetting: (key, value) => {
-    activeSettings[key] = value;
-    return settingsDomainService.setSetting(key, value, 'Global');
-  },
-  openSurface: (contractId, surfaceProps = {}) => {
-    const lw = typeof window !== 'undefined' ? (window as any).LuminaWeave : null;
-    const desktopSurface = lw?.services?.desktopSurface || lw?.desktopSurface;
-    if (desktopSurface && typeof desktopSurface.launchActivity === 'function') {
-      desktopSurface.launchActivity({
-        id: contractId,
-        title: String(contractId),
-        icon: '',
-        role: 'support',
-        target: {
-          kind: 'surface',
-          contractId
-        },
-        activity: {
-          size: 'small',
-          pageType: 'nested'
-        },
-        props: surfaceProps
-      });
+const rebuildSurface = (): void => {
+  nodeError.value = undefined;
+
+  if (!runtime) {
+    disposeActiveSurface();
+    resolution.value = null;
+    nodeError.value = 'runtime-unavailable';
+    console.error('[SurfaceRuntime] Surface unavailable', {
+      code: nodeError.value,
+      contractId: props.contractId
+    });
+    return;
+  }
+
+  try {
+    const parsedInput = surfaceRegistry.parseInput(props.contractId, props.input);
+    const resolved = surfaceRegistry.resolve({
+      contractId: props.contractId,
+      desktopModeId: props.desktopModeId,
+      preferredVariant: props.variant
+    });
+    const theme: SurfaceThemeContext = {
+      desktopModeId: props.desktopModeId,
+      variant: props.variant || resolved.renderer.variant,
+      tokens: props.tokens,
+      cssVars: props.cssVars
+    };
+    const currentRenderer = resolution.value?.renderer;
+    if (
+      activeSurface.value
+      && currentRenderer === resolved.renderer
+      && isSurfaceValueEquivalent(activeInput.value, parsedInput)
+      && isSurfaceValueEquivalent(activeTheme.value, theme)
+    ) {
       return;
     }
-    if (desktopSurface && typeof desktopSurface.openTab === 'function') {
-      desktopSurface.openTab({
-        id: contractId,
-        name: String(contractId),
-        icon: '',
-        surfaceContractId: contractId,
-        props: surfaceProps
-      });
-    }
+
+    disposeActiveSurface();
+    resolution.value = resolved;
+    const contract = surfaceRegistry.getContract(props.contractId);
+    const nextSurface = createSurfaceRuntimeContext({
+      contractId: props.contractId,
+      input: parsedInput,
+      renderer: resolved.renderer,
+      runtime,
+      theme,
+      requiredIntents: contract?.requiredIntents
+    });
+    activeSurface.value = nextSurface;
+    activeInput.value = parsedInput;
+    activeTheme.value = theme;
+    surfaceRevision.value += 1;
+  } catch (error) {
+    disposeActiveSurface();
+    resolution.value = null;
+    nodeError.value = error instanceof SurfaceRegistryError ? 'registry' : 'context';
+    console.error('[SurfaceRuntime] Surface unavailable', {
+      code: error instanceof SurfaceRegistryError ? error.code : 'context-creation-failed',
+      contractId: props.contractId,
+      error
+    });
   }
 };
 
-const runtimeContext = computed<SurfaceRuntimeContext>(() => ({
-  ...(resolved.value.renderer.createContext?.(rendererRuntime) || {
-    state: props.state,
-    intents: props.intents,
-    theme: themeContext.value
-  }),
-  theme: themeContext.value
-}));
+watch(
+  () => [props.contractId, props.input, props.desktopModeId, props.variant, props.tokens, props.cssVars],
+  rebuildSurface,
+  { immediate: true, deep: true }
+);
 
-provide('lwSurfaceRuntimeContext', runtimeContext);
-
-const componentProps = computed(() => ({
-  ...attrs,
-  ...(resolved.value.source === 'empty' ? { contractId: props.contractId } : {}),
-  ...(props.containerProps || {})
-}));
+onBeforeUnmount(disposeActiveSurface);
 </script>

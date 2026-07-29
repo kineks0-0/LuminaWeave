@@ -1,6 +1,7 @@
 import { computed, onUnmounted, ref, watch, type Component, type ComputedRef, type Ref } from 'vue';
 import { lwStorage } from '../api/storage.js';
 import SurfaceOutlet from '../platform/surface/SurfaceOutlet.vue';
+import { projectSurfaceInput } from '../platform/surface/surfaceInputProjection.js';
 import DynamicTabOutlet from '../shell/DynamicTabOutlet.vue';
 import { getPrimarySurfaceContractIdForPlugin } from '../platform/plugin/officialPluginSurfaces.js';
 import { useCardMakerStore } from '../plugins/forge/CardMakerStore.js';
@@ -11,6 +12,10 @@ import type { LuminaPlugin } from '../types/plugin.js';
 import type { DynamicTabConfig } from '../shell/types.js';
 import { getLegacyPanelDefinition } from '../shell/legacyPanelRegistry.js';
 import { ForgeAuxPanelView } from '../plugins/forge/app/forgeAsyncComponents.js';
+import {
+  createWorkspaceSurfaceOutletProps,
+  type WorkspaceSurfaceProjection
+} from './workspaceSurfaceProjection.js';
 
 type WorkspaceAppKind = 'launcher' | 'main' | 'widget' | 'panel';
 
@@ -53,6 +58,7 @@ interface WorkspaceAppDescriptor {
   preferredWidth: number;
   preferredHeight: number;
   eyebrow: string;
+  surface?: WorkspaceSurfaceProjection;
 }
 
 const WORKSPACE_MAX_WINDOWS_PER_STAGE_KEY = 'lumina-settings.workspaceMaxWindowsPerStage';
@@ -118,6 +124,7 @@ export const useWorkspaceManager = ({
   dynamicTabs,
   activeMainTab,
   activeRightPanel,
+  activeDesktopModeId,
   isMobile,
   freeformStageRef,
   workspaceNavigationVisible,
@@ -128,6 +135,7 @@ export const useWorkspaceManager = ({
   dynamicTabs: Ref<DynamicTabConfig[]>;
   activeMainTab: Ref<string>;
   activeRightPanel: Ref<string>;
+  activeDesktopModeId: Ref<string> | ComputedRef<string>;
   isMobile: Ref<boolean>;
   freeformStageRef: Ref<HTMLElement | null>;
   workspaceNavigationVisible: Ref<boolean> | ComputedRef<boolean>;
@@ -156,7 +164,15 @@ export const useWorkspaceManager = ({
         title: '启动台',
         icon: '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
         component: SurfaceOutlet,
-        props: { contractId: 'launcher.root', activeMainTab: activeMainTab.value },
+        props: {
+          contractId: 'launcher.root',
+          input: { activeMainTab: activeMainTab.value },
+          desktopModeId: activeDesktopModeId.value
+        },
+        surface: {
+          contractId: 'launcher.root',
+          rawInput: { activeMainTab: activeMainTab.value }
+        },
         kind: 'launcher',
         dockable: true,
         minWidth: 180,
@@ -174,11 +190,33 @@ export const useWorkspaceManager = ({
         component: SurfaceOutlet,
         props: {
           contractId: 'forge.workspace',
-          embeddedInWorkspaceWindow: true,
+          input: projectSurfaceInput('forge.workspace', {
+            embeddedInWorkspaceWindow: true
+          }, {
+            embeddedInWorkspaceWindow: true,
+            activity: {
+              size: 'small',
+              pageType: 'standalone',
+              titleBar: { title: '制卡工坊' }
+            }
+          }),
+          desktopModeId: activeDesktopModeId.value,
           activity: {
             size: 'small',
             pageType: 'standalone',
             titleBar: { title: '制卡工坊' }
+          }
+        },
+        surface: {
+          contractId: 'forge.workspace',
+          rawInput: { embeddedInWorkspaceWindow: true },
+          environment: {
+            embeddedInWorkspaceWindow: true,
+            activity: {
+              size: 'small',
+              pageType: 'standalone',
+              titleBar: { title: '制卡工坊' }
+            }
           }
         },
         kind: 'panel',
@@ -218,6 +256,11 @@ export const useWorkspaceManager = ({
     const mainPluginIds = new Set<string>();
     for (const plugin of mainPlugins.value) {
       if (plugin.id === 'lumina-launcher') continue;
+      const contractId = getPrimarySurfaceContractIdForPlugin(plugin);
+      if (!contractId) {
+        console.error('[SurfaceRuntime] Plugin primary surface unavailable', { pluginId: plugin.id });
+        continue;
+      }
       mainPluginIds.add(plugin.id);
       apps.push({
         id: `plugin:${plugin.id}`,
@@ -225,9 +268,19 @@ export const useWorkspaceManager = ({
         icon: plugin.icon,
         component: SurfaceOutlet,
         props: {
-          contractId: getPrimarySurfaceContractIdForPlugin(plugin.id),
-          activity: { size: 'default', pageType: 'nested' },
-          isMobile: isMobile.value
+          contractId,
+          input: projectSurfaceInput(contractId, {}, {
+            activity: { size: 'default', pageType: 'nested' },
+            isMobile: isMobile.value
+          }),
+          desktopModeId: activeDesktopModeId.value
+        },
+        surface: {
+          contractId,
+          rawInput: {},
+          environment: {
+            activity: { size: 'default', pageType: 'nested' }
+          }
         },
         kind: 'main',
         dockable: true,
@@ -244,15 +297,30 @@ export const useWorkspaceManager = ({
     for (const plugin of widgetPlugins.value) {
       // 如果插件同时拥有主视图位槽，则使用 widget: 前缀以区分身份
       const isDualRole = mainPluginIds.has(plugin.id);
+      const contractId = getPrimarySurfaceContractIdForPlugin(plugin);
+      if (!contractId) {
+        console.error('[SurfaceRuntime] Plugin primary surface unavailable', { pluginId: plugin.id });
+        continue;
+      }
       apps.push({
         id: isDualRole ? `widget:${plugin.id}` : `plugin:${plugin.id}`,
         title: plugin.name,
         icon: plugin.icon,
         component: SurfaceOutlet,
         props: {
-          contractId: getPrimarySurfaceContractIdForPlugin(plugin.id),
-          activity: { size: 'small', pageType: 'nested' },
-          isMobile: isMobile.value
+          contractId,
+          input: projectSurfaceInput(contractId, {}, {
+            activity: { size: 'small', pageType: 'nested' },
+            isMobile: isMobile.value
+          }),
+          desktopModeId: activeDesktopModeId.value
+        },
+        surface: {
+          contractId,
+          rawInput: {},
+          environment: {
+            activity: { size: 'small', pageType: 'nested' }
+          }
         },
         kind: 'widget',
         dockable: true,
@@ -295,7 +363,11 @@ export const useWorkspaceManager = ({
       title: tab.name,
       icon: tab.icon || '',
       component: DynamicTabOutlet,
-      props: { tab },
+      props: {
+        tab,
+        desktopModeId: activeDesktopModeId.value,
+        isMobile: isMobile.value
+      },
       kind: 'panel',
       dockable: false,
       minWidth: 180,
@@ -824,7 +896,25 @@ export const useWorkspaceManager = ({
 
   const activeStageWindowEntries = computed(() =>
     getWorkspaceWindowEntriesForStage(activeWorkspaceStageId.value)
-      .map(({ window, app }) => ({
+      .map(({ window, app }) => {
+        const isCompact =
+          window.layout.width <= 768 ||
+          window.layout.height <= 520 ||
+          (app.kind === 'widget' && window.layout.width <= 560);
+        const windowProps = app.surface
+          ? createWorkspaceSurfaceOutletProps({
+              ...app.surface,
+              desktopModeId: activeDesktopModeId.value,
+              isMobile: isMobile.value,
+              isCompact
+            })
+          : {
+              ...app.props,
+              isMobile: isMobile.value || isCompact,
+              workspaceCompact: isCompact
+            };
+
+        return {
         id: window.id,
         appId: app.id,
         title: app.id === 'plugin:lumina-settings' && currentDetailedView.value
@@ -834,7 +924,7 @@ export const useWorkspaceManager = ({
             : app.title,
         icon: app.icon,
         component: app.component,
-        props: app.props,
+        props: windowProps,
         kind: app.kind,
         eyebrow: app.eyebrow,
         minWidth: app.minWidth,
@@ -843,11 +933,9 @@ export const useWorkspaceManager = ({
         maxHeight: app.maxHeight,
         zIndex: window.zIndex,
         layout: window.layout,
-        isCompact:
-          window.layout.width <= 768 ||
-          window.layout.height <= 520 ||
-          (app.kind === 'widget' && window.layout.width <= 560)
-      }))
+        isCompact
+        };
+      })
   );
 
   const persistWorkspaceMetadata = () => {

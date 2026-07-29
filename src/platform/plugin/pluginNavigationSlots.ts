@@ -1,7 +1,6 @@
 import type { LuminaPlugin } from '../../types/plugin.js';
 import type { SurfaceContractId } from '../surface/types.js';
 import type { PluginManifestV2 } from './types.js';
-import { getPrimarySurfaceContractIdForPlugin } from './officialPluginSurfaces.js';
 
 export type PluginNavigationSlot = 'mainView' | 'widget' | 'headerCenter' | 'headerRight';
 
@@ -27,11 +26,8 @@ export const deriveNavigationSlotsFromManifest = (manifest: PluginManifestV2): P
         return [...manifest.navigationSlots];
     }
 
-    const declaredSurfaceIds = manifest.surfaces?.map(surface => surface.id) || [];
-    const manifestPrimarySurface = manifest.primarySurface || declaredSurfaceIds.find(surfaceId =>
-        getDefaultNavigationSlotsForSurface(surfaceId).length > 0
-    );
-    const primarySurface = manifestPrimarySurface || getPrimarySurfaceContractIdForPlugin(manifest.id);
+    const primarySurface = manifest.primarySurface;
+    if (!primarySurface) return [];
     const declaresPrimarySurface = manifest.surfaces?.some(surface => surface.id === primarySurface) || false;
 
     if (!declaresPrimarySurface) {

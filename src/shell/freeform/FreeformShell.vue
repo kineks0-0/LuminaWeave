@@ -99,7 +99,7 @@
 
           <component
             :is="entry.component"
-            v-bind="{ ...entry.props, isMobile: isMobile || entry.isCompact, workspaceCompact: entry.isCompact }"
+            v-bind="entry.props"
           />
         </WorkspaceWindow>
       </TransitionGroup>
@@ -119,7 +119,16 @@
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-            <SurfaceOutlet contract-id="launcher.root" presentation="launchpad" :activeMainTab="activeMainTab" :dismissOnSelect="true" @dismiss="onCloseWorkspaceLaunchpad" />
+            <SurfaceOutlet
+              contract-id="launcher.root"
+              :input="{
+                presentation: 'launchpad',
+                activeMainTab,
+                dismissOnSelect: true,
+                onDismiss: onCloseWorkspaceLaunchpad
+              }"
+              :desktop-mode-id="activeDesktopModeId"
+            />
           </div>
         </div>
       </Transition>
