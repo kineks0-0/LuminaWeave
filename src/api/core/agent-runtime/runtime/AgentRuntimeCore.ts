@@ -6,7 +6,7 @@ export interface AgentRuntimeManagedSession<TTurnInput, TRunResult, TPreviewResu
     runTurn(input: TTurnInput): Promise<TRunResult>;
     previewPrompt(input: TTurnInput): Promise<TPreviewResult>;
     continue?(): Promise<void>;
-    resolveToolApproval?(toolCallId: string, approved: boolean, message?: string, options?: unknown): Promise<TApprovalResult>;
+    resolveToolApproval?(turnId: string, toolCallId: string, approved: boolean, message?: string, options?: unknown): Promise<TApprovalResult>;
     abort?(): void;
 }
 
@@ -44,14 +44,19 @@ export class AgentRuntimeCore<TTurnInput, TRunResult, TPreviewResult, TApprovalR
         await this.sessions.get(sessionId)?.continue?.();
     }
 
-    async resolveToolApproval(toolCallId: string, approved: boolean, message?: string, options?: unknown): Promise<TApprovalResult | null> {
-        for (const session of this.sessions.values()) {
-            const result = options === undefined
-                ? await session.resolveToolApproval?.(toolCallId, approved, message)
-                : await session.resolveToolApproval?.(toolCallId, approved, message, options);
-            if (result) return result;
-        }
-        return null;
+    async resolveToolApproval(
+        sessionId: string,
+        turnId: string,
+        toolCallId: string,
+        approved: boolean,
+        message?: string,
+        options?: unknown
+    ): Promise<TApprovalResult | null> {
+        const session = this.sessions.get(sessionId);
+        if (!session?.resolveToolApproval) return null;
+        return options === undefined
+            ? session.resolveToolApproval(turnId, toolCallId, approved, message)
+            : session.resolveToolApproval(turnId, toolCallId, approved, message, options);
     }
 
     abortActiveGeneration(): void {

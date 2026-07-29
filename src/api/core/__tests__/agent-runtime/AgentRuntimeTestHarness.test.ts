@@ -28,6 +28,8 @@ describe('AgentRuntimeTestHarness', () => {
             message: 'ok'
         });
         await expect(harness.tools.execute({
+            sessionId: 'session_1',
+            turnId: 'turn_1',
             toolCallId: 'call_echo',
             toolName: 'echo',
             args: { text: 'hello' }
@@ -41,15 +43,19 @@ describe('AgentRuntimeTestHarness', () => {
     it('exposes a runtime event recorder for adapter tests', () => {
         const harness = createAgentRuntimeTestHarness();
 
-        harness.events.emit({ type: 'turn_start', turnId: 'turn_1' });
+        harness.events.emit({ type: 'turn_start', sessionId: 'session_1', turnId: 'turn_1' });
         harness.events.emit({
             type: 'message_start',
-            message: { id: 'message_1', role: 'assistant', blocks: [] }
+            sessionId: 'session_1',
+            turnId: 'turn_1',
+            message: { id: 'message_1', turnId: 'turn_1', role: 'assistant', blocks: [] }
         });
         harness.events.emit({
             type: 'message_update',
+            sessionId: 'session_1',
+            turnId: 'turn_1',
             messageId: 'message_1',
-            block: { type: 'text', text: 'hello' }
+            block: { type: 'text', contentIndex: 0, text: 'hello' }
         });
 
         expect(harness.events.getEvents().map(event => event.type)).toEqual([
@@ -57,10 +63,11 @@ describe('AgentRuntimeTestHarness', () => {
             'message_start',
             'message_update'
         ]);
-        expect(harness.events.getSnapshot().streamingMessage).toEqual({
+        expect(harness.events.getSnapshot('session_1').streamingMessage).toEqual({
             id: 'message_1',
+            turnId: 'turn_1',
             role: 'assistant',
-            blocks: [{ type: 'text', text: 'hello' }],
+            blocks: [{ type: 'text', contentIndex: 0, text: 'hello' }],
             status: 'streaming'
         });
     });

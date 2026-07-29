@@ -13,6 +13,11 @@ export type AgentRuntimeEventType =
     | 'agent_end'
     | 'queue_update';
 
+export interface AgentRuntimeEventFilter {
+    sessionId?: string;
+    turnId?: string;
+}
+
 export interface AgentRuntimeContentBlock {
     type: string;
     id?: string;
@@ -23,6 +28,7 @@ export interface AgentRuntimeContentBlock {
 
 export interface AgentRuntimeMessage {
     id: string;
+    turnId: string;
     role: 'system' | 'user' | 'assistant' | 'tool' | 'custom';
     blocks: AgentRuntimeContentBlock[];
     status?: 'streaming' | 'complete';
@@ -37,6 +43,7 @@ export interface AgentRuntimeToolSummary {
 }
 
 export interface AgentRuntimePendingToolCall {
+    turnId: string;
     toolCallId: string;
     toolName: string;
     args: unknown;
@@ -50,6 +57,8 @@ export interface AgentRuntimeQueueSnapshot {
 }
 
 export interface AgentRuntimeSnapshot {
+    sessionId: string;
+    activeTurnId?: string;
     isStreaming: boolean;
     streamingMessage?: AgentRuntimeMessage;
     pendingToolCalls: AgentRuntimePendingToolCall[];
@@ -63,103 +72,122 @@ export interface CreateAgentRuntimeEventBusOptions {
     activeTools?: AgentRuntimeToolSummary[];
 }
 
+interface AgentRuntimeScopedEvent {
+    sessionId: string;
+    turnId: string;
+}
+
 export type AgentRuntimeEvent =
-    | {
-        type: 'agent_start';
-        sessionId: string;
-    }
-    | {
-        type: 'turn_start';
-        turnId: string;
-    }
-    | {
+    | (AgentRuntimeScopedEvent & { type: 'agent_start' })
+    | (AgentRuntimeScopedEvent & { type: 'turn_start' })
+    | (AgentRuntimeScopedEvent & {
         type: 'message_start';
         message: AgentRuntimeMessage;
-    }
-    | {
+    })
+    | (AgentRuntimeScopedEvent & {
         type: 'message_update';
         messageId: string;
         block: AgentRuntimeContentBlock;
-    }
-    | {
+    })
+    | (AgentRuntimeScopedEvent & {
         type: 'message_end';
         messageId: string;
-    }
-    | {
+    })
+    | (AgentRuntimeScopedEvent & {
         type: 'tool_execution_start';
         toolCallId: string;
         toolName: string;
         args: unknown;
-    }
-    | {
+    })
+    | (AgentRuntimeScopedEvent & {
         type: 'tool_execution_update';
         toolCallId: string;
+        toolName: string;
         content: AgentRuntimeContentBlock[];
-    }
-    | {
+    })
+    | (AgentRuntimeScopedEvent & {
         type: 'tool_execution_end';
         toolCallId: string;
+        toolName: string;
         status: 'completed' | 'failed' | 'denied';
         result?: AgentRuntimeToolResult;
         errorMessage?: string;
-    }
-    | {
+    })
+    | (AgentRuntimeScopedEvent & {
         type: 'turn_end';
-        turnId: string;
         errorMessage?: string;
-    }
-    | {
-        type: 'agent_end';
-        sessionId: string;
-    }
+    })
+    | (AgentRuntimeScopedEvent & { type: 'agent_end' })
     | {
         type: 'queue_update';
+        sessionId: string;
         queuedTurns: number;
         activeTurnId?: string;
     };
 
 export type AgentRuntimeEventListener = (event: AgentRuntimeEvent, snapshot: AgentRuntimeSnapshot) => void;
 
+interface AgentRuntimeSubscription {
+    filter: AgentRuntimeEventFilter;
+    listener: AgentRuntimeEventListener;
+}
+
 export class AgentRuntimeEventBus {
     private readonly events: AgentRuntimeEvent[] = [];
-    private readonly listeners = new Set<AgentRuntimeEventListener>();
-    private snapshot: AgentRuntimeSnapshot;
+    private readonly subscriptions = new Set<AgentRuntimeSubscription>();
+    private readonly snapshots = new Map<string, AgentRuntimeSnapshot>();
+    private readonly activeTools: AgentRuntimeToolSummary[];
 
     constructor(options: CreateAgentRuntimeEventBusOptions = {}) {
-        this.snapshot = {
-            isStreaming: false,
-            streamingMessage: undefined,
-            pendingToolCalls: [],
-            messages: [],
-            errorMessage: undefined,
-            activeTools: clone(options.activeTools ?? []),
-            queue: undefined
-        };
+        this.activeTools = clone(options.activeTools ?? []);
     }
 
-    subscribe(listener: AgentRuntimeEventListener): () => void {
-        this.listeners.add(listener);
+    subscribe(filter: AgentRuntimeEventFilter, listener: AgentRuntimeEventListener): () => void {
+        const subscription = { filter: clone(filter), listener };
+        this.subscriptions.add(subscription);
         return () => {
-            this.listeners.delete(listener);
+            this.subscriptions.delete(subscription);
         };
     }
 
     emit(event: AgentRuntimeEvent): void {
         const storedEvent = clone(event);
         this.events.push(storedEvent);
-        this.snapshot = reduceSnapshot(this.snapshot, storedEvent);
-        const snapshot = this.getSnapshot();
-        for (const listener of this.listeners) {
-            listener(storedEvent, snapshot);
+        const currentSnapshot = this.snapshots.get(storedEvent.sessionId)
+            ?? this.createSnapshot(storedEvent.sessionId);
+        const nextSnapshot = reduceSnapshot(currentSnapshot, storedEvent);
+        this.snapshots.set(storedEvent.sessionId, nextSnapshot);
+        const listenerSnapshot = clone(nextSnapshot);
+        for (const subscription of this.subscriptions) {
+            if (!matchesFilter(storedEvent, subscription.filter)) continue;
+            try {
+                subscription.listener(clone(storedEvent), clone(listenerSnapshot));
+            } catch (error: unknown) {
+                console.error({ error }, 'Agent runtime event subscription failed.');
+            }
         }
     }
 
-    getEvents(): AgentRuntimeEvent[] {
-        return clone(this.events);
+    getEvents(filter: AgentRuntimeEventFilter = {}): AgentRuntimeEvent[] {
+        return clone(this.events.filter(event => matchesFilter(event, filter)));
     }
 
-    getSnapshot(): AgentRuntimeSnapshot {
-        return clone(this.snapshot);
+    getSnapshot(sessionId: string): AgentRuntimeSnapshot {
+        return clone(this.snapshots.get(sessionId) ?? this.createSnapshot(sessionId));
+    }
+
+    private createSnapshot(sessionId: string): AgentRuntimeSnapshot {
+        return {
+            sessionId,
+            activeTurnId: undefined,
+            isStreaming: false,
+            streamingMessage: undefined,
+            pendingToolCalls: [],
+            messages: [],
+            errorMessage: undefined,
+            activeTools: clone(this.activeTools),
+            queue: undefined
+        };
     }
 }
 
@@ -171,44 +199,53 @@ const reduceSnapshot = (
         case 'agent_start':
             return {
                 ...snapshot,
+                activeTurnId: event.turnId,
                 errorMessage: undefined
             };
         case 'turn_start':
             return {
                 ...snapshot,
+                activeTurnId: event.turnId,
                 isStreaming: true,
                 errorMessage: undefined
             };
         case 'message_start': {
             const message = {
                 ...event.message,
+                turnId: event.turnId,
                 blocks: [...event.message.blocks],
                 status: 'streaming' as const
             };
             return {
                 ...snapshot,
+                activeTurnId: event.turnId,
                 isStreaming: true,
                 streamingMessage: message,
                 messages: [...snapshot.messages, message]
             };
         }
         case 'message_update':
-            return updateMessage(snapshot, event.messageId, message => ({
+            return updateMessage(snapshot, event, message => ({
                 ...message,
                 blocks: upsertMessageBlock(message.blocks, event.block),
                 status: message.status ?? 'streaming'
             }));
         case 'message_end':
-            return updateMessage(snapshot, event.messageId, message => ({
+            return updateMessage(snapshot, event, message => ({
                 ...message,
                 status: 'complete'
             }), true);
-        case 'tool_execution_start':
+        case 'tool_execution_start': {
+            const alreadyPending = snapshot.pendingToolCalls.some(toolCall =>
+                toolCall.turnId === event.turnId && toolCall.toolCallId === event.toolCallId
+            );
+            if (alreadyPending) return snapshot;
             return {
                 ...snapshot,
                 pendingToolCalls: [
                     ...snapshot.pendingToolCalls,
                     {
+                        turnId: event.turnId,
                         toolCallId: event.toolCallId,
                         toolName: event.toolName,
                         args: event.args,
@@ -217,11 +254,12 @@ const reduceSnapshot = (
                     }
                 ]
             };
+        }
         case 'tool_execution_update':
             return {
                 ...snapshot,
                 pendingToolCalls: snapshot.pendingToolCalls.map(toolCall =>
-                    toolCall.toolCallId === event.toolCallId
+                    toolCall.turnId === event.turnId && toolCall.toolCallId === event.toolCallId
                         ? {
                             ...toolCall,
                             updates: [...toolCall.updates, event.content]
@@ -232,10 +270,15 @@ const reduceSnapshot = (
         case 'tool_execution_end':
             return {
                 ...snapshot,
-                pendingToolCalls: snapshot.pendingToolCalls.filter(toolCall => toolCall.toolCallId !== event.toolCallId),
-                errorMessage: event.errorMessage ?? snapshot.errorMessage
+                pendingToolCalls: snapshot.pendingToolCalls.filter(toolCall =>
+                    toolCall.turnId !== event.turnId || toolCall.toolCallId !== event.toolCallId
+                ),
+                errorMessage: snapshot.activeTurnId === event.turnId
+                    ? event.errorMessage ?? snapshot.errorMessage
+                    : snapshot.errorMessage
             };
         case 'turn_end':
+            if (snapshot.activeTurnId !== event.turnId) return snapshot;
             return {
                 ...snapshot,
                 isStreaming: false,
@@ -243,15 +286,18 @@ const reduceSnapshot = (
                 errorMessage: event.errorMessage ?? snapshot.errorMessage
             };
         case 'agent_end':
+            if (snapshot.activeTurnId !== event.turnId) return snapshot;
             return {
                 ...snapshot,
+                activeTurnId: undefined,
                 isStreaming: false,
                 streamingMessage: undefined,
-                pendingToolCalls: []
+                pendingToolCalls: snapshot.pendingToolCalls.filter(toolCall => toolCall.turnId !== event.turnId)
             };
         case 'queue_update':
             return {
                 ...snapshot,
+                activeTurnId: event.activeTurnId,
                 queue: {
                     queuedTurns: event.queuedTurns,
                     activeTurnId: event.activeTurnId
@@ -262,23 +308,37 @@ const reduceSnapshot = (
 
 const updateMessage = (
     snapshot: AgentRuntimeSnapshot,
-    messageId: string,
+    event: Extract<AgentRuntimeEvent, { type: 'message_update' | 'message_end' }>,
     update: (message: AgentRuntimeMessage) => AgentRuntimeMessage,
     clearStreaming = false
 ): AgentRuntimeSnapshot => {
     let updatedStreamingMessage = snapshot.streamingMessage;
     const messages = snapshot.messages.map(message => {
-        if (message.id !== messageId) return message;
+        if (message.turnId !== event.turnId || message.id !== event.messageId) return message;
         const updated = update(message);
-        updatedStreamingMessage = updated;
+        if (snapshot.streamingMessage?.turnId === event.turnId && snapshot.streamingMessage.id === event.messageId) {
+            updatedStreamingMessage = updated;
+        }
         return updated;
     });
+    const shouldClearStreaming = clearStreaming
+        && snapshot.streamingMessage?.turnId === event.turnId
+        && snapshot.streamingMessage.id === event.messageId;
     return {
         ...snapshot,
-        streamingMessage: clearStreaming ? undefined : updatedStreamingMessage,
+        streamingMessage: shouldClearStreaming ? undefined : updatedStreamingMessage,
         messages
     };
 };
+
+const matchesFilter = (event: AgentRuntimeEvent, filter: AgentRuntimeEventFilter): boolean => {
+    if (filter.sessionId !== undefined && event.sessionId !== filter.sessionId) return false;
+    if (filter.turnId === undefined) return true;
+    return resolveEventTurnId(event) === filter.turnId;
+};
+
+const resolveEventTurnId = (event: AgentRuntimeEvent): string | undefined =>
+    event.type === 'queue_update' ? event.activeTurnId : event.turnId;
 
 const upsertMessageBlock = (
     blocks: AgentRuntimeContentBlock[],

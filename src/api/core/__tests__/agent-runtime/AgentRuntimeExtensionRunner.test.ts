@@ -29,6 +29,8 @@ describe('AgentRuntimeExtensionRunner', () => {
 
         expect(tools.getToolSummary().map(tool => tool.name)).toEqual(['inspect']);
         await expect(tools.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_inspect',
             toolName: 'inspect',
             args: { query: 'skill' }

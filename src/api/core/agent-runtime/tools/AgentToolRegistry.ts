@@ -26,6 +26,8 @@ export interface AgentToolRegistryOptions {
 }
 
 export interface AgentToolExecutionInput {
+    sessionId: string;
+    turnId: string;
     toolCallId: string;
     toolName: string;
     args: unknown;
@@ -70,6 +72,8 @@ export type AgentToolAfterResultHandler = (
 
 export interface AgentToolApprovalRequest {
     approvalId: string;
+    sessionId: string;
+    turnId: string;
     toolCallId: string;
     toolName: string;
     args: unknown;
@@ -104,6 +108,8 @@ export type AgentToolApprovalResolution =
     }
     | {
         status: 'not_found';
+        sessionId: string;
+        turnId: string;
         toolCallId: string;
     };
 
@@ -175,7 +181,8 @@ export class AgentToolRegistry {
             : Boolean(tool.needsApproval);
         if (needsApproval) {
             const approval = this.createApproval(preparedInput);
-            this.pendingApprovals.set(preparedInput.toolCallId, { tool, input: preparedInput, approval });
+            this.emitToolStart(tool, preparedInput);
+            this.pendingApprovals.set(this.createPendingApprovalKey(preparedInput), { tool, input: preparedInput, approval });
             return {
                 status: 'approval_required',
                 approval
@@ -188,18 +195,23 @@ export class AgentToolRegistry {
     }
 
     async resolveToolApproval(
+        sessionId: string,
+        turnId: string,
         toolCallId: string,
         approved: boolean,
         message?: string
     ): Promise<AgentToolApprovalResolution> {
-        const pending = this.pendingApprovals.get(toolCallId);
-        if (!pending) return { status: 'not_found', toolCallId };
-        this.pendingApprovals.delete(toolCallId);
+        const pendingKey = this.createPendingApprovalKey({ sessionId, turnId, toolCallId });
+        const pending = this.pendingApprovals.get(pendingKey);
+        if (!pending) return { status: 'not_found', sessionId, turnId, toolCallId };
+        this.pendingApprovals.delete(pendingKey);
         if (!approved) {
-            this.emitToolStart(pending.tool, pending.input);
             this.options.events?.emit({
                 type: 'tool_execution_end',
-                toolCallId: toolCallId,
+                sessionId,
+                turnId,
+                toolCallId,
+                toolName: pending.tool.name,
                 status: 'denied',
                 errorMessage: message
             });
@@ -212,7 +224,7 @@ export class AgentToolRegistry {
         return {
             status: 'approved',
             approval: pending.approval,
-            result: await this.executeWithEventProjection(pending.tool, pending.input),
+            result: await this.executeWithEventProjection(pending.tool, pending.input, false),
             message
         };
     }
@@ -259,21 +271,28 @@ export class AgentToolRegistry {
 
     private async executeWithEventProjection(
         tool: AgentRuntimeTool,
-        input: AgentToolExecutionInput
+        input: AgentToolExecutionInput,
+        emitStart = true
     ): Promise<AgentRuntimeToolResult> {
-        this.emitToolStart(tool, input);
+        if (emitStart) this.emitToolStart(tool, input);
         try {
             const result = await this.executeWithAfterHooks(tool, input);
             if (result.content.length > 0) {
                 this.options.events?.emit({
                     type: 'tool_execution_update',
+                    sessionId: input.sessionId,
+                    turnId: input.turnId,
                     toolCallId: input.toolCallId,
+                    toolName: tool.name,
                     content: result.content
                 });
             }
             this.options.events?.emit({
                 type: 'tool_execution_end',
+                sessionId: input.sessionId,
+                turnId: input.turnId,
                 toolCallId: input.toolCallId,
+                toolName: tool.name,
                 status: 'completed',
                 result
             });
@@ -281,7 +300,10 @@ export class AgentToolRegistry {
         } catch (error) {
             this.options.events?.emit({
                 type: 'tool_execution_end',
+                sessionId: input.sessionId,
+                turnId: input.turnId,
                 toolCallId: input.toolCallId,
+                toolName: tool.name,
                 status: 'failed',
                 errorMessage: error instanceof Error ? error.message : String(error)
             });
@@ -292,6 +314,8 @@ export class AgentToolRegistry {
     private emitToolStart(tool: AgentRuntimeTool, input: AgentToolExecutionInput): void {
         this.options.events?.emit({
             type: 'tool_execution_start',
+            sessionId: input.sessionId,
+            turnId: input.turnId,
             toolCallId: input.toolCallId,
             toolName: tool.name,
             args: input.args
@@ -301,10 +325,16 @@ export class AgentToolRegistry {
     private createApproval(input: AgentToolExecutionInput): AgentToolApprovalRequest {
         return {
             approvalId: `approval-${input.toolCallId}`,
+            sessionId: input.sessionId,
+            turnId: input.turnId,
             toolCallId: input.toolCallId,
             toolName: input.toolName,
             args: input.args
         };
+    }
+
+    private createPendingApprovalKey(input: Pick<AgentToolExecutionInput, 'sessionId' | 'turnId' | 'toolCallId'>): string {
+        return JSON.stringify([input.sessionId, input.turnId, input.toolCallId]);
     }
 
     private isVisible(tool: AgentRuntimeTool, visibility: AgentToolVisibilityContext | undefined): boolean {

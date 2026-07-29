@@ -23,7 +23,7 @@ class TestSession implements AgentRuntimeManagedSession<TestTurnInput, string, s
         return `preview:${this.sessionId}:${input.prompt}`;
     }
 
-    async resolveToolApproval(toolCallId: string, approved: boolean): Promise<string> {
+    async resolveToolApproval(_turnId: string, toolCallId: string, approved: boolean): Promise<string> {
         return `${toolCallId}:${approved ? 'approved' : 'denied'}`;
     }
 }
@@ -80,6 +80,8 @@ describe('AgentRuntime', () => {
         });
         expect(runtime.tools.getToolSummary().map(tool => tool.name)).toEqual(['echo']);
         await expect(runtime.tools.execute({
+            sessionId: 'session-1',
+            turnId: 'turn-1',
             toolCallId: 'call_echo',
             toolName: 'echo',
             args: { value: 'ok' }
