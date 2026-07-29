@@ -286,7 +286,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, inject, onMounted } from 'vue';
+import { computed, ref, inject, onMounted, onUnmounted } from 'vue';
 import { LuminaWeaveAPI } from '../../api/index.js';
 import type {
     PromptAssemblyResult,
@@ -298,7 +298,14 @@ import type {
 import type { CleanedMessage } from '../../types/nexus.js';
 import type { ResourceDiagnostic, ResourceRef } from '../../../shared/resources';
 
+interface Props {
+    onRunEditedPrompt: (text: string) => Promise<boolean>;
+}
+
+const props = defineProps<Props>();
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
+let isUnmounted = false;
+let probeTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 当前面板模式 */
 const editMode = ref(false);
@@ -380,25 +387,28 @@ const setPromptPayload = (p: any, source: 'st' | 'lumina') => {
 };
 
 /** 监听 ST 原始截获 */
-lwApi?.on('ST_PROMPT_INTERCEPTED', (p: any) => {
-    setPromptPayload(p, 'st');
+const onStPromptIntercepted = (promptPayload: unknown): void => {
+    if (isUnmounted) return;
+    setPromptPayload(promptPayload, 'st');
     // 注意：如果是探针触发的，探针还在等待 LUMINA_PROMPT_BUILT
-});
+};
 
 /** 监听 Lumina 组装完成 */
-lwApi?.on('LUMINA_PROMPT_BUILT', (p: any) => {
-    setPromptPayload(p, 'lumina');
+const onLuminaPromptBuilt = (promptPayload: unknown): void => {
+    if (isUnmounted) return;
+    setPromptPayload(promptPayload, 'lumina');
     isProbing.value = false; // 最终组装完成，探针结束
-});
+};
 
 /**
  * 主动刺探：调用 probePrompt() 发起一次虚假 dryRun
  * 由 ST 组装完整提示词后自动报告回来
  */
-const runProbe = async () => {
-    if (!lwApi || isProbing.value) return;
+const runProbe = async (): Promise<void> => {
+    if (!lwApi || isUnmounted || isProbing.value) return;
     isProbing.value = true;
     const result = await lwApi.probePrompt();
+    if (isUnmounted) return;
     // probePrompt 通过 PROMPT_INTERCEPTED 事件更新了 payload
     // 如果 5s 超时会返回 null
     if (result === null && isProbing.value) {
@@ -408,8 +418,23 @@ const runProbe = async () => {
 
 /** 面板挂载时自动刺探 */
 onMounted(() => {
+    lwApi?.on('ST_PROMPT_INTERCEPTED', onStPromptIntercepted);
+    lwApi?.on('LUMINA_PROMPT_BUILT', onLuminaPromptBuilt);
     // 延迟 300ms 等 Vue 渲染完成后再刺探
-    setTimeout(runProbe, 300);
+    probeTimer = setTimeout(() => {
+        probeTimer = null;
+        void runProbe();
+    }, 300);
+});
+
+onUnmounted(() => {
+    isUnmounted = true;
+    if (probeTimer !== null) {
+        clearTimeout(probeTimer);
+        probeTimer = null;
+    }
+    lwApi?.off('ST_PROMPT_INTERCEPTED', onStPromptIntercepted);
+    lwApi?.off('LUMINA_PROMPT_BUILT', onLuminaPromptBuilt);
 });
 
 /** 各角色标签映射 */
@@ -728,10 +753,10 @@ const switchToEdit = () => {
 };
 
 const sendEdited = () => {
-    if (!lwApi || !editContent.value.trim()) return;
+    if (!editContent.value.trim()) return;
     // 将编辑后的内容直接发给自定义流引擎，不走 ST 重组管线
     // 以字符串形式送入（兼容大多数 text completion 引擎）
-    void lwApi.services.generation.runEditedPrompt(editContent.value);
+    void props.onRunEditedPrompt(editContent.value);
 };
 </script>
 

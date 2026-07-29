@@ -18,6 +18,7 @@ export interface GenerationStreamState {
     filteredCount: number;
     statusText?: string;
     thinkingText?: string;
+    pendingText?: string;
 }
 
 export interface GenerationRuntimePort {

@@ -36,6 +36,7 @@ import { ConversationDomainService } from './services/ConversationDomainService.
 import {
     GenerationDomainService,
     type GenerationDomainEventListener,
+    type GenerationStreamState,
     type SendMessageOptions
 } from './services/GenerationDomainService.js';
 import { settingsDomainService, type SettingsDomainService } from './services/SettingsDomainService.js';
@@ -109,7 +110,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     private _ready: boolean = false;
     private _readyPromise: Promise<boolean> | null = null;
 
-    public lastStreamState: { processed: string; text: string; filteredCount: number; statusText?: string; thinkingText?: string } | null = null;
+    public lastStreamState: GenerationStreamState | null = null;
     private _manualAbortPending: boolean = false;
     private _lastGeneralChatLoadChatId: string | null = null;
     private _lastGeneralChatLoadAt: number = 0;
@@ -230,7 +231,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                         }
                     };
                 }
-            }
+            },
+            this.conversationCommandService
         );
         this.generation = new GenerationDomainService({
             sendMessage: (text, options) => this.sendMessage(text, options),
@@ -247,10 +249,11 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                     rawText = processed,
                     filteredCount = 0,
                     statusText?: string,
-                    thinkingText?: string
+                    thinkingText?: string,
+                    pendingText?: string
                 ): void => listener({
                     type: 'updated',
-                    state: { processed, text: rawText, filteredCount, statusText, thinkingText }
+                    state: { processed, text: rawText, filteredCount, statusText, thinkingText, pendingText }
                 });
                 const onEnded = (finalText: string): void => listener({ type: 'ended', finalText });
                 const onFailed = (message: string, status?: string): void => listener({ type: 'failed', message, status });
@@ -305,7 +308,14 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                     ? filteredCount
                     : Math.max(0, fullRaw.length - text.length);
 
-                this.lastStreamState = { processed, text: fullRaw, filteredCount: stableFilteredCount, statusText, thinkingText };
+                this.lastStreamState = {
+                    processed,
+                    text: fullRaw,
+                    filteredCount: stableFilteredCount,
+                    statusText,
+                    thinkingText,
+                    pendingText
+                };
                 this.emit('BUFFER_UPDATED', processed, fullRaw, stableFilteredCount, statusText, thinkingText ?? '', pendingText ?? '');
             });
 

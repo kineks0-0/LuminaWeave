@@ -2,7 +2,6 @@ import ChatStream from './ChatStream.vue';
 import ChatPreview from './ChatPreview.vue';
 import { LuminaPlugin } from '../../types/plugin.js';
 import ChatRoot from './ChatRoot.vue';
-import { useChatStore } from '../../stores/useChatStore.js';
 import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 
 const settingsSchema = {
@@ -221,11 +220,7 @@ const plugin: LuminaPlugin = {
     component: ChatRoot,
     settingsPreviewComponent: ChatPreview,
     settingsManifest: settingsSchema,
-    platformManifest,
-    init() {
-        useChatStore().bind();
-        console.log('[Plugin: Chat] initialized');
-    }
+    platformManifest
 };
 
 export default plugin;

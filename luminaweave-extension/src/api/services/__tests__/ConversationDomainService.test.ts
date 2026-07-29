@@ -20,11 +20,15 @@ const createEventSource = () => ({
     subscribe: vi.fn(() => vi.fn())
 });
 
+const createMessageCommands = () => ({
+    mutateChatRecord: vi.fn(async () => ({ success: true, events: [] }))
+});
+
 describe('ConversationDomainService', () => {
     it('waits for runtime readiness before reading conversation context', async () => {
         const core = createCoreConversationService();
         const waitForReady = vi.fn(async () => true);
-        const service = new ConversationDomainService(core as any, waitForReady, createEventSource());
+        const service = new ConversationDomainService(core as never, waitForReady, createEventSource(), createMessageCommands());
 
         await expect(service.getContext({ sourceId: 'chat' })).resolves.toEqual({
             source: 'chat',
@@ -38,7 +42,12 @@ describe('ConversationDomainService', () => {
 
     it('delegates session listing and context switching to the core conversation service', async () => {
         const core = createCoreConversationService();
-        const service = new ConversationDomainService(core as any, vi.fn(async () => true), createEventSource());
+        const service = new ConversationDomainService(
+            core as never,
+            vi.fn(async () => true),
+            createEventSource(),
+            createMessageCommands()
+        );
 
         await service.listSessions('forge');
         await service.switchContext({ sourceId: 'forge', sessionId: 'forge-1' });
@@ -49,7 +58,12 @@ describe('ConversationDomainService', () => {
 
     it('delegates worldline commands without owning mutation logic', async () => {
         const core = createCoreConversationService();
-        const service = new ConversationDomainService(core as any, vi.fn(async () => true), createEventSource());
+        const service = new ConversationDomainService(
+            core as never,
+            vi.fn(async () => true),
+            createEventSource(),
+            createMessageCommands()
+        );
         const input = { sourceId: 'chat' as const, targetNodeId: 'node-1' };
 
         await expect(service.switchNode(input)).resolves.toBe(true);
@@ -68,9 +82,33 @@ describe('ConversationDomainService', () => {
             subscribe: vi.fn(() => unsubscribe)
         };
         const listener = vi.fn();
-        const service = new ConversationDomainService(core as any, vi.fn(async () => true), eventSource);
+        const service = new ConversationDomainService(
+            core as never,
+            vi.fn(async () => true),
+            eventSource,
+            createMessageCommands()
+        );
 
         expect(service.subscribe(listener)).toBe(unsubscribe);
         expect(eventSource.subscribe).toHaveBeenCalledWith(listener);
+    });
+
+    it('delegates message editing and deletion through the command port after readiness', async () => {
+        const core = createCoreConversationService();
+        const waitForReady = vi.fn(async () => true);
+        const messageCommands = createMessageCommands();
+        const service = new ConversationDomainService(
+            core as never,
+            waitForReady,
+            createEventSource(),
+            messageCommands
+        );
+
+        await expect(service.editMessage('node-1', 'Updated')).resolves.toBe(true);
+        await expect(service.deleteMessage('node-1')).resolves.toBe(true);
+
+        expect(waitForReady).toHaveBeenCalledTimes(2);
+        expect(messageCommands.mutateChatRecord).toHaveBeenNthCalledWith(1, 'node-1', 'edit', 'Updated');
+        expect(messageCommands.mutateChatRecord).toHaveBeenNthCalledWith(2, 'node-1', 'delete');
     });
 });

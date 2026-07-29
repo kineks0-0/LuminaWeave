@@ -69,6 +69,8 @@ Chat 是主消息体验和生成入口。
 
 - UI 只发出意图并消费状态，不直接判定同步或写入存储。
 - 主聊天专属调用应显式传入 `sourceId: 'chat'`。
+- `ChatApplicationController` 是 Chat 的单一应用控制入口，将 conversation 与 generation 领域事件投影为统一 snapshot，并拥有发送、停止、编辑、删除、重生成、分支和 Prompt Inspector intents。
+- `useConversationContextStore` 只保存会话选择与 presentation 状态，不再与 Controller 并存第二份消息事实源。
 
 ### 4.2 Timeline
 
@@ -206,6 +208,7 @@ Desktop Modes 定义完整工作方式，不只是皮肤。
 - `DesktopModeManifest` 是桌面模式的唯一公开事实源；Desktop Mode Runtime、设置详情、surface overrides 与 Activity placement 都应从该 manifest 派生运行时描述，不再维护并行的第二份公开 manifest。
 - 当前早期阶段不保留旧 Theme Pack 兼容层；代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`，旧 `activeThemePack` / `theme-pack-*` 配置可直接失效。
 - `DesktopExperienceRuntime` 统一暴露 conversation、generation、character、timeline、activity 五组 headless 领域能力，并拥有显式 `dispose()` 生命周期。
+- Chat renderer 通过 runtime 创建应用控制器；Controller 销毁时必须取消 conversation/generation 订阅，presentation 只消费 snapshot 与 intents。
 - 插件通过 `SurfaceContractMap` 声明 input、state 与 intents，通过 surface contract 暴露业务 renderer；桌面模式可以包裹、替换布局或提供 variant。
 - `PluginManifestV2.primarySurface` 是插件主 Surface 的唯一来源；Shell、Workspace 与路由不得从插件 ID 推断 contract。
 - contract、plugin renderer 与 desktop override 必须先完成整批校验再原子注册，单个 renderer 失败只影响对应节点。

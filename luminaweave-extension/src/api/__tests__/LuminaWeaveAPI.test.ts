@@ -60,7 +60,7 @@ describe('LuminaWeaveAPI Streaming Cache', () => {
         const testRaw = '<Chat_Reply>Hello</Chat_Reply>';
         const filteredCount = testRaw.length - testText.length;
         
-        api.streamHandler.emit('BUFFER_UPDATED', testText, testRaw, filteredCount, '回复中...', 'abc', '');
+        api.streamHandler.emit('BUFFER_UPDATED', testText, testRaw, filteredCount, '回复中...', 'abc', 'lo');
 
         expect(api.lastStreamState).not.toBeNull();
         expect(api.lastStreamState?.text).toBe(testRaw);
@@ -68,6 +68,7 @@ describe('LuminaWeaveAPI Streaming Cache', () => {
         expect(api.lastStreamState?.filteredCount).toBe(filteredCount);
         expect(api.lastStreamState?.statusText).toBe('回复中...');
         expect(api.lastStreamState?.thinkingText).toBe('abc');
+        expect(api.lastStreamState?.pendingText).toBe('lo');
     });
 
     it('should keep forwarded filteredCount without recomputing from raw text', () => {

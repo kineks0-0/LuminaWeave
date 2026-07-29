@@ -39,7 +39,7 @@
 
 ## 当前状态
 
-已完成架构基线、Headless Domain Runtime 与 Typed Surface Runtime 实现：
+已完成架构基线、Headless Domain Runtime、Typed Surface Runtime 与 Chat Application Controller 实现：
 
 - `DesktopExperienceRuntime` 已统一暴露 conversation、generation、character、timeline、activity 五组领域能力。
 - App scope 负责创建并提供 runtime，scope 销毁时统一释放角色会话订阅。
@@ -49,8 +49,13 @@
 - Surface contract、plugin renderer 与 desktop override 改为批量预检后原子注册，失败不会留下部分注册状态。
 - renderer context 只接收 typed input、runtime 与 disposer 注册；`SurfaceOutlet` 负责 theme 注入、等价输入复用、异常隔离和销毁。
 - 插件主 Surface 只读取 `PluginManifestV2.primarySurface`，Shell 与 Workspace 不再从插件 ID 推断 contract。
+- `ChatApplicationController` 已统一 conversation/generation 订阅和发送、停止、编辑、删除、重生成、分支、Prompt Inspector intents，并在销毁时取消订阅。
+- Controller 启动失败会释放部分订阅并允许重试；生成期间修改型命令统一拒绝，stop 只在 live chat 正在生成时接受。
+- `ChatRoot` 负责 Controller scope；`ChatStream` 不再导入 Pinia、不再订阅 generation 事件或直调 conversation/generation 命令。
+- 旧 `useChatStore` 与未使用的 `useConversationViewStore` 已删除；`useConversationContextStore` 只保留会话选择、session switch 与会话列表 presentation 状态。
+- Prompt Inspector 在 surface 卸载时取消全局监听并清理延时探针，不再跨面板实例残留副作用。
 
-任务 2 定向验证：4 个测试文件、15 个测试通过；`npm run type-check` 通过。任务 3 定向验证：19 个测试文件、89 个测试通过；`npm run type-check` 通过。下一步是提交 Typed Surface Runtime，再进入 Chat Application Controller。
+任务 2 定向验证：4 个测试文件、15 个测试通过；`npm run type-check` 通过。任务 3 定向验证：19 个测试文件、89 个测试通过；`npm run type-check` 通过。任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；`npm run type-check` 通过。下一步是 Official Surface Kit，拆分 transcript、message、streaming、composer、toolbar 与 Prompt Inspector surface，并清除 Chat presentation 的剩余 API/宿主读取。
 
 ## 恢复入口
 

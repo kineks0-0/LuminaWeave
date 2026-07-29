@@ -222,6 +222,18 @@ Renderer 接收：
 
 Renderer 不直接写 Core 内部状态。如需打开其他页面，必须通过 runtime 的 activity 能力发起 Activity LaunchIntent；不得直接决定 tab、右栏、workspace window 或移动页面栈。Surface Runtime 不改变持久化边界，普通 Tauri 的 runtime extension store 继续使用 SQLite，浏览器与 standalone-local 的既有 IndexedDB 实现保持不变。
 
+#### Chat Application Controller
+
+`chat.main` 由 ChatRoot 在 surface scope 内装配 `ChatApplicationController`。Controller 同时订阅 `DesktopExperienceRuntime.conversation` 与 `DesktopExperienceRuntime.generation`，产出单一 `ChatApplicationSnapshot` 和强类型 intents：
+
+```text
+conversation events ─┐
+                     ├─> ChatApplicationController ─> context/messages/generation snapshot
+generation events ───┘                            └─> send/stop/edit/delete/regenerate/branch/prompt intents
+```
+
+ChatStream 不再订阅 `GENERATION_*` / `BUFFER_UPDATED`，也不直接调用 conversation 或 generation 命令。`useConversationContextStore` 只保留会话选择、会话列表和 session switch presentation 状态；旧 `useChatStore` 已删除。Controller 的 `dispose()` 必须取消两个领域订阅并阻止迟到事件更新已卸载 surface。
+
 ## 3. 启动与运行流程
 
 ```mermaid
@@ -595,6 +607,7 @@ Facade 可保留委托入口，但新增 UI 应优先消费明确 domain service
 - `LorebookManager` 只维护世界书领域状态、快照和事件派发；ST/TavernHelper/REST 世界书读写由 `STWorldInfoDriver` 承担。
 - `LuminaWeaveAPIBase` 的环境等待、ST context / event source 访问由 `STEnvironmentDriver` 承担。
 - `LuminaWeaveAPI` 中角色名、用户头像、角色头像等宿主资料读取由 `STCharacterProfileDriver` 承担。
+- Chat 消息与生成状态由 `ChatApplicationController` 统一投影；`ChatRoot` 负责 scope 装配和销毁，`ChatStream` 只提交 typed intents。
 
 ## 11. 后端服务设计
 
