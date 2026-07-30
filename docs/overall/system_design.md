@@ -224,15 +224,20 @@ Renderer 不直接写 Core 内部状态。如需打开其他页面，必须通�
 
 #### Chat Application Controller
 
-`chat.main` 由 ChatRoot 在 surface scope 内装配 `ChatApplicationController`。Controller 同时订阅 `DesktopExperienceRuntime.conversation` 与 `DesktopExperienceRuntime.generation`，产出单一 `ChatApplicationSnapshot` 和强类型 intents：
+`chat.main`、`chat.transcript`、`chat.composer` 与 `chat.promptInspector` 的 renderer context factory 通过引用计数 application scope 共享 `ChatApplicationController`。Controller 订阅 `DesktopExperienceRuntime.conversation`、generation lifecycle、Prompt inspection 与 activity presentation command，产出单一 `ChatApplicationSnapshot` 和强类型 intents：
 
 ```text
 conversation events ─┐
-                     ├─> ChatApplicationController ─> context/messages/generation snapshot
-generation events ───┘                            └─> send/stop/edit/delete/regenerate/branch/prompt intents
+generation events ───┼─> ChatApplicationController ─> context/messages/generation/prompt snapshot
+prompt events ───────┘                            └─> send/stop/edit/delete/regenerate/branch/prompt intents
+presentation commands ───────────────────────────> scroll/focus request revisions
 ```
 
-ChatStream 不再订阅 `GENERATION_*` / `BUFFER_UPDATED`，也不直接调用 conversation 或 generation 命令。`useConversationContextStore` 只保留会话选择、会话列表和 session switch presentation 状态；旧 `useChatStore` 已删除。Controller 的 `dispose()` 必须取消两个领域订阅并阻止迟到事件更新已卸载 surface。
+Official Surface Kit 由角色、会话、transcript、message、streaming、composer、toolbar、header 与 Prompt Inspector 等单一职责组件组成。presentation 只消费 typed Surface context/input，不订阅 `GENERATION_*` / `BUFFER_UPDATED`，不直接调用 conversation/generation 命令，也不导入 Pinia、API Facade、存储、Shell 或具体桌面模式。renderer context factory 将消息渲染设置投影为 `ChatApplicationSurfaceState.messageRenderPreferences`，并在 surface 销毁时取消设置订阅；Shell、Workspace 业务窗口与设置预览通过 `ThemedSurfaceOutlet` 注入受控 skin。用户消息只进入 Markdown `TextBlock`，assistant 消息才进入 LuminaView `MessageRenderer`；纯 `ChatStreamingPresentation` 映射 effect class 与光标状态。`useConversationContextStore` 只保留 Shell 所需的会话选择和 presentation 状态；旧 `useChatStore` 已删除。Controller 的 `dispose()` 必须取消四条事件订阅并阻止迟到事件更新已卸载 surface。
+
+Choice block 只提交选项文本。renderer context factory 将精确设置键 `lumina-chat.dialogueUIInteraction` 投影为 `fill | generate`；`fill` 通过 `setComposerDraft` 更新 `ChatApplicationSnapshot.composerDraft`，`generate` 通过 `sendMessage` 提交。既有 `SCROLL_TO_BOTTOM` / `FOCUS_MAIN_INPUT` 只在 `ChatPresentationCommandService` 边界被精确适配为封闭 command，独立 transcript/composer surface 仅消费 Controller 的 revisioned snapshot，不直接依赖全局事件或 API。
+
+Chat 的设置预览通过 `LuminaPlugin.settingsPreviewSurface` 声明 typed contract 与 input，`SettingsDetailed` 使用 `ThemedSurfaceOutlet` 解析 skin 并委托 `SurfaceOutlet` 挂载；其他仍使用静态预览 component 的插件保留原有入口，但不得用于需要 runtime context 的 renderer。
 
 ## 3. 启动与运行流程
 
@@ -607,7 +612,7 @@ Facade 可保留委托入口，但新增 UI 应优先消费明确 domain service
 - `LorebookManager` 只维护世界书领域状态、快照和事件派发；ST/TavernHelper/REST 世界书读写由 `STWorldInfoDriver` 承担。
 - `LuminaWeaveAPIBase` 的环境等待、ST context / event source 访问由 `STEnvironmentDriver` 承担。
 - `LuminaWeaveAPI` 中角色名、用户头像、角色头像等宿主资料读取由 `STCharacterProfileDriver` 承担。
-- Chat 消息与生成状态由 `ChatApplicationController` 统一投影；`ChatRoot` 负责 scope 装配和销毁，`ChatStream` 只提交 typed intents。
+- Chat 消息、生成与 Prompt inspection 状态由 `ChatApplicationController` 统一投影；`ChatSurfaceApplicationScope` 负责引用计数装配和销毁，Official Surface Kit 只提交 typed intents。
 
 ## 11. 后端服务设计
 

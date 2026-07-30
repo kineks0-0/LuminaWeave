@@ -6,10 +6,16 @@ import type {
 import type {
     GenerationDomainEvent,
     GenerationDomainService,
-    GenerationStreamState
+    GenerationStreamState,
+    PromptInspectionEvent,
+    PromptInspectionSource
 } from '../../../api/services/GenerationDomainService.js';
 import type { HostInteractionService } from '../../../api/services/HostInteractionService.js';
 import type { ConversationViewContext } from '../../../types/ConversationContextTypes.js';
+import type {
+    ChatPresentationCommand,
+    ChatPresentationCommandService
+} from '../../../api/services/ChatPresentationCommandService.js';
 
 export type ChatGenerationPhase = 'idle' | 'running' | 'ended' | 'failed';
 
@@ -26,7 +32,23 @@ export interface ChatApplicationSnapshot {
     context: ConversationViewContext;
     messages: LuminaChatMessage[];
     generation: ChatGenerationState;
+    composerDraft: string;
+    promptInspection: ChatPromptInspectionState;
     promptInspectorVisible: boolean;
+    presentation: ChatPresentationState;
+}
+
+export interface ChatPresentationState {
+    scrollRequest: { revision: number; force: boolean } | null;
+    composerFocusRequest: { revision: number } | null;
+}
+
+export interface ChatPromptInspectionState {
+    revision: number;
+    payload: unknown;
+    source: PromptInspectionSource | null;
+    isProbing: boolean;
+    errorMessage: string;
 }
 
 export interface ChatMessageIntentInput {
@@ -45,7 +67,9 @@ export interface ChatApplicationIntents {
     deleteMessage(input: ChatMessageIntentInput): Promise<boolean>;
     regenerate(): Promise<boolean>;
     branchMessage(input: ChatMessageIntentInput): Promise<boolean>;
+    setComposerDraft(text: string): void;
     togglePromptInspector(): void;
+    probePrompt(): Promise<boolean>;
     runEditedPrompt(text: string): Promise<boolean>;
 }
 
@@ -63,9 +87,15 @@ export interface ChatApplicationControllerDependencies {
         | 'isGenerating'
         | 'isSyncing'
         | 'getLastStreamState'
+        | 'getLastPromptPayload'
+        | 'probePrompt'
         | 'subscribe'
+        | 'subscribePromptInspection'
     >;
     feedback: Pick<HostInteractionService, 'confirm' | 'showToast'>;
+    activity: {
+        subscribeChatPresentationCommands: ChatPresentationCommandService['subscribe'];
+    };
 }
 
 export type ChatApplicationListener = (snapshot: ChatApplicationSnapshot) => void;
@@ -113,7 +143,19 @@ export class ChatApplicationController {
             context,
             messages: context.messages,
             generation: createInitialGenerationState(dependencies.generation),
-            promptInspectorVisible: false
+            composerDraft: '',
+            promptInspection: {
+                revision: 0,
+                payload: dependencies.generation.getLastPromptPayload(),
+                source: null,
+                isProbing: false,
+                errorMessage: ''
+            },
+            promptInspectorVisible: false,
+            presentation: {
+                scrollRequest: null,
+                composerFocusRequest: null
+            }
         };
         this.intents = {
             sendMessage: (text) => this.sendMessage(text),
@@ -122,7 +164,9 @@ export class ChatApplicationController {
             deleteMessage: (input) => this.deleteMessage(input),
             regenerate: () => this.regenerate(),
             branchMessage: (input) => this.branchMessage(input),
+            setComposerDraft: (text) => this.setComposerDraft(text),
             togglePromptInspector: () => this.togglePromptInspector(),
+            probePrompt: () => this.probePrompt(),
             runEditedPrompt: (text) => this.runEditedPrompt(text)
         };
     }
@@ -137,6 +181,14 @@ export class ChatApplicationController {
             );
             this.disposers.push(
                 this.dependencies.generation.subscribe(event => this.handleGenerationEvent(event))
+            );
+            this.disposers.push(
+                this.dependencies.generation.subscribePromptInspection(event => this.handlePromptInspectionEvent(event))
+            );
+            this.disposers.push(
+                this.dependencies.activity.subscribeChatPresentationCommands(
+                    command => this.handlePresentationCommand(command)
+                )
             );
 
             const requestedAtRevision = this.contextRevision;
@@ -170,7 +222,11 @@ export class ChatApplicationController {
         if (!normalizedText || !this.canMutateWithoutActiveGeneration()) {
             return false;
         }
-        return this.dependencies.generation.sendMessage(normalizedText);
+        const sent = await this.dependencies.generation.sendMessage(normalizedText);
+        if (sent) {
+            this.updateSnapshot({ composerDraft: '' });
+        }
+        return sent;
     }
 
     async stopGeneration(): Promise<boolean> {
@@ -215,11 +271,54 @@ export class ChatApplicationController {
         });
     }
 
+    setComposerDraft(text: string): void {
+        if (this.disposed || text === this.snapshot.composerDraft) return;
+        this.updateSnapshot({ composerDraft: text });
+    }
+
     togglePromptInspector(): void {
         if (this.disposed) return;
         this.updateSnapshot({
             promptInspectorVisible: !this.snapshot.promptInspectorVisible
         });
+    }
+
+    async probePrompt(): Promise<boolean> {
+        if (this.disposed || this.snapshot.promptInspection.isProbing) return false;
+        this.updatePromptInspection({
+            ...this.snapshot.promptInspection,
+            isProbing: true,
+            errorMessage: ''
+        });
+
+        try {
+            const payload = await this.dependencies.generation.probePrompt();
+            if (this.disposed) return false;
+            if (payload !== null && payload !== undefined) {
+                this.updatePromptInspection({
+                    revision: this.snapshot.promptInspection.revision + 1,
+                    payload,
+                    source: this.snapshot.promptInspection.source,
+                    isProbing: false,
+                    errorMessage: ''
+                });
+                return true;
+            }
+
+            this.updatePromptInspection({
+                ...this.snapshot.promptInspection,
+                isProbing: false
+            });
+            return false;
+        } catch (error) {
+            if (this.disposed) return false;
+            this.updatePromptInspection({
+                ...this.snapshot.promptInspection,
+                isProbing: false,
+                errorMessage: error instanceof Error ? error.message : '提示词探测失败'
+            });
+            return false;
+        }
     }
 
     async runEditedPrompt(text: string): Promise<boolean> {
@@ -299,6 +398,40 @@ export class ChatApplicationController {
         });
     }
 
+    private handlePromptInspectionEvent(event: PromptInspectionEvent): void {
+        if (this.disposed) return;
+        this.updatePromptInspection({
+            revision: this.snapshot.promptInspection.revision + 1,
+            payload: event.payload,
+            source: event.source,
+            isProbing: event.source !== 'lumina' && this.snapshot.promptInspection.isProbing,
+            errorMessage: ''
+        });
+    }
+
+    private handlePresentationCommand(command: ChatPresentationCommand): void {
+        if (this.disposed) return;
+        if (command.type === 'scroll_to_bottom') {
+            const revision = (this.snapshot.presentation.scrollRequest?.revision || 0) + 1;
+            this.updateSnapshot({
+                presentation: {
+                    ...this.snapshot.presentation,
+                    scrollRequest: { revision, force: command.force }
+                }
+            });
+            return;
+        }
+
+        const revision = (this.snapshot.presentation.composerFocusRequest?.revision || 0) + 1;
+        this.updateSnapshot({
+            ...(command.text === undefined ? {} : { composerDraft: command.text }),
+            presentation: {
+                ...this.snapshot.presentation,
+                composerFocusRequest: { revision }
+            }
+        });
+    }
+
     private applyContext(context: ConversationViewContext): void {
         this.updateSnapshot({
             context,
@@ -308,6 +441,10 @@ export class ChatApplicationController {
 
     private updateGeneration(generation: ChatGenerationState): void {
         this.updateSnapshot({ generation });
+    }
+
+    private updatePromptInspection(promptInspection: ChatPromptInspectionState): void {
+        this.updateSnapshot({ promptInspection });
     }
 
     private updateSnapshot(patch: Partial<ChatApplicationSnapshot>): void {

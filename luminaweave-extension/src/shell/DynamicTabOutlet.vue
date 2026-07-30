@@ -1,5 +1,5 @@
 <template>
-  <SurfaceOutlet
+  <ThemedSurfaceOutlet
     v-if="resolved.surfaceContractId && surfaceInput"
     :contract-id="resolved.surfaceContractId"
     :input="surfaceInput"
@@ -18,7 +18,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import SurfaceOutlet from '../platform/surface/SurfaceOutlet.vue';
+import ThemedSurfaceOutlet from '../platform/surface/ThemedSurfaceOutlet.vue';
 import SurfaceFailure from '../platform/surface/SurfaceFailure.vue';
 import { projectSurfaceInput } from '../platform/surface/surfaceInputProjection.js';
 import type { DynamicTabConfig } from './types.js';

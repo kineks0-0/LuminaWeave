@@ -143,7 +143,7 @@
             @openTool="onSwitchRightPanel"
           />
           <template v-else>
-            <SurfaceOutlet
+            <ThemedSurfaceOutlet
               v-if="entry.plugin.id !== 'lumina-timeline' || activeMainTab === 'lumina-timeline' || isTimelineLoadedOnce"
               :contract-id="entry.contractId"
               :input="getMainSurfaceInput(entry.contractId)"
@@ -236,7 +236,7 @@ import {
   shouldShowTelegramMobileStackBar as resolveShouldShowTelegramMobileStackBar
 } from '../modes/telegram/telegramRouteViewModel.js';
 import WidgetPanelHost from './WidgetPanelHost.vue';
-import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
+import ThemedSurfaceOutlet from '../../platform/surface/ThemedSurfaceOutlet.vue';
 import { projectSurfaceInput } from '../../platform/surface/surfaceInputProjection.js';
 import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
 import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
@@ -312,7 +312,14 @@ const effectiveForgeAuxSidebarMode = computed(() => {
 });
 
 const getMainSurfaceInput = (contractId: SurfaceContractId) => {
-  return projectSurfaceInput(contractId, {}, {
+  const input = contractId === 'chat.main' && isTelegramDesktopMode.value
+    ? {
+        onTelegramOpenRoleProfile: onOpenTelegramDesktopRoleProfile,
+        onOpenPanel: onSwitchRightPanel
+      }
+    : {};
+
+  return projectSurfaceInput(contractId, input, {
     activity: { size: 'default', pageType: 'nested' },
     isMobile: isMobile.value,
     auxSidebarMode: effectiveForgeAuxSidebarMode.value,
@@ -361,6 +368,7 @@ const onTelegramLeftRailResizeStart = (event?: MouseEvent) => props.runtimeActio
 const onBackFromDetailedSettings = () => props.runtimeActions.traditional.backFromDetailedSettings();
 const onToggleWidgetDropdown = () => props.runtimeActions.traditional.toggleWidgetDropdown();
 const onSwitchRightPanel = (panelId: string) => props.runtimeActions.traditional.switchRightPanel(panelId);
+const onOpenTelegramDesktopRoleProfile = () => onSwitchRightPanel('telegram-profile');
 const onRestoreSidebarLeft = () => props.runtimeActions.traditional.restoreSidebarLeft();
 const onClosePanel = () => props.runtimeActions.traditional.closePanel();
 const onUpdateShowNexus = (value: boolean) => props.runtimeActions.traditional.updateShowNexus(value);

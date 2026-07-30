@@ -1,5 +1,9 @@
+import type { Component } from 'vue';
 import { pluginManager } from '../../core/PluginManager.js';
-import type { SettingDefinition } from '../../types/plugin.js';
+import type {
+    SettingDefinition,
+    SettingsPreviewSurface
+} from '../../types/plugin.js';
 import {
     getDesktopModeIdFromSettingsPluginId,
     getDesktopModeSettingsPluginId,
@@ -15,13 +19,14 @@ export interface SettingsSourceEntry {
     pluginIcon: string;
     manifest: Record<string, SettingDefinition>;
     kind: 'plugin' | 'desktop-mode';
-    settingsPreviewComponent?: any;
-    settingsInlineComponent?: any;
+    settingsPreviewComponent?: Component;
+    settingsPreviewSurface?: SettingsPreviewSurface;
+    settingsInlineComponent?: Component;
 }
 
 export const getRegisteredSettingsCatalog = (): Record<string, Record<string, SettingDefinition>> => {
     const catalog: Record<string, Record<string, SettingDefinition>> = {
-        ...(pluginManager as any).registeredSettings
+        ...pluginManager.registeredSettings
     };
 
     listDesktopModes().forEach(desktopMode => {
@@ -59,13 +64,14 @@ export const getSettingsEntry = (pluginId: string): SettingsSourceEntry | null =
         manifest: plugin.settingsManifest,
         kind: 'plugin',
         settingsPreviewComponent: plugin.settingsPreviewComponent,
+        settingsPreviewSurface: plugin.settingsPreviewSurface,
         settingsInlineComponent: plugin.settingsInlineComponent
     };
 };
 
 export const getVisibleSettingsEntries = (activeDesktopModeId: string): SettingsSourceEntry[] => {
     const entries: SettingsSourceEntry[] = [];
-    Object.keys((pluginManager as any).registeredSettings).forEach(pluginId => {
+    Object.keys(pluginManager.registeredSettings).forEach(pluginId => {
         const entry = getSettingsEntry(pluginId);
         if (entry) {
             entries.push(entry);

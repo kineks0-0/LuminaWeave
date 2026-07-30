@@ -472,8 +472,8 @@ export const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopMode
             '--lw-discord-mobile-sheet-backdrop': 'blur(6px)'
         }
     },
-    'chat.stream': {
-        componentId: 'chat.stream',
+    'chat.main': {
+        componentId: 'chat.main',
         cssVars: ({ activeSettings, desktopModeId, resolvedAppearance }) => {
             const density = getDesktopModeSettingValue(activeSettings, desktopModeId, 'messageDensity');
             const avatarShape = getDesktopModeSettingValue(activeSettings, desktopModeId, 'avatarShape');

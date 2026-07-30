@@ -5,6 +5,8 @@ import type { DesktopExperienceRuntime } from '../../api/services/DesktopExperie
 export type SurfaceRendererKind = 'desktop-override' | 'plugin-business' | 'core-default' | 'empty';
 
 export type SurfaceDisposer = () => void;
+export type ThemeMessageShape = 'bubble' | 'document';
+export type ThemeAvatarPlacement = 'hidden' | 'inline' | 'topbar' | 'rail';
 
 export type EmptySurfaceData = Readonly<Record<never, never>>;
 

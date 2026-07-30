@@ -1,10 +1,17 @@
 import { z } from 'zod';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import type { Ref } from 'vue';
 import type { ActivityDescriptor } from '../activity/types.js';
 import type {
     CharacterChannelState,
     CreateChatConversationInput
 } from '../../types/ConversationContextTypes.js';
 import type { SettingDefinition } from '../../types/plugin.js';
+import type {
+    ChatApplicationIntents,
+    ChatApplicationSnapshot
+} from '../../plugins/chat/application/ChatApplicationController.js';
+import type { ChatMessageRenderPreferences } from '../../plugins/chat/presentation/ChatMessageRenderPreferences.js';
 import type {
     EmptySurfaceData,
     SurfaceContractDefinition,
@@ -18,7 +25,77 @@ export interface ChatMainSurfaceInput {
     workspaceCompact?: boolean;
     onTelegramBack?: () => void;
     onTelegramOpenRoleProfile?: () => void;
+    onOpenPanel?: (panelId: string) => void;
 }
+
+export interface CharacterRosterSurfaceInput {
+    compact?: boolean;
+}
+
+export interface ConversationSessionListSurfaceInput {
+    characterKey?: string;
+    compact?: boolean;
+}
+
+export interface ChatTranscriptSurfaceInput {
+    compact?: boolean;
+}
+
+export interface ChatComposerSurfaceInput {
+    compact?: boolean;
+    placeholder?: string;
+}
+
+export interface ChatPromptInspectorSurfaceInput {
+    autoProbe?: boolean;
+}
+
+export interface CharacterChannelSurfaceState {
+    channel: Readonly<Ref<CharacterChannelState>>;
+}
+
+export type ChatChoiceInteractionMode = 'fill' | 'generate';
+
+export interface CharacterRosterSurfaceIntents {
+    refresh(): Promise<void>;
+    openSession(sessionId: string): Promise<void>;
+    createSession(input: CreateChatConversationInput): Promise<void>;
+    toggleGroup(groupKey: string): void;
+}
+
+export interface ConversationSessionListSurfaceIntents {
+    openSession(sessionId: string): Promise<void>;
+    renameSession(sessionId: string, nextTitle: string): Promise<void>;
+    deleteSession(sessionId: string): Promise<void>;
+    closeCurrentSession(): Promise<boolean>;
+    toggleGroupSessionExpansion(groupKey: string): void;
+}
+
+export interface ChatApplicationSurfaceState {
+    snapshot: Readonly<Ref<ChatApplicationSnapshot>>;
+    character: Readonly<Ref<CharacterChannelState>>;
+    choiceInteractionMode: Readonly<Ref<ChatChoiceInteractionMode>>;
+    messageRenderPreferences: Readonly<Ref<ChatMessageRenderPreferences>>;
+    defaultAvatar: string;
+    resolveMessageAvatar(message: LuminaChatMessage): string;
+}
+
+export type ChatTranscriptSurfaceIntents = Pick<ChatApplicationIntents,
+    | 'editMessage'
+    | 'deleteMessage'
+    | 'regenerate'
+    | 'branchMessage'
+    | 'sendMessage'
+    | 'setComposerDraft'
+>;
+
+export type ChatComposerSurfaceIntents = Pick<ChatApplicationIntents,
+    'sendMessage' | 'stopGeneration' | 'setComposerDraft' | 'togglePromptInspector'
+>;
+
+export type ChatPromptInspectorSurfaceIntents = Pick<ChatApplicationIntents,
+    'probePrompt' | 'runEditedPrompt'
+>;
 
 export interface SettingsRootSurfaceInput {
     mode?: 'large' | 'small';
@@ -81,9 +158,33 @@ export interface TelegramInfoPanelSurfaceInput {
 
 declare module './types.js' {
     interface SurfaceContractMap {
-        'chat.main': SurfaceContractSpec<ChatMainSurfaceInput>;
+        'character.roster': SurfaceContractSpec<
+            CharacterRosterSurfaceInput,
+            CharacterChannelSurfaceState,
+            CharacterRosterSurfaceIntents
+        >;
+        'conversation.sessionList': SurfaceContractSpec<
+            ConversationSessionListSurfaceInput,
+            CharacterChannelSurfaceState,
+            ConversationSessionListSurfaceIntents
+        >;
+        'chat.transcript': SurfaceContractSpec<
+            ChatTranscriptSurfaceInput,
+            ChatApplicationSurfaceState,
+            ChatTranscriptSurfaceIntents
+        >;
+        'chat.main': SurfaceContractSpec<ChatMainSurfaceInput, ChatApplicationSurfaceState, ChatApplicationIntents>;
         'chat.preview': SurfaceContractSpec<EmptySurfaceData>;
-        'chat.composer': SurfaceContractSpec<EmptySurfaceData>;
+        'chat.composer': SurfaceContractSpec<
+            ChatComposerSurfaceInput,
+            ChatApplicationSurfaceState,
+            ChatComposerSurfaceIntents
+        >;
+        'chat.promptInspector': SurfaceContractSpec<
+            ChatPromptInspectorSurfaceInput,
+            ChatApplicationSurfaceState,
+            ChatPromptInspectorSurfaceIntents
+        >;
         'settings.root': SurfaceContractSpec<SettingsRootSurfaceInput>;
         'settings.control': SurfaceContractSpec<SettingsControlSurfaceInput>;
         'forge.workspace': SurfaceContractSpec<ForgeWorkspaceSurfaceInput>;
@@ -101,9 +202,13 @@ declare module './types.js' {
 }
 
 export const OFFICIAL_SURFACE_CONTRACTS = [
+    'character.roster',
+    'conversation.sessionList',
+    'chat.transcript',
     'chat.main',
     'chat.preview',
     'chat.composer',
+    'chat.promptInspector',
     'settings.root',
     'settings.control',
     'forge.workspace',
@@ -261,14 +366,31 @@ const contextPanelInputSchema = z.object({
 }).strict();
 
 export const OFFICIAL_SURFACE_INPUT_SCHEMAS = {
+    'character.roster': z.object({
+        compact: z.boolean().optional()
+    }).strict(),
+    'conversation.sessionList': z.object({
+        characterKey: z.string().min(1).optional(),
+        compact: z.boolean().optional()
+    }).strict(),
+    'chat.transcript': z.object({
+        compact: z.boolean().optional()
+    }).strict(),
     'chat.main': z.object({
         isMobile: z.boolean().optional(),
         workspaceCompact: z.boolean().optional(),
         onTelegramBack: callbackSchema<() => void>().optional(),
-        onTelegramOpenRoleProfile: callbackSchema<() => void>().optional()
+        onTelegramOpenRoleProfile: callbackSchema<() => void>().optional(),
+        onOpenPanel: callbackSchema<(panelId: string) => void>().optional()
     }).strict(),
     'chat.preview': emptyInputSchema,
-    'chat.composer': emptyInputSchema,
+    'chat.composer': z.object({
+        compact: z.boolean().optional(),
+        placeholder: z.string().optional()
+    }).strict(),
+    'chat.promptInspector': z.object({
+        autoProbe: z.boolean().optional()
+    }).strict(),
     'settings.root': z.object({
         mode: z.enum(['large', 'small']).optional(),
         activity: activityDescriptorSchema.optional()

@@ -47,6 +47,7 @@ class MockCharacterChannelApi {
     public readonly waitForReady = vi.fn(async () => false);
     public readonly getAssistantName = vi.fn(() => 'Assistant');
     public readonly getCharAvatar = vi.fn((name: string) => `/avatar/${name}.png`);
+    public readonly getUserAvatar = vi.fn((name?: string) => `/avatar/user/${name || 'User'}.png`);
     private readonly listeners = new Map<string, Function[]>();
 
     on(event: string, callback: Function): void {
@@ -257,6 +258,61 @@ describe('CharacterChannelService', () => {
 
         api = new MockCharacterChannelApi();
         ({ store: contextStore, order } = createContextStore());
+    });
+
+    it('resolves message avatars through the character runtime boundary', () => {
+        const service = new CharacterChannelService(api, contextStore, hostProvider);
+        const resolveMessageAvatar = Reflect.get(service, 'resolveMessageAvatar');
+        expect(typeof resolveMessageAvatar).toBe('function');
+        if (typeof resolveMessageAvatar !== 'function') return;
+
+        expect(resolveMessageAvatar.call(service, {
+            id: 'direct',
+            parentId: null,
+            name: 'Alice',
+            role: 'assistant',
+            is_user: false,
+            mesRaw: '',
+            mes: '',
+            fingerprint: 'direct',
+            extra: {},
+            avatarUrl: '/direct.png'
+        })).toBe('/direct.png');
+        expect(resolveMessageAvatar.call(service, {
+            id: 'user',
+            parentId: null,
+            name: 'User',
+            role: 'user',
+            is_user: true,
+            mesRaw: '',
+            mes: '',
+            fingerprint: 'user',
+            extra: {}
+        })).toBe('/avatar/user/User.png');
+        expect(resolveMessageAvatar.call(service, {
+            id: 'assistant',
+            parentId: null,
+            name: 'Alice',
+            role: 'assistant',
+            is_user: false,
+            mesRaw: '',
+            mes: '',
+            fingerprint: 'assistant',
+            extra: {}
+        })).toBe('/avatar/Alice.png');
+
+        api.getCharAvatar.mockReturnValueOnce('');
+        expect(resolveMessageAvatar.call(service, {
+            id: 'fallback',
+            parentId: null,
+            name: 'Unknown',
+            role: 'assistant',
+            is_user: false,
+            mesRaw: '',
+            mes: '',
+            fingerprint: 'fallback',
+            extra: {}
+        })).toBe('/default.png');
     });
 
     it('builds stable character groups from roster, summary and helper-resolved session character metadata', async () => {

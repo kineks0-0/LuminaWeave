@@ -47,7 +47,7 @@
       @createSession="onCreateSession"
       @openTool="onOpenPanel"
     />
-    <SurfaceOutlet
+    <ThemedSurfaceOutlet
       v-else-if="route.name === 'roleProfile'"
       contract-id="telegram.infoPanel"
       :input="{
@@ -59,17 +59,18 @@
       }"
       :desktop-mode-id="activeDesktopModeId"
     />
-    <SurfaceOutlet
+    <ThemedSurfaceOutlet
       v-else-if="route.name === 'chat'"
       contract-id="chat.main"
       :input="{
         isMobile: true,
         onTelegramBack: onPopRoute,
-        onTelegramOpenRoleProfile: onOpenRoleProfile
+        onTelegramOpenRoleProfile: onOpenRoleProfile,
+        onOpenPanel: onOpenPanel
       }"
       :desktop-mode-id="activeDesktopModeId"
     />
-    <SurfaceOutlet
+    <ThemedSurfaceOutlet
       v-else-if="route.name === 'settings'"
       contract-id="settings.root"
       :input="{ activity: { size: 'small', pageType: 'standalone' } }"
@@ -85,7 +86,7 @@
       @openPanel="onOpenPanel"
       @close="onClose"
     />
-    <SurfaceOutlet
+    <ThemedSurfaceOutlet
       v-else-if="route.name === 'tool' && toolContractId"
       :contract-id="toolContractId"
       :input="projectSurfaceInput(toolContractId, toolProps, {
@@ -106,7 +107,7 @@
 import type { CSSProperties } from 'vue';
 import type { ActivityDescriptor } from '../../../platform/activity/types.js';
 import type { SurfaceContractId } from '../../../platform/surface/types.js';
-import SurfaceOutlet from '../../../platform/surface/SurfaceOutlet.vue';
+import ThemedSurfaceOutlet from '../../../platform/surface/ThemedSurfaceOutlet.vue';
 import SurfaceFailure from '../../../platform/surface/SurfaceFailure.vue';
 import { projectSurfaceInput } from '../../../platform/surface/surfaceInputProjection.js';
 import DiscordCharacterRail from '../../../components/DiscordCharacterRail.vue';

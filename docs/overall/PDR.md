@@ -208,8 +208,11 @@ Desktop Modes 定义完整工作方式，不只是皮肤。
 - `DesktopModeManifest` 是桌面模式的唯一公开事实源；Desktop Mode Runtime、设置详情、surface overrides 与 Activity placement 都应从该 manifest 派生运行时描述，不再维护并行的第二份公开 manifest。
 - 当前早期阶段不保留旧 Theme Pack 兼容层；代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`，旧 `activeThemePack` / `theme-pack-*` 配置可直接失效。
 - `DesktopExperienceRuntime` 统一暴露 conversation、generation、character、timeline、activity 五组 headless 领域能力，并拥有显式 `dispose()` 生命周期。
-- Chat renderer 通过 runtime 创建应用控制器；Controller 销毁时必须取消 conversation/generation 订阅，presentation 只消费 snapshot 与 intents。
+- Chat renderer 通过 runtime 创建应用控制器；Controller 销毁时必须取消 conversation、generation 与 Prompt inspection 订阅，presentation 只消费 snapshot 与 intents。
 - 插件通过 `SurfaceContractMap` 声明 input、state 与 intents，通过 surface contract 暴露业务 renderer；桌面模式可以包裹、替换布局或提供 variant。
+- Official Surface Kit 提供角色、会话、消息流、输入、header 与 Prompt Inspector 等 typed Chat surface；presentation 不直接访问 Pinia、API Facade、存储、Shell、宿主对象或桌面模式判断，消息渲染设置由 Surface context 投影。
+- 既有 Chat 滚动与输入聚焦事件必须先由 `DesktopExperienceRuntime.activity` 适配为 typed presentation command，再由 Controller snapshot 投影给 Surface；presentation 不直接订阅宿主事件。
+- 需要 runtime context 的设置预览通过 `settingsPreviewSurface` 元数据进入 `ThemedSurfaceOutlet -> SurfaceOutlet`，不能以裸 Vue component 或裸 `SurfaceOutlet` 绕过 skin、contract 校验、theme context 与局部错误边界。
 - `PluginManifestV2.primarySurface` 是插件主 Surface 的唯一来源；Shell、Workspace 与路由不得从插件 ID 推断 contract。
 - contract、plugin renderer 与 desktop override 必须先完成整批校验再原子注册，单个 renderer 失败只影响对应节点。
 - 插件或业务组件通过 Activity LaunchIntent 启动页面，只声明目标、默认/小窗偏好、嵌套/独立页面和可选状态栏/标题栏/二级菜单 metadata；具体落到主区、右侧栏、临时移动页、Telegram 移动页面栈或自由工作台窗口，由 desktop mode 解析。

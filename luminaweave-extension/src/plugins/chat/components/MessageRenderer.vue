@@ -19,7 +19,7 @@
           <component
             :is="resolveRenderedComponent(comp.component)"
             v-if="resolveRenderedComponent(comp.component)"
-            v-bind="buildComponentProps(comp.props as any)"
+            v-bind="buildComponentProps(comp.component, comp.props)"
           />
           <div v-else class="lv-unknown-block">
             <code>{{ comp.component }}({{ JSON.stringify(comp.props) }})</code>
@@ -41,8 +41,11 @@ import { splitToSegments, type MessageSegment } from '../../../api/core/xml-view
 import TextBlock from './blocks/TextBlock.vue';
 import ThinkingBlock from './blocks/ThinkingBlock.vue';
 import { globalXMLInterceptor, XMLInterceptor } from '../../../api/core/xml-view/XMLInterceptor.js';
-import { lwStorage } from '../../../api/storage.js';
 import { viewRenderRegistry, type ViewRenderContext } from '../../../api/core/xml-view/ViewRenderRegistry.js';
+import {
+  DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES,
+  type ChatMessageRenderPreferences
+} from '../presentation/ChatMessageRenderPreferences.js';
 
 const ForgeMessageAutoSubmit = defineAsyncComponent(() =>
   import('../../forge/blocks/forgeBlockComponents.js').then(module => module.ForgeMessageAutoSubmit)
@@ -67,6 +70,10 @@ const props = defineProps<{
   messageId?: string;
   /** 思维链的展示风格 */
   thinkingVariant?: 'default' | 'codex';
+  /** Chat Choices 组件提交的选项文本 */
+  onSelectChoice?: (text: string) => void;
+  /** 由 Surface context 投影的消息渲染设置 */
+  renderPreferences?: ChatMessageRenderPreferences;
 }>();
 
 const effectiveRenderContext = computed<ViewRenderContext>(() => props.renderContext || 'chat');
@@ -75,7 +82,16 @@ const resolveRenderedComponent = (componentName: string) => {
   return viewRenderRegistry.resolve(effectiveRenderContext.value, componentName);
 };
 
-const buildComponentProps = (componentProps: Record<string, unknown>) => {
+const buildComponentProps = (
+  componentName: string,
+  componentProps: Record<string, unknown>
+): Record<string, unknown> => {
+  if (effectiveRenderContext.value === 'chat' && componentName === 'Choices') {
+    return {
+      ...componentProps,
+      onSelect: props.onSelectChoice
+    };
+  }
   if (effectiveRenderContext.value !== 'forge' || !props.messageId) {
     return componentProps;
   }
@@ -86,14 +102,11 @@ const buildComponentProps = (componentProps: Record<string, unknown>) => {
   };
 };
 
-const thinkingDisplayMode = computed<'hidden' | 'collapsible'>(() => {
-  const storedMode = lwStorage.get('lumina-settings.thinkingDisplayMode', 'collapsible', 'Global');
-  return storedMode === 'hidden' ? 'hidden' : 'collapsible';
-});
-
-const thinkingAutoExpand = computed<boolean>(() => {
-  return Boolean(lwStorage.get('lumina-settings.thinkingAutoExpand', true, 'Global'));
-});
+const renderPreferences = computed<Readonly<ChatMessageRenderPreferences>>(() => (
+  props.renderPreferences ?? DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES
+));
+const thinkingDisplayMode = computed(() => renderPreferences.value.thinkingDisplayMode);
+const thinkingAutoExpand = computed(() => renderPreferences.value.thinkingAutoExpand);
 
 const effectiveThinkingText = computed(() => {
   if (typeof props.thinkingText === 'string' && props.thinkingText.trim()) {
@@ -120,7 +133,7 @@ const segments = computed<MessageSegment[]>(() => {
   if (!targetText) return [];
   
   // 核心修复：同步流式过滤设置，且区分阶段应用猜测逻辑
-  const filterChatReply = lwStorage.get('lumina-chat.filterChatReply', false, 'Global');
+  const filterChatReply = renderPreferences.value.filterChatReply;
   
   if (filterChatReply && !props.isStreaming) {
     // 只有在从原始 pluginRaw 降级渲染时，才由设置开关决定猜测逻辑
@@ -128,8 +141,12 @@ const segments = computed<MessageSegment[]>(() => {
     const usePluginAsSource = !props.mes && !props.mesRaw && props.pluginRaw;
     
     // 场景感知：已整理的消息强制允许顶层展示且不识别隐式思考，仅对原始流应用用户配置
-    const effectiveAllowTopLevel = usePluginAsSource ? lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global') : true;
-    const effectiveImplicitThinking = usePluginAsSource ? lwStorage.get('lumina-chat.implicitThinkingInFilter', false, 'Global') : false;
+    const effectiveAllowTopLevel = usePluginAsSource
+      ? renderPreferences.value.allowTopLevelInFilter
+      : true;
+    const effectiveImplicitThinking = usePluginAsSource
+      ? renderPreferences.value.implicitThinkingInFilter
+      : false;
 
     const state = globalXMLInterceptor.deriveStreamState(targetText, true, effectiveAllowTopLevel, effectiveImplicitThinking);
     targetText = state.displayText;

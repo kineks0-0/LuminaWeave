@@ -1,4 +1,5 @@
 import { ref, type Ref } from 'vue';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { LuminaWeaveAPI } from '../../index.js';
 import type {
     CharacterChannelCapabilities,
@@ -27,6 +28,7 @@ export type CharacterChannelApiPort = Pick<LuminaWeaveAPI,
     | 'deleteChatSession'
     | 'getAssistantName'
     | 'getCharAvatar'
+    | 'getUserAvatar'
     | 'DEFAULT_AVATAR'
 >;
 
@@ -122,6 +124,22 @@ export class CharacterChannelService {
     ) {
         this.state = ref(createEmptyState(this.hostProvider.getCapabilityFlags()));
         this.bind();
+    }
+
+    get defaultAvatar(): string {
+        return this.api.DEFAULT_AVATAR;
+    }
+
+    resolveMessageAvatar(message: LuminaChatMessage): string {
+        const directAvatar = message.avatarUrl?.trim() || '';
+        if (directAvatar) {
+            return directAvatar;
+        }
+
+        const resolvedAvatar = message.is_user
+            ? this.api.getUserAvatar(message.name)
+            : this.api.getCharAvatar(message.name);
+        return resolvedAvatar || this.api.DEFAULT_AVATAR;
     }
 
     private bind(): void {

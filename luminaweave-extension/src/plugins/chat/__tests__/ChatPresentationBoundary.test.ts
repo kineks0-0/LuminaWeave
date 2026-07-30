@@ -8,17 +8,22 @@ const readSource = (relativePath: string): string => readFileSync(
 );
 
 describe('Chat presentation application boundary', () => {
-    it('routes generation state and chat commands through the application controller', () => {
-        const chatStreamSource = readSource('../ChatStream.vue');
+    it('removes the coupled ChatStream and keeps official surfaces behind typed context', () => {
+        const chatStreamUrl = new URL('../ChatStream.vue', import.meta.url);
+        const surfaceSources = [
+            '../surfaces/ChatMainSurface.vue',
+            '../surfaces/ChatTranscriptSurface.vue',
+            '../surfaces/ChatComposerSurface.vue',
+            '../surfaces/ChatPromptInspectorSurface.vue'
+        ].map(readSource);
 
-        expect(chatStreamSource).not.toContain('useConversationContextStore');
-        expect(chatStreamSource).not.toContain("lwApi?.on('GENERATION_");
-        expect(chatStreamSource).not.toContain("lwApi?.on('BUFFER_UPDATED'");
-        expect(chatStreamSource).not.toContain('services.generation.sendMessage');
-        expect(chatStreamSource).not.toContain('services.generation.regenerateLast');
-        expect(chatStreamSource).not.toContain('services.conversation.branchNode');
-        expect(chatStreamSource).not.toContain('crudChatRecord');
-        expect(chatStreamSource).not.toContain('abortGenerate');
+        expect(existsSync(fileURLToPath(chatStreamUrl))).toBe(false);
+        for (const source of surfaceSources) {
+            expect(source).toContain('useSurfaceRuntimeContext');
+            expect(source).not.toContain('useConversationContextStore');
+            expect(source).not.toContain('luminaWeaveApi');
+            expect(source).not.toContain('desktop-modes');
+        }
     });
 
     it('removes the legacy chat store after the controller becomes the message owner', () => {
@@ -34,11 +39,11 @@ describe('Chat presentation application boundary', () => {
         expect(contextStoreSource).not.toContain('currentContext.value.messages');
     });
 
-    it('cleans Prompt Inspector listeners and delayed probes when the panel unmounts', () => {
+    it('keeps Prompt Inspector host-neutral and clears its delayed probe', () => {
         const promptInspectorSource = readSource('../PromptInspector.vue');
 
-        expect(promptInspectorSource).toContain("lwApi?.off('ST_PROMPT_INTERCEPTED', onStPromptIntercepted)");
-        expect(promptInspectorSource).toContain("lwApi?.off('LUMINA_PROMPT_BUILT', onLuminaPromptBuilt)");
+        expect(promptInspectorSource).not.toContain('lwApi');
+        expect(promptInspectorSource).not.toContain("inject(");
         expect(promptInspectorSource).toContain('clearTimeout(probeTimer)');
     });
 });

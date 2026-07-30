@@ -10,13 +10,13 @@
 - Official Surface Kit：提供角色、会话、消息、输入和 Prompt Inspector 等可组合 surface。
 - `DesktopModeManifest.composition`：作为桌面与移动端组合树的唯一公开事实源。
 
-## 当前事实
+## 初始问题
 
 - `DesktopModeManifest` 已是桌面模式唯一注册源，但尚未表达组件组合树。
 - Shell 与 `useWorkspaceManager.ts` 仍直接组合业务组件或硬编码应用目录。
-- `SurfaceRuntimeContext` 仍允许 `unknown`、开放字符串 contract 和任意容器属性。
-- `ChatStream.vue` 同时承担消息展示、生成控制、会话命令、滚动、输入、编辑、分支和模式分支。
-- `useChatStore` 与 `useConversationContextStore` 并存，消息与会话状态所有权不唯一。
+- 初始 `SurfaceRuntimeContext` 允许 `unknown`、开放字符串 contract 和任意容器属性。
+- 初始 `ChatStream.vue` 同时承担消息展示、生成控制、会话命令、滚动、输入、编辑、分支和模式分支。
+- 初始 `useChatStore` 与 `useConversationContextStore` 并存，消息与会话状态所有权不唯一。
 
 ## 已锁定决策
 
@@ -39,7 +39,7 @@
 
 ## 当前状态
 
-已完成架构基线、Headless Domain Runtime、Typed Surface Runtime 与 Chat Application Controller 实现：
+已完成架构基线、Headless Domain Runtime、Typed Surface Runtime、Chat Application Controller 与 Official Surface Kit：
 
 - `DesktopExperienceRuntime` 已统一暴露 conversation、generation、character、timeline、activity 五组领域能力。
 - App scope 负责创建并提供 runtime，scope 销毁时统一释放角色会话订阅。
@@ -47,15 +47,23 @@
 - Discord Shell 已改为消费 runtime-owned 角色会话服务，不再自行构造服务或使用 `any` 强转。
 - `SurfaceContractMap` 已为官方 contract 固定 input、state 与 intents 类型，注册时通过严格 Zod schema 校验 input。
 - Surface contract、plugin renderer 与 desktop override 改为批量预检后原子注册，失败不会留下部分注册状态。
-- renderer context 只接收 typed input、runtime 与 disposer 注册；`SurfaceOutlet` 负责 theme 注入、等价输入复用、异常隔离和销毁。
+- renderer context 只接收 typed input、runtime 与 disposer 注册；`ThemedSurfaceOutlet` 负责 skin 投影，`SurfaceOutlet` 负责 context theme 注入、等价输入复用、异常隔离和销毁。
 - 插件主 Surface 只读取 `PluginManifestV2.primarySurface`，Shell 与 Workspace 不再从插件 ID 推断 contract。
 - `ChatApplicationController` 已统一 conversation/generation 订阅和发送、停止、编辑、删除、重生成、分支、Prompt Inspector intents，并在销毁时取消订阅。
 - Controller 启动失败会释放部分订阅并允许重试；生成期间修改型命令统一拒绝，stop 只在 live chat 正在生成时接受。
-- `ChatRoot` 负责 Controller scope；`ChatStream` 不再导入 Pinia、不再订阅 generation 事件或直调 conversation/generation 命令。
+- `ChatRoot` 只挂载 `ChatMainSurface`；`createChatSurfaceContexts.ts` 通过引用计数 application scope 复用并销毁 Controller。
 - 旧 `useChatStore` 与未使用的 `useConversationViewStore` 已删除；`useConversationContextStore` 只保留会话选择、session switch 与会话列表 presentation 状态。
-- Prompt Inspector 在 surface 卸载时取消全局监听并清理延时探针，不再跨面板实例残留副作用。
+- `ChatStream.vue` 已拆为角色、会话、transcript、message、streaming、composer、toolbar、header 与 Prompt Inspector 等单一职责 surface/presentation 组件。
+- Chat presentation 只消费 typed Surface context，不导入 Pinia、`lwApi`、Shell、宿主全局对象或桌面模式判断；头像由 runtime character capability 解析，外观由 Surface theme 注入。
+- Telegram 移动 chat route 通过 `chat.main` typed callback 恢复返回与页面栈导航；桌面 Telegram 通过同一 contract 打开角色资料与右侧面板；两端共用本地消息搜索、上下文工具和 Prompt Inspector，Chat 组件不读取 Shell 路由状态。
+- 旧 `SCROLL_TO_BOTTOM` / `FOCUS_MAIN_INPUT` 由 runtime activity capability 适配为 typed presentation command；Controller 用 revisioned snapshot 驱动 transcript 滚动与 composer 填入/聚焦，销毁后取消订阅。
+- Shell、Workspace 业务窗口与设置预览统一通过 `ThemedSurfaceOutlet` 注入受控 skin；消息形态、头像位置、用户名和 streaming effect 由纯 presentation 消费，只有 `typewriter` 显示输入光标；shared application 对首次启动失败只做一次有界重试。
+- Choice block 只提交选项文本；`fill` 模式写入 Controller 共享 composer draft，`generate` 模式调用 `sendMessage` intent，独立 transcript/composer surface 不再通过全局事件协作。
+- 用户消息只经过 Markdown `TextBlock`，assistant 消息才进入 LuminaView `MessageRenderer`，用户输入不会生成 Choices 交互块。
+- Chat 设置预览通过 `settingsPreviewSurface` 元数据进入 `ThemedSurfaceOutlet -> SurfaceOutlet`；其他插件仍可使用既有 `settingsPreviewComponent`。
+- Prompt Inspector 在 surface 卸载时清理延时探针，不再跨面板实例残留副作用。
 
-任务 2 定向验证：4 个测试文件、15 个测试通过；`npm run type-check` 通过。任务 3 定向验证：19 个测试文件、89 个测试通过；`npm run type-check` 通过。任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；`npm run type-check` 通过。下一步是 Official Surface Kit，拆分 transcript、message、streaming、composer、toolbar 与 Prompt Inspector surface，并清除 Chat presentation 的剩余 API/宿主读取。
+任务 2 定向验证：4 个测试文件、15 个测试通过；任务 3 定向验证：19 个测试文件、89 个用例通过；任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；任务 5 定向验证：27 个测试文件、120 个用例通过。各阶段 `npm run type-check` 均通过。下一步是 Composition Runtime，为 `DesktopModeManifest.composition` 增加版本 1 schema、原子注册校验和确定性解析器。
 
 ## 恢复入口
 

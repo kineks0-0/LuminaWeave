@@ -78,6 +78,9 @@
             </div>
             <div class="sim-param flex-row">
               <label class="toggle-label">
+                <input type="checkbox" v-model="simConfig.smooth" /> 平滑输出
+              </label>
+              <label class="toggle-label">
                 <input type="checkbox" v-model="simConfig.autoLoop" /> 自动循环
               </label>
               <button @click="toggleSimulation" class="sim-main-btn" :class="{ running: isSimulating }">
@@ -110,8 +113,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted, reactive, watch, nextTick } from 'vue';
-import { activeSettings } from '../settings/useSettings.js';
-import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import { useSurfaceRuntimeContext } from '../../platform/surface/useSurfaceRuntimeContext.js';
 
 const isCollapsed = ref(false);
 const activeTab = ref<'typography' | 'streaming'>('typography');
@@ -132,20 +134,26 @@ const fullText = "这就是 LuminaWeave 的流式模拟实验室。在这里，�
 const simConfig = reactive({
   chunkSize: 5,
   stutterChance: 10,
+  smooth: true,
+  smoothnessFactor: 2,
+  maxSpeed: 20,
   autoLoop: false
 });
 
 const currentStep = ref(0);
-let simTimer: any = null;
-let chunkTimer: any = null;
+let simTimer: ReturnType<typeof setInterval> | null = null;
+let chunkTimer: ReturnType<typeof setInterval> | null = null;
+let loopTimer: ReturnType<typeof setTimeout> | null = null;
 let buffer = '';
 let queue: string[] = [];
 let charIndex = 0;
-const { cssVars: previewSkinVars, variant: chatVariant } = useSurfaceSkin('chat.preview');
+const surfaceContext = useSurfaceRuntimeContext('chat.preview');
+const chatVariant = computed(() => surfaceContext.value.theme.variant || 'default');
 
-const previewStyle = computed(() => {
+const previewStyle = computed<Record<string, string | number>>(() => {
   return {
-    ...previewSkinVars.value
+    ...(surfaceContext.value.theme.tokens || {}),
+    ...(surfaceContext.value.theme.cssVars || {})
   };
 });
 
@@ -157,22 +165,22 @@ const showPreviewTopbar = computed(() => assistantAvatarPlacement.value === 'top
 const assistantShapeLabel = computed(() => assistantShape.value === 'document' ? 'AI 文档' : 'AI 气泡');
 const userShapeLabel = computed(() => userShape.value === 'document' ? '用户文档' : '用户气泡');
 
-const showPreviewAvatar = (role: 'assistant' | 'user') => {
+const showPreviewAvatar = (role: 'assistant' | 'user'): boolean => {
   const placement = role === 'assistant' ? assistantAvatarPlacement.value : userAvatarPlacement.value;
   return placement === 'inline';
 };
 
-const showPreviewMeta = (role: 'assistant' | 'user') => {
+const showPreviewMeta = (role: 'assistant' | 'user'): boolean => {
   const placement = role === 'assistant' ? assistantAvatarPlacement.value : userAvatarPlacement.value;
   const shape = role === 'assistant' ? assistantShape.value : userShape.value;
   return placement !== 'hidden' && placement !== 'topbar' && shape !== 'document';
 };
 
-const renderText = (text: string) => {
+const renderText = (text: string): string => {
   return text.split('\n').map(p => `<p>${p}</p>`).join('');
 };
 
-const toggleSimulation = () => {
+const toggleSimulation = (): void => {
   if (isSimulating.value) {
     stopSimulation();
   } else {
@@ -180,7 +188,7 @@ const toggleSimulation = () => {
   }
 };
 
-const startSimulation = () => {
+const startSimulation = (): void => {
   stopSimulation(); // 先清理
   isSimulating.value = true;
   simulationText.value = '';
@@ -188,13 +196,16 @@ const startSimulation = () => {
   queue = [];
   charIndex = 0;
   
-  const isSmooth = activeSettings['lumina-chat.streamingSmoothness'];
-  const smoothness = activeSettings['lumina-chat.streamingSmoothnessFactor'] || 2;
+  const isSmooth = simConfig.smooth;
+  const smoothness = simConfig.smoothnessFactor;
 
-  // 模拟 Chunk 到达逻辑 (受 chunkSize 和 stutterChance 影响)
+  // 这里把分块大小和卡顿概率作为网络到达节奏的唯一输入。
   chunkTimer = setInterval(() => {
     if (charIndex >= fullText.length) {
-      clearInterval(chunkTimer);
+      if (chunkTimer !== null) {
+        clearInterval(chunkTimer);
+        chunkTimer = null;
+      }
       return;
     }
 
@@ -222,7 +233,7 @@ const startSimulation = () => {
     if (isSmooth && queue.length > 0) {
         let step = Math.ceil(queue.length / (8 - smoothness));
         if (queue.length > 50) step = Math.max(step, 2);
-        const maxSpeed = activeSettings['lumina-chat.streamingMaxSpeed'] || 20;
+        const maxSpeed = simConfig.maxSpeed;
         step = Math.min(step, maxSpeed); // 限速保护
         currentStep.value = step;
         
@@ -235,9 +246,9 @@ const startSimulation = () => {
     // 检测是否完成并处理循环
     if (charIndex >= fullText.length && (isSmooth ? queue.length === 0 : true)) {
         if (simConfig.autoLoop) {
-            setTimeout(startSimulation, 1000); // 1秒后自动重起
-            clearInterval(simTimer);
-            clearInterval(chunkTimer);
+            loopTimer = setTimeout(startSimulation, 1000); // 1秒后自动重起
+            if (simTimer !== null) clearInterval(simTimer);
+            if (chunkTimer !== null) clearInterval(chunkTimer);
         } else {
             stopSimulation();
         }
@@ -245,10 +256,20 @@ const startSimulation = () => {
   }, 20);
 };
 
-const stopSimulation = () => {
+const stopSimulation = (): void => {
   isSimulating.value = false;
-  clearInterval(simTimer);
-  clearInterval(chunkTimer);
+  if (simTimer !== null) {
+    clearInterval(simTimer);
+    simTimer = null;
+  }
+  if (chunkTimer !== null) {
+    clearInterval(chunkTimer);
+    chunkTimer = null;
+  }
+  if (loopTimer !== null) {
+    clearTimeout(loopTimer);
+    loopTimer = null;
+  }
 };
 
 onUnmounted(stopSimulation);
@@ -490,7 +511,7 @@ onUnmounted(stopSimulation);
 .bubble-content p { margin: 0 0 var(--lw-chat-preview-paragraph-spacing, 16px) 0; }
 .bubble-content p:last-child { margin-bottom: 0; }
 
-/* Dashboard */
+/* 模拟控制面板 */
 .sim-dashboard {
   background: #f8fafc;
   border: 1px solid #e2e8f0;

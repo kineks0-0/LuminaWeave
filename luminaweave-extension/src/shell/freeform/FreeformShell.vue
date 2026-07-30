@@ -119,7 +119,7 @@
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-            <SurfaceOutlet
+            <ThemedSurfaceOutlet
               contract-id="launcher.root"
               :input="{
                 presentation: 'launchpad',
@@ -154,7 +154,7 @@ import WorkspaceWindow from '../../components/WorkspaceWindow.vue';
 import ForgeWorkspaceWindowActions from '../../plugins/forge/ForgeWorkspaceWindowActions.vue';
 import type { ShellRuntimeActions, ShellRuntimeContext, ShellRuntimeSurfaces } from '../types.js';
 import WorkspaceMenu from './WorkspaceMenu.vue';
-import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
+import ThemedSurfaceOutlet from '../../platform/surface/ThemedSurfaceOutlet.vue';
 
 const props = defineProps<{
   runtimeContext: ShellRuntimeContext;

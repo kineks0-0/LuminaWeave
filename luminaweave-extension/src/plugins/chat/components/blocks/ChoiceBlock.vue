@@ -12,6 +12,7 @@
         v-for="(opt, idx) in normalizedOptions" 
         :key="idx" 
         class="choice-item"
+        :disabled="!onSelect"
         @click="handleChoice(opt)"
       >
         <span class="choice-index">{{ idx + 1 }}</span>
@@ -27,9 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject } from 'vue';
-import { LuminaWeaveAPI } from '../../../../api/index.js';
-import { useSettings } from '../../../settings/useSettings.js';
+import { computed } from 'vue';
 
 interface ChoiceOption {
   label: string;
@@ -38,9 +37,8 @@ interface ChoiceOption {
 
 const props = defineProps<{
   options: (string | ChoiceOption)[];
+  onSelect?: (text: string) => void;
 }>();
-
-const lwApi = inject<LuminaWeaveAPI>('lwApi');
 
 const normalizedOptions = computed(() => {
   return props.options.map(opt => {
@@ -51,21 +49,9 @@ const normalizedOptions = computed(() => {
   });
 });
 
-const { activeSettings } = useSettings();
-
-const handleChoice = (opt: ChoiceOption) => {
-  if (!lwApi) return;
-  
-  const interactionMode = activeSettings['lumina-chat.dialogueUIInteraction'] || 'generate';
+const handleChoice = (opt: ChoiceOption): void => {
   const text = opt.cmd || opt.label;
-
-  if (interactionMode === 'fill') {
-    // 填充模式：仅将内容填入输入框，不自动发送
-    lwApi.emit('FOCUS_MAIN_INPUT', { text });
-  } else {
-    // 默认/生成模式：直接发送并触发生成
-    void lwApi.services.generation.sendMessage(text);
-  }
+  props.onSelect?.(text);
 };
 </script>
 
@@ -127,6 +113,11 @@ const handleChoice = (opt: ChoiceOption) => {
 .choice-item:active {
   transform: scale(0.995);
   background: rgba(139, 92, 246, 0.06);
+}
+
+.choice-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .choice-index {

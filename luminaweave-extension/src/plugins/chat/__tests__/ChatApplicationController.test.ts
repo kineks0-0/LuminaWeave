@@ -6,8 +6,14 @@ import type {
 } from '../../../api/services/ConversationDomainService.js';
 import type {
     GenerationDomainEvent,
-    GenerationDomainEventListener
+    GenerationDomainEventListener,
+    PromptInspectionEvent,
+    PromptInspectionEventListener
 } from '../../../api/services/GenerationDomainService.js';
+import type {
+    ChatPresentationCommand,
+    ChatPresentationCommandListener
+} from '../../../api/services/ChatPresentationCommandService.js';
 import type { ConversationViewContext } from '../../../types/ConversationContextTypes.js';
 import { ChatApplicationController } from '../application/ChatApplicationController.js';
 
@@ -42,8 +48,12 @@ const createContext = (
 const createHarness = (initialContext: ConversationViewContext = createContext()) => {
     let conversationListener: ConversationDomainEventListener | null = null;
     let generationListener: GenerationDomainEventListener | null = null;
+    let promptInspectionListener: PromptInspectionEventListener | null = null;
+    let presentationCommandListener: ChatPresentationCommandListener | null = null;
     const unsubscribeConversation = vi.fn();
     const unsubscribeGeneration = vi.fn();
+    const unsubscribePromptInspection = vi.fn();
+    const unsubscribePresentationCommands = vi.fn();
     const conversation = {
         getContext: vi.fn(async () => initialContext),
         subscribe: vi.fn((listener: ConversationDomainEventListener) => {
@@ -62,19 +72,32 @@ const createHarness = (initialContext: ConversationViewContext = createContext()
         isGenerating: vi.fn(() => false),
         isSyncing: vi.fn(() => false),
         getLastStreamState: vi.fn(() => null),
+        getLastPromptPayload: vi.fn(() => null),
+        probePrompt: vi.fn(async () => null),
         subscribe: vi.fn((listener: GenerationDomainEventListener) => {
             generationListener = listener;
             return unsubscribeGeneration;
+        }),
+        subscribePromptInspection: vi.fn((listener: PromptInspectionEventListener) => {
+            promptInspectionListener = listener;
+            return unsubscribePromptInspection;
         })
     };
     const feedback = {
         confirm: vi.fn(async () => true),
         showToast: vi.fn()
     };
+    const activity = {
+        subscribeChatPresentationCommands: vi.fn((listener: ChatPresentationCommandListener) => {
+            presentationCommandListener = listener;
+            return unsubscribePresentationCommands;
+        })
+    };
     const controller = new ChatApplicationController({
         conversation,
         generation,
-        feedback
+        feedback,
+        activity
     });
 
     return {
@@ -82,13 +105,22 @@ const createHarness = (initialContext: ConversationViewContext = createContext()
         conversation,
         generation,
         feedback,
+        activity,
         unsubscribeConversation,
         unsubscribeGeneration,
+        unsubscribePromptInspection,
+        unsubscribePresentationCommands,
         emitConversation(event: ConversationDomainEvent): void {
             conversationListener?.(event);
         },
         emitGeneration(event: GenerationDomainEvent): void {
             generationListener?.(event);
+        },
+        emitPromptInspection(event: PromptInspectionEvent): void {
+            promptInspectionListener?.(event);
+        },
+        emitPresentationCommand(command: ChatPresentationCommand): void {
+            presentationCommandListener?.(command);
         }
     };
 };
@@ -159,6 +191,74 @@ describe('ChatApplicationController', () => {
         expect(harness.controller.getSnapshot().promptInspectorVisible).toBe(true);
     });
 
+    it('shares the composer draft and clears it after a successful send', async () => {
+        const harness = createHarness();
+        await harness.controller.start();
+
+        harness.controller.intents.setComposerDraft('Choice command');
+        expect(harness.controller.getSnapshot().composerDraft).toBe('Choice command');
+
+        await expect(harness.controller.intents.sendMessage('Choice command')).resolves.toBe(true);
+        expect(harness.controller.getSnapshot().composerDraft).toBe('');
+
+        harness.controller.intents.setComposerDraft('Keep on failure');
+        harness.generation.sendMessage.mockResolvedValueOnce(false);
+        await expect(harness.controller.intents.sendMessage('Keep on failure')).resolves.toBe(false);
+        expect(harness.controller.getSnapshot().composerDraft).toBe('Keep on failure');
+    });
+
+    it('projects typed scroll and composer focus commands through revisioned snapshot requests', async () => {
+        const harness = createHarness();
+        await harness.controller.start();
+
+        harness.emitPresentationCommand({ type: 'scroll_to_bottom', force: true });
+        expect(harness.controller.getSnapshot().presentation.scrollRequest).toEqual({
+            revision: 1,
+            force: true
+        });
+
+        harness.emitPresentationCommand({ type: 'focus_composer', text: 'Timeline message' });
+        expect(harness.controller.getSnapshot()).toMatchObject({
+            composerDraft: 'Timeline message',
+            presentation: {
+                composerFocusRequest: { revision: 1 }
+            }
+        });
+
+        harness.emitPresentationCommand({ type: 'focus_composer' });
+        expect(harness.controller.getSnapshot()).toMatchObject({
+            composerDraft: 'Timeline message',
+            presentation: {
+                composerFocusRequest: { revision: 2 }
+            }
+        });
+    });
+
+    it('projects prompt inspection events and probes through the shared snapshot', async () => {
+        const harness = createHarness();
+        await harness.controller.start();
+        const initialPromptInspection = Reflect.get(harness.controller.getSnapshot(), 'promptInspection');
+        expect(initialPromptInspection).toBeDefined();
+        if (!initialPromptInspection) return;
+
+        harness.emitPromptInspection({
+            source: 'lumina',
+            payload: { messages: [{ role: 'user', content: 'hello' }] }
+        });
+        const probePrompt = Reflect.get(harness.controller.intents, 'probePrompt');
+        expect(typeof probePrompt).toBe('function');
+        if (typeof probePrompt !== 'function') return;
+        await expect(probePrompt()).resolves.toBe(false);
+
+        expect(harness.controller.getSnapshot().promptInspection).toMatchObject({
+            source: 'lumina',
+            payload: { messages: [{ role: 'user', content: 'hello' }] },
+            isProbing: false,
+            errorMessage: ''
+        });
+        expect(harness.generation.probePrompt).toHaveBeenCalledTimes(1);
+    });
+
     it('rejects mutating commands while the selected conversation is read-only', async () => {
         const message = createMessage('node-1', 'Archived');
         const harness = createHarness(createContext([message], false));
@@ -191,6 +291,8 @@ describe('ChatApplicationController', () => {
 
         expect(harness.unsubscribeConversation).toHaveBeenCalledTimes(1);
         expect(harness.unsubscribeGeneration).toHaveBeenCalledTimes(1);
+        expect(harness.unsubscribePromptInspection).toHaveBeenCalledTimes(1);
+        expect(harness.unsubscribePresentationCommands).toHaveBeenCalledTimes(1);
         expect(harness.controller.getSnapshot()).toBe(snapshotBeforeDispose);
     });
 

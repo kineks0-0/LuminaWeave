@@ -11,6 +11,9 @@ describe('GenerationDomainService', () => {
             isGenerating: vi.fn(() => false),
             isSyncing: vi.fn(() => false),
             getLastStreamState: vi.fn(() => null),
+            getLastPromptPayload: vi.fn(() => null),
+            probePrompt: vi.fn(async () => null),
+            subscribePromptInspection: vi.fn(() => vi.fn()),
             subscribe: vi.fn(() => vi.fn())
         };
         const service = new GenerationDomainService(runtime);
@@ -41,6 +44,9 @@ describe('GenerationDomainService', () => {
             isGenerating: vi.fn(() => false),
             isSyncing: vi.fn(() => false),
             getLastStreamState: vi.fn(() => null),
+            getLastPromptPayload: vi.fn(() => null),
+            probePrompt: vi.fn(async () => null),
+            subscribePromptInspection: vi.fn(() => vi.fn()),
             subscribe: vi.fn(() => vi.fn())
         };
         const service = new GenerationDomainService(runtime);
@@ -59,6 +65,9 @@ describe('GenerationDomainService', () => {
             isGenerating: vi.fn(() => false),
             isSyncing: vi.fn(() => false),
             getLastStreamState: vi.fn(() => null),
+            getLastPromptPayload: vi.fn(() => null),
+            probePrompt: vi.fn(async () => null),
+            subscribePromptInspection: vi.fn(() => vi.fn()),
             subscribe: vi.fn(() => vi.fn())
         };
         const service = new GenerationDomainService(runtime);
@@ -77,6 +86,9 @@ describe('GenerationDomainService', () => {
             isGenerating: vi.fn(() => true),
             isSyncing: vi.fn(() => true),
             getLastStreamState: vi.fn(() => ({ processed: 'p', text: 't', filteredCount: 1 })),
+            getLastPromptPayload: vi.fn(() => null),
+            probePrompt: vi.fn(async () => null),
+            subscribePromptInspection: vi.fn(() => vi.fn()),
             subscribe: vi.fn(() => vi.fn())
         };
         const service = new GenerationDomainService(runtime);
@@ -96,6 +108,9 @@ describe('GenerationDomainService', () => {
             isGenerating: vi.fn(() => true),
             isSyncing: vi.fn(() => false),
             getLastStreamState: vi.fn(() => null),
+            getLastPromptPayload: vi.fn(() => null),
+            probePrompt: vi.fn(async () => null),
+            subscribePromptInspection: vi.fn(() => vi.fn()),
             subscribe: vi.fn(() => unsubscribe)
         };
         const listener = vi.fn();
