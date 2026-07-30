@@ -1,5 +1,16 @@
-import { Component } from 'vue';
+import type { Component } from 'vue';
 import type { PluginManifestV2 } from '../platform/plugin/types.js';
+import type {
+    SurfaceContractId,
+    SurfaceInput
+} from '../platform/surface/types.js';
+
+export type SettingsPreviewSurface = {
+    [K in SurfaceContractId]: Readonly<{
+        contractId: K;
+        input: SurfaceInput<K>;
+    }>;
+}[SurfaceContractId];
 
 export interface SettingOption {
     value: string | number;
@@ -33,6 +44,7 @@ export interface LuminaPlugin {
     headerCenterComponent?: Component;
     headerRightComponent?: Component;
     settingsPreviewComponent?: Component;
+    settingsPreviewSurface?: SettingsPreviewSurface;
     /** 内嵌于 SettingsUnified 对应插件 card 底部的自定义组件（无需跳转至 SettingsDetailed 即可访问） */
     settingsInlineComponent?: Component;
     settingsManifest?: Record<string, SettingDefinition>;

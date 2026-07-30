@@ -61,7 +61,12 @@ describe('useWidgetPanels', () => {
         id: 'lumina-settings',
         name: '设置',
         icon: 'S',
-        component: {} as never
+        component: {} as never,
+        platformManifest: {
+          id: 'lumina-settings',
+          name: '设置面板',
+          primarySurface: 'settings.root' as const
+        }
       }]),
       layoutMode: ref<'traditional' | 'freeform'>('traditional'),
       isMobile: ref(true),

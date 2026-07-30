@@ -209,12 +209,12 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     : 'rgba(255, 255, 255, 0.62)'
             })
         },
-        'chat.stream': {
-            ...base['chat.stream'],
+        'chat.main': {
+            ...base['chat.main'],
             cssVars: (context: ComponentThemeContext) => {
                 const density = getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'messageDensity');
                 return {
-                    ...resolveThemeValueMap(base['chat.stream']?.cssVars, context),
+                    ...resolveThemeValueMap(base['chat.main']?.cssVars, context),
                     '--lw-chat-stream-bg': context.resolvedAppearance === 'dark'
                         ? 'radial-gradient(circle at 20% 0%, rgba(74, 163, 255, 0.12), transparent 26%), rgba(15, 28, 42, 0.66)'
                         : 'radial-gradient(circle at 18% 0%, rgba(73, 164, 230, 0.16), transparent 30%), rgba(238, 248, 255, 0.44)',

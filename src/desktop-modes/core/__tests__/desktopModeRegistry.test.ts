@@ -22,6 +22,19 @@ const expectNoHardcodedLightSurfaceEndpoint = (value: string | number | undefine
 };
 
 describe('desktopModeRegistry', () => {
+    it('resolves built-in chat theme through the chat.main surface contract', () => {
+        const context = {
+            activeSettings: {},
+            resolvedAppearance: 'light' as const,
+            desktopModeId: 'telegram'
+        };
+
+        expect(resolveSurfaceSkin('telegram', 'chat.main', context).variant).toBe('telegram');
+        expect(resolveSurfaceSkin('telegram', 'chat.stream', context).skin).toBeUndefined();
+        expect(getSurfaceSkinContract('chat.main')?.componentId).toBe('chat.main');
+        expect(getSurfaceSkinContract('chat.stream')).toBeUndefined();
+    });
+
     it('uses activeDesktopMode as the only desktop mode selection setting', () => {
         expect(getActiveDesktopModeIdFromSettings({
             [ACTIVE_DESKTOP_MODE_STORAGE_KEY]: 'stage',
@@ -70,7 +83,7 @@ describe('desktopModeRegistry', () => {
             desktopModeId: 'telegram'
         };
 
-        expect(resolveSurfaceSkin('telegram', 'chat.stream', context).variant).toBe('telegram');
+        expect(resolveSurfaceSkin('telegram', 'chat.main', context).variant).toBe('telegram');
         expect(resolveSurfaceSkin('telegram', 'telegram.frame', context).cssVars['--lw-telegram-frame-bg']).toBeDefined();
         expect(getSurfaceSkinContract('shell.app')?.exposedCssVars).not.toContain('--lw-shell-statusbar-bg');
     });

@@ -216,10 +216,10 @@ export const createDiscordSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins
                 '--lw-discord-mobile-sheet-backdrop': 'blur(6px)'
             }))
         },
-        'chat.stream': {
-            ...base['chat.stream'],
+        'chat.main': {
+            ...base['chat.main'],
             cssVars: (context: ComponentThemeContext) => ({
-                ...resolveThemeValueMap(base['chat.stream']?.cssVars, context),
+                ...resolveThemeValueMap(base['chat.main']?.cssVars, context),
                 '--lw-chat-stream-bg': context.resolvedAppearance === 'dark'
                     ? '#313338'
                     : 'var(--lw-surface-container-low)',

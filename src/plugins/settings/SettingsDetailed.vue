@@ -5,10 +5,20 @@
     :style="detailSkinStyle"
   >
     <div
-      v-if="plugin?.settingsPreviewComponent"
+      v-if="plugin?.settingsPreviewSurface || plugin?.settingsPreviewComponent"
       class="preview-container tw:sticky tw:top-0 tw:z-20 tw:mb-2 tw:flex tw:flex-col tw:border-b tw:border-lw-border tw:bg-lw-surface tw:px-0 tw:py-2.5"
     >
-      <component :is="plugin.settingsPreviewComponent" :pluginId="pluginId" />
+      <ThemedSurfaceOutlet
+        v-if="plugin?.settingsPreviewSurface"
+        :contract-id="plugin.settingsPreviewSurface.contractId"
+        :input="plugin.settingsPreviewSurface.input"
+        :desktop-mode-id="props.desktopModeId"
+      />
+      <component
+        :is="plugin.settingsPreviewComponent"
+        v-else-if="plugin?.settingsPreviewComponent"
+        :pluginId="pluginId"
+      />
     </div>
     <div
       v-if="manifest && pluginId"
@@ -28,6 +38,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
+import ThemedSurfaceOutlet from '../../platform/surface/ThemedSurfaceOutlet.vue';
 import type { SettingsControlSurfaceInput } from '../../platform/surface/officialContracts.js';
 import { useSettings } from './useSettings.js';
 import { getSettingsEntry } from './settingsRegistry.js';

@@ -19,6 +19,7 @@
               :mes-raw="msg.content"
               :render-markdown="renderMarkdown"
               :is-streaming="msg.isStreaming"
+              :on-select-choice="handleChoice"
             />
             <div v-else class="scv-user-text">{{ msg.content }}</div>
             <div v-if="msg.isStreaming" class="scv-streaming-indicator">
@@ -119,6 +120,11 @@ const handleSend = (trigger: 'button' | 'enter' = 'button') => {
 
 const handleSendClick = () => {
   handleSend('button');
+};
+
+const handleChoice = (text: string): void => {
+  if (!text.trim() || props.isStreaming) return;
+  emit('send', text);
 };
 
 const handleTextareaKeydown = (event: KeyboardEvent) => {

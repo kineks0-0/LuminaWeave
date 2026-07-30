@@ -29,7 +29,10 @@ export interface GenerationRuntimePort {
     isGenerating(): boolean;
     isSyncing(): boolean;
     getLastStreamState(): GenerationStreamState | null;
+    getLastPromptPayload(): unknown;
+    probePrompt(): Promise<unknown>;
     subscribe(listener: GenerationDomainEventListener): () => void;
+    subscribePromptInspection(listener: PromptInspectionEventListener): () => void;
 }
 
 export type GenerationDomainEvent =
@@ -38,6 +41,15 @@ export type GenerationDomainEvent =
     | { type: 'ended'; finalText: string }
     | { type: 'failed'; message: string; status?: string };
 export type GenerationDomainEventListener = (event: GenerationDomainEvent) => void;
+
+export type PromptInspectionSource = 'st' | 'lumina';
+
+export interface PromptInspectionEvent {
+    source: PromptInspectionSource;
+    payload: unknown;
+}
+
+export type PromptInspectionEventListener = (event: PromptInspectionEvent) => void;
 
 export class GenerationDomainService {
     constructor(private readonly runtime: GenerationRuntimePort) {}
@@ -72,5 +84,17 @@ export class GenerationDomainService {
 
     getLastStreamState(): GenerationStreamState | null {
         return this.runtime.getLastStreamState();
+    }
+
+    getLastPromptPayload(): unknown {
+        return this.runtime.getLastPromptPayload();
+    }
+
+    probePrompt(): Promise<unknown> {
+        return this.runtime.probePrompt();
+    }
+
+    subscribePromptInspection(listener: PromptInspectionEventListener): () => void {
+        return this.runtime.subscribePromptInspection(listener);
     }
 }

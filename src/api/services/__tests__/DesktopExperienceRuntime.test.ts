@@ -61,6 +61,9 @@ const createGeneration = (): GenerationDomainService => new GenerationDomainServ
     isGenerating: vi.fn(() => false),
     isSyncing: vi.fn(() => false),
     getLastStreamState: vi.fn(() => null),
+    getLastPromptPayload: vi.fn(() => null),
+    probePrompt: vi.fn(async () => null),
+    subscribePromptInspection: vi.fn(() => vi.fn()),
     subscribe: vi.fn(() => vi.fn())
 });
 
@@ -70,6 +73,8 @@ describe('DesktopExperienceRuntime', () => {
         const generation = createGeneration();
         const character = {
             state: ref(createCharacterState()),
+            defaultAvatar: '/default.png',
+            resolveMessageAvatar: vi.fn(() => '/avatar.png'),
             refresh: vi.fn(async () => undefined),
             openSession: vi.fn(async () => undefined),
             createSession: vi.fn(async () => undefined),
@@ -81,11 +86,16 @@ describe('DesktopExperienceRuntime', () => {
             dispose: vi.fn()
         };
         const launchActivity = vi.fn();
+        const confirm = vi.fn(async () => true);
+        const showToast = vi.fn();
+        const subscribeChatPresentationCommands = vi.fn(() => vi.fn());
         const runtime = new DesktopExperienceRuntime({
             conversation,
             generation,
             character,
-            activity: { launchActivity }
+            activity: { launchActivity },
+            feedback: { confirm, showToast },
+            chatPresentationCommands: { subscribe: subscribeChatPresentationCommands }
         });
         const intent = {
             id: 'chat',
@@ -99,16 +109,30 @@ describe('DesktopExperienceRuntime', () => {
             node_1: { id: 'node_1' }
         });
         runtime.activity.launch(intent);
+        const activityConfirm = Reflect.get(runtime.activity, 'confirm');
+        const activityShowToast = Reflect.get(runtime.activity, 'showToast');
+        expect(typeof activityConfirm).toBe('function');
+        expect(typeof activityShowToast).toBe('function');
+        if (typeof activityConfirm !== 'function' || typeof activityShowToast !== 'function') return;
+        await expect(activityConfirm.call(runtime.activity, '确认操作')).resolves.toBe(true);
+        activityShowToast.call(runtime.activity, '操作完成', 'success');
+        const unsubscribePresentationCommands = runtime.activity.subscribeChatPresentationCommands(vi.fn());
+        unsubscribePresentationCommands();
 
         expect(runtime.conversation).toBe(conversation);
         expect(runtime.generation).toBe(generation);
         expect(runtime.character).toBe(character);
         expect(launchActivity).toHaveBeenCalledWith(intent);
+        expect(confirm).toHaveBeenCalledWith('确认操作');
+        expect(showToast).toHaveBeenCalledWith('操作完成', 'success', undefined, 3000);
+        expect(subscribeChatPresentationCommands).toHaveBeenCalledTimes(1);
     });
 
     it('disposes owned domain runtimes once', () => {
         const character = {
             state: ref(createCharacterState()),
+            defaultAvatar: '/default.png',
+            resolveMessageAvatar: vi.fn(() => '/avatar.png'),
             refresh: vi.fn(),
             openSession: vi.fn(),
             createSession: vi.fn(),
@@ -123,7 +147,9 @@ describe('DesktopExperienceRuntime', () => {
             conversation: createConversation(),
             generation: createGeneration(),
             character,
-            activity: { launchActivity: vi.fn() }
+            activity: { launchActivity: vi.fn() },
+            feedback: { confirm: vi.fn(), showToast: vi.fn() },
+            chatPresentationCommands: { subscribe: vi.fn(() => vi.fn()) }
         });
 
         runtime.dispose();

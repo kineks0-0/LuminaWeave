@@ -1,6 +1,6 @@
 import { computed, onUnmounted, ref, watch, type Component, type ComputedRef, type Ref } from 'vue';
 import { lwStorage } from '../api/storage.js';
-import SurfaceOutlet from '../platform/surface/SurfaceOutlet.vue';
+import ThemedSurfaceOutlet from '../platform/surface/ThemedSurfaceOutlet.vue';
 import { projectSurfaceInput } from '../platform/surface/surfaceInputProjection.js';
 import DynamicTabOutlet from '../shell/DynamicTabOutlet.vue';
 import { getPrimarySurfaceContractIdForPlugin } from '../platform/plugin/officialPluginSurfaces.js';
@@ -163,7 +163,7 @@ export const useWorkspaceManager = ({
         id: 'plugin:lumina-launcher',
         title: '启动台',
         icon: '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
-        component: SurfaceOutlet,
+        component: ThemedSurfaceOutlet,
         props: {
           contractId: 'launcher.root',
           input: { activeMainTab: activeMainTab.value },
@@ -187,7 +187,7 @@ export const useWorkspaceManager = ({
         id: 'panel:card_maker',
         title: '制卡工坊',
         icon: '🧩',
-        component: SurfaceOutlet,
+        component: ThemedSurfaceOutlet,
         props: {
           contractId: 'forge.workspace',
           input: projectSurfaceInput('forge.workspace', {
@@ -266,7 +266,7 @@ export const useWorkspaceManager = ({
         id: `plugin:${plugin.id}`,
         title: plugin.name,
         icon: plugin.icon,
-        component: SurfaceOutlet,
+        component: ThemedSurfaceOutlet,
         props: {
           contractId,
           input: projectSurfaceInput(contractId, {}, {
@@ -306,7 +306,7 @@ export const useWorkspaceManager = ({
         id: isDualRole ? `widget:${plugin.id}` : `plugin:${plugin.id}`,
         title: plugin.name,
         icon: plugin.icon,
-        component: SurfaceOutlet,
+        component: ThemedSurfaceOutlet,
         props: {
           contractId,
           input: projectSurfaceInput(contractId, {}, {

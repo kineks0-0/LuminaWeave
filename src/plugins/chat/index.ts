@@ -1,8 +1,21 @@
-import ChatStream from './ChatStream.vue';
 import ChatPreview from './ChatPreview.vue';
 import { LuminaPlugin } from '../../types/plugin.js';
 import ChatRoot from './ChatRoot.vue';
 import type { PluginManifestV2 } from '../../platform/plugin/types.js';
+import CharacterRosterSurface from './surfaces/CharacterRosterSurface.vue';
+import ConversationSessionListSurface from './surfaces/ConversationSessionListSurface.vue';
+import ChatTranscriptSurface from './surfaces/ChatTranscriptSurface.vue';
+import ChatComposerSurface from './surfaces/ChatComposerSurface.vue';
+import ChatPromptInspectorSurface from './surfaces/ChatPromptInspectorSurface.vue';
+import ChatMainSurface from './surfaces/ChatMainSurface.vue';
+import {
+    createCharacterRosterSurfaceContext,
+    createConversationSessionListSurfaceContext,
+    createChatTranscriptSurfaceContext,
+    createChatComposerSurfaceContext,
+    createChatPromptInspectorSurfaceContext,
+    createChatMainSurfaceContext
+} from './surfaces/createChatSurfaceContexts.js';
 
 const settingsSchema = {
     nexusPreset: { default: '', label: '专用模型/网关预设', common: true, type: 'nexus-select', allowedScopes: ['Global', 'Character'] },
@@ -204,11 +217,91 @@ const platformManifest: PluginManifestV2 = {
     ],
     settingsSchema,
     surfaces: [
-        { id: 'chat.main', ownerPluginId: 'lumina-chat', description: '主对话 surface。' },
+        {
+            id: 'character.roster',
+            ownerPluginId: 'lumina-chat',
+            description: '角色列表 surface。',
+            requiredIntents: ['refresh', 'openSession', 'createSession', 'toggleGroup']
+        },
+        {
+            id: 'conversation.sessionList',
+            ownerPluginId: 'lumina-chat',
+            description: '角色会话列表 surface。',
+            requiredIntents: [
+                'openSession',
+                'renameSession',
+                'deleteSession',
+                'closeCurrentSession',
+                'toggleGroupSessionExpansion'
+            ]
+        },
+        {
+            id: 'chat.transcript',
+            ownerPluginId: 'lumina-chat',
+            description: '消息与流式状态 surface。',
+            requiredIntents: ['editMessage', 'deleteMessage', 'regenerate', 'branchMessage']
+        },
+        {
+            id: 'chat.composer',
+            ownerPluginId: 'lumina-chat',
+            description: '输入与生成控制 surface。',
+            requiredIntents: ['sendMessage', 'stopGeneration', 'togglePromptInspector']
+        },
+        {
+            id: 'chat.promptInspector',
+            ownerPluginId: 'lumina-chat',
+            description: 'Prompt 查看、探测与编辑 surface。',
+            requiredIntents: ['probePrompt', 'runEditedPrompt']
+        },
+        {
+            id: 'chat.main',
+            ownerPluginId: 'lumina-chat',
+            description: '组合消息、Prompt Inspector 与输入区的主对话 surface。',
+            requiredIntents: [
+                'sendMessage',
+                'stopGeneration',
+                'editMessage',
+                'deleteMessage',
+                'regenerate',
+                'branchMessage',
+                'togglePromptInspector',
+                'probePrompt',
+                'runEditedPrompt'
+            ]
+        },
         { id: 'chat.preview', ownerPluginId: 'lumina-chat', description: '设置与主题中使用的对话预览 surface。' }
     ],
     businessRenderers: {
-        'chat.main': { contractId: 'chat.main', component: ChatRoot },
+        'character.roster': {
+            contractId: 'character.roster',
+            component: CharacterRosterSurface,
+            createContext: createCharacterRosterSurfaceContext
+        },
+        'conversation.sessionList': {
+            contractId: 'conversation.sessionList',
+            component: ConversationSessionListSurface,
+            createContext: createConversationSessionListSurfaceContext
+        },
+        'chat.transcript': {
+            contractId: 'chat.transcript',
+            component: ChatTranscriptSurface,
+            createContext: createChatTranscriptSurfaceContext
+        },
+        'chat.composer': {
+            contractId: 'chat.composer',
+            component: ChatComposerSurface,
+            createContext: createChatComposerSurfaceContext
+        },
+        'chat.promptInspector': {
+            contractId: 'chat.promptInspector',
+            component: ChatPromptInspectorSurface,
+            createContext: createChatPromptInspectorSurfaceContext
+        },
+        'chat.main': {
+            contractId: 'chat.main',
+            component: ChatMainSurface,
+            createContext: createChatMainSurfaceContext
+        },
         'chat.preview': { contractId: 'chat.preview', component: ChatPreview }
     }
 };
@@ -218,7 +311,7 @@ const plugin: LuminaPlugin = {
     name: '剧情演播',
     icon: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
     component: ChatRoot,
-    settingsPreviewComponent: ChatPreview,
+    settingsPreviewSurface: { contractId: 'chat.preview', input: {} },
     settingsManifest: settingsSchema,
     platformManifest
 };

@@ -36,7 +36,7 @@ export const discordDesktopMode: DesktopModeManifest = {
         'shell.guildRail': 'discord',
         'shell.characterRail': 'discord',
         'shell.characterCard': 'discord',
-        'chat.stream': 'discord',
+        'chat.main': 'discord',
         'settings.root': 'discord-panel',
         'settings.control': 'discord',
         'timeline.root': 'discord',

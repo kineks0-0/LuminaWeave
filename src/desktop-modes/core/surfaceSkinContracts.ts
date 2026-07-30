@@ -187,7 +187,7 @@ export const surfaceSkinContracts = new SurfaceSkinContractRegistry();
         supportedVariants: ['telegram']
     },
     {
-        componentId: 'chat.stream',
+        componentId: 'chat.main',
         exposedCssVars: [
             '--lw-chat-stream-bg',
             '--lw-chat-scroll-bg',

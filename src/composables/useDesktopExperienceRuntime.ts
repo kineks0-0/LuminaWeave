@@ -17,7 +17,9 @@ export const useDesktopExperienceRuntime = (): DesktopExperienceRuntimeCompositi
         conversation: luminaWeaveApi.services.conversation,
         generation: luminaWeaveApi.services.generation,
         character: new CharacterChannelService(luminaWeaveApi, contextStore),
-        activity: luminaWeaveApi.services.desktopSurface
+        activity: luminaWeaveApi.services.desktopSurface,
+        feedback: luminaWeaveApi.services.host,
+        chatPresentationCommands: luminaWeaveApi.services.chatPresentationCommands
     });
 
     provide(desktopExperienceRuntimeKey, runtime);

@@ -1,11 +1,10 @@
 import type { SettingDefinition } from '../../types/plugin.js';
+export type { ThemeAvatarPlacement, ThemeMessageShape } from '../../platform/surface/types.js';
 
 export type DesktopModeAppearance = 'light' | 'dark' | 'follow-setting';
 export type ResolvedDesktopAppearance = 'light' | 'dark';
 export type DesktopModeShellKind = 'traditional' | 'freeform';
 export type ThemeWorkspaceMode = DesktopModeShellKind;
-export type ThemeMessageShape = 'bubble' | 'document';
-export type ThemeAvatarPlacement = 'hidden' | 'inline' | 'topbar' | 'rail';
 export type ThemeHeaderVariant = 'default' | 'discord' | 'telegram';
 export type ThemeRailMode = 'none' | 'character-rail';
 export type ThemeSurfaceVariant = 'default' | 'discord' | 'telegram';

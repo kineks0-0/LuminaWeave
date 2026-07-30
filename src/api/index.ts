@@ -40,6 +40,7 @@ import {
     type SendMessageOptions
 } from './services/GenerationDomainService.js';
 import { settingsDomainService, type SettingsDomainService } from './services/SettingsDomainService.js';
+import { ChatPresentationCommandService } from './services/ChatPresentationCommandService.js';
 import type { DesktopModeManifest } from '../desktop-modes/core/types.js';
 
 // 全局变量声明已移动至 src/types/sillytavern.d.ts
@@ -76,6 +77,7 @@ export interface LuminaWeaveDomainServices {
     conversation: ConversationDomainService;
     generation: GenerationDomainService;
     settings: SettingsDomainService;
+    chatPresentationCommands: ChatPresentationCommandService;
 }
 
 /**
@@ -105,6 +107,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     public conversation: ConversationDomainService;
     public generation: GenerationDomainService;
     public settings: SettingsDomainService;
+    public chatPresentationCommands: ChatPresentationCommandService;
     public services: LuminaWeaveDomainServices;
 
     private _ready: boolean = false;
@@ -242,6 +245,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             isGenerating: () => this.isGenerating,
             isSyncing: () => this.streamHandler.isSyncing,
             getLastStreamState: () => this.lastStreamState,
+            getLastPromptPayload: () => this.lastPromptPayload as unknown,
+            probePrompt: () => this.probePrompt() as Promise<unknown>,
             subscribe: (listener: GenerationDomainEventListener) => {
                 const onStarted = (): void => listener({ type: 'started' });
                 const onUpdated = (
@@ -273,15 +278,36 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                         this.off(event, handler);
                     }
                 };
+            },
+            subscribePromptInspection: (listener) => {
+                const onStPromptIntercepted = (payload: unknown): void => {
+                    listener({ source: 'st', payload });
+                };
+                const onLuminaPromptBuilt = (payload: unknown): void => {
+                    listener({ source: 'lumina', payload });
+                };
+
+                this.on('ST_PROMPT_INTERCEPTED', onStPromptIntercepted);
+                this.on('LUMINA_PROMPT_BUILT', onLuminaPromptBuilt);
+
+                return () => {
+                    this.off('ST_PROMPT_INTERCEPTED', onStPromptIntercepted);
+                    this.off('LUMINA_PROMPT_BUILT', onLuminaPromptBuilt);
+                };
             }
         });
         this.settings = settingsDomainService;
+        this.chatPresentationCommands = new ChatPresentationCommandService({
+            on: (eventName, listener) => this.on(eventName, listener),
+            off: (eventName, listener) => this.off(eventName, listener)
+        });
         this.services = {
             desktopSurface: this.desktopSurface,
             host: this.host,
             conversation: this.conversation,
             generation: this.generation,
-            settings: this.settings
+            settings: this.settings,
+            chatPresentationCommands: this.chatPresentationCommands
         };
         this.registeredPanels = this.desktopSurface.registeredPanels;
 

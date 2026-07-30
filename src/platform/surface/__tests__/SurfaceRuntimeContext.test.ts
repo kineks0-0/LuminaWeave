@@ -9,10 +9,10 @@ const runtime = {} as DesktopExperienceRuntime;
 describe('createSurfaceRuntimeContext', () => {
     it('provides typed input, runtime, theme and idempotent disposal', () => {
         const disposer = vi.fn();
-        const renderer: SurfaceRendererDefinition<'chat.main'> = {
-            contractId: 'chat.main',
+        const renderer: SurfaceRendererDefinition<'settings.root'> = {
+            contractId: 'settings.root',
             component: defineComponent({ template: '<div />' }),
-            ownerId: 'lumina-chat',
+            ownerId: 'lumina-settings',
             kind: 'plugin-business',
             createContext: ({ onDispose }) => {
                 onDispose(disposer);
@@ -21,15 +21,15 @@ describe('createSurfaceRuntimeContext', () => {
         };
 
         const surface = createSurfaceRuntimeContext({
-            contractId: 'chat.main',
-            input: { isMobile: true },
+            contractId: 'settings.root',
+            input: { mode: 'small' },
             renderer,
             runtime,
             theme: { desktopModeId: 'classic' }
         });
 
-        expect(surface.context.contractId).toBe('chat.main');
-        expect(surface.context.input).toEqual({ isMobile: true });
+        expect(surface.context.contractId).toBe('settings.root');
+        expect(surface.context.input).toEqual({ mode: 'small' });
         expect(surface.context.runtime).toBe(runtime);
         expect(surface.context.theme.desktopModeId).toBe('classic');
 

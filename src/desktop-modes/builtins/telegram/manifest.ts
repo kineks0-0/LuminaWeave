@@ -40,7 +40,7 @@ export const telegramDesktopMode: DesktopModeManifest = {
         'shell.mainSurface': 'telegram',
         'shell.characterRail': 'telegram',
         'shell.characterCard': 'telegram',
-        'chat.stream': 'telegram',
+        'chat.main': 'telegram',
         'chat.preview': 'telegram',
         'settings.root': 'telegram',
         'settings.unified': 'telegram',
