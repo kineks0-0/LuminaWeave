@@ -63,7 +63,15 @@
 - Chat 设置预览通过 `settingsPreviewSurface` 元数据进入 `ThemedSurfaceOutlet -> SurfaceOutlet`；其他插件仍可使用既有 `settingsPreviewComponent`。
 - Prompt Inspector 在 surface 卸载时清理延时探针，不再跨面板实例残留副作用。
 
-任务 2 定向验证：4 个测试文件、15 个测试通过；任务 3 定向验证：19 个测试文件、89 个用例通过；任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；任务 5 定向验证：27 个测试文件、120 个用例通过。各阶段 `npm run type-check` 均通过。下一步是 Composition Runtime，为 `DesktopModeManifest.composition` 增加版本 1 schema、原子注册校验和确定性解析器。
+Composition Runtime 已完成当前阶段实现：
+
+- `DesktopModeManifest.composition` 已增加 version 1 公共类型，desktop/mobile 根节点只允许 `group`、`surface`、`activity-slot`。
+- 布局枚举固定为 `row | column`、`content | fill`、`visible | hidden`，strict Zod schema 拒绝任意 CSS、Vue component、attrs 与额外字段。
+- runtime preflight 在任何 registry 写入前校验版本、全树节点 ID、Surface contract、contract input 和 desktop overrides，公开 `registerDesktopMode()` 失败后不残留核心模式或 runtime 状态。
+- resolver 按显式 viewport 返回独立树，不读取 Shell、插件 ID 或宿主对象；特殊 contract input 实例保持其原型，不被转换为普通对象。
+- 四个内置模式完成迁移前 `composition` 暂时可选；未声明时不生成默认组合树，声明后必须经过完整校验。
+
+任务 2 定向验证：4 个测试文件、15 个测试通过；任务 3 定向验证：19 个测试文件、89 个用例通过；任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；任务 5 定向验证：27 个测试文件、120 个用例通过。任务 6 定向验证通过 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。下一步是 Shell 与 Workspace 迁移，使业务区域从 composition、插件注册信息和 Activity descriptor 派生。
 
 ## 恢复入口
 

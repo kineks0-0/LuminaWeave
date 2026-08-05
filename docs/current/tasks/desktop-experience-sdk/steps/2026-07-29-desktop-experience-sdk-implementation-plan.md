@@ -44,8 +44,8 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 2. Typed Surface Runtime：已完成开放类型清理、Zod 校验和局部错误边界。
 3. Chat Application Controller：已完成消息事实源、生成订阅和 Chat intent 收敛。
 4. Official Surface Kit：已完成角色、会话、消息、输入、header 与 Prompt Inspector surface 拆分；Shell、Workspace 与设置预览通过 `ThemedSurfaceOutlet` 挂载业务 surface，消息渲染设置通过 typed surface state 投影，用户消息与 assistant 交互块使用独立渲染路径。
-5. Composition Runtime：下一步校验和解析版本化组合树。
-6. Shell 与 Workspace：从 manifest、surface registry 和 Activity descriptor 派生界面。
+5. Composition Runtime：已完成 version 1 类型、strict Zod schema、跨 registry 原子预检、Surface input 校验与 desktop/mobile 确定性解析器；内置模式迁移前字段暂时可选且不生成默认树。
+6. Shell 与 Workspace：下一步从 manifest、surface registry 和 Activity descriptor 派生界面。
 7. 内置模式：依次迁移 classic、stage、discord、telegram。
 8. 第三方示例：验证声明式模式和 trusted renderer。
 9. 清理与验收：删除旧入口、同步长期文档、执行完整测试与浏览器验证。
@@ -55,6 +55,8 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 每项任务遵循失败测试、红灯确认、最小实现、定向测试、类型检查、精确暂存和独立 Conventional Commit。现有 `dist/**` 与 `src-tauri/Cargo.toml` 修改不属于本任务。
 
 任务 5 的最终定向验证覆盖 27 个测试文件、120 个用例，`npm run type-check` 通过。Telegram 桌面/移动 chat header callback、presentation command、Workspace/设置预览 theme、streaming effect、user/assistant 渲染边界、Choice block 全局依赖与 MessageRenderer 存储穿透均已通过新增红灯固定；真实桌面/移动浏览器验证保留到内置模式迁移与最终验收阶段。
+
+任务 6 的最终定向验证覆盖 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。构建产物继续只由构建命令生成，不纳入 Composition Runtime 提交。
 
 ## 最终验收
 

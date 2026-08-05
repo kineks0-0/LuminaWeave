@@ -1,4 +1,8 @@
-import { listDesktopModes, onDesktopModeRegistered } from '../../desktop-modes/core/registry.js';
+import {
+    listDesktopModes,
+    onDesktopModeRegistered,
+    onDesktopModeRegistering
+} from '../../desktop-modes/core/registry.js';
 import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
 import FreeformShell from '../../shell/freeform/FreeformShell.vue';
 import TraditionalShell from '../../shell/traditional/TraditionalShell.vue';
@@ -67,12 +71,17 @@ export const registerDesktopModeRuntimeDescriptor = (mode: DesktopModeManifest):
     desktopModeRuntimeRegistry.register(createDesktopModeRuntimeDescriptor(mode));
 };
 
+export const assertCanRegisterDesktopModeRuntimeDescriptor = (mode: DesktopModeManifest): void => {
+    desktopModeRuntimeRegistry.assertCanRegister(createDesktopModeRuntimeDescriptor(mode));
+};
+
 let isListeningForDesktopModeRegistrations = false;
 
 export const initializeDesktopModeRuntime = (): void => {
     listDesktopModes().forEach(registerDesktopModeRuntimeDescriptor);
 
     if (!isListeningForDesktopModeRegistrations) {
+        onDesktopModeRegistering(assertCanRegisterDesktopModeRuntimeDescriptor);
         onDesktopModeRegistered(registerDesktopModeRuntimeDescriptor);
         isListeningForDesktopModeRegistrations = true;
     }

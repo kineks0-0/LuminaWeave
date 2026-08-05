@@ -54,17 +54,20 @@ export const resolveDesktopModeValues = (
 };
 
 export type DesktopModeRegistrationListener = (manifest: DesktopModeManifest) => void;
+export type DesktopModeRegistrationValidator = (manifest: DesktopModeManifest) => void;
 
 class DesktopModeRegistry {
     public readonly modes = shallowReactive<Record<string, DesktopModeManifest>>(
         {} as Record<string, DesktopModeManifest>
     );
     private readonly registrationListeners = new Set<DesktopModeRegistrationListener>();
+    private readonly registrationValidators = new Set<DesktopModeRegistrationValidator>();
 
-    register(manifest: DesktopModeManifest) {
+    register(manifest: DesktopModeManifest): void {
         if (this.modes[manifest.id]) {
             throw new Error(`[DesktopModeRegistry] Duplicate desktop mode id: ${manifest.id}`);
         }
+        this.registrationValidators.forEach(validate => validate(manifest));
         this.modes[manifest.id] = manifest;
         this.registrationListeners.forEach(listener => listener(manifest));
     }
@@ -83,6 +86,13 @@ class DesktopModeRegistry {
             this.registrationListeners.delete(listener);
         };
     }
+
+    onBeforeRegister(validator: DesktopModeRegistrationValidator): () => void {
+        this.registrationValidators.add(validator);
+        return () => {
+            this.registrationValidators.delete(validator);
+        };
+    }
 }
 
 export const desktopModeRegistry = new DesktopModeRegistry();
@@ -92,6 +102,8 @@ builtinDesktopModes.forEach(mode => desktopModeRegistry.register(mode));
 export const registerDesktopMode = (manifest: DesktopModeManifest) => desktopModeRegistry.register(manifest);
 export const onDesktopModeRegistered = (listener: DesktopModeRegistrationListener) =>
     desktopModeRegistry.onRegister(listener);
+export const onDesktopModeRegistering = (validator: DesktopModeRegistrationValidator): (() => void) =>
+    desktopModeRegistry.onBeforeRegister(validator);
 export const listDesktopModes = () => desktopModeRegistry.list();
 export const getDesktopMode = (desktopModeId: string) => desktopModeRegistry.get(desktopModeId);
 export const getDesktopModeOrDefault = (desktopModeId?: string | null) =>

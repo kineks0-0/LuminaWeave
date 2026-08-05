@@ -223,6 +223,13 @@
 - **任务 5 提交前完整测试有效修复**: 保持运行时只读取 manifest 的单一事实源，在 `useWidgetPanels.test.ts` 的 `lumina-settings` fixture 中补齐与生产插件一致的 `platformManifest.primarySurface: 'settings.root'`；没有恢复插件 ID 映射，也没有改变缺少主 Surface 时拒绝打开临时窗口的运行时行为。
 - **任务 5 提交前完整测试验证结果**: 单文件复跑通过 1 个测试文件、5 个用例；随后 `npm run test` 通过 183 个测试文件、912 个用例，2 个用例跳过；`npm run type-check` 退出码 0。
 - **任务 5 验证结果**: Official Surface Kit、Chat Controller/application scope、presentation command、CharacterChannelService、DesktopExperienceRuntime、GenerationDomainService、Surface Runtime、Desktop Mode、官方插件 manifest、Traditional/Freeform Shell、Workspace 投影与 Telegram Shell 结构定向测试通过（27 个测试文件、120 个用例）；`npm run type-check` 通过，`git diff --check` 无 whitespace error。Composition Runtime、内置模式迁移和真实桌面/移动浏览器验证仍属于后续任务。
+- **任务 6 复现的错误消息**: `DesktopCompositionRuntime.test.ts` 首轮运行 7 个用例全部失败：registry 不存在 `resolveComposition()`，且非法版本、重复节点 ID、未知 Surface contract、非法 Surface input、任意布局值/属性均未被拒绝；失败注册还会继续写入 desktop override。
+- **任务 6 根本原因假设**: `DesktopModeManifest` 尚无 composition 公共类型，`DesktopModeRuntimeRegistry.register()` 只预检 desktop override，不解析版本化组合树，也没有在写入 override 前校验组合结构和 Surface input。
+- **任务 6 验证中发现的错误消息**: 首次补齐 runtime 校验后，跨 registry 测试显示非法 manifest 虽被 runtime 拒绝，仍残留在核心 `desktopModeRegistry`；随后 `npm run type-check` 报 `TS2352`，指出测试中 `version: 2` 不能直接断言为只允许 `version: 1` 的 `DesktopModeManifest`。
+- **任务 6 根本原因**: 核心 registry 原先先写入 manifest、再通知 runtime listener，导致 listener 校验失败无法回滚核心状态；测试中的非法版本属于外部运行时输入，必须先以 `unknown` 表达，再进入 Zod 边界，不能放宽生产类型。
+- **任务 6 有效修复**: 新增 version 1 composition 类型、strict Zod schema、全树节点 ID 唯一校验、Surface contract/input 校验和确定性 resolver。核心 registry 增加无副作用注册前 validator，Desktop Mode Runtime 在任何核心模式、runtime descriptor 或 desktop override 写入前完成 composition 与 override 整批预检；resolver 返回独立树，并只递归克隆数组与普通对象，保留第三方 contract input 的特殊实例原型。
+- **任务 6 失败尝试**: 首版只在 `DesktopModeRuntimeRegistry.register()` 内校验，虽然避免 runtime 与 Surface Registry 残留，但无法阻止公开 `registerDesktopMode()` 已先写入核心模式。没有通过回滚补丁修复，而是把校验前移为无副作用 preflight；非法版本测试也没有使用宽松生产类型，而是在测试边界显式表达外部未知输入。
+- **任务 6 最终验证结果**: Composition Runtime、Desktop Mode Runtime、核心 Desktop Mode Registry 与 Surface Registry 定向测试通过 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过；`npm run type-check` 与 `npm run build` 均退出码 0。构建仅保留既有的 `node:fs` browser externalize 和大 chunk 提示，未产生构建错误；生成的 `dist/**` 不纳入任务提交。
 
 ## 2026-06-27 AgentRuntime pi compat review fixes
 

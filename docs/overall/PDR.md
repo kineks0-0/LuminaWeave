@@ -206,6 +206,9 @@ Desktop Modes 定义完整工作方式，不只是皮肤。
 - Traditional、Freeform、Discord、Telegram 等可替换壳层。
 - 由 desktop mode 决定导航、surface 映射、交互策略和设计 tokens。
 - `DesktopModeManifest` 是桌面模式的唯一公开事实源；Desktop Mode Runtime、设置详情、surface overrides 与 Activity placement 都应从该 manifest 派生运行时描述，不再维护并行的第二份公开 manifest。
+- `DesktopModeManifest.composition` 使用固定 `version: 1`，分别声明 desktop/mobile 根节点。节点只允许 `group`、`surface`、`activity-slot`；布局只允许 `row | column`、`content | fill`、`visible | hidden`，不得携带任意 CSS、Vue component 或 attrs。
+- Composition 注册必须在写入模式列表和 desktop override 前完成 Zod 结构校验、全树节点 ID 唯一性校验、Surface contract 存在性校验及 contract input schema 校验；失败不得在核心 registry、runtime registry 或 Surface Registry 留下部分状态。
+- Composition Runtime 按 desktop/mobile 视口确定性返回独立组合树，不从 Shell、当前活动界面、插件 ID 或旧布局推断节点。四个内置模式迁移完成前，未声明 composition 的旧 manifest 暂时继续注册；声明 composition 后不得绕过完整校验，迁移完成后该字段改为必填。
 - 当前早期阶段不保留旧 Theme Pack 兼容层；代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`，旧 `activeThemePack` / `theme-pack-*` 配置可直接失效。
 - `DesktopExperienceRuntime` 统一暴露 conversation、generation、character、timeline、activity 五组 headless 领域能力，并拥有显式 `dispose()` 生命周期。
 - Chat renderer 通过 runtime 创建应用控制器；Controller 销毁时必须取消 conversation、generation 与 Prompt inspection 订阅，presentation 只消费 snapshot 与 intents。

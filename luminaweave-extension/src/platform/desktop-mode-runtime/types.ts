@@ -1,7 +1,11 @@
 import type { Component } from 'vue';
 import type { SettingDefinition } from '../../types/plugin.js';
 import type { SurfaceContractId, SurfaceRendererDefinition } from '../surface/types.js';
-import type { DesktopModeManifest, DesktopModeShellKind } from '../../desktop-modes/core/types.js';
+import type {
+    DesktopModeComposition,
+    DesktopModeManifest,
+    DesktopModeShellKind
+} from '../../desktop-modes/core/types.js';
 
 export type DesktopShellKind = DesktopModeShellKind | (string & {});
 
@@ -36,4 +40,5 @@ export interface DesktopModeRuntimeDescriptor {
     interactionPolicy: DesktopInteractionPolicy;
     tokens?: Record<string, string | number>;
     settingsSchema?: Record<string, SettingDefinition>;
+    composition?: DesktopModeComposition;
 }

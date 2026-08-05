@@ -1,4 +1,5 @@
 import type { SettingDefinition } from '../../types/plugin.js';
+import type { SurfaceContractId, SurfaceInput } from '../../platform/surface/types.js';
 export type { ThemeAvatarPlacement, ThemeMessageShape } from '../../platform/surface/types.js';
 
 export type DesktopModeAppearance = 'light' | 'dark' | 'follow-setting';
@@ -8,6 +9,50 @@ export type ThemeWorkspaceMode = DesktopModeShellKind;
 export type ThemeHeaderVariant = 'default' | 'discord' | 'telegram';
 export type ThemeRailMode = 'none' | 'character-rail';
 export type ThemeSurfaceVariant = 'default' | 'discord' | 'telegram';
+
+export type DesktopCompositionDirection = 'row' | 'column';
+export type DesktopCompositionSize = 'content' | 'fill';
+export type DesktopCompositionVisibility = 'visible' | 'hidden';
+export type DesktopCompositionViewport = 'desktop' | 'mobile';
+
+export interface DesktopCompositionNodeLayout {
+    size: DesktopCompositionSize;
+    visibility: DesktopCompositionVisibility;
+}
+
+export interface DesktopCompositionGroupNode extends DesktopCompositionNodeLayout {
+    id: string;
+    kind: 'group';
+    direction: DesktopCompositionDirection;
+    children: DesktopCompositionNode[];
+}
+
+export interface DesktopCompositionSurfaceNodeFor<K extends SurfaceContractId> extends DesktopCompositionNodeLayout {
+    id: string;
+    kind: 'surface';
+    contractId: K;
+    input: SurfaceInput<K>;
+}
+
+export type DesktopCompositionSurfaceNode = {
+    [K in SurfaceContractId]: DesktopCompositionSurfaceNodeFor<K>;
+}[SurfaceContractId];
+
+export interface DesktopCompositionActivitySlotNode extends DesktopCompositionNodeLayout {
+    id: string;
+    kind: 'activity-slot';
+}
+
+export type DesktopCompositionNode =
+    | DesktopCompositionGroupNode
+    | DesktopCompositionSurfaceNode
+    | DesktopCompositionActivitySlotNode;
+
+export interface DesktopModeComposition {
+    version: 1;
+    desktop: DesktopCompositionNode;
+    mobile: DesktopCompositionNode;
+}
 
 export interface SurfaceSkinContext {
     activeSettings: Record<string, any>;
@@ -88,4 +133,8 @@ export interface DesktopModeManifest {
     surfaceSkins?: Record<string, SurfaceSkinDefinition>;
     settingsManifest?: Record<string, SettingDefinition>;
     rendererVariants?: Record<string, string>;
+    /**
+     * 内置模式完成迁移前保持可选；声明后必须通过版本 1 的完整运行时校验。
+     */
+    composition?: DesktopModeComposition;
 }

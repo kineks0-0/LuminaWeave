@@ -1,4 +1,5 @@
 export * from './desktop-mode-runtime/DesktopModeRuntimeRegistry.js';
+export * from './desktop-mode-runtime/DesktopCompositionRuntime.js';
 export * from './desktop-mode-runtime/initializeDesktopModeRuntime.js';
 export * from './desktop-mode-runtime/types.js';
 export * from './plugin/PluginDomainRegistry.js';

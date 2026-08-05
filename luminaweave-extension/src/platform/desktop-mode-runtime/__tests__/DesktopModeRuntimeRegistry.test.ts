@@ -7,7 +7,8 @@ import { SurfaceRegistry } from '../../surface/SurfaceRegistry.js';
 import { OFFICIAL_SURFACE_INPUT_SCHEMAS } from '../../surface/officialContracts.js';
 import { initializeSurfaceRuntime } from '../../surface/initializeSurfaceRuntime.js';
 import type { SurfaceRendererDefinition } from '../../surface/types.js';
-import { registerDesktopMode } from '../../../desktop-modes/core/registry.js';
+import { getDesktopMode, registerDesktopMode } from '../../../desktop-modes/core/registry.js';
+import type { DesktopModeManifest } from '../../../desktop-modes/core/types.js';
 
 vi.mock('../../../shell/modes/telegram/TelegramUserInfoPanel.vue', () => ({
     default: defineComponent({ name: 'TelegramUserInfoPanelStub', template: '<div />' })
@@ -203,5 +204,36 @@ describe('DesktopModeRuntimeRegistry', () => {
         expect(runtimeMode?.shellRenderer).toBeDefined();
         expect(runtimeMode?.interactionPolicy.supportsOverlappingWindows).toBe(true);
         expect(runtimeMode?.settingsSchema?.density?.default).toBe('compact');
+    });
+
+    it('does not retain a public desktop mode when composition preflight fails', () => {
+        desktopModeRuntimeRegistry.clearForTests();
+        initializeDesktopModeRuntime();
+        const customId = `runtime-invalid-${Math.random().toString(36).slice(2, 8)}`;
+        const manifest = {
+            id: customId,
+            name: 'Invalid Runtime Desktop',
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 2,
+                desktop: {
+                    id: 'desktop-root',
+                    kind: 'activity-slot',
+                    size: 'fill',
+                    visibility: 'visible'
+                },
+                mobile: {
+                    id: 'mobile-root',
+                    kind: 'activity-slot',
+                    size: 'fill',
+                    visibility: 'visible'
+                }
+            }
+        } as unknown as DesktopModeManifest;
+
+        expect(() => registerDesktopMode(manifest))
+            .toThrow('[DesktopCompositionRuntime] Unsupported composition version');
+        expect(getDesktopMode(customId)).toBeUndefined();
+        expect(desktopModeRuntimeRegistry.get(customId)).toBeUndefined();
     });
 });

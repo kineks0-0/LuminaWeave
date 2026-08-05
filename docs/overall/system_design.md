@@ -192,6 +192,14 @@ Desktop Mode Runtime 定义完整工作方式。
 - Web / PWA safe-area fallback 同样先进入 `--lw-safe-*` 归一化层，再由 root / residual 变量分发；桌面模式和插件不得绕过该层直接读取浏览器 `env()`。
 - component overrides 在写入 desktop mode registry 前整批预检；任一 override 无效时不得留下部分 Surface 或 mode 注册状态。
 
+Composition Runtime 作为 Desktop Mode Runtime 的声明式布局层：
+
+- `DesktopModeManifest.composition.version` 固定为 `1`，desktop/mobile 各有一个根节点。
+- 节点判别值只允许 `group`、`surface`、`activity-slot`。`group.direction` 只允许 `row | column`，节点尺寸只允许 `content | fill`，可见性只允许 `visible | hidden`；schema 使用 strict object，拒绝 CSS、Vue component、attrs 和其他未声明字段。
+- Surface 节点先由 Zod 校验树结构，再通过 Surface Registry 确认 `contractId` 并调用该 contract 的 input schema。节点 ID 在 desktop/mobile 两棵树之间全局唯一。
+- 注册数据流为 `registerDesktopMode -> runtime preflight -> core registry commit -> runtime registry commit`。preflight 无副作用，同时校验 composition 和 desktop overrides；任一校验失败时两个 registry 与 Surface Registry 均保持原状态。
+- resolver 只按显式 viewport 选择已校验根节点并返回独立副本，不读取 Shell 状态或宿主全局对象。迁移期只对已声明 composition 的 manifest 启用该链路；四个内置模式完成迁移后，所有模式统一从 composition 渲染。
+
 约束：
 
 - 桌面模式可以改变信息架构和交互方式。
