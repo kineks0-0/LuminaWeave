@@ -47,7 +47,7 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 5. Official Surface Kit：已完成角色、会话、消息、输入、header 与 Prompt Inspector surface 拆分；Shell、Workspace 与设置预览通过 `ThemedSurfaceOutlet` 挂载业务 surface，消息渲染设置通过 typed surface state 投影，用户消息与 assistant 交互块使用独立渲染路径。
 6. Composition Runtime：已完成 version 1 类型、strict Zod schema、跨 registry 原子预检、Surface input 校验与 desktop/mobile 确定性解析器；内置模式迁移前字段暂时可选且不生成默认树。
 7. Shell 与 Workspace：已完成 concrete Shell 内的 composition outlet 接入、通用 Activity 容器、完整插件目录派生的 Workspace catalog 和 Shell 业务硬编码清理；无 composition 的内置模式暂时保留旧 renderer。
-8. 内置模式：下一步依次迁移 classic、stage、discord、telegram。
+8. 内置模式：classic、stage 已完成显式 desktop/mobile Activity composition；下一步迁移 discord、telegram，并把角色、会话与 Chat 内容统一切到 Official Surface Kit。
 9. 第三方示例：验证声明式模式和 trusted renderer。
 10. 清理与验收：删除旧入口、同步长期文档、执行完整测试与浏览器验证。
 

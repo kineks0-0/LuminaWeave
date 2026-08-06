@@ -11,6 +11,21 @@ export const stageDesktopMode: DesktopModeManifest = {
     shell: {
         kind: 'freeform'
     },
+    composition: {
+        version: 1,
+        desktop: {
+            id: 'stage-desktop-activity',
+            kind: 'activity-slot',
+            size: 'fill',
+            visibility: 'visible'
+        },
+        mobile: {
+            id: 'stage-mobile-activity',
+            kind: 'activity-slot',
+            size: 'fill',
+            visibility: 'visible'
+        }
+    },
     navigationPreset: {
         traditional: {
             headerVariant: 'default',

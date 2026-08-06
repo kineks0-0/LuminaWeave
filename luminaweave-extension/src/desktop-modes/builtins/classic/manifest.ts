@@ -11,6 +11,21 @@ export const classicDesktopMode: DesktopModeManifest = {
     shell: {
         kind: 'traditional'
     },
+    composition: {
+        version: 1,
+        desktop: {
+            id: 'classic-desktop-activity',
+            kind: 'activity-slot',
+            size: 'fill',
+            visibility: 'visible'
+        },
+        mobile: {
+            id: 'classic-mobile-activity',
+            kind: 'activity-slot',
+            size: 'fill',
+            visibility: 'visible'
+        }
+    },
     navigationPreset: {
         traditional: {
             headerVariant: 'default',
