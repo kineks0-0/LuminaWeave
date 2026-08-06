@@ -109,7 +109,7 @@ export interface WorkspaceWindowEntry {
   icon: string;
   component: Component;
   props: object;
-  kind: 'launcher' | 'main' | 'widget' | 'panel';
+  kind: 'main' | 'widget' | 'panel';
   eyebrow: string;
   minWidth: number;
   maxWidth: number;
@@ -135,10 +135,6 @@ export interface ShellRuntimeFrame {
 
 export interface ShellRuntimeContext {
   shellKind: 'traditional' | 'freeform';
-  /**
-   * @deprecated Use shellKind. Kept for legacy shell templates and data attributes.
-   */
-  layoutMode: 'traditional' | 'freeform';
   activeDesktopModeId: string;
   desktopModeOptions: Array<{ value: string; label: string; description?: string }>;
   activeMainTab: string;
@@ -189,7 +185,6 @@ export interface ShellRuntimeContext {
     isWorkspaceNavigationVisible: boolean;
     activeWorkspaceWindowId: string | null;
     workspaceSceneInsets: WorkspaceSceneInsets;
-    showWorkspaceLaunchpad: boolean;
     isWorkspaceDockVisible: boolean;
   };
 }
@@ -261,8 +256,7 @@ export interface ShellRuntimeActions {
     selectTelegramBottomNav: (itemId: 'chat' | 'characters' | 'settings' | 'profile') => void;
   };
   freeform: {
-    createStageWithLauncher: () => void;
-    openWorkspaceSettings: () => void;
+    createWorkspaceStage: () => void;
     activateWorkspaceStageWithNavigation: (stageId: string) => void;
     createWorkspaceStageFromStrip: () => void;
     holdWorkspaceNavigation: () => void;
@@ -274,8 +268,6 @@ export interface ShellRuntimeActions {
     closeWorkspaceWindow: (entryId: string) => void;
     focusWorkspaceWindow: (entryId: string) => void;
     focusAdjacentWorkspaceWindow: (entryId: string, direction: 'prev' | 'next') => void;
-    backFromDetailedSettings: () => void;
-    closeWorkspaceLaunchpad: () => void;
     handleWorkspaceDockOpenWithNavigation: (appId: string) => void;
     stageElementChange: (element: HTMLElement | null) => void;
   };

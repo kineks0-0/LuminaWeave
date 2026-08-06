@@ -6,6 +6,7 @@ import type {
 import { SurfaceRegistry, surfaceRegistry } from '../surface/SurfaceRegistry.js';
 import type { SurfaceRendererDefinitionUnion } from '../surface/types.js';
 import {
+    collectDesktopCompositionSurfaceIds,
     resolveDesktopComposition,
     validateDesktopModeComposition
 } from './DesktopCompositionRuntime.js';
@@ -53,6 +54,13 @@ export class DesktopModeRuntimeRegistry {
                 composition
             },
             composition,
+            navigationModel: composition
+                ? {
+                    ...manifest.navigationModel,
+                    primarySurfaces: collectDesktopCompositionSurfaceIds(composition.desktop),
+                    mobileSurfaces: collectDesktopCompositionSurfaceIds(composition.mobile)
+                }
+                : manifest.navigationModel,
             shellRenderer: manifest.shellRenderer ? markRaw(manifest.shellRenderer) : undefined
         };
 

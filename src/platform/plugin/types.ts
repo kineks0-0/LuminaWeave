@@ -1,5 +1,6 @@
 import type { Component } from 'vue';
 import type { SettingDefinition } from '../../types/plugin.js';
+import type { ActivityDescriptor } from '../activity/types.js';
 import type {
     SurfaceContractDefinitionUnion,
     SurfaceContractId,
@@ -57,6 +58,7 @@ export interface PluginManifestV2 {
     icon?: string;
     capabilities?: PluginCapabilityDefinition[];
     primarySurface?: SurfaceContractId;
+    activity?: ActivityDescriptor;
     navigationSlots?: ('mainView' | 'widget' | 'headerCenter' | 'headerRight')[];
     selectors?: Record<string, PluginStateSelector>;
     intents?: Record<string, PluginIntentHandler>;

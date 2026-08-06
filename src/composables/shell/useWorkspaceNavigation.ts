@@ -20,7 +20,6 @@ export const useWorkspaceNavigation = ({
   const showWorkspaceNavigation = ref(false);
   const workspaceNavigationPeek = ref(false);
   const workspaceNavigationVisibleRef = ref(false);
-  const showWorkspaceLaunchpad = ref(false);
   let workspaceNavigationHideTimer: ReturnType<typeof setTimeout> | null = null;
 
   const isWorkspaceNavigationVisible = computed(() =>
@@ -69,28 +68,6 @@ export const useWorkspaceNavigation = ({
     if (activeStageWindowCount.value > 0) {
       scheduleWorkspaceNavigationHide(delay);
     }
-  };
-
-  const closeWorkspaceLaunchpad = () => {
-    if (!showWorkspaceLaunchpad.value) return;
-    showWorkspaceLaunchpad.value = false;
-    if (!showWorkspaceNavigation.value && activeStageWindowCount.value > 0) {
-      scheduleWorkspaceNavigationHide(isMobile.value ? 1200 : 480);
-    }
-  };
-
-  const openWorkspaceLaunchpad = () => {
-    showWorkspaceLaunchpad.value = true;
-    clearWorkspaceNavigationHideTimer();
-    workspaceNavigationPeek.value = false;
-  };
-
-  const toggleWorkspaceLaunchpad = () => {
-    if (showWorkspaceLaunchpad.value) {
-      closeWorkspaceLaunchpad();
-      return;
-    }
-    openWorkspaceLaunchpad();
   };
 
   const toggleWorkspaceNavigation = () => {
@@ -142,7 +119,6 @@ export const useWorkspaceNavigation = ({
       return;
     }
 
-    closeWorkspaceLaunchpad();
     showWorkspaceNavigation.value = false;
     workspaceNavigationPeek.value = false;
     clearWorkspaceNavigationHideTimer();
@@ -156,7 +132,6 @@ export const useWorkspaceNavigation = ({
     showWorkspaceNavigation,
     workspaceNavigationPeek,
     workspaceNavigationVisibleRef,
-    showWorkspaceLaunchpad,
     isWorkspaceNavigationVisible,
     isWorkspaceStageStripVisible,
     isWorkspaceDockVisible,
@@ -165,9 +140,6 @@ export const useWorkspaceNavigation = ({
     scheduleWorkspaceNavigationHide,
     holdWorkspaceNavigation,
     revealWorkspaceNavigation,
-    closeWorkspaceLaunchpad,
-    openWorkspaceLaunchpad,
-    toggleWorkspaceLaunchpad,
     toggleWorkspaceNavigation,
     handleFreeformScenePointerDown
   };

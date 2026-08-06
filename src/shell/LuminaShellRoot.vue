@@ -27,7 +27,25 @@
     :class="{ 'is-freeform': layoutMode === 'freeform' }"
     :style="runtimeFrame.panelBodyStyle"
   >
-    <component v-show="!runtimeFrame.showSplash" :is="currentShellRenderer" v-bind="shellRendererProps" />
+    <component
+      v-show="!runtimeFrame.showSplash"
+      :is="currentShellRenderer"
+      v-bind="shellRendererProps"
+    >
+      <template v-if="hasComposition" #composition="{ activityComponent, activityComponentProps }">
+        <DesktopCompositionOutlet
+          :desktop-mode-id="runtimeContext.activeDesktopModeId"
+          :is-mobile="runtimeContext.isMobile"
+        >
+          <template #activity>
+            <component
+              :is="activityComponent"
+              v-bind="activityComponentProps"
+            />
+          </template>
+        </DesktopCompositionOutlet>
+      </template>
+    </component>
   </div>
 
   <PanelHeader
@@ -58,6 +76,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import PanelHeader from '../components/PanelHeader.vue';
+import DesktopCompositionOutlet from '../platform/desktop-mode-runtime/DesktopCompositionOutlet.vue';
 import { desktopModeRuntimeRegistry } from '../platform/desktop-mode-runtime/DesktopModeRuntimeRegistry.js';
 import type {
   ShellRuntimeActions,
@@ -83,6 +102,10 @@ const layoutMode = computed(() => props.runtimeContext.shellKind);
 
 const shouldRenderTraditionalHeader = computed(() => (
   props.runtimeContext.activeDesktopModeId !== 'telegram'
+));
+
+const hasComposition = computed(() => Boolean(
+  desktopModeRuntimeRegistry.get(props.runtimeContext.activeDesktopModeId)?.composition
 ));
 
 const currentShellRenderer = computed(() => (

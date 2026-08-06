@@ -1,23 +1,17 @@
 import { computed, onUnmounted, ref, watch, type Component, type ComputedRef, type Ref } from 'vue';
 import { lwStorage } from '../api/storage.js';
 import ThemedSurfaceOutlet from '../platform/surface/ThemedSurfaceOutlet.vue';
-import { projectSurfaceInput } from '../platform/surface/surfaceInputProjection.js';
 import DynamicTabOutlet from '../shell/DynamicTabOutlet.vue';
-import { getPrimarySurfaceContractIdForPlugin } from '../platform/plugin/officialPluginSurfaces.js';
-import { useCardMakerStore } from '../plugins/forge/CardMakerStore.js';
-import { useSessionIndexStore } from '../stores/useSessionIndexStore.js';
-import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../plugins/forge/forgeAuxPanels.js';
-import { currentDetailedView } from '../plugins/settings/useSettings.js';
+import { normalizeActivityDescriptor } from '../platform/activity/activityLaunchResolver.js';
 import type { LuminaPlugin } from '../types/plugin.js';
 import type { DynamicTabConfig } from '../shell/types.js';
-import { getLegacyPanelDefinition } from '../shell/legacyPanelRegistry.js';
-import { ForgeAuxPanelView } from '../plugins/forge/app/forgeAsyncComponents.js';
 import {
   createWorkspaceSurfaceOutletProps,
+  deriveWorkspacePluginCatalog,
   type WorkspaceSurfaceProjection
 } from './workspaceSurfaceProjection.js';
 
-type WorkspaceAppKind = 'launcher' | 'main' | 'widget' | 'panel';
+type WorkspaceAppKind = 'main' | 'widget' | 'panel';
 
 interface WorkspaceLayout {
   x: number;
@@ -45,6 +39,7 @@ interface WorkspaceWindowRecord {
 
 interface WorkspaceAppDescriptor {
   id: string;
+  pluginId?: string;
   title: string;
   icon: string;
   component: Component;
@@ -119,19 +114,16 @@ const normalizeWorkspaceWindows = (input: unknown): Record<string, WorkspaceWind
 };
 
 export const useWorkspaceManager = ({
-  mainPlugins,
-  widgetPlugins,
+  plugins,
   dynamicTabs,
   activeMainTab,
   activeRightPanel,
   activeDesktopModeId,
   isMobile,
   freeformStageRef,
-  workspaceNavigationVisible,
-  getPluginName
+  workspaceNavigationVisible
 }: {
-  mainPlugins: ComputedRef<LuminaPlugin[]>;
-  widgetPlugins: ComputedRef<LuminaPlugin[]>;
+  plugins: ComputedRef<LuminaPlugin[]>;
   dynamicTabs: Ref<DynamicTabConfig[]>;
   activeMainTab: Ref<string>;
   activeRightPanel: Ref<string>;
@@ -139,10 +131,8 @@ export const useWorkspaceManager = ({
   isMobile: Ref<boolean>;
   freeformStageRef: Ref<HTMLElement | null>;
   workspaceNavigationVisible: Ref<boolean> | ComputedRef<boolean>;
-  getPluginName: (pluginId: string | null) => string;
 }) => {
   let workspacePersistTimer: ReturnType<typeof setTimeout> | null = null;
-  const forgeStore = useCardMakerStore();
   const workspaceStages = ref<WorkspaceStageRecord[]>(normalizeWorkspaceStages(lwStorage.get('luminaWeave.workspaceStages', [], 'Global')));
   const workspaceWindows = ref<Record<string, WorkspaceWindowRecord>>(normalizeWorkspaceWindows(lwStorage.get('luminaWeave.workspaceWindows', {}, 'Global')));
   const activeWorkspaceStageId = ref<string>(typeof lwStorage.get('luminaWeave.workspaceActiveStageId', '', 'Global') === 'string'
@@ -157,205 +147,37 @@ export const useWorkspaceManager = ({
   const workspaceShowStageStrip = ref(lwStorage.get(WORKSPACE_SHOW_STAGE_STRIP_KEY, true, 'Global') !== false);
   const workspaceShowDock = ref(lwStorage.get(WORKSPACE_SHOW_DOCK_KEY, true, 'Global') !== false);
 
-  const workspaceStaticApps = computed<WorkspaceAppDescriptor[]>(() => {
-    const apps: WorkspaceAppDescriptor[] = [
-      {
-        id: 'plugin:lumina-launcher',
-        title: '启动台',
-        icon: '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>',
-        component: ThemedSurfaceOutlet,
-        props: {
-          contractId: 'launcher.root',
-          input: { activeMainTab: activeMainTab.value },
-          desktopModeId: activeDesktopModeId.value
-        },
-        surface: {
-          contractId: 'launcher.root',
-          rawInput: { activeMainTab: activeMainTab.value }
-        },
-        kind: 'launcher',
-        dockable: true,
-        minWidth: 180,
-        maxWidth: 1460,
-        minHeight: 460,
-        maxHeight: 1100,
-        preferredWidth: 1180,
-        preferredHeight: 720,
-        eyebrow: 'Workspace Index'
+  const workspaceStaticApps = computed<WorkspaceAppDescriptor[]>(() => deriveWorkspacePluginCatalog(
+    plugins.value
+  ).map((entry) => {
+    const activity = normalizeActivityDescriptor(entry.activity);
+    const isSupportActivity = activity.size === 'small' || entry.kind === 'widget';
+    return {
+      id: entry.id,
+      pluginId: entry.pluginId,
+      title: entry.title,
+      icon: entry.icon,
+      component: ThemedSurfaceOutlet,
+      props: {},
+      surface: {
+        contractId: entry.contractId,
+        rawInput: {},
+        environment: {
+          activity,
+          embeddedInWorkspaceWindow: true
+        }
       },
-      {
-        id: 'panel:card_maker',
-        title: '制卡工坊',
-        icon: '🧩',
-        component: ThemedSurfaceOutlet,
-        props: {
-          contractId: 'forge.workspace',
-          input: projectSurfaceInput('forge.workspace', {
-            embeddedInWorkspaceWindow: true
-          }, {
-            embeddedInWorkspaceWindow: true,
-            activity: {
-              size: 'small',
-              pageType: 'standalone',
-              titleBar: { title: '制卡工坊' }
-            }
-          }),
-          desktopModeId: activeDesktopModeId.value,
-          activity: {
-            size: 'small',
-            pageType: 'standalone',
-            titleBar: { title: '制卡工坊' }
-          }
-        },
-        surface: {
-          contractId: 'forge.workspace',
-          rawInput: { embeddedInWorkspaceWindow: true },
-          environment: {
-            embeddedInWorkspaceWindow: true,
-            activity: {
-              size: 'small',
-              pageType: 'standalone',
-              titleBar: { title: '制卡工坊' }
-            }
-          }
-        },
-        kind: 'panel',
-        dockable: true,
-        minWidth: 180,
-        maxWidth: 1500,
-        minHeight: 520,
-        maxHeight: 1100,
-        preferredWidth: 1160,
-        preferredHeight: 760,
-        eyebrow: 'Forge Workspace'
-      }
-    ];
-
-    FORGE_AUX_PANEL_ORDER.forEach((kind) => {
-      const panel = FORGE_AUX_PANEL_META[kind];
-      const isWidePanel = kind === 'lorebook' || kind === 'review';
-      const isTallPanel = kind === 'memory' || kind === 'post_tracks';
-      apps.push({
-        id: `panel:${panel.id}`,
-        title: panel.title,
-        icon: panel.icon,
-        component: ForgeAuxPanelView,
-        props: { kind },
-        kind: 'panel',
-        dockable: false,
-        minWidth: 360,
-        maxWidth: 980,
-        minHeight: 320,
-        maxHeight: 980,
-        preferredWidth: isWidePanel ? 520 : 460,
-        preferredHeight: isTallPanel ? 720 : 620,
-        eyebrow: 'Workspace Sheet'
-      });
-    });
-
-    const mainPluginIds = new Set<string>();
-    for (const plugin of mainPlugins.value) {
-      if (plugin.id === 'lumina-launcher') continue;
-      const contractId = getPrimarySurfaceContractIdForPlugin(plugin);
-      if (!contractId) {
-        console.error('[SurfaceRuntime] Plugin primary surface unavailable', { pluginId: plugin.id });
-        continue;
-      }
-      mainPluginIds.add(plugin.id);
-      apps.push({
-        id: `plugin:${plugin.id}`,
-        title: plugin.name,
-        icon: plugin.icon,
-        component: ThemedSurfaceOutlet,
-        props: {
-          contractId,
-          input: projectSurfaceInput(contractId, {}, {
-            activity: { size: 'default', pageType: 'nested' },
-            isMobile: isMobile.value
-          }),
-          desktopModeId: activeDesktopModeId.value
-        },
-        surface: {
-          contractId,
-          rawInput: {},
-          environment: {
-            activity: { size: 'default', pageType: 'nested' }
-          }
-        },
-        kind: 'main',
-        dockable: true,
-        minWidth: 180,
-        maxWidth: 1460,
-        minHeight: 420,
-        maxHeight: 1100,
-        preferredWidth: plugin.id === 'lumina-chat' ? 980 : 1080,
-        preferredHeight: plugin.id === 'lumina-timeline' ? 700 : 760,
-        eyebrow: plugin.id === 'lumina-chat' ? 'Primary Workspace' : 'Creative Workspace'
-      });
-    }
-
-    for (const plugin of widgetPlugins.value) {
-      // 如果插件同时拥有主视图位槽，则使用 widget: 前缀以区分身份
-      const isDualRole = mainPluginIds.has(plugin.id);
-      const contractId = getPrimarySurfaceContractIdForPlugin(plugin);
-      if (!contractId) {
-        console.error('[SurfaceRuntime] Plugin primary surface unavailable', { pluginId: plugin.id });
-        continue;
-      }
-      apps.push({
-        id: isDualRole ? `widget:${plugin.id}` : `plugin:${plugin.id}`,
-        title: plugin.name,
-        icon: plugin.icon,
-        component: ThemedSurfaceOutlet,
-        props: {
-          contractId,
-          input: projectSurfaceInput(contractId, {}, {
-            activity: { size: 'small', pageType: 'nested' },
-            isMobile: isMobile.value
-          }),
-          desktopModeId: activeDesktopModeId.value
-        },
-        surface: {
-          contractId,
-          rawInput: {},
-          environment: {
-            activity: { size: 'small', pageType: 'nested' }
-          }
-        },
-        kind: 'widget',
-        dockable: true,
-        minWidth: 360,
-        maxWidth: 920,
-        minHeight: 320,
-        maxHeight: 940,
-        preferredWidth: plugin.id === 'lumina-settings' ? 560 : 460,
-        preferredHeight: plugin.id === 'lumina-settings' ? 700 : 560,
-        eyebrow: 'Support Tool'
-      });
-    }
-
-    const contextSwitcherPanel = getLegacyPanelDefinition('context-switcher');
-    if (contextSwitcherPanel) {
-      apps.push({
-        id: 'plugin:context-switcher',
-        title: contextSwitcherPanel.title,
-        icon: contextSwitcherPanel.icon,
-        component: contextSwitcherPanel.component,
-        props: {},
-        kind: 'widget',
-        dockable: false,
-        minWidth: 320,
-        maxWidth: 560,
-        minHeight: 320,
-        maxHeight: 880,
-        preferredWidth: 420,
-        preferredHeight: 520,
-        eyebrow: 'Context'
-      });
-    }
-
-    return apps;
-  });
+      kind: entry.kind,
+      dockable: true,
+      minWidth: isSupportActivity ? 360 : 180,
+      maxWidth: isSupportActivity ? 920 : 1460,
+      minHeight: isSupportActivity ? 320 : 420,
+      maxHeight: isSupportActivity ? 940 : 1100,
+      preferredWidth: isSupportActivity ? 460 : 1080,
+      preferredHeight: isSupportActivity ? 560 : 760,
+      eyebrow: isSupportActivity ? 'Support Activity' : 'Primary Activity'
+    };
+  }));
 
   const workspaceDynamicApps = computed<WorkspaceAppDescriptor[]>(() =>
     dynamicTabs.value.map((tab) => ({
@@ -450,7 +272,6 @@ export const useWorkspaceManager = ({
 
   const getWorkspaceAppIdForMainTab = (tabId: string) => {
     if (dynamicTabs.value.some((tab) => tab.id === tabId)) return `tab:${tabId}`;
-    if (tabId === 'card_maker') return 'panel:card_maker';
     return `plugin:${tabId}`;
   };
 
@@ -554,14 +375,13 @@ export const useWorkspaceManager = ({
   };
 
   const syncSelectionFromWorkspaceApp = (appId: string) => {
-    if (appId.startsWith('plugin:')) {
-      const pluginId = appId.slice(7);
-      if (mainPlugins.value.some((plugin) => plugin.id === pluginId)) {
-        activeMainTab.value = pluginId;
-      }
-      if (widgetPlugins.value.some((plugin) => plugin.id === pluginId)) {
-        activeRightPanel.value = pluginId;
-      }
+    const app = workspaceAppMap.value.get(appId);
+    if (app?.pluginId && app.kind === 'main') {
+      activeMainTab.value = app.pluginId;
+      return;
+    }
+    if (app?.pluginId && app.kind === 'widget') {
+      activeRightPanel.value = app.pluginId;
       return;
     }
 
@@ -842,15 +662,6 @@ export const useWorkspaceManager = ({
     focusWorkspaceWindow(entries[nextIndex].id);
   };
 
-  const createStageWithLauncher = () => {
-    const stage = createWorkspaceStage(true);
-    openWorkspaceApp('plugin:lumina-launcher', { allowDuplicate: true, stageId: stage.id });
-  };
-
-  const openWorkspaceSettings = () => {
-    openWorkspaceApp('plugin:lumina-settings');
-  };
-
   const handleWorkspaceDockOpen = (appId: string) => {
     openWorkspaceApp(appId);
   };
@@ -879,12 +690,10 @@ export const useWorkspaceManager = ({
   );
 
   const workspaceDockItems = computed(() => {
-    const sessionIndexStore = useSessionIndexStore();
-    const hasMultipleSessions = (sessionIndexStore.chatSessions.length + sessionIndexStore.forgeSessions.length) > 1;
     const runningAppIds = new Set(Object.values(workspaceWindows.value).map((window) => window.appId));
     const activeStageAppIds = new Set(getWorkspaceWindowEntriesForStage(activeWorkspaceStageId.value).map((entry) => entry.window.appId));
     return workspaceStaticApps.value
-      .filter((app) => app.dockable || (app.id === 'plugin:context-switcher' && hasMultipleSessions))
+      .filter((app) => app.dockable)
       .map((app) => ({
         id: app.id,
         title: app.title,
@@ -915,25 +724,21 @@ export const useWorkspaceManager = ({
             };
 
         return {
-        id: window.id,
-        appId: app.id,
-        title: app.id === 'plugin:lumina-settings' && currentDetailedView.value
-          ? `${getPluginName(currentDetailedView.value)} 设置`
-          : app.id === 'panel:card_maker'
-            ? (forgeStore.workspaceTitle || app.title)
-            : app.title,
-        icon: app.icon,
-        component: app.component,
-        props: windowProps,
-        kind: app.kind,
-        eyebrow: app.eyebrow,
-        minWidth: app.minWidth,
-        maxWidth: app.maxWidth,
-        minHeight: app.minHeight,
-        maxHeight: app.maxHeight,
-        zIndex: window.zIndex,
-        layout: window.layout,
-        isCompact
+          id: window.id,
+          appId: app.id,
+          title: app.title,
+          icon: app.icon,
+          component: app.component,
+          props: windowProps,
+          kind: app.kind,
+          eyebrow: app.eyebrow,
+          minWidth: app.minWidth,
+          maxWidth: app.maxWidth,
+          minHeight: app.minHeight,
+          maxHeight: app.maxHeight,
+          zIndex: window.zIndex,
+          layout: window.layout,
+          isCompact
         };
       })
   );
@@ -980,8 +785,6 @@ export const useWorkspaceManager = ({
     closeWorkspaceWindow,
     activateWorkspaceStage,
     createWorkspaceStage,
-    createStageWithLauncher,
-    openWorkspaceSettings,
     handleWorkspaceDockOpen,
     openWorkspaceApp,
     closeWorkspaceApps,
