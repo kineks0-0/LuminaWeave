@@ -171,6 +171,26 @@ describe('DesktopModeRuntimeRegistry', () => {
         expect(desktopModeRuntimeRegistry.get('telegram')?.componentOverrides?.['telegram.infoPanel']?.ownerId).toBe('telegram');
     });
 
+    it('resolves classic and stage through explicit desktop and mobile compositions', () => {
+        desktopModeRuntimeRegistry.clearForTests();
+        initializeDesktopModeRuntime();
+
+        for (const modeId of ['classic', 'stage']) {
+            expect(desktopModeRuntimeRegistry.resolveComposition(modeId, 'desktop')).toMatchObject({
+                id: `${modeId}-desktop-activity`,
+                kind: 'activity-slot',
+                size: 'fill',
+                visibility: 'visible'
+            });
+            expect(desktopModeRuntimeRegistry.resolveComposition(modeId, 'mobile')).toMatchObject({
+                id: `${modeId}-mobile-activity`,
+                kind: 'activity-slot',
+                size: 'fill',
+                visibility: 'visible'
+            });
+        }
+    });
+
     it('keeps the runtime registry synchronized with custom modes registered after initialization', () => {
         desktopModeRuntimeRegistry.clearForTests();
         initializeDesktopModeRuntime();
