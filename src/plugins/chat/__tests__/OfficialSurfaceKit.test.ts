@@ -145,26 +145,72 @@ describe('Official Surface Kit', () => {
         expect(sessionListSource).not.toContain('expandedSessionGroups[groupKey] !== false');
     });
 
-    it('keeps Telegram mobile chat navigation inside typed presentation inputs', () => {
+    it('keeps shell chat navigation inside generic typed presentation inputs', () => {
         const contractSource = readSource('../../../platform/surface/officialContracts.ts');
         const chatMainSource = readSource('../surfaces/ChatMainSurface.vue');
         const telegramStackSource = readSource('../../../shell/modes/telegram/TelegramMobileStack.vue');
 
+        expect(contractSource).toContain('onBack?: () => void;');
+        expect(contractSource).toContain('onOpenRoleProfile?: () => void;');
         expect(contractSource).toContain('onOpenPanel?: (panelId: string) => void;');
         expect(chatMainSource).toContain('<ChatHeader');
-        expect(chatMainSource).toContain(':on-back="input.onTelegramBack"');
-        expect(chatMainSource).toContain(':on-open-role-profile="input.onTelegramOpenRoleProfile"');
+        expect(chatMainSource).toContain(':on-back="input.onBack"');
+        expect(chatMainSource).toContain(':on-open-role-profile="input.onOpenRoleProfile"');
         expect(chatMainSource).toContain(':on-open-panel="input.onOpenPanel"');
+        expect(contractSource).not.toContain('onTelegramBack');
+        expect(contractSource).not.toContain('onTelegramOpenRoleProfile');
+        expect(chatMainSource).not.toContain('onTelegram');
+        expect(telegramStackSource).toContain('onBack: onPopRoute');
+        expect(telegramStackSource).toContain('onOpenRoleProfile: onOpenRoleProfile');
         expect(telegramStackSource).toContain('onOpenPanel: onOpenPanel');
     });
 
-    it('projects Telegram desktop header actions through chat.main input', () => {
+    it('projects Telegram desktop header actions through generic chat.main input', () => {
         const traditionalShellSource = readSource('../../../shell/traditional/TraditionalShell.vue');
 
         expect(traditionalShellSource).toContain("contractId === 'chat.main' && isTelegramDesktopMode.value");
-        expect(traditionalShellSource).toContain('onTelegramOpenRoleProfile: onOpenTelegramDesktopRoleProfile');
+        expect(traditionalShellSource).toContain('onOpenRoleProfile: onOpenTelegramDesktopRoleProfile');
         expect(traditionalShellSource).toContain('onOpenPanel: onSwitchRightPanel');
         expect(traditionalShellSource).toContain("onSwitchRightPanel('telegram-profile')");
+        expect(traditionalShellSource).not.toContain('onTelegramOpenRoleProfile:');
+    });
+
+    it('assembles Discord and Telegram business content through official surface contracts', () => {
+        const traditionalShellSource = readSource('../../../shell/traditional/TraditionalShell.vue');
+        const discordMobileSource = readSource('../../../shell/modes/discord/DiscordMobileShell.vue');
+        const telegramDesktopSource = readSource('../../../shell/modes/telegram/TelegramDesktopPane.vue');
+        const telegramMobileSource = readSource('../../../shell/modes/telegram/TelegramMobileStack.vue');
+
+        expect(traditionalShellSource).not.toContain('<DiscordCharacterRail');
+        expect(traditionalShellSource).not.toContain('<TelegramCharacterOverview');
+
+        expect(discordMobileSource).toContain('<ThemedSurfaceOutlet');
+        expect(discordMobileSource).toContain('contract-id="character.roster"');
+        expect(discordMobileSource).not.toContain('DiscordCharacterRail');
+
+        expect(telegramDesktopSource).toContain('contract-id="conversation.sessionList"');
+        expect(telegramDesktopSource).toContain('contract-id="character.roster"');
+        expect(telegramDesktopSource).not.toContain('DiscordCharacterRail');
+        expect(telegramDesktopSource).not.toContain('TelegramRoleListPage');
+
+        expect(telegramMobileSource).toContain('contract-id="conversation.sessionList"');
+        expect(telegramMobileSource).toContain('contract-id="character.roster"');
+        expect(telegramMobileSource).not.toContain('DiscordCharacterRail');
+        expect(telegramMobileSource).not.toContain('TelegramCharacterOverview');
+        expect(telegramMobileSource).not.toContain('TelegramRoleListPage');
+    });
+
+    it('keeps composed roster and session surfaces constrained by their shell containers', () => {
+        const rosterSource = readSource('../surfaces/CharacterRosterSurface.vue');
+        const discordMobileSource = readSource('../../../shell/modes/discord/DiscordMobileShell.vue');
+        const telegramDesktopSource = readSource('../../../shell/modes/telegram/TelegramDesktopPane.vue');
+
+        expect(rosterSource).toContain('.character-roster-surface.is-compact');
+        expect(rosterSource).toContain('var(--lw-character-rail-width, 292px)');
+        expect(discordMobileSource).toContain('.lw-discord-mobile-sheet.is-top .character-roster-surface');
+        expect(discordMobileSource).toContain('.lw-discord-mobile-sheet.is-left .character-roster-surface');
+        expect(telegramDesktopSource).toContain('.lw-telegram-left-stack > .character-roster-surface');
+        expect(telegramDesktopSource).toContain('.lw-telegram-left-stack > .conversation-session-list');
     });
 
     it('routes choice blocks through typed chat intents and the shared composer draft', () => {

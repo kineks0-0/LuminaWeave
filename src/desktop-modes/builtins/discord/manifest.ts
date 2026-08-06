@@ -11,6 +11,38 @@ export const discordDesktopMode: DesktopModeManifest = {
     shell: {
         kind: 'traditional'
     },
+    composition: {
+        version: 1,
+        desktop: {
+            id: 'discord-desktop-layout',
+            kind: 'group',
+            direction: 'row',
+            size: 'fill',
+            visibility: 'visible',
+            children: [
+                {
+                    id: 'discord-desktop-roster',
+                    kind: 'surface',
+                    contractId: 'character.roster',
+                    input: { compact: true },
+                    size: 'content',
+                    visibility: 'visible'
+                },
+                {
+                    id: 'discord-desktop-activity',
+                    kind: 'activity-slot',
+                    size: 'fill',
+                    visibility: 'visible'
+                }
+            ]
+        },
+        mobile: {
+            id: 'discord-mobile-activity',
+            kind: 'activity-slot',
+            size: 'fill',
+            visibility: 'visible'
+        }
+    },
     navigationPreset: {
         traditional: {
             headerVariant: 'discord',

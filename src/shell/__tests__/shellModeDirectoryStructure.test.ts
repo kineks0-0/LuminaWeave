@@ -40,7 +40,6 @@ describe('shell mode directory structure', () => {
     [
       "from '../modes/discord/DiscordMobileShell.vue';",
       "from '../modes/telegram/TelegramBottomNav.vue';",
-      "from '../modes/telegram/TelegramCharacterOverview.vue';",
       "from '../modes/telegram/TelegramDesktopPane.vue';",
       "from '../modes/telegram/TelegramMobileStack.vue';"
     ].forEach((importPath) => {
@@ -58,5 +57,7 @@ describe('shell mode directory structure', () => {
     ].forEach((importPath) => {
       expect(source).not.toContain(importPath);
     });
+
+    expect(source).not.toContain("from '../modes/telegram/TelegramCharacterOverview.vue';");
   });
 });

@@ -42,16 +42,10 @@
         :style="mobileDiscordStyle"
         @click.self="emit('updateShowDiscordMobileCharacterRail', false)"
       >
-        <DiscordCharacterRail
-          :state="characterChannelState"
-          :isMobile="true"
-          :mobilePlacement="characterEntryPosition"
-          :onRenameSession="onRenameMobileSession"
-          :onDeleteSession="onDeleteMobileSession"
-          :onOpenSession="emitOpenMobileSession"
-          :onCreateSession="emitCreateMobileSession"
-          :onToggleGroup="onToggleMobileGroup"
-          :onToggleSessionExpansion="onToggleMobileSessionExpansion"
+        <ThemedSurfaceOutlet
+          contract-id="character.roster"
+          :input="{}"
+          :desktop-mode-id="activeDesktopModeId"
         />
       </div>
     </transition>
@@ -60,15 +54,9 @@
 
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue';
-import DiscordCharacterRail from '../../../components/DiscordCharacterRail.vue';
 import DiscordGuildRail from '../../../components/DiscordGuildRail.vue';
 import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
-import type {
-  CharacterChannelState,
-  CreateChatConversationInput,
-  DeleteChatConversationInput,
-  RenameChatConversationInput
-} from '../../../types/ConversationContextTypes.js';
+import ThemedSurfaceOutlet from '../../../platform/surface/ThemedSurfaceOutlet.vue';
 
 defineProps<{
   isDiscordMobileMode: boolean;
@@ -79,11 +67,7 @@ defineProps<{
   characterEntryPosition: 'top' | 'bottom' | 'left' | 'right';
   showDiscordMobileCharacterRail: boolean;
   characterEntryStyle: CSSProperties;
-  characterChannelState: CharacterChannelState;
-  onRenameMobileSession: (payload: RenameChatConversationInput) => Promise<void> | void;
-  onDeleteMobileSession: (payload: DeleteChatConversationInput) => Promise<void> | void;
-  onToggleMobileGroup: (groupKey: string) => void;
-  onToggleMobileSessionExpansion: (groupKey: string) => void;
+  activeDesktopModeId: string;
 }>();
 
 const { cssVars: mobileDiscordSkinVars } = useSurfaceSkin('shell.mobileDiscord');
@@ -93,18 +77,8 @@ const emit = defineEmits<{
   (e: 'switchMainView', tabId: string): void;
   (e: 'toggleSettings'): void;
   (e: 'close'): void;
-  (e: 'openMobileSession', sessionId: string): void;
-  (e: 'createMobileSession', payload: CreateChatConversationInput): void;
   (e: 'updateShowDiscordMobileCharacterRail', value: boolean): void;
 }>();
-
-const emitOpenMobileSession = (sessionId: string) => {
-  emit('openMobileSession', sessionId);
-};
-
-const emitCreateMobileSession = (payload: CreateChatConversationInput) => {
-  emit('createMobileSession', payload);
-};
 </script>
 
 <style>
@@ -282,6 +256,19 @@ const emitCreateMobileSession = (payload: CreateChatConversationInput) => {
 .lw-discord-mobile-sheet.is-right {
   align-items: stretch;
   justify-content: flex-end;
+}
+
+.lw-discord-mobile-sheet.is-top .character-roster-surface,
+.lw-discord-mobile-sheet.is-bottom .character-roster-surface {
+  width: 100%;
+  height: min(68vh, 560px);
+  max-height: calc(100% - 24px);
+}
+
+.lw-discord-mobile-sheet.is-left .character-roster-surface,
+.lw-discord-mobile-sheet.is-right .character-roster-surface {
+  width: min(var(--lw-character-rail-width, 292px), calc(100% - 24px));
+  height: 100%;
 }
 
 @media (max-width: 768px) {

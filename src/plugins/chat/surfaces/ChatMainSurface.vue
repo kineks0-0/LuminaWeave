@@ -11,8 +11,8 @@
       :avatar-url="headerAvatarUrl"
       :default-avatar="surfaceContext.state.defaultAvatar"
       :messages="snapshot.messages"
-      :on-back="input.onTelegramBack"
-      :on-open-role-profile="input.onTelegramOpenRoleProfile"
+      :on-back="input.onBack"
+      :on-open-role-profile="input.onOpenRoleProfile"
       :on-open-panel="input.onOpenPanel"
       :on-toggle-prompt-inspector="surfaceContext.intents.togglePromptInspector"
     />
@@ -96,8 +96,8 @@ const messageRenderPreferences = computed(() => ({
 const compact = computed(() => Boolean(input.isMobile || input.workspaceCompact));
 const sessionSwitching = computed(() => characterState.value.status.kind === 'switching');
 const showHeader = computed(() => Boolean(
-  input.onTelegramBack
-  || input.onTelegramOpenRoleProfile
+  input.onBack
+  || input.onOpenRoleProfile
   || input.onOpenPanel
 ));
 const latestAssistantMessage = computed(() => {

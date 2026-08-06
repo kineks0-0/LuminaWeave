@@ -23,8 +23,8 @@ import type {
 export interface ChatMainSurfaceInput {
     isMobile?: boolean;
     workspaceCompact?: boolean;
-    onTelegramBack?: () => void;
-    onTelegramOpenRoleProfile?: () => void;
+    onBack?: () => void;
+    onOpenRoleProfile?: () => void;
     onOpenPanel?: (panelId: string) => void;
 }
 
@@ -379,8 +379,8 @@ export const OFFICIAL_SURFACE_INPUT_SCHEMAS = {
     'chat.main': z.object({
         isMobile: z.boolean().optional(),
         workspaceCompact: z.boolean().optional(),
-        onTelegramBack: callbackSchema<() => void>().optional(),
-        onTelegramOpenRoleProfile: callbackSchema<() => void>().optional(),
+        onBack: callbackSchema<() => void>().optional(),
+        onOpenRoleProfile: callbackSchema<() => void>().optional(),
         onOpenPanel: callbackSchema<(panelId: string) => void>().optional()
     }).strict(),
     'chat.preview': emptyInputSchema,
