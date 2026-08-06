@@ -114,6 +114,10 @@ const widgetPlugins = computed(() => {
   settingsRevision.value;
   return pluginManager.getPluginsInSlot('widget');
 });
+const workspacePlugins = computed(() => {
+  settingsRevision.value;
+  return pluginManager.getPlugins();
+});
 
 const {
   isMobile: responsiveIsMobile,
@@ -188,8 +192,6 @@ const {
   closeWorkspaceWindow,
   activateWorkspaceStage,
   createWorkspaceStage,
-  createStageWithLauncher,
-  openWorkspaceSettings,
   handleWorkspaceDockOpen,
   openWorkspaceApp,
   closeWorkspaceApps,
@@ -197,16 +199,14 @@ const {
   getWorkspaceAppIdForMainTab,
   workspaceAppMap
 } = useWorkspaceManager({
-  mainPlugins,
-  widgetPlugins,
+  plugins: workspacePlugins,
   dynamicTabs,
   activeMainTab,
   activeRightPanel,
   activeDesktopModeId,
   isMobile,
   freeformStageRef,
-  workspaceNavigationVisible: workspaceNavigationVisibleState,
-  getPluginName
+  workspaceNavigationVisible: workspaceNavigationVisibleState
 });
 
 function getPluginName(pluginId: string | null) {
@@ -254,7 +254,6 @@ const {
   showWorkspaceNavigation,
   workspaceNavigationPeek,
   workspaceNavigationVisibleRef,
-  showWorkspaceLaunchpad,
   isWorkspaceNavigationVisible,
   isWorkspaceStageStripVisible,
   isWorkspaceDockVisible,
@@ -262,7 +261,6 @@ const {
   clearWorkspaceNavigationHideTimer,
   scheduleWorkspaceNavigationHide,
   holdWorkspaceNavigation,
-  closeWorkspaceLaunchpad,
   toggleWorkspaceNavigation,
   handleFreeformScenePointerDown
 } = useWorkspaceNavigation({
@@ -274,14 +272,6 @@ const {
   workspaceShowStageStripSetting,
   workspaceShowDockSetting
 });
-
-const workspaceDockDisplayItems = computed(() =>
-  workspaceDockItems.value.map((item) => (
-    item.id === 'plugin:lumina-launcher'
-      ? { ...item, isActive: showWorkspaceLaunchpad.value || item.isActive }
-      : item
-  ))
-);
 
 const isForgeActiveInTraditional = computed(() =>
   layoutMode.value === 'traditional' && (activeMainTab.value === 'lumina-forge' || activeMainTab.value === 'card_maker')
@@ -696,10 +686,6 @@ const handleToggleWidgetPanel = (panelId: string) => {
 
 const openSettingsPanel = () => {
   clearTransientActivityMetadata();
-  if (layoutMode.value === 'freeform') {
-    openWorkspaceSettings();
-    return;
-  }
   if (isMobile.value) {
     openTemporaryWidgetTab('lumina-settings');
     return;
@@ -768,13 +754,8 @@ const handleTelegramBottomNavSelectWithActivityReset = (
   handleTelegramBottomNavSelect(itemId);
 };
 
-const createStageWithLauncherAndCloseMenu = () => {
-  createStageWithLauncher();
-  showWorkspaceMenu.value = false;
-};
-
-const openWorkspaceSettingsAndCloseMenu = () => {
-  openWorkspaceSettings();
+const createWorkspaceStageAndCloseMenu = () => {
+  createWorkspaceStage(true);
   showWorkspaceMenu.value = false;
 };
 
@@ -790,17 +771,6 @@ const createWorkspaceStageFromStrip = () => {
 };
 
 const handleWorkspaceDockOpenWithNavigation = (appId: string) => {
-  if (appId === 'plugin:lumina-launcher') {
-    if (showWorkspaceLaunchpad.value) {
-      closeWorkspaceLaunchpad();
-    } else {
-      showWorkspaceLaunchpad.value = true;
-      clearWorkspaceNavigationHideTimer();
-      workspaceNavigationPeek.value = false;
-    }
-    return;
-  }
-  closeWorkspaceLaunchpad();
   handleWorkspaceDockOpen(appId);
   if (!showWorkspaceNavigation.value) {
     scheduleWorkspaceNavigationHide(isMobile.value ? 1100 : 420);
@@ -817,7 +787,6 @@ const toggleWorkspaceMenu = () => {
 
 const updateDesktopMode = async (desktopModeId: string) => {
   showWorkspaceMenu.value = false;
-  closeWorkspaceLaunchpad();
   if (desktopModeId === activeDesktopModeId.value) {
     return;
   }
@@ -829,16 +798,15 @@ const handleThemeChange = (event: MediaQueryListEvent) => {
 };
 
 const handleWorkspaceKeydown = (event: KeyboardEvent) => {
-  if (event.key !== 'Escape' || !showWorkspaceLaunchpad.value) return;
+  if (event.key !== 'Escape' || !showWorkspaceMenu.value) return;
   event.preventDefault();
-  closeWorkspaceLaunchpad();
+  showWorkspaceMenu.value = false;
 };
 
 const toggleExpand = () => {
   isExpanded.value = !isExpanded.value;
   if (!isExpanded.value) {
     showWorkspaceMenu.value = false;
-    closeWorkspaceLaunchpad();
     showWorkspaceNavigation.value = false;
     workspaceNavigationPeek.value = false;
     clearWorkspaceNavigationHideTimer();
@@ -871,7 +839,6 @@ const {
 } = useShellRuntimePayload({
   context: {
     shellKind,
-    layoutMode,
     activeDesktopModeId,
     desktopModeOptions,
     activeMainTab,
@@ -922,7 +889,6 @@ const {
       isWorkspaceNavigationVisible,
       activeWorkspaceWindowId,
       workspaceSceneInsets,
-      showWorkspaceLaunchpad,
       isWorkspaceDockVisible
     }
   },
@@ -944,7 +910,7 @@ const {
       workspaceStageStyle: shellWorkspaceStageStyle,
       stageStripItems: workspaceStageStripItems,
       stageWindowEntries: activeStageWindowEntries,
-      dockDisplayItems: workspaceDockDisplayItems
+      dockDisplayItems: workspaceDockItems
     }
   },
   actions: {
@@ -992,8 +958,7 @@ const {
       selectTelegramBottomNav: handleTelegramBottomNavSelectWithActivityReset
     },
     freeform: {
-      createStageWithLauncher: createStageWithLauncherAndCloseMenu,
-      openWorkspaceSettings: openWorkspaceSettingsAndCloseMenu,
+      createWorkspaceStage: createWorkspaceStageAndCloseMenu,
       activateWorkspaceStageWithNavigation,
       createWorkspaceStageFromStrip,
       holdWorkspaceNavigation,
@@ -1005,8 +970,6 @@ const {
       closeWorkspaceWindow,
       focusWorkspaceWindow,
       focusAdjacentWorkspaceWindow,
-      backFromDetailedSettings,
-      closeWorkspaceLaunchpad,
       handleWorkspaceDockOpenWithNavigation,
       stageElementChange: handleStageElementChange
     }
@@ -1067,7 +1030,6 @@ watch(isMobile, (mobile, wasMobile) => {
 
 watch(showWorkspaceMenu, (isOpen) => {
   if (isOpen) {
-    closeWorkspaceLaunchpad();
     holdWorkspaceNavigation();
     return;
   }

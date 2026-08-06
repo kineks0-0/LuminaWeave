@@ -23,14 +23,9 @@
         <small>{{ desktopMode.description }}</small>
       </button>
 
-      <button class="lw-workspace-menu-item" @click="emit('createStageWithLauncher')">
+      <button class="lw-workspace-menu-item" @click="emit('createStage')">
         <span>新建舞台</span>
-        <small>创建一个空舞台，并将启动台调度到前台。</small>
-      </button>
-
-      <button class="lw-workspace-menu-item" @click="emit('openWorkspaceSettings')">
-        <span>打开设置窗口</span>
-        <small>把设置窗口调到当前舞台的前台位置。</small>
+        <small>创建并切换到一个空舞台。</small>
       </button>
     </div>
   </transition>
@@ -49,8 +44,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'setDesktopMode', desktopModeId: string): void;
-  (e: 'createStageWithLauncher'): void;
-  (e: 'openWorkspaceSettings'): void;
+  (e: 'createStage'): void;
 }>();
 </script>
 

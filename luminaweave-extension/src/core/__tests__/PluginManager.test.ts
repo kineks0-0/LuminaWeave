@@ -16,6 +16,7 @@ declare module '../../platform/surface/types.js' {
         'test.conflict.surface': SurfaceContractSpec<EmptySurfaceData>;
         'test.duplicate-within-manifest.surface': SurfaceContractSpec<EmptySurfaceData>;
         'test.atomic-contract.surface': SurfaceContractSpec<EmptySurfaceData>;
+        'test.activity-only.surface': SurfaceContractSpec<EmptySurfaceData>;
     }
 }
 
@@ -76,6 +77,43 @@ describe('PluginManager', () => {
         await manager.initializeAllPlugins();
 
         expect(init).toHaveBeenCalledTimes(1);
+    });
+
+    it('lists enabled plugins even when they do not declare a navigation slot', () => {
+        const manager = new PluginManager();
+        const contractId = 'test.activity-only.surface';
+        const plugin: LuminaPlugin = {
+            id: 'activity-only-plugin',
+            name: 'Activity Only',
+            icon: '',
+            component: StubComponent,
+            platformManifest: {
+                id: 'activity-only-plugin',
+                name: 'Activity Only',
+                primarySurface: contractId,
+                activity: {
+                    size: 'small',
+                    pageType: 'standalone'
+                },
+                surfaces: [{
+                    id: contractId,
+                    ownerPluginId: 'activity-only-plugin',
+                    inputSchema: z.object({}).strict(),
+                    businessRenderer: {
+                        contractId,
+                        component: StubComponent,
+                        ownerId: 'activity-only-plugin',
+                        kind: 'plugin-business'
+                    }
+                }]
+            }
+        };
+
+        manager.register(plugin);
+
+        expect(manager.getPlugins()).toEqual([plugin]);
+        expect(manager.getPluginsInSlot('mainView')).toEqual([]);
+        expect(manager.getPluginsInSlot('widget')).toEqual([]);
     });
 
     it('does not leave a plugin domain or legacy registry entry when platform registration fails', () => {

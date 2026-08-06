@@ -10,6 +10,7 @@
 </template>
 
 <script setup lang="ts" generic="K extends SurfaceContractId">
+import { computed } from 'vue';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import SurfaceOutlet from './SurfaceOutlet.vue';
 import type { SurfaceContractId, SurfaceInput } from './types.js';
@@ -24,5 +25,6 @@ const props = defineProps<{
   desktopModeId: string;
 }>();
 
-const skin = useSurfaceSkin(props.contractId);
+const contractId = computed((): string => props.contractId);
+const skin = useSurfaceSkin(contractId);
 </script>

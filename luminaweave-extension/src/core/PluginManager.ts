@@ -272,6 +272,10 @@ export class PluginManager {
         return plugins.filter(p => !p.isEnabled || p.isEnabled());
     }
 
+    getPlugins(): LuminaPlugin[] {
+        return Object.values(this.plugins).filter(plugin => !plugin.isEnabled || plugin.isEnabled());
+    }
+
     getPlugin(id: string): LuminaPlugin | undefined {
         return this.plugins[id];
     }

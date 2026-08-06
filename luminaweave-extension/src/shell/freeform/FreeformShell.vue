@@ -12,8 +12,7 @@
       :activeDesktopModeId="activeDesktopModeId"
       :desktopModes="desktopModeOptions"
       @setDesktopMode="onSetDesktopMode"
-      @createStageWithLauncher="onCreateStageWithLauncher"
-      @openWorkspaceSettings="onOpenWorkspaceSettings"
+      @createStage="onCreateWorkspaceStage"
     />
 
     <Transition name="workspace-nav-motion" appear>
@@ -43,12 +42,6 @@
           <line x1="4" y1="17" x2="20" y2="17"></line>
         </svg>
       </button>
-      <button class="lw-freeform-control" @click="onOpenWorkspaceSettings" title="设置窗口">
-        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-      </button>
       <button class="lw-freeform-control" @click="onClose" title="退出工作台">
         <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -57,82 +50,21 @@
       </button>
     </div>
 
-    <div class="lw-freeform-scene" @pointerdown.self="onHandleFreeformScenePointerDown">
-      <TransitionGroup name="workspace-window-motion" appear>
-        <WorkspaceWindow
-          v-for="entry in activeStageWindowEntries"
-          :key="entry.id"
-          :x="entry.layout.x"
-          :y="entry.layout.y"
-          :width="entry.layout.width"
-          :height="entry.layout.height"
-          :zIndex="entry.zIndex"
-          :isActive="activeWorkspaceWindowId === entry.id"
-          :title="entry.title"
-          :icon="entry.icon"
-          :eyebrow="entry.eyebrow"
-          :kind="entry.kind === 'widget' ? 'widget' : 'main'"
-          :minWidth="entry.minWidth"
-          :maxWidth="entry.maxWidth"
-          :minHeight="entry.minHeight"
-          :maxHeight="entry.maxHeight"
-          :isCompact="entry.isCompact"
-          :sceneLeft="workspaceSceneInsets.left"
-          :sceneTop="workspaceSceneInsets.top"
-          :sceneRight="workspaceSceneInsets.right"
-          :sceneBottom="workspaceSceneInsets.bottom"
-          @updateLayout="onUpdateWorkspaceLayout(entry.id, $event)"
-          @requestClose="onCloseWorkspaceWindow(entry.id)"
-          @focus="onFocusWorkspaceWindow(entry.id)"
-          @switchAdjacent="onFocusAdjacentWorkspaceWindow(entry.id, $event)"
-        >
-          <template #actions>
-            <ForgeWorkspaceWindowActions v-if="entry.appId === 'panel:card_maker'" />
-            <template v-if="entry.appId === 'plugin:lumina-settings' && currentDetailedView">
-              <button class="icon-action-btn" type="button" title="返回概览" @pointerdown.stop @click.stop="onBackFromDetailedSettings">
-                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none">
-                  <polyline points="15 18 9 12 15 6"></polyline>
-                </svg>
-              </button>
-            </template>
-          </template>
-
-          <component
-            :is="entry.component"
-            v-bind="entry.props"
-          />
-        </WorkspaceWindow>
-      </TransitionGroup>
-
-      <div v-if="activeStageWindowEntries.length === 0" class="lw-freeform-empty-stage">
-        <span class="lw-freeform-empty-kicker">Stage Ready</span>
-        <strong>当前舞台为空</strong>
-        <span>从底部 Dock 打开工作区，或在左侧创建一个新的舞台组。</span>
-      </div>
-
-      <Transition name="workspace-launchpad-motion">
-        <div v-if="showWorkspaceLaunchpad" class="lw-workspace-launchpad-overlay" @pointerdown.self="onCloseWorkspaceLaunchpad">
-          <div class="lw-workspace-launchpad-shell" @pointerdown.stop>
-            <button class="lw-workspace-launchpad-close" type="button" @click="onCloseWorkspaceLaunchpad" title="关闭启动台">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-            <ThemedSurfaceOutlet
-              contract-id="launcher.root"
-              :input="{
-                presentation: 'launchpad',
-                activeMainTab,
-                dismissOnSelect: true,
-                onDismiss: onCloseWorkspaceLaunchpad
-              }"
-              :desktop-mode-id="activeDesktopModeId"
-            />
-          </div>
-        </div>
-      </Transition>
-    </div>
+    <slot
+      name="composition"
+      :activity-component="FreeformWorkspaceActivityOutlet"
+      :activity-component-props="{
+        runtimeContext: props.runtimeContext,
+        runtimeSurfaces: props.runtimeSurfaces,
+        runtimeActions: props.runtimeActions
+      }"
+    >
+      <FreeformWorkspaceActivityOutlet
+        :runtime-context="props.runtimeContext"
+        :runtime-surfaces="props.runtimeSurfaces"
+        :runtime-actions="props.runtimeActions"
+      />
+    </slot>
 
     <Transition name="workspace-nav-motion" appear>
       <WorkspaceDock
@@ -150,11 +82,9 @@
 import { computed, ref, watch } from 'vue';
 import WorkspaceDock from '../../components/WorkspaceDock.vue';
 import WorkspaceStageStrip from '../../components/WorkspaceStageStrip.vue';
-import WorkspaceWindow from '../../components/WorkspaceWindow.vue';
-import ForgeWorkspaceWindowActions from '../../plugins/forge/ForgeWorkspaceWindowActions.vue';
 import type { ShellRuntimeActions, ShellRuntimeContext, ShellRuntimeSurfaces } from '../types.js';
+import FreeformWorkspaceActivityOutlet from './FreeformWorkspaceActivityOutlet.vue';
 import WorkspaceMenu from './WorkspaceMenu.vue';
-import ThemedSurfaceOutlet from '../../platform/surface/ThemedSurfaceOutlet.vue';
 
 const props = defineProps<{
   runtimeContext: ShellRuntimeContext;
@@ -173,18 +103,11 @@ const isWorkspaceStageStripVisible = computed(() => props.runtimeContext.freefor
 const workspaceStageStripItems = computed(() => props.runtimeSurfaces.freeform.stageStripItems);
 const isMobile = computed(() => props.runtimeContext.isMobile);
 const isWorkspaceNavigationVisible = computed(() => props.runtimeContext.freeform.isWorkspaceNavigationVisible);
-const activeStageWindowEntries = computed(() => props.runtimeSurfaces.freeform.stageWindowEntries);
-const activeWorkspaceWindowId = computed(() => props.runtimeContext.freeform.activeWorkspaceWindowId);
-const workspaceSceneInsets = computed(() => props.runtimeContext.freeform.workspaceSceneInsets);
-const currentDetailedView = computed(() => props.runtimeContext.currentDetailedView);
-const showWorkspaceLaunchpad = computed(() => props.runtimeContext.freeform.showWorkspaceLaunchpad);
-const activeMainTab = computed(() => props.runtimeContext.activeMainTab);
 const isWorkspaceDockVisible = computed(() => props.runtimeContext.freeform.isWorkspaceDockVisible);
 const workspaceDockDisplayItems = computed(() => props.runtimeSurfaces.freeform.dockDisplayItems);
 
 const onSetDesktopMode = (desktopModeId: string) => props.runtimeActions.navigation.updateDesktopMode(desktopModeId);
-const onCreateStageWithLauncher = () => props.runtimeActions.freeform.createStageWithLauncher();
-const onOpenWorkspaceSettings = () => props.runtimeActions.freeform.openWorkspaceSettings();
+const onCreateWorkspaceStage = () => props.runtimeActions.freeform.createWorkspaceStage();
 const onActivateWorkspaceStageWithNavigation = (stageId: string) =>
   props.runtimeActions.freeform.activateWorkspaceStageWithNavigation(stageId);
 const onCreateWorkspaceStageFromStrip = () => props.runtimeActions.freeform.createWorkspaceStageFromStrip();
@@ -193,18 +116,6 @@ const onScheduleWorkspaceNavigationHide = () => props.runtimeActions.freeform.sc
 const onToggleWorkspaceNavigation = () => props.runtimeActions.freeform.toggleWorkspaceNavigation();
 const onToggleWorkspaceMenu = () => props.runtimeActions.freeform.toggleWorkspaceMenu();
 const onClose = () => props.runtimeActions.navigation.close();
-const onHandleFreeformScenePointerDown = (event: PointerEvent) =>
-  props.runtimeActions.freeform.handleFreeformScenePointerDown(event);
-const onUpdateWorkspaceLayout = (
-  entryId: string,
-  patch: { x?: number; y?: number; width?: number; height?: number; interaction?: 'move' | 'resize'; isFinal?: boolean }
-) => props.runtimeActions.freeform.updateWorkspaceLayout(entryId, patch);
-const onCloseWorkspaceWindow = (entryId: string) => props.runtimeActions.freeform.closeWorkspaceWindow(entryId);
-const onFocusWorkspaceWindow = (entryId: string) => props.runtimeActions.freeform.focusWorkspaceWindow(entryId);
-const onFocusAdjacentWorkspaceWindow = (entryId: string, direction: 'prev' | 'next') =>
-  props.runtimeActions.freeform.focusAdjacentWorkspaceWindow(entryId, direction);
-const onBackFromDetailedSettings = () => props.runtimeActions.freeform.backFromDetailedSettings();
-const onCloseWorkspaceLaunchpad = () => props.runtimeActions.freeform.closeWorkspaceLaunchpad();
 const onHandleWorkspaceDockOpenWithNavigation = (appId: string) =>
   props.runtimeActions.freeform.handleWorkspaceDockOpenWithNavigation(appId);
 
@@ -264,63 +175,6 @@ watch(stageElement, (element) => {
     radial-gradient(circle at 50% 102%, var(--lw-glass-bg), transparent 28%);
   opacity: 0.5;
   pointer-events: none;
-}
-
-.lw-workspace-launchpad-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 5000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 84px 34px 72px;
-  box-sizing: border-box;
-}
-
-.lw-workspace-launchpad-overlay::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(circle at 50% 0%, var(--lw-glass-border), transparent 28%),
-    linear-gradient(180deg, rgba(var(--lw-bg-app-rgb), 0.08), var(--lw-glass-bg));
-  backdrop-filter: blur(16px) saturate(118%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 80%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 0%, black 80%, transparent 100%);
-}
-
-.lw-workspace-launchpad-shell {
-  position: relative;
-  width: min(1080px, 100%);
-  max-width: calc(100% - 24px);
-}
-
-.lw-workspace-launchpad-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--lw-glass-border);
-  border-radius: 999px;
-  background: var(--lw-glass-bg);
-  color: var(--lw-text-main);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 14px 28px var(--lw-glass-shadow);
-  backdrop-filter: blur(18px);
-  transition:
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.lw-workspace-launchpad-close:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.7);
 }
 
 .lw-freeform-empty-stage {

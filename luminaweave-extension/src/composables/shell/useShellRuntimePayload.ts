@@ -12,7 +12,6 @@ const read = <T>(source: Source<T>): T => unref(source);
 
 interface ShellRuntimePayloadContextInput {
   shellKind: Source<ShellRuntimeContext['shellKind']>;
-  layoutMode: Source<ShellRuntimeContext['layoutMode']>;
   activeDesktopModeId: Source<ShellRuntimeContext['activeDesktopModeId']>;
   desktopModeOptions: Source<ShellRuntimeContext['desktopModeOptions']>;
   activeMainTab: Source<ShellRuntimeContext['activeMainTab']>;
@@ -63,7 +62,6 @@ interface ShellRuntimePayloadContextInput {
     isWorkspaceNavigationVisible: Source<ShellRuntimeContext['freeform']['isWorkspaceNavigationVisible']>;
     activeWorkspaceWindowId: Source<ShellRuntimeContext['freeform']['activeWorkspaceWindowId']>;
     workspaceSceneInsets: Source<ShellRuntimeContext['freeform']['workspaceSceneInsets']>;
-    showWorkspaceLaunchpad: Source<ShellRuntimeContext['freeform']['showWorkspaceLaunchpad']>;
     isWorkspaceDockVisible: Source<ShellRuntimeContext['freeform']['isWorkspaceDockVisible']>;
   };
 }
@@ -108,7 +106,6 @@ export interface UseShellRuntimePayloadInput {
 export const useShellRuntimePayload = (input: UseShellRuntimePayloadInput) => {
   const shellRuntimeContext = computed<ShellRuntimeContext>(() => ({
     shellKind: read(input.context.shellKind),
-    layoutMode: read(input.context.layoutMode),
     activeDesktopModeId: read(input.context.activeDesktopModeId),
     desktopModeOptions: read(input.context.desktopModeOptions),
     activeMainTab: read(input.context.activeMainTab),
@@ -159,7 +156,6 @@ export const useShellRuntimePayload = (input: UseShellRuntimePayloadInput) => {
       isWorkspaceNavigationVisible: read(input.context.freeform.isWorkspaceNavigationVisible),
       activeWorkspaceWindowId: read(input.context.freeform.activeWorkspaceWindowId),
       workspaceSceneInsets: read(input.context.freeform.workspaceSceneInsets),
-      showWorkspaceLaunchpad: read(input.context.freeform.showWorkspaceLaunchpad),
       isWorkspaceDockVisible: read(input.context.freeform.isWorkspaceDockVisible)
     }
   }));

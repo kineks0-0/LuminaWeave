@@ -6,6 +6,7 @@ import { SurfaceRegistry } from '../../surface/SurfaceRegistry.js';
 import type { SurfaceRendererDefinition } from '../../surface/types.js';
 import { DesktopModeRuntimeRegistry } from '../DesktopModeRuntimeRegistry.js';
 import type { DesktopModeRuntimeDescriptor } from '../types.js';
+import * as compositionRuntime from '../DesktopCompositionRuntime.js';
 
 const createSurfaceRegistry = (): SurfaceRegistry => {
     const registry = new SurfaceRegistry();
@@ -66,6 +67,24 @@ const createValidComposition = (): object => ({
 });
 
 describe('Desktop composition runtime', () => {
+    it('projects surface contracts from composition without shell-owned business lists', () => {
+        const collectDesktopCompositionSurfaceIds = (
+            compositionRuntime as typeof compositionRuntime & {
+                collectDesktopCompositionSurfaceIds?: (node: object) => string[];
+            }
+        ).collectDesktopCompositionSurfaceIds;
+
+        expect(collectDesktopCompositionSurfaceIds).toBeTypeOf('function');
+        if (!collectDesktopCompositionSurfaceIds) return;
+
+        const composition = createValidComposition() as {
+            desktop: object;
+            mobile: object;
+        };
+        expect(collectDesktopCompositionSurfaceIds(composition.desktop)).toEqual(['chat.main']);
+        expect(collectDesktopCompositionSurfaceIds(composition.mobile)).toEqual(['chat.main']);
+    });
+
     it('registers version 1 composition and resolves desktop and mobile roots deterministically', () => {
         const registry = new DesktopModeRuntimeRegistry(createSurfaceRegistry());
         registry.register(createDescriptor(createValidComposition()));

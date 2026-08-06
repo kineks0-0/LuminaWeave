@@ -167,7 +167,7 @@ describe('DesktopModeRuntimeRegistry', () => {
         expect(desktopModeRuntimeRegistry.get('stage')?.interactionPolicy.supportsOverlappingWindows).toBe(true);
         expect(desktopModeRuntimeRegistry.get('classic')?.shellRenderer).toBeDefined();
         expect(desktopModeRuntimeRegistry.get('stage')?.shellRenderer).toBeDefined();
-        expect(desktopModeRuntimeRegistry.get('telegram')?.navigationModel.mobileSurfaces).toContain('settings.root');
+        expect(desktopModeRuntimeRegistry.get('telegram')?.navigationModel.mobileSurfaces).toEqual([]);
         expect(desktopModeRuntimeRegistry.get('telegram')?.componentOverrides?.['telegram.infoPanel']?.ownerId).toBe('telegram');
     });
 
@@ -233,6 +233,38 @@ describe('DesktopModeRuntimeRegistry', () => {
 
         expect(() => registerDesktopMode(manifest))
             .toThrow('[DesktopCompositionRuntime] Unsupported composition version');
+        expect(getDesktopMode(customId)).toBeUndefined();
+        expect(desktopModeRuntimeRegistry.get(customId)).toBeUndefined();
+    });
+
+    it('reports malformed public composition trees as stable invalid-layout errors', () => {
+        desktopModeRuntimeRegistry.clearForTests();
+        initializeDesktopModeRuntime();
+        const customId = `runtime-malformed-${Math.random().toString(36).slice(2, 8)}`;
+        const manifest = {
+            id: customId,
+            name: 'Malformed Runtime Desktop',
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 1,
+                desktop: {
+                    id: 'desktop-root',
+                    kind: 'group',
+                    direction: 'row',
+                    size: 'fill',
+                    visibility: 'visible'
+                },
+                mobile: {
+                    id: 'mobile-root',
+                    kind: 'activity-slot',
+                    size: 'fill',
+                    visibility: 'visible'
+                }
+            }
+        } as unknown as DesktopModeManifest;
+
+        expect(() => registerDesktopMode(manifest))
+            .toThrow('[DesktopCompositionRuntime] Invalid composition layout');
         expect(getDesktopMode(customId)).toBeUndefined();
         expect(desktopModeRuntimeRegistry.get(customId)).toBeUndefined();
     });

@@ -209,6 +209,7 @@ Desktop Modes 定义完整工作方式，不只是皮肤。
 - `DesktopModeManifest.composition` 使用固定 `version: 1`，分别声明 desktop/mobile 根节点。节点只允许 `group`、`surface`、`activity-slot`；布局只允许 `row | column`、`content | fill`、`visible | hidden`，不得携带任意 CSS、Vue component 或 attrs。
 - Composition 注册必须在写入模式列表和 desktop override 前完成 Zod 结构校验、全树节点 ID 唯一性校验、Surface contract 存在性校验及 contract input schema 校验；失败不得在核心 registry、runtime registry 或 Surface Registry 留下部分状态。
 - Composition Runtime 按 desktop/mobile 视口确定性返回独立组合树，不从 Shell、当前活动界面、插件 ID 或旧布局推断节点。四个内置模式迁移完成前，未声明 composition 的旧 manifest 暂时继续注册；声明 composition 后不得绕过完整校验，迁移完成后该字段改为必填。
+- 声明 composition 的模式仍保留 concrete Shell，由 root 把组合树注入 Shell 的 Activity 区域：`surface` 节点进入带主题的 Surface Runtime，`activity-slot` 只挂载 Shell 自有的主 Activity、移动页面栈或自由工作台窗口容器。Shell 不再决定角色、会话、Chat、Forge、Launcher 或 Settings 等业务组件的固定位置。
 - 当前早期阶段不保留旧 Theme Pack 兼容层；代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`，旧 `activeThemePack` / `theme-pack-*` 配置可直接失效。
 - `DesktopExperienceRuntime` 统一暴露 conversation、generation、character、timeline、activity 五组 headless 领域能力，并拥有显式 `dispose()` 生命周期。
 - Chat renderer 通过 runtime 创建应用控制器；Controller 销毁时必须取消 conversation、generation 与 Prompt inspection 订阅，presentation 只消费 snapshot 与 intents。
@@ -217,6 +218,7 @@ Desktop Modes 定义完整工作方式，不只是皮肤。
 - 既有 Chat 滚动与输入聚焦事件必须先由 `DesktopExperienceRuntime.activity` 适配为 typed presentation command，再由 Controller snapshot 投影给 Surface；presentation 不直接订阅宿主事件。
 - 需要 runtime context 的设置预览通过 `settingsPreviewSurface` 元数据进入 `ThemedSurfaceOutlet -> SurfaceOutlet`，不能以裸 Vue component 或裸 `SurfaceOutlet` 绕过 skin、contract 校验、theme context 与局部错误边界。
 - `PluginManifestV2.primarySurface` 是插件主 Surface 的唯一来源；Shell、Workspace 与路由不得从插件 ID 推断 contract。
+- Workspace 应用目录遍历完整启用插件集合，并从 `primarySurface`、`navigationSlots` 与可选 `ActivityDescriptor` 派生；Activity-only 插件也可进入目录，未提供 Activity metadata 时只按 main/widget 角色生成受控默认值，动态 Activity 继续由 Activity registry 提供。Workspace 和 Freeform Shell 不维护 Forge、Launcher、Settings 或其他插件身份映射。
 - contract、plugin renderer 与 desktop override 必须先完成整批校验再原子注册，单个 renderer 失败只影响对应节点。
 - 插件或业务组件通过 Activity LaunchIntent 启动页面，只声明目标、默认/小窗偏好、嵌套/独立页面和可选状态栏/标题栏/二级菜单 metadata；具体落到主区、右侧栏、临时移动页、Telegram 移动页面栈或自由工作台窗口，由 desktop mode 解析。
 

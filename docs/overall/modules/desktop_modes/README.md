@@ -19,6 +19,16 @@ Desktop Modes 定义 LuminaWeave 的平台级桌面模式。桌面模式不是�
 
 当前任务 6 是分阶段迁移点：四个内置模式尚未声明 composition 时，字段暂时可选且不会生成默认树；一旦声明就必须通过完整校验。classic、stage、discord、telegram 迁移后将 composition 收紧为必填，并删除旧 Shell 业务组合路径。
 
+## Shell 与 Workspace 投影
+
+声明 composition 的模式仍由 `LuminaShellRoot` 挂载 concrete Shell，再把 `DesktopCompositionOutlet` 注入其 Activity 区域。`surface` 节点进入 `ThemedSurfaceOutlet`，`activity-slot` 只接收 Shell 自有容器：traditional 使用通用主 Activity outlet 并保留 Telegram 移动页面栈，freeform 使用舞台与窗口工作台。Shell 不根据 contract 或插件 ID 判断 Chat、Forge、Launcher、Settings 等业务含义。
+
+Desktop navigation descriptor 的 desktop/mobile Surface 列表在 composition 校验后直接从对应树收集。Workspace 应用目录遍历完整启用插件集合，再从 `primarySurface`、`navigationSlots` 和可选 `ActivityDescriptor` 派生；Activity-only 插件也可进入目录，main/widget 仅决定受控的默认 Activity 尺寸，动态 Activity 继续通过通用窗口入口提供。Freeform Shell 只负责舞台、窗口、焦点、导航显隐和 Dock，新建舞台为空容器，不自动打开 Launcher 或其他业务插件。
+
+组合根和递归节点的 renderer identity 覆盖 desktop mode、viewport、node kind 与 contract，主题 skin 跟随响应式 contract id 更新，避免切换模式或节点时复用旧 renderer 状态。
+
+任务 7 只完成运行时与壳层迁移。没有 composition 的内置模式仍使用旧 shell renderer；任务 8 将依次迁移 classic、stage、discord、telegram，随后删除 fallback 并把 composition 改为必填。
+
 当前项目仍处于早期阶段，桌面模式不保留旧 Theme Pack 兼容层。代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`；`ThemePack`、`activeThemePack`、`theme-pack-*`、`themePackId`、`useThemePack()` 和 `getThemePack*` 不再作为公开或内部入口。
 
 代码目录边界：

@@ -205,16 +205,25 @@ describe('Official Surface Kit', () => {
         const outletSource = readSource('../../../platform/surface/SurfaceOutlet.vue');
         const workspaceManagerSource = readSource('../../../composables/useWorkspaceManager.ts');
 
-        expect(wrapperSource).toContain('useSurfaceSkin(props.contractId)');
+        expect(wrapperSource).toContain('computed((): string => props.contractId)');
+        expect(wrapperSource).toContain('useSurfaceSkin(contractId)');
         expect(wrapperSource).toContain(':css-vars="skin.cssVars.value"');
         expect(outletSource).not.toContain('useSurfaceSkin');
         expect(workspaceManagerSource).toContain("import ThemedSurfaceOutlet from '../platform/surface/ThemedSurfaceOutlet.vue';");
         expect(workspaceManagerSource).toContain('component: ThemedSurfaceOutlet');
         expect(workspaceManagerSource).not.toContain('component: SurfaceOutlet');
 
+        const freeformShellSource = readSource('../../../shell/freeform/FreeformShell.vue');
+        const freeformActivitySource = readSource('../../../shell/freeform/FreeformWorkspaceActivityOutlet.vue');
+        expect(freeformShellSource).toContain('<FreeformWorkspaceActivityOutlet');
+        expect(freeformActivitySource).toContain(':is="entry.component"');
+        expect(freeformShellSource).not.toContain('<ThemedSurfaceOutlet');
+        expect(freeformActivitySource).not.toContain('<ThemedSurfaceOutlet');
+
         for (const relativePath of [
+            '../../../platform/desktop-mode-runtime/DesktopCompositionNodeOutlet.vue',
+            '../../../shell/ShellPrimaryActivityOutlet.vue',
             '../../../shell/traditional/TraditionalShell.vue',
-            '../../../shell/freeform/FreeformShell.vue',
             '../../../shell/DynamicTabOutlet.vue',
             '../../../shell/modes/telegram/TelegramMobileStack.vue'
         ]) {

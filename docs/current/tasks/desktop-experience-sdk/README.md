@@ -30,12 +30,16 @@
 
 ## 实施顺序
 
-1. 建立 Headless Domain Runtime。
-2. 收紧 Typed Surface Runtime。
-3. 建立 Chat Application Controller 和 Official Surface Kit。
-4. 增加 Composition Runtime。
-5. 迁移 Shell、Workspace 和四个内置桌面模式。
-6. 增加第三方协议示例，删除旧入口并完成文档与验证。
+1. 建立架构基线、ADR 与问题记录。
+2. 建立 Headless Domain Runtime。
+3. 收紧 Typed Surface Runtime。
+4. 建立 Chat Application Controller。
+5. 提取 Official Surface Kit。
+6. 增加 Composition Runtime。
+7. 迁移 Shell 与 Workspace。
+8. 迁移 classic、stage、discord、telegram 四个内置模式。
+9. 增加声明式模式与 trusted renderer 示例。
+10. 删除旧入口并完成文档、浏览器验证与最终验收。
 
 ## 当前状态
 
@@ -71,7 +75,16 @@ Composition Runtime 已完成当前阶段实现：
 - resolver 按显式 viewport 返回独立树，不读取 Shell、插件 ID 或宿主对象；特殊 contract input 实例保持其原型，不被转换为普通对象。
 - 四个内置模式完成迁移前 `composition` 暂时可选；未声明时不生成默认组合树，声明后必须经过完整校验。
 
-任务 2 定向验证：4 个测试文件、15 个测试通过；任务 3 定向验证：19 个测试文件、89 个用例通过；任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；任务 5 定向验证：27 个测试文件、120 个用例通过。任务 6 定向验证通过 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。下一步是 Shell 与 Workspace 迁移，使业务区域从 composition、插件注册信息和 Activity descriptor 派生。
+Shell 与 Workspace 迁移已完成当前阶段实现：
+
+- `LuminaShellRoot` 始终保留当前 concrete Shell，并在其 Activity 区域注入 `DesktopCompositionOutlet`；`surface` 节点进入 `ThemedSurfaceOutlet`，`activity-slot` 只委托 Shell 自有的主 Activity、Telegram 移动页面栈或自由工作台窗口容器。
+- Desktop navigation surface 列表在 composition 完成校验后直接遍历 desktop/mobile 根节点派生，不再维护平行的业务 Surface 清单。
+- Workspace 使用完整启用插件目录，并从 `PluginManifestV2.primarySurface`、`navigationSlots` 和 `ActivityDescriptor` 派生应用；只有 Activity metadata 的插件也能进入目录，动态 Activity 继续作为临时窗口来源，目录不再硬编码 Forge、Launcher、Settings 或 context switcher 身份。
+- Freeform Shell 只管理舞台、窗口、焦点、导航显隐和 Dock；Launcher overlay、Forge 窗口 action 与 Settings 详情特判已删除，新建舞台不再隐式打开某个业务插件。
+- `ShellRuntimeContext` 已删除重复 `layoutMode` 和 launchpad 状态；没有 composition 的内置模式暂时继续走旧 Shell renderer，留待下一阶段逐个迁移。
+- composition renderer 的实例身份包含 desktop mode、viewport、node kind 与 Surface contract；`ThemedSurfaceOutlet` 对 contract 变化响应式重算 skin，避免模式或节点切换复用旧主题状态。
+
+任务 2 定向验证：4 个测试文件、15 个测试通过；任务 3 定向验证：19 个测试文件、89 个用例通过；任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；任务 5 定向验证：27 个测试文件、120 个用例通过。任务 6 定向验证通过 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。任务 7 审查收敛后的 Shell、Workspace、Activity 与 Desktop Runtime 定向验证通过 15 个测试文件、77 个用例；最终 extension 全量 `npm run test` 通过 184 个测试文件、930 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。下一步是迁移 classic、stage、discord、telegram，使四个内置模式全部声明 composition 并删除旧 Shell 业务组合路径。
 
 ## 恢复入口
 

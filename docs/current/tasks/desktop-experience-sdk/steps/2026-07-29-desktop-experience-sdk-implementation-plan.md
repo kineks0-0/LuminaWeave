@@ -40,15 +40,16 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 
 ## 任务分解
 
-1. Headless Domain Runtime：已完成角色会话能力提升、领域订阅与统一销毁。
-2. Typed Surface Runtime：已完成开放类型清理、Zod 校验和局部错误边界。
-3. Chat Application Controller：已完成消息事实源、生成订阅和 Chat intent 收敛。
-4. Official Surface Kit：已完成角色、会话、消息、输入、header 与 Prompt Inspector surface 拆分；Shell、Workspace 与设置预览通过 `ThemedSurfaceOutlet` 挂载业务 surface，消息渲染设置通过 typed surface state 投影，用户消息与 assistant 交互块使用独立渲染路径。
-5. Composition Runtime：已完成 version 1 类型、strict Zod schema、跨 registry 原子预检、Surface input 校验与 desktop/mobile 确定性解析器；内置模式迁移前字段暂时可选且不生成默认树。
-6. Shell 与 Workspace：下一步从 manifest、surface registry 和 Activity descriptor 派生界面。
-7. 内置模式：依次迁移 classic、stage、discord、telegram。
-8. 第三方示例：验证声明式模式和 trusted renderer。
-9. 清理与验收：删除旧入口、同步长期文档、执行完整测试与浏览器验证。
+1. 架构基线与问题记录：已完成任务文档、ADR-0004、参考项目取舍和问题日志。
+2. Headless Domain Runtime：已完成角色会话能力提升、领域订阅与统一销毁。
+3. Typed Surface Runtime：已完成开放类型清理、Zod 校验和局部错误边界。
+4. Chat Application Controller：已完成消息事实源、生成订阅和 Chat intent 收敛。
+5. Official Surface Kit：已完成角色、会话、消息、输入、header 与 Prompt Inspector surface 拆分；Shell、Workspace 与设置预览通过 `ThemedSurfaceOutlet` 挂载业务 surface，消息渲染设置通过 typed surface state 投影，用户消息与 assistant 交互块使用独立渲染路径。
+6. Composition Runtime：已完成 version 1 类型、strict Zod schema、跨 registry 原子预检、Surface input 校验与 desktop/mobile 确定性解析器；内置模式迁移前字段暂时可选且不生成默认树。
+7. Shell 与 Workspace：已完成 concrete Shell 内的 composition outlet 接入、通用 Activity 容器、完整插件目录派生的 Workspace catalog 和 Shell 业务硬编码清理；无 composition 的内置模式暂时保留旧 renderer。
+8. 内置模式：下一步依次迁移 classic、stage、discord、telegram。
+9. 第三方示例：验证声明式模式和 trusted renderer。
+10. 清理与验收：删除旧入口、同步长期文档、执行完整测试与浏览器验证。
 
 ## 提交策略
 
@@ -57,6 +58,8 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 任务 5 的最终定向验证覆盖 27 个测试文件、120 个用例，`npm run type-check` 通过。Telegram 桌面/移动 chat header callback、presentation command、Workspace/设置预览 theme、streaming effect、user/assistant 渲染边界、Choice block 全局依赖与 MessageRenderer 存储穿透均已通过新增红灯固定；真实桌面/移动浏览器验证保留到内置模式迁移与最终验收阶段。
 
 任务 6 的最终定向验证覆盖 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。构建产物继续只由构建命令生成，不纳入 Composition Runtime 提交。
+
+任务 7 审查收敛后的 Shell、Workspace、Activity 与 Desktop Runtime 定向验证覆盖 15 个测试文件、77 个用例。最终 extension 全量 `npm run test` 通过 184 个测试文件、930 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。Workspace 应用目录只从完整插件集合中的 `primarySurface`、navigation slots、Activity metadata 与动态 Activity 派生；Freeform Shell 不再持有 Forge、Launcher 或 Settings 业务特判。生成的 `dist/**` 不纳入本任务提交。
 
 ## 最终验收
 

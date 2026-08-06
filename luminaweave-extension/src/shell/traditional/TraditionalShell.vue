@@ -81,96 +81,102 @@
       @updateShowDiscordMobileCharacterRail="onUpdateShowDiscordMobileCharacterRail"
     />
 
-    <TelegramMobileStack
-      v-if="isTelegramMobileMode"
-      :route="telegramMobileCurrentRoute"
-      :routeTitle="telegramMobileStackTitle"
-      :showStackBar="telegramMobileStackShowsBar"
-      :showBottomNavPadding="shouldShowTelegramMobileBottomNav"
-      :mainSurfaceVariant="shellMainSurfaceVariant"
-      :mainSurfaceStyle="shellMainSurfaceStyle"
-      :mobileMainStyle="discordMobileMainStyle"
-      :state="characterChannelState"
-      :selectedCharacterKey="telegramSelectedCharacterKey"
-      :telegramToolEntries="telegramToolEntries"
-      :activeTelegramToolId="activeTelegramToolId"
-      :telegramListMode="telegramConversationListMode"
-      :desktopModes="desktopModeOptions"
-      :activeDesktopModeId="activeDesktopModeId"
-      :widgetGroups="widgetGroups"
-      :toolContractId="telegramMobileToolContractId"
-      :toolProps="telegramMobileToolProps"
-      :toolActivity="telegramMobileToolActivity"
-      :toolAuxSidebarMode="telegramMobileToolAuxSidebarMode"
-      :onPopRoute="onPopTelegramMobileRoute"
-      :onRenameSession="onRenameDiscordChatSession"
-      :onDeleteSession="onDeleteDiscordChatSession"
-      :onOpenSession="onOpenTelegramMobileSession"
-      :onCreateSession="onCreateTelegramMobileSession"
-      :onTelegramListModeChange="onSetTelegramConversationListMode"
-      :onOpenTelegramToolEntry="onOpenTelegramMobileToolEntry"
-      :onSelectCharacterOverview="onOpenTelegramMobileCharacterOverview"
-      :onToggleGroup="onToggleDiscordCharacterGroup"
-      :onToggleSessionExpansion="onToggleDiscordCharacterSessionExpansion"
-      :onOpenPanel="onOpenTelegramMobilePanel"
-      :onHandleRoleProfileTool="onHandleTelegramMobileRoleProfileTool"
-      :onOpenRoleProfile="onOpenTelegramMobileRoleProfile"
-      :onUpdateDesktopMode="onUpdateDesktopMode"
-      :onSelectBottomNav="onSelectTelegramBottomNav"
-      :onClose="onClose"
-    />
+    <slot
+      name="composition"
+      :activity-component="compositionActivityComponent"
+      :activity-component-props="compositionActivityComponentProps"
+    >
+      <TelegramMobileStack
+        v-if="isTelegramMobileMode"
+        :route="telegramMobileCurrentRoute"
+        :routeTitle="telegramMobileStackTitle"
+        :showStackBar="telegramMobileStackShowsBar"
+        :showBottomNavPadding="shouldShowTelegramMobileBottomNav"
+        :mainSurfaceVariant="shellMainSurfaceVariant"
+        :mainSurfaceStyle="shellMainSurfaceStyle"
+        :mobileMainStyle="discordMobileMainStyle"
+        :state="characterChannelState"
+        :selectedCharacterKey="telegramSelectedCharacterKey"
+        :telegramToolEntries="telegramToolEntries"
+        :activeTelegramToolId="activeTelegramToolId"
+        :telegramListMode="telegramConversationListMode"
+        :desktopModes="desktopModeOptions"
+        :activeDesktopModeId="activeDesktopModeId"
+        :widgetGroups="widgetGroups"
+        :toolContractId="telegramMobileToolContractId"
+        :toolProps="telegramMobileToolProps"
+        :toolActivity="telegramMobileToolActivity"
+        :toolAuxSidebarMode="telegramMobileToolAuxSidebarMode"
+        :onPopRoute="onPopTelegramMobileRoute"
+        :onRenameSession="onRenameDiscordChatSession"
+        :onDeleteSession="onDeleteDiscordChatSession"
+        :onOpenSession="onOpenTelegramMobileSession"
+        :onCreateSession="onCreateTelegramMobileSession"
+        :onTelegramListModeChange="onSetTelegramConversationListMode"
+        :onOpenTelegramToolEntry="onOpenTelegramMobileToolEntry"
+        :onSelectCharacterOverview="onOpenTelegramMobileCharacterOverview"
+        :onToggleGroup="onToggleDiscordCharacterGroup"
+        :onToggleSessionExpansion="onToggleDiscordCharacterSessionExpansion"
+        :onOpenPanel="onOpenTelegramMobilePanel"
+        :onHandleRoleProfileTool="onHandleTelegramMobileRoleProfileTool"
+        :onOpenRoleProfile="onOpenTelegramMobileRoleProfile"
+        :onUpdateDesktopMode="onUpdateDesktopMode"
+        :onSelectBottomNav="onSelectTelegramBottomNav"
+        :onClose="onClose"
+      />
 
-    <template v-else>
-      <template v-for="entry in mainSurfaceEntries" :key="entry.plugin.id">
+      <template v-else>
+        <template v-for="entry in mainSurfaceEntries" :key="entry.plugin.id">
+          <div
+            v-show="activeMainTab === entry.plugin.id"
+            class="lw-main-wrapper"
+            :class="{
+              'lw-main-timeline-wrapper': entry.plugin.id === 'lumina-timeline',
+              'has-discord-mobile-shell': isDiscordMobileMode,
+              'has-telegram-mobile-nav': isTelegramMobileMode
+            }"
+            :data-surface-variant="shellMainSurfaceVariant"
+            :style="[shellMainSurfaceStyle, discordMobileMainStyle]"
+          >
+            <TelegramCharacterOverview
+              v-if="isTelegramCharacterOverviewVisible(entry.plugin.id)"
+              :state="characterChannelState"
+              :selectedCharacterKey="telegramSelectedCharacterKey"
+              :isMobile="isMobile"
+              @openSession="onOpenDiscordChatSession"
+              @createSession="onCreateDiscordChatSession"
+              @openTool="onSwitchRightPanel"
+            />
+            <template v-else>
+              <ThemedSurfaceOutlet
+                v-if="entry.plugin.id !== 'lumina-timeline' || activeMainTab === 'lumina-timeline' || isTimelineLoadedOnce"
+                :contract-id="entry.contractId"
+                :input="getMainSurfaceInput(entry.contractId)"
+                :desktop-mode-id="activeDesktopModeId"
+              />
+            </template>
+          </div>
+        </template>
+      </template>
+
+      <template v-if="!isTelegramMobileMode" v-for="tab in dynamicTabs" :key="tab.id">
         <div
-          v-show="activeMainTab === entry.plugin.id"
+          v-show="activeMainTab === tab.id"
           class="lw-main-wrapper"
-          :class="{
-            'lw-main-timeline-wrapper': entry.plugin.id === 'lumina-timeline',
-            'has-discord-mobile-shell': isDiscordMobileMode,
-            'has-telegram-mobile-nav': isTelegramMobileMode
-          }"
+          :class="{ 'has-discord-mobile-shell': isDiscordMobileMode, 'has-telegram-mobile-nav': isTelegramMobileMode }"
           :data-surface-variant="shellMainSurfaceVariant"
           :style="[shellMainSurfaceStyle, discordMobileMainStyle]"
         >
-          <TelegramCharacterOverview
-            v-if="isTelegramCharacterOverviewVisible(entry.plugin.id)"
-            :state="characterChannelState"
-            :selectedCharacterKey="telegramSelectedCharacterKey"
-            :isMobile="isMobile"
-            @openSession="onOpenDiscordChatSession"
-            @createSession="onCreateDiscordChatSession"
-            @openTool="onSwitchRightPanel"
+          <DynamicTabOutlet
+            :tab="tab"
+            :desktop-mode-id="activeDesktopModeId"
+            :is-mobile="isMobile"
+            :aux-sidebar-mode="effectiveForgeAuxSidebarMode"
+            :active-right-panel-id="isForgeActiveInTraditional ? activeRightPanel : undefined"
           />
-          <template v-else>
-            <ThemedSurfaceOutlet
-              v-if="entry.plugin.id !== 'lumina-timeline' || activeMainTab === 'lumina-timeline' || isTimelineLoadedOnce"
-              :contract-id="entry.contractId"
-              :input="getMainSurfaceInput(entry.contractId)"
-              :desktop-mode-id="activeDesktopModeId"
-            />
-          </template>
         </div>
       </template>
-    </template>
-
-    <template v-if="!isTelegramMobileMode" v-for="tab in dynamicTabs" :key="tab.id">
-      <div
-        v-show="activeMainTab === tab.id"
-        class="lw-main-wrapper"
-        :class="{ 'has-discord-mobile-shell': isDiscordMobileMode, 'has-telegram-mobile-nav': isTelegramMobileMode }"
-        :data-surface-variant="shellMainSurfaceVariant"
-        :style="[shellMainSurfaceStyle, discordMobileMainStyle]"
-      >
-        <DynamicTabOutlet
-          :tab="tab"
-          :desktop-mode-id="activeDesktopModeId"
-          :is-mobile="isMobile"
-          :aux-sidebar-mode="effectiveForgeAuxSidebarMode"
-          :active-right-panel-id="isForgeActiveInTraditional ? activeRightPanel : undefined"
-        />
-      </div>
-    </template>
+    </slot>
 
     <WidgetPanelHost
       :activeRightPanel="activeRightPanel"
@@ -242,6 +248,7 @@ import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/offi
 import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
 import DynamicTabOutlet from '../DynamicTabOutlet.vue';
 import type { SurfaceContractId } from '../../platform/surface/types.js';
+import ShellPrimaryActivityOutlet from '../ShellPrimaryActivityOutlet.vue';
 
 const props = defineProps<{
   runtimeContext: ShellRuntimeContext;
@@ -441,6 +448,55 @@ const onOpenTelegramMobileToolEntry = (toolId: TelegramRailToolEntry['id']) => {
   onOpenTelegramToolEntry(toolId);
   onPushTelegramMobileRoute({ name: 'tool', toolId });
 };
+const compositionActivityComponent = computed(() => (
+  isTelegramMobileMode.value ? TelegramMobileStack : ShellPrimaryActivityOutlet
+));
+const compositionActivityComponentProps = computed(() => {
+  if (!isTelegramMobileMode.value) {
+    return {
+      runtimeContext: props.runtimeContext,
+      runtimeSurfaces: props.runtimeSurfaces
+    };
+  }
+
+  return {
+    route: telegramMobileCurrentRoute.value,
+    routeTitle: telegramMobileStackTitle.value,
+    showStackBar: telegramMobileStackShowsBar.value,
+    showBottomNavPadding: shouldShowTelegramMobileBottomNav.value,
+    mainSurfaceVariant: shellMainSurfaceVariant.value,
+    mainSurfaceStyle: shellMainSurfaceStyle.value,
+    mobileMainStyle: discordMobileMainStyle.value,
+    state: characterChannelState.value,
+    selectedCharacterKey: telegramSelectedCharacterKey.value,
+    telegramToolEntries: telegramToolEntries.value,
+    activeTelegramToolId: activeTelegramToolId.value,
+    telegramListMode: telegramConversationListMode.value,
+    desktopModes: desktopModeOptions.value,
+    activeDesktopModeId: activeDesktopModeId.value,
+    widgetGroups: widgetGroups.value,
+    toolContractId: telegramMobileToolContractId.value,
+    toolProps: telegramMobileToolProps.value,
+    toolActivity: telegramMobileToolActivity.value,
+    toolAuxSidebarMode: telegramMobileToolAuxSidebarMode.value,
+    onPopRoute: onPopTelegramMobileRoute,
+    onRenameSession: onRenameDiscordChatSession,
+    onDeleteSession: onDeleteDiscordChatSession,
+    onOpenSession: onOpenTelegramMobileSession,
+    onCreateSession: onCreateTelegramMobileSession,
+    onTelegramListModeChange: onSetTelegramConversationListMode,
+    onOpenTelegramToolEntry: onOpenTelegramMobileToolEntry,
+    onSelectCharacterOverview: onOpenTelegramMobileCharacterOverview,
+    onToggleGroup: onToggleDiscordCharacterGroup,
+    onToggleSessionExpansion: onToggleDiscordCharacterSessionExpansion,
+    onOpenPanel: onOpenTelegramMobilePanel,
+    onHandleRoleProfileTool: onHandleTelegramMobileRoleProfileTool,
+    onOpenRoleProfile: onOpenTelegramMobileRoleProfile,
+    onUpdateDesktopMode,
+    onSelectBottomNav: onSelectTelegramBottomNav,
+    onClose
+  };
+});
 const { cssVars: telegramFrameVars } = useSurfaceSkin('telegram.frame');
 const telegramFrameStyle = computed<CSSProperties>(() => telegramFrameVars.value as CSSProperties);
 const telegramLeftRailStyle = computed<CSSProperties>(() => ({

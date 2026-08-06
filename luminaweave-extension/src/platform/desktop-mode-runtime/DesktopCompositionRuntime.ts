@@ -206,3 +206,17 @@ export const resolveDesktopComposition = (
     composition: DesktopModeComposition,
     viewport: DesktopCompositionViewport
 ): DesktopCompositionNode => cloneCompositionNode(composition[viewport]);
+
+export const collectDesktopCompositionSurfaceIds = (
+    node: DesktopCompositionNode
+): SurfaceContractId[] => {
+    if (node.kind === 'surface') {
+        return [node.contractId];
+    }
+    if (node.kind === 'activity-slot') {
+        return [];
+    }
+
+    const collected = node.children.flatMap(collectDesktopCompositionSurfaceIds);
+    return [...new Set(collected)];
+};
