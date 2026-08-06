@@ -191,6 +191,50 @@ describe('DesktopModeRuntimeRegistry', () => {
         }
     });
 
+    it('resolves discord and telegram through their declared surface compositions', () => {
+        desktopModeRuntimeRegistry.clearForTests();
+        initializeDesktopModeRuntime();
+
+        expect(desktopModeRuntimeRegistry.resolveComposition('discord', 'desktop')).toMatchObject({
+            id: 'discord-desktop-layout',
+            kind: 'group',
+            direction: 'row',
+            size: 'fill',
+            visibility: 'visible',
+            children: [
+                {
+                    id: 'discord-desktop-roster',
+                    kind: 'surface',
+                    contractId: 'character.roster',
+                    input: { compact: true },
+                    size: 'content',
+                    visibility: 'visible'
+                },
+                {
+                    id: 'discord-desktop-activity',
+                    kind: 'activity-slot',
+                    size: 'fill',
+                    visibility: 'visible'
+                }
+            ]
+        });
+        expect(desktopModeRuntimeRegistry.resolveComposition('discord', 'mobile')).toMatchObject({
+            id: 'discord-mobile-activity',
+            kind: 'activity-slot',
+            size: 'fill',
+            visibility: 'visible'
+        });
+
+        for (const viewport of ['desktop', 'mobile'] as const) {
+            expect(desktopModeRuntimeRegistry.resolveComposition('telegram', viewport)).toMatchObject({
+                id: `telegram-${viewport}-activity`,
+                kind: 'activity-slot',
+                size: 'fill',
+                visibility: 'visible'
+            });
+        }
+    });
+
     it('keeps the runtime registry synchronized with custom modes registered after initialization', () => {
         desktopModeRuntimeRegistry.clearForTests();
         initializeDesktopModeRuntime();

@@ -86,6 +86,13 @@ const createSession = (
   background: var(--lw-bg-app);
 }
 
+.character-roster-surface.is-compact {
+  width: var(--lw-character-rail-width, 292px);
+  min-width: min(var(--lw-character-rail-width, 292px), 100%);
+  max-width: min(var(--lw-character-rail-width, 292px), 100%);
+  flex: 0 0 var(--lw-character-rail-width, 292px);
+}
+
 .character-roster-surface > header {
   display: flex;
   height: 42px;

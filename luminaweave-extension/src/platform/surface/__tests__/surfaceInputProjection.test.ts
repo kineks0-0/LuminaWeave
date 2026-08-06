@@ -26,10 +26,10 @@ describe('projectSurfaceInput', () => {
     });
 
     it('keeps chat callbacks while excluding unrelated Activity metadata', () => {
-        const onTelegramBack = (): void => undefined;
+        const onBack = (): void => undefined;
         const input = projectSurfaceInput('chat.main', {
             activity: { size: 'default', pageType: 'nested' },
-            onTelegramBack
+            onBack
         }, {
             isMobile: true,
             workspaceCompact: true
@@ -38,7 +38,7 @@ describe('projectSurfaceInput', () => {
         expect(input).toEqual({
             isMobile: true,
             workspaceCompact: true,
-            onTelegramBack
+            onBack
         });
     });
 

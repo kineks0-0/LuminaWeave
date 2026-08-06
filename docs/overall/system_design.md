@@ -199,7 +199,7 @@ Composition Runtime 作为 Desktop Mode Runtime 的声明式布局层：
 - 节点判别值只允许 `group`、`surface`、`activity-slot`。`group.direction` 只允许 `row | column`，节点尺寸只允许 `content | fill`，可见性只允许 `visible | hidden`；schema 使用 strict object，拒绝 CSS、Vue component、attrs 和其他未声明字段。
 - Surface 节点先由 Zod 校验树结构，再通过 Surface Registry 确认 `contractId` 并调用该 contract 的 input schema。节点 ID 在 desktop/mobile 两棵树之间全局唯一。
 - 注册数据流为 `registerDesktopMode -> runtime preflight -> core registry commit -> runtime registry commit`。preflight 无副作用，同时校验 composition 和 desktop overrides；任一校验失败时两个 registry 与 Surface Registry 均保持原状态。
-- resolver 只按显式 viewport 选择已校验根节点并返回独立副本，不读取 Shell 状态或宿主全局对象。迁移期只对已声明 composition 的 manifest 启用该链路；四个内置模式完成迁移后，所有模式统一从 composition 渲染。
+- resolver 只按显式 viewport 选择已校验根节点并返回独立副本，不读取 Shell 状态或宿主全局对象。classic、stage、discord、telegram 均已声明 composition，并统一从该链路渲染；可选字段和无 composition fallback 只等待最终清理。
 
 Shell 与 Workspace 的投影边界：
 
@@ -207,7 +207,7 @@ Shell 与 Workspace 的投影边界：
 - Desktop navigation model 的 primary/mobile surface 列表在 composition 完成校验后遍历对应根节点派生，不再与组合树并行维护；非法树不会进入导航投影。
 - Workspace 从 `PluginManager.getPlugins()` 的完整启用插件集合派生静态应用目录，而不是只遍历已有 navigation slot。条目仍要求 `primarySurface`，有 main/widget slot 时按 slot 建立入口，只有 `ActivityDescriptor` 时按 Activity 尺寸建立入口；运行时动态 Activity 继续通过通用 DynamicTab outlet 进入窗口。
 - Freeform Shell 只拥有舞台、窗口、焦点、移动导航和 Dock 机制。新建舞台创建空容器，不隐式启动 Launcher；窗口标题栏和菜单不按 Forge、Settings 或其他插件 ID 分支。
-- `ShellRuntimeContext` 只携带 Shell 机制需要的状态；重复的 `layoutMode` 与业务 launchpad 状态不再作为运行时契约。迁移期没有 composition 的内置模式仍走旧 shell renderer，待四个模式迁移后删除该 fallback。
+- `ShellRuntimeContext` 只携带 Shell 机制需要的状态；重复的 `layoutMode` 与业务 launchpad 状态不再作为运行时契约。Discord desktop 的 roster 由 composition 声明，Discord mobile overlay、Telegram desktop tabs 和 Telegram mobile route 通过 Official Surface contract 获取角色、会话与 Chat presentation；Shell 只传递页面栈与容器导航 intent。
 - composition 根实例 key 包含 desktop mode、viewport 和根节点，递归节点 key 继续包含 mode、node kind 与 Surface contract；`ThemedSurfaceOutlet` 以响应式 contract id 解析 skin，模式、viewport 或 renderer 身份变化不会复用旧主题状态。
 
 约束：

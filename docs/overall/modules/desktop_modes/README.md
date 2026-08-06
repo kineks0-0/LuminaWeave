@@ -17,7 +17,7 @@ Desktop Modes 定义 LuminaWeave 的平台级桌面模式。桌面模式不是�
 
 节点 schema 为 strict object，不接受任意 CSS、Vue component、attrs 或宿主对象引用。注册时先执行无副作用 runtime preflight，依次校验 version、布局、desktop/mobile 全树节点 ID、Surface contract 和 contract input，再校验 desktop overrides；全部通过后才写入核心模式列表和 runtime registry。`resolveComposition(desktopModeId, viewport)` 只选择已校验根节点并返回独立副本。
 
-当前任务 6 是分阶段迁移点：四个内置模式尚未声明 composition 时，字段暂时可选且不会生成默认树；一旦声明就必须通过完整校验。classic、stage、discord、telegram 迁移后将 composition 收紧为必填，并删除旧 Shell 业务组合路径。
+classic、stage、discord、telegram 已全部声明 composition，并通过相同的 version、节点 ID、Surface contract 与 input 预检。字段目前只为最终清理保留可选类型；任务 10 将把 composition 收紧为必填并删除无 composition fallback。
 
 ## Shell 与 Workspace 投影
 
@@ -27,7 +27,7 @@ Desktop navigation descriptor 的 desktop/mobile Surface 列表在 composition �
 
 组合根和递归节点的 renderer identity 覆盖 desktop mode、viewport、node kind 与 contract，主题 skin 跟随响应式 contract id 更新，避免切换模式或节点时复用旧 renderer 状态。
 
-任务 7 只完成运行时与壳层迁移。没有 composition 的内置模式仍使用旧 shell renderer；任务 8 将依次迁移 classic、stage、discord、telegram，随后删除 fallback 并把 composition 改为必填。
+classic、stage 与 telegram 的 desktop/mobile 根节点以 Activity slot 保留各自 Shell 容器；Discord desktop 使用 `character.roster + activity-slot` 横向组合，mobile 根节点保留 Activity slot。Discord 角色 overlay、Telegram 左栏 tabs 和移动页面栈通过 `ThemedSurfaceOutlet` 挂载 `character.roster`、`conversation.sessionList` 与 `chat.main`，模式 Shell 不再直接挂载旧角色/会话业务组件。
 
 当前项目仍处于早期阶段，桌面模式不保留旧 Theme Pack 兼容层。代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`；`ThemePack`、`activeThemePack`、`theme-pack-*`、`themePackId`、`useThemePack()` 和 `getThemePack*` 不再作为公开或内部入口。
 

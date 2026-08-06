@@ -14,38 +14,26 @@
       <strong>{{ routeTitle }}</strong>
     </header>
 
-    <DiscordCharacterRail
+    <ThemedSurfaceOutlet
       v-if="route.name === 'conversationList'"
-      :state="state"
-      :isMobile="true"
-      :mobilePlacement="'bottom'"
-      :onRenameSession="onRenameSession"
-      :onDeleteSession="onDeleteSession"
-      :onOpenSession="onOpenSession"
-      :onCreateSession="onCreateSession"
-      :selectedCharacterKey="selectedCharacterKey"
-      :telegramToolEntries="telegramToolEntries"
-      :activeTelegramToolId="activeTelegramToolId"
-      :telegramListMode="telegramListMode"
-      :onTelegramListModeChange="onTelegramListModeChange"
-      :onOpenTelegramToolEntry="onOpenTelegramToolEntry"
-      :onSelectCharacterOverview="onSelectCharacterOverview"
-      :onToggleGroup="onToggleGroup"
-      :onToggleSessionExpansion="onToggleSessionExpansion"
+      contract-id="conversation.sessionList"
+      :input="{ compact: true }"
+      :desktop-mode-id="activeDesktopModeId"
     />
-    <TelegramRoleListPage
+    <ThemedSurfaceOutlet
       v-else-if="route.name === 'roleList'"
-      :state="state"
-      @selectRole="onSelectCharacterOverview"
+      contract-id="character.roster"
+      :input="{ compact: true }"
+      :desktop-mode-id="activeDesktopModeId"
     />
-    <TelegramCharacterOverview
+    <ThemedSurfaceOutlet
       v-else-if="route.name === 'characterOverview'"
-      :state="state"
-      :selectedCharacterKey="route.groupKey || selectedCharacterKey"
-      :isMobile="true"
-      @openSession="onOpenSession"
-      @createSession="onCreateSession"
-      @openTool="onOpenPanel"
+      contract-id="conversation.sessionList"
+      :input="{
+        characterKey: route.groupKey || selectedCharacterKey || undefined,
+        compact: true
+      }"
+      :desktop-mode-id="activeDesktopModeId"
     />
     <ThemedSurfaceOutlet
       v-else-if="route.name === 'roleProfile'"
@@ -64,8 +52,8 @@
       contract-id="chat.main"
       :input="{
         isMobile: true,
-        onTelegramBack: onPopRoute,
-        onTelegramOpenRoleProfile: onOpenRoleProfile,
+        onBack: onPopRoute,
+        onOpenRoleProfile: onOpenRoleProfile,
         onOpenPanel: onOpenPanel
       }"
       :desktop-mode-id="activeDesktopModeId"
@@ -110,17 +98,12 @@ import type { SurfaceContractId } from '../../../platform/surface/types.js';
 import ThemedSurfaceOutlet from '../../../platform/surface/ThemedSurfaceOutlet.vue';
 import SurfaceFailure from '../../../platform/surface/SurfaceFailure.vue';
 import { projectSurfaceInput } from '../../../platform/surface/surfaceInputProjection.js';
-import DiscordCharacterRail from '../../../components/DiscordCharacterRail.vue';
 import type { CharacterChannelState } from '../../../types/ConversationContextTypes.js';
 import type {
   ShellRuntimeActions,
-  TelegramConversationListMode,
-  TelegramRailToolEntry,
   TelegramStackRoute,
   WidgetPanelGroup
 } from '../../types.js';
-import TelegramCharacterOverview from './TelegramCharacterOverview.vue';
-import TelegramRoleListPage from './TelegramRoleListPage.vue';
 import TelegramUserProfilePage from './TelegramUserProfilePage.vue';
 
 defineProps<{
@@ -133,9 +116,6 @@ defineProps<{
   mobileMainStyle: CSSProperties;
   state: CharacterChannelState;
   selectedCharacterKey: string | null;
-  telegramToolEntries: TelegramRailToolEntry[];
-  activeTelegramToolId: string | null;
-  telegramListMode: TelegramConversationListMode;
   desktopModes: Array<{ value: string; label: string; description?: string }>;
   activeDesktopModeId: string;
   widgetGroups: WidgetPanelGroup[];
@@ -144,15 +124,8 @@ defineProps<{
   toolActivity: ActivityDescriptor;
   toolAuxSidebarMode?: 'hidden';
   onPopRoute: ShellRuntimeActions['traditional']['popTelegramMobileRoute'];
-  onRenameSession: ShellRuntimeActions['traditional']['renameDiscordChatSession'];
-  onDeleteSession: ShellRuntimeActions['traditional']['deleteDiscordChatSession'];
   onOpenSession: ShellRuntimeActions['traditional']['openDiscordMobileChatSession'];
   onCreateSession: ShellRuntimeActions['traditional']['createDiscordMobileChatSession'];
-  onTelegramListModeChange: ShellRuntimeActions['traditional']['setTelegramConversationListMode'];
-  onOpenTelegramToolEntry: ShellRuntimeActions['traditional']['openTelegramToolEntry'];
-  onSelectCharacterOverview: ShellRuntimeActions['traditional']['selectTelegramCharacterOverview'];
-  onToggleGroup: ShellRuntimeActions['traditional']['toggleDiscordCharacterGroup'];
-  onToggleSessionExpansion: ShellRuntimeActions['traditional']['toggleDiscordCharacterSessionExpansion'];
   onOpenPanel: (panelId: string) => void;
   onHandleRoleProfileTool: (panelId: string) => void;
   onOpenRoleProfile: () => void;

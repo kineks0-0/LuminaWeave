@@ -11,6 +11,21 @@ export const telegramDesktopMode: DesktopModeManifest = {
     shell: {
         kind: 'traditional'
     },
+    composition: {
+        version: 1,
+        desktop: {
+            id: 'telegram-desktop-activity',
+            kind: 'activity-slot',
+            size: 'fill',
+            visibility: 'visible'
+        },
+        mobile: {
+            id: 'telegram-mobile-activity',
+            kind: 'activity-slot',
+            size: 'fill',
+            visibility: 'visible'
+        }
+    },
     navigationPreset: {
         traditional: {
             headerVariant: 'telegram',

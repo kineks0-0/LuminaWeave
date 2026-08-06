@@ -17,27 +17,17 @@
           角色
         </button>
       </nav>
-      <DiscordCharacterRail
+      <ThemedSurfaceOutlet
         v-if="leftRoute === 'conversationList'"
-        :state="state"
-        :onRenameSession="onRenameSession"
-        :onDeleteSession="onDeleteSession"
-        :onOpenSession="onOpenSession"
-        :onCreateSession="onCreateSession"
-        :selectedCharacterKey="selectedCharacterKey"
-        :telegramToolEntries="telegramToolEntries"
-        :activeTelegramToolId="activeTelegramToolId"
-        :telegramListMode="telegramListMode"
-        :onTelegramListModeChange="onTelegramListModeChange"
-        :onOpenTelegramToolEntry="onOpenTelegramToolEntry"
-        :onSelectCharacterOverview="onSelectCharacterOverview"
-        :onToggleGroup="onToggleGroup"
-        :onToggleSessionExpansion="onToggleSessionExpansion"
+        contract-id="conversation.sessionList"
+        :input="{}"
+        :desktop-mode-id="activeDesktopModeId"
       />
-      <TelegramRoleListPage
+      <ThemedSurfaceOutlet
         v-else
-        :state="state"
-        @selectRole="onSelectCharacterOverview"
+        contract-id="character.roster"
+        :input="{}"
+        :desktop-mode-id="activeDesktopModeId"
       />
     </div>
     <div
@@ -53,37 +43,18 @@
 
 <script setup lang="ts">
 import type { CSSProperties } from 'vue';
-import DiscordCharacterRail from '../../../components/DiscordCharacterRail.vue';
-import type {
-  CharacterChannelState
-} from '../../../types/ConversationContextTypes.js';
+import ThemedSurfaceOutlet from '../../../platform/surface/ThemedSurfaceOutlet.vue';
 import type {
   ShellRuntimeActions,
-  TelegramConversationListMode,
-  TelegramDesktopLeftRoute,
-  TelegramRailToolEntry
+  TelegramDesktopLeftRoute
 } from '../../types.js';
-import TelegramRoleListPage from './TelegramRoleListPage.vue';
 
 defineProps<{
-  state: CharacterChannelState;
+  activeDesktopModeId: string;
   leftRoute: TelegramDesktopLeftRoute;
   leftRailStyle: CSSProperties;
   isLeftRailResizing: boolean;
-  selectedCharacterKey: string | null;
-  telegramToolEntries: TelegramRailToolEntry[];
-  activeTelegramToolId: string | null;
-  telegramListMode: TelegramConversationListMode;
   onSetLeftRoute: ShellRuntimeActions['traditional']['setTelegramDesktopLeftRoute'];
-  onRenameSession: ShellRuntimeActions['traditional']['renameDiscordChatSession'];
-  onDeleteSession: ShellRuntimeActions['traditional']['deleteDiscordChatSession'];
-  onOpenSession: ShellRuntimeActions['traditional']['openDiscordChatSession'];
-  onCreateSession: ShellRuntimeActions['traditional']['createDiscordChatSession'];
-  onTelegramListModeChange: ShellRuntimeActions['traditional']['setTelegramConversationListMode'];
-  onOpenTelegramToolEntry: ShellRuntimeActions['traditional']['openTelegramToolEntry'];
-  onSelectCharacterOverview: ShellRuntimeActions['traditional']['selectTelegramCharacterOverview'];
-  onToggleGroup: ShellRuntimeActions['traditional']['toggleDiscordCharacterGroup'];
-  onToggleSessionExpansion: ShellRuntimeActions['traditional']['toggleDiscordCharacterSessionExpansion'];
   onLeftRailResizeStart: ShellRuntimeActions['traditional']['telegramLeftRailResizeStart'];
 }>();
 </script>
@@ -132,15 +103,13 @@ defineProps<{
   color: var(--lw-primary);
 }
 
-.lw-telegram-left-pane .lw-discord-rail[data-skin-variant='telegram'] {
+.lw-telegram-left-stack > .character-roster-surface,
+.lw-telegram-left-stack > .conversation-session-list {
   width: 100%;
   min-width: 0;
-  max-width: none;
-  flex: 1 1 auto;
-}
-
-.lw-traditional-shell.is-telegram-desktop .lw-discord-rail[data-skin-variant='telegram'] {
   height: auto;
+  min-height: 0;
+  flex: 1 1 0;
   border-radius: var(--lw-telegram-pane-radius, 0);
   border: 1px solid var(--lw-telegram-pane-border, transparent);
   box-shadow: var(--lw-telegram-pane-shadow, none);
