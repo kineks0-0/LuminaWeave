@@ -236,6 +236,8 @@ Renderer 接收：
 
 `SurfaceContractMap` 是进程内 contract 类型事实源；每个可注册 contract 必须提供 Zod input schema。contract、plugin renderer 和 desktop override 均先整批校验再原子写入 registry，未知 contract、map key/owner 不一致、重复注册或非法 input 在节点边界返回稳定错误。
 
+受信任第三方 renderer 通过 module augmentation 增加自己的 contract 类型，并由 `PluginManifestV2.surfaces + businessRenderers` 提交同一批注册。`src/examples/desktop-experience/` 的 `example.characterFocus` fixture 只作为独立装配示例导出：它从 `DesktopExperienceRuntime` 投影当前角色、会话、消息、时间线与生成态，所有订阅和 watcher 均注册到 `onDispose()`，并使用 revision/disposed guard 丢弃迟到异步结果。示例不会在 bootstrap 阶段自动注册，声明式模式也不能绕过 Surface Registry 引用未注册 contract。
+
 `SurfaceOutlet` 解析 renderer 后创建独立 context。等价 input/theme 不重建 context；input、theme 或 renderer 变化时先销毁旧 context。renderer 创建或渲染异常只替换对应节点，并立即逐项执行已注册 disposer；单个 disposer 抛错不得覆盖原始错误或阻断其他清理。
 
 Renderer 不直接写 Core 内部状态。如需打开其他页面，必须通过 runtime 的 activity 能力发起 Activity LaunchIntent；不得直接决定 tab、右栏、workspace window 或移动页面栈。Surface Runtime 不改变持久化边界，普通 Tauri 的 runtime extension store 继续使用 SQLite，浏览器与 standalone-local 的既有 IndexedDB 实现保持不变。

@@ -215,6 +215,7 @@ Desktop Modes 定义完整工作方式，不只是皮肤。
 - `DesktopExperienceRuntime` 统一暴露 conversation、generation、character、timeline、activity 五组 headless 领域能力，并拥有显式 `dispose()` 生命周期。
 - Chat renderer 通过 runtime 创建应用控制器；Controller 销毁时必须取消 conversation、generation 与 Prompt inspection 订阅，presentation 只消费 snapshot 与 intents。
 - 插件通过 `SurfaceContractMap` 声明 input、state 与 intents，通过 surface contract 暴露业务 renderer；桌面模式可以包裹、替换布局或提供 variant。
+- 受信任第三方插件通过 TypeScript module augmentation 扩展 `SurfaceContractMap`，为 contract 提供 strict Zod input schema，并只通过 `PluginManifestV2.businessRenderers` 注册 Vue/TypeScript renderer。纯声明式桌面模式只能引用已注册 contract；扩展示例只导出 fixture，不自动进入正式插件或内置模式 registry。
 - Official Surface Kit 提供角色、会话、消息流、输入、header 与 Prompt Inspector 等 typed Chat surface；presentation 不直接访问 Pinia、API Facade、存储、Shell、宿主对象或桌面模式判断，消息渲染设置由 Surface context 投影。
 - 既有 Chat 滚动与输入聚焦事件必须先由 `DesktopExperienceRuntime.activity` 适配为 typed presentation command，再由 Controller snapshot 投影给 Surface；presentation 不直接订阅宿主事件。
 - 需要 runtime context 的设置预览通过 `settingsPreviewSurface` 元数据进入 `ThemedSurfaceOutlet -> SurfaceOutlet`，不能以裸 Vue component 或裸 `SurfaceOutlet` 绕过 skin、contract 校验、theme context 与局部错误边界。

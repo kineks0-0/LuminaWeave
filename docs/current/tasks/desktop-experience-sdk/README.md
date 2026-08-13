@@ -85,7 +85,14 @@ Shell 与 Workspace 迁移已完成当前阶段实现：
 - Discord mobile 的角色 overlay、Telegram desktop 左栏和 Telegram mobile 的会话/角色路由已改用 `character.roster`、`conversation.sessionList` 与 `chat.main` Official Surface；Shell 只保留 guild rail、tabs、页面栈、overlay 和 Activity 容器。
 - composition renderer 的实例身份包含 desktop mode、viewport、node kind 与 Surface contract；`ThemedSurfaceOutlet` 对 contract 变化响应式重算 skin，避免模式或节点切换复用旧主题状态。
 
-任务 2 定向验证：4 个测试文件、15 个测试通过；任务 3 定向验证：19 个测试文件、89 个用例通过；任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；任务 5 定向验证：27 个测试文件、120 个用例通过。任务 6 定向验证通过 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。任务 7 审查收敛后的 Shell、Workspace、Activity 与 Desktop Runtime 定向验证通过 15 个测试文件、77 个用例；最终 extension 全量 `npm run test` 通过 184 个测试文件、930 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。任务 8 第一批已将 classic、stage 的 desktop/mobile Activity 纳入同一 Composition Runtime，定向测试 2 个文件、15 个用例与 `npm run type-check` 通过；第二批完成 Discord、Telegram 的 composition 与 Official Surface 迁移，扩大定向测试通过 18 个文件、92 个用例，`npm run type-check` 通过。真实浏览器与宿主验收仍留在最终阶段。
+第三方扩展示例已完成：
+
+- `src/examples/desktop-experience/` 提供独立导出的 `example.characterFocus` contract、strict Zod input schema、纯声明式 desktop/mobile mode fixture 与 trusted Vue renderer；示例不自动注册，不进入正式插件或内置模式目录。
+- contract 通过 `SurfaceContractMap` module augmentation 声明 input、snapshot state 与 refresh/open/send/stop intents，renderer 只消费 `DesktopExperienceRuntime` 的 character、conversation、generation 与 timeline 能力。
+- context factory 订阅角色 ref、conversation 与 generation，使用 revision/disposed guard 隔离迟到异步结果，并通过 `onDispose()` 清理 watcher 和两个领域订阅。
+- 独立 registry 测试覆盖 composition preflight、未知 input 字段拒绝、当前角色自动更新、typed intent 转发、销毁后停止更新，以及 renderer 异常不影响同级节点。
+
+任务 2 定向验证：4 个测试文件、15 个测试通过；任务 3 定向验证：19 个测试文件、89 个用例通过；任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；任务 5 定向验证：27 个测试文件、120 个用例通过。任务 6 定向验证通过 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。任务 7 审查收敛后的 Shell、Workspace、Activity 与 Desktop Runtime 定向验证通过 15 个测试文件、77 个用例；最终 extension 全量 `npm run test` 通过 184 个测试文件、930 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。任务 8 第一批已将 classic、stage 的 desktop/mobile Activity 纳入同一 Composition Runtime，定向测试 2 个文件、15 个用例与 `npm run type-check` 通过；第二批完成 Discord、Telegram 的 composition 与 Official Surface 迁移，扩大定向测试通过 18 个文件、92 个用例，`npm run type-check` 通过。任务 9 示例自身测试通过 1 个测试文件、6 个用例；扩大到 Surface Registry、Surface Runtime、renderer boundary 与 Composition Runtime 的定向测试通过 6 个测试文件、52 个用例，`npm run type-check` 通过。真实浏览器与宿主验收仍留在最终阶段。
 
 ## 恢复入口
 

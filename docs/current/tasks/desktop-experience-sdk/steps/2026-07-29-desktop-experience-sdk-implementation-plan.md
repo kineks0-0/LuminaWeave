@@ -48,7 +48,7 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 6. Composition Runtime：已完成 version 1 类型、strict Zod schema、跨 registry 原子预检、Surface input 校验与 desktop/mobile 确定性解析器；字段必填化与 fallback 删除在任务 10 统一清理。
 7. Shell 与 Workspace：已完成 concrete Shell 内的 composition outlet 接入、通用 Activity 容器、完整插件目录派生的 Workspace catalog 和 Shell 业务硬编码清理。
 8. 内置模式：classic、stage、discord、telegram 已完成显式 desktop/mobile composition；Discord desktop 组合角色 roster 与 Activity，Discord mobile overlay、Telegram desktop 左栏及 mobile 页面栈统一消费 Official Surface Kit，`chat.main` 不再暴露 Telegram 专属 callback 名称。
-9. 第三方示例：验证声明式模式和 trusted renderer。
+9. 第三方示例：已通过独立导出的 `example.characterFocus` contract、纯声明式 desktop/mobile mode fixture 与 `businessRenderers` trusted Vue renderer，验证 strict input、当前角色/会话/消息/时间线投影、typed runtime intents、订阅销毁和局部错误隔离；示例不自动注册。
 10. 清理与验收：删除旧入口、同步长期文档、执行完整测试与浏览器验证。
 
 ## 提交策略
@@ -62,6 +62,8 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 任务 7 审查收敛后的 Shell、Workspace、Activity 与 Desktop Runtime 定向验证覆盖 15 个测试文件、77 个用例。最终 extension 全量 `npm run test` 通过 184 个测试文件、930 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。Workspace 应用目录只从完整插件集合中的 `primarySurface`、navigation slots、Activity metadata 与动态 Activity 派生；Freeform Shell 不再持有 Forge、Launcher 或 Settings 业务特判。生成的 `dist/**` 不纳入本任务提交。
 
 任务 8 第一批将 classic、stage 的 desktop/mobile Activity 纳入 Composition Runtime。第二批为 Discord、Telegram 增加 version 1 composition，将角色与会话入口替换为 `character.roster` / `conversation.sessionList`，并通过通用 `chat.main` callback 维持 Shell 页面栈导航；扩大定向验证通过 18 个测试文件、92 个用例，`npm run type-check` 通过。旧业务组件文件与未使用的 Shell runtime 状态统一留到任务 10 删除。
+
+任务 9 在 `src/examples/desktop-experience/` 增加只导出、不自动注册的第三方扩展示例。测试先因示例模块不存在而红灯，随后以独立 Surface/Desktop Mode registry 验证声明式 composition 与 trusted renderer 装配；示例自身测试通过 1 个测试文件、6 个用例，扩大到 Surface/Composition Runtime 的定向测试通过 6 个测试文件、52 个用例，`npm run type-check` 通过。
 
 ## 最终验收
 

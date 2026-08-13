@@ -29,6 +29,15 @@ Desktop navigation descriptor 的 desktop/mobile Surface 列表在 composition �
 
 classic、stage 与 telegram 的 desktop/mobile 根节点以 Activity slot 保留各自 Shell 容器；Discord desktop 使用 `character.roster + activity-slot` 横向组合，mobile 根节点保留 Activity slot。Discord 角色 overlay、Telegram 左栏 tabs 和移动页面栈通过 `ThemedSurfaceOutlet` 挂载 `character.roster`、`conversation.sessionList` 与 `chat.main`，模式 Shell 不再直接挂载旧角色/会话业务组件。
 
+## 第三方扩展示例
+
+`luminaweave-extension/src/examples/desktop-experience/` 提供一个不自动注册的 `example.characterFocus` 示例。它演示两层扩展模型：
+
+- 纯声明式 `DesktopModeManifest.composition` 只组合已注册的 `example.characterFocus` surface 与 `activity-slot`。
+- trusted plugin 通过 `SurfaceContractMap` module augmentation、strict Zod schema 和 `PluginManifestV2.businessRenderers` 注册 Vue renderer，并只调用 `DesktopExperienceRuntime` 的 typed 能力。
+
+示例 context factory 跟随当前角色与会话，订阅 conversation/generation 并投影消息和时间线；销毁时取消 watcher 和所有订阅，迟到异步结果不得更新已卸载 surface。示例目录不属于正式插件 bootstrap、内置模式或远程代码加载机制。
+
 当前项目仍处于早期阶段，桌面模式不保留旧 Theme Pack 兼容层。代码和 storage 统一使用 `activeDesktopMode` 与 `desktop-mode-*`；`ThemePack`、`activeThemePack`、`theme-pack-*`、`themePackId`、`useThemePack()` 和 `getThemePack*` 不再作为公开或内部入口。
 
 代码目录边界：

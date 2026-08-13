@@ -247,6 +247,11 @@
 - **任务 8 第二批有效修复**: Discord manifest 的 desktop composition 声明 compact `character.roster + activity-slot`，mobile 声明 Activity slot；Telegram desktop/mobile 均声明 Activity slot。Discord mobile overlay、Telegram desktop tabs 与 Telegram mobile conversation/role/overview route 改用 `ThemedSurfaceOutlet`，`chat.main` callback 收敛为通用 `onBack` / `onOpenRoleProfile`。Traditional Shell 删除旧 `DiscordCharacterRail` / `TelegramCharacterOverview` 业务组合，compact roster、四向 mobile sheet 与 Telegram 左栏分别补充稳定尺寸和 flex/overflow 约束。
 - **任务 8 第二批失败尝试**: 没有从当前活动界面推断角色或会话 Surface，也没有保留 Telegram 专属 callback 作为兼容别名；这两种做法都会重新建立模式专属数据路径。首次替换组件只完成 renderer 路径，布局红灯证明旧组件 CSS 不能作为新 contract 的隐式容器协议，随后在 Surface 根类和 Shell 容器边界补齐受控尺寸。
 - **任务 8 第二批验证结果**: Desktop Composition、Surface Runtime、Official Surface Kit 与 Shell runtime/主题/Telegram 结构扩大定向测试通过 18 个测试文件、92 个用例；`npm run type-check` 与任务范围 `git diff --check` 均退出码 0。真实 desktop/mobile 浏览器及 SillyTavern/Tauri 宿主验证仍属于最终验收。
+- **任务 9 复现的错误消息**: `DesktopExperienceExtensionExamples.test.ts` 首次运行因 `src/examples/desktop-experience/index.ts` 不存在而失败，固定了第三方声明式 mode 与 trusted renderer 尚无仓库内可执行示例的事实。
+- **任务 9 根本原因**: 平台 contract、Composition Runtime 与 `businessRenderers` 已具备扩展能力，但缺少一个不依赖正式 bootstrap 的 fixture 同时证明 module augmentation、strict input、当前角色跟随、领域订阅、typed intents 和销毁隔离，第三方作者只能从分散的内置实现反推装配方式。
+- **任务 9 有效修复**: 新增只导出、不自动注册的 `example.characterFocus` contract、context factory、Vue renderer、plugin manifest 与 desktop/mobile composition。context 只调用 `DesktopExperienceRuntime`，使用 revision/disposed guard 隔离迟到异步结果，并通过 `onDispose()` 清理 conversation、generation 与角色 watcher；独立 registry 测试同时验证 renderer 异常只影响本节点。
+- **任务 9 失败尝试**: 没有把示例加入正式插件或内置模式目录，没有新增远程代码加载、安装市场或角色切换自动换模式，也没有为示例建立绕过 Surface Registry 的直接 Vue 挂载路径。
+- **任务 9 验证结果**: 示例自身测试通过 1 个测试文件、6 个用例；扩大到 Surface Registry、Surface Runtime、renderer boundary 与 Composition Runtime 的定向测试通过 6 个测试文件、52 个用例；`npm run type-check` 退出码 0。最终全量 test/build、server 验证和 desktop/mobile 浏览器验收仍属于任务 10。
 
 ## 2026-06-27 AgentRuntime pi compat review fixes
 
