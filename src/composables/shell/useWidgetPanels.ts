@@ -3,11 +3,9 @@ import { lwStorage } from '../../api/storage.js';
 import { luminaWeaveApi as lwApi } from '../../api/index.js';
 import { pluginManager } from '../../core/PluginManager.js';
 import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
-import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
 import type { LuminaPlugin } from '../../types/plugin.js';
 import type { RegisteredPanelEntry, WidgetPanelGroup, WidgetPanelItem, WidgetPluginEntry } from '../../shell/types.js';
 
-const FORGE_AUX_PANEL_PATTERN = /^forge_(lorebook|memory|export|post_tracks|test_chat)$/;
 const TELEGRAM_LEFT_RAIL_STORAGE_KEY = 'luminaWeave.telegram.leftRailWidth';
 const RIGHT_PANEL_STORAGE_KEY = 'luminaWeave.widgetWidth';
 const TELEGRAM_LEFT_RAIL_DEFAULT_WIDTH = 320;
@@ -90,36 +88,11 @@ export const useWidgetPanels = ({
     return toRegisteredPanelEntry(activeRightPanel.value);
   });
 
-  const activeForgeAuxKind = computed<string | null>(() => {
-    const match = activeRightPanel.value.match(FORGE_AUX_PANEL_PATTERN);
-    return match ? match[1] : null;
-  });
-
-  const forgeAuxPanelItems = computed<WidgetPanelItem[]>(() => {
-    const items: WidgetPanelItem[] = [];
-    const forgeAuxKinds = ['lorebook', 'memory', 'export', 'post_tracks', 'test_chat'] as const;
-
-    for (const kind of forgeAuxKinds) {
-      const panelId = `forge_${kind}`;
-      const registered = toRegisteredPanelEntry(panelId);
-      if (registered) {
-        items.push({
-          id: panelId,
-          name: registered.config.title,
-          icon: registered.config.icon || ''
-        });
-      }
-    }
-
-    return items;
-  });
-
   const registeredPanelItems = computed<WidgetPanelItem[]>(() => {
     const items: WidgetPanelItem[] = [];
-    const excludeIds = new Set(['card_maker', 'conflict', 'sync_report', ...forgeAuxPanelItems.value.map((item) => item.id)]);
 
     for (const [id, panel] of desktopSurfaceService.registeredPanels) {
-      if (excludeIds.has(id)) continue;
+      if (panel.config.navigation?.hidden) continue;
       items.push({
         id,
         name: panel.config.title,
@@ -136,18 +109,9 @@ export const useWidgetPanels = ({
       name: plugin.name,
       icon: plugin.icon
     }));
-    const cardMakerPanel = toRegisteredPanelEntry('card_maker');
     const merged = [...widgetItems];
     const seen = new Set(merged.map((item) => item.id));
-    const extraItems = [
-      ...(cardMakerPanel ? [{
-        id: 'card_maker',
-        name: cardMakerPanel.config.title,
-        icon: cardMakerPanel.config.icon || ''
-      }] : []),
-      ...registeredPanelItems.value,
-      ...forgeAuxPanelItems.value
-    ];
+    const extraItems = registeredPanelItems.value;
 
     for (const item of extraItems) {
       if (seen.has(item.id)) continue;
@@ -165,32 +129,25 @@ export const useWidgetPanels = ({
       name: plugin.name,
       icon: plugin.icon
     }));
-    const cardMakerPanel = toRegisteredPanelEntry('card_maker');
-    const panelItems = [
-      ...(cardMakerPanel ? [{
-        id: 'card_maker',
-        name: cardMakerPanel.config.title,
-        icon: cardMakerPanel.config.icon || ''
-      }] : []),
-      ...registeredPanelItems.value
-    ];
+    const panelGroups = new Map<string, WidgetPanelItem[]>();
+    for (const item of registeredPanelItems.value) {
+      const panel = desktopSurfaceService.registeredPanels.get(item.id);
+      const group = panel?.config.navigation?.group || '面板';
+      const items = panelGroups.get(group) || [];
+      items.push(item);
+      panelGroups.set(group, items);
+    }
 
     if (pluginItems.length > 0) {
       groups.push({ label: '插件', items: pluginItems });
     }
-    if (forgeAuxPanelItems.value.length > 0) {
-      groups.push({ label: '制卡辅助', items: forgeAuxPanelItems.value });
-    }
-    if (panelItems.length > 0) {
-      groups.push({ label: '面板', items: panelItems });
-    }
+    panelGroups.forEach((items, label) => groups.push({ label, items }));
 
     return groups;
   });
 
   const createMobileWidgetTabProps = (panelId: string): Record<string, unknown> => {
-    const auxKindMatch = panelId.match(FORGE_AUX_PANEL_PATTERN);
-    return auxKindMatch ? { kind: auxKindMatch[1] } : {};
+    return toRegisteredPanelEntry(panelId)?.config.defaultInput || {};
   };
 
   const openTemporaryWidgetTab = (panelId: string) => {
@@ -218,7 +175,7 @@ export const useWidgetPanels = ({
 
     const registered = toRegisteredPanelEntry(panelId);
     if (registered) {
-      const surfaceContractId = getSurfaceContractIdForRegisteredPanel(panelId);
+      const surfaceContractId = registered.config.surfaceContractId;
       desktopSurfaceService.openTab({
         id: `mobile-widget:${panelId}`,
         name: registered.config.title,
@@ -260,25 +217,6 @@ export const useWidgetPanels = ({
     }
 
     switchRightPanel(panelId);
-  };
-
-  const toggleAuxWindow = () => {
-    if (layoutMode.value === 'freeform') {
-      openWorkspaceApp('plugin:lumina-launcher');
-      return;
-    }
-
-    if (isMobile.value) {
-      openTemporaryWidgetTab(lastKnownRightPanel.value || activeRightPanel.value || 'lumina-settings');
-      return;
-    }
-
-    if (activeRightPanel.value === 'none') {
-      activeRightPanel.value = lastKnownRightPanel.value || 'lumina-settings';
-      return;
-    }
-
-    activeRightPanel.value = 'none';
   };
 
   const closeWidgetPanel = () => {
@@ -386,15 +324,12 @@ export const useWidgetPanels = ({
     isTelegramLeftRailResizing,
     activeWidgetPlugin,
     activeRegisteredPanel,
-    activeForgeAuxKind,
-    forgeAuxPanelItems,
     registeredPanelItems,
     widgetPanelList,
     widgetGroups,
     openTemporaryWidgetTab,
     switchRightPanel,
     handleOpenWidget,
-    toggleAuxWindow,
     closeWidgetPanel,
     initResize,
     stopResize,

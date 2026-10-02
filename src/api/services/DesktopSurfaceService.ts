@@ -1,5 +1,4 @@
 import type { Component } from 'vue';
-import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
 import { activityFromLegacyMode, mergeActivityDescriptors } from '../../platform/activity/activityLaunchResolver.js';
 import type {
     ActivityDescriptor,
@@ -7,7 +6,6 @@ import type {
     ActivityLaunchRole,
     LegacyActivityMode
 } from '../../platform/activity/types.js';
-import { surfaceRegistry } from '../../platform/surface/SurfaceRegistry.js';
 import type { SurfaceContractId } from '../../platform/surface/types.js';
 import {
     getDesktopMode,
@@ -21,6 +19,11 @@ export interface RegisteredPanelConfig {
     icon?: string;
     defaultMode?: 'tab' | 'modal';
     surfaceContractId?: SurfaceContractId;
+    defaultInput?: Record<string, unknown>;
+    navigation?: {
+        group?: string;
+        hidden?: boolean;
+    };
 }
 
 export interface RegisteredPanelEntry {
@@ -81,10 +84,7 @@ export class DesktopSurfaceService {
         const mode = options.mode || panel.config.defaultMode || 'modal';
 
         if (mode === 'tab') {
-            const surfaceContractId =
-                panel.config.surfaceContractId ||
-                getSurfaceContractIdForRegisteredPanel(panel.id) ||
-                (surfaceRegistry.hasContract(id) ? id : null);
+            const surfaceContractId = panel.config.surfaceContractId;
             const activity = mergeActivityDescriptors(options.activity, { size: 'default', pageType: 'nested' });
             const role: ActivityLaunchRole = options.role || (activity.size === 'small' ? 'support' : 'primary');
             this.launchActivity({

@@ -32,7 +32,7 @@
       :is="currentShellRenderer"
       v-bind="shellRendererProps"
     >
-      <template v-if="hasComposition" #composition="{ activityComponent, activityComponentProps }">
+      <template #composition="{ activityComponent, activityComponentProps }">
         <DesktopCompositionOutlet
           :desktop-mode-id="runtimeContext.activeDesktopModeId"
           :is-mobile="runtimeContext.isMobile"
@@ -84,9 +84,7 @@ import type {
   ShellRuntimeFrame,
   ShellRuntimeSurfaces
 } from './types.js';
-import FreeformShell from './freeform/FreeformShell.vue';
 import LegacyGlobalPanels from './LegacyGlobalPanels.vue';
-import TraditionalShell from './traditional/TraditionalShell.vue';
 
 const legacyGlobalPanels = ref<InstanceType<typeof LegacyGlobalPanels> | null>(null);
 const panelBodyElement = ref<HTMLElement | null>(null);
@@ -104,14 +102,15 @@ const shouldRenderTraditionalHeader = computed(() => (
   props.runtimeContext.activeDesktopModeId !== 'telegram'
 ));
 
-const hasComposition = computed(() => Boolean(
-  desktopModeRuntimeRegistry.get(props.runtimeContext.activeDesktopModeId)?.composition
-));
-
-const currentShellRenderer = computed(() => (
-  desktopModeRuntimeRegistry.get(props.runtimeContext.activeDesktopModeId)?.shellRenderer
-  || (props.runtimeContext.shellKind === 'freeform' ? FreeformShell : TraditionalShell)
-));
+const currentShellRenderer = computed(() => {
+  const renderer = desktopModeRuntimeRegistry.get(
+    props.runtimeContext.activeDesktopModeId
+  )?.shellRenderer;
+  if (!renderer) {
+    throw new Error('[LuminaShellRoot] Desktop mode shell renderer unavailable');
+  }
+  return renderer;
+});
 
 const shellRendererProps = computed(() => ({
   runtimeContext: props.runtimeContext,

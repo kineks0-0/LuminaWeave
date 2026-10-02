@@ -7,6 +7,7 @@ import { SurfaceRegistry, surfaceRegistry } from '../surface/SurfaceRegistry.js'
 import type { SurfaceRendererDefinitionUnion } from '../surface/types.js';
 import {
     collectDesktopCompositionSurfaceIds,
+    requireDesktopModeComposition,
     resolveDesktopComposition,
     validateDesktopModeComposition
 } from './DesktopCompositionRuntime.js';
@@ -25,9 +26,10 @@ export class DesktopModeRuntimeRegistry {
             throw new Error(`[DesktopModeRuntimeRegistry] Duplicate desktop mode id: ${manifest.id}`);
         }
 
-        const composition = manifest.manifest.composition
-            ? validateDesktopModeComposition(manifest.manifest.composition, this.surfaces)
-            : undefined;
+        const composition = validateDesktopModeComposition(
+            requireDesktopModeComposition(manifest.manifest.composition),
+            this.surfaces
+        );
 
         const overrides = Object.values(manifest.componentOverrides || {})
             .filter((renderer): renderer is SurfaceRendererDefinitionUnion => Boolean(renderer));
@@ -54,13 +56,11 @@ export class DesktopModeRuntimeRegistry {
                 composition
             },
             composition,
-            navigationModel: composition
-                ? {
-                    ...manifest.navigationModel,
-                    primarySurfaces: collectDesktopCompositionSurfaceIds(composition.desktop),
-                    mobileSurfaces: collectDesktopCompositionSurfaceIds(composition.mobile)
-                }
-                : manifest.navigationModel,
+            navigationModel: {
+                ...manifest.navigationModel,
+                primarySurfaces: collectDesktopCompositionSurfaceIds(composition.desktop),
+                mobileSurfaces: collectDesktopCompositionSurfaceIds(composition.mobile)
+            },
             shellRenderer: manifest.shellRenderer ? markRaw(manifest.shellRenderer) : undefined
         };
 
@@ -79,9 +79,12 @@ export class DesktopModeRuntimeRegistry {
     resolveComposition(
         desktopModeId: string,
         viewport: DesktopCompositionViewport
-    ): DesktopCompositionNode | undefined {
-        const composition = this.modes.get(desktopModeId)?.composition;
-        return composition ? resolveDesktopComposition(composition, viewport) : undefined;
+    ): DesktopCompositionNode {
+        const mode = this.modes.get(desktopModeId);
+        if (!mode) {
+            throw new Error(`[DesktopModeRuntimeRegistry] Unknown desktop mode: ${desktopModeId}`);
+        }
+        return resolveDesktopComposition(mode.composition, viewport);
     }
 
     clearForTests(): void {

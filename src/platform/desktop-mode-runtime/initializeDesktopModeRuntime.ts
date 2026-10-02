@@ -53,7 +53,8 @@ export const createDesktopModeRuntimeDescriptor = (mode: DesktopModeManifest): D
         },
         tokens: {},
         settingsSchema: mode.settingsManifest,
-        componentOverrides
+        componentOverrides,
+        composition: mode.composition
     };
 };
 

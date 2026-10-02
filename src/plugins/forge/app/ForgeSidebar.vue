@@ -91,11 +91,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
-import { useCardMakerStore } from '../plugins/forge/CardMakerStore.js';
-import { useSessionIndexStore } from '../stores/useSessionIndexStore.js';
-import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../plugins/forge/forgeAuxPanels.js';
-import type { ForgeAuxPanelKind } from '../types/ForgeWorkflowTypes.js';
-import { ForgeAuxPanelView } from '../plugins/forge/app/forgeAsyncComponents.js';
+import { useCardMakerStore } from '../CardMakerStore.js';
+import { useSessionIndexStore } from '../../../stores/useSessionIndexStore.js';
+import { FORGE_AUX_PANEL_META, FORGE_AUX_PANEL_ORDER } from '../forgeAuxPanels.js';
+import type { ForgeAuxPanelKind } from '../../../types/ForgeWorkflowTypes.js';
+import { ForgeAuxPanelView } from './forgeAsyncComponents.js';
 
 defineProps<{
   isCollapsed?: boolean;

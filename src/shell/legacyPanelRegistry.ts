@@ -9,6 +9,10 @@ export interface LegacyPanelDefinition {
   title: string;
   icon: string;
   legacyTabComponentName?: string;
+  navigation?: {
+    group?: string;
+    hidden?: boolean;
+  };
 }
 
 export const legacyPanelDefinitions = [
@@ -17,14 +21,16 @@ export const legacyPanelDefinitions = [
     component: ConflictDiffViewer,
     title: '版本分歧比对',
     icon: '⚡',
-    legacyTabComponentName: 'ConflictDiffViewer'
+    legacyTabComponentName: 'ConflictDiffViewer',
+    navigation: { hidden: true }
   },
   {
     id: 'sync_report',
     component: SyncReportViewer,
     title: '同步对比报告',
     icon: '🧾',
-    legacyTabComponentName: 'SyncReportViewer'
+    legacyTabComponentName: 'SyncReportViewer',
+    navigation: { hidden: true }
   },
   {
     id: 'context-switcher',

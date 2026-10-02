@@ -260,7 +260,8 @@ describe('Desktop Experience extension examples', () => {
             name: characterFocusDesktopModeManifest.name,
             shellKind: characterFocusDesktopModeManifest.shell.kind,
             navigationModel: { id: `${characterFocusDesktopModeManifest.id}.navigation` },
-            interactionPolicy: { id: `${characterFocusDesktopModeManifest.id}.policy` }
+            interactionPolicy: { id: `${characterFocusDesktopModeManifest.id}.policy` },
+            composition: characterFocusDesktopModeManifest.composition
         });
 
         expect(modes.resolveComposition(characterFocusDesktopModeManifest.id, 'desktop')).toMatchObject({

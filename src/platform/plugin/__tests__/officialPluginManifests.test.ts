@@ -2,7 +2,6 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import type { LuminaPlugin } from '../../../types/plugin.js';
 import { getPrimarySurfaceContractIdForPlugin } from '../officialPluginSurfaces.js';
-import { getSurfaceContractIdForRegisteredPanel } from '../officialPanelSurfaces.js';
 import { deriveNavigationSlotsFromManifest, getPluginNavigationSlots } from '../pluginNavigationSlots.js';
 import type { EmptySurfaceData, SurfaceContractSpec } from '../../surface/types.js';
 
@@ -143,8 +142,4 @@ describe('official plugin platform manifests', () => {
         })).toEqual(['widget']);
     });
 
-    it('maps official registered panels that have platform surfaces', () => {
-        expect(getSurfaceContractIdForRegisteredPanel('card_maker')).toBe('forge.workspace');
-        expect(getSurfaceContractIdForRegisteredPanel('conflict')).toBeNull();
-    });
 });

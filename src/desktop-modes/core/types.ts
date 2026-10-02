@@ -133,8 +133,5 @@ export interface DesktopModeManifest {
     surfaceSkins?: Record<string, SurfaceSkinDefinition>;
     settingsManifest?: Record<string, SettingDefinition>;
     rendererVariants?: Record<string, string>;
-    /**
-     * 内置模式完成迁移前保持可选；声明后必须通过版本 1 的完整运行时校验。
-     */
-    composition?: DesktopModeComposition;
+    composition: DesktopModeComposition;
 }

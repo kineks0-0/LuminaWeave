@@ -39,6 +39,11 @@ describe('LuminaShellRoot runtime boundary', () => {
         expect(source).toContain('#activity');
         expect(source).toContain('#composition="{ activityComponent, activityComponentProps }"');
         expect(source).toContain(':is="currentShellRenderer"');
+        expect(source).not.toContain('v-if="hasComposition"');
+        expect(source).not.toContain('const hasComposition');
+        expect(source).not.toContain("import FreeformShell from './freeform/FreeformShell.vue';");
+        expect(source).not.toContain("import TraditionalShell from './traditional/TraditionalShell.vue';");
+        expect(source).not.toContain("props.runtimeContext.shellKind === 'freeform'");
         expect(traditionalSource).toContain('name="composition"');
         expect(freeformSource).toContain('name="composition"');
     });
@@ -93,6 +98,10 @@ describe('LuminaShellRoot runtime boundary', () => {
             new URL('../../composables/useWorkspaceManager.ts', import.meta.url),
             'utf-8'
         );
+        const widgetPanelSource = readFileSync(
+            new URL('../../composables/shell/useWidgetPanels.ts', import.meta.url),
+            'utf-8'
+        );
 
         expect(shellSource).not.toContain('ForgeWorkspaceWindowActions');
         expect(shellSource).not.toContain("entry.appId === 'panel:card_maker'");
@@ -107,5 +116,41 @@ describe('LuminaShellRoot runtime boundary', () => {
         expect(workspaceSource).not.toContain('useSessionIndexStore');
         expect(workspaceSource).not.toContain("'plugin:context-switcher'");
         expect(workspaceSource).not.toContain('currentDetailedView');
+        expect(widgetPanelSource).not.toContain('lumina-launcher');
+    });
+
+    it('keeps Forge presentation and identity checks out of the traditional shell boundary', () => {
+        const appSource = readFileSync(new URL('../../App.vue', import.meta.url), 'utf-8');
+        const shellSource = readFileSync(
+            new URL('../traditional/TraditionalShell.vue', import.meta.url),
+            'utf-8'
+        );
+        const payloadSource = readFileSync(
+            new URL('../../composables/shell/useShellRuntimePayload.ts', import.meta.url),
+            'utf-8'
+        );
+        const widgetHostSource = readFileSync(
+            new URL('../traditional/WidgetPanelHost.vue', import.meta.url),
+            'utf-8'
+        );
+        const forgeWorkspaceSource = readFileSync(
+            new URL('../../plugins/forge/app/CardMakerPanel.vue', import.meta.url),
+            'utf-8'
+        );
+
+        for (const source of [appSource, shellSource, payloadSource]) {
+            expect(source).not.toContain('ForgeSidebar');
+            expect(source).not.toContain('shouldShowForgeSidebar');
+            expect(source).not.toContain('isForgeSidebarCollapsed');
+            expect(source).not.toContain('isForgeActiveInTraditional');
+        }
+
+        expect(shellSource).toContain('auxSidebarMode: surfaceAuxSidebarMode.value');
+        expect(shellSource).toContain('activeRightPanelId: activeRightPanel.value');
+        expect(shellSource).not.toContain('officialPanelSurfaces');
+        expect(widgetHostSource).not.toContain('officialPanelSurfaces');
+        expect(forgeWorkspaceSource).toContain('<ForgeSidebar');
+        expect(forgeWorkspaceSource).toContain('resolveForgeWorkspacePlacement');
+        expect(forgeWorkspaceSource).not.toContain("props.auxSidebarMode === 'left'");
     });
 });

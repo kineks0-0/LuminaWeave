@@ -211,7 +211,8 @@ const plugin: LuminaPlugin = {
             desktopSurface.registerPanel('card_maker', CardMakerPanel, {
                 title: '制卡工坊',
                 icon: '🧩',
-                defaultMode: 'tab'
+                defaultMode: 'tab',
+                surfaceContractId: 'forge.workspace'
             });
 
             FORGE_AUX_PANEL_ORDER.forEach((kind) => {
@@ -219,7 +220,9 @@ const plugin: LuminaPlugin = {
                 desktopSurface.registerPanel(panel.id, ForgeAuxPanelView, {
                     title: panel.title,
                     icon: panel.icon,
-                    defaultMode: 'tab'
+                    defaultMode: 'tab',
+                    defaultInput: { kind },
+                    navigation: { group: '制卡辅助' }
                 });
             });
         }

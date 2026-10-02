@@ -6,9 +6,7 @@ import type { DynamicTabConfig } from '../../shell/types.js';
 import type { LuminaPlugin } from '../../types/plugin.js';
 import type {
   CharacterChannelState,
-  CreateChatConversationInput,
-  DeleteChatConversationInput,
-  RenameChatConversationInput
+  CreateChatConversationInput
 } from '../../types/ConversationContextTypes.js';
 
 type DiscordMobileEdge = 'top' | 'bottom' | 'left' | 'right';
@@ -31,7 +29,6 @@ export const useDiscordShell = ({
   mainPlugins,
   dynamicTabs,
   activeMainTab,
-  shouldShowForgeSidebar,
   desktopExperienceRuntime,
   contextStore,
   updateSetting,
@@ -45,7 +42,6 @@ export const useDiscordShell = ({
   mainPlugins: ComputedRef<LuminaPlugin[]>;
   dynamicTabs: Ref<DynamicTabConfig[]>;
   activeMainTab: Ref<string>;
-  shouldShowForgeSidebar: ComputedRef<boolean>;
   desktopExperienceRuntime: DesktopExperienceRuntime;
   contextStore: ReturnType<typeof useConversationContextStore>;
   updateSetting: (key: string, value: unknown) => Promise<void> | void;
@@ -94,12 +90,11 @@ export const useDiscordShell = ({
     )
   );
 
-  const shouldShowDiscordCharacterRail = computed(() =>
+  const shouldShowCharacterNavigationPane = computed(() =>
     layoutMode.value === 'traditional'
     && traditionalLeftRail.value === 'character-rail'
     && !isMobile.value
     && isCharacterChannelDesktopMode.value
-    && !shouldShowForgeSidebar.value
   );
 
   const discordGuildEntries = computed(() => {
@@ -271,52 +266,6 @@ export const useDiscordShell = ({
     await createDiscordChatSession(target);
   };
 
-  const renameDiscordChatSession = async (input: RenameChatConversationInput) => {
-    const nextTitle = (input.nextTitle || '').trim();
-    if (!input.sessionId || !nextTitle) {
-      return;
-    }
-
-    logDiscordSwitch('renameDiscordChatSession:start', {
-      input,
-      currentContext: {
-        sourceId: contextStore.activeSourceId,
-        sessionId: contextStore.activeSessionId,
-        selectedViewSessionId: contextStore.selectedViewSessionId
-      }
-    });
-
-    await characterChannelService.renameSession({
-      ...input,
-      nextTitle
-    });
-    showDiscordMobileCharacterRail.value = false;
-    logDiscordSwitch('renameDiscordChatSession:success', {
-      input
-    });
-  };
-
-  const deleteDiscordChatSession = async (input: DeleteChatConversationInput & { title?: string }) => {
-    if (!input.sessionId) {
-      return;
-    }
-
-    logDiscordSwitch('deleteDiscordChatSession:start', {
-      input,
-      currentContext: {
-        sourceId: contextStore.activeSourceId,
-        sessionId: contextStore.activeSessionId,
-        selectedViewSessionId: contextStore.selectedViewSessionId
-      }
-    });
-
-    await characterChannelService.deleteSession(input);
-    showDiscordMobileCharacterRail.value = false;
-    logDiscordSwitch('deleteDiscordChatSession:success', {
-      input
-    });
-  };
-
   watch(activeMainTab, async (value) => {
     if (value !== 'lumina-chat' || !pendingDiscordAction.value) {
       return;
@@ -347,14 +296,6 @@ export const useDiscordShell = ({
 
   const characterChannelState = computed<CharacterChannelState>(() => characterChannelService.state.value);
 
-  const toggleDiscordCharacterGroup = (groupKey: string) => {
-    characterChannelService.toggleGroup(groupKey);
-  };
-
-  const toggleDiscordCharacterSessionExpansion = (groupKey: string) => {
-    characterChannelService.toggleGroupSessionExpansion(groupKey);
-  };
-
   return {
     characterChannelState,
     discordChannelMarkVisible,
@@ -363,7 +304,7 @@ export const useDiscordShell = ({
     shouldShowDiscordGuildRail,
     discordMobileGuildRailPosition,
     discordMobileCharacterEntryPosition,
-    shouldShowDiscordCharacterRail,
+    shouldShowCharacterNavigationPane,
     discordGuildEntries,
     showDiscordMobileCharacterRail,
     discordMobileMainStyle,
@@ -373,10 +314,6 @@ export const useDiscordShell = ({
     openDiscordChatSession,
     openDiscordMobileChatSession,
     createDiscordChatSession,
-    createDiscordMobileChatSession,
-    renameDiscordChatSession,
-    deleteDiscordChatSession,
-    toggleDiscordCharacterGroup,
-    toggleDiscordCharacterSessionExpansion
+    createDiscordMobileChatSession
   };
 };

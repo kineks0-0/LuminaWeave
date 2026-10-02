@@ -10,7 +10,6 @@ describe('shell mode directory structure', () => {
     [
       'modes/discord/DiscordMobileShell.vue',
       'modes/telegram/TelegramBottomNav.vue',
-      'modes/telegram/TelegramCharacterOverview.vue',
       'modes/telegram/TelegramRoleListPage.vue',
       'modes/telegram/TelegramUserInfoPanel.vue',
       'modes/telegram/TelegramUserProfilePage.vue',
@@ -59,5 +58,19 @@ describe('shell mode directory structure', () => {
     });
 
     expect(source).not.toContain("from '../modes/telegram/TelegramCharacterOverview.vue';");
+  });
+
+  it('removes business presentation components replaced by official surfaces', () => {
+    [
+      '../components/DiscordCharacterRail.vue',
+      'modes/telegram/TelegramCharacterOverview.vue'
+    ].forEach((path) => {
+      expect(existsSync(pathFromShellTest(path)), path).toBe(false);
+    });
+  });
+
+  it('keeps Forge presentation components inside the Forge plugin boundary', () => {
+    expect(existsSync(pathFromShellTest('../plugins/forge/app/ForgeSidebar.vue'))).toBe(true);
+    expect(existsSync(pathFromShellTest('../components/ForgeSidebar.vue'))).toBe(false);
   });
 });
