@@ -102,15 +102,20 @@ import { luminaWeaveApi as lwApi } from '../api/index.ts';
 - `id`
 - `name`
 - `shell.kind`
-- `navigation`
-- `surfaces`
+- `composition.version`（固定为 `1`）
+- `composition.desktop`
+- `composition.mobile`
+- `navigationPreset?`
+- `surfacePreset?`
 - `settingsManifest?`
 
 开放边界：
 
 - 允许自定义 shell、navigation、surface、settings 与受控 renderer variants
+- composition 节点只允许 `group`、`surface`、`activity-slot`，且只能引用已注册 Surface contract
 - 不允许直接替换核心会话、同步、持久化与事务运行时
 - `layoutMode` 只保留为旧命名兼容；Activity placement 和运行时策略使用 manifest 派生的 `shellKind`
+- runtime shell renderer 必须由 Desktop Mode Runtime 注册，root 不按 `shell.kind` 提供 renderer fallback
 
 最小注册示例：
 
@@ -123,6 +128,21 @@ lwApi.registerDesktopMode({
   description: '面向高密度信息浏览的自定义桌面。',
   shell: {
     kind: 'traditional',
+  },
+  composition: {
+    version: 1,
+    desktop: {
+      id: 'operator-deck-desktop-activity',
+      kind: 'activity-slot',
+      size: 'fill',
+      visibility: 'visible',
+    },
+    mobile: {
+      id: 'operator-deck-mobile-activity',
+      kind: 'activity-slot',
+      size: 'fill',
+      visibility: 'visible',
+    },
   },
   navigationPreset: {
     traditional: {
@@ -158,9 +178,11 @@ lwApi.registerDesktopMode({
 接入结果：
 
 - 新模式会自动进入“桌面模式”设置选项
-- 新模式会自动进入 Desktop Mode Runtime，并按 `shell.kind` 使用传统桌面或自由工作台壳层
+- 新模式会自动进入 Desktop Mode Runtime；注册入口负责为 manifest 派生明确的 shell renderer 与已校验 composition
 - `desktop-mode-operator-deck.*` 会成为正式设置命名空间
 - 不需要额外手写设置页接线代码
+
+`registerPanel(id, component, config)` 的 `config.surfaceContractId` 是 panel 进入 typed Surface Runtime 的唯一身份声明。`id` 与 contract 同名不会触发隐式映射；`defaultInput` 提供默认 Surface input，`navigation.group/hidden` 控制通用导航分组与可见性。未声明 `surfaceContractId` 时仍使用传入的 `component`。
 
 ---
 > 💡 **Plugin 开发指南**

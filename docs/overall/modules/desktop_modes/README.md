@@ -4,7 +4,7 @@ Desktop Modes 定义 LuminaWeave 的平台级桌面模式。桌面模式不是�
 
 桌面模式采用单注册源：`DesktopModeManifest` 是公开事实源，`registerDesktopMode()` 会同时进入模式列表、设置详情和 Desktop Mode Runtime。运行时内部只派生 `DesktopModeRuntimeDescriptor`，用于解析 shell renderer、`shellKind`、navigation model、interaction policy 与受控 desktop overrides。
 
-插件主 Surface 只由 `PluginManifestV2.primarySurface` 声明。Shell、Workspace 和移动路由不得根据插件 ID 推断 contract。Surface contract、plugin renderer 与 desktop override 在写入 registry 前必须完成整批校验；任一条目失败时不得留下部分注册状态。
+插件主 Surface 只由 `PluginManifestV2.primarySurface` 声明。registered panel 只在配置中显式声明 `surfaceContractId` 时进入 typed Surface Runtime；插件 ID、panel ID 和同名 contract 都不是推断依据。Shell、Workspace 和移动路由不得猜测业务 contract。Surface contract、plugin renderer 与 desktop override 在写入 registry 前必须完成整批校验；任一条目失败时不得留下部分注册状态。
 
 ## Composition Runtime
 
@@ -17,13 +17,17 @@ Desktop Modes 定义 LuminaWeave 的平台级桌面模式。桌面模式不是�
 
 节点 schema 为 strict object，不接受任意 CSS、Vue component、attrs 或宿主对象引用。注册时先执行无副作用 runtime preflight，依次校验 version、布局、desktop/mobile 全树节点 ID、Surface contract 和 contract input，再校验 desktop overrides；全部通过后才写入核心模式列表和 runtime registry。`resolveComposition(desktopModeId, viewport)` 只选择已校验根节点并返回独立副本。
 
-classic、stage、discord、telegram 已全部声明 composition，并通过相同的 version、节点 ID、Surface contract 与 input 预检。字段目前只为最终清理保留可选类型；任务 10 将把 composition 收紧为必填并删除无 composition fallback。
+classic、stage、discord、telegram 已全部声明 composition，并通过相同的 version、节点 ID、Surface contract 与 input 预检。`composition` 已是 manifest 与 runtime descriptor 的必填字段；root 无条件提供 composition slot，缺少 runtime shell renderer 时直接报告稳定错误，不保留无 composition 或按 `shellKind` 猜测 renderer 的 fallback。
 
 ## Shell 与 Workspace 投影
 
 声明 composition 的模式仍由 `LuminaShellRoot` 挂载 concrete Shell，再把 `DesktopCompositionOutlet` 注入其 Activity 区域。`surface` 节点进入 `ThemedSurfaceOutlet`，`activity-slot` 只接收 Shell 自有容器：traditional 使用通用主 Activity outlet 并保留 Telegram 移动页面栈，freeform 使用舞台与窗口工作台。Shell 不根据 contract 或插件 ID 判断 Chat、Forge、Launcher、Settings 等业务含义。
 
 Desktop navigation descriptor 的 desktop/mobile Surface 列表在 composition 校验后直接从对应树收集。Workspace 应用目录遍历完整启用插件集合，再从 `primarySurface`、`navigationSlots` 和可选 `ActivityDescriptor` 派生；Activity-only 插件也可进入目录，main/widget 仅决定受控的默认 Activity 尺寸，动态 Activity 继续通过通用窗口入口提供。Freeform Shell 只负责舞台、窗口、焦点、导航显隐和 Dock，新建舞台为空容器，不自动打开 Launcher 或其他业务插件。
+
+registered panel 的导航列表由 `navigation.group/hidden` 派生，默认输入读取 `defaultInput`。没有 `surfaceContractId` 的 panel 仍以注册 component 打开；即使 panel ID 与某个 contract 相同，也不会自动切换成 Surface renderer。这保证 legacy/dynamic panel 与 typed Surface 的身份边界可审计。
+
+Forge panel 的 `id / title / shortLabel / icon / order` 由 Forge 插件注册 metadata 提供；平台只消费这些 registered-panel metadata，不维护 Forge 专属映射，也不从 panel ID 推断其 Surface 或 placement。辅助面板选择和实例内折叠状态继续由 Forge presentation 拥有。
 
 组合根和递归节点的 renderer identity 覆盖 desktop mode、viewport、node kind 与 contract，主题 skin 跟随响应式 contract id 更新，避免切换模式或节点时复用旧 renderer 状态。
 

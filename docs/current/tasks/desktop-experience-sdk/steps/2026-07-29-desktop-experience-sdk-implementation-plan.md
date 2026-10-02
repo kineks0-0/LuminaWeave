@@ -29,7 +29,8 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 - `SurfaceRuntimeContext<K>` 提供 typed runtime、input、state、intents、theme 与销毁注册。
 - `PluginManifestV2.primarySurface` 是插件主 Surface 的唯一来源；不得根据插件 ID 推断 contract。
 - contract、renderer 与 desktop override 必须先完成整批校验再原子注册。
-- `DesktopModeManifest.composition` 固定为版本 1，desktop/mobile 根节点只允许 group、surface、activity-slot。
+- `DesktopModeManifest.composition` 是必填的版本 1 契约，desktop/mobile 根节点只允许 group、surface、activity-slot。
+- Desktop Mode Runtime 必须提供明确 shell renderer；root 不从 `shellKind` 推断 renderer。registered panel 只通过显式 `surfaceContractId` 选择 typed Surface，不从 panel ID 推断。
 - Composition 不接受任意组件引用、任意 attrs、任意 CSS 或宿主全局对象。
 
 ## 非目标
@@ -45,11 +46,11 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 3. Typed Surface Runtime：已完成开放类型清理、Zod 校验和局部错误边界。
 4. Chat Application Controller：已完成消息事实源、生成订阅和 Chat intent 收敛。
 5. Official Surface Kit：已完成角色、会话、消息、输入、header 与 Prompt Inspector surface 拆分；Shell、Workspace 与设置预览通过 `ThemedSurfaceOutlet` 挂载业务 surface，消息渲染设置通过 typed surface state 投影，用户消息与 assistant 交互块使用独立渲染路径。
-6. Composition Runtime：已完成 version 1 类型、strict Zod schema、跨 registry 原子预检、Surface input 校验与 desktop/mobile 确定性解析器；字段必填化与 fallback 删除在任务 10 统一清理。
+6. Composition Runtime：已完成 version 1 类型、strict Zod schema、跨 registry 原子预检、Surface input 校验与 desktop/mobile 确定性解析器；任务 10 已完成字段必填化和 fallback 删除。
 7. Shell 与 Workspace：已完成 concrete Shell 内的 composition outlet 接入、通用 Activity 容器、完整插件目录派生的 Workspace catalog 和 Shell 业务硬编码清理。
 8. 内置模式：classic、stage、discord、telegram 已完成显式 desktop/mobile composition；Discord desktop 组合角色 roster 与 Activity，Discord mobile overlay、Telegram desktop 左栏及 mobile 页面栈统一消费 Official Surface Kit，`chat.main` 不再暴露 Telegram 专属 callback 名称。
 9. 第三方示例：已通过独立导出的 `example.characterFocus` contract、纯声明式 desktop/mobile mode fixture 与 `businessRenderers` trusted Vue renderer，验证 strict input、当前角色/会话/消息/时间线投影、typed runtime intents、订阅销毁和局部错误隔离；示例不自动注册。
-10. 清理与验收：删除旧入口、同步长期文档、执行完整测试与浏览器验证。
+10. 清理与验收：已完成。已删除旧角色组合组件、panel contract 映射表和 Shell/composition fallback；Forge placement、sidebar 与辅助面板 presentation ownership 已收回 Forge app；长期文档、全量测试、构建和八组 desktop/mobile 浏览器验证均已完成。
 
 ## 提交策略
 
@@ -65,6 +66,8 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 
 任务 9 在 `src/examples/desktop-experience/` 增加只导出、不自动注册的第三方扩展示例。测试先因示例模块不存在而红灯，随后以独立 Surface/Desktop Mode registry 验证声明式 composition 与 trusted renderer 装配；示例自身测试通过 1 个测试文件、6 个用例，扩大到 Surface/Composition Runtime 的定向测试通过 6 个测试文件、52 个用例，`npm run type-check` 通过。
 
+任务 10 先以结构测试固定 `composition` 必填、root composition slot 和 runtime shell renderer 边界，再用冲突用例证明 panel ID 与已注册 contract 同名时旧实现会误投影为 Surface。实现删除无 composition 分支、`shellKind` renderer fallback、官方 panel 映射和同名 contract 探测；registered panel 只消费显式 `surfaceContractId/defaultInput/navigation`。Forge placement 改为 app-owned 纯 resolver，sidebar 折叠状态按 Surface 实例隔离。定向验证通过 16 个测试文件、116 个用例；extension 全量 type-check/test/build 与 server test/build 通过。classic、stage、discord、telegram 均完成 `1440x900` desktop 与 `390x844` mobile 验收，无横向溢出或 renderer unavailable。standalone 环境仍记录既有 Vue lifecycle warning、ST 世界书宿主缺失与 Dexie 持久化失败，真实 SillyTavern/Tauri 宿主验证不计入本轮证据。
+
 ## 最终验收
 
 - 四个内置模式经过同一 Composition Runtime 和 Official Surface Kit。
@@ -72,3 +75,4 @@ Presentation 组件只消费 typed surface context。Shell 只负责安全区、
 - Workspace 不硬编码 Forge、Launcher 或插件组件。
 - renderer 或订阅销毁后不再更新，单节点错误不影响其他 surface。
 - extension 的 type-check、test、build 与 server 的 test、build 全部通过。
+- classic、stage、discord、telegram 的 desktop/mobile 浏览器视口均经过可见 UI 切换，主要容器可见且无横向溢出或 renderer unavailable。

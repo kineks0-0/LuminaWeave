@@ -4,7 +4,7 @@
 
 `telegram` 是新增的独立内置桌面模式，不是 `discord` 的皮肤，也不替换 `classic / stage / discord`。它以聊天为中心，参考 Telegram 式三栏信息架构与 Liquid Glass 视觉：浅色与深色双配色、柔和蓝色氛围、玻璃质感角色列表、气泡聊天、会话/角色资料页与移动端底栏。
 
-本模式只扩展桌面模式、Shell 导航、主题变体和组件皮肤，不改变 `ConversationService / STAdapter / PersistenceService / PromptBuilder` 等核心运行时。
+本模式只扩展桌面模式 composition、Shell 导航、主题变体和组件皮肤，不改变 `ConversationService / STAdapter / PersistenceService / PromptBuilder` 等核心运行时。
 
 长期设计语言入口见 [`telegram/design.md`](./telegram/design.md)。本文件保留为 Telegram Liquid Glass 的专项规划与实现检查清单。
 
@@ -22,11 +22,11 @@
 
 - `telegram` 通过 `DesktopModeManifest` 注册，`shell.kind = traditional`。
 - 视觉差异必须通过 `designTokens / surfaceSkins / rendererVariants / settingsManifest` 下发，避免在业务组件中硬编码 Telegram 专属数据逻辑。
-- Telegram 专用结构性 surface contract 为 `telegram.frame / telegram.chatList / telegram.conversation / telegram.infoPanel / telegram.composer`。这些 contract 只描述壳层、列表、会话、资料与输入器的表层变量，不拥有会话状态或存储权限。
-- 角色频道能力复用现有 `CharacterChannelService` 与统一会话上下文；视图只发起打开、新建、重命名、删除等意图。
+- Telegram 的 desktop/mobile 根布局由必填的 `DesktopModeManifest.composition` 声明。通用业务内容只引用 `character.roster`、`conversation.sessionList` 与 `chat.main` Official Surface contract；Telegram 专属 frame/info contract 只描述壳层与资料展示，不拥有会话状态或存储权限。
+- 角色频道能力由 `DesktopExperienceRuntime.character` 复用 runtime-owned `CharacterChannelService` 与统一会话上下文；Official Surface 只发起打开、新建、重命名、删除等 typed intent。
 - Telegram shell 允许新增搜索 query、当前过滤 tab、`+` 菜单展开态与工具菜单展开态等 UI 层状态；这些状态不得写入 `CharacterChannelService`、`ConversationService` 或持久化层。
-- Telegram shell 维护桌面三栏与移动四 tab 的独立 stack navigator 状态。桌面左栏 stack 包含 `会话列表页` 与 `角色列表页`；会话列表页支持 `角色聚合 / 对话文件` 双模式，前者点击角色进入角色概览，后者点击对话文件直接进入聊天。
-- 设置页、聊天、角色栏、右侧面板、Timeline、Lorebook、Director、Stats 等官方上下文组件通过 `useComponentSkin()` 与 `data-skin-variant='telegram'` 适配。新增上下文插件 skin key 为 `stats.panel` 与 `director.panel`；它们只描述 Telegram 表层变量，不承载插件业务状态。
+- Telegram shell 只维护桌面 `conversationList / roleList` 容器路由与移动四 tab 的独立 stack navigator 状态。会话和角色业务列表分别来自 `conversation.sessionList` 与 `character.roster`；Shell 不再拥有角色聚合、对话文件或角色概览业务页，列表项只通过 typed intent 打开聊天或资料容器。
+- 设置页、聊天、角色栏、右侧面板、Timeline、Lorebook、Director、Stats 等官方上下文组件通过 `ThemedSurfaceOutlet` / 既有 skin 入口适配。新增上下文插件 skin key 为 `stats.panel` 与 `director.panel`；它们只描述 Telegram 表层变量，不承载插件业务状态。
 - 不新增独立聊天数据源，不绕过统一会话 API，不修改同步、持久化、Prompt 合成链路。
 
 ## 4. Implementation Checklist
@@ -35,11 +35,11 @@
 - 扩展 `ThemeHeaderVariant / ThemeSurfaceVariant` 与 `themeComponentRegistry` 支持 `telegram`。
 - 新增 Telegram 移动底栏组件，只处理 `对话 / 角色 / 设置 / 个人资料` 四个导航意图。
 - Traditional Shell 在桌面和移动 Telegram 模式下隐藏全局 `PanelHeader`，改由 Telegram shell 内部导航承载页面切换、返回、关闭与设置入口。
-- `ChatStream` 增加 `telegram` 结构 variant，输出参考图式聊天头、背景、气泡与输入胶囊；不直接持有 Timeline/Lorebook/Memory 面板状态。
+- `chat.main` 及 Official Surface Kit 输出 Telegram skin 下的聊天头、背景、气泡与输入器；旧 `ChatStream` 已删除，Telegram Shell 不直接持有 Chat、Timeline、Lorebook 或 Memory 业务状态。
 - `SettingsRoot / SettingsUnified / SettingsDetailed / SettingControl` 增加 `telegram` variant，并把设置项压回 Telegram 式列表行与胶囊控件。
 - `LuminaStats / DirectorPanel / LuminaTimeline / LorebookWorkspace / LorebookEditor` 在 `telegram` variant 下呈现浅雾蓝、轻玻璃分区、圆角列表行和触控友好的单列移动布局。
-- `WidgetPanelHost` 使用 `telegram-profile` 作为 Telegram 资料页伪面板；`lumina-stats` 保留为真实状态工具面板，避免资料页入口与状态插件互相占用。
-- `ChatStream` 和 `TelegramUserInfoPanel` 通过 `TELEGRAM_CONTEXT_TOOL` 或 `switchRightPanel` 意图打开既有 `lumina-timeline / lumina-lorebook / lumina-director / lumina-stats / lumina-settings` 面板，不直接内嵌插件重操作。
+- `WidgetPanelHost` 使用 `telegram-profile` 作为 Telegram 资料页容器；`lumina-stats` 保留为真实状态工具面板，避免资料页入口与状态插件互相占用。
+- `chat.main` header 与 `TelegramUserInfoPanel` 通过通用 `onOpenPanel` / Activity intent 打开既有 `lumina-timeline / lumina-lorebook / lumina-director / lumina-stats / lumina-settings` 面板，不直接内嵌插件重操作，也不从当前页面推断 Surface contract。
 - 更新 `docs/index.md`、`docs/overall/PDR.md`、`docs/overall/system_design.md` 中的桌面模式说明。
 
 ## 5. Mobile Adaptation Roadmap
@@ -58,3 +58,9 @@
 - `Timeline / Lorebook / Memory` 在 Telegram 模式中作为聊天上下文工具入口，而不是独立主导航目标。
 - `classic / stage / discord` 行为不回归。
 - `npm run type-check` 通过。
+
+## 7. 当前实现状态
+
+- Telegram desktop 左栏与 mobile 会话/角色/聊天页面栈均通过 `ThemedSurfaceOutlet` 挂载 Official Surface Kit；Shell 只管理 tabs、stack、返回和资料页容器。
+- registered panel 的 Surface 身份来自显式 `surfaceContractId`，默认输入与导航分组分别来自 `defaultInput`、`navigation`，不存在 panel ID 映射表。
+- `ChatStream`、`TelegramCharacterOverview` 等旧业务组合入口已删除；最终视觉验收以 classic、stage、discord、telegram 的 desktop/mobile 浏览器检查为准。

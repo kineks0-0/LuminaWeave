@@ -35,6 +35,7 @@
 - 自由工作台拆出态下主聊天区会去掉内部 hero/topbar 与额外边距，原顶部动作迁移到 `WorkspaceWindow` 顶栏；传统桌面展开态也会取消重复 hero 与聊天区顶栏，并在重置会话左侧提供“工作区”二级菜单。
 - 聊天与 Forge 共用思考折叠块，默认只在“有思考、无正文”时展开，正文或 `<V>` 一出现即自动收起。
 - Forge 拥有独立排版设置：AI 回复、用户输入、消息内组件分别提供字号、行距、字距配置。设置写入 `lumina-forge.*` 命名空间，只在 Forge 工作台根节点输出 CSS 变量，不影响主聊天、桌面模式消息矩阵或核心生成链路。
+- Forge workspace 的布局决策归 `src/plugins/forge/app/forgeWorkspacePlacementPresentation.ts`：纯 resolver 只根据移动端、Workspace 嵌入态与辅助栏模式计算 presentation flags，Shell/Widget 不再按 Forge panel ID 推断布局。`ForgeSidebar` 归 Forge app presentation 所有，侧栏折叠状态由每个 `CardMakerPanel` Surface 实例独立持有，不跨实例共享。
 - Forge Agent runtime 已转向前端 pi-style runtime：制卡聊天的长期事实源收敛为同一协作线程内的 pi session tree，Forge timeline 作为 UI 投影保留用户可操作节点的 pi origin。
 - Forge Agent 实时生命周期统一由 scoped `AgentRuntimeEventBus` 驱动：事件和 snapshot 按 `sessionId + turnId` 隔离，pi 每次 `message_start` 使用 `agent-message:${sessionId}:${turnId}:${sequence}`，普通生成与授权续跑共用同一消息、thinking、工具和运行时快照投影。旧 Forge stream/tool 事件不再作为传输契约；`CardMakerStore` 在 Pinia scope 内串行订阅并在销毁时取消。
 - Forge 是 Agent Runtime SDK 的第一套 adapter 来源；后续抽取 SDK 时，Forge 仍保留 Semantic VFS、Git-backed 工作区版本、Prompt Preview 事实源和真实 ST 发布边界。

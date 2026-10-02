@@ -13,6 +13,8 @@
 4. **Official Surface Kit（展示组件）**
    `CharacterRosterSurface`、`ConversationSessionListSurface`、`ChatTranscriptSurface`、`ChatComposerSurface`、`ChatPromptInspectorSurface` 与 `ChatMainSurface` 是公开组合节点；`ChatHeader`、`ChatTranscript`、`ChatMessage`、`ChatStreamingMessage`、`ChatComposer` 和 `ChatToolbar` 是纯 presentation。它们只消费 typed input/context，不导入 Pinia、API Facade、Shell 或桌面模式实现。
 
+旧 `ChatStream.vue` 与 legacy presentation mount 已删除。完整聊天的唯一挂载链为 `ChatRoot -> ChatMainSurface -> Surface context / ChatSurfaceApplicationScope`；独立 transcript、composer 与 Prompt Inspector 也必须从同一 application scope 取得状态和 intents，不得建立第二套 store 或全局事件路径。
+
 ## 二、 核心依赖与数据源
 - `ConversationDomainService.getContext()` 和 conversation event 是 Controller 的消息事实源。
 - `GenerationDomainService.subscribe()` 输出 started/updated/ended/failed 生命周期；`subscribePromptInspection()` 独立输出 Prompt probe 与自定义生成检查状态。

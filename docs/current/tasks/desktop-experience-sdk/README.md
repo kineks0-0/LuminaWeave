@@ -39,7 +39,7 @@
 7. 迁移 Shell 与 Workspace。
 8. 迁移 classic、stage、discord、telegram 四个内置模式。
 9. 增加声明式模式与 trusted renderer 示例。
-10. 删除旧入口并完成文档、浏览器验证与最终验收。
+10. 删除旧入口并完成文档、浏览器验证与最终验收（已完成）。
 
 ## 当前状态
 
@@ -73,7 +73,7 @@ Composition Runtime 已完成当前阶段实现：
 - 布局枚举固定为 `row | column`、`content | fill`、`visible | hidden`，strict Zod schema 拒绝任意 CSS、Vue component、attrs 与额外字段。
 - runtime preflight 在任何 registry 写入前校验版本、全树节点 ID、Surface contract、contract input 和 desktop overrides，公开 `registerDesktopMode()` 失败后不残留核心模式或 runtime 状态。
 - resolver 按显式 viewport 返回独立树，不读取 Shell、插件 ID 或宿主对象；特殊 contract input 实例保持其原型，不被转换为普通对象。
-- classic、stage、discord、telegram 已全部声明 desktop/mobile composition，并经过相同的注册预检与确定性解析；`composition` 的类型必填化留到任务 10 与 fallback 清理一并完成。
+- classic、stage、discord、telegram 已全部声明 desktop/mobile composition，并经过相同的注册预检与确定性解析；`composition` 已在 manifest/runtime descriptor 中设为必填，缺失 composition 不再有兼容渲染路径。
 
 Shell 与 Workspace 迁移已完成当前阶段实现：
 
@@ -84,6 +84,9 @@ Shell 与 Workspace 迁移已完成当前阶段实现：
 - `ShellRuntimeContext` 已删除重复 `layoutMode` 和 launchpad 状态；classic、stage、telegram 通过 desktop/mobile Activity slot 进入同一 Composition Runtime，Discord desktop 额外声明 `character.roster + activity-slot` 组合。
 - Discord mobile 的角色 overlay、Telegram desktop 左栏和 Telegram mobile 的会话/角色路由已改用 `character.roster`、`conversation.sessionList` 与 `chat.main` Official Surface；Shell 只保留 guild rail、tabs、页面栈、overlay 和 Activity 容器。
 - composition renderer 的实例身份包含 desktop mode、viewport、node kind 与 Surface contract；`ThemedSurfaceOutlet` 对 contract 变化响应式重算 skin，避免模式或节点切换复用旧主题状态。
+- `LuminaShellRoot` 无条件提供 composition slot，并只接受 Desktop Mode Runtime 注册的 shell renderer；缺少 renderer 时报告稳定错误，不按 `shellKind` 猜测 concrete Shell。
+- registered panel 的 typed Surface 只读取显式 `surfaceContractId`，不再通过官方映射表、panel ID 或同名 contract 推断；`defaultInput` 和 `navigation.group/hidden` 作为通用装配元数据。
+- 旧 `DiscordCharacterRail.vue`、`TelegramCharacterOverview.vue` 与 `officialPanelSurfaces.ts` 已删除；`ForgeSidebar` 与纯 placement resolver 归 `plugins/forge/app/`，侧栏折叠状态由每个 Forge Surface 实例独立持有。
 
 第三方扩展示例已完成：
 
@@ -92,7 +95,9 @@ Shell 与 Workspace 迁移已完成当前阶段实现：
 - context factory 订阅角色 ref、conversation 与 generation，使用 revision/disposed guard 隔离迟到异步结果，并通过 `onDispose()` 清理 watcher 和两个领域订阅。
 - 独立 registry 测试覆盖 composition preflight、未知 input 字段拒绝、当前角色自动更新、typed intent 转发、销毁后停止更新，以及 renderer 异常不影响同级节点。
 
-任务 2 定向验证：4 个测试文件、15 个测试通过；任务 3 定向验证：19 个测试文件、89 个用例通过；任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；任务 5 定向验证：27 个测试文件、120 个用例通过。任务 6 定向验证通过 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。任务 7 审查收敛后的 Shell、Workspace、Activity 与 Desktop Runtime 定向验证通过 15 个测试文件、77 个用例；最终 extension 全量 `npm run test` 通过 184 个测试文件、930 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。任务 8 第一批已将 classic、stage 的 desktop/mobile Activity 纳入同一 Composition Runtime，定向测试 2 个文件、15 个用例与 `npm run type-check` 通过；第二批完成 Discord、Telegram 的 composition 与 Official Surface 迁移，扩大定向测试通过 18 个文件、92 个用例，`npm run type-check` 通过。任务 9 示例自身测试通过 1 个测试文件、6 个用例；扩大到 Surface Registry、Surface Runtime、renderer boundary 与 Composition Runtime 的定向测试通过 6 个测试文件、52 个用例，`npm run type-check` 通过。真实浏览器与宿主验收仍留在最终阶段。
+任务 2 定向验证：4 个测试文件、15 个测试通过；任务 3 定向验证：19 个测试文件、89 个用例通过；任务 4 审查收敛后定向验证：7 个测试文件、30 个用例通过；任务 5 定向验证：27 个测试文件、120 个用例通过。任务 6 定向验证通过 4 个测试文件、38 个用例；extension 全量 `npm run test` 通过 184 个测试文件、921 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。任务 7 审查收敛后的 Shell、Workspace、Activity 与 Desktop Runtime 定向验证通过 15 个测试文件、77 个用例；最终 extension 全量 `npm run test` 通过 184 个测试文件、930 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过。任务 8 第一批已将 classic、stage 的 desktop/mobile Activity 纳入同一 Composition Runtime，定向测试 2 个文件、15 个用例与 `npm run type-check` 通过；第二批完成 Discord、Telegram 的 composition 与 Official Surface 迁移，扩大定向测试通过 18 个文件、92 个用例，`npm run type-check` 通过。任务 9 示例自身测试通过 1 个测试文件、6 个用例；扩大到 Surface Registry、Surface Runtime、renderer boundary 与 Composition Runtime 的定向测试通过 6 个测试文件、52 个用例，`npm run type-check` 通过。
+
+任务 10 已完成 composition/shell/panel fallback 清理，定向回归通过 16 个测试文件、116 个用例；extension 全量 `npm run test` 通过 186 个测试文件、960 个用例，2 个用例跳过，`npm run type-check` 与 `npm run build` 均通过；server `npm run test` 通过 3 个测试文件、9 个用例，`npm run build` 通过。classic、stage、discord、telegram 均在 `1440x900` desktop 与 `390x844` mobile 视口通过可见 UI 切换验收：根容器覆盖视口、无横向溢出、主要导航/Activity 可见，且未出现 Shell/Surface renderer unavailable。standalone console 仍有既有 Vue lifecycle warning、缺少真实 ST 宿主导致的世界书同步失败，以及浏览器 IndexedDB/Dexie 写入失败；真实 SillyTavern/Tauri 宿主集成不在本轮本地浏览器证据内。
 
 ## 恢复入口
 

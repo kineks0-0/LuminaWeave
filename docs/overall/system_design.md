@@ -1,7 +1,7 @@
 # LuminaWeave 系统架构与设计文档 (System Design)
 
-**版本:** v6.1-docs
-**最后更新时间:** 2026-06-28
+**版本:** v6.2-docs
+**最后更新时间:** 2026-08-13
 
 本文记录 LuminaWeave 长期系统设计、模块边界、数据流和不可破坏的工程约束。短版入口见 `docs/architecture.md`，产品目标见 `docs/overall/PDR.md`。
 
@@ -199,16 +199,18 @@ Composition Runtime 作为 Desktop Mode Runtime 的声明式布局层：
 - 节点判别值只允许 `group`、`surface`、`activity-slot`。`group.direction` 只允许 `row | column`，节点尺寸只允许 `content | fill`，可见性只允许 `visible | hidden`；schema 使用 strict object，拒绝 CSS、Vue component、attrs 和其他未声明字段。
 - Surface 节点先由 Zod 校验树结构，再通过 Surface Registry 确认 `contractId` 并调用该 contract 的 input schema。节点 ID 在 desktop/mobile 两棵树之间全局唯一。
 - 注册数据流为 `registerDesktopMode -> runtime preflight -> core registry commit -> runtime registry commit`。preflight 无副作用，同时校验 composition 和 desktop overrides；任一校验失败时两个 registry 与 Surface Registry 均保持原状态。
-- resolver 只按显式 viewport 选择已校验根节点并返回独立副本，不读取 Shell 状态或宿主全局对象。classic、stage、discord、telegram 均已声明 composition，并统一从该链路渲染；可选字段和无 composition fallback 只等待最终清理。
+- resolver 只按显式 viewport 选择已校验根节点并返回独立副本，不读取 Shell 状态或宿主全局对象。`DesktopModeManifest.composition` 与 runtime descriptor 中的 composition 都是必填字段；classic、stage、discord、telegram 统一从该链路渲染，不存在无 composition fallback。
 
 Shell 与 Workspace 的投影边界：
 
-- `LuminaShellRoot` 始终挂载当前模式的 concrete Shell；runtime descriptor 含 composition 时，通过 Shell 的 composition slot 把 `DesktopCompositionOutlet` 注入其 Activity 区域。递归 outlet 将 `surface` 节点交给 `ThemedSurfaceOutlet`，并把 `activity-slot` 交给通用主 Activity、Telegram 移动页面栈或 Freeform 窗口容器；Shell 不解析 contract 的业务语义。
+- `LuminaShellRoot` 始终挂载 Desktop Mode Runtime 为当前模式注册的 concrete Shell，并无条件通过 composition slot 把 `DesktopCompositionOutlet` 注入其 Activity 区域。缺少 runtime shell renderer 时抛出稳定边界错误，不根据 `shellKind` 猜测 Traditional/Freeform renderer。递归 outlet 将 `surface` 节点交给 `ThemedSurfaceOutlet`，并把 `activity-slot` 交给通用主 Activity、Telegram 移动页面栈或 Freeform 窗口容器；Shell 不解析 contract 的业务语义。
 - Desktop navigation model 的 primary/mobile surface 列表在 composition 完成校验后遍历对应根节点派生，不再与组合树并行维护；非法树不会进入导航投影。
 - Workspace 从 `PluginManager.getPlugins()` 的完整启用插件集合派生静态应用目录，而不是只遍历已有 navigation slot。条目仍要求 `primarySurface`，有 main/widget slot 时按 slot 建立入口，只有 `ActivityDescriptor` 时按 Activity 尺寸建立入口；运行时动态 Activity 继续通过通用 DynamicTab outlet 进入窗口。
 - Freeform Shell 只拥有舞台、窗口、焦点、移动导航和 Dock 机制。新建舞台创建空容器，不隐式启动 Launcher；窗口标题栏和菜单不按 Forge、Settings 或其他插件 ID 分支。
 - `ShellRuntimeContext` 只携带 Shell 机制需要的状态；重复的 `layoutMode` 与业务 launchpad 状态不再作为运行时契约。Discord desktop 的 roster 由 composition 声明，Discord mobile overlay、Telegram desktop tabs 和 Telegram mobile route 通过 Official Surface contract 获取角色、会话与 Chat presentation；Shell 只传递页面栈与容器导航 intent。
 - composition 根实例 key 包含 desktop mode、viewport 和根节点，递归节点 key 继续包含 mode、node kind 与 Surface contract；`ThemedSurfaceOutlet` 以响应式 contract id 解析 skin，模式、viewport 或 renderer 身份变化不会复用旧主题状态。
+- registered panel 的 typed Surface 身份只读取显式 `surfaceContractId`；不得从 panel ID、当前活动界面或 Surface Registry 的同名 contract 推断。`defaultInput` 作为移动临时页/Activity 的默认输入，`navigation.group/hidden` 作为通用导航投影元数据；未声明 contract 时 Activity 保留注册 component 目标。
+- Forge 的 `ForgeSidebar`、辅助面板选择与 placement resolver 由 `plugins/forge/app` 拥有；Shell 只消费 registered-panel metadata，不识别 Forge panel ID。`activeAuxPanel` / `auxPresentationMode` 属于 Forge store，sidebar collapse 属于每个 Forge Surface 实例的局部状态，均不得提升为 Shell 全局状态。
 
 约束：
 
