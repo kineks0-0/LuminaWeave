@@ -1,6 +1,5 @@
 <template>
   <DesktopCompositionNodeOutlet
-    v-if="composition"
     :key="compositionRenderKey"
     :node="composition"
     :desktop-mode-id="desktopModeId"
@@ -9,7 +8,6 @@
       <slot name="activity" v-bind="slotProps" />
     </template>
   </DesktopCompositionNodeOutlet>
-  <slot v-else />
 </template>
 
 <script setup lang="ts">
@@ -30,6 +28,6 @@ const composition = computed(() => desktopModeRuntimeRegistry.resolveComposition
 const compositionRenderKey = computed(() => [
   props.desktopModeId,
   viewport.value,
-  composition.value?.id || 'empty'
+  composition.value.id
 ].join(':'));
 </script>

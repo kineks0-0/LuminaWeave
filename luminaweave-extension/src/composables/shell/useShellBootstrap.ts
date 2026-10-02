@@ -79,7 +79,8 @@ export const useShellBootstrap = ({
     legacyPanelDefinitions.forEach((panel) => {
       desktopSurfaceService.registerPanel(panel.id, panel.component, {
         title: panel.title,
-        icon: panel.icon
+        icon: panel.icon,
+        navigation: panel.navigation
       });
     });
 

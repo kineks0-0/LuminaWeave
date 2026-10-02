@@ -1,11 +1,18 @@
 <template>
   <div class="card-maker-root" :style="forgeTypographyStyle">
+    <ForgeSidebar
+      v-if="workspacePlacement.showOwnedLeftSidebar"
+      :is-collapsed="instancePresentationState.isSidebarCollapsed"
+      @toggle-collapse="instancePresentationState.isSidebarCollapsed = !instancePresentationState.isSidebarCollapsed"
+      @switch-mode="handleSwitchAuxMode"
+    />
+    <div class="card-maker-workspace">
     <ForgeSessionBrowser v-if="store.workspacePage === 'session-browser'"
       @close="store.setWorkspacePage('workspace')" />
 
     <div v-else class="workspace-shell"
-      :class="{ 'is-detached-workspace': isDetachedWorkspace, 'is-mobile-layout': isMobileLayout, 'is-standalone-expanded': isStandaloneExpandedWorkspace }">
-      <header v-if="showWorkspaceHero" class="workspace-hero">
+      :class="{ 'is-detached-workspace': workspacePlacement.isDetachedWorkspace, 'is-mobile-layout': workspacePlacement.isMobileLayout, 'is-standalone-expanded': workspacePlacement.isStandaloneExpandedWorkspace }">
+      <header v-if="workspacePlacement.showWorkspaceHero" class="workspace-hero">
         <div v-if="!props.embeddedInWorkspaceWindow" class="hero-copy">
           <span class="hero-kicker">Forge Project</span>
           <h1 class="hero-title">{{ heroTitle }}</h1>
@@ -16,7 +23,7 @@
           :aux-sidebar-mode="props.auxSidebarMode" :active-right-panel-id="props.activeRightPanelId" />
       </header>
 
-      <div v-if="showStandaloneWorkspaceActions" class="standalone-actions-row">
+      <div v-if="workspacePlacement.showStandaloneWorkspaceActions" class="standalone-actions-row">
         <div class="standalone-title-group">
           <span class="standalone-kicker">Forge Project</span>
           <strong class="standalone-title">{{ heroTitle }}</strong>
@@ -27,11 +34,11 @@
       </div>
 
       <div class="main-layout"
-        :class="{ 'has-embedded-sidebar': showEmbeddedSidebar, 'is-detached-workspace': isDetachedWorkspace }">
-        <section class="chat-section" data-lw-ime-scope :class="{ 'is-detached-workspace': isDetachedWorkspace }">
-          <div v-if="showWorkspaceTopbar" class="window-handle" aria-hidden="true"></div>
+        :class="{ 'has-embedded-sidebar': workspacePlacement.showEmbeddedSidebar, 'is-detached-workspace': workspacePlacement.isDetachedWorkspace }">
+        <section class="chat-section" data-lw-ime-scope :class="{ 'is-detached-workspace': workspacePlacement.isDetachedWorkspace }">
+          <div v-if="workspacePlacement.showWorkspaceTopbar" class="window-handle" aria-hidden="true"></div>
 
-          <div v-if="isMobileLayout" class="mobile-aux-strip">
+          <div v-if="workspacePlacement.showMobileAuxStrip" class="mobile-aux-strip">
             <button v-for="item in auxPanelButtons" :key="item.kind" class="mobile-aux-btn" type="button"
               @click="handleAuxPanelClick(item.kind)">
               <span aria-hidden="true">{{ item.icon }}</span>
@@ -39,7 +46,7 @@
             </button>
           </div>
 
-          <div v-if="showWorkspaceTopbar" class="topbar" :class="{ 'is-collapsed': isTopbarCollapsed }">
+          <div v-if="workspacePlacement.showWorkspaceTopbar" class="topbar" :class="{ 'is-collapsed': isTopbarCollapsed }">
             <div v-if="!isTopbarCollapsed" class="topbar-content">
               <div class="title-group compact">
                 <span class="icon">⚒</span>
@@ -57,11 +64,11 @@
                 @open-browser="store.setWorkspacePage('session-browser')" @new-session="handleCreateWorkspace"
                 @clear-reference="handleClearChatReference" />
 
-              <div v-if="showAuxStripInBody || showAuxStripForHiddenMode || showAuxStripForWidgetMode"
+              <div v-if="workspacePlacement.showAuxStripInBody || workspacePlacement.showAuxStripForHiddenMode || workspacePlacement.showAuxStripForWidgetMode"
                 class="aux-panel-strip"
-                :class="{ 'is-window-launcher': props.embeddedInWorkspaceWindow, 'is-hidden-mode': showAuxStripForHiddenMode, 'is-widget-mode': showAuxStripForWidgetMode }">
-                <span class="aux-panel-strip-label">{{ showAuxStripForHiddenMode ? '辅助面板（小窗）' :
-                  (showAuxStripForWidgetMode ? '辅助面板（右侧）' : (props.embeddedInWorkspaceWindow &&
+                :class="{ 'is-window-launcher': props.embeddedInWorkspaceWindow, 'is-hidden-mode': workspacePlacement.showAuxStripForHiddenMode, 'is-widget-mode': workspacePlacement.showAuxStripForWidgetMode }">
+                <span class="aux-panel-strip-label">{{ workspacePlacement.showAuxStripForHiddenMode ? '辅助面板（小窗）' :
+                  (workspacePlacement.showAuxStripForWidgetMode ? '辅助面板（右侧）' : (props.embeddedInWorkspaceWindow &&
                     store.auxPresentationMode === 'detached' ? '辅助窗口' : '辅助面板')) }}</span>
                 <div class="aux-panel-strip-actions">
                   <button v-for="item in auxPanelButtons" :key="item.kind" class="aux-panel-btn"
@@ -70,7 +77,7 @@
                     <span class="aux-panel-btn-icon" aria-hidden="true">{{ item.icon }}</span>
                     <span>{{ item.shortLabel }}</span>
                   </button>
-                  <template v-if="isTraditionalWithRightSidebar">
+                  <template v-if="workspacePlacement.isTraditionalWithRightSidebar">
                     <button class="aux-panel-mode-btn" type="button" title="切换到左侧" @click="handleSwitchAuxMode('left')">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
                         fill="none">
@@ -87,7 +94,7 @@
                       </svg>
                     </button>
                   </template>
-                  <template v-if="isTraditionalWithWidgetSidebar">
+                  <template v-if="workspacePlacement.isTraditionalWithWidgetSidebar">
                     <button class="aux-panel-mode-btn" type="button" title="切换到左侧" @click="handleSwitchAuxMode('left')">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2"
                         fill="none">
@@ -428,13 +435,14 @@
           </div>
         </section>
 
-        <aside v-if="showEmbeddedSidebar" class="workspace-sidebar"
+        <aside v-if="workspacePlacement.showEmbeddedSidebar" class="workspace-sidebar"
           :class="{ 'is-workspace-embedded': props.embeddedInWorkspaceWindow }">
           <div class="sidebar-body">
             <ForgeAuxPanelView :kind="store.activeAuxPanel" />
           </div>
         </aside>
       </div>
+    </div>
     </div>
 
   </div>
@@ -456,6 +464,7 @@ import ForgeSessionBrowser from '../project/ForgeSessionBrowser.vue';
 import ForgeSessionToolbar from '../project/ForgeSessionToolbar.vue';
 import ForgeMessageRenderer from '../console/ForgeMessageRenderer.vue';
 import ForgeWindowActions from '../ForgeWindowActions.vue';
+import ForgeSidebar from './ForgeSidebar.vue';
 import SeedSnippetSelector from '../SeedSnippetSelector.vue';
 import { useForgeSeedImport } from '../useForgeSeedImport.js';
 import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
@@ -475,6 +484,10 @@ import {
   type ForgeAgentProcessPresentation
 } from '../project/forgeAgentProcessPresentation.js';
 import { ForgeAuxPanelView } from './forgeAsyncComponents.js';
+import {
+  createForgeWorkspaceInstanceState,
+  resolveForgeWorkspacePlacement
+} from './forgeWorkspacePlacementPresentation.js';
 
 const props = useSurfaceInput('forge.workspace');
 
@@ -494,6 +507,7 @@ const isComposerMenuOpen = ref(false);
 const isDetailModeMenuOpen = ref(false);
 const isPromptPreviewOpen = ref(false);
 const isResolvingComposerApproval = ref(false);
+const instancePresentationState = reactive(createForgeWorkspaceInstanceState());
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let stopForgeTypographyWatch: (() => void) | null = null;
 
@@ -734,44 +748,12 @@ const auxPanelButtons = FORGE_AUX_PANEL_ORDER.map((kind) => ({
   ...FORGE_AUX_PANEL_META[kind]
 }));
 
-const isDetachedWorkspace = computed(() => props.embeddedInWorkspaceWindow && store.auxPresentationMode === 'detached');
-const isMobileLayout = computed(() => props.isMobile || props.auxSidebarMode === 'hidden');
-const isStandaloneExpandedWorkspace = computed(() => !props.embeddedInWorkspaceWindow && !isMobileLayout.value);
-const showStandaloneWorkspaceActions = computed(() => isStandaloneExpandedWorkspace.value);
-const showWorkspaceHero = computed(() => !isStandaloneExpandedWorkspace.value && !isDetachedWorkspace.value && !isMobileLayout.value);
-const showWorkspaceTopbar = computed(() => !isStandaloneExpandedWorkspace.value && !isDetachedWorkspace.value && !isMobileLayout.value);
-const isTraditionalWithLeftSidebar = computed(() =>
-  !props.embeddedInWorkspaceWindow && props.auxSidebarMode === 'left'
-);
-const isTraditionalWithRightSidebar = computed(() =>
-  !props.embeddedInWorkspaceWindow && props.auxSidebarMode === 'right'
-);
-const isTraditionalWithWidgetSidebar = computed(() =>
-  !props.embeddedInWorkspaceWindow && props.auxSidebarMode === 'widget'
-);
-const isTraditionalWithHiddenSidebar = computed(() =>
-  !props.embeddedInWorkspaceWindow && props.auxSidebarMode === 'hidden'
-);
-const showEmbeddedSidebar = computed(() =>
-  isTraditionalWithRightSidebar.value
-  || (!isTraditionalWithLeftSidebar.value
-    && !isTraditionalWithWidgetSidebar.value
-    && !isTraditionalWithHiddenSidebar.value
-    && (!props.embeddedInWorkspaceWindow || store.auxPresentationMode === 'embedded'))
-);
-const showAuxStripInBody = computed(() =>
-  isTraditionalWithRightSidebar.value
-  || (!isTraditionalWithLeftSidebar.value
-    && !isTraditionalWithHiddenSidebar.value
-    && !isTraditionalWithWidgetSidebar.value
-    && (!props.embeddedInWorkspaceWindow || store.auxPresentationMode === 'embedded'))
-);
-const showAuxStripForWidgetMode = computed(() =>
-  isTraditionalWithWidgetSidebar.value
-);
-const showAuxStripForHiddenMode = computed(() =>
-  isTraditionalWithHiddenSidebar.value
-);
+const workspacePlacement = computed(() => resolveForgeWorkspacePlacement({
+  isMobile: props.isMobile ?? false,
+  embeddedInWorkspaceWindow: props.embeddedInWorkspaceWindow ?? false,
+  auxSidebarMode: props.auxSidebarMode ?? 'left',
+  auxPresentationMode: store.auxPresentationMode
+}));
 const isForgeAuxPanelVisibleInWidget = (kind: ForgeAuxPanelKind): boolean => {
   if (props.auxSidebarMode !== 'widget') return store.activeAuxPanel === kind;
   return props.activeRightPanelId === `forge_${kind}`;
@@ -1084,7 +1066,7 @@ onUnmounted(() => {
   position: relative;
   isolation: isolate;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100%;
   overflow: hidden;
   color: var(--lw-text-main);
@@ -1107,6 +1089,16 @@ onUnmounted(() => {
   --lw-forge-component-font-size: 12px;
   --lw-forge-component-line-height: 1.45;
   --lw-forge-component-letter-spacing: 0px;
+}
+
+.card-maker-workspace {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .card-maker-root::before,

@@ -14,15 +14,8 @@
       @close="onClose"
     />
 
-    <ForgeSidebar
-      v-if="shouldShowForgeSidebar"
-      :isCollapsed="isForgeSidebarCollapsed"
-      @toggleCollapse="onToggleForgeSidebarCollapse"
-      @switchMode="onSetSidebarMode"
-    />
-
     <TelegramDesktopPane
-      v-if="isTelegramDesktopMode && shouldShowDiscordCharacterRail"
+      v-if="isTelegramDesktopMode && shouldShowCharacterNavigationPane"
       :activeDesktopModeId="activeDesktopModeId"
       :leftRoute="telegramDesktopLeftRoute"
       :leftRailStyle="telegramLeftRailStyle"
@@ -62,7 +55,6 @@
         :mainSurfaceStyle="shellMainSurfaceStyle"
         :mobileMainStyle="discordMobileMainStyle"
         :state="characterChannelState"
-        :selectedCharacterKey="telegramSelectedCharacterKey"
         :desktopModes="desktopModeOptions"
         :activeDesktopModeId="activeDesktopModeId"
         :widgetGroups="widgetGroups"
@@ -116,8 +108,8 @@
             :tab="tab"
             :desktop-mode-id="activeDesktopModeId"
             :is-mobile="isMobile"
-            :aux-sidebar-mode="effectiveForgeAuxSidebarMode"
-            :active-right-panel-id="isForgeActiveInTraditional ? activeRightPanel : undefined"
+            :aux-sidebar-mode="surfaceAuxSidebarMode"
+            :active-right-panel-id="activeRightPanel"
           />
         </div>
       </template>
@@ -134,9 +126,7 @@
       :isResizing="isResizing"
       :currentDetailedView="currentDetailedView"
       :saveStatus="saveStatus"
-      :activeForgeAuxKind="activeForgeAuxKind"
-      :isForgeActiveInTraditional="isForgeActiveInTraditional"
-      :rawSidebarMode="rawSidebarMode"
+      :auxSidebarMode="surfaceAuxSidebarMode"
       :activeWidgetPlugin="activeWidgetPlugin"
       :activeRegisteredPanel="activeRegisteredPanel"
       :activeRightPanelActivity="activeRightPanelActivity"
@@ -149,7 +139,6 @@
       @backFromDetailedSettings="onBackFromDetailedSettings"
       @toggleWidgetDropdown="onToggleWidgetDropdown"
       @switchRightPanel="onSwitchRightPanel"
-      @restoreSidebarLeft="onRestoreSidebarLeft"
       @closePanel="onClosePanel"
     />
 
@@ -169,7 +158,6 @@ import type { CSSProperties } from 'vue';
 import { computed } from 'vue';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import DiscordGuildRail from '../../components/DiscordGuildRail.vue';
-import ForgeSidebar from '../../components/ForgeSidebar.vue';
 import type { ShellRuntimeActions, ShellRuntimeContext, ShellRuntimeSurfaces } from '../types.js';
 import DiscordMobileShell from '../modes/discord/DiscordMobileShell.vue';
 import TelegramBottomNav from '../modes/telegram/TelegramBottomNav.vue';
@@ -188,7 +176,6 @@ import WidgetPanelHost from './WidgetPanelHost.vue';
 import ThemedSurfaceOutlet from '../../platform/surface/ThemedSurfaceOutlet.vue';
 import { projectSurfaceInput } from '../../platform/surface/surfaceInputProjection.js';
 import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
-import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
 import DynamicTabOutlet from '../DynamicTabOutlet.vue';
 import type { SurfaceContractId } from '../../platform/surface/types.js';
 import ShellPrimaryActivityOutlet from '../ShellPrimaryActivityOutlet.vue';
@@ -210,9 +197,7 @@ const widgetGroups = computed(() => props.runtimeContext.widgetGroups);
 const characterChannelState = computed(() => props.runtimeContext.characterChannelState);
 const shouldShowDiscordGuildRail = computed(() => props.runtimeContext.traditional.shouldShowDiscordGuildRail);
 const discordGuildEntries = computed(() => props.runtimeContext.traditional.discordGuildEntries);
-const shouldShowForgeSidebar = computed(() => props.runtimeContext.traditional.shouldShowForgeSidebar);
-const isForgeSidebarCollapsed = computed(() => props.runtimeContext.traditional.isForgeSidebarCollapsed);
-const shouldShowDiscordCharacterRail = computed(() => props.runtimeContext.traditional.shouldShowDiscordCharacterRail);
+const shouldShowCharacterNavigationPane = computed(() => props.runtimeContext.traditional.shouldShowCharacterNavigationPane);
 const isDiscordMobileMode = computed(() => props.runtimeContext.traditional.isDiscordMobileMode);
 const isTelegramMobileMode = computed(() => props.runtimeContext.traditional.isTelegramMobileMode);
 const shouldShowDiscordMobileShell = computed(() => props.runtimeContext.traditional.shouldShowDiscordMobileShell);
@@ -220,7 +205,6 @@ const discordMobileGuildRailPosition = computed(() => props.runtimeContext.tradi
 const discordMobileCharacterEntryPosition = computed(() => props.runtimeContext.traditional.discordMobileCharacterEntryPosition);
 const showDiscordMobileCharacterRail = computed(() => props.runtimeContext.traditional.showDiscordMobileCharacterRail);
 const discordMobileCharacterEntryStyle = computed(() => props.runtimeContext.traditional.discordMobileCharacterEntryStyle);
-const telegramSelectedCharacterKey = computed(() => props.runtimeContext.traditional.telegramSelectedCharacterKey);
 const telegramDesktopLeftRoute = computed(() => props.runtimeContext.traditional.telegramDesktopLeftRoute);
 const telegramMobileActiveTab = computed(() => props.runtimeContext.traditional.telegramMobileActiveTab);
 const telegramMobileCurrentRoute = computed(() => props.runtimeContext.traditional.telegramMobileCurrentRoute);
@@ -237,7 +221,6 @@ const shellMainSurfaceVariant = computed(() => props.runtimeSurfaces.traditional
 const shellMainSurfaceStyle = computed(() => props.runtimeSurfaces.traditional.mainSurfaceStyle);
 const discordMobileMainStyle = computed(() => props.runtimeSurfaces.traditional.mobileMainStyle);
 const isTimelineLoadedOnce = computed(() => props.runtimeContext.traditional.isTimelineLoadedOnce);
-const isForgeActiveInTraditional = computed(() => props.runtimeContext.traditional.isForgeActiveInTraditional);
 const sidebarMode = computed(() => props.runtimeContext.traditional.sidebarMode);
 const activeRightPanel = computed(() => props.runtimeContext.traditional.activeRightPanel);
 const shellWidgetSurfaceVariant = computed(() => props.runtimeSurfaces.traditional.widgetSurfaceVariant);
@@ -246,17 +229,12 @@ const widgetWidth = computed(() => props.runtimeContext.traditional.widgetWidth)
 const isResizing = computed(() => props.runtimeContext.traditional.isResizing);
 const telegramLeftRailWidth = computed(() => props.runtimeContext.traditional.telegramLeftRailWidth);
 const isTelegramLeftRailResizing = computed(() => props.runtimeContext.traditional.isTelegramLeftRailResizing);
-const activeForgeAuxKind = computed(() => props.runtimeContext.traditional.activeForgeAuxKind);
-const rawSidebarMode = computed(() => props.runtimeContext.traditional.rawSidebarMode);
 const activeWidgetPlugin = computed(() => props.runtimeContext.traditional.activeWidgetPlugin);
 const activeRegisteredPanel = computed(() => props.runtimeContext.traditional.activeRegisteredPanel);
 const activeRightPanelActivity = computed(() => props.runtimeContext.traditional.activeRightPanelActivity);
 const showWidgetDropdown = computed(() => props.runtimeContext.traditional.showWidgetDropdown);
 const showNexus = computed(() => props.runtimeContext.traditional.showNexus);
-const effectiveForgeAuxSidebarMode = computed(() => {
-  if (!isForgeActiveInTraditional.value) return undefined;
-  return isMobile.value ? 'hidden' : sidebarMode.value;
-});
+const surfaceAuxSidebarMode = computed(() => isMobile.value ? 'hidden' : sidebarMode.value);
 
 const getMainSurfaceInput = (contractId: SurfaceContractId) => {
   const input = contractId === 'chat.main' && isTelegramDesktopMode.value
@@ -269,8 +247,8 @@ const getMainSurfaceInput = (contractId: SurfaceContractId) => {
   return projectSurfaceInput(contractId, input, {
     activity: { size: 'default', pageType: 'nested' },
     isMobile: isMobile.value,
-    auxSidebarMode: effectiveForgeAuxSidebarMode.value,
-    activeRightPanelId: isForgeActiveInTraditional.value ? activeRightPanel.value : undefined
+    auxSidebarMode: surfaceAuxSidebarMode.value,
+    activeRightPanelId: activeRightPanel.value
   });
 };
 
@@ -278,8 +256,6 @@ const getPluginName = (pluginId: string | null) => props.runtimeActions.getPlugi
 const onSwitchMainView = (tabId: string) => props.runtimeActions.navigation.switchMainView(tabId);
 const onToggleSettings = () => props.runtimeActions.navigation.openSettingsPanel();
 const onClose = () => props.runtimeActions.navigation.close();
-const onToggleForgeSidebarCollapse = () => props.runtimeActions.traditional.toggleForgeSidebarCollapse();
-const onSetSidebarMode = (mode: 'left' | 'right' | 'widget') => props.runtimeActions.traditional.setSidebarMode(mode);
 const onOpenDiscordChatSession = (sessionId: string) => props.runtimeActions.traditional.openDiscordChatSession(sessionId);
 const onOpenDiscordMobileChatSession = (sessionId: string) =>
   props.runtimeActions.traditional.openDiscordMobileChatSession(sessionId);
@@ -302,7 +278,6 @@ const onBackFromDetailedSettings = () => props.runtimeActions.traditional.backFr
 const onToggleWidgetDropdown = () => props.runtimeActions.traditional.toggleWidgetDropdown();
 const onSwitchRightPanel = (panelId: string) => props.runtimeActions.traditional.switchRightPanel(panelId);
 const onOpenTelegramDesktopRoleProfile = () => onSwitchRightPanel('telegram-profile');
-const onRestoreSidebarLeft = () => props.runtimeActions.traditional.restoreSidebarLeft();
 const onClosePanel = () => props.runtimeActions.traditional.closePanel();
 const onUpdateShowNexus = (value: boolean) => props.runtimeActions.traditional.updateShowNexus(value);
 const onSelectTelegramBottomNav: ShellRuntimeActions['traditional']['selectTelegramBottomNav'] = (itemId) =>
@@ -324,7 +299,7 @@ const telegramMobileStackTitle = computed(() =>
 );
 const telegramMobileToolContractId = computed(() =>
   resolveTelegramMobileToolContractId(telegramMobileCurrentRoute.value, {
-    resolveRegisteredPanelContractId: getSurfaceContractIdForRegisteredPanel,
+    resolveRegisteredPanelContractId: props.runtimeActions.resolveRegisteredPanelSurface,
     resolvePluginContractId: props.runtimeActions.resolvePluginPrimarySurface
   })
 );
@@ -380,7 +355,6 @@ const compositionActivityComponentProps = computed(() => {
     mainSurfaceStyle: shellMainSurfaceStyle.value,
     mobileMainStyle: discordMobileMainStyle.value,
     state: characterChannelState.value,
-    selectedCharacterKey: telegramSelectedCharacterKey.value,
     desktopModes: desktopModeOptions.value,
     activeDesktopModeId: activeDesktopModeId.value,
     widgetGroups: widgetGroups.value,

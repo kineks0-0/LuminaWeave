@@ -11,6 +11,7 @@ import { SurfaceRegistryError, type SurfaceRegistry } from '../surface/SurfaceRe
 import type { SurfaceContractId, SurfaceInput } from '../surface/types.js';
 
 export type DesktopCompositionRuntimeErrorCode =
+    | 'missing-composition'
     | 'unsupported-version'
     | 'invalid-layout'
     | 'duplicate-node-id'
@@ -18,11 +19,21 @@ export type DesktopCompositionRuntimeErrorCode =
     | 'invalid-surface-input';
 
 const ERROR_MESSAGES: Record<DesktopCompositionRuntimeErrorCode, string> = {
+    'missing-composition': '[DesktopCompositionRuntime] Missing desktop mode composition',
     'unsupported-version': '[DesktopCompositionRuntime] Unsupported composition version',
     'invalid-layout': '[DesktopCompositionRuntime] Invalid composition layout',
     'duplicate-node-id': '[DesktopCompositionRuntime] Duplicate composition node id',
     'unknown-contract': '[DesktopCompositionRuntime] Unknown surface contract',
     'invalid-surface-input': '[DesktopCompositionRuntime] Invalid surface input'
+};
+
+export const requireDesktopModeComposition = (
+    composition: DesktopModeComposition | undefined
+): DesktopModeComposition => {
+    if (!composition) {
+        throw new DesktopCompositionRuntimeError('missing-composition');
+    }
+    return composition;
 };
 
 export class DesktopCompositionRuntimeError extends Error {

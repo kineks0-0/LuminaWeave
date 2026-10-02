@@ -31,7 +31,6 @@ export const shouldShowTelegramMobileStackBar = (route: TelegramStackRoute): boo
   canPopTelegramMobileRoute(route) && !['chat', 'roleProfile'].includes(route.name);
 
 export const resolveTelegramMobileRouteTitle = (route: TelegramStackRoute): string => {
-  if (route.name === 'characterOverview') return '角色概览';
   if (route.name === 'roleProfile') return '角色资料';
   if (route.name === 'chat') return '聊天';
   if (route.name === 'tool') return route.title || '工具';

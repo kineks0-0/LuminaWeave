@@ -52,7 +52,12 @@ describe('DesktopModeRuntimeRegistry', () => {
             manifest: {
                 id: 'telegram',
                 name: 'Telegram 桌面',
-                shell: { kind: 'traditional' }
+                shell: { kind: 'traditional' },
+                composition: {
+                    version: 1,
+                    desktop: { id: 'telegram-desktop', kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                    mobile: { id: 'telegram-mobile', kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+                }
             },
             id: 'telegram',
             name: 'Telegram 桌面',
@@ -69,12 +74,17 @@ describe('DesktopModeRuntimeRegistry', () => {
                 id: 'telegram.policy',
                 openSurface: 'temporary-tab',
                 supportsContextualTools: true
+            },
+            composition: {
+                version: 1,
+                desktop: { id: 'telegram-desktop', kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: 'telegram-mobile', kind: 'activity-slot', size: 'fill', visibility: 'visible' }
             }
         });
 
         const mode = desktopRegistry.get('telegram');
 
-        expect(mode?.navigationModel.primarySurfaces).toEqual(['chat.main']);
+        expect(mode?.navigationModel.primarySurfaces).toEqual([]);
         expect(mode?.componentOverrides?.['settings.root']?.ownerId).toBe('telegram');
     });
 
@@ -84,13 +94,23 @@ describe('DesktopModeRuntimeRegistry', () => {
             manifest: {
                 id: 'stage',
                 name: '自由工作台',
-                shell: { kind: 'freeform' as const }
+                shell: { kind: 'freeform' as const },
+                composition: {
+                    version: 1 as const,
+                    desktop: { id: 'stage-desktop', kind: 'activity-slot' as const, size: 'fill' as const, visibility: 'visible' as const },
+                    mobile: { id: 'stage-mobile', kind: 'activity-slot' as const, size: 'fill' as const, visibility: 'visible' as const }
+                }
             },
             id: 'stage',
             name: '自由工作台',
             shellKind: 'freeform' as const,
             navigationModel: { id: 'stage.navigation' },
-            interactionPolicy: { id: 'stage.policy', supportsOverlappingWindows: true }
+            interactionPolicy: { id: 'stage.policy', supportsOverlappingWindows: true },
+            composition: {
+                version: 1 as const,
+                desktop: { id: 'stage-desktop', kind: 'activity-slot' as const, size: 'fill' as const, visibility: 'visible' as const },
+                mobile: { id: 'stage-mobile', kind: 'activity-slot' as const, size: 'fill' as const, visibility: 'visible' as const }
+            }
         };
 
         desktopRegistry.register(manifest);
@@ -115,7 +135,12 @@ describe('DesktopModeRuntimeRegistry', () => {
             manifest: {
                 id: 'atomic-mode',
                 name: 'Atomic Mode',
-                shell: { kind: 'traditional' }
+                shell: { kind: 'traditional' },
+                composition: {
+                    version: 1,
+                    desktop: { id: 'atomic-desktop', kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                    mobile: { id: 'atomic-mobile', kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+                }
             },
             id: 'atomic-mode',
             name: 'Atomic Mode',
@@ -125,7 +150,12 @@ describe('DesktopModeRuntimeRegistry', () => {
                 'chat.main': createChatRenderer('atomic-chat'),
                 'settings.root': createRenderer('conflicting-settings')
             },
-            interactionPolicy: { id: 'atomic-mode.policy' }
+            interactionPolicy: { id: 'atomic-mode.policy' },
+            composition: {
+                version: 1,
+                desktop: { id: 'atomic-desktop', kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: 'atomic-mobile', kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            }
         })).toThrow(/Duplicate desktop override/);
 
         expect(desktopRegistry.get('atomic-mode')).toBeUndefined();
@@ -246,6 +276,11 @@ describe('DesktopModeRuntimeRegistry', () => {
             description: 'Verifies single-source desktop mode registration.',
             shell: {
                 kind: 'freeform'
+            },
+            composition: {
+                version: 1,
+                desktop: { id: `${customId}-desktop`, kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: `${customId}-mobile`, kind: 'activity-slot', size: 'fill', visibility: 'visible' }
             },
             settingsManifest: {
                 density: {

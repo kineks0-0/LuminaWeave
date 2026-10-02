@@ -1,9 +1,7 @@
 import type { Component, CSSProperties } from 'vue';
 import type {
   CharacterChannelState,
-  CreateChatConversationInput,
-  DeleteChatConversationInput,
-  RenameChatConversationInput
+  CreateChatConversationInput
 } from '../types/ConversationContextTypes.js';
 import type { LuminaPlugin } from '../types/plugin.js';
 import type { SurfaceContractId } from '../platform/surface/types.js';
@@ -23,6 +21,12 @@ export interface RegisteredPanelConfig {
   title: string;
   icon?: string;
   defaultMode?: 'tab' | 'modal';
+  surfaceContractId?: SurfaceContractId;
+  defaultInput?: Record<string, unknown>;
+  navigation?: {
+    group?: string;
+    hidden?: boolean;
+  };
 }
 
 export interface RegisteredPanelEntry {
@@ -49,13 +53,11 @@ export interface TelegramRailToolEntry {
   icon: string;
 }
 
-export type TelegramConversationListMode = 'groupedByRole' | 'conversationFiles';
 export type TelegramDesktopLeftRoute = 'conversationList' | 'roleList';
 export type TelegramMobileTabId = 'conversations' | 'roles' | 'settings' | 'profile';
 export type TelegramStackRouteName =
   | 'conversationList'
   | 'roleList'
-  | 'characterOverview'
   | 'roleProfile'
   | 'chat'
   | 'tool'
@@ -146,9 +148,7 @@ export interface ShellRuntimeContext {
   traditional: {
     shouldShowDiscordGuildRail: boolean;
     discordGuildEntries: Array<{ id: string; name: string; icon: string }>;
-    shouldShowForgeSidebar: boolean;
-    isForgeSidebarCollapsed: boolean;
-    shouldShowDiscordCharacterRail: boolean;
+    shouldShowCharacterNavigationPane: boolean;
     isDiscordMobileMode: boolean;
     isTelegramMobileMode: boolean;
     shouldShowDiscordMobileShell: boolean;
@@ -156,23 +156,18 @@ export interface ShellRuntimeContext {
     discordMobileCharacterEntryPosition: 'top' | 'bottom' | 'left' | 'right';
     showDiscordMobileCharacterRail: boolean;
     discordMobileCharacterEntryStyle: CSSProperties;
-    telegramSelectedCharacterKey: string | null;
     telegramToolEntries: TelegramRailToolEntry[];
     activeTelegramToolId: string | null;
-    telegramConversationListMode: TelegramConversationListMode;
     telegramDesktopLeftRoute: TelegramDesktopLeftRoute;
     telegramMobileActiveTab: TelegramMobileTabId;
     telegramMobileCurrentRoute: TelegramStackRoute;
     isTimelineLoadedOnce: boolean;
-    isForgeActiveInTraditional: boolean;
     sidebarMode: 'left' | 'right' | 'widget' | 'hidden';
     activeRightPanel: string;
     widgetWidth: number;
     isResizing: boolean;
     telegramLeftRailWidth: number;
     isTelegramLeftRailResizing: boolean;
-    activeForgeAuxKind: string | null;
-    rawSidebarMode: 'left' | 'right' | 'widget' | 'hidden';
     activeWidgetPlugin: LuminaPlugin | null;
     activeRegisteredPanel: RegisteredPanelEntry | null;
     activeRightPanelActivity: ActivityPanelPayload | null;
@@ -214,6 +209,7 @@ export interface ShellRuntimeSurfaces {
 export interface ShellRuntimeActions {
   getPluginName: (pluginId: string | null) => string;
   resolvePluginPrimarySurface: (pluginId: string) => SurfaceContractId | null;
+  resolveRegisteredPanelSurface: (panelId: string) => SurfaceContractId | null;
   navigation: {
     switchMainView: (tabId: string) => void;
     closeTab: (tabId: string) => void;
@@ -227,21 +223,13 @@ export interface ShellRuntimeActions {
   traditional: {
     toggleDiscordGuildRail: () => void;
     handleOpenWidget: (panelId: string) => void;
-    toggleForgeSidebarCollapse: () => void;
-    setSidebarMode: (mode: 'left' | 'right' | 'widget') => void;
     openDiscordChatSession: (sessionId: string) => void;
     openDiscordMobileChatSession: (sessionId: string) => void;
     createDiscordChatSession: (payload: CreateChatConversationInput) => void;
     createDiscordMobileChatSession: (payload: CreateChatConversationInput) => void;
-    renameDiscordChatSession: (payload: RenameChatConversationInput) => Promise<void> | void;
-    deleteDiscordChatSession: (payload: DeleteChatConversationInput) => Promise<void> | void;
-    toggleDiscordCharacterGroup: (groupKey: string) => void;
-    toggleDiscordCharacterSessionExpansion: (groupKey: string) => void;
     handleDiscordMobileMainViewSwitch: (tabId: string) => void;
     updateShowDiscordMobileCharacterRail: (value: boolean) => void;
-    selectTelegramCharacterOverview: (groupKey: string | null) => void;
     openTelegramToolEntry: (toolId: TelegramRailToolEntry['id']) => void;
-    setTelegramConversationListMode: (mode: TelegramConversationListMode) => void;
     setTelegramDesktopLeftRoute: (route: TelegramDesktopLeftRoute) => void;
     pushTelegramMobileRoute: (route: TelegramStackRoute) => void;
     popTelegramMobileRoute: () => void;
@@ -250,7 +238,6 @@ export interface ShellRuntimeActions {
     backFromDetailedSettings: () => void;
     toggleWidgetDropdown: () => void;
     switchRightPanel: (panelId: string) => void;
-    restoreSidebarLeft: () => void;
     closePanel: () => void;
     updateShowNexus: (value: boolean) => void;
     selectTelegramBottomNav: (itemId: 'chat' | 'characters' | 'settings' | 'profile') => void;

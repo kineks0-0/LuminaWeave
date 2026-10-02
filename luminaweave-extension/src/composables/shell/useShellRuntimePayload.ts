@@ -23,9 +23,7 @@ interface ShellRuntimePayloadContextInput {
   traditional: {
     shouldShowDiscordGuildRail: Source<ShellRuntimeContext['traditional']['shouldShowDiscordGuildRail']>;
     discordGuildEntries: Source<ShellRuntimeContext['traditional']['discordGuildEntries']>;
-    shouldShowForgeSidebar: Source<ShellRuntimeContext['traditional']['shouldShowForgeSidebar']>;
-    isForgeSidebarCollapsed: Source<ShellRuntimeContext['traditional']['isForgeSidebarCollapsed']>;
-    shouldShowDiscordCharacterRail: Source<ShellRuntimeContext['traditional']['shouldShowDiscordCharacterRail']>;
+    shouldShowCharacterNavigationPane: Source<ShellRuntimeContext['traditional']['shouldShowCharacterNavigationPane']>;
     isDiscordMobileMode: Source<ShellRuntimeContext['traditional']['isDiscordMobileMode']>;
     isTelegramMobileMode: Source<ShellRuntimeContext['traditional']['isTelegramMobileMode']>;
     shouldShowDiscordMobileShell: Source<ShellRuntimeContext['traditional']['shouldShowDiscordMobileShell']>;
@@ -33,23 +31,18 @@ interface ShellRuntimePayloadContextInput {
     discordMobileCharacterEntryPosition: Source<ShellRuntimeContext['traditional']['discordMobileCharacterEntryPosition']>;
     showDiscordMobileCharacterRail: Source<ShellRuntimeContext['traditional']['showDiscordMobileCharacterRail']>;
     discordMobileCharacterEntryStyle: Source<ShellRuntimeContext['traditional']['discordMobileCharacterEntryStyle']>;
-    telegramSelectedCharacterKey: Source<ShellRuntimeContext['traditional']['telegramSelectedCharacterKey']>;
     telegramToolEntries: Source<ShellRuntimeContext['traditional']['telegramToolEntries']>;
     activeTelegramToolId: Source<ShellRuntimeContext['traditional']['activeTelegramToolId']>;
-    telegramConversationListMode: Source<ShellRuntimeContext['traditional']['telegramConversationListMode']>;
     telegramDesktopLeftRoute: Source<ShellRuntimeContext['traditional']['telegramDesktopLeftRoute']>;
     telegramMobileActiveTab: Source<ShellRuntimeContext['traditional']['telegramMobileActiveTab']>;
     telegramMobileCurrentRoute: Source<ShellRuntimeContext['traditional']['telegramMobileCurrentRoute']>;
     isTimelineLoadedOnce: Source<ShellRuntimeContext['traditional']['isTimelineLoadedOnce']>;
-    isForgeActiveInTraditional: Source<ShellRuntimeContext['traditional']['isForgeActiveInTraditional']>;
     sidebarMode: Source<ShellRuntimeContext['traditional']['sidebarMode']>;
     activeRightPanel: Source<ShellRuntimeContext['traditional']['activeRightPanel']>;
     widgetWidth: Source<ShellRuntimeContext['traditional']['widgetWidth']>;
     isResizing: Source<ShellRuntimeContext['traditional']['isResizing']>;
     telegramLeftRailWidth: Source<ShellRuntimeContext['traditional']['telegramLeftRailWidth']>;
     isTelegramLeftRailResizing: Source<ShellRuntimeContext['traditional']['isTelegramLeftRailResizing']>;
-    activeForgeAuxKind: Source<ShellRuntimeContext['traditional']['activeForgeAuxKind']>;
-    rawSidebarMode: Source<ShellRuntimeContext['traditional']['rawSidebarMode']>;
     activeWidgetPlugin: Source<ShellRuntimeContext['traditional']['activeWidgetPlugin']>;
     activeRegisteredPanel: Source<ShellRuntimeContext['traditional']['activeRegisteredPanel']>;
     activeRightPanelActivity: Source<ShellRuntimeContext['traditional']['activeRightPanelActivity']>;
@@ -117,9 +110,7 @@ export const useShellRuntimePayload = (input: UseShellRuntimePayloadInput) => {
     traditional: {
       shouldShowDiscordGuildRail: read(input.context.traditional.shouldShowDiscordGuildRail),
       discordGuildEntries: read(input.context.traditional.discordGuildEntries),
-      shouldShowForgeSidebar: read(input.context.traditional.shouldShowForgeSidebar),
-      isForgeSidebarCollapsed: read(input.context.traditional.isForgeSidebarCollapsed),
-      shouldShowDiscordCharacterRail: read(input.context.traditional.shouldShowDiscordCharacterRail),
+      shouldShowCharacterNavigationPane: read(input.context.traditional.shouldShowCharacterNavigationPane),
       isDiscordMobileMode: read(input.context.traditional.isDiscordMobileMode),
       isTelegramMobileMode: read(input.context.traditional.isTelegramMobileMode),
       shouldShowDiscordMobileShell: read(input.context.traditional.shouldShowDiscordMobileShell),
@@ -127,23 +118,18 @@ export const useShellRuntimePayload = (input: UseShellRuntimePayloadInput) => {
       discordMobileCharacterEntryPosition: read(input.context.traditional.discordMobileCharacterEntryPosition),
       showDiscordMobileCharacterRail: read(input.context.traditional.showDiscordMobileCharacterRail),
       discordMobileCharacterEntryStyle: read(input.context.traditional.discordMobileCharacterEntryStyle),
-      telegramSelectedCharacterKey: read(input.context.traditional.telegramSelectedCharacterKey),
       telegramToolEntries: read(input.context.traditional.telegramToolEntries),
       activeTelegramToolId: read(input.context.traditional.activeTelegramToolId),
-      telegramConversationListMode: read(input.context.traditional.telegramConversationListMode),
       telegramDesktopLeftRoute: read(input.context.traditional.telegramDesktopLeftRoute),
       telegramMobileActiveTab: read(input.context.traditional.telegramMobileActiveTab),
       telegramMobileCurrentRoute: read(input.context.traditional.telegramMobileCurrentRoute),
       isTimelineLoadedOnce: read(input.context.traditional.isTimelineLoadedOnce),
-      isForgeActiveInTraditional: read(input.context.traditional.isForgeActiveInTraditional),
       sidebarMode: read(input.context.traditional.sidebarMode),
       activeRightPanel: read(input.context.traditional.activeRightPanel),
       widgetWidth: read(input.context.traditional.widgetWidth),
       isResizing: read(input.context.traditional.isResizing),
       telegramLeftRailWidth: read(input.context.traditional.telegramLeftRailWidth),
       isTelegramLeftRailResizing: read(input.context.traditional.isTelegramLeftRailResizing),
-      activeForgeAuxKind: read(input.context.traditional.activeForgeAuxKind),
-      rawSidebarMode: read(input.context.traditional.rawSidebarMode),
       activeWidgetPlugin: read(input.context.traditional.activeWidgetPlugin),
       activeRegisteredPanel: read(input.context.traditional.activeRegisteredPanel),
       activeRightPanelActivity: read(input.context.traditional.activeRightPanelActivity),

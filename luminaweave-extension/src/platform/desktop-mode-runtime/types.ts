@@ -40,5 +40,5 @@ export interface DesktopModeRuntimeDescriptor {
     interactionPolicy: DesktopInteractionPolicy;
     tokens?: Record<string, string | number>;
     settingsSchema?: Record<string, SettingDefinition>;
-    composition?: DesktopModeComposition;
+    composition: DesktopModeComposition;
 }

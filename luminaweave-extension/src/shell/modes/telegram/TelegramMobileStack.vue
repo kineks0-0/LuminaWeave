@@ -27,15 +27,6 @@
       :desktop-mode-id="activeDesktopModeId"
     />
     <ThemedSurfaceOutlet
-      v-else-if="route.name === 'characterOverview'"
-      contract-id="conversation.sessionList"
-      :input="{
-        characterKey: route.groupKey || selectedCharacterKey || undefined,
-        compact: true
-      }"
-      :desktop-mode-id="activeDesktopModeId"
-    />
-    <ThemedSurfaceOutlet
       v-else-if="route.name === 'roleProfile'"
       contract-id="telegram.infoPanel"
       :input="{
@@ -115,7 +106,6 @@ defineProps<{
   mainSurfaceStyle: CSSProperties;
   mobileMainStyle: CSSProperties;
   state: CharacterChannelState;
-  selectedCharacterKey: string | null;
   desktopModes: Array<{ value: string; label: string; description?: string }>;
   activeDesktopModeId: string;
   widgetGroups: WidgetPanelGroup[];

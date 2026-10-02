@@ -128,6 +128,11 @@ describe('desktopModeRegistry', () => {
             shell: {
                 kind: 'freeform'
             },
+            composition: {
+                version: 1,
+                desktop: { id: `${customId}-desktop`, kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: `${customId}-mobile`, kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            },
             settingsManifest: {
                 accentDepth: {
                     default: 'medium',

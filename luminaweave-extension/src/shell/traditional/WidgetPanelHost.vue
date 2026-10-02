@@ -87,17 +87,6 @@
           <span>{{ saveStatus === 'saving' ? '正在存入' : (saveStatus === 'saved' ? '已保存' : '') }}</span>
         </div>
 
-        <button
-          v-if="activeForgeAuxKind && isForgeActiveInTraditional && rawSidebarMode === 'widget'"
-          @click="emit('restoreSidebarLeft')"
-          title="切换回左侧栏"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-            <rect x="3" y="3" width="7" height="18" rx="1"></rect>
-            <rect x="14" y="3" width="7" height="18" rx="1"></rect>
-          </svg>
-        </button>
-
         <button @click="emit('closePanel')" title="Close Panel">
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -118,8 +107,7 @@
         <component
           v-else-if="activeRegisteredPanel && !activeRegisteredPanelSurfaceContractId"
           :is="activeRegisteredPanel.component"
-          v-bind="activePanelProps"
-          :kind="activePanelKind"
+          v-bind="{ ...registeredPanelDefaultInput, ...activePanelProps }"
           :activity="activePanelActivity"
           :isMobile="isMobile"
         />
@@ -145,7 +133,6 @@ import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
 import { projectSurfaceInput } from '../../platform/surface/surfaceInputProjection.js';
 import type { SurfaceContractId } from '../../platform/surface/types.js';
 import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/officialPluginSurfaces.js';
-import { getSurfaceContractIdForRegisteredPanel } from '../../platform/plugin/officialPanelSurfaces.js';
 
 const props = defineProps<{
   activeRightPanel: string;
@@ -158,9 +145,7 @@ const props = defineProps<{
   isResizing: boolean;
   currentDetailedView: string | null;
   saveStatus: string;
-  activeForgeAuxKind: string | null;
-  isForgeActiveInTraditional: boolean;
-  rawSidebarMode: 'left' | 'right' | 'widget' | 'hidden';
+  auxSidebarMode: 'left' | 'right' | 'widget' | 'hidden';
   activeWidgetPlugin: LuminaPlugin | null;
   activeRegisteredPanel: RegisteredPanelEntry | null;
   activeRightPanelActivity: ActivityPanelPayload | null;
@@ -178,22 +163,16 @@ const activePanelPayload = computed(() => (
     : null
 ));
 const activePanelProps = computed(() => activePanelPayload.value?.props || {});
+const registeredPanelDefaultInput = computed(() => props.activeRegisteredPanel?.config.defaultInput || {});
 const activePanelActivity = computed(() => activePanelPayload.value?.activity || defaultPanelActivity);
-const activePanelKind = computed(() => {
-  const payloadKind = activePanelProps.value.kind;
-  return typeof payloadKind === 'string'
-    ? payloadKind
-    : props.activeForgeAuxKind || undefined;
-});
 const activeWidgetSurfaceContractId = computed<SurfaceContractId | null>(() => (
   activePanelPayload.value?.contractId
   || (props.activeWidgetPlugin ? getPrimarySurfaceContractIdForPlugin(props.activeWidgetPlugin) : null)
 ));
 const activeRegisteredPanelSurfaceContractId = computed<SurfaceContractId | null>(() => (
   activePanelPayload.value?.contractId
-  || (props.activeRegisteredPanel
-    ? getSurfaceContractIdForRegisteredPanel(props.activeRegisteredPanel.id)
-    : null)
+  || props.activeRegisteredPanel?.config.surfaceContractId
+  || null
 ));
 
 const telegramInfoPanelInput = computed(() => ({
@@ -206,12 +185,12 @@ const telegramInfoPanelInput = computed(() => ({
 
 const getActivePanelSurfaceInput = (contractId: SurfaceContractId) => projectSurfaceInput(
   contractId,
-  activePanelProps.value,
+  { ...registeredPanelDefaultInput.value, ...activePanelProps.value },
   {
     activity: activePanelActivity.value,
     isMobile: props.isMobile,
-    auxSidebarMode: props.isForgeActiveInTraditional ? props.rawSidebarMode : undefined,
-    activeRightPanelId: props.isForgeActiveInTraditional ? props.activeRightPanel : undefined
+    auxSidebarMode: props.auxSidebarMode,
+    activeRightPanelId: props.activeRightPanel
   }
 );
 
@@ -220,7 +199,6 @@ const emit = defineEmits<{
   (e: 'backFromDetailedSettings'): void;
   (e: 'toggleWidgetDropdown'): void;
   (e: 'switchRightPanel', panelId: string): void;
-  (e: 'restoreSidebarLeft'): void;
   (e: 'closePanel'): void;
 }>();
 </script>

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Component } from 'vue';
+import { z } from 'zod';
 import { DesktopSurfaceService } from '../DesktopSurfaceService.js';
+import { surfaceRegistry } from '../../../platform/surface/SurfaceRegistry.js';
 import type { EmptySurfaceData, SurfaceContractSpec } from '../../../platform/surface/types.js';
 
 declare module '../../../platform/surface/types.js' {
@@ -24,28 +26,32 @@ describe('DesktopSurfaceService', () => {
         });
     });
 
-    it('keeps registered panel tab compatibility as a primary default Activity with the official surface contract', () => {
+    it('does not infer a surface contract from a registered panel id', () => {
         const emit = vi.fn();
         const service = new DesktopSurfaceService(emit);
 
-        service.registerPanel('card_maker', DummyPanel, { title: 'Card Maker', icon: 'id-card', defaultMode: 'tab' });
-        service.openPanel('card_maker', { source: 'test' });
+        surfaceRegistry.registerContract({
+            id: 'custom.surface',
+            inputSchema: z.object({}).strict()
+        });
+        service.registerPanel('custom.surface', DummyPanel, { title: 'Custom', icon: 'id-card', defaultMode: 'tab' });
+        service.openPanel('custom.surface', { source: 'test' });
 
         expect(emit).toHaveBeenCalledWith('LAUNCH_ACTIVITY', {
-            id: 'card_maker',
-            title: 'Card Maker',
+            id: 'custom.surface',
+            title: 'Custom',
             icon: 'id-card',
             role: 'primary',
             target: {
-                kind: 'surface',
-                contractId: 'forge.workspace'
+                kind: 'component',
+                component: DummyPanel
             },
             activity: {
                 size: 'default',
                 pageType: 'nested'
             },
             props: { source: 'test', isTabMode: true },
-            dedupeKey: 'panel:card_maker'
+            dedupeKey: 'panel:custom.surface'
         });
     });
 

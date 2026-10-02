@@ -81,6 +81,51 @@ describe('useWidgetPanels', () => {
     scope.stop();
   });
 
+  it('derives registered panel navigation and mobile input from panel metadata', () => {
+    const desktopSurface = lwApi.services.desktopSurface;
+    const openTabSpy = vi.spyOn(desktopSurface, 'openTab').mockImplementation(() => {});
+    desktopSurface.registerPanel('test_aux_panel', {} as never, {
+      title: 'Auxiliary panel',
+      icon: 'A',
+      navigation: { group: 'Auxiliary' },
+      defaultInput: { kind: 'memory' }
+    });
+    desktopSurface.registerPanel('test_hidden_panel', {} as never, {
+      title: 'Hidden panel',
+      navigation: { hidden: true }
+    });
+
+    const scope = effectScope();
+    const panels = scope.run(() => useWidgetPanels({
+      activeRightPanel: ref('lumina-settings'),
+      lastKnownRightPanel: ref('lumina-settings'),
+      showWidgetDropdown: ref(false),
+      showNexus: ref(true),
+      widgetPlugins: computed(() => []),
+      layoutMode: ref<'traditional' | 'freeform'>('traditional'),
+      isMobile: ref(true),
+      workspaceAppMap: computed(() => new Map()),
+      openWorkspaceApp: vi.fn(),
+      getPluginName: (pluginId) => pluginId || ''
+    }))!;
+
+    expect(panels.widgetGroups.value).toContainEqual({
+      label: 'Auxiliary',
+      items: [{ id: 'test_aux_panel', name: 'Auxiliary panel', icon: 'A' }]
+    });
+    expect(panels.widgetPanelList.value.some((item) => item.id === 'test_hidden_panel')).toBe(false);
+
+    panels.switchRightPanel('test_aux_panel');
+    expect(openTabSpy).toHaveBeenLastCalledWith(expect.objectContaining({
+      id: 'mobile-widget:test_aux_panel',
+      props: expect.objectContaining({ kind: 'memory' })
+    }));
+
+    scope.stop();
+    desktopSurface.registeredPanels.delete('test_aux_panel');
+    desktopSurface.registeredPanels.delete('test_hidden_panel');
+  });
+
   it('should switch the active right panel on desktop traditional layout', () => {
     const activeRightPanel = ref('lumina-settings');
     const scope = effectScope();

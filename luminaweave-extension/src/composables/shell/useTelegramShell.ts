@@ -1,20 +1,10 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue';
-import { lwStorage } from '../../api/storage.js';
 import { getDesktopModeSettingValue } from '../../desktop-modes/core/registry.js';
 import type {
-  TelegramConversationListMode,
   TelegramDesktopLeftRoute,
   TelegramMobileTabId,
   TelegramStackRoute
 } from '../../shell/types.js';
-
-const TELEGRAM_LIST_MODE_STORAGE_KEY = 'luminaWeave.telegram.conversationListMode';
-
-const getStoredConversationListMode = (): TelegramConversationListMode => {
-  return lwStorage.get(TELEGRAM_LIST_MODE_STORAGE_KEY, 'groupedByRole', 'Global') === 'conversationFiles'
-    ? 'conversationFiles'
-    : 'groupedByRole';
-};
 
 const rootRouteForMobileTab = (tabId: TelegramMobileTabId): TelegramStackRoute => {
   if (tabId === 'roles') return { name: 'roleList' };
@@ -54,7 +44,6 @@ export const useTelegramShell = ({
     getDesktopModeSettingValue(activeSettings, activeDesktopModeId.value, 'rightInfoPanel', 'auto')
   ));
   const isRightPanelExplicitlyOpened = ref(false);
-  const telegramConversationListMode = ref<TelegramConversationListMode>(getStoredConversationListMode());
   const telegramDesktopLeftRoute = ref<TelegramDesktopLeftRoute>('conversationList');
   const telegramMobileActiveTab = ref<TelegramMobileTabId>('conversations');
   const telegramMobileStacks = ref<Record<TelegramMobileTabId, TelegramStackRoute[]>>({
@@ -105,11 +94,6 @@ export const useTelegramShell = ({
   const visibleShowNexus = computed(() => (
     activeDesktopModeId.value === 'telegram' ? false : showNexus.value
   ));
-
-  const setTelegramConversationListMode = (mode: TelegramConversationListMode) => {
-    telegramConversationListMode.value = mode;
-    void lwStorage.set(TELEGRAM_LIST_MODE_STORAGE_KEY, mode, 'Global');
-  };
 
   const setTelegramDesktopLeftRoute = (route: TelegramDesktopLeftRoute) => {
     telegramDesktopLeftRoute.value = route;
@@ -226,14 +210,12 @@ export const useTelegramShell = ({
     visibleRightPanel,
     visibleWidgetWidth,
     visibleShowNexus,
-    telegramConversationListMode,
     telegramDesktopLeftRoute,
     telegramMobileActiveTab,
     telegramMobileCurrentRoute,
     openProfilePanel,
     openCharacters,
     selectBottomNav,
-    setTelegramConversationListMode,
     setTelegramDesktopLeftRoute,
     pushTelegramMobileRoute,
     popTelegramMobileRoute

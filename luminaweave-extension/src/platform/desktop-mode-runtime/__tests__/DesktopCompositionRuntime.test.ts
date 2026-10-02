@@ -17,19 +17,23 @@ const createSurfaceRegistry = (): SurfaceRegistry => {
     return registry;
 };
 
-const createDescriptor = (composition: object): DesktopModeRuntimeDescriptor => ({
+const createDescriptor = (composition: object): DesktopModeRuntimeDescriptor => {
+    const typedComposition = composition as DesktopModeManifest['composition'];
+    return ({
     manifest: {
         id: 'composable-mode',
         name: 'Composable Mode',
         shell: { kind: 'traditional' },
-        composition
-    } as DesktopModeManifest,
+        composition: typedComposition
+    },
     id: 'composable-mode',
     name: 'Composable Mode',
     shellKind: 'traditional',
     navigationModel: { id: 'composable-mode.navigation' },
-    interactionPolicy: { id: 'composable-mode.interaction' }
-});
+    interactionPolicy: { id: 'composable-mode.interaction' },
+    composition: typedComposition
+    });
+};
 
 const createValidComposition = (): object => ({
     version: 1,
@@ -67,6 +71,33 @@ const createValidComposition = (): object => ({
 });
 
 describe('Desktop composition runtime', () => {
+    it('rejects desktop modes without an explicit composition', () => {
+        const registry = new DesktopModeRuntimeRegistry(createSurfaceRegistry());
+        const descriptor = {
+            manifest: {
+                id: 'missing-composition',
+                name: 'Missing Composition',
+                shell: { kind: 'traditional' }
+            },
+            id: 'missing-composition',
+            name: 'Missing Composition',
+            shellKind: 'traditional',
+            navigationModel: { id: 'missing-composition.navigation' },
+            interactionPolicy: { id: 'missing-composition.interaction' }
+        } as unknown as DesktopModeRuntimeDescriptor;
+
+        expect(() => registry.register(descriptor))
+            .toThrow('[DesktopCompositionRuntime] Missing desktop mode composition');
+        expect(registry.get('missing-composition')).toBeUndefined();
+    });
+
+    it('does not resolve an empty composition for an unknown desktop mode', () => {
+        const registry = new DesktopModeRuntimeRegistry(createSurfaceRegistry());
+
+        expect(() => registry.resolveComposition('missing-mode', 'desktop'))
+            .toThrow('[DesktopModeRuntimeRegistry] Unknown desktop mode');
+    });
+
     it('projects surface contracts from composition without shell-owned business lists', () => {
         const collectDesktopCompositionSurfaceIds = (
             compositionRuntime as typeof compositionRuntime & {

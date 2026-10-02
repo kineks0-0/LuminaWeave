@@ -43,12 +43,9 @@ describe('Telegram shell split structure', () => {
     const viewModel = await import(routeViewModelUrl.href);
 
     expect(viewModel.isTelegramMobileRootRoute({ name: 'conversationList' })).toBe(true);
-    expect(viewModel.isTelegramMobileRootRoute({ name: 'characterOverview' })).toBe(false);
     expect(viewModel.shouldShowTelegramMobileBottomNav(true, { name: 'profile' })).toBe(true);
     expect(viewModel.shouldShowTelegramMobileBottomNav(false, { name: 'profile' })).toBe(false);
-    expect(viewModel.shouldShowTelegramMobileStackBar({ name: 'characterOverview' })).toBe(true);
     expect(viewModel.shouldShowTelegramMobileStackBar({ name: 'chat' })).toBe(false);
-    expect(viewModel.resolveTelegramMobileRouteTitle({ name: 'characterOverview' })).toBe('角色概览');
     expect(viewModel.resolveTelegramMobileRouteTitle({ name: 'tool', title: '工具箱' })).toBe('工具箱');
     expect(viewModel.resolveTelegramMobileRouteTitle({ name: 'tool' })).toBe('工具');
     expect(viewModel.resolveTelegramMobileToolContractId(
