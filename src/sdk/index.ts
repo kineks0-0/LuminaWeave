@@ -48,6 +48,8 @@ export type {
     PluginRuntimeWriteContext,
     PluginStateSelector
 } from '../platform/plugin/types.js';
+export type { RegistrationHandle } from '../platform/plugin/PluginRegistrationScope.js';
+export type { PluginRuntimeApi } from '../api/services/PluginRuntimeService.js';
 export type { SettingDefinition, SettingOption } from '../types/plugin.js';
 export type { PromptAssemblyPolicy } from '../types/PromptAssemblyTypes.js';
 export type { ModalOptions, ToastType } from '../api/services/HostInteractionService.js';

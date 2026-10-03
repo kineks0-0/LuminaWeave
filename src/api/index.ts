@@ -14,6 +14,8 @@ import { globalXMLInterceptor } from './core/xml-view/XMLInterceptor.js';
 import { globalMemoryManager } from './core/runtime-utils/MemoryManager.js';
 import { ControlledChatCreationCoordinator } from './core/conversation/ControlledChatCreationCoordinator.js';
 import { pluginManager } from '../core/PluginManager.js';
+import { pluginDomainRegistry } from '../platform/plugin/PluginDomainRegistry.js';
+import { createPluginRuntimeApi, type PluginRuntimeApi } from './services/PluginRuntimeService.js';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { LuminaWeaveAPIBase } from './core/facade/LuminaWeaveAPIBase.js';
 import { HOST_EVENT, getHostRuntimePort } from './core/facade/HostRuntimePort.js';
@@ -109,6 +111,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     public settings: SettingsDomainService;
     public chatPresentationCommands: ChatPresentationCommandService;
     public services: LuminaWeaveDomainServices;
+    public readonly plugins: PluginRuntimeApi = createPluginRuntimeApi(pluginManager, pluginDomainRegistry, () => pluginManager.whenBuiltinsInitialized());
 
     private _ready: boolean = false;
     private _readyPromise: Promise<boolean> | null = null;

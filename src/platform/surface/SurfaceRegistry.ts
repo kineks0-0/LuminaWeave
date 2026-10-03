@@ -10,6 +10,7 @@ import type {
     SurfaceResolutionRequest,
     SurfaceResolutionResult
 } from './types.js';
+import type { RegistrationDisposer } from '../plugin/PluginRegistrationScope.js';
 
 type DesktopOverrideKey = `${string}:${string}`;
 
@@ -224,39 +225,71 @@ export class SurfaceRegistry {
         target: Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>,
         renderer: SurfaceRendererDefinitionUnion,
         kind: 'core-default' | 'plugin-business'
-    ): void {
+    ): SurfaceRendererDefinitionUnion {
         const normalized = { ...renderer, kind } satisfies SurfaceRendererDefinitionUnion;
         const renderers = target.get(renderer.contractId);
         target.set(renderer.contractId, [...(renderers || []), normalized]);
+        return normalized;
     }
 
-    registerBatch(batch: SurfaceRegistrationBatch): void {
+    private removeRenderer(
+        target: Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>,
+        renderer: SurfaceRendererDefinitionUnion
+    ): void {
+        const remaining = (target.get(renderer.contractId) || []).filter(existing => existing !== renderer);
+        if (remaining.length > 0) {
+            target.set(renderer.contractId, remaining);
+        } else {
+            target.delete(renderer.contractId);
+        }
+    }
+
+    /** 原子注册一个批次，返回撤销函数：按引用移除本批次追加的 renderer，并删除或恢复本批次写入的 contract。 */
+    registerBatch(batch: SurfaceRegistrationBatch): RegistrationDisposer {
         this.assertCanRegisterBatch(batch);
         const contracts = batch.contracts || [];
-        contracts.forEach(contract => {
-            const existing = this.contracts.get(contract.id);
-
-            this.contracts.set(contract.id, {
-                ...existing,
+        const contractChanges = contracts.map(contract => {
+            const previous = this.contracts.get(contract.id);
+            const next = {
+                ...previous,
                 ...contract,
-                inputSchema: contract.inputSchema || existing?.inputSchema,
-                ownerPluginId: contract.ownerPluginId || existing?.ownerPluginId
-            } as SurfaceContractDefinitionUnion);
+                inputSchema: contract.inputSchema || previous?.inputSchema,
+                ownerPluginId: contract.ownerPluginId || previous?.ownerPluginId
+            } as SurfaceContractDefinitionUnion;
+            this.contracts.set(contract.id, next);
+            return { id: contract.id, previous, next };
         });
+        const appended: Array<{
+            target: Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>;
+            renderer: SurfaceRendererDefinitionUnion;
+        }> = [];
+        const append = (
+            target: Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>,
+            renderer: SurfaceRendererDefinitionUnion,
+            kind: 'core-default' | 'plugin-business'
+        ): void => {
+            appended.push({ target, renderer: this.appendRenderer(target, renderer, kind) });
+        };
         contracts.forEach(contract => {
-            if (contract.defaultRenderer) {
-                this.appendRenderer(this.defaultRenderers, contract.defaultRenderer, 'core-default');
-            }
-            if (contract.businessRenderer) {
-                this.appendRenderer(this.businessRenderers, contract.businessRenderer, 'plugin-business');
-            }
+            if (contract.defaultRenderer) append(this.defaultRenderers, contract.defaultRenderer, 'core-default');
+            if (contract.businessRenderer) append(this.businessRenderers, contract.businessRenderer, 'plugin-business');
         });
-        (batch.defaultRenderers || []).forEach(renderer => {
-            this.appendRenderer(this.defaultRenderers, renderer, 'core-default');
-        });
-        (batch.businessRenderers || []).forEach(renderer => {
-            this.appendRenderer(this.businessRenderers, renderer, 'plugin-business');
-        });
+        (batch.defaultRenderers || []).forEach(renderer => append(this.defaultRenderers, renderer, 'core-default'));
+        (batch.businessRenderers || []).forEach(renderer => append(this.businessRenderers, renderer, 'plugin-business'));
+
+        return () => {
+            [...appended].reverse().forEach(({ target, renderer }) => this.removeRenderer(target, renderer));
+            [...contractChanges].reverse().forEach(change => {
+                // 只撤销仍由本批次写入的定义，避免覆盖之后的注册。
+                // 删除 contract 时不处理其他插件挂在该 contract 上的 renderer（交叉依赖由 E2b 处理）。
+                if (this.contracts.get(change.id) !== change.next) return;
+                if (change.previous) {
+                    this.contracts.set(change.id, change.previous);
+                } else {
+                    this.contracts.delete(change.id);
+                }
+            });
+        };
     }
 
     assertCanRegisterContract(contract: SurfaceContractDefinitionUnion): void {
@@ -356,6 +389,12 @@ export class SurfaceRegistry {
 
     listContracts(): SurfaceContractDefinitionUnion[] {
         return Array.from(this.contracts.values());
+    }
+
+    /** 诊断/测试接口：列出某一来源下全部已注册 renderer。 */
+    listRenderers(source: 'core-default' | 'plugin-business'): SurfaceRendererDefinitionUnion[] {
+        const target = source === 'core-default' ? this.defaultRenderers : this.businessRenderers;
+        return Array.from(target.values()).flat();
     }
 
     parseInput<K extends SurfaceContractId>(contractId: K, input: object): SurfaceInput<K> {
