@@ -10,7 +10,6 @@ describe('shell mode directory structure', () => {
     [
       'modes/discord/DiscordMobileShell.vue',
       'modes/telegram/TelegramBottomNav.vue',
-      'modes/telegram/TelegramRoleListPage.vue',
       'modes/telegram/TelegramUserInfoPanel.vue',
       'modes/telegram/TelegramUserProfilePage.vue',
       'modes/telegram/telegramVisual.ts'
@@ -63,7 +62,8 @@ describe('shell mode directory structure', () => {
   it('removes business presentation components replaced by official surfaces', () => {
     [
       '../components/DiscordCharacterRail.vue',
-      'modes/telegram/TelegramCharacterOverview.vue'
+      'modes/telegram/TelegramCharacterOverview.vue',
+      'modes/telegram/TelegramRoleListPage.vue'
     ].forEach((path) => {
       expect(existsSync(pathFromShellTest(path)), path).toBe(false);
     });

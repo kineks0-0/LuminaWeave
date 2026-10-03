@@ -128,7 +128,7 @@ export interface WorkspaceWindowEntry {
 }
 
 export interface ShellRuntimeFrame {
-  panelHeaderVariant: 'default' | 'discord' | 'telegram';
+  panelHeaderVariant: 'default' | 'discord';
   traditionalHeaderPosition: 'top' | 'bottom';
   panelBodyStyle: CSSProperties;
   showSplash: boolean;

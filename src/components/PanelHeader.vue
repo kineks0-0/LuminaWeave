@@ -6,52 +6,7 @@
     :style="headerSkinStyle"
   >
     <div class="header-left">
-      <template v-if="variant === 'telegram'">
-        <div class="telegram-channel-bar">
-          <button
-            class="telegram-channel-avatar"
-            type="button"
-            title="打开个人资料"
-            @click="$emit('openWidget', activeWidgetId || 'lumina-stats')"
-          >
-            <img
-              v-if="activeUserAvatar"
-              :src="activeUserAvatar || defaultAvatar"
-              :alt="activeUserName"
-              @error="(e) => (e.target as HTMLImageElement).src = defaultAvatar"
-            >
-            <span v-else>{{ activeUserName.slice(0, 1).toUpperCase() }}</span>
-          </button>
-          <div class="telegram-channel-copy">
-            <strong>{{ activeTabEntry?.name || '聊天' }}</strong>
-            <span>聊天上下文工具集中在这里</span>
-          </div>
-          <div v-if="!isMobile" class="telegram-context-tools">
-            <button type="button" title="时间线" @click="$emit('openWidget', 'lumina-timeline')">
-              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
-                <circle cx="12" cy="12" r="9"></circle>
-                <path d="M12 7v5l3 2"></path>
-              </svg>
-            </button>
-            <button type="button" title="世界书" @click="$emit('openWidget', 'lumina-lorebook')">
-              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-              </svg>
-            </button>
-            <button type="button" title="记忆与状态" @click="$emit('openWidget', 'lumina-stats')">
-              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
-                <path d="M12 2a5 5 0 0 1 5 5c0 1.9-1.06 3.5-2.6 4.34"></path>
-                <path d="M12 2a5 5 0 0 0-5 5c0 1.9 1.06 3.5 2.6 4.34"></path>
-                <path d="M8 14h8"></path>
-                <path d="M9 18h6"></path>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </template>
-
-      <template v-else-if="variant !== 'discord'">
+      <template v-if="variant !== 'discord'">
       <div class="lw-brand" v-if="!isMobile">
         <span class="lw-title-main">LuminaWeave</span>
       </div>
@@ -306,7 +261,7 @@ const props = withDefaults(defineProps<{
   isMobile?: boolean;
   activeDesktopModeId?: string;
   desktopModes?: { value: string; label: string; description?: string }[];
-  variant?: 'default' | 'discord' | 'telegram';
+  variant?: 'default' | 'discord';
   headerPlacement?: 'top' | 'bottom';
   widgetPanels?: { id: string; name: string; icon: string }[];
   widgetGroups?: { label?: string; items: { id: string; name: string; icon: string }[] }[];
@@ -1163,131 +1118,6 @@ function onDocPointerDown(e: PointerEvent) {
 .avatar-sm.placeholder {
   display: block;
   background: var(--lw-bg-subtle);
-}
-
-.telegram-channel-bar {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.telegram-channel-avatar {
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--lw-border-subtle);
-  border-radius: var(--lw-telegram-avatar-radius, 999px);
-  background: color-mix(in srgb, var(--lw-primary) 14%, var(--lw-surface-container-high));
-  color: var(--lw-text-main);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  cursor: pointer;
-  font-size: var(--lw-type-label-large-size);
-  line-height: var(--lw-type-label-large-line-height);
-  font-weight: var(--lw-type-label-large-weight);
-  letter-spacing: var(--lw-type-label-large-tracking);
-  box-shadow: var(--lw-header-avatar-shadow, 0 10px 24px rgba(44, 92, 130, 0.12));
-}
-
-.telegram-channel-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.telegram-channel-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.telegram-channel-copy strong {
-  max-width: min(34vw, 280px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--lw-type-title-medium-size);
-  line-height: var(--lw-type-title-medium-line-height);
-  font-weight: var(--lw-type-title-medium-weight);
-  letter-spacing: var(--lw-type-title-medium-tracking);
-  color: var(--lw-text-main);
-}
-
-.telegram-channel-copy span {
-  max-width: min(36vw, 320px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--lw-type-body-small-size);
-  line-height: var(--lw-type-body-small-line-height);
-  font-weight: var(--lw-type-body-small-weight);
-  letter-spacing: var(--lw-type-body-small-tracking);
-  color: var(--lw-text-muted);
-}
-
-.telegram-context-tools {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px;
-  border: 1px solid var(--lw-border-subtle);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-surface-container-high) 72%, transparent);
-  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
-  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
-}
-
-.telegram-context-tools button {
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--lw-text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition:
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    color 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.telegram-context-tools button:hover {
-  transform: translateY(-1px);
-  background: color-mix(in srgb, var(--lw-primary) 14%, transparent);
-  color: var(--lw-text-main);
-}
-
-.lw-panel-header[data-skin-variant='telegram'] {
-  min-height: 64px;
-  height: 64px;
-  border-bottom-color: var(--lw-header-border, var(--lw-border-subtle));
-  background: var(--lw-header-bg, linear-gradient(180deg, color-mix(in srgb, var(--lw-surface-container-high) 88%, transparent), color-mix(in srgb, var(--lw-surface-container) 66%, transparent)));
-  box-shadow: var(--lw-header-shadow, 0 14px 34px rgba(44, 92, 130, 0.08));
-  backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
-  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
-}
-
-.lw-panel-header[data-skin-variant='telegram'] .header-floating-controls,
-.lw-panel-header[data-skin-variant='telegram'] .profile-trigger,
-.lw-panel-header[data-skin-variant='telegram'] .profile-menu,
-.lw-panel-header[data-skin-variant='telegram'] .widget-dropdown,
-.lw-panel-header[data-skin-variant='telegram'] .lw-tab-dropdown {
-  background: var(--lw-header-control-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent));
-  border-color: var(--lw-header-control-border, var(--lw-border-subtle));
-  box-shadow: var(--lw-header-control-shadow, var(--lw-telegram-panel-shadow, var(--lw-shadow-card)));
-  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-}
-
-.lw-panel-header[data-skin-variant='telegram'].is-bottom {
-  border-top-color: var(--lw-header-border, var(--lw-border-subtle));
-  box-shadow: var(--lw-header-bottom-shadow, 0 -14px 34px rgba(44, 92, 130, 0.08));
 }
 
 .lw-panel-header[data-skin-variant='discord'] {

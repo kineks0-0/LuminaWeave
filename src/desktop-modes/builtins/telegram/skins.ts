@@ -25,31 +25,6 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     : 'linear-gradient(180deg, rgba(255, 255, 255, 0.30), transparent 36%), rgba(218, 236, 250, 0.48)'
             }))
         },
-        'shell.header': {
-            ...base['shell.header'],
-            cssVars: mergeCssVars(base['shell.header']?.cssVars, ({ resolvedAppearance }) => ({
-                '--lw-header-bg': resolvedAppearance === 'dark'
-                    ? 'linear-gradient(180deg, rgba(24, 45, 65, 0.90), rgba(15, 28, 42, 0.76))'
-                    : 'linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(245, 251, 255, 0.66))',
-                '--lw-header-border': 'var(--lw-border-subtle)',
-                '--lw-header-shadow': resolvedAppearance === 'dark'
-                    ? '0 14px 34px rgba(0, 0, 0, 0.18)'
-                    : '0 14px 34px rgba(44, 92, 130, 0.08)',
-                '--lw-header-bottom-shadow': resolvedAppearance === 'dark'
-                    ? '0 -14px 34px rgba(0, 0, 0, 0.18)'
-                    : '0 -14px 34px rgba(44, 92, 130, 0.08)',
-                '--lw-header-control-bg': 'color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent)',
-                '--lw-header-control-border': 'var(--lw-border-subtle)',
-                '--lw-header-control-shadow': 'var(--lw-telegram-panel-shadow, var(--lw-shadow-card))',
-                '--lw-header-control-hover-bg': 'color-mix(in srgb, var(--lw-primary) 10%, var(--lw-header-control-bg))',
-                '--lw-header-avatar-shadow': resolvedAppearance === 'dark'
-                    ? '0 10px 24px rgba(0, 0, 0, 0.20)'
-                    : '0 10px 24px rgba(44, 92, 130, 0.12)',
-                '--lw-header-tab-bg': 'color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent)',
-                '--lw-header-tab-hover-bg': 'color-mix(in srgb, var(--lw-primary) 8%, transparent)',
-                '--lw-header-tab-active-bg': 'color-mix(in srgb, var(--lw-primary) 14%, transparent)'
-            }))
-        },
         'telegram.frame': {
             componentId: 'telegram.frame',
             variant: 'telegram',
@@ -124,9 +99,9 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
         'telegram.infoPanel': {
             componentId: 'telegram.infoPanel',
             variant: 'telegram',
-            cssVars: ({ resolvedAppearance }) => ({
-                '--lw-telegram-info-panel-bg': resolvedAppearance === 'dark' ? '#151e27' : '#f0f2f5',
-                '--lw-telegram-info-card-bg': resolvedAppearance === 'dark' ? '#1d2733' : '#ffffff',
+            cssVars: () => ({
+                '--lw-telegram-info-panel-bg': 'var(--lw-telegram-layer-base)',
+                '--lw-telegram-info-card-bg': 'var(--lw-telegram-layer-surface)',
                 '--lw-telegram-info-panel-border': 'var(--lw-border-base)',
                 '--lw-telegram-avatar-radius': '999px'
             })
@@ -212,7 +187,7 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     '--lw-chat-layout': 'telegram',
                     // 壁纸铺在整个聊天面，顶栏与输入框浮在其上
                     '--lw-chat-stream-bg': isDark
-                        ? `${wallpaperLayer}, #161f2e`
+                        ? `${wallpaperLayer}, var(--lw-telegram-layer-base)`
                         // 原版浅色壁纸：左上黄绿、右下浅灰绿、中间偏绿的四角渐变
                         : `${wallpaperLayer}, radial-gradient(circle at 0% 0%, #d4d68d 0%, transparent 55%), radial-gradient(circle at 100% 100%, #ccd6b3 0%, transparent 50%), radial-gradient(circle at 100% 0%, #89b884 0%, transparent 60%), linear-gradient(170deg, #9cbf8a 0%, #82b081 50%, #7dad87 100%)`,
                     '--lw-chat-scroll-bg': 'none',
@@ -227,11 +202,11 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     '--lw-chat-day-padding': '4px 12px',
                     '--lw-chat-day-font-size': '0.875rem',
                     '--lw-chat-day-font-weight': 600,
-                    '--lw-chat-floating-bg': isDark ? 'rgba(29, 43, 56, 0.94)' : 'rgba(255, 255, 255, 0.88)',
+                    '--lw-chat-floating-bg': isDark ? 'color-mix(in srgb, var(--lw-telegram-layer-raised) 94%, transparent)' : 'rgba(255, 255, 255, 0.88)',
                     '--lw-chat-floating-border': isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(30, 50, 30, 0.06)',
                     '--lw-chat-floating-shadow': isDark ? '0 2px 10px rgba(0, 0, 0, 0.22)' : '0 2px 10px rgba(30, 50, 30, 0.14)',
                     '--lw-chat-floating-blur': 'blur(18px) saturate(1.2)',
-                    '--lw-chat-bubble': isDark ? '#252e3d' : '#ffffff',
+                    '--lw-chat-bubble': isDark ? 'var(--lw-telegram-layer-raised)' : '#ffffff',
                     // 原版深色的发出气泡是按屏幕位置分布的紫→蓝渐变
                     '--lw-chat-user-bubble': isDark
                         ? 'linear-gradient(180deg, #8d4fe3 0%, #6f52dd 38%, #4f72e2 66%, #3584e4 100%)'
@@ -254,7 +229,7 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     '--lw-chat-input-shadow': 'none',
                     '--lw-chat-input-focus-border': 'transparent',
                     '--lw-chat-input-focus-shadow': 'none',
-                    '--lw-chat-menu-bg': isDark ? 'rgba(35, 50, 69, 0.97)' : 'rgba(255, 255, 255, 0.8)',
+                    '--lw-chat-menu-bg': isDark ? 'color-mix(in srgb, var(--lw-telegram-layer-raised) 97%, transparent)' : 'rgba(255, 255, 255, 0.8)',
                     '--lw-chat-menu-radius': '16px',
                     '--lw-chat-menu-shadow': isDark ? '0 10px 30px rgba(0, 0, 0, 0.35)' : '0 10px 30px rgba(30, 50, 30, 0.18)',
                     '--lw-chat-empty-mark-bg': 'var(--lw-chat-floating-bg)',

@@ -6,7 +6,7 @@ export type DesktopModeAppearance = 'light' | 'dark' | 'follow-setting';
 export type ResolvedDesktopAppearance = 'light' | 'dark';
 export type DesktopModeShellKind = 'traditional' | 'freeform';
 export type ThemeWorkspaceMode = DesktopModeShellKind;
-export type ThemeHeaderVariant = 'default' | 'discord' | 'telegram';
+export type ThemeHeaderVariant = 'default' | 'discord';
 export type ThemeRailMode = 'none' | 'character-rail';
 export type ThemeSurfaceVariant = 'default' | 'discord' | 'telegram';
 

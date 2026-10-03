@@ -28,7 +28,7 @@ export const telegramDesktopMode: DesktopModeManifest = {
     },
     navigationPreset: {
         traditional: {
-            headerVariant: 'telegram',
+            headerVariant: 'default',
             leftRail: 'character-rail',
             widgetVariant: 'telegram',
             headerDesktopPosition: 'top',
@@ -49,7 +49,6 @@ export const telegramDesktopMode: DesktopModeManifest = {
         'telegram.chatList': 'telegram',
         'telegram.conversation': 'telegram',
         'telegram.infoPanel': 'telegram',
-        'shell.header': 'telegram',
         'shell.widget': 'telegram',
         'shell.mainSurface': 'telegram',
         'shell.characterRail': 'telegram',
