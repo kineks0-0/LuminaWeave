@@ -1,4 +1,4 @@
-import type { Component } from 'vue';
+import { shallowReactive, type Component } from 'vue';
 import { activityFromLegacyMode, mergeActivityDescriptors } from '../../platform/activity/activityLaunchResolver.js';
 import type {
     ActivityDescriptor,
@@ -51,13 +51,22 @@ export interface OpenPanelOptions {
 export type DesktopSurfaceEventEmitter = (event: string, ...args: unknown[]) => void;
 
 export class DesktopSurfaceService {
-    public readonly registeredPanels = new Map<string, RegisteredPanelEntry>();
+    // 响应式 Map：运行时插件注册/注销面板后，useWidgetPanels 的 computed 才会刷新。
+    public readonly registeredPanels: Map<string, RegisteredPanelEntry> = shallowReactive(new Map<string, RegisteredPanelEntry>());
 
     constructor(private readonly emit: DesktopSurfaceEventEmitter) {}
 
-    registerPanel(id: string, component: Component, config: RegisteredPanelConfig = { title: '未命名面板' }) {
+    registerPanel(id: string, component: Component, config: RegisteredPanelConfig = { title: '未命名面板' }): RegisteredPanelEntry {
         console.log(`[DesktopSurfaceService] 注册面板: ${id}`);
-        this.registeredPanels.set(id, { id, component, config });
+        const entry: RegisteredPanelEntry = { id, component, config };
+        this.registeredPanels.set(id, entry);
+        return entry;
+    }
+
+    /** 传入 entry 时只在当前登记的仍是该对象才移除，避免撤销过期注册误删新面板。 */
+    unregisterPanel(id: string, entry?: RegisteredPanelEntry) {
+        if (entry && this.registeredPanels.get(id) !== entry) return;
+        this.registeredPanels.delete(id);
     }
 
     registerDesktopMode(manifest: DesktopModeManifest) {

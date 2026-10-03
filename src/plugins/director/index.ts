@@ -1,5 +1,4 @@
-import { globalXMLInterceptor } from '../../api/core/xml-view/XMLInterceptor.js';
-import { globalPromptRegistry, PromptSlot, PromptType, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
+import { PromptSlot, PromptType, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
 import { globalMemoryManager } from '../../api/core/runtime-utils/MemoryManager.js';
 
 // 导出核心引擎组件
@@ -55,144 +54,6 @@ export const DirectorPlugin: LuminaPlugin = {
             allowedScopes: ["Global", "Character"]
         }
     },
-    init() {
-        // --- 1. 确保 Store 激活并绑定 Mutation 模型 ---
-        useTier1Store().initializeModels();
-        useDirectorStore().initializeModels();
-
-        // --- 2. 注册至核心记忆管理器 (State Management) ---
-        globalMemoryManager.registerProvider(useTier1Store() as any);
-        globalMemoryManager.registerProvider(useDirectorStore() as any);
-        globalMemoryManager.registerProvider({
-            id: 'mutation',
-            exportSnapshot: () => null,
-            importSnapshot: () => { },
-            reset: () => globalMutationEngine.clearCache(),
-            flushDeltas: () => globalMutationEngine.flushDeltas(),
-            applyDelta: (d: unknown) => globalMutationEngine.applyDelta(d as MutationCommand)
-        });
-
-        // --- 3. 注册 XML 解析器 ---
-        globalXMLInterceptor.registerXMLParser('Current_Plan', 'ephemeral', (content) => {
-            useDirectorStore().setCurrentPlan(content.trim());
-            return '';
-        });
-
-        globalXMLInterceptor.registerXMLParser('Next_Plan', 'ephemeral', (content) => {
-            useDirectorStore().setNextPlan(content.trim());
-            return '';
-        });
-
-        globalXMLInterceptor.registerXMLParser('Story_Summary', 'persistent', (content) => {
-            useDirectorStore().setStorySummary(content.trim());
-            return '';
-        });
-
-        // --- 4. 注册 XML 协议说明 ---
-        globalPromptRegistry.register({
-            id: 'director-current-plan-protocol',
-            contexts: ['chat', 'director'],
-            slot: PromptSlot.ST_MAIN,
-            targetIdentifier: STIdentifier.MAIN,
-            priority: 10,
-            xmlTags: [{
-                tag: 'Current_Plan',
-                description: '参考上回合的 <Next_Plan> 指导与本次用户输入，简要说明你对当前回合的短期剧情意图。',
-                statusText: '制定意图中...',
-                anchor: 'Chat_Reply',
-                position: 'before',
-                priority: 10,
-                promptContexts: ['chat', 'director']
-            }],
-            getFragment: () => null
-        });
-
-        globalPromptRegistry.register({
-            id: 'director-next-plan-protocol',
-            contexts: ['chat', 'director'],
-            slot: PromptSlot.ST_MAIN,
-            targetIdentifier: STIdentifier.MAIN,
-            priority: 20,
-            xmlTags: [{
-                tag: 'Next_Plan',
-                description: '根据当前局势演变，简要说明你对下一轮的剧情伏笔或行动规划指令。这将指导下回合生成。',
-                statusText: '制定计划中...',
-                anchor: 'Chat_Reply',
-                position: 'after',
-                priority: 60,
-                promptContexts: ['chat', 'director']
-            }, {
-                tag: 'Story_Summary',
-                description: '凝练地总结并更新当前的剧情概况。这将作为长线背景通过世界书同步。',
-                statusText: '总结剧情中...',
-                anchor: 'Next_Plan',
-                position: 'after',
-                priority: 70,
-                promptContexts: ['chat', 'director']
-            }],
-            getFragment: () => null
-        });
-
-        // 注册剧情概况作为虚拟世界书条目 (长线背景)
-        globalPromptRegistry.register({
-            id: 'director-story-summary',
-            contexts: ['chat', 'director'],
-            slot: PromptSlot.ST_MAIN,
-            label: 'Story Summary',
-            priority: 100,
-            getFragment: () => {
-                const summary = useDirectorStore().storySummary;
-                if (!summary) return null;
-                return `[剧情前情提要]\n${summary}`;
-            }
-        });
-
-        // --- 5. 注册统一的世界拓扑、记忆与数据协议 ---
-        globalPromptRegistry.register({
-            id: 'director-world-context-unified',
-            contexts: ['chat', 'director'],
-            slot: PromptSlot.ST_MAIN,
-            type: PromptType.WORLD_VIEW,
-            targetIdentifier: STIdentifier.WORLD_INFO_BEFORE,
-            label: '记忆系统-导演推演',
-            priority: 100,
-            getFragment: () => {
-                const directorStore = useDirectorStore();
-                const tier1Store = useTier1Store();
-
-                const memState = directorStore.getFormattedMemoryState;
-                const tier1State = tier1Store.getFormattedTier1State;
-
-                let parts: string[] = [];
-                if (tier1State) parts.push(tier1State);
-                if (memState) parts.push(memState);
-
-                if (parts.length === 0) return null;
-
-                let output = '';
-                output += '你必须使用标准指令实时同步世界线状态 根据 <Chat_Reply> 内的对话内容。\n';
-                output += '如果没有任何内容的表格，请必须进行一次初始化内容更新。\n\n';
-                output += parts.join('\n\n').trim();
-                output += '\n\n';
-                output += globalMutationEngine.getDocumentation();
-
-                return output;
-            }
-        });
-
-        // --- 6. 监听核心事件与范围控制启动 ---
-        if (typeof (window as any).LuminaWeave?.on === 'function') {
-            (window as any).LuminaWeave.on('CHAT_CREATED', () => {
-                console.log('[LuminaDirector] 监听到新对话创建事件，正在重置引擎状态...');
-                const store = useDirectorStore();
-                store.reset();
-            });
-            
-            // 旧的范围同步器 (MemoryController) 已被废弃并移除，其功能由核心模块 ContextCompactor 接管
-        }
-
-        console.log('[LuminaDirector] Plugin initialized with central memory and scope control.');
-    },
     hooks: {
         onMessageAdding(newMsg, currentTrace) {
             // 调度核心记忆管理器的状态捕获 (处理 Deltas 与 Snapshots)
@@ -220,7 +81,7 @@ export const DirectorPlugin: LuminaPlugin = {
         },
         onChatLoaded(activeLeafId, nodePool) {
             console.log(`[LuminaDirector] chat loaded: ${activeLeafId}, nodes: ${nodePool?.length || 0}`);
-            
+
             if (!nodePool || nodePool.length === 0) {
                 console.log('[LuminaDirector] New chat detected, resetting all engine states.');
                 const store = useDirectorStore();
@@ -260,5 +121,143 @@ DirectorPlugin.platformManifest = {
     ],
     businessRenderers: {
         'director.panel': { contractId: 'director.panel', component: DirectorPanel }
+    },
+    init(context) {
+        // --- 0. Mutation 引擎的 XML 解析器与协议说明（原先在模块加载时全局注册） ---
+        globalMutationEngine.install(context);
+
+        // --- 1. 确保 Store 激活并绑定 Mutation 模型（模型撤销交给作用域） ---
+        context.onDispose(useTier1Store().initializeModels());
+        context.onDispose(useDirectorStore().initializeModels());
+
+        // --- 2. 注册至核心记忆管理器 (State Management) ---
+        context.memory.registerProvider(useTier1Store());
+        context.memory.registerProvider(useDirectorStore());
+        context.memory.registerProvider({
+            id: 'mutation',
+            exportSnapshot: () => null,
+            importSnapshot: () => { },
+            reset: () => globalMutationEngine.clearCache(),
+            flushDeltas: () => globalMutationEngine.flushDeltas(),
+            applyDelta: (d: unknown) => globalMutationEngine.applyDelta(d as MutationCommand)
+        });
+
+        // --- 3. 注册 XML 解析器 ---
+        context.xml.registerParser('Current_Plan', 'ephemeral', (content) => {
+            useDirectorStore().setCurrentPlan(content.trim());
+            return '';
+        });
+
+        context.xml.registerParser('Next_Plan', 'ephemeral', (content) => {
+            useDirectorStore().setNextPlan(content.trim());
+            return '';
+        });
+
+        context.xml.registerParser('Story_Summary', 'persistent', (content) => {
+            useDirectorStore().setStorySummary(content.trim());
+            return '';
+        });
+
+        // --- 4. 注册 XML 协议说明（含 DirectorStore 的 3 个 Prompt 片段） ---
+        useDirectorStore().registerPrompts(context);
+        context.prompts.register({
+            id: 'director-current-plan-protocol',
+            contexts: ['chat', 'director'],
+            slot: PromptSlot.ST_MAIN,
+            targetIdentifier: STIdentifier.MAIN,
+            priority: 10,
+            xmlTags: [{
+                tag: 'Current_Plan',
+                description: '参考上回合的 <Next_Plan> 指导与本次用户输入，简要说明你对当前回合的短期剧情意图。',
+                statusText: '制定意图中...',
+                anchor: 'Chat_Reply',
+                position: 'before',
+                priority: 10,
+                promptContexts: ['chat', 'director']
+            }],
+            getFragment: () => null
+        });
+
+        context.prompts.register({
+            id: 'director-next-plan-protocol',
+            contexts: ['chat', 'director'],
+            slot: PromptSlot.ST_MAIN,
+            targetIdentifier: STIdentifier.MAIN,
+            priority: 20,
+            xmlTags: [{
+                tag: 'Next_Plan',
+                description: '根据当前局势演变，简要说明你对下一轮的剧情伏笔或行动规划指令。这将指导下回合生成。',
+                statusText: '制定计划中...',
+                anchor: 'Chat_Reply',
+                position: 'after',
+                priority: 60,
+                promptContexts: ['chat', 'director']
+            }, {
+                tag: 'Story_Summary',
+                description: '凝练地总结并更新当前的剧情概况。这将作为长线背景通过世界书同步。',
+                statusText: '总结剧情中...',
+                anchor: 'Next_Plan',
+                position: 'after',
+                priority: 70,
+                promptContexts: ['chat', 'director']
+            }],
+            getFragment: () => null
+        });
+
+        // 注册剧情概况作为虚拟世界书条目 (长线背景)
+        context.prompts.register({
+            id: 'director-story-summary',
+            contexts: ['chat', 'director'],
+            slot: PromptSlot.ST_MAIN,
+            label: 'Story Summary',
+            priority: 100,
+            getFragment: () => {
+                const summary = useDirectorStore().storySummary;
+                if (!summary) return null;
+                return `[剧情前情提要]\n${summary}`;
+            }
+        });
+
+        // --- 5. 注册统一的世界拓扑、记忆与数据协议 ---
+        context.prompts.register({
+            id: 'director-world-context-unified',
+            contexts: ['chat', 'director'],
+            slot: PromptSlot.ST_MAIN,
+            type: PromptType.WORLD_VIEW,
+            targetIdentifier: STIdentifier.WORLD_INFO_BEFORE,
+            label: '记忆系统-导演推演',
+            priority: 100,
+            getFragment: () => {
+                const directorStore = useDirectorStore();
+                const tier1Store = useTier1Store();
+
+                const memState = directorStore.getFormattedMemoryState;
+                const tier1State = tier1Store.getFormattedTier1State;
+
+                let parts: string[] = [];
+                if (tier1State) parts.push(tier1State);
+                if (memState) parts.push(memState);
+
+                if (parts.length === 0) return null;
+
+                let output = '';
+                output += '你必须使用标准指令实时同步世界线状态 根据 <Chat_Reply> 内的对话内容。\n';
+                output += '如果没有任何内容的表格，请必须进行一次初始化内容更新。\n\n';
+                output += parts.join('\n\n').trim();
+                output += '\n\n';
+                output += globalMutationEngine.getDocumentation();
+
+                return output;
+            }
+        });
+
+        // --- 6. 监听核心事件与范围控制启动 ---
+        context.events.on('CHAT_CREATED', () => {
+            console.log('[LuminaDirector] 监听到新对话创建事件，正在重置引擎状态...');
+            useDirectorStore().reset();
+        });
+        // 旧的范围同步器 (MemoryController) 已被废弃并移除，其功能由核心模块 ContextCompactor 接管
+
+        console.log('[LuminaDirector] Plugin initialized with central memory and scope control.');
     }
 } satisfies PluginManifestV2;

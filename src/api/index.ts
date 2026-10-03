@@ -11,6 +11,9 @@ import { FontManager } from './core/runtime-utils/FontManager.js';
 import { MeasureService } from './core/runtime-utils/MeasureService.js';
 import { HALBootstrap } from './core/hal/HALBootstrap.js';
 import { globalXMLInterceptor } from './core/xml-view/XMLInterceptor.js';
+import { globalPromptRegistry } from './core/hal/prompt/PromptRegistry.js';
+import { globalXMLTagRegistry } from '@shared/XMLTagRegistry.js';
+import { createPluginInitContext } from './services/PluginInitContextFactory.js';
 import { globalMemoryManager } from './core/runtime-utils/MemoryManager.js';
 import { ControlledChatCreationCoordinator } from './core/conversation/ControlledChatCreationCoordinator.js';
 import { pluginManager } from '../core/PluginManager.js';
@@ -198,6 +201,15 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.memoryManager = globalMemoryManager;
         this.forgeAgent = new ForgeAgentController(this);
         this.desktopSurface = new DesktopSurfaceService((event, ...args) => this.emit(event, ...args));
+        // 必须早于 initializeAllPlugins：插件 init 经 context 做的全局注册都登记进各自的撤销作用域。
+        pluginManager.setInitContextFactory((pluginId, scope) => createPluginInitContext(pluginId, scope, {
+            promptRegistry: globalPromptRegistry,
+            xmlInterceptor: globalXMLInterceptor,
+            xmlTagRegistry: globalXMLTagRegistry,
+            memoryManager: globalMemoryManager,
+            desktopSurface: this.desktopSurface,
+            events: this
+        }));
         this.host = new HostInteractionService();
         this.conversation = new ConversationDomainService(
             this.conversationService,

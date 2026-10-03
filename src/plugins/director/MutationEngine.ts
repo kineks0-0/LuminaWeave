@@ -1,6 +1,6 @@
-import { globalXMLInterceptor } from '../../api/core/xml-view/XMLInterceptor.js';
-import { globalPromptRegistry, PromptSlot, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
-import { p } from '../../api/core/hal/prompt/PromptUtils.js';
+import { PromptSlot, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
+import type { PluginInitContext } from '../../platform/plugin/PluginInitContext.js';
+import type { RegistrationDisposer } from '../../platform/plugin/PluginRegistrationScope.js';
 
 /**
  * 对应大模型必须输出的标准化 Mutation 操作指令结构
@@ -34,16 +34,20 @@ export class IncrementalMutationEngine {
     public models: Map<string, DataModelProxy> = new Map();
     private deltaCache: MutationCommand[] = []; // 增量缓存池
 
-    constructor() {
-        this.installDefaultInterceptor();
-        this.registerPromptMetadata();
+    /**
+     * 经插件 context 安装 XML 解析器与 Prompt 元数据；撤销由 context 所属作用域负责。
+     * 构造函数不再产生全局副作用，由 director init 显式调用。
+     */
+    public install(context: PluginInitContext): void {
+        this.installDefaultInterceptor(context);
+        this.registerPromptMetadata(context);
     }
 
     /**
      * 注册 XML 标签元数据，使 M 标签出现在 Prompt 指令序列中
      */
-    private registerPromptMetadata() {
-        globalPromptRegistry.register({
+    private registerPromptMetadata(context: PluginInitContext) {
+        context.prompts.register({
             id: 'mutation-engine-xml-docs',
             contexts: ['chat', 'director'],
             slot: PromptSlot.ST_MAIN,
@@ -100,9 +104,13 @@ export class IncrementalMutationEngine {
      * @param targetName 数据模型唯一追踪名 (比如 'inventory', 'relationships')
      * @param proxy 提供增删改查回调的代理对象
      */
-    public registerDataModel(targetName: string, proxy: DataModelProxy) {
+    public registerDataModel(targetName: string, proxy: DataModelProxy): RegistrationDisposer {
         this.models.set(targetName, proxy);
         console.log(`[MutationEngine] Data model registered for tracking: ${targetName}`);
+        // 只撤销仍是本次登记的代理，同名模型被后来者覆盖时不误删。
+        return () => {
+            if (this.models.get(targetName) === proxy) this.models.delete(targetName);
+        };
     }
 
     /**
@@ -185,7 +193,7 @@ export class IncrementalMutationEngine {
      * 向全局的 XMLInterceptor 注册拦截 <Mutation> 标签。
      * 由于状态修改是落地性质的，它的生命周期被强制标记为 'persistent' (落库后就不往 ST 聊天流里吐出此 XML 标签了)
      */
-    private installDefaultInterceptor() {
+    private installDefaultInterceptor(context: PluginInitContext) {
         const parser = (content: string, fullMatchText: string) => {
             if (content.trim().length === 0 && fullMatchText.includes('target=')) {
                 // 兼容旧的 Attributes 模式
@@ -200,12 +208,12 @@ export class IncrementalMutationEngine {
             return '';
         };
 
-        globalXMLInterceptor.registerXMLParser('Mutation', 'persistent', parser);
-        globalXMLInterceptor.registerXMLParser('M', 'persistent', parser);
+        context.xml.registerParser('Mutation', 'persistent', parser);
+        context.xml.registerParser('M', 'persistent', parser);
 
         // 3. 自然语言模式 [物品栏更新] (Persistent)
         const inventoryPattern = /\[物品栏更新\]：\s*((?:\n?\s*-\s*[^：\n]+?：[^（\n]+?(?:（.*?）)?)+)/gis;
-        globalXMLInterceptor.registerPatternParser(inventoryPattern, 'persistent', (content) => {
+        context.xml.registerPatternParser(inventoryPattern, 'persistent', (content) => {
             this.parseNaturalLanguageInventory(content);
             return '';
         });

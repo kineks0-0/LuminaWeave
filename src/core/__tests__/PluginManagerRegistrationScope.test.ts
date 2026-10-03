@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { PluginManager } from '../PluginManager.js';
 import type { LuminaPlugin } from '../../types/plugin.js';
 import { pluginDomainRegistry } from '../../platform/plugin/PluginDomainRegistry.js';
+import type { PluginInitContext } from '../../platform/plugin/PluginInitContext.js';
+import { createTestInitContextHarness } from './testInitContext.js';
+import { PromptSlot } from '../../api/core/hal/prompt/PromptRegistry.js';
 import { surfaceRegistry } from '../../platform/surface/SurfaceRegistry.js';
 import type { EmptySurfaceData, SurfaceContractSpec, SurfaceRendererDefinition } from '../../platform/surface/types.js';
 
@@ -35,7 +38,7 @@ const snapshot = (manager: PluginManager) => ({
     settings: { ...manager.registeredSettings }
 });
 
-const createFullPlugin = (init?: () => void | Promise<void>): LuminaPlugin => ({
+const createFullPlugin = (init?: (context: PluginInitContext) => void | Promise<void>): LuminaPlugin => ({
     id: 'scope-plugin',
     name: 'Scope Plugin',
     icon: '',
@@ -68,8 +71,10 @@ const createFullPlugin = (init?: () => void | Promise<void>): LuminaPlugin => ({
 describe('PluginManager registration scope', () => {
     // 各用例使用独立 manager，但 surface/domain 注册表是全局单例，失败用例也要清理。
     const managers: PluginManager[] = [];
+    const harness = createTestInitContextHarness();
     const createManager = (): PluginManager => {
         const manager = new PluginManager();
+        manager.setInitContextFactory(harness.factory);
         managers.push(manager);
         return manager;
     };
@@ -203,5 +208,61 @@ describe('PluginManager registration scope', () => {
         await manager.initializeAllPlugins();
 
         expect(await state()).toBeUndefined();
+    });
+    it('passes a context with the right pluginId to manifest init and still calls legacy init', async () => {
+        const manager = createManager();
+        const manifestInit = vi.fn();
+        const legacyInit = vi.fn();
+        const plugin = createFullPlugin(manifestInit);
+        plugin.init = legacyInit;
+
+        await manager.registerAndInitialize(plugin);
+
+        expect(manifestInit).toHaveBeenCalledWith(expect.objectContaining({ pluginId: 'scope-plugin' }));
+        expect(legacyInit).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes a context to initializeAllPlugins initializers', async () => {
+        const manager = createManager();
+        const init = vi.fn();
+        manager.register(createFullPlugin(init));
+
+        await manager.initializeAllPlugins();
+
+        expect(init).toHaveBeenCalledWith(expect.objectContaining({ pluginId: 'scope-plugin' }));
+    });
+
+    it('revokes registrations made through the context after unregister', async () => {
+        const manager = createManager();
+        await manager.registerAndInitialize(createFullPlugin(context => {
+            context.prompts.register({ id: 'ctx-frag', slot: PromptSlot.ST_MAIN, priority: 1, getFragment: () => null });
+            context.panels.register('ctx-panel', Stub, { title: 'Ctx' });
+        }));
+        expect(harness.promptRegistry.getAllFragments().map(f => f.id)).toContain('ctx-frag');
+        expect(harness.desktopSurface.registeredPanels.has('ctx-panel')).toBe(true);
+
+        manager.unregister('scope-plugin');
+
+        expect(harness.promptRegistry.getAllFragments().map(f => f.id)).not.toContain('ctx-frag');
+        expect(harness.desktopSurface.registeredPanels.has('ctx-panel')).toBe(false);
+    });
+
+    it('revokes context registrations when runtime init fails', async () => {
+        const manager = createManager();
+
+        await expect(manager.registerAndInitialize(createFullPlugin(context => {
+            context.panels.register('ctx-panel-fail', Stub, { title: 'Ctx' });
+            throw new Error('init failed after register');
+        }))).rejects.toThrow('init failed after register');
+
+        expect(harness.desktopSurface.registeredPanels.has('ctx-panel-fail')).toBe(false);
+    });
+
+    it('fails fast when no init context factory is configured', async () => {
+        const manager = new PluginManager();
+        managers.push(manager);
+
+        await expect(manager.registerAndInitialize(createFullPlugin(vi.fn()))).rejects.toThrow('init context factory');
+        expect(manager.getPlugin('scope-plugin')).toBeUndefined();
     });
 });

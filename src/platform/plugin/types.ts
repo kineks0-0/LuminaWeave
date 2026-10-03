@@ -1,5 +1,6 @@
 import type { Component } from 'vue';
 import type { SettingDefinition } from '../../types/plugin.js';
+import type { PluginInitContext } from './PluginInitContext.js';
 import type { ActivityDescriptor } from '../activity/types.js';
 import type {
     SurfaceContractDefinitionUnion,
@@ -66,5 +67,5 @@ export interface PluginManifestV2 {
     surfaces?: SurfaceContractDefinitionUnion[];
     businessRenderers?: PluginBusinessRendererMap;
     fallbackRenderers?: PluginFallbackRendererMap;
-    init?: () => void | Promise<void>;
+    init?: (context: PluginInitContext) => void | Promise<void>;
 }

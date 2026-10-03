@@ -5,6 +5,7 @@ import {
     type StreamSemanticState,
     type StreamingPolicy
 } from '@shared/BaseXMLInterceptor.js';
+import type { RegistrationDisposer } from '../../../platform/plugin/PluginRegistrationScope.js';
 import { tokenize, extractBlocks, type Token, type TagBlock } from '@shared/TagTokenizer.js';
 
 /**
@@ -75,7 +76,7 @@ export class XMLInterceptor extends BaseXMLInterceptor {
         lifecycle: LifecycleType,
         handler: InterceptorCallback,
         sourceId?: string
-    ): void {
+    ): RegistrationDisposer {
         const canonicalTag = globalXMLTagRegistry.resolveCanonical(tagName) || tagName;
         if (!globalXMLTagRegistry.getDefinition(canonicalTag)) {
             globalXMLTagRegistry.register({
@@ -85,20 +86,26 @@ export class XMLInterceptor extends BaseXMLInterceptor {
                 exposeInProtocol: false
             });
         }
-        this.registerHandler(canonicalTag, handler, sourceId);
+        const dispose = this.registerHandler(canonicalTag, handler, sourceId);
         console.debug(`[XMLInterceptor] Registered extension parser for <${tagName}> (${lifecycle})`);
+        return dispose;
     }
 
-    public registerHandler(canonicalTag: string, handler: InterceptorCallback, sourceId?: string): void {
+    /** 返回的撤销函数按引用移除本次登记，同 (sourceId, tag) 被后来者覆盖时不会误删。 */
+    public registerHandler(canonicalTag: string, handler: InterceptorCallback, sourceId?: string): RegistrationDisposer {
         const normalizedCanonical = globalXMLTagRegistry.resolveCanonical(canonicalTag) || canonicalTag;
         const handlerSource = sourceId || `xml-handler:${normalizedCanonical.toLowerCase()}`;
         this.extensionHandlers = this.extensionHandlers.filter(item => !(item.sourceId === handlerSource && item.canonicalTag === normalizedCanonical));
-        this.extensionHandlers.push({
+        const registration: ParserRegistration = {
             sourceId: handlerSource,
             canonicalTag: normalizedCanonical,
             lifecycle: this.getLifecycle(normalizedCanonical) || 'persistent',
             handler
-        });
+        };
+        this.extensionHandlers.push(registration);
+        return () => {
+            this.extensionHandlers = this.extensionHandlers.filter(item => item !== registration);
+        };
     }
 
     public unregisterHandler(canonicalTag: string, sourceId?: string): void {
@@ -114,9 +121,13 @@ export class XMLInterceptor extends BaseXMLInterceptor {
         regex: RegExp,
         lifecycle: LifecycleType,
         handler: InterceptorCallback
-    ): void {
-        this.patternParsers.push({ regex, lifecycle, handler });
+    ): RegistrationDisposer {
+        const registration: ParserRegistration = { regex, lifecycle, handler };
+        this.patternParsers.push(registration);
         console.debug(`[XMLInterceptor] Registered pattern parser: ${regex.source}`);
+        return () => {
+            this.patternParsers = this.patternParsers.filter(item => item !== registration);
+        };
     }
 
     public unregisterXMLParser(tagName: string): void {

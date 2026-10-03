@@ -36,6 +36,15 @@ export class MemoryManager {
     }
 
     /**
+     * 仅当该 id 当前登记的仍是此对象时才移除；不清理已写入节点 extra 的历史数据。
+     */
+    public unregisterProvider(provider: StateProvider | IncrementalProvider) {
+        if (this.providers.get(provider.id) !== provider) return;
+        this.providers.delete(provider.id);
+        console.log(`[MemoryManager] Unregistered state provider: ${provider.id}`);
+    }
+
+    /**
      * 捕获当前状态并绑定到消息节点(onMessageAdding 钩子)
      * @param msg 当前正在添加的消息对象     
      * @param trace 当前消息的溯源链路 (不包含当前消息)

@@ -51,3 +51,23 @@ describe('MemoryManager Core Logic', () => {
         expect(msg.extra.tier1_snapshot).toEqual({ data: 123 });
     });
 });
+
+describe('MemoryManager.unregisterProvider', () => {
+    const createProvider = (id: string) => ({ id, exportSnapshot: vi.fn(), importSnapshot: vi.fn(), reset: vi.fn() });
+
+    it('removes the provider only when the registered object is the same reference', () => {
+        const manager = new MemoryManager();
+        const first = createProvider('same-id');
+        const second = createProvider('same-id');
+        manager.registerProvider(first);
+        manager.registerProvider(second);
+
+        manager.unregisterProvider(first);
+        manager.resetAll();
+        expect(second.reset).toHaveBeenCalledTimes(1);
+
+        manager.unregisterProvider(second);
+        manager.resetAll();
+        expect(second.reset).toHaveBeenCalledTimes(1);
+    });
+});

@@ -2,6 +2,7 @@ import { defineComponent } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { PluginManager } from '../PluginManager.js';
+import { createTestInitContextHarness } from './testInitContext.js';
 import type { LuminaPlugin } from '../../types/plugin.js';
 import { pluginDomainRegistry } from '../../platform/plugin/PluginDomainRegistry.js';
 import { surfaceRegistry } from '../../platform/surface/SurfaceRegistry.js';
@@ -35,6 +36,7 @@ const createRenderer = <K extends 'test.conflict.surface' | 'test.duplicate-with
 describe('PluginManager', () => {
     it('initializes both legacy plugins and manifest v2 plugins', async () => {
         const manager = new PluginManager();
+        manager.setInitContextFactory(createTestInitContextHarness().factory);
         const legacyInit = vi.fn();
         const manifestInit = vi.fn();
         const plugin: LuminaPlugin = {
@@ -59,6 +61,7 @@ describe('PluginManager', () => {
 
     it('does not run the same initializer twice when legacy and manifest share it', async () => {
         const manager = new PluginManager();
+        manager.setInitContextFactory(createTestInitContextHarness().factory);
         const init = vi.fn();
         const plugin: LuminaPlugin = {
             id: 'shared-init-plugin',

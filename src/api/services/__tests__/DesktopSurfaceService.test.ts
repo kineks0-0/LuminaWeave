@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Component } from 'vue';
+import { computed, type Component } from 'vue';
 import { z } from 'zod';
 import { DesktopSurfaceService } from '../DesktopSurfaceService.js';
 import { surfaceRegistry } from '../../../platform/surface/SurfaceRegistry.js';
@@ -188,5 +188,32 @@ describe('DesktopSurfaceService', () => {
             { tabId: 'unregistered-tab' }
         );
         consoleError.mockRestore();
+    });
+});
+
+describe('DesktopSurfaceService panel unregistration', () => {
+    it('removes a panel only when the entry reference matches', () => {
+        const service = new DesktopSurfaceService(vi.fn());
+        service.registerPanel('panel-b', DummyPanel, { title: 'B' });
+        const stale = service.registeredPanels.get('panel-b')!;
+        service.registerPanel('panel-b', DummyPanel, { title: 'B2' });
+
+        service.unregisterPanel('panel-b', stale);
+        expect(service.registeredPanels.get('panel-b')?.config.title).toBe('B2');
+
+        service.unregisterPanel('panel-b');
+        expect(service.registeredPanels.has('panel-b')).toBe(false);
+    });
+
+    it('notifies reactive readers on register and unregister', () => {
+        const service = new DesktopSurfaceService(vi.fn());
+        const ids = computed(() => Array.from(service.registeredPanels.keys()));
+        expect(ids.value).toEqual([]);
+
+        service.registerPanel('panel-c', DummyPanel, { title: 'C' });
+        expect(ids.value).toEqual(['panel-c']);
+
+        service.unregisterPanel('panel-c');
+        expect(ids.value).toEqual([]);
     });
 });

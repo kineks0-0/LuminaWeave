@@ -9,6 +9,7 @@ import type {
 } from '../platform/plugin/types.js';
 import type { SurfaceRendererDefinitionUnion } from '../platform/surface/types.js';
 import { getPluginNavigationSlots } from '../platform/plugin/pluginNavigationSlots.js';
+import type { PluginInitContext, PluginInitContextFactory } from '../platform/plugin/PluginInitContext.js';
 import {
     PluginRegistrationScope,
     type RegistrationHandle
@@ -34,6 +35,8 @@ export class PluginManager {
 
     private readonly scopes = new Map<string, PluginRegistrationScope>();
     private readonly initializedPluginIds = new Set<string>();
+    // 由 api 层注入（真实注册中心在 api/ 单例里，core/ 不反向依赖它们）。
+    private initContextFactory: PluginInitContextFactory | null = null;
     private resolveBuiltinsInitialized: (() => void) | null = null;
     private readonly builtinsInitialized = new Promise<void>(resolve => {
         this.resolveBuiltinsInitialized = resolve;
@@ -227,6 +230,22 @@ export class PluginManager {
         };
     }
 
+    /** 注入 init context 工厂；必须早于 initializeAllPlugins / registerAndInitialize。 */
+    setInitContextFactory(factory: PluginInitContextFactory): void {
+        this.initContextFactory = factory;
+    }
+
+    private createInitContext(pluginId: string): PluginInitContext {
+        const scope = this.scopes.get(pluginId);
+        if (!this.initContextFactory) {
+            throw new Error(`[LuminaWeave PluginManager] init context factory is not configured (plugin: ${pluginId})`);
+        }
+        if (!scope) {
+            throw new Error(`[LuminaWeave PluginManager] Plugin has no registration scope: ${pluginId}`);
+        }
+        return this.initContextFactory(pluginId, scope);
+    }
+
     /**
      * 判断插件是否被允许注入提示词 (默认允许)
      */
@@ -311,8 +330,8 @@ export class PluginManager {
     /**
      * 运行时注册：注册后立即初始化，初始化失败时整体回滚并抛出（ADR-0005 决策 11）。
      * 内置插件仍由 initializeAllPlugins 初始化，失败时只记录日志。
-     * init 内部未经作用域的全局注册（Prompt/XML/Panel 等）不会回滚，E2b 提供 init(context) 后解决；
-     * init 期间插件已对外可见。
+     * init 内经 context 做的全局注册（Prompt/XML/Memory/Panel/事件）登记在插件作用域内，回滚时一并撤销；
+     * 绕过 context 的全局注册不会回滚。init 期间插件已对外可见。
      */
     async registerAndInitialize(plugin: LuminaPlugin): Promise<RegistrationHandle> {
         if (!plugin.id) {
@@ -328,8 +347,12 @@ export class PluginManager {
         const scope = this.scopes.get(plugin.id);
         this.initializedPluginIds.add(plugin.id);
         try {
-            for (const init of this.collectInitializers(plugin)) {
-                await init();
+            const initializers = this.collectInitializers(plugin);
+            if (initializers.length > 0) {
+                const context = this.createInitContext(plugin.id);
+                for (const init of initializers) {
+                    await init(context);
+                }
             }
         } catch (error) {
             handle.dispose(); // 带作用域校验，不会误卸载同 id 的新注册
@@ -341,11 +364,12 @@ export class PluginManager {
         return handle;
     }
 
-    private collectInitializers(plugin: LuminaPlugin): Array<() => void | Promise<void>> {
+    private collectInitializers(plugin: LuminaPlugin): Array<(context: PluginInitContext) => void | Promise<void>> {
+        // 旧的 LuminaPlugin.init 不接收参数，可直接赋给带 context 参数的签名；调用时多传的 context 会被忽略。
         return [
             plugin.init,
             plugin.platformManifest?.init
-        ].filter((init, index, list): init is () => void | Promise<void> =>
+        ].filter((init, index, list): init is (context: PluginInitContext) => void | Promise<void> =>
             typeof init === 'function' && list.indexOf(init) === index
         );
     }
@@ -366,10 +390,19 @@ export class PluginManager {
             .filter(plugin => !this.initializedPluginIds.has(plugin.id))
             .map(async (plugin) => {
                 this.initializedPluginIds.add(plugin.id);
-                for (const init of this.collectInitializers(plugin)) {
+                const initializers = this.collectInitializers(plugin);
+                if (initializers.length === 0) return;
+                let context: PluginInitContext;
+                try {
+                    context = this.createInitContext(plugin.id);
+                } catch (e) {
+                    console.error(`[LuminaWeave PluginManager] Failed to initialize plugin ${plugin.id}:`, e);
+                    return;
+                }
+                for (const init of initializers) {
                     try {
                         console.log(`[LuminaWeave PluginManager] Initializing plugin: ${plugin.id}`);
-                        await init();
+                        await init(context);
                     } catch (e) {
                         console.error(`[LuminaWeave PluginManager] Failed to initialize plugin ${plugin.id}:`, e);
                     }

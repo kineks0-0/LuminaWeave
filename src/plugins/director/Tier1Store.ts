@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import type { RegistrationDisposer } from '../../platform/plugin/PluginRegistrationScope.js';
 import { globalMutationEngine } from './MutationEngine.js';
-import { globalPromptRegistry, PromptSlot, PromptType } from '../../api/core/hal/prompt/PromptRegistry.js';
 
 /**
  * 动态表格元数据定义
@@ -143,9 +143,6 @@ export const useTier1Store = defineStore('lumina-tier1', () => {
             });
         }
 
-        if (!_isInitialized.value)
-            initializeModels();
-
         const availableTargets = globalMutationEngine.getAvailableTargets();
         output += `[初始化指令]\n`;
         output += `现在你需要初始化/更新以下表单：${availableTargets.join(', ')}\n\n`;
@@ -190,20 +187,21 @@ export const useTier1Store = defineStore('lumina-tier1', () => {
 
     const _isInitialized = ref(false);
     // === Mutation Engine 模型绑定 ===
-    const initializeModels = () => {
-        if (_isInitialized.value) return;
+    const initializeModels = (): RegistrationDisposer => {
+        if (_isInitialized.value) return () => { };
+        const disposers: RegistrationDisposer[] = [];
         // 1. 全局环境
-        globalMutationEngine.registerDataModel('global', {
+        disposers.push(globalMutationEngine.registerDataModel('global', {
             description: tableRegistry.value.global.schema,
             onUpdate: (val: any) => {
                 if (val && typeof val === 'object') {
                     tables.value.global = { ...tables.value.global, ...val };
                 }
             }
-        });
+        }));
 
         // 2. 人物档案
-        globalMutationEngine.registerDataModel('characters', {
+        disposers.push(globalMutationEngine.registerDataModel('characters', {
             description: tableRegistry.value.characters.schema,
             onAdd: (val: any, index?: number, key?: string) => {
                 const name = key || (val && val.name);
@@ -228,10 +226,10 @@ export const useTier1Store = defineStore('lumina-tier1', () => {
             onDelete: (index?: number, key?: string) => {
                 if (key) delete tables.value.characters.npcs[key];
             }
-        });
+        }));
 
         // 3. 物品清单
-        globalMutationEngine.registerDataModel('inventory', {
+        disposers.push(globalMutationEngine.registerDataModel('inventory', {
             description: tableRegistry.value.inventory.schema,
             onAdd: (val: any) => {
                 if (val && typeof val === 'object' && (val.item || val.id)) {
@@ -252,10 +250,10 @@ export const useTier1Store = defineStore('lumina-tier1', () => {
                     tables.value.inventory.splice(index, 1);
                 }
             }
-        });
+        }));
 
         // 4. 技能列表
-        globalMutationEngine.registerDataModel('skills', {
+        disposers.push(globalMutationEngine.registerDataModel('skills', {
             description: tableRegistry.value.skills.schema,
             onAdd: (val: any) => {
                 if (typeof val === 'string' && !tables.value.skills.includes(val)) {
@@ -268,19 +266,24 @@ export const useTier1Store = defineStore('lumina-tier1', () => {
                     tables.value.skills.splice(idx, 1);
                 }
             }
-        });
+        }));
 
         // 5. 剧情追踪
-        globalMutationEngine.registerDataModel('plot', {
+        disposers.push(globalMutationEngine.registerDataModel('plot', {
             description: tableRegistry.value.plot.schema,
             onUpdate: (val: any) => {
                 if (val && typeof val === 'object') {
                     tables.value.plot = { ...tables.value.plot, ...val };
                 }
             }
-        });
+        }));
 
         _isInitialized.value = true;
+        return () => {
+            // 逆序撤销并允许再次初始化（插件卸载后重新注册）。
+            disposers.splice(0).reverse().forEach(dispose => dispose());
+            _isInitialized.value = false;
+        };
     };
 
     // 暴露核心 Getter 和 Action

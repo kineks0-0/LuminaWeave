@@ -48,7 +48,13 @@ export type {
     PluginRuntimeWriteContext,
     PluginStateSelector
 } from '../platform/plugin/types.js';
-export type { RegistrationHandle } from '../platform/plugin/PluginRegistrationScope.js';
+export type { RegistrationDisposer, RegistrationHandle } from '../platform/plugin/PluginRegistrationScope.js';
+export type {
+    PluginEventListener,
+    PluginInitContext,
+    PluginMemoryProvider,
+    PluginXMLHandler
+} from '../platform/plugin/PluginInitContext.js';
 export type { PluginRuntimeApi } from '../api/services/PluginRuntimeService.js';
 export type { SettingDefinition, SettingOption } from '../types/plugin.js';
 export type { PromptAssemblyPolicy } from '../types/PromptAssemblyTypes.js';

@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { globalPromptRegistry, PromptSlot, PromptType, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
+import { PromptSlot, PromptType, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
+import type { PluginInitContext } from '../../platform/plugin/PluginInitContext.js';
+import type { RegistrationDisposer } from '../../platform/plugin/PluginRegistrationScope.js';
 import { globalMutationEngine } from './MutationEngine.js';
 import { MemoryFragment } from './MemoryVectorService.js';
 
@@ -31,81 +33,74 @@ export const useDirectorStore = defineStore('lumina-director', () => {
     const pastMemories = ref<MemoryEntry[]>([]);
     const vectorMemories = ref<MemoryFragment[]>([]);
 
-    // === 自动注册提示词集成 ===
-    
-    // 注册：剧情规划指导
-    globalPromptRegistry.register({
-        id: 'director-next-plan',
-        slot: PromptSlot.ST_MAIN,
-        targetIdentifier: STIdentifier.MAIN,
-        label: 'Director Plan',
-        priority: 200,
-        getFragment: () => {
-            if (!nextPlan.value) return null;
-            return `[Plot Continuity Guide]\n` +
-                   `You MUST follow this plan for your current response:\n` +
-                   `${nextPlan.value}\n` +
-                   `IMPORTANT: If the plan involves state changes, use <M> tags for synchronization.`;
-        }
-    });
+    // === 提示词集成：由 director init 经 context 注册，不再在 store setup 中产生全局副作用 ===
+    // 注意：原先此处还注册过一份 `director-story-summary`，但 init 随后用同 id 覆盖了它（实际生效的是 index.ts 那份），
+    // 因此这里只保留其余三份。
 
-    // 注册：剧情概况 (Story Summary) - 用于世界书注入
-    globalPromptRegistry.register({
-        id: 'director-story-summary',
-        slot: PromptSlot.ST_MAIN,
-        targetIdentifier: STIdentifier.WORLD_INFO_AFTER,
-        label: 'Story Summary',
-        priority: 180,
-        getFragment: () => {
-            if (!storySummary.value) return null;
-            return `[Story Overview / Current Status]\n${storySummary.value}`;
-        }
-    });
+    const registerPrompts = (context: PluginInitContext): void => {
+        context.prompts.register({
+            id: 'director-next-plan',
+            slot: PromptSlot.ST_MAIN,
+            targetIdentifier: STIdentifier.MAIN,
+            label: 'Director Plan',
+            priority: 200,
+            getFragment: () => {
+                if (!nextPlan.value) return null;
+                return `[Plot Continuity Guide]\n` +
+                       `You MUST follow this plan for your current response:\n` +
+                       `${nextPlan.value}\n` +
+                       `IMPORTANT: If the plan involves state changes, use <M> tags for synchronization.`;
+            }
+        });
 
-    // 注册：长期记忆 (用于同步至世界书或直接注入)
-    globalPromptRegistry.register({
-        id: 'director-long-term-memory',
-        slot: PromptSlot.ST_MAIN,
-        targetIdentifier: STIdentifier.MAIN,
-        label: 'Director Memory',
-        priority: 150,
-        getFragment: () => getFormattedMemoryState.value
-    });
+        context.prompts.register({
+            id: 'director-long-term-memory',
+            slot: PromptSlot.ST_MAIN,
+            targetIdentifier: STIdentifier.MAIN,
+            label: 'Director Memory',
+            priority: 150,
+            getFragment: () => getFormattedMemoryState.value
+        });
 
-    // 注册：向量召唤插槽 (Tier 4)
-    globalPromptRegistry.register({
-        id: 'tier4-vector-recall',
-        slot: PromptSlot.ST_STORY_STRING,
-        targetIdentifier: STIdentifier.STORY_STRING,
-        type: PromptType.SCENARIO,
-        label: 'Vector Recall',
-        priority: 70,
-        getFragment: () => {
-            const recent = vectorMemories.value.slice(-3).map(m => m.content).join('\n');
-            return recent ? `[Relevant Memories]\n${recent}` : '';
-        }
-    });
+        context.prompts.register({
+            id: 'tier4-vector-recall',
+            slot: PromptSlot.ST_STORY_STRING,
+            targetIdentifier: STIdentifier.STORY_STRING,
+            type: PromptType.SCENARIO,
+            label: 'Vector Recall',
+            priority: 70,
+            getFragment: () => {
+                const recent = vectorMemories.value.slice(-3).map(m => m.content).join('\n');
+                return recent ? `[Relevant Memories]\n${recent}` : '';
+            }
+        });
+    };
 
     const _isInitialized = ref(false);
     // === Mutation Engine 模型绑定 ===
-    const initializeModels = () => {
-        if (_isInitialized.value) return;
-        globalMutationEngine.registerDataModel('outline', {
+    const initializeModels = (): RegistrationDisposer => {
+        if (_isInitialized.value) return () => { };
+        const disposers: RegistrationDisposer[] = [];
+        disposers.push(globalMutationEngine.registerDataModel('outline', {
             description: "故事核心脉络与大纲 (Tier 3)。建议在每章结束时更新。",
             onUpdate: (val: any) => {
                 if (typeof val === 'string') overallOutline.value = val;
             }
-        });
+        }));
 
         // 注册剧情概况模型
-        globalMutationEngine.registerDataModel('summary', {
+        disposers.push(globalMutationEngine.registerDataModel('summary', {
             description: "当前剧情的高度凝练概括 (Tier 2/Overview)。用于长线状态同步。",
             onUpdate: (val: any) => {
                 if (typeof val === 'string') storySummary.value = val;
             }
-        });
+        }));
 
         _isInitialized.value = true;
+        return () => {
+            disposers.splice(0).reverse().forEach(dispose => dispose());
+            _isInitialized.value = false;
+        };
     };
 
     // === MemoryManager 接口实现 ===
@@ -186,6 +181,6 @@ export const useDirectorStore = defineStore('lumina-director', () => {
         // Actions
         setCurrentPlan, clearCurrentPlan, setNextPlan, clearNextPlan, setStorySummary, addVectorMemory,
         // Core API
-        initializeModels, exportSnapshot, importSnapshot, reset
+        initializeModels, registerPrompts, exportSnapshot, importSnapshot, reset
     };
 });

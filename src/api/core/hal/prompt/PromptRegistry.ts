@@ -237,6 +237,14 @@ export class PromptRegistry {
     }
 
     /**
+     * 仅当该 id 当前登记的仍是此对象时才移除；同 id 被后来者覆盖时不误删。
+     */
+    public unregisterIfCurrent(fragment: PromptFragment): void {
+        if (!this.fragments.includes(fragment)) return;
+        this.unregister(fragment.id);
+    }
+
+    /**
      * 获取所有已注册的 XML 标签信息汇总，并执行基于锚点的排序逻辑
      */
     public getAllXMLTags(context: PromptContext = 'chat'): XMLTagInfo[] {

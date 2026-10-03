@@ -184,6 +184,30 @@ const platformManifest: PluginManifestV2 = {
         'forge.workspace': { contractId: 'forge.workspace', component: CardMakerPanel },
         'forge.settings.summary': { contractId: 'forge.settings.summary', component: ForgePromptPresetInlineSummary },
         'forge.settings.workbench': { contractId: 'forge.settings.workbench', component: ForgePromptPresetWorkbench }
+    },
+    init(context) {
+        // gateway 只有 setter、不支持复位；Forge 是内置插件，provider 指向常驻的 Pinia store，卸载时无需清理。
+        forgeConversationGateway.setStoreProvider(() => useCardMakerStore());
+
+        // 在微内核中注册面板，以便通过 ID 唤起 (兼容旧有 Tab/Window 调度)；撤销由 context 作用域负责。
+        context.panels.register('card_maker', CardMakerPanel, {
+            title: '制卡工坊',
+            icon: '🧩',
+            defaultMode: 'tab',
+            surfaceContractId: 'forge.workspace'
+        });
+
+        FORGE_AUX_PANEL_ORDER.forEach((kind) => {
+            const panel = FORGE_AUX_PANEL_META[kind];
+            context.panels.register(panel.id, ForgeAuxPanelView, {
+                title: panel.title,
+                icon: panel.icon,
+                defaultMode: 'tab',
+                defaultInput: { kind },
+                navigation: { group: '制卡辅助' }
+            });
+        });
+        console.log('[Plugin: Forge] initialized');
     }
 };
 
@@ -200,34 +224,7 @@ const plugin: LuminaPlugin = {
     settingsInlineComponent: ForgePromptPresetInlineSummary,
     settingsPreviewComponent: ForgePromptPresetWorkbench,
     settingsManifest: settingsSchema,
-    platformManifest,
-    init() {
-        forgeConversationGateway.setStoreProvider(() => useCardMakerStore());
-
-        // 在微内核中注册面板，以便通过 ID 唤起 (兼容旧有 Tab/Window 调度)
-        const lw = (window as any).LuminaWeave;
-        const desktopSurface = lw?.services?.desktopSurface;
-        if (desktopSurface && typeof desktopSurface.registerPanel === 'function') {
-            desktopSurface.registerPanel('card_maker', CardMakerPanel, {
-                title: '制卡工坊',
-                icon: '🧩',
-                defaultMode: 'tab',
-                surfaceContractId: 'forge.workspace'
-            });
-
-            FORGE_AUX_PANEL_ORDER.forEach((kind) => {
-                const panel = FORGE_AUX_PANEL_META[kind];
-                desktopSurface.registerPanel(panel.id, ForgeAuxPanelView, {
-                    title: panel.title,
-                    icon: panel.icon,
-                    defaultMode: 'tab',
-                    defaultInput: { kind },
-                    navigation: { group: '制卡辅助' }
-                });
-            });
-        }
-        console.log('[Plugin: Forge] initialized');
-    }
+    platformManifest
 };
 
 export default plugin;
