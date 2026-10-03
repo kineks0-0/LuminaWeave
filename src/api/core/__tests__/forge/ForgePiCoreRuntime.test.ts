@@ -593,6 +593,11 @@ describe('ForgePiCoreRuntime', () => {
             'tool_execution_end'
         ]));
         expect(runtime.getAgentRuntimeSnapshot('forge_project_alpha__conversation_alpha').pendingToolCalls).toEqual([]);
+        const completedEventTypes = runtime.getAgentRuntimeEvents().map(event => event.type);
+        expect(completedEventTypes.filter(type => type === 'turn_end')).toHaveLength(1);
+        expect(completedEventTypes.filter(type => type === 'agent_end')).toHaveLength(1);
+        expect(completedEventTypes.slice(-2)).toEqual(['turn_end', 'agent_end']);
+        expect(runtime.getAgentRuntimeSnapshot('forge_project_alpha__conversation_alpha').isStreaming).toBe(false);
         expect(calls).toBe(2);
     });
 });

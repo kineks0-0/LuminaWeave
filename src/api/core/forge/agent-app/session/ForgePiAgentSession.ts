@@ -1090,13 +1090,6 @@ export class ForgePiAgentSession {
                     result: this.toAgentRuntimeToolResult(event.result),
                     errorMessage: event.isError ? 'Tool execution failed.' : undefined
                 });
-                this.pendingApprovalWaits.set(event.toolCallId, {
-                    requestId: input.request.requestId,
-                    toolName: event.toolName,
-                    kind: 'forge',
-                    source: input.source,
-                    args: event.result
-                });
             }
             const toolResultRecord = {
                 requestId: input.request.requestId,
