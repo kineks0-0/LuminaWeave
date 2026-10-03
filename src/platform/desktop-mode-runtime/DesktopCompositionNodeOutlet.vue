@@ -94,4 +94,10 @@ defineSlots<{
   display: flex;
   overflow: hidden;
 }
+
+/* 活动槽是行向 flex：不声明宽度的活动根节点会只撑到内容宽度，这里统一让它填满槽 */
+.lw-composition-node.is-activity-slot > :deep(*) {
+  flex: 1 1 0;
+  min-width: 0;
+}
 </style>
