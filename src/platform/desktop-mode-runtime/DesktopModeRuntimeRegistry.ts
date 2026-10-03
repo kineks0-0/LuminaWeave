@@ -66,7 +66,7 @@ export class DesktopModeRuntimeRegistry {
             shellRenderer: manifest.shellRenderer ? markRaw(manifest.shellRenderer) : undefined
         };
 
-        this.overrideDisposers.set(manifest.id, this.surfaces.registerDesktopOverrides(manifest.id, normalizedOverrides));
+        this.overrideDisposers.set(manifest.id, this.surfaces.registerDesktopOverrides(manifest.id, normalizedOverrides, manifest.ownerPluginId));
         this.modes.set(manifest.id, normalizedManifest);
     }
 
@@ -84,6 +84,25 @@ export class DesktopModeRuntimeRegistry {
 
     list(): DesktopModeRuntimeDescriptor[] {
         return Array.from(this.modes.values());
+    }
+
+    /**
+     * 只读查询：composition（桌面或移动）引用了给定 contract 之一的模式 id。
+     * excludeOwnerPluginId：排除该插件自己注册的模式（卸载插件时它们会随插件一并撤销）。
+     */
+    listModesReferencingContracts(
+        contractIds: readonly string[],
+        options: { excludeOwnerPluginId?: string } = {}
+    ): string[] {
+        if (contractIds.length === 0) return [];
+        const wanted = new Set<string>(contractIds);
+        return this.list()
+            .filter(mode => !options.excludeOwnerPluginId || mode.ownerPluginId !== options.excludeOwnerPluginId)
+            .filter(mode => [
+                ...collectDesktopCompositionSurfaceIds(mode.composition.desktop),
+                ...collectDesktopCompositionSurfaceIds(mode.composition.mobile)
+            ].some(id => wanted.has(id)))
+            .map(mode => mode.id);
     }
 
     resolveComposition(

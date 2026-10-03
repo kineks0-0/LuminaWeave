@@ -90,8 +90,8 @@ export interface DesktopExperienceRuntimeDependencies {
     conversation: ConversationDomainService;
     generation: GenerationDomainService;
     character: DesktopCharacterRuntime;
-    // timeline / activity 是挂在 lwApi.services 上的共享无状态实例，由外部注入；
-    // 本类不拥有它们，dispose 也不会销毁。
+    // character / timeline / activity 都是挂在 lwApi.services 上的应用级共享实例，由外部注入；
+    // 本类不拥有它们，所以没有 dispose。
     timeline: DesktopTimelineRuntime;
     activity: DesktopActivityRuntime;
 }
@@ -102,7 +102,6 @@ export class DesktopExperienceRuntime {
     public readonly character: DesktopCharacterRuntime;
     public readonly timeline: DesktopTimelineRuntime;
     public readonly activity: DesktopActivityRuntime;
-    private disposed = false;
 
     constructor(dependencies: DesktopExperienceRuntimeDependencies) {
         this.conversation = dependencies.conversation;
@@ -110,14 +109,5 @@ export class DesktopExperienceRuntime {
         this.character = dependencies.character;
         this.timeline = dependencies.timeline;
         this.activity = dependencies.activity;
-    }
-
-    dispose(): void {
-        if (this.disposed) {
-            return;
-        }
-
-        this.disposed = true;
-        this.character.dispose();
     }
 }

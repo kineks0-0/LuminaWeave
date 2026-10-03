@@ -1,3 +1,4 @@
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { XMLTagRegistry } from '@shared/XMLTagRegistry.js';
 import type { PromptRegistry } from '../core/hal/prompt/PromptRegistry.js';
 import type { XMLInterceptor } from '../core/xml-view/XMLInterceptor.js';
@@ -16,7 +17,9 @@ export interface PluginInitContextDeps {
     promptRegistry: Pick<PromptRegistry, 'register' | 'unregisterIfCurrent'>;
     xmlInterceptor: Pick<XMLInterceptor, 'registerXMLParser' | 'registerPatternParser'>;
     xmlTagRegistry: Pick<XMLTagRegistry, 'getDefinition' | 'resolveCanonical' | 'unregister'>;
-    memoryManager: Pick<MemoryManager, 'registerProvider' | 'unregisterProvider'>;
+    memoryManager: Pick<MemoryManager, 'registerProvider' | 'unregisterProvider' | 'restoreProvider'>;
+    /** 宿主就绪且有活动会话时返回当前节点链路；否则 undefined（此时无需恢复）。 */
+    getActiveTrace(): LuminaChatMessage[] | undefined;
     desktopSurface: Pick<DesktopSurfaceService, 'registerPanel' | 'unregisterPanel' | 'registerDesktopMode'>;
     events: {
         on(event: string, listener: PluginEventListener): void;
@@ -86,6 +89,9 @@ export const createPluginInitContext = (
         memory: {
             registerProvider(provider) {
                 deps.memoryManager.registerProvider(provider);
+                // 会话已经加载好之后才注册的 provider（运行时插件）不会再等到 onChatLoaded，这里补一次只针对它的恢复。
+                const activeTrace = deps.getActiveTrace();
+                if (activeTrace) deps.memoryManager.restoreProvider(provider, activeTrace);
                 return track(() => deps.memoryManager.unregisterProvider(provider));
             }
         },
@@ -99,7 +105,7 @@ export const createPluginInitContext = (
             register(manifest) {
                 // DesktopModeManifest 目前没有 componentOverrides 字段（运行时 override 只由内置 telegram 描述符硬编码），
                 // 所以这里没有官方 contract 命名空间可检查；若将来新增该字段，需在此补校验。
-                return track(deps.desktopSurface.registerDesktopMode(manifest));
+                return track(deps.desktopSurface.registerDesktopMode(manifest, pluginId));
             }
         },
         events: {

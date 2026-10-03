@@ -2,7 +2,8 @@ import {
     listDesktopModes,
     onDesktopModeRegistered,
     onDesktopModeRegistering,
-    onDesktopModeUnregistered
+    onDesktopModeUnregistered,
+    getDesktopModeOwnerPluginId
 } from '../../desktop-modes/core/registry.js';
 import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
 import FreeformShell from '../../shell/freeform/FreeformShell.vue';
@@ -55,7 +56,8 @@ export const createDesktopModeRuntimeDescriptor = (mode: DesktopModeManifest): D
         tokens: {},
         settingsSchema: mode.settingsManifest,
         componentOverrides,
-        composition: mode.composition
+        composition: mode.composition,
+        ownerPluginId: getDesktopModeOwnerPluginId(mode.id)
     };
 };
 

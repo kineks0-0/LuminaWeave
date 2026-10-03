@@ -108,3 +108,20 @@ describe('LuminaWeaveAPI Streaming Cache', () => {
         expect(result).toBe('Cleaned reply');
     });
 });
+
+
+describe('LuminaWeaveAPI.whenHostReady', () => {
+    it('stays pending until the host is marked ready, together with waitForReady', async () => {
+        const api = new LuminaWeaveAPI();
+        let resolved = false;
+        void api.whenHostReady().then(() => { resolved = true; });
+        await Promise.resolve();
+        expect(resolved).toBe(false);
+
+        // _initInternal 末尾通过 markHostReady 设置 _ready 并 resolve 门控（唯一出口）
+        api.markHostReady();
+
+        await expect(api.whenHostReady()).resolves.toBeUndefined();
+        await expect(api.waitForReady()).resolves.toBe(true);
+    });
+});

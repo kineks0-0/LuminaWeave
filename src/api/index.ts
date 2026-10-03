@@ -45,7 +45,12 @@ import {
     type SendMessageOptions
 } from './services/GenerationDomainService.js';
 import { settingsDomainService, type SettingsDomainService } from './services/SettingsDomainService.js';
-import { DesktopActivityRuntime, DesktopTimelineRuntime } from './services/DesktopExperienceRuntime.js';
+import {
+    DesktopActivityRuntime,
+    DesktopTimelineRuntime,
+    type DesktopCharacterRuntime
+} from './services/DesktopExperienceRuntime.js';
+import { CharacterRuntimeSlot } from './services/CharacterRuntimeSlot.js';
 import { ChatPresentationCommandService } from './services/ChatPresentationCommandService.js';
 import type { DesktopModeManifest } from '../desktop-modes/core/types.js';
 
@@ -86,6 +91,8 @@ export interface LuminaWeaveDomainServices {
     chatPresentationCommands: ChatPresentationCommandService;
     timeline: DesktopTimelineRuntime;
     activity: DesktopActivityRuntime;
+    /** 应用级单例，由入口在 app.use(pinia) 后经 attachCharacterRuntime 挂载；挂载前读取会抛错。 */
+    readonly character: DesktopCharacterRuntime;
 }
 
 /**
@@ -117,9 +124,13 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     public settings: SettingsDomainService;
     public chatPresentationCommands: ChatPresentationCommandService;
     public services: LuminaWeaveDomainServices;
-    public readonly plugins: PluginRuntimeApi = createPluginRuntimeApi(pluginManager, pluginDomainRegistry, () => pluginManager.whenBuiltinsInitialized());
+    public readonly plugins: PluginRuntimeApi = createPluginRuntimeApi(pluginManager, pluginDomainRegistry, () => this.whenHostReady());
 
     private _ready: boolean = false;
+    private resolveHostReady: (() => void) | null = null;
+    private readonly hostReady = new Promise<void>(resolve => {
+        this.resolveHostReady = resolve;
+    });
     private _readyPromise: Promise<boolean> | null = null;
 
     public lastStreamState: GenerationStreamState | null = null;
@@ -128,6 +139,12 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     private _lastGeneralChatLoadAt: number = 0;
     private readonly controlledChatCreation = new ControlledChatCreationCoordinator();
     public registeredPanels: Map<string, RegisteredPanelEntry>;
+    private readonly characterRuntimeSlot = new CharacterRuntimeSlot();
+
+    /** 挂载应用级 character 服务；只能调用一次。 */
+    public attachCharacterRuntime(runtime: DesktopCharacterRuntime): void {
+        this.characterRuntimeSlot.attach(runtime);
+    }
 
     public get lastPromptPayload(): any {
         return this.promptCommandService?.lastPromptPayload ?? null;
@@ -210,6 +227,12 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             xmlInterceptor: globalXMLInterceptor,
             xmlTagRegistry: globalXMLTagRegistry,
             memoryManager: globalMemoryManager,
+            getActiveTrace: () => {
+                // 宿主就绪前不恢复：此时 provider 由随后的 onChatLoaded 统一恢复。
+                if (!this._ready) return undefined;
+                const leafId = this.chatManager.activeLeafId;
+                return leafId ? this.chatManager.store.getTrace(leafId) : undefined;
+            },
             desktopSurface: this.desktopSurface,
             events: this
         }));
@@ -319,6 +342,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             on: (eventName, listener) => this.on(eventName, listener),
             off: (eventName, listener) => this.off(eventName, listener)
         });
+        const slot = this.characterRuntimeSlot;
         this.services = {
             desktopSurface: this.desktopSurface,
             host: this.host,
@@ -327,7 +351,10 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             settings: this.settings,
             chatPresentationCommands: this.chatPresentationCommands,
             timeline: new DesktopTimelineRuntime(this.conversation),
-            activity: new DesktopActivityRuntime(this.desktopSurface, this.host, this.chatPresentationCommands)
+            activity: new DesktopActivityRuntime(this.desktopSurface, this.host, this.chatPresentationCommands),
+            get character() {
+                return slot.get();
+            }
         };
         this.registeredPanels = this.desktopSurface.registeredPanels;
 
@@ -420,6 +447,23 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         return this._readyPromise;
     }
 
+    /**
+     * 宿主完全就绪（_initInternal 走完）后 resolve；运行时插件注册以此为门控。
+     * init 失败时永不 resolve，运行时注册将一直挂起（与 whenBuiltinsInitialized 约定一致）。
+     */
+    whenHostReady(): Promise<void> {
+        return this.hostReady;
+    }
+
+    /**
+     * @internal 只由 _initInternal 末尾调用（宿主就绪的唯一出口），同时设置 _ready 并放行 whenHostReady。
+     * 设为公开仅为了单测直接驱动，插件与适配器不要调用。
+     */
+    markHostReady(): void {
+        this._ready = true;
+        this.resolveHostReady?.();
+    }
+
     private async _initInternal(): Promise<boolean> {
         console.log('[LuminaWeave API] Starting explicit initialization...');
         this.emit('INIT_PROGRESS', '准备初始化环境...');
@@ -483,7 +527,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         });
 
         this.emit('INIT_PROGRESS', '实时指纹捕获中...');
-        this._ready = true;
+        this.markHostReady();
         console.log('[LuminaWeave API] Facade initialization complete.');
         return true;
     }

@@ -120,11 +120,22 @@ const assertNoRendererConflict = (
     );
 };
 
+/** 其他插件 / 桌面模式挂在某插件所属 contract 上的渲染依赖。 */
+export type SurfaceDependent =
+    | { contractId: SurfaceContractId; kind: 'business' | 'fallback'; ownerPluginId: string }
+    | { contractId: SurfaceContractId; kind: 'desktop-override'; modeId: string };
+
 export class SurfaceRegistry {
     private readonly contracts = new Map<SurfaceContractId, SurfaceContractDefinitionUnion>();
     private readonly defaultRenderers = new Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>();
     private readonly businessRenderers = new Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>();
     private readonly desktopOverrides = new Map<DesktopOverrideKey, SurfaceRendererDefinitionUnion[]>();
+    // contractId -> modeId -> 该模式在此 contract 上的 override 登记数与模式 owner。
+    // 供 findForeignDependents 直接按 contract 查询，不必解析 desktopOverrides 的字符串 key。
+    private readonly overrideModesByContract = new Map<
+        SurfaceContractId,
+        Map<string, { ownerPluginId: string | undefined; count: number }>
+    >();
     private emptyRenderer: EmptySurfaceRendererDefinition | null = null;
     private readonly revision = shallowRef(0);
 
@@ -367,8 +378,12 @@ export class SurfaceRegistry {
         });
     }
 
-    /** 返回撤销函数：按引用移除本次追加的 override。 */
-    registerDesktopOverrides(desktopModeId: string, renderers: SurfaceRendererDefinitionUnion[]): RegistrationDisposer {
+    /** 返回撤销函数：按引用移除本次追加的 override。ownerPluginId 是模式的 owner（用于卸载依赖判断）。 */
+    registerDesktopOverrides(
+        desktopModeId: string,
+        renderers: SurfaceRendererDefinitionUnion[],
+        ownerPluginId?: string
+    ): RegistrationDisposer {
         this.assertCanRegisterDesktopOverrides(desktopModeId, renderers);
         const added: Array<{ key: DesktopOverrideKey; renderer: SurfaceRendererDefinitionUnion }> = [];
         renderers.forEach(renderer => {
@@ -377,6 +392,11 @@ export class SurfaceRegistry {
             const registeredRenderers = this.desktopOverrides.get(key);
             this.desktopOverrides.set(key, [...(registeredRenderers || []), normalized]);
             added.push({ key, renderer: normalized });
+            const modes = this.overrideModesByContract.get(renderer.contractId) || new Map();
+            const entry = modes.get(desktopModeId) || { ownerPluginId, count: 0 };
+            entry.count += 1;
+            modes.set(desktopModeId, entry);
+            this.overrideModesByContract.set(renderer.contractId, modes);
         });
         this.revision.value += 1;
 
@@ -385,6 +405,12 @@ export class SurfaceRegistry {
             if (disposed) return;
             disposed = true;
             added.forEach(({ key, renderer }) => {
+                const modes = this.overrideModesByContract.get(renderer.contractId);
+                const entry = modes?.get(desktopModeId);
+                if (modes && entry && (entry.count -= 1) <= 0) {
+                    modes.delete(desktopModeId);
+                    if (modes.size === 0) this.overrideModesByContract.delete(renderer.contractId);
+                }
                 const remaining = (this.desktopOverrides.get(key) || []).filter(entry => entry !== renderer);
                 if (remaining.length > 0) {
                     this.desktopOverrides.set(key, remaining);
@@ -398,6 +424,7 @@ export class SurfaceRegistry {
 
     clearDesktopOverridesForTests(): void {
         this.desktopOverrides.clear();
+        this.overrideModesByContract.clear();
     }
 
     registerEmptyRenderer(renderer: EmptySurfaceRendererDefinition): void {
@@ -428,6 +455,35 @@ export class SurfaceRegistry {
     listRenderers(source: 'core-default' | 'plugin-business'): SurfaceRendererDefinitionUnion[] {
         const target = source === 'core-default' ? this.defaultRenderers : this.businessRenderers;
         return Array.from(target.values()).flat();
+    }
+
+    /**
+     * 列出挂在 ownerPluginId 所属 contract 上、由其他 owner 注册的 renderer 与桌面模式 override。
+     * 只读查询；卸载前由第三方入口调用，registry 自身的 disposer 不做依赖处理。
+     */
+    findForeignDependents(ownerPluginId: string): SurfaceDependent[] {
+        const dependents: SurfaceDependent[] = [];
+        for (const contract of this.contracts.values()) {
+            if (contract.ownerPluginId !== ownerPluginId) continue;
+            const contractId = contract.id;
+            const sources = [
+                ['business', this.businessRenderers] as const,
+                ['fallback', this.defaultRenderers] as const
+            ];
+            for (const [kind, target] of sources) {
+                for (const renderer of target.get(contractId) || []) {
+                    if (renderer.ownerId === ownerPluginId) continue;
+                    dependents.push({ contractId, kind, ownerPluginId: renderer.ownerId });
+                }
+            }
+            for (const [modeId, entry] of this.overrideModesByContract.get(contractId) || []) {
+                // 按模式的 owner 判断；没有 owner（内置或门面注册）的模式视为外部依赖。
+                // 不看 renderer.ownerId：它由注册方自己填写。
+                if (entry.ownerPluginId === ownerPluginId) continue;
+                dependents.push({ contractId, kind: 'desktop-override', modeId });
+            }
+        }
+        return dependents;
     }
 
     parseInput<K extends SurfaceContractId>(contractId: K, input: object): SurfaceInput<K> {

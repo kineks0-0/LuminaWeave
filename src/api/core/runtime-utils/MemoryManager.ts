@@ -101,10 +101,7 @@ export class MemoryManager {
     public restoreState(nodeId: string, trace: LuminaChatMessage[]) {
         console.log(`[MemoryManager] Restoring state for node ${nodeId}, trace length: ${trace.length}`);
 
-        // 1. 初始化：重置所有提供者到干净状态
-        this.providers.forEach(p => p.reset());
-
-        // 2. 寻找最近的快照点
+        // 寻找最近的快照点：只要任一 provider 有快照就算（全局口径，保持既有行为）。
         let snapshotIndex = -1;
         for (let i = trace.length - 1; i >= 0; i--) {
             const hasSnapshot = Array.from(this.providers.keys()).some(id => trace[i].extra?.[`${id}_snapshot`]);
@@ -113,34 +110,50 @@ export class MemoryManager {
                 break;
             }
         }
-
-        // 3. 载入快照
         if (snapshotIndex !== -1) {
-            const extra = trace[snapshotIndex].extra;
-            this.providers.forEach(provider => {
-                const snapshot = extra?.[`${provider.id}_snapshot`];
-                if (snapshot) {
-                    provider.importSnapshot(snapshot);
-                }
-            });
             console.log(`[MemoryManager] Base snapshot loaded from depth ${snapshotIndex}.`);
         }
 
-        // 4. 从快照点向下重播增量 (Deltas)
-        const replayStartIndex = snapshotIndex !== -1 ? snapshotIndex + 1 : 0;
-        for (let i = replayStartIndex; i < trace.length; i++) {
-            const extra = trace[i].extra;
-            if (!extra) continue;
-
-            this.providers.forEach(provider => {
-                const deltas = extra[`${provider.id}_delta`];
-                if (Array.isArray(deltas) && 'applyDelta' in provider) {
-                    deltas.forEach(d => (provider as IncrementalProvider).applyDelta(d));
-                }
-            });
-        }
+        this.providers.forEach(provider => this.restoreOne(provider, trace, snapshotIndex));
 
         console.log(`[MemoryManager] State restoration complete.`);
+    }
+
+    /**
+     * 只恢复单个 provider（运行时插件在会话已加载后才注册 provider 时使用）。
+     * 快照点按该 provider 自己的快照计算：重置 → 载入最近快照 → 重放其后的增量。
+     * 与 restoreState 的全局快照点口径不同：若别的 provider 的快照点更晚，两者重放范围不同。
+     * 下一次 onChatLoaded / onMessageSelected 会按全局口径对所有 provider 再恢复一次，最终结果一致。
+     */
+    public restoreProvider(provider: StateProvider | IncrementalProvider, trace: LuminaChatMessage[]) {
+        let snapshotIndex = -1;
+        for (let i = trace.length - 1; i >= 0; i--) {
+            if (trace[i].extra?.[`${provider.id}_snapshot`]) {
+                snapshotIndex = i;
+                break;
+            }
+        }
+        this.restoreOne(provider, trace, snapshotIndex);
+    }
+
+    private restoreOne(provider: StateProvider | IncrementalProvider, trace: LuminaChatMessage[], snapshotIndex: number) {
+        provider.reset();
+
+        if (snapshotIndex !== -1) {
+            const snapshot = trace[snapshotIndex].extra?.[`${provider.id}_snapshot`];
+            if (snapshot) {
+                provider.importSnapshot(snapshot);
+            }
+        }
+
+        if (!('applyDelta' in provider)) return;
+        const replayStartIndex = snapshotIndex !== -1 ? snapshotIndex + 1 : 0;
+        for (let i = replayStartIndex; i < trace.length; i++) {
+            const deltas = trace[i].extra?.[`${provider.id}_delta`];
+            if (Array.isArray(deltas)) {
+                deltas.forEach(d => (provider as IncrementalProvider).applyDelta(d));
+            }
+        }
     }
 
     /**

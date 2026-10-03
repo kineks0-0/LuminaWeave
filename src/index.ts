@@ -1,4 +1,5 @@
 import { luminaWeaveApi } from "./api/index.js";
+import { installCharacterRuntime } from "./bootstrap/installCharacterRuntime.js";
 import { lwStorage } from "./api/storage.js";
 import { createApp } from "vue";
 import { createPinia } from "pinia";
@@ -163,6 +164,8 @@ export async function init() {
   const app = createApp(App);
   const pinia = createPinia();
   app.use(pinia);
+  // character 服务依赖 Pinia store，须在 pinia 安装后、挂载前创建。
+  installCharacterRuntime(luminaWeaveApi);
   // 注入核心 API
   app.provide("lwApi", luminaWeaveApi);
   app.provide("lwHostContainer", container);

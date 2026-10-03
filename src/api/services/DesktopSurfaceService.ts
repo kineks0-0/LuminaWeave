@@ -71,8 +71,9 @@ export class DesktopSurfaceService {
     }
 
     /** 返回撤销函数：只注销本次注册的 manifest（引用比较），重复调用无副作用。 */
-    registerDesktopMode(manifest: DesktopModeManifest): () => void {
-        registerDesktopMode(manifest);
+    /** ownerPluginId：经插件 context 注册时传入，用于卸载插件时区分“自己的模式”与外部依赖。 */
+    registerDesktopMode(manifest: DesktopModeManifest, ownerPluginId?: string): () => void {
+        registerDesktopMode(manifest, ownerPluginId);
         this.emit('SETTINGS_CHANGED');
         this.emit('DESKTOP_MODES_CHANGED', manifest.id);
         let disposed = false;

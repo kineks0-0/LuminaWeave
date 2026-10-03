@@ -41,4 +41,6 @@ export interface DesktopModeRuntimeDescriptor {
     tokens?: Record<string, string | number>;
     settingsSchema?: Record<string, SettingDefinition>;
     composition: DesktopModeComposition;
+    /** 经插件 context 注册该模式的插件 id；内置与门面注册的模式没有。 */
+    ownerPluginId?: string;
 }

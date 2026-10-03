@@ -10,6 +10,14 @@ import {
   deriveWorkspacePluginCatalog,
   type WorkspaceSurfaceProjection
 } from './workspaceSurfaceProjection.js';
+import {
+  computeDisappearedAppIds,
+  findAwakenedWindowIds,
+  partitionWorkspaceWindowIds,
+  resolveActiveWorkspaceWindowId,
+  shouldDropWorkspaceWindowOnReconcile,
+  shouldSeedWorkspace
+} from './workspaceDormancy.js';
 
 type WorkspaceAppKind = 'main' | 'widget' | 'panel';
 
@@ -306,9 +314,16 @@ export const useWorkspaceManager = ({
       .filter((entry): entry is { window: WorkspaceWindowRecord; app: WorkspaceAppDescriptor } => Boolean(entry));
   };
 
+  /** 舞台上可渲染（应用已注册）的窗口 id；休眠窗口（运行时插件尚未注册）不计入。 */
+  const getRenderableWindowIdsForStage = (stage: WorkspaceStageRecord | null | undefined): string[] => {
+    if (!stage) return [];
+    const validAppIds = new Set(workspaceAppMap.value.keys());
+    return partitionWorkspaceWindowIds(stage.windowIds, workspaceWindows.value, validAppIds).renderable;
+  };
+
   const getWorkspaceDefaultLayout = (app: WorkspaceAppDescriptor, stageId?: string): WorkspaceLayout => {
     const bounds = getWorkspaceSceneBounds();
-    const stageWindowCount = stageId ? (getWorkspaceStage(stageId)?.windowIds.length ?? 0) : 0;
+    const stageWindowCount = stageId ? getRenderableWindowIdsForStage(getWorkspaceStage(stageId)).length : 0;
     const minWidth = Math.min(app.minWidth, bounds.width);
     const maxWidth = Math.max(minWidth, Math.min(app.maxWidth, bounds.width));
     const minHeight = Math.min(app.minHeight, bounds.height);
@@ -429,7 +444,7 @@ export const useWorkspaceManager = ({
     if (!stage) return;
     activeWorkspaceStageId.value = stageId;
     stage.lastActiveAt = Date.now();
-    const topWindow = stage.windowIds
+    const topWindow = getRenderableWindowIdsForStage(stage)
       .map((windowId) => workspaceWindows.value[windowId])
       .filter((window): window is WorkspaceWindowRecord => Boolean(window))
       .sort((left, right) => right.zIndex - left.zIndex)[0];
@@ -470,7 +485,7 @@ export const useWorkspaceManager = ({
     }
 
     if (activeWorkspaceWindowId.value === windowId) {
-      const fallbackWindow = (stage?.windowIds ?? [])
+      const fallbackWindow = getRenderableWindowIdsForStage(stage)
         .map((id) => workspaceWindows.value[id])
         .filter((window): window is WorkspaceWindowRecord => Boolean(window))
         .sort((left, right) => right.zIndex - left.zIndex)[0];
@@ -519,10 +534,7 @@ export const useWorkspaceManager = ({
    * 启动期的全量 reconcileWorkspaceState 不动（运行时插件尚未注册时不能误删它们的窗口）。
    */
   const closeDisappearedApps = (ids: string[]) => {
-    const appIds = ids
-      .flatMap((id) => [`plugin:${id}`, `widget:${id}`, `panel:${id}`])
-      .filter((appId) => !workspaceAppMap.value.has(appId));
-    closeWorkspaceApps(appIds);
+    closeWorkspaceApps(computeDisappearedAppIds(ids, new Set(workspaceAppMap.value.keys())));
   };
 
   const openWorkspaceApp = (
@@ -547,7 +559,7 @@ export const useWorkspaceManager = ({
     }
 
     let targetStage = options.stageId ? getWorkspaceStage(options.stageId) : getWorkspaceStage(activeWorkspaceStageId.value);
-    if (!targetStage || options.forceNewStage || targetStage.windowIds.length >= maxWindows) {
+    if (!targetStage || options.forceNewStage || getRenderableWindowIdsForStage(targetStage).length >= maxWindows) {
       targetStage = createWorkspaceStage(true);
     }
 
@@ -610,7 +622,7 @@ export const useWorkspaceManager = ({
   const reconcileWorkspaceState = (seedIfEmpty = false) => {
     const validAppIds = new Set(workspaceApps.value.map((app) => app.id));
     for (const [windowId, window] of Object.entries(workspaceWindows.value)) {
-      if (!validAppIds.has(window.appId)) {
+      if (shouldDropWorkspaceWindowOnReconcile(window.appId, validAppIds)) {
         delete workspaceWindows.value[windowId];
       }
     }
@@ -624,18 +636,18 @@ export const useWorkspaceManager = ({
 
     ensureWorkspaceStageExists();
 
-    if (!activeWorkspaceWindowId.value || !workspaceWindows.value[activeWorkspaceWindowId.value]) {
-      const activeStage = getWorkspaceStage(activeWorkspaceStageId.value);
-      const fallbackWindow = (activeStage?.windowIds ?? [])
-        .map((windowId) => workspaceWindows.value[windowId])
-        .filter((window): window is WorkspaceWindowRecord => Boolean(window))
-        .sort((left, right) => right.zIndex - left.zIndex)[0];
-      activeWorkspaceWindowId.value = fallbackWindow?.id ?? null;
-    }
+    // 休眠窗口不能当作活动窗口：它没有渲染，焦点会落在看不见的东西上。
+    activeWorkspaceWindowId.value = resolveActiveWorkspaceWindowId(
+      activeWorkspaceWindowId.value,
+      getWorkspaceStage(activeWorkspaceStageId.value)?.windowIds ?? [],
+      workspaceWindows.value,
+      validAppIds
+    );
 
     reflowWorkspaceWindows();
 
-    if (seedIfEmpty && Object.keys(workspaceWindows.value).length === 0) {
+    // 只有休眠窗口时界面上仍是空的，同样需要播种初始窗口。
+    if (seedIfEmpty && shouldSeedWorkspace(workspaceWindows.value, validAppIds)) {
       openWorkspaceApp(getWorkspaceAppIdForMainTab(activeMainTab.value || 'lumina-chat'), { allowDuplicate: true });
       if (!isMobile.value && activeRightPanel.value !== 'none') {
         openWorkspaceApp(`plugin:${activeRightPanel.value}`, { allowDuplicate: true });
@@ -688,12 +700,13 @@ export const useWorkspaceManager = ({
         const entries = getWorkspaceWindowEntriesForStage(stage.id)
           .sort((left, right) => right.window.zIndex - left.window.zIndex)
           .slice(0, 3);
+        const renderableCount = getRenderableWindowIdsForStage(stage).length;
         return {
           id: stage.id,
           label: stage.id === activeWorkspaceStageId.value ? '当前舞台' : `舞台 ${String(index + 1).padStart(2, '0')}`,
           isActive: stage.id === activeWorkspaceStageId.value,
-          isEmpty: stage.windowIds.length === 0,
-          windowCount: stage.windowIds.length,
+          isEmpty: renderableCount === 0,
+          windowCount: renderableCount,
           appIcons: entries.map((entry) => entry.app.icon),
           previewTitles: entries.map((entry) => entry.app.title)
         };
@@ -762,6 +775,18 @@ export const useWorkspaceManager = ({
       workspacePersistTimer = null;
     }, 600);
   };
+
+  // 休眠窗口在应用注册前不参与布局校正；应用一注册就按当前边界与尺寸约束重新校正一次。
+  watch(
+    () => new Set(workspaceAppMap.value.keys()),
+    (currentAppIds, previousAppIds) => {
+      for (const windowId of findAwakenedWindowIds(workspaceWindows.value, previousAppIds, currentAppIds)) {
+        const window = workspaceWindows.value[windowId];
+        const app = window ? workspaceAppMap.value.get(window.appId) : undefined;
+        if (window && app) window.layout = normalizeWorkspaceLayout(app, window.layout);
+      }
+    }
+  );
 
   watch(workspaceStages, persistWorkspaceMetadata, { deep: true });
   watch(workspaceWindows, persistWorkspaceMetadata, { deep: true });

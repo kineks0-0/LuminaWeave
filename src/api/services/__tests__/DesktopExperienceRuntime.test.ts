@@ -130,38 +130,4 @@ describe('DesktopExperienceRuntime', () => {
         expect(showToast).toHaveBeenCalledWith('操作完成', 'success', undefined, 3000);
         expect(subscribeChatPresentationCommands).toHaveBeenCalledTimes(1);
     });
-
-    it('disposes owned domain runtimes once', () => {
-        const character = {
-            state: ref(createCharacterState()),
-            defaultAvatar: '/default.png',
-            resolveMessageAvatar: vi.fn(() => '/avatar.png'),
-            refresh: vi.fn(),
-            openSession: vi.fn(),
-            createSession: vi.fn(),
-            renameSession: vi.fn(),
-            deleteSession: vi.fn(),
-            closeCurrentSession: vi.fn(),
-            toggleGroup: vi.fn(),
-            toggleGroupSessionExpansion: vi.fn(),
-            dispose: vi.fn()
-        };
-        const conversation = createConversation();
-        const runtime = new DesktopExperienceRuntime({
-            conversation,
-            generation: createGeneration(),
-            character,
-            timeline: new DesktopTimelineRuntime(conversation),
-            activity: new DesktopActivityRuntime(
-                { launchActivity: vi.fn() },
-                { confirm: vi.fn(), showToast: vi.fn() },
-                { subscribe: vi.fn(() => vi.fn()) }
-            )
-        });
-
-        runtime.dispose();
-        runtime.dispose();
-
-        expect(character.dispose).toHaveBeenCalledTimes(1);
-    });
 });

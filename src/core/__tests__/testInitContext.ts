@@ -26,6 +26,7 @@ export const createTestInitContextHarness = () => {
         xmlInterceptor,
         xmlTagRegistry: globalXMLTagRegistry,
         memoryManager,
+        getActiveTrace: () => undefined,
         desktopSurface,
         events
     });

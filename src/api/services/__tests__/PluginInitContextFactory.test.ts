@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Component } from 'vue';
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { PluginRegistrationScope } from '../../../platform/plugin/PluginRegistrationScope.js';
 import { PromptSlot, type PromptFragment } from '../../core/hal/prompt/PromptRegistry.js';
 import type { PluginMemoryProvider } from '../../../platform/plugin/PluginInitContext.js';
@@ -32,8 +33,10 @@ const createDeps = () => {
         },
         memoryManager: {
             registerProvider: vi.fn((provider: PluginMemoryProvider) => { calls.push(`mem+${provider.id}`); }),
-            unregisterProvider: vi.fn((provider: PluginMemoryProvider) => { calls.push(`mem-${provider.id}`); })
+            unregisterProvider: vi.fn((provider: PluginMemoryProvider) => { calls.push(`mem-${provider.id}`); }),
+            restoreProvider: vi.fn((provider: PluginMemoryProvider) => { calls.push(`restore-${provider.id}`); })
         },
+        getActiveTrace: vi.fn((): LuminaChatMessage[] | undefined => undefined),
         desktopSurface: {
             registerPanel: vi.fn((id: string, component: Component, config: RegisteredPanelEntry['config']): RegisteredPanelEntry => {
                 calls.push(`panel+${id}`);
@@ -83,6 +86,39 @@ describe('createPluginInitContext', () => {
             'custom', 'on-EVT', 'panel-panel', 'mem-prov', 'pattern-abc', 'xml-Tag', 'def-Tag@plugin:p1', 'prompt-frag'
         ]);
         expect(deps.promptRegistry.unregisterIfCurrent).toHaveBeenCalledWith(fragment);
+    });
+
+    it('restores a newly registered memory provider from the active trace', () => {
+        const { deps, calls } = createDeps();
+        const trace = [{ id: 'n1' }] as LuminaChatMessage[];
+        deps.getActiveTrace.mockReturnValue(trace);
+        const context = createPluginInitContext('p1', new PluginRegistrationScope('p1'), deps);
+
+        context.memory.registerProvider(provider);
+
+        expect(deps.memoryManager.restoreProvider).toHaveBeenCalledTimes(1);
+        expect(deps.memoryManager.restoreProvider).toHaveBeenCalledWith(provider, trace);
+        // 先登记再恢复
+        expect(calls).toEqual(['mem+prov', 'restore-prov']);
+    });
+
+    it('does not restore a memory provider when there is no active trace', () => {
+        const { deps } = createDeps();
+        const context = createPluginInitContext('p1', new PluginRegistrationScope('p1'), deps);
+
+        context.memory.registerProvider(provider);
+
+        expect(deps.memoryManager.restoreProvider).not.toHaveBeenCalled();
+    });
+
+    it('registers desktop modes with the owning plugin id', () => {
+        const { deps } = createDeps();
+        const context = createPluginInitContext('p1', new PluginRegistrationScope('p1'), deps);
+        const manifest = { id: 'mode-1' } as never;
+
+        context.desktopModes.register(manifest);
+
+        expect(deps.desktopSurface.registerDesktopMode).toHaveBeenCalledWith(manifest, 'p1');
     });
 
     it('uses plugin:<pluginId> as xml sourceId', () => {

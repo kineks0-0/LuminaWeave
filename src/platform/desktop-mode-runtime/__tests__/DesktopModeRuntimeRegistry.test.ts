@@ -7,7 +7,12 @@ import { SurfaceRegistry } from '../../surface/SurfaceRegistry.js';
 import { OFFICIAL_SURFACE_INPUT_SCHEMAS } from '../../surface/officialContracts.js';
 import { initializeSurfaceRuntime } from '../../surface/initializeSurfaceRuntime.js';
 import type { SurfaceRendererDefinition } from '../../surface/types.js';
-import { getDesktopMode, registerDesktopMode, unregisterDesktopMode } from '../../../desktop-modes/core/registry.js';
+import {
+    getDesktopMode,
+    getDesktopModeOwnerPluginId,
+    registerDesktopMode,
+    unregisterDesktopMode
+} from '../../../desktop-modes/core/registry.js';
 import type { DesktopModeManifest } from '../../../desktop-modes/core/types.js';
 import type { DesktopModeRuntimeDescriptor } from '../types.js';
 
@@ -473,5 +478,110 @@ describe('DesktopModeRuntimeRegistry', () => {
 
         expect(isolated.resolve({ contractId: 'settings.root', desktopModeId: 'chain-rt' }).renderer.ownerId)
             .toBe('new-owner');
+    });
+    it('lists modes whose composition references any of the given contracts', () => {
+        const isolated = new SurfaceRegistry();
+        isolated.registerContract({ id: 'settings.root', inputSchema: OFFICIAL_SURFACE_INPUT_SCHEMAS['settings.root'] });
+        const registry = new DesktopModeRuntimeRegistry(isolated);
+        const surfaceNode = {
+            id: 'ref-surface',
+            kind: 'surface' as const,
+            contractId: 'settings.root' as const,
+            input: {},
+            size: 'fill' as const,
+            visibility: 'visible' as const
+        };
+        const slot = { id: 'ref-slot', kind: 'activity-slot' as const, size: 'fill' as const, visibility: 'visible' as const };
+        const composition = { version: 1 as const, desktop: surfaceNode, mobile: slot };
+        registry.register(createTestDescriptor('ref-mode', {
+            manifest: { id: 'ref-mode', name: 'ref-mode', shell: { kind: 'traditional' }, composition },
+            composition
+        }));
+        registry.register(createTestDescriptor('plain-mode'));
+
+        expect(registry.listModesReferencingContracts(['settings.root'])).toEqual(['ref-mode']);
+        expect(registry.listModesReferencingContracts(['chat.main'])).toEqual([]);
+        expect(registry.listModesReferencingContracts([])).toEqual([]);
+    });
+    it('excludes modes owned by the given plugin from contract reference queries', () => {
+        const isolated = new SurfaceRegistry();
+        isolated.registerContract({ id: 'settings.root', inputSchema: OFFICIAL_SURFACE_INPUT_SCHEMAS['settings.root'] });
+        const registry = new DesktopModeRuntimeRegistry(isolated);
+        const slot = { id: 'own-slot', kind: 'activity-slot' as const, size: 'fill' as const, visibility: 'visible' as const };
+        const referencing = (id: string, ownerPluginId?: string) => {
+            const composition = {
+                version: 1 as const,
+                desktop: {
+                    id: `${id}-node`,
+                    kind: 'surface' as const,
+                    contractId: 'settings.root' as const,
+                    input: {},
+                    size: 'fill' as const,
+                    visibility: 'visible' as const
+                },
+                mobile: { ...slot, id: `${id}-slot` }
+            };
+            return createTestDescriptor(id, {
+                manifest: { id, name: id, shell: { kind: 'traditional' }, composition },
+                composition,
+                ownerPluginId
+            });
+        };
+        registry.register(referencing('mode-a', 'plugin-a'));
+        registry.register(referencing('mode-b', 'plugin-b'));
+        registry.register(referencing('mode-builtin'));
+
+        expect(registry.listModesReferencingContracts(['settings.root'])).toEqual(['mode-a', 'mode-b', 'mode-builtin']);
+        expect(registry.listModesReferencingContracts(['settings.root'], { excludeOwnerPluginId: 'plugin-a' }))
+            .toEqual(['mode-b', 'mode-builtin']);
+    });
+
+    it('passes the mode owner to surface overrides so the owner is not its own dependent', () => {
+        const isolated = new SurfaceRegistry();
+        isolated.registerBatch({
+            contracts: [{
+                id: 'settings.root',
+                ownerPluginId: 'plugin-a',
+                inputSchema: OFFICIAL_SURFACE_INPUT_SCHEMAS['settings.root']
+            }]
+        });
+        const registry = new DesktopModeRuntimeRegistry(isolated);
+        registry.register(createTestDescriptor('override-own', {
+            ownerPluginId: 'plugin-a',
+            componentOverrides: { 'settings.root': createRenderer('whatever') }
+        }));
+        expect(isolated.findForeignDependents('plugin-a')).toEqual([]);
+
+        registry.register(createTestDescriptor('override-foreign', {
+            ownerPluginId: 'plugin-b',
+            componentOverrides: { 'settings.root': createRenderer('plugin-a') }
+        }));
+        expect(isolated.findForeignDependents('plugin-a')).toEqual([
+            { contractId: 'settings.root', kind: 'desktop-override', modeId: 'override-foreign' }
+        ]);
+    });
+
+    it('records the plugin that registered a public desktop mode on its runtime descriptor', () => {
+        desktopModeRuntimeRegistry.clearForTests();
+        initializeDesktopModeRuntime();
+        const customId = `runtime-owned-${Math.random().toString(36).slice(2, 8)}`;
+        const manifest: DesktopModeManifest = {
+            id: customId,
+            name: 'Owned',
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 1,
+                desktop: { id: `${customId}-d`, kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: `${customId}-m`, kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            }
+        };
+        registerDesktopMode(manifest, 'owner-plugin');
+        try {
+            expect(desktopModeRuntimeRegistry.get(customId)?.ownerPluginId).toBe('owner-plugin');
+        } finally {
+            unregisterDesktopMode(customId, manifest);
+        }
+        expect(desktopModeRuntimeRegistry.get(customId)).toBeUndefined();
+        expect(getDesktopModeOwnerPluginId(customId)).toBeUndefined();
     });
 });
