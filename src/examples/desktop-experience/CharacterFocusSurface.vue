@@ -77,7 +77,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { MessageSquareText, RefreshCw, Send, Square } from 'lucide-vue-next';
-import { useSurfaceRuntimeContext } from '../../platform/surface/useSurfaceRuntimeContext.js';
+import { useSurfaceRuntimeContext } from '../../sdk/index.js';
 import {
   CHARACTER_FOCUS_CONTRACT_ID,
   CHARACTER_FOCUS_EXAMPLE_COPY

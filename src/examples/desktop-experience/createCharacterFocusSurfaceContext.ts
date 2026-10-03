@@ -1,13 +1,11 @@
 import { shallowRef, watch } from 'vue';
-import type { GenerationDomainEvent } from '../../api/services/GenerationDomainService.js';
 import type {
     CharacterChannelGroup,
-    CharacterChannelState
-} from '../../types/ConversationContextTypes.js';
-import type {
+    CharacterChannelState,
+    GenerationDomainEvent,
     SurfaceRendererContextFactoryInput,
     SurfaceRendererContextValues
-} from '../../platform/surface/types.js';
+} from '../../sdk/index.js';
 import type {
     CharacterFocusSessionOption,
     CharacterFocusSnapshot

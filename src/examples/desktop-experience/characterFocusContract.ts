@@ -1,15 +1,13 @@
-import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { ShallowRef } from 'vue';
 import { z } from 'zod';
 import type {
     ConversationTimelineNode,
-    ConversationViewContext
-} from '../../types/ConversationContextTypes.js';
-import type {
+    ConversationViewContext,
+    LuminaChatMessage,
     SurfaceContractDefinition,
     SurfaceContractSpec,
     SurfaceInputSchema
-} from '../../platform/surface/types.js';
+} from '../../sdk/index.js';
 
 export const CHARACTER_FOCUS_CONTRACT_ID = 'example.characterFocus' as const;
 export const CHARACTER_FOCUS_PLUGIN_ID = 'example-character-focus' as const;
@@ -47,7 +45,7 @@ export interface CharacterFocusSurfaceIntents {
     stopGeneration(): Promise<unknown>;
 }
 
-declare module '../../platform/surface/types.js' {
+declare module '../../sdk/index.js' {
     interface SurfaceContractMap {
         'example.characterFocus': SurfaceContractSpec<
             CharacterFocusSurfaceInput,

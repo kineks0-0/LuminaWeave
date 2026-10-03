@@ -1,5 +1,4 @@
-import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
-import type { PluginManifestV2 } from '../../platform/plugin/types.js';
+import type { DesktopModeManifest, PluginManifestV2 } from '../../sdk/index.js';
 import CharacterFocusSurface from './CharacterFocusSurface.vue';
 import {
     CHARACTER_FOCUS_CONTRACT_ID,
