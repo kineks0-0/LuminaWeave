@@ -1,31 +1,51 @@
 import {
     Agent,
     type AgentMessage,
+    type AgentTool,
     type BeforeToolCallContext,
     type BeforeToolCallResult
 } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage } from '@earendil-works/pi-ai';
+import type { JsonValue } from '@earendil-works/pi-ai';
 import type { AgentRuntimeEvent } from '../events/AgentRuntimeEventBus.js';
 import { toJsonValue } from '../runtime/AgentJsonValue.js';
+import { createToolApprovalId } from '../tools/AgentToolRegistry.js';
 import { AgentSessionEventProjector } from './AgentSessionEventProjector.js';
 import {
     ABORTED_MESSAGE,
     APPROVAL_PENDING_TEXT,
     NOT_EXECUTED_TEXT,
     SKIPPED_FOR_APPROVAL_TEXT,
+    deniedToolText,
+    LOG_WRITE_FAILED,
     errorOutcome,
+    resolveSettleErrorMessage,
+    statusFromStopReason,
     toErrorMessage,
     type AgentSessionActiveTurn,
     type AgentSessionPendingState,
     type AgentSessionPhase,
     type AgentSessionToolOutcome
 } from './AgentSessionInternals.js';
-import { toBusToolResult, toToolResultMessage } from './AgentSessionContent.js';
-import { mergeTools, toToolCall } from './AgentSessionToolBinding.js';
+import { denyToolCall, executeApprovedToolCall, type AgentSessionApprovalExecutorDeps } from './AgentSessionApprovalExecutor.js';
+import { toToolResultMessage } from './AgentSessionContent.js';
+import { mergeTools, type AgentSessionMergedTools } from './AgentSessionToolBinding.js';
+import {
+    planDiscardApproval,
+    planInterruptedTurnClose,
+    planRestore,
+    writeDiscardedApproval,
+    writeInterruptedTurnClose
+} from './AgentSessionRestore.js';
+import { appendTurnLog, assertLogReadyForTurn, commitTurnMessages, createCursorAtHead, startTurnLog } from './AgentSessionTurnLog.js';
+import { buildTurnContext, type AgentSessionTurnContext } from './AgentTurnContext.js';
+import type { AgentSessionLog, AgentSessionLogBranchOptions } from './AgentSessionLog.js';
 import type {
     AgentSessionApprovalResult,
+    AgentSessionLogPayload,
     AgentSessionOptions,
     AgentSessionPendingApproval,
+    AgentSessionRestoreInput,
+    AgentSessionRestoreResult,
     AgentSessionToolCall,
     AgentSessionTurnPlan,
     AgentSessionTurnResult,
@@ -35,6 +55,7 @@ import {
     fillMissingToolResults,
     insertToolResultAt,
     lastAssistant,
+    rebuildSkippedToolResults,
     removeLastToolResult,
     stripSystemMessage
 } from './AgentTranscriptEditor.js';
@@ -55,6 +76,7 @@ import {
 export class AgentSession {
     readonly sessionId: string;
     private readonly options: AgentSessionOptions;
+    private readonly now: () => number;
     private readonly projector: AgentSessionEventProjector;
     private phase: AgentSessionPhase = 'idle';
     private turn: AgentSessionActiveTurn | undefined;
@@ -64,6 +86,7 @@ export class AgentSession {
     constructor(options: AgentSessionOptions) {
         this.sessionId = options.sessionId;
         this.options = options;
+        this.now = options.now ?? Date.now;
         this.projector = new AgentSessionEventProjector({
             sessionId: options.sessionId,
             emit: event => this.emit(event),
@@ -74,52 +97,143 @@ export class AgentSession {
 
     async runTurn(plan: AgentSessionTurnPlan): Promise<AgentSessionTurnResult> {
         if (this.phase !== 'idle') throw new Error('AgentSession is busy');
-        // pi 只在 messages 不以 system 开头时才用 systemPrompt 生成首条 system 消息；
-        // history 混入 system 会静默替换本回合系统提示词或残留旧的工具声明，因此直接拒绝。
-        if (plan.history.some(message => message.role === 'system')) {
-            throw new Error('AgentSession history must not contain system messages; pass the prompt via plan.systemPrompt.');
-        }
-        const tools = mergeTools({ turnId: plan.turnId, adapterTools: plan.tools ?? [] }, {
+        assertLogReadyForTurn(this.options.log, plan.turnId);
+        const merged = this.bindTools(plan.turnId, plan.tools ?? []);
+        const context = buildTurnContext(plan, merged.agentTools, this.now);
+        const turn = this.createActiveTurn(plan, context.history, merged);
+        turn.historyEnd = turn.agent.state.messages.length;
+        startTurnLog(this.options.log, turn, context);
+        this.activate(turn);
+        return this.track(turn, this.drive(turn, () => turn.agent.prompt(context.userMessage)));
+    }
+
+    /** 纯预览：与 runTurn 共用上下文构建器；不发事件、不写日志、不创建 Agent。 */
+    previewTurn(plan: AgentSessionTurnPlan): AgentSessionTurnContext {
+        const merged = mergeTools({ turnId: plan.turnId, adapterTools: plan.tools ?? [] }, {
             sessionId: this.sessionId,
             registry: this.options.tools,
-            onApprovalRequired: approval => {
-                this.pending = { approval };
-            }
+            onApprovalRequired: () => undefined
         });
-        const turn: AgentSessionActiveTurn = {
-            turnId: plan.turnId,
-            agent: new Agent({
-                initialState: {
-                    systemPrompt: plan.systemPrompt,
-                    messages: plan.history,
-                    tools: tools.agentTools,
-                    model: plan.model,
-                    thinkingLevel: plan.thinkingLevel ?? 'off'
-                },
-                streamFn: plan.streamFn,
-                sessionId: this.sessionId,
-                // 顺序执行才能保证“先登记的审批之后，同批次其余调用都被跳过”的判断没有竞态。
-                toolExecution: 'sequential',
-                beforeToolCall: async context => this.handleBeforeToolCall(turn, context),
-                // pi 只在整批结果都带 terminate 时才提前结束；批次里先于审批执行的普通工具不带 terminate，
-                // 因此这里在有等待审批时强制结束本次循环，避免模型拿着占位结果被再次调用。
-                finishTurn: () => this.pending ? { action: 'end' } : undefined
-            }),
-            registryToolNames: tools.registryToolNames,
-            messageSeq: 0,
-            abortRequested: false,
-            historyEnd: 0
-        };
-        turn.historyEnd = turn.agent.state.messages.length;
+        return buildTurnContext(plan, merged.agentTools, this.now);
+    }
+
+    /** 从日志当前分支推导下一回合的 history（适配器也可自行提供 plan.history）。 */
+    branchHistory(options: Omit<AgentSessionLogBranchOptions, 'nodeId'> = {}): AgentMessage[] {
+        return this.requireLog().branchMessages(options);
+    }
+
+    /**
+     * 仅空闲时允许：回合写入固定挂在开始时的 head 下，进行中移动 head 会让新旧分支交错。
+     * 落在回合中间（该回合有 turn:start、之后没有 turn:end）会被视为未关闭回合，runTurn 会拒绝，
+     * 需要先 closeInterruptedTurn；落在 approval 条目上，restorePendingApproval 会重新找到该审批。
+     */
+    checkout(nodeId: string | null): void {
+        this.requireIdleLog().checkout(nodeId);
+    }
+
+    branchFromUserMessage(nodeId: string): { headId: string | null; text: string } {
+        return this.requireIdleLog().branchFromUserMessage(nodeId);
+    }
+
+    /**
+     * 追加适配器自定义条目。回合进行中沿该回合的写入链追加（并推进 tailId），保证落在活跃分支上；
+     * 空闲时挂在 head 下。写入失败返回 false（不抛错）。
+     */
+    appendCustom(customType: string, data: JsonValue): boolean {
+        const log = this.requireLog();
+        const cursor = this.turn?.log ?? createCursorAtHead(log);
+        const turnId = this.turn?.turnId;
+        return appendTurnLog(log, cursor, {
+            kind: 'custom',
+            ...(turnId !== undefined ? { turnId } : {}),
+            customType,
+            data
+        });
+    }
+
+    /**
+     * 重载恢复：从日志找到等待中的审批，重建 Agent、registry / 策略与回合的等待状态，之后照常批准或拒绝。
+     * 仅空闲时允许。恢复不通知观察者 onApprovalNeeded（重载前已通知过）；恢复的审批视为观察者未被通知，
+     * 因此之后处理时也不触发 onApprovalResolved，总线上的 approval_required / approval_resolved 照常成对。
+     *
+     * 原子性：先由 planRestore 完成全部纯计算与校验，成功后才占住会话并产生副作用；
+     * 之后任一步失败都回滚（phase、turn、registry 中重建的审批）并抛出原错误。
+     */
+    async restorePendingApproval(input: AgentSessionRestoreInput): Promise<AgentSessionRestoreResult> {
+        const log = this.requireIdleLog();
+        const { plan } = input;
+        const planned = planRestore(log, {
+            currentModel: plan.model,
+            hasRegistryTool: toolName => this.options.tools?.hasTool(toolName) ?? false,
+            hasPolicyRestore: typeof this.options.approvalPolicy?.restore === 'function'
+        });
+        if (planned.status !== 'ready') return planned;
+        const { approval, turnId } = planned;
+        const merged = this.bindTools(turnId, plan.tools ?? []);
+        // 先占住会话（同步，早于任何 await），避免并发的 runTurn / 恢复穿插进来。
         this.phase = 'running';
-        this.turn = turn;
-        turn.agent.subscribe(event => {
-            if (this.turn !== turn) return;
-            this.projector.handle(turn, event);
-        });
-        this.emit({ type: 'agent_start', sessionId: this.sessionId, turnId: turn.turnId });
-        this.emit({ type: 'turn_start', sessionId: this.sessionId, turnId: turn.turnId });
-        return this.track(turn, this.drive(turn, () => turn.agent.prompt(plan.prompt)));
+        let registryRestored = false;
+        try {
+            // 纯构造先于副作用：构造失败时 registry / 策略尚未被触碰。
+            const turn = this.createActiveTurn({ ...plan, turnId }, planned.messages, merged);
+            // agent.state.messages 可能多出 pi 补的首条 system 消息。
+            const offset = turn.agent.state.messages.length - planned.messages.length;
+            // historyEnd 指向本回合 user 消息，不能取数组长度，否则收口补结果时会把本回合消息当作历史跳过。
+            turn.historyEnd = offset + planned.turnStartIndex;
+            turn.messageSeq = planned.messageSeq;
+            turn.log = { tailId: planned.tailId, committed: planned.committed };
+            if (approval.source === 'registry') {
+                this.options.tools?.restorePendingApproval({
+                    approvalId: createToolApprovalId(approval.toolCallId),
+                    sessionId: approval.sessionId,
+                    turnId,
+                    toolCallId: approval.toolCallId,
+                    toolName: approval.toolName,
+                    args: approval.args
+                });
+                registryRestored = true;
+            } else {
+                await this.options.approvalPolicy?.restore?.({ ...approval });
+            }
+            this.pending = { approval, insertIndex: planned.insertIndex + offset };
+            this.activate(turn);
+            this.phase = 'awaiting_approval';
+            this.announceApproval(turn, approval, { restored: true });
+        } catch (error: unknown) {
+            this.turn = undefined;
+            this.pending = undefined;
+            this.phase = 'idle';
+            if (registryRestored) {
+                this.options.tools?.discardPendingApproval(approval.sessionId, turnId, approval.toolCallId);
+            }
+            throw error;
+        }
+        return { status: 'restored', approval: { ...approval }, turnId };
+    }
+
+    /**
+     * 重载后收口被中断的回合（有 turn:start、无 turn:end、无未解决审批）：为缺结果的 toolCall 补 isError 结果，
+     * 再写 turn:end(aborted)。只写日志，不发总线事件。
+     */
+    closeInterruptedTurn(reason?: string): { turnId: string } | undefined {
+        const log = this.requireIdleLog();
+        const plan = planInterruptedTurnClose(log, reason);
+        if (!plan) return undefined;
+        if (!writeInterruptedTurnClose(log, plan)) throw new Error(LOG_WRITE_FAILED);
+        return { turnId: plan.turnId };
+    }
+
+    /**
+     * 丢弃日志里等待中的审批（例如恢复返回 model_changed、适配器决定放弃该审批时）：
+     * 写拒绝 resolution，为缺结果的 toolCall 补 isError 结果，再写 turn:end(aborted)。
+     * 仅空闲时允许；只写日志，不发总线事件（重载前的总线状态已不存在）。
+     */
+    discardPendingApproval(message?: string): { turnId: string } | undefined {
+        const log = this.requireIdleLog();
+        const plan = planDiscardApproval(log, message);
+        if (!plan) return undefined;
+        if (!writeDiscardedApproval(log, plan, message)) throw new Error(LOG_WRITE_FAILED);
+        return { turnId: plan.turnId };
     }
 
     async resolveToolApproval(
@@ -164,6 +278,61 @@ export class AgentSession {
         return this.pending ? { ...this.pending.approval } : undefined;
     }
 
+    private bindTools(turnId: string, adapterTools: AgentTool[]): AgentSessionMergedTools {
+        return mergeTools({ turnId, adapterTools }, {
+            sessionId: this.sessionId,
+            registry: this.options.tools,
+            onApprovalRequired: approval => {
+                this.pending = { approval };
+            }
+        });
+    }
+
+    /** 新建回合对象与 pi Agent；runTurn 与重载恢复共用。historyEnd 由调用方按场景设置。 */
+    private createActiveTurn(
+        plan: Omit<AgentSessionTurnPlan, 'prompt' | 'history'>,
+        messages: AgentMessage[],
+        merged: AgentSessionMergedTools
+    ): AgentSessionActiveTurn {
+        const turn: AgentSessionActiveTurn = {
+            turnId: plan.turnId,
+            agent: new Agent({
+                initialState: {
+                    systemPrompt: plan.systemPrompt,
+                    messages,
+                    tools: merged.agentTools,
+                    model: plan.model,
+                    thinkingLevel: plan.thinkingLevel ?? 'off'
+                },
+                streamFn: plan.streamFn,
+                sessionId: this.sessionId,
+                // 顺序执行才能保证“先登记的审批之后，同批次其余调用都被跳过”的判断没有竞态。
+                toolExecution: 'sequential',
+                beforeToolCall: async context => this.handleBeforeToolCall(turn, context),
+                // pi 只在整批结果都带 terminate 时才提前结束；批次里先于审批执行的普通工具不带 terminate，
+                // 因此这里在有等待审批时强制结束本次循环，避免模型拿着占位结果被再次调用。
+                finishTurn: () => this.pending ? { action: 'end' } : undefined
+            }),
+            registryToolNames: merged.registryToolNames,
+            messageSeq: 0,
+            abortRequested: false,
+            historyEnd: 0
+        };
+        return turn;
+    }
+
+    /** 把回合设为当前回合：订阅 pi 事件并在总线上开启回合（agent_start → turn_start）。 */
+    private activate(turn: AgentSessionActiveTurn): void {
+        this.phase = 'running';
+        this.turn = turn;
+        turn.agent.subscribe(event => {
+            if (this.turn !== turn) return;
+            this.projector.handle(turn, event);
+        });
+        this.emit({ type: 'agent_start', sessionId: this.sessionId, turnId: turn.turnId });
+        this.emit({ type: 'turn_start', sessionId: this.sessionId, turnId: turn.turnId });
+    }
+
     /** 兜底：run promise 意外 reject 时按 error 收口，避免会话永久停在 running、后续回合全部 busy。 */
     private track(turn: AgentSessionActiveTurn, run: Promise<AgentSessionTurnResult>): Promise<AgentSessionTurnResult> {
         const guarded = run.catch((error: unknown) => {
@@ -191,6 +360,14 @@ export class AgentSession {
             this.pending = undefined;
             return this.cancelPendingAndFinish(turn, pending);
         }
+        if (pending.insertIndex !== undefined) {
+            // 用与重载恢复相同的纯函数重建跳过结果，保证恢复后的消息记录与不重载时逐条一致。
+            turn.agent.state.messages = rebuildSkippedToolResults(
+                turn.agent.state.messages,
+                pending.insertIndex,
+                pending.approval.toolCallId
+            );
+        }
         return this.pauseForApproval(turn, pending);
     }
 
@@ -205,6 +382,8 @@ export class AgentSession {
         pending: AgentSessionPendingState
     ): Promise<AgentSessionTurnResult> {
         this.phase = 'awaiting_approval';
+        // 只提交到 insertIndex（不含）：其后的跳过结果在审批处理时位于插入结果之后，届时再按顺序提交。
+        this.commitTurnMessages(turn, pending.insertIndex ?? turn.agent.state.messages.length);
         this.announceApproval(turn, pending.approval);
         const resolvedOnAnnounce = this.reentrantRun(pending);
         if (resolvedOnAnnounce) return resolvedOnAnnounce;
@@ -243,7 +422,7 @@ export class AgentSession {
             await this.denyPending(turn, pending, message);
             return this.settleTurn(turn);
         }
-        const outcome = await this.executeApproved(pending.approval, message);
+        const outcome = await executeApprovedToolCall(this.executorDeps(), pending.approval, message);
         this.insertAndNotifyToolResult(turn, pending, outcome);
         if (turn.abortRequested) {
             return this.settleTurn(turn, { status: 'aborted', errorMessage: ABORTED_MESSAGE });
@@ -270,82 +449,8 @@ export class AgentSession {
         pending: AgentSessionPendingState,
         reason?: string
     ): Promise<void> {
-        const { approval } = pending;
-        if (approval.source === 'registry') {
-            await this.options.tools?.resolveToolApproval(
-                this.sessionId,
-                approval.turnId,
-                approval.toolCallId,
-                false,
-                reason
-            );
-        } else {
-            this.emit({
-                type: 'tool_execution_end',
-                sessionId: this.sessionId,
-                turnId: approval.turnId,
-                toolCallId: approval.toolCallId,
-                toolName: approval.toolName,
-                status: 'denied',
-                ...(reason !== undefined ? { errorMessage: reason } : {})
-            });
-        }
-        const text = reason ? `Tool call denied: ${reason}` : 'Tool call denied.';
-        this.insertAndNotifyToolResult(turn, pending, {
-            result: { content: [{ type: 'text', text }], details: undefined },
-            isError: true
-        });
-    }
-
-    private async executeApproved(
-        approval: AgentSessionPendingApproval,
-        message?: string
-    ): Promise<AgentSessionToolOutcome> {
-        if (approval.source === 'registry') {
-            const tools = this.options.tools;
-            if (!tools) return errorOutcome('Agent tool registry is not attached.');
-            try {
-                const resolution = await tools.resolveToolApproval(
-                    this.sessionId,
-                    approval.turnId,
-                    approval.toolCallId,
-                    true,
-                    message
-                );
-                if (resolution.status === 'approved') return { result: resolution.result, isError: false };
-                return errorOutcome('Tool approval could not be resolved.');
-            } catch (error: unknown) {
-                // registry 已发出 failed 的 tool_execution_end；这里只把错误作为工具结果交还模型。
-                return errorOutcome(toErrorMessage(error));
-            }
-        }
-        const policy = this.options.approvalPolicy;
-        if (!policy) return errorOutcome('Agent approval policy is not attached.');
-        try {
-            const result = await policy.execute(toToolCall(approval));
-            this.emit({
-                type: 'tool_execution_end',
-                sessionId: this.sessionId,
-                turnId: approval.turnId,
-                toolCallId: approval.toolCallId,
-                toolName: approval.toolName,
-                status: 'completed',
-                result: toBusToolResult(result)
-            });
-            return { result, isError: false };
-        } catch (error: unknown) {
-            const errorMessage = toErrorMessage(error);
-            this.emit({
-                type: 'tool_execution_end',
-                sessionId: this.sessionId,
-                turnId: approval.turnId,
-                toolCallId: approval.toolCallId,
-                toolName: approval.toolName,
-                status: 'failed',
-                errorMessage
-            });
-            return errorOutcome(errorMessage);
-        }
+        await denyToolCall(this.executorDeps(), pending.approval, reason);
+        this.insertAndNotifyToolResult(turn, pending, errorOutcome(deniedToolText(reason)));
     }
 
     /** 回合收口：每个回合恰好一次（幂等）。 */
@@ -371,6 +476,14 @@ export class AgentSession {
         for (const message of filled.filled) {
             this.notifyMessageEnd(turn.turnId, message);
         }
+        this.commitTurnMessages(turn, turn.agent.state.messages.length);
+        this.appendTurnLog(turn, {
+            kind: 'turn',
+            turnId: turn.turnId,
+            phase: 'end',
+            status,
+            ...(errorMessage !== undefined ? { errorMessage } : {})
+        });
         this.emit({
             type: 'turn_end',
             sessionId: this.sessionId,
@@ -425,9 +538,17 @@ export class AgentSession {
         return { block: true, reason: APPROVAL_PENDING_TEXT, terminate: true };
     }
 
-    /** 在总线上宣告等待中的审批（approval_required），并记为已宣告。不改 phase，不通知观察者。 */
-    private announceApproval(turn: AgentSessionActiveTurn, approval: AgentSessionPendingApproval): void {
+    /**
+     * 在总线上宣告等待中的审批（approval_required），并记为已宣告。不改 phase，不通知观察者。
+     * 日志的 approval 条目在这里写而不依赖观察者通知；重载恢复时该条目已在日志中，传 restored 跳过写入。
+     */
+    private announceApproval(
+        turn: AgentSessionActiveTurn,
+        approval: AgentSessionPendingApproval,
+        options: { restored?: boolean } = {}
+    ): void {
         turn.announcedApproval = { approval: { ...approval }, observerNotified: false };
+        if (!options.restored) this.appendTurnLog(turn, { kind: 'approval', approval: { ...approval } });
         this.emit({
             type: 'approval_required',
             sessionId: this.sessionId,
@@ -456,6 +577,12 @@ export class AgentSession {
             toolCallId: approval.toolCallId,
             approved
         });
+        // 与总线事件一起写：总线监听器在宣告时同步处理审批时观察者不会被通知，但日志不能漏记决策。
+        this.appendTurnLog(turn, {
+            kind: 'approval',
+            approval: { ...approval },
+            resolution: { approved, ...(message !== undefined ? { message } : {}) }
+        });
         if (!announced.observerNotified) return;
         this.notify(() => this.options.observer?.onApprovalResolved?.({
             approval,
@@ -482,7 +609,29 @@ export class AgentSession {
         const message = toToolResultMessage(pending.approval, outcome);
         const messages = turn.agent.state.messages;
         turn.agent.state.messages = insertToolResultAt(messages, pending.insertIndex ?? messages.length, message);
+        // 插入位置之后是同批被跳过的结果，均已定稿：立即提交，重载时不会把已执行的调用当作中断补结果。
+        this.commitTurnMessages(turn, turn.agent.state.messages.length);
         this.notifyMessageEnd(turn.turnId, message);
+    }
+
+    private appendTurnLog(turn: AgentSessionActiveTurn, payload: AgentSessionLogPayload): void {
+        appendTurnLog(this.options.log, turn.log, payload);
+    }
+
+    private commitTurnMessages(turn: AgentSessionActiveTurn, end: number): void {
+        commitTurnMessages(this.options.log, turn, end);
+    }
+
+    private requireLog(): AgentSessionLog {
+        const log = this.options.log;
+        if (!log) throw new Error('AgentSession log is not attached.');
+        return log;
+    }
+
+    private requireIdleLog(): AgentSessionLog {
+        const log = this.requireLog();
+        if (this.phase !== 'idle') throw new Error('AgentSession is busy');
+        return log;
     }
 
     private transcript(turn: AgentSessionActiveTurn): AgentMessage[] {
@@ -491,6 +640,15 @@ export class AgentSession {
 
     private isPendingToolCall(toolCallId: string): boolean {
         return this.pending?.approval.toolCallId === toolCallId;
+    }
+
+    private executorDeps(): AgentSessionApprovalExecutorDeps {
+        return {
+            sessionId: this.sessionId,
+            tools: this.options.tools,
+            approvalPolicy: this.options.approvalPolicy,
+            emit: event => this.emit(event)
+        };
     }
 
     private emit(event: AgentRuntimeEvent): void {
@@ -509,28 +667,3 @@ export class AgentSession {
         }
     }
 }
-
-/**
- * 收口文案优先级：
- * 1. 按 error 收口（兜底 reject、前置校验失败）且带异常信息：保留真实异常，即使同时请求了中止，
- *    否则真实故障会被中止文案掩盖；
- * 2. 用户主动中止：统一使用 session 的中止文案，不透出 pi 的 'Request was aborted'；
- * 3. 依次取显式传入的文案、pi Agent 记录的错误、aborted 状态的默认中止文案。
- */
-const resolveSettleErrorMessage = (
-    turn: AgentSessionActiveTurn,
-    override: { status?: AgentSessionTurnStatus; errorMessage?: string },
-    status: AgentSessionTurnStatus
-): string | undefined => {
-    if (override.status === 'error' && override.errorMessage !== undefined) return override.errorMessage;
-    if (turn.abortRequested) return ABORTED_MESSAGE;
-    return override.errorMessage
-        ?? turn.agent.state.errorMessage
-        ?? (status === 'aborted' ? ABORTED_MESSAGE : undefined);
-};
-
-const statusFromStopReason = (message: AssistantMessage | undefined): AgentSessionTurnStatus => {
-    if (message?.stopReason === 'error') return 'error';
-    if (message?.stopReason === 'aborted') return 'aborted';
-    return 'completed';
-};

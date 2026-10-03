@@ -119,6 +119,9 @@ interface PendingToolApproval {
     approval: AgentToolApprovalRequest;
 }
 
+/** registry 审批 id 的约定格式；重载恢复时据此重建 AgentToolApprovalRequest。 */
+export const createToolApprovalId = (toolCallId: string): string => `approval-${toolCallId}`;
+
 export class AgentToolRegistry {
     private readonly tools = new Map<string, AgentRuntimeTool>();
     private readonly pendingApprovals = new Map<string, PendingToolApproval>();
@@ -132,6 +135,10 @@ export class AgentToolRegistry {
             throw new Error(`Agent tool already registered: ${tool.name}`);
         }
         this.tools.set(tool.name, tool as AgentRuntimeTool);
+    }
+
+    hasTool(toolName: string): boolean {
+        return this.tools.has(toolName);
     }
 
     onBeforeToolCall(handler: AgentToolBeforeCallHandler): void {
@@ -229,6 +236,39 @@ export class AgentToolRegistry {
         };
     }
 
+    listPendingApprovals(sessionId?: string): AgentToolApprovalRequest[] {
+        return Array.from(this.pendingApprovals.values())
+            .filter(pending => sessionId === undefined || pending.approval.sessionId === sessionId)
+            .map(pending => ({ ...pending.approval }));
+    }
+
+    /**
+     * 重载后重建等待中的审批，之后照常经 resolveToolApproval 批准或拒绝。
+     * 不重新执行 beforeToolCall 钩子与 needsApproval：approval.args 已是钩子处理后的参数，重跑可能产生副作用或不同判定。
+     */
+    restorePendingApproval(
+        approval: AgentToolApprovalRequest,
+        visibility?: AgentToolVisibilityContext
+    ): 'restored' | 'tool_not_registered' {
+        const tool = this.tools.get(approval.toolName);
+        if (!tool) return 'tool_not_registered';
+        const input: AgentToolExecutionInput = {
+            sessionId: approval.sessionId,
+            turnId: approval.turnId,
+            toolCallId: approval.toolCallId,
+            toolName: approval.toolName,
+            args: approval.args,
+            ...(visibility ? { visibility } : {})
+        };
+        this.pendingApprovals.set(this.createPendingApprovalKey(input), { tool, input, approval: { ...approval } });
+        return 'restored';
+    }
+
+    /** 撤销一个等待中的审批（不发事件）；用于恢复流程在副作用之后失败时的回滚。返回是否确有该审批。 */
+    discardPendingApproval(sessionId: string, turnId: string, toolCallId: string): boolean {
+        return this.pendingApprovals.delete(this.createPendingApprovalKey({ sessionId, turnId, toolCallId }));
+    }
+
     private async runBeforeToolCallHooks(
         tool: AgentRuntimeTool,
         input: AgentToolExecutionInput
@@ -324,7 +364,7 @@ export class AgentToolRegistry {
 
     private createApproval(input: AgentToolExecutionInput): AgentToolApprovalRequest {
         return {
-            approvalId: `approval-${input.toolCallId}`,
+            approvalId: createToolApprovalId(input.toolCallId),
             sessionId: input.sessionId,
             turnId: input.turnId,
             toolCallId: input.toolCallId,

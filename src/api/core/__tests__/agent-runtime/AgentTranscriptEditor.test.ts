@@ -5,6 +5,7 @@ import {
     fillMissingToolResults,
     findToolResultInsertIndex,
     insertToolResultAt,
+    rebuildSkippedToolResults,
     removeLastToolResult
 } from '@/api/core/agent-runtime/session/AgentTranscriptEditor.js';
 
@@ -72,5 +73,21 @@ describe('AgentTranscriptEditor', () => {
         expect(filled.filled.map(message => message.toolCallId)).toEqual(['call_2']);
         expect(filled.messages).toHaveLength(5);
         expect(filled.messages[4]).toMatchObject({ toolCallId: 'call_2', isError: true });
+    });
+
+    it('rebuilds the skipped results after the pending call, replacing any existing segment', () => {
+        const prefix = [user('go'), assistantCalling('call_0', 'call_1', 'call_2', 'call_3'), toolResult('call_0')];
+
+        const appended = rebuildSkippedToolResults(prefix, 3, 'call_1');
+        const replaced = rebuildSkippedToolResults([...prefix, toolResult('call_2', 'pi'), toolResult('call_3', 'pi')], 3, 'call_1');
+
+        expect(appended.slice(0, 3)).toEqual(prefix);
+        expect(appended.slice(3)).toEqual([
+            expect.objectContaining({ toolCallId: 'call_2', isError: true, content: [{ type: 'text', text: expect.stringMatching(/^Tool call skipped/) }] }),
+            expect.objectContaining({ toolCallId: 'call_3', isError: true })
+        ]);
+        expect(replaced.map(message => message.role === 'toolResult' ? message.content : null))
+            .toEqual(appended.map(message => message.role === 'toolResult' ? message.content : null));
+        expect(rebuildSkippedToolResults(prefix, 3, 'missing')).toBe(prefix);
     });
 });

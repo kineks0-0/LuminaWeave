@@ -1,7 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, ToolResultMessage } from '@earendil-works/pi-ai';
 import { toToolResultMessage } from './AgentSessionContent.js';
-import { errorOutcome } from './AgentSessionInternals.js';
+import { SKIPPED_FOR_APPROVAL_TEXT, errorOutcome } from './AgentSessionInternals.js';
 
 // pi 消息记录的纯数组修补函数：不读写 agent.state，不通知观察者，也不修改入参数组；
 // 由 AgentSession 负责把结果写回 agent.state.messages 并决定何时通知。
@@ -51,8 +51,42 @@ export const findToolResultInsertIndex = (messages: AgentMessage[], toolCallId: 
     return undefined;
 };
 
+/** 同批中排在等待审批调用之后、被跳过的调用的错误结果。 */
+export const createSkippedToolResult = (toolCall: { id: string; name: string }): ToolResultMessage =>
+    toToolResultMessage(
+        { toolCallId: toolCall.id, toolName: toolCall.name },
+        { result: { content: [{ type: 'text', text: SKIPPED_FOR_APPROVAL_TEXT }], details: {} }, isError: true }
+    );
+
 /**
- * 为 historyEnd 之后缺少结果的 toolCall 补 isError toolResult（文案为 text），保证消息记录自洽；
+ * 用 createSkippedToolResult 重建等待调用之后的跳过结果段：insertIndex 是等待调用结果应插入的位置
+ * （占位已移除），其后紧跟的 toolResult 段整体替换为发起消息中排在等待调用之后的每个调用的跳过结果。
+ * 暂停时用它替换 pi 生成的跳过结果，重载恢复时用它在日志前缀之后补回这些结果，二者因此逐条一致。
+ * 找不到发起调用的 assistant 消息时原样返回。
+ */
+export const rebuildSkippedToolResults = (
+    messages: AgentMessage[],
+    insertIndex: number,
+    toolCallId: string
+): AgentMessage[] => {
+    let assistantIndex = insertIndex - 1;
+    while (assistantIndex >= 0 && messages[assistantIndex].role === 'toolResult') assistantIndex -= 1;
+    const source = messages[assistantIndex];
+    if (source?.role !== 'assistant') return messages;
+    const calls = source.content.flatMap(part => part.type === 'toolCall' ? [part] : []);
+    const pendingPosition = calls.findIndex(call => call.id === toolCallId);
+    if (pendingPosition < 0) return messages;
+    let segmentEnd = insertIndex;
+    while (segmentEnd < messages.length && messages[segmentEnd].role === 'toolResult') segmentEnd += 1;
+    return [
+        ...messages.slice(0, insertIndex),
+        ...calls.slice(pendingPosition + 1).map(createSkippedToolResult),
+        ...messages.slice(segmentEnd)
+    ];
+};
+
+/**
+ * 为 historyEnd 之后缺少结果的 toolCall 补 isError toolResult（文案为 text，或按 toolCallId 取文案），保证消息记录自洽；
  * 返回新数组与补入的消息（未补时 messages 为入参原数组）。
  * 主要来源是中止：pi 顺序执行时在 abort 后直接 break，同批次剩余调用既不执行也不产生结果。
  * 只处理正常结束的 assistant 消息；error/aborted 的 assistant 消息在 pi-ai 重放时整条被跳过，
@@ -61,7 +95,7 @@ export const findToolResultInsertIndex = (messages: AgentMessage[], toolCallId: 
 export const fillMissingToolResults = (
     messages: AgentMessage[],
     historyEnd: number,
-    text: string
+    text: string | ((toolCallId: string) => string)
 ): { messages: AgentMessage[]; filled: ToolResultMessage[] } => {
     const next: AgentMessage[] = [];
     const filled: ToolResultMessage[] = [];
@@ -86,7 +120,7 @@ export const fillMissingToolResults = (
         }
         for (const part of message.content) {
             if (part.type !== 'toolCall' || answered.has(part.id)) continue;
-            const result = toToolResultMessage({ toolCallId: part.id, toolName: part.name }, errorOutcome(text));
+            const result = toToolResultMessage({ toolCallId: part.id, toolName: part.name }, errorOutcome(typeof text === 'string' ? text : text(part.id)));
             next.push(result);
             filled.push(result);
         }

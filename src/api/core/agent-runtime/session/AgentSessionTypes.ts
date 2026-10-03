@@ -1,7 +1,9 @@
 import type { AgentMessage, AgentTool, StreamFn, ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type { Api, Model } from '@earendil-works/pi-ai';
+import type { Api, JsonValue, Model } from '@earendil-works/pi-ai';
 import type { AgentRuntimeApprovalSource, AgentRuntimeEventBus } from '../events/AgentRuntimeEventBus.js';
 import type { AgentRuntimeToolResult, AgentToolRegistry } from '../tools/AgentToolRegistry.js';
+import type { AgentSessionLog } from './AgentSessionLog.js';
+import type { AgentSessionTreeEntry, AgentSessionTreePersistedState } from './AgentSessionTree.js';
 
 /** 适配器为每个回合提供的运行计划。 */
 export interface AgentSessionTurnPlan {
@@ -37,6 +39,8 @@ export interface AgentSessionApprovalPolicy {
     check(call: AgentSessionToolCall): Promise<{ details?: unknown } | null> | { details?: unknown } | null;
     /** 用户批准后执行原工具调用并返回结果；拒绝时不调用。 */
     execute(call: AgentSessionToolCall): Promise<AgentRuntimeToolResult>;
+    /** 重载恢复等待中的审批时调用，供适配器重建自己的待审批状态；之后照常走 execute / 拒绝。 */
+    restore?(approval: AgentSessionPendingApproval): Promise<void> | void;
 }
 
 /**
@@ -89,4 +93,45 @@ export interface AgentSessionOptions {
     tools?: AgentToolRegistry;
     approvalPolicy?: AgentSessionApprovalPolicy;
     observer?: AgentSessionObserver;
+    /** 会话日志：提供时 session 在回合检查点写入，并可从其分支推导 history、恢复等待中的审批。 */
+    log?: AgentSessionLog;
+    /** 时间源（user 消息时间戳）；默认 Date.now。runTurn 与 previewTurn 共用，便于测试注入固定时间。 */
+    now?: () => number;
 }
+
+export interface AgentSessionModelRef {
+    provider: string;
+    id: string;
+}
+
+export type AgentSessionLogKind = 'message' | 'turn' | 'approval' | 'custom';
+
+export type AgentSessionLogPayload =
+    | { kind: 'message'; turnId: string; message: AgentMessage }
+    | { kind: 'turn'; turnId: string; phase: 'start'; model: AgentSessionModelRef }
+    | { kind: 'turn'; turnId: string; phase: 'end'; status: AgentSessionTurnStatus; errorMessage?: string }
+    | { kind: 'approval'; approval: AgentSessionPendingApproval; resolution?: { approved: boolean; message?: string } }
+    | { kind: 'custom'; turnId?: string; customType: string; data: JsonValue };
+
+export type AgentSessionLogEntry = AgentSessionTreeEntry<AgentSessionLogKind, AgentSessionLogPayload>;
+
+/** 日志的一次增量变更：追加了一个条目（entry 为深拷贝），或仅 head 移动（checkout，entry 为 undefined）。 */
+export interface AgentSessionLogChange {
+    entry?: AgentSessionLogEntry;
+    headId: string | null;
+}
+
+export type AgentSessionLogState = AgentSessionTreePersistedState<AgentSessionLogKind, AgentSessionLogPayload>;
+
+export interface AgentSessionRestoreInput {
+    /** 当前可用的模型与工具配置；prompt / history 由日志决定。 */
+    plan: Omit<AgentSessionTurnPlan, 'prompt' | 'history' | 'turnId'>;
+}
+
+export type AgentSessionRestoreResult =
+    | { status: 'restored'; approval: AgentSessionPendingApproval; turnId: string }
+    | { status: 'nothing_to_restore' }
+    | { status: 'model_changed'; recorded: AgentSessionModelRef }
+    | { status: 'tool_not_registered'; toolName: string }
+    /** 审批来源是适配器策略，但会话没有挂载带 restore 的 approvalPolicy。 */
+    | { status: 'policy_not_attached' };
