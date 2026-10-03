@@ -373,8 +373,6 @@ onMounted(() => {
     // 从全局存储加载 Preset 配置
     const loadedPresets = settingsDomainService.getGlobalValue<NexusPreset[]>('nexus.presets', []);
     presets.value = JSON.parse(JSON.stringify(loadedPresets));
-    console.log('[LuminaWeave] presets', presets.value);
-    console.log('[LuminaWeave] customApis', customApis.value);
 
     useSSE.value = settingsDomainService.getGlobalValue('nexus.useSSE', true) === true;
 });
