@@ -1,13 +1,13 @@
 import { computed } from 'vue';
 import { activeSettings, useSettings } from '../../plugins/settings/useSettings.js';
 import {
-    DEFAULT_DESKTOP_MODE_ID,
     getActiveDesktopModeIdFromSettings,
     getDesktopModeNavigationPreset,
     getDesktopModeOrDefault,
     getDesktopModeSettingStorageKey,
     getDesktopModeShell,
     getDesktopModeSurfacePreset,
+    resolveRegisteredDesktopModeId,
 } from './registry.js';
 import type { ResolvedDesktopAppearance, ThemeWorkspaceMode } from './types.js';
 
@@ -16,7 +16,7 @@ const mediaQuery = typeof window !== 'undefined'
     : null;
 
 const resolveAppearance = (): ResolvedDesktopAppearance => {
-    const desktopModeId = getActiveDesktopModeIdFromSettings(activeSettings) || DEFAULT_DESKTOP_MODE_ID;
+    const desktopModeId = resolveRegisteredDesktopModeId(getActiveDesktopModeIdFromSettings(activeSettings));
     const desktopMode = getDesktopModeOrDefault(desktopModeId);
     const desktopAppearance = activeSettings[getDesktopModeSettingStorageKey(desktopModeId, 'appearanceMode')];
     if (desktopAppearance === 'light' || desktopAppearance === 'dark') {
@@ -36,7 +36,8 @@ const resolveAppearance = (): ResolvedDesktopAppearance => {
 export const useDesktopMode = () => {
     useSettings();
 
-    const desktopModeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings) || DEFAULT_DESKTOP_MODE_ID);
+    const desktopModeId = computed(() =>
+        resolveRegisteredDesktopModeId(getActiveDesktopModeIdFromSettings(activeSettings)));
     const desktopMode = computed(() => getDesktopModeOrDefault(desktopModeId.value));
     const desktopShell = computed(() => getDesktopModeShell(desktopModeId.value));
     const resolvedAppearance = computed<ResolvedDesktopAppearance>(() => resolveAppearance());

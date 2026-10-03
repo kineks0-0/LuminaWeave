@@ -1,7 +1,16 @@
+import { defineComponent } from 'vue';
+import { z } from 'zod';
 import { describe, expect, it, vi } from 'vitest';
+import type { EmptySurfaceData, SurfaceContractSpec } from '../../../platform/surface/types.js';
 import { PluginManager } from '../../../core/PluginManager.js';
 import { PluginDomainRegistry, pluginDomainRegistry } from '../../../platform/plugin/PluginDomainRegistry.js';
 import { createPluginRuntimeApi } from '../PluginRuntimeService.js';
+
+declare module '../../../platform/surface/types.js' {
+    interface SurfaceContractMap {
+        'rt-custom.main': SurfaceContractSpec<EmptySurfaceData>;
+    }
+}
 
 const ready = () => Promise.resolve(true);
 
@@ -110,5 +119,59 @@ describe('PluginRuntimeService', () => {
         expect(manager.getPlugin('runtime-stale')).toBeDefined();
         expect(api.unregister('runtime-stale')).toBe(true);
         expect(manager.getPlugin('runtime-stale')).toBeUndefined();
+    });
+
+    describe('official contract namespace', () => {
+        const makeApi = () => createPluginRuntimeApi(new PluginManager(), new PluginDomainRegistry(), ready);
+        const Stub = defineComponent({ name: 'RuntimeStub', render: () => null });
+
+        it('rejects runtime manifests that declare an official contract', async () => {
+            await expect(
+                makeApi().register({
+                    id: 'rt-declare',
+                    name: 'X',
+                    surfaces: [{ id: 'chat.main', inputSchema: z.object({}) }]
+                })
+            ).rejects.toThrow(/chat\.main/);
+        });
+
+        it('rejects business renderers bound to an official contract', async () => {
+            await expect(
+                makeApi().register({
+                    id: 'rt-business',
+                    name: 'X',
+                    businessRenderers: { 'chat.composer': { contractId: 'chat.composer', component: Stub } }
+                })
+            ).rejects.toThrow(/chat\.composer/);
+        });
+
+        it('rejects fallback renderers bound to an official contract', async () => {
+            await expect(
+                makeApi().register({
+                    id: 'rt-fallback',
+                    name: 'X',
+                    fallbackRenderers: { 'settings.root': { contractId: 'settings.root', component: Stub } as never }
+                })
+            ).rejects.toThrow(/settings\.root/);
+        });
+
+        it('rejects a renderer whose contractId is official even under another key', async () => {
+            await expect(
+                makeApi().register({
+                    id: 'rt-contract-id',
+                    name: 'X',
+                    businessRenderers: { custom: { contractId: 'stats.panel', component: Stub } } as never
+                })
+            ).rejects.toThrow(/stats\.panel/);
+        });
+
+        it('still accepts custom contracts', async () => {
+            const handle = await makeApi().register({
+                id: 'rt-custom',
+                name: 'X',
+                surfaces: [{ id: 'rt-custom.main', inputSchema: z.object({}) }]
+            });
+            expect(handle.pluginId).toBe('rt-custom');
+        });
     });
 });

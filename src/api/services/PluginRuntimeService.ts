@@ -2,6 +2,7 @@ import type { PluginManager } from '../../core/PluginManager.js';
 import { createRuntimePlugin } from '../../platform/plugin/createRuntimePlugin.js';
 import type { PluginDomainRegistry } from '../../platform/plugin/PluginDomainRegistry.js';
 import type { RegistrationHandle } from '../../platform/plugin/PluginRegistrationScope.js';
+import { OFFICIAL_SURFACE_CONTRACTS } from '../../platform/surface/officialContracts.js';
 import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 
 /** 第三方运行时插件注册入口（lwApi.plugins）。 */
@@ -13,12 +14,36 @@ export interface PluginRuntimeApi {
 
 const HEADER_SLOTS: ReadonlySet<string> = new Set(['headerCenter', 'headerRight']);
 
+const OFFICIAL_CONTRACT_IDS: ReadonlySet<string> = new Set(OFFICIAL_SURFACE_CONTRACTS);
+
+const assertNotOfficialContract = (pluginId: string, contractId: string | undefined, where: string): void => {
+    if (contractId !== undefined && OFFICIAL_CONTRACT_IDS.has(contractId)) {
+        throw new Error(
+            `[LuminaWeave PluginRuntime] Runtime plugin cannot use official surface contract "${contractId}" (${where}): ${pluginId}`
+        );
+    }
+};
+
 const assertRuntimeManifest = (manifest: PluginManifestV2): void => {
     // 运行时插件没有 header 组件（占位组件不渲染内容），声明 header 槽位只会得到空白入口。
     if (manifest.navigationSlots?.some(slot => HEADER_SLOTS.has(slot))) {
         throw new Error(
             `[LuminaWeave PluginRuntime] Runtime plugin cannot declare header navigation slots: ${manifest.id}`
         );
+    }
+    // 官方 contract 是保留命名空间：运行时插件既不能声明，也不能给它挂 renderer。
+    for (const surface of manifest.surfaces ?? []) {
+        assertNotOfficialContract(manifest.id, surface.id, 'surfaces');
+    }
+    const rendererGroups: [string, Record<string, { contractId?: string } | undefined> | undefined][] = [
+        ['businessRenderers', manifest.businessRenderers],
+        ['fallbackRenderers', manifest.fallbackRenderers]
+    ];
+    for (const [where, renderers] of rendererGroups) {
+        for (const [key, renderer] of Object.entries(renderers ?? {})) {
+            assertNotOfficialContract(manifest.id, key, where);
+            assertNotOfficialContract(manifest.id, renderer?.contractId, where);
+        }
     }
 };
 

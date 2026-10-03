@@ -26,4 +26,10 @@ describe('SurfaceOutlet boundary', () => {
         expect(source).toContain('deep: true');
         expect(source).toContain('isSurfaceValueEquivalent');
     });
+
+    it('rebuilds when the surface registry changes', () => {
+        const source = readFileSync(outletPath, 'utf8');
+
+        expect(source).toContain('surfaceRegistry.version');
+    });
 });

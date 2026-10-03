@@ -90,9 +90,10 @@ export interface DesktopExperienceRuntimeDependencies {
     conversation: ConversationDomainService;
     generation: GenerationDomainService;
     character: DesktopCharacterRuntime;
-    activity: Pick<DesktopSurfaceService, 'launchActivity'>;
-    feedback: Pick<HostInteractionService, 'confirm' | 'showToast'>;
-    chatPresentationCommands: Pick<ChatPresentationCommandService, 'subscribe'>;
+    // timeline / activity 是挂在 lwApi.services 上的共享无状态实例，由外部注入；
+    // 本类不拥有它们，dispose 也不会销毁。
+    timeline: DesktopTimelineRuntime;
+    activity: DesktopActivityRuntime;
 }
 
 export class DesktopExperienceRuntime {
@@ -107,12 +108,8 @@ export class DesktopExperienceRuntime {
         this.conversation = dependencies.conversation;
         this.generation = dependencies.generation;
         this.character = dependencies.character;
-        this.timeline = new DesktopTimelineRuntime(dependencies.conversation);
-        this.activity = new DesktopActivityRuntime(
-            dependencies.activity,
-            dependencies.feedback,
-            dependencies.chatPresentationCommands
-        );
+        this.timeline = dependencies.timeline;
+        this.activity = dependencies.activity;
     }
 
     dispose(): void {

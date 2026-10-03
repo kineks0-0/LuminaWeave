@@ -45,6 +45,7 @@ import {
     type SendMessageOptions
 } from './services/GenerationDomainService.js';
 import { settingsDomainService, type SettingsDomainService } from './services/SettingsDomainService.js';
+import { DesktopActivityRuntime, DesktopTimelineRuntime } from './services/DesktopExperienceRuntime.js';
 import { ChatPresentationCommandService } from './services/ChatPresentationCommandService.js';
 import type { DesktopModeManifest } from '../desktop-modes/core/types.js';
 
@@ -83,6 +84,8 @@ export interface LuminaWeaveDomainServices {
     generation: GenerationDomainService;
     settings: SettingsDomainService;
     chatPresentationCommands: ChatPresentationCommandService;
+    timeline: DesktopTimelineRuntime;
+    activity: DesktopActivityRuntime;
 }
 
 /**
@@ -322,7 +325,9 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             conversation: this.conversation,
             generation: this.generation,
             settings: this.settings,
-            chatPresentationCommands: this.chatPresentationCommands
+            chatPresentationCommands: this.chatPresentationCommands,
+            timeline: new DesktopTimelineRuntime(this.conversation),
+            activity: new DesktopActivityRuntime(this.desktopSurface, this.host, this.chatPresentationCommands)
         };
         this.registeredPanels = this.desktopSurface.registeredPanels;
 
@@ -987,8 +992,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         this.desktopSurface.registerPanel(id, component, config);
     }
 
-    registerDesktopMode(manifest: DesktopModeManifest) {
-        this.desktopSurface.registerDesktopMode(manifest);
+    registerDesktopMode(manifest: DesktopModeManifest): () => void {
+        return this.desktopSurface.registerDesktopMode(manifest);
     }
 
     listDesktopModes() {

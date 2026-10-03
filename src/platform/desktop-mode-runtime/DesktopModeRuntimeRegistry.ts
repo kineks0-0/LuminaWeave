@@ -1,4 +1,4 @@
-import { markRaw } from 'vue';
+import { markRaw, shallowReactive } from 'vue';
 import type {
     DesktopCompositionNode,
     DesktopCompositionViewport
@@ -14,7 +14,9 @@ import {
 import type { DesktopModeRuntimeDescriptor } from './types.js';
 
 export class DesktopModeRuntimeRegistry {
-    private readonly modes = new Map<string, DesktopModeRuntimeDescriptor>();
+    // 响应式 Map：同一 tick 内注销再用同 id 注册时，读取 get/list/resolveComposition 的 computed 要能重新计算。
+    private readonly modes = shallowReactive(new Map<string, DesktopModeRuntimeDescriptor>());
+    private readonly overrideDisposers = new Map<string, () => void>();
 
     constructor(private readonly surfaces: SurfaceRegistry = surfaceRegistry) {}
 
@@ -64,8 +66,16 @@ export class DesktopModeRuntimeRegistry {
             shellRenderer: manifest.shellRenderer ? markRaw(manifest.shellRenderer) : undefined
         };
 
-        this.surfaces.registerDesktopOverrides(manifest.id, normalizedOverrides);
+        this.overrideDisposers.set(manifest.id, this.surfaces.registerDesktopOverrides(manifest.id, normalizedOverrides));
         this.modes.set(manifest.id, normalizedManifest);
+    }
+
+    /** 删除模式描述并撤销它登记的 surface overrides；未注册时返回 false。 */
+    unregister(desktopModeId: string): boolean {
+        if (!this.modes.delete(desktopModeId)) return false;
+        this.overrideDisposers.get(desktopModeId)?.();
+        this.overrideDisposers.delete(desktopModeId);
+        return true;
     }
 
     get(desktopModeId: string): DesktopModeRuntimeDescriptor | undefined {
@@ -89,6 +99,7 @@ export class DesktopModeRuntimeRegistry {
 
     clearForTests(): void {
         this.modes.clear();
+        this.overrideDisposers.clear();
         this.surfaces.clearDesktopOverridesForTests();
     }
 }

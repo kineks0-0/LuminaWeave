@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import { ConversationDomainService } from '../ConversationDomainService.js';
-import { DesktopExperienceRuntime } from '../DesktopExperienceRuntime.js';
+import { DesktopActivityRuntime, DesktopExperienceRuntime, DesktopTimelineRuntime } from '../DesktopExperienceRuntime.js';
 import { GenerationDomainService } from '../GenerationDomainService.js';
 import type { CharacterChannelState } from '../../../types/ConversationContextTypes.js';
 
@@ -93,9 +93,12 @@ describe('DesktopExperienceRuntime', () => {
             conversation,
             generation,
             character,
-            activity: { launchActivity },
-            feedback: { confirm, showToast },
-            chatPresentationCommands: { subscribe: subscribeChatPresentationCommands }
+            timeline: new DesktopTimelineRuntime(conversation),
+            activity: new DesktopActivityRuntime(
+                { launchActivity },
+                { confirm, showToast },
+                { subscribe: subscribeChatPresentationCommands }
+            )
         });
         const intent = {
             id: 'chat',
@@ -143,13 +146,17 @@ describe('DesktopExperienceRuntime', () => {
             toggleGroupSessionExpansion: vi.fn(),
             dispose: vi.fn()
         };
+        const conversation = createConversation();
         const runtime = new DesktopExperienceRuntime({
-            conversation: createConversation(),
+            conversation,
             generation: createGeneration(),
             character,
-            activity: { launchActivity: vi.fn() },
-            feedback: { confirm: vi.fn(), showToast: vi.fn() },
-            chatPresentationCommands: { subscribe: vi.fn(() => vi.fn()) }
+            timeline: new DesktopTimelineRuntime(conversation),
+            activity: new DesktopActivityRuntime(
+                { launchActivity: vi.fn() },
+                { confirm: vi.fn(), showToast: vi.fn() },
+                { subscribe: vi.fn(() => vi.fn()) }
+            )
         });
 
         runtime.dispose();

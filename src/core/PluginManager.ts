@@ -1,4 +1,4 @@
-import { shallowReactive, markRaw } from 'vue';
+import { shallowReactive, shallowRef, markRaw, type Ref } from 'vue';
 import { LuminaPlugin, SettingDefinition } from '../types/plugin.js';
 import { lwStorage } from '../api/storage.js';
 import { pluginDomainRegistry } from '../platform/plugin/PluginDomainRegistry.js';
@@ -32,6 +32,13 @@ export class PluginManager {
     } as Record<string, LuminaPlugin[]>);
 
     public registeredSettings: Record<string, Record<string, SettingDefinition>> = shallowReactive({} as Record<string, Record<string, SettingDefinition>>);
+
+    private readonly revision = shallowRef(0);
+    /**
+     * 插件条目对外可见性变化（暴露/撤销）时递增，供响应式消费者重新计算；只增不减。
+     * 注意：延迟暴露期间 settings 已写入 registeredSettings，但版本号要等 expose() 时才递增。
+     */
+    public readonly registrationVersion: Readonly<Ref<number>> = this.revision;
 
     private readonly scopes = new Map<string, PluginRegistrationScope>();
     private readonly initializedPluginIds = new Set<string>();
@@ -256,16 +263,34 @@ export class PluginManager {
 
     /** 注册插件，并确保平台 manifest 完整落库后再暴露旧插件入口；返回可撤销句柄。 */
     register(plugin: LuminaPlugin): RegistrationHandle | undefined {
+        return this.registerInternal(plugin, false)?.handle;
+    }
+
+    /**
+     * deferExposure 仅供 registerAndInitialize 使用：平台 manifest 立即生效，
+     * 旧入口（plugins / slots）封装成 expose，由调用方在 init 成功后调用。
+     */
+    private registerInternal(
+        plugin: LuminaPlugin,
+        deferExposure: boolean
+    ): { handle: RegistrationHandle; expose: () => void } | undefined {
         if (!plugin.id) {
             console.error('[LuminaWeave PluginManager] Plugin must have an id.');
             return undefined;
         }
 
         const existing = this.plugins[plugin.id];
+        const existingScope = this.scopes.get(plugin.id);
         if (existing) {
-            const existingScope = this.scopes.get(plugin.id);
             // 只有同一对象的重复注册才拿回句柄；异对象同 id 不授予所有权。
-            return existing === plugin && existingScope ? this.createHandle(plugin.id, existingScope) : undefined;
+            return existing === plugin && existingScope
+                ? { handle: this.createHandle(plugin.id, existingScope), expose: () => undefined }
+                : undefined;
+        }
+        // 延迟暴露的运行时插件在 init 期间没有 plugins 条目，但 scope 已占位。
+        if (existingScope) {
+            console.warn(`[LuminaWeave PluginManager] Plugin is still initializing, registration ignored: ${plugin.id}`);
+            return undefined;
         }
 
         if (plugin.component) {
@@ -280,15 +305,13 @@ export class PluginManager {
         }
 
         const scope = new PluginRegistrationScope(plugin.id);
-        try {
-            if (plugin.platformManifest) {
-                this.registerPlatformManifest(plugin.platformManifest, scope);
-            }
-
-            // 平台注册完整成功后才暴露旧插件入口，避免两套注册表状态分裂。
+        const expose = (): void => {
             this.plugins[plugin.id] = plugin;
             scope.add(() => {
-                if (this.plugins[plugin.id] === plugin) delete this.plugins[plugin.id];
+                if (this.plugins[plugin.id] === plugin) {
+                    delete this.plugins[plugin.id];
+                    this.revision.value += 1;
+                }
             });
 
             getPluginNavigationSlots(plugin).forEach(slot => {
@@ -302,6 +325,15 @@ export class PluginManager {
                     this.slots[slot] = this.slots[slot].filter(entry => entry !== plugin);
                 });
             });
+            this.revision.value += 1;
+        };
+        try {
+            if (plugin.platformManifest) {
+                this.registerPlatformManifest(plugin.platformManifest, scope);
+            }
+
+            // 平台注册完整成功后才暴露旧插件入口，避免两套注册表状态分裂。
+            if (!deferExposure) expose();
 
             if (plugin.settingsManifest) {
                 this.setRegisteredSettings(plugin.id, plugin.settingsManifest, scope);
@@ -313,7 +345,7 @@ export class PluginManager {
 
         this.scopes.set(plugin.id, scope);
         console.log(`[LuminaWeave PluginManager] Plugin registered: ${plugin.id}`);
-        return this.createHandle(plugin.id, scope);
+        return { handle: this.createHandle(plugin.id, scope), expose };
     }
 
     /** 按相反顺序撤销插件的全部注册；插件未注册时返回 false。 */
@@ -331,19 +363,21 @@ export class PluginManager {
      * 运行时注册：注册后立即初始化，初始化失败时整体回滚并抛出（ADR-0005 决策 11）。
      * 内置插件仍由 initializeAllPlugins 初始化，失败时只记录日志。
      * init 内经 context 做的全局注册（Prompt/XML/Memory/Panel/事件）登记在插件作用域内，回滚时一并撤销；
-     * 绕过 context 的全局注册不会回滚。init 期间插件已对外可见。
+     * 绕过 context 的全局注册不会回滚。插件在 init 成功后才对外可见（plugins / slots），init 期间不可见。
      */
     async registerAndInitialize(plugin: LuminaPlugin): Promise<RegistrationHandle> {
         if (!plugin.id) {
             throw new Error('[LuminaWeave PluginManager] Plugin must have an id.');
         }
-        if (this.plugins[plugin.id]) {
+        // scopes 在 init 期间就占位，能挡住尚未暴露的同 id 并发注册。
+        if (this.plugins[plugin.id] || this.scopes.has(plugin.id)) {
             throw new Error(`[LuminaWeave PluginManager] Duplicate plugin id: ${plugin.id}`);
         }
-        const handle = this.register(plugin);
-        if (!handle) {
+        const registration = this.registerInternal(plugin, true);
+        if (!registration) {
             throw new Error(`[LuminaWeave PluginManager] Failed to register plugin: ${plugin.id}`);
         }
+        const { handle, expose } = registration;
         const scope = this.scopes.get(plugin.id);
         this.initializedPluginIds.add(plugin.id);
         try {
@@ -361,6 +395,7 @@ export class PluginManager {
         if (!scope || scope.isDisposed) {
             throw new Error(`[LuminaWeave PluginManager] Plugin was unregistered during init: ${plugin.id}`);
         }
+        expose();
         return handle;
     }
 

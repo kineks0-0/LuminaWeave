@@ -1,3 +1,4 @@
+import { shallowRef } from 'vue';
 import { z } from 'zod';
 import type {
     SurfaceContractDefinition,
@@ -125,6 +126,12 @@ export class SurfaceRegistry {
     private readonly businessRenderers = new Map<SurfaceContractId, SurfaceRendererDefinitionUnion[]>();
     private readonly desktopOverrides = new Map<DesktopOverrideKey, SurfaceRendererDefinitionUnion[]>();
     private emptyRenderer: EmptySurfaceRendererDefinition | null = null;
+    private readonly revision = shallowRef(0);
+
+    /** 注册表内容每次变化（注册或撤销）递增；响应式消费者读取它即可在变化后重新计算。 */
+    get version(): number {
+        return this.revision.value;
+    }
 
     private assertContractMetadataCanRegister(contract: SurfaceContractDefinitionUnion): void {
         assertValidContractRegistration(contract);
@@ -277,7 +284,12 @@ export class SurfaceRegistry {
         (batch.defaultRenderers || []).forEach(renderer => append(this.defaultRenderers, renderer, 'core-default'));
         (batch.businessRenderers || []).forEach(renderer => append(this.businessRenderers, renderer, 'plugin-business'));
 
+        this.revision.value += 1;
+
+        let disposed = false;
         return () => {
+            if (disposed) return;
+            disposed = true;
             [...appended].reverse().forEach(({ target, renderer }) => this.removeRenderer(target, renderer));
             [...contractChanges].reverse().forEach(change => {
                 // 只撤销仍由本批次写入的定义，避免覆盖之后的注册。
@@ -289,6 +301,7 @@ export class SurfaceRegistry {
                     this.contracts.delete(change.id);
                 }
             });
+            this.revision.value += 1;
         };
     }
 
@@ -354,14 +367,33 @@ export class SurfaceRegistry {
         });
     }
 
-    registerDesktopOverrides(desktopModeId: string, renderers: SurfaceRendererDefinitionUnion[]): void {
+    /** 返回撤销函数：按引用移除本次追加的 override。 */
+    registerDesktopOverrides(desktopModeId: string, renderers: SurfaceRendererDefinitionUnion[]): RegistrationDisposer {
         this.assertCanRegisterDesktopOverrides(desktopModeId, renderers);
+        const added: Array<{ key: DesktopOverrideKey; renderer: SurfaceRendererDefinitionUnion }> = [];
         renderers.forEach(renderer => {
             const key = createDesktopOverrideKey(desktopModeId, renderer.contractId);
             const normalized = { ...renderer, kind: 'desktop-override' } satisfies SurfaceRendererDefinitionUnion;
             const registeredRenderers = this.desktopOverrides.get(key);
             this.desktopOverrides.set(key, [...(registeredRenderers || []), normalized]);
+            added.push({ key, renderer: normalized });
         });
+        this.revision.value += 1;
+
+        let disposed = false;
+        return () => {
+            if (disposed) return;
+            disposed = true;
+            added.forEach(({ key, renderer }) => {
+                const remaining = (this.desktopOverrides.get(key) || []).filter(entry => entry !== renderer);
+                if (remaining.length > 0) {
+                    this.desktopOverrides.set(key, remaining);
+                } else {
+                    this.desktopOverrides.delete(key);
+                }
+            });
+            this.revision.value += 1;
+        };
     }
 
     clearDesktopOverridesForTests(): void {
@@ -377,6 +409,7 @@ export class SurfaceRegistry {
             );
         }
         this.emptyRenderer = { ...renderer, kind: 'empty' };
+        this.revision.value += 1;
     }
 
     getContract<K extends SurfaceContractId>(contractId: K): SurfaceContractDefinition<K> | undefined {

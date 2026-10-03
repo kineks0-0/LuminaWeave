@@ -39,7 +39,11 @@ const createDeps = () => {
                 calls.push(`panel+${id}`);
                 return { id, component, config };
             }),
-            unregisterPanel: vi.fn((id: string) => { calls.push(`panel-${id}`); })
+            unregisterPanel: vi.fn((id: string) => { calls.push(`panel-${id}`); }),
+            registerDesktopMode: vi.fn((manifest: { id: string }) => {
+                calls.push(`mode+${manifest.id}`);
+                return () => { calls.push(`mode-${manifest.id}`); };
+            })
         },
         events: {
             on: vi.fn((event: string) => { calls.push(`on+${event}`); }),
@@ -146,5 +150,17 @@ describe('createPluginInitContext', () => {
         scope.dispose();
 
         expect(deps.memoryManager.unregisterProvider).toHaveBeenCalledTimes(1);
+    });
+
+    it('registers desktop modes into the scope and revokes them on dispose', () => {
+        const { deps, calls } = createDeps();
+        const scope = new PluginRegistrationScope('p-mode');
+        const context = createPluginInitContext('p-mode', scope, deps);
+
+        context.desktopModes.register({ id: 'ctx-mode' } as never);
+        expect(calls).toEqual(['mode+ctx-mode']);
+
+        scope.dispose();
+        expect(calls).toEqual(['mode+ctx-mode', 'mode-ctx-mode']);
     });
 });

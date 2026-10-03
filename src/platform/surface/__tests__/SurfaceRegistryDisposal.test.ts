@@ -1,4 +1,4 @@
-import { defineComponent } from 'vue';
+import { computed, defineComponent } from 'vue';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { SurfaceRegistry } from '../SurfaceRegistry.js';
@@ -78,5 +78,78 @@ describe('SurfaceRegistry registration disposal', () => {
         disposeFirst();
 
         expect(registry.listRenderers('plugin-business').map(entry => entry.ownerId)).toEqual(['second']);
+    });
+
+    describe('reactive version', () => {
+        const contract = {
+            id: 'test.disposal.owned' as const,
+            ownerPluginId: 'owner',
+            inputSchema: z.object({}).strict()
+        };
+
+        it('bumps on batch registration and on its disposer', () => {
+            const registry = new SurfaceRegistry();
+            const start = registry.version;
+
+            const dispose = registry.registerBatch({ contracts: [contract] });
+            expect(registry.version).toBe(start + 1);
+
+            dispose();
+            expect(registry.version).toBe(start + 2);
+        });
+
+        it('bumps on desktop overrides and removes them by reference in the disposer', () => {
+            const registry = new SurfaceRegistry();
+            registry.registerContract(contract);
+            const start = registry.version;
+            const override = renderer('test.disposal.owned', 'owner');
+
+            const dispose = registry.registerDesktopOverrides('mode-a', [override]);
+            expect(registry.version).toBe(start + 1);
+            expect(registry.resolve({ contractId: 'test.disposal.owned', desktopModeId: 'mode-a' }).source)
+                .toBe('desktop-override');
+
+            dispose();
+            dispose();
+            expect(registry.version).toBe(start + 2);
+            expect(() => registry.resolve({ contractId: 'test.disposal.owned', desktopModeId: 'mode-a' }))
+                .toThrow();
+        });
+
+        it('keeps other overrides of the same mode when one disposer runs', () => {
+            const registry = new SurfaceRegistry();
+            registry.registerContract(contract);
+            const disposeFirst = registry.registerDesktopOverrides('mode-a', [renderer('test.disposal.owned', 'one', 'v1')]);
+            registry.registerDesktopOverrides('mode-a', [renderer('test.disposal.owned', 'two', 'v2')]);
+
+            disposeFirst();
+
+            expect(registry.resolve({
+                contractId: 'test.disposal.owned',
+                desktopModeId: 'mode-a',
+                preferredVariant: 'v2'
+            }).renderer.ownerId).toBe('two');
+        });
+
+        it('bumps when an empty renderer is registered', () => {
+            const registry = new SurfaceRegistry();
+            const start = registry.version;
+
+            registry.registerEmptyRenderer({ contractId: '__empty__', component: Stub, ownerId: 'owner', kind: 'empty' });
+
+            expect(registry.version).toBe(start + 1);
+        });
+
+        it('invalidates computed values that read the version', () => {
+            const registry = new SurfaceRegistry();
+            const hasContract = computed(() => registry.version >= 0 && registry.hasContract('test.disposal.owned'));
+            expect(hasContract.value).toBe(false);
+
+            const dispose = registry.registerBatch({ contracts: [contract] });
+            expect(hasContract.value).toBe(true);
+
+            dispose();
+            expect(hasContract.value).toBe(false);
+        });
     });
 });

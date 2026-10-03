@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { computed } from 'vue';
+import { describe, expect, it, vi } from 'vitest';
 import {
     ACTIVE_DESKTOP_MODE_STORAGE_KEY,
     getActiveDesktopModeIdFromSettings,
@@ -8,6 +9,11 @@ import {
     getDesktopModeShell,
     listDesktopModes,
     registerDesktopMode,
+    unregisterDesktopMode,
+    onDesktopModeUnregistered,
+    desktopModeRegistrationVersion,
+    getDesktopMode,
+    resolveRegisteredDesktopModeId,
     resolveSurfaceSkin,
     resolveDesktopModeValues,
 } from '../registry.js';
@@ -170,5 +176,70 @@ describe('desktopModeRegistry', () => {
             : desktopModeSetting?.options || [];
 
         expect(options.some(option => option.value === customId)).toBe(true);
+    });
+
+    describe('unregistration', () => {
+        const createMode = (id: string): DesktopModeManifest => ({
+            id,
+            name: id,
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 1,
+                desktop: { id: `${id}-d`, kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: `${id}-m`, kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            }
+        });
+
+        it('removes only the same manifest object, notifies listeners and bumps the version', () => {
+            const mode = createMode('unreg-mode-a');
+            registerDesktopMode(mode);
+            const listener = vi.fn();
+            const stop = onDesktopModeUnregistered(listener);
+            try {
+                const before = desktopModeRegistrationVersion.value;
+
+                expect(unregisterDesktopMode(mode.id, createMode(mode.id))).toBe(false);
+                expect(getDesktopMode(mode.id)).toBe(mode);
+                expect(desktopModeRegistrationVersion.value).toBe(before);
+
+                expect(unregisterDesktopMode(mode.id, mode)).toBe(true);
+                expect(getDesktopMode(mode.id)).toBeUndefined();
+                expect(listener).toHaveBeenCalledWith(mode);
+                expect(desktopModeRegistrationVersion.value).toBe(before + 1);
+            } finally {
+                stop();
+                unregisterDesktopMode(mode.id, mode);
+            }
+        });
+
+        it('bumps the version on registration', () => {
+            const before = desktopModeRegistrationVersion.value;
+            const mode = createMode('unreg-mode-b');
+            registerDesktopMode(mode);
+            expect(desktopModeRegistrationVersion.value).toBe(before + 1);
+            unregisterDesktopMode(mode.id, mode);
+        });
+
+        it('refuses to unregister built-in modes', () => {
+            const classic = getDesktopMode('classic')!;
+            expect(() => unregisterDesktopMode('classic', classic)).toThrow(/built-in/i);
+            expect(getDesktopMode('classic')).toBe(classic);
+        });
+
+        it('falls back to classic for unregistered persisted ids without rewriting them', () => {
+            const mode = createMode('unreg-mode-c');
+            const settings = { [ACTIVE_DESKTOP_MODE_STORAGE_KEY]: mode.id };
+            const resolved = computed(() => resolveRegisteredDesktopModeId(getActiveDesktopModeIdFromSettings(settings)));
+            try {
+                expect(resolved.value).toBe('classic');
+                registerDesktopMode(mode);
+                expect(resolved.value).toBe(mode.id);
+                unregisterDesktopMode(mode.id, mode);
+                expect(resolved.value).toBe('classic');
+                expect(getActiveDesktopModeIdFromSettings(settings)).toBe(mode.id);
+            } finally {
+                unregisterDesktopMode(mode.id, mode);
+            }
+        });
     });
 });

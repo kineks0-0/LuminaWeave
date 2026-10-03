@@ -1,4 +1,4 @@
-import { defineComponent } from 'vue';
+import { computed, defineComponent } from 'vue';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { DesktopModeRuntimeRegistry } from '../DesktopModeRuntimeRegistry.js';
 import { desktopModeRuntimeRegistry } from '../DesktopModeRuntimeRegistry.js';
@@ -7,8 +7,9 @@ import { SurfaceRegistry } from '../../surface/SurfaceRegistry.js';
 import { OFFICIAL_SURFACE_INPUT_SCHEMAS } from '../../surface/officialContracts.js';
 import { initializeSurfaceRuntime } from '../../surface/initializeSurfaceRuntime.js';
 import type { SurfaceRendererDefinition } from '../../surface/types.js';
-import { getDesktopMode, registerDesktopMode } from '../../../desktop-modes/core/registry.js';
+import { getDesktopMode, registerDesktopMode, unregisterDesktopMode } from '../../../desktop-modes/core/registry.js';
 import type { DesktopModeManifest } from '../../../desktop-modes/core/types.js';
+import type { DesktopModeRuntimeDescriptor } from '../types.js';
 
 vi.mock('../../../shell/modes/telegram/TelegramUserInfoPanel.vue', () => ({
     default: defineComponent({ name: 'TelegramUserInfoPanelStub', template: '<div />' })
@@ -33,6 +34,27 @@ const createChatRenderer = (ownerId: string): SurfaceRendererDefinition<'chat.ma
     ownerId,
     kind: 'desktop-override'
 });
+
+const createTestDescriptor = (
+    id: string,
+    overrides: Partial<DesktopModeRuntimeDescriptor> = {}
+): DesktopModeRuntimeDescriptor => {
+    const composition = {
+        version: 1 as const,
+        desktop: { id: `${id}-desktop`, kind: 'activity-slot' as const, size: 'fill' as const, visibility: 'visible' as const },
+        mobile: { id: `${id}-mobile`, kind: 'activity-slot' as const, size: 'fill' as const, visibility: 'visible' as const }
+    };
+    return {
+        manifest: { id, name: id, shell: { kind: 'traditional' }, composition },
+        id,
+        name: id,
+        shellKind: 'traditional',
+        navigationModel: { id: `${id}.navigation` },
+        interactionPolicy: { id: `${id}.policy` },
+        composition,
+        ...overrides
+    };
+};
 
 describe('DesktopModeRuntimeRegistry', () => {
     beforeAll(() => {
@@ -270,7 +292,7 @@ describe('DesktopModeRuntimeRegistry', () => {
         initializeDesktopModeRuntime();
 
         const customId = `runtime-custom-${Math.random().toString(36).slice(2, 8)}`;
-        registerDesktopMode({
+        const customManifest: DesktopModeManifest = {
             id: customId,
             name: 'Runtime Custom Desktop',
             description: 'Verifies single-source desktop mode registration.',
@@ -294,15 +316,19 @@ describe('DesktopModeRuntimeRegistry', () => {
                     ]
                 }
             }
-        });
+        };
+        registerDesktopMode(customManifest);
+        try {
+            const runtimeMode = desktopModeRuntimeRegistry.get(customId);
 
-        const runtimeMode = desktopModeRuntimeRegistry.get(customId);
-
-        expect(runtimeMode?.manifest.id).toBe(customId);
-        expect(runtimeMode?.shellKind).toBe('freeform');
-        expect(runtimeMode?.shellRenderer).toBeDefined();
-        expect(runtimeMode?.interactionPolicy.supportsOverlappingWindows).toBe(true);
-        expect(runtimeMode?.settingsSchema?.density?.default).toBe('compact');
+            expect(runtimeMode?.manifest.id).toBe(customId);
+            expect(runtimeMode?.shellKind).toBe('freeform');
+            expect(runtimeMode?.shellRenderer).toBeDefined();
+            expect(runtimeMode?.interactionPolicy.supportsOverlappingWindows).toBe(true);
+            expect(runtimeMode?.settingsSchema?.density?.default).toBe('compact');
+        } finally {
+            unregisterDesktopMode(customId, customManifest);
+        }
     });
 
     it('does not retain a public desktop mode when composition preflight fails', () => {
@@ -366,5 +392,86 @@ describe('DesktopModeRuntimeRegistry', () => {
             .toThrow('[DesktopCompositionRuntime] Invalid composition layout');
         expect(getDesktopMode(customId)).toBeUndefined();
         expect(desktopModeRuntimeRegistry.get(customId)).toBeUndefined();
+    });
+
+    it('unregisters runtime descriptors and their surface overrides', () => {
+        const isolated = new SurfaceRegistry();
+        isolated.registerContract({ id: 'settings.root', inputSchema: OFFICIAL_SURFACE_INPUT_SCHEMAS['settings.root'] });
+        const registry = new DesktopModeRuntimeRegistry(isolated);
+        registry.register(createTestDescriptor('unreg-rt', {
+            componentOverrides: { 'settings.root': createRenderer('unreg-rt') }
+        }));
+        expect(isolated.resolve({ contractId: 'settings.root', desktopModeId: 'unreg-rt' }).source).toBe('desktop-override');
+
+        registry.unregister('unreg-rt');
+
+        expect(registry.get('unreg-rt')).toBeUndefined();
+        expect(() => isolated.resolve({ contractId: 'settings.root', desktopModeId: 'unreg-rt' })).toThrow();
+    });
+
+    it('drops the runtime descriptor when a custom mode is unregistered from the public registry', () => {
+        desktopModeRuntimeRegistry.clearForTests();
+        initializeDesktopModeRuntime();
+        const customId = `runtime-unreg-${Math.random().toString(36).slice(2, 8)}`;
+        const manifest: DesktopModeManifest = {
+            id: customId,
+            name: 'Unreg',
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 1,
+                desktop: { id: `${customId}-d`, kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: `${customId}-m`, kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            }
+        };
+        registerDesktopMode(manifest);
+        try {
+            expect(desktopModeRuntimeRegistry.get(customId)).toBeDefined();
+        } finally {
+            unregisterDesktopMode(customId, manifest);
+        }
+        expect(desktopModeRuntimeRegistry.get(customId)).toBeUndefined();
+    });
+
+    it('is reactive: a computed reading a descriptor sees unregister and same-id re-register', () => {
+        const registry = new DesktopModeRuntimeRegistry(new SurfaceRegistry());
+        const first = createTestDescriptor('reactive-rt');
+        registry.register(first);
+        const descriptor = computed(() => registry.get('reactive-rt'));
+        const composition = computed(() => registry.resolveComposition('reactive-rt', 'desktop').id);
+        expect(descriptor.value?.id).toBe('reactive-rt');
+        expect(composition.value).toBe('reactive-rt-desktop');
+
+        registry.unregister('reactive-rt');
+        expect(descriptor.value).toBeUndefined();
+
+        const second = createTestDescriptor('reactive-rt');
+        // register 以 manifest.composition 为准，两处都改成 v2。
+        const v2Composition = {
+            ...second.composition,
+            desktop: { id: 'reactive-rt-desktop-v2', kind: 'activity-slot' as const, size: 'fill' as const, visibility: 'visible' as const }
+        };
+        second.composition = v2Composition;
+        second.manifest = { ...second.manifest, composition: v2Composition };
+        registry.register(second);
+        expect(descriptor.value).not.toBe(first);
+        expect(descriptor.value?.composition.desktop.id).toBe('reactive-rt-desktop-v2');
+        expect(composition.value).toBe('reactive-rt-desktop-v2');
+    });
+
+    it('applies the new override after unregister and same-id re-register', () => {
+        const isolated = new SurfaceRegistry();
+        isolated.registerContract({ id: 'settings.root', inputSchema: OFFICIAL_SURFACE_INPUT_SCHEMAS['settings.root'] });
+        const registry = new DesktopModeRuntimeRegistry(isolated);
+        registry.register(createTestDescriptor('chain-rt', {
+            componentOverrides: { 'settings.root': createRenderer('old-owner') }
+        }));
+
+        registry.unregister('chain-rt');
+        registry.register(createTestDescriptor('chain-rt', {
+            componentOverrides: { 'settings.root': createRenderer('new-owner') }
+        }));
+
+        expect(isolated.resolve({ contractId: 'settings.root', desktopModeId: 'chain-rt' }).renderer.ownerId)
+            .toBe('new-owner');
     });
 });

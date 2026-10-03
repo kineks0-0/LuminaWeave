@@ -514,6 +514,17 @@ export const useWorkspaceManager = ({
       .forEach((window) => closeWorkspaceWindow(window.id));
   };
 
+  /**
+   * 插件或面板卸载后，只清理属于这些 id、且应用目录里已不存在的窗口记录。
+   * 启动期的全量 reconcileWorkspaceState 不动（运行时插件尚未注册时不能误删它们的窗口）。
+   */
+  const closeDisappearedApps = (ids: string[]) => {
+    const appIds = ids
+      .flatMap((id) => [`plugin:${id}`, `widget:${id}`, `panel:${id}`])
+      .filter((appId) => !workspaceAppMap.value.has(appId));
+    closeWorkspaceApps(appIds);
+  };
+
   const openWorkspaceApp = (
     appId: string,
     options: { forceNewStage?: boolean; allowDuplicate?: boolean; stageId?: string } = {}
@@ -788,6 +799,7 @@ export const useWorkspaceManager = ({
     handleWorkspaceDockOpen,
     openWorkspaceApp,
     closeWorkspaceApps,
+    closeDisappearedApps,
     closeTab,
     getWorkspaceAppIdForMainTab,
     workspaceAppMap

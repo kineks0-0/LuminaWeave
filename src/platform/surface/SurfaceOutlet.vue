@@ -149,7 +149,8 @@ const rebuildSurface = (): void => {
 };
 
 watch(
-  () => [props.contractId, props.input, props.desktopModeId, props.variant, props.tokens, props.cssVars],
+  // 注册表变化（运行时插件注册/卸载 renderer）也要重建；短路逻辑保证无关变化的重建代价很低。
+  () => [props.contractId, props.input, props.desktopModeId, props.variant, props.tokens, props.cssVars, surfaceRegistry.version],
   rebuildSurface,
   { immediate: true, deep: true }
 );

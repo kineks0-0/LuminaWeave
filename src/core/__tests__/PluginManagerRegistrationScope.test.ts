@@ -7,6 +7,7 @@ import { pluginDomainRegistry } from '../../platform/plugin/PluginDomainRegistry
 import type { PluginInitContext } from '../../platform/plugin/PluginInitContext.js';
 import { createTestInitContextHarness } from './testInitContext.js';
 import { PromptSlot } from '../../api/core/hal/prompt/PromptRegistry.js';
+import { getDesktopMode } from '../../desktop-modes/core/registry.js';
 import { surfaceRegistry } from '../../platform/surface/SurfaceRegistry.js';
 import type { EmptySurfaceData, SurfaceContractSpec, SurfaceRendererDefinition } from '../../platform/surface/types.js';
 
@@ -258,11 +259,141 @@ describe('PluginManager registration scope', () => {
         expect(harness.desktopSurface.registeredPanels.has('ctx-panel-fail')).toBe(false);
     });
 
+    it('removes desktop modes registered through the context when the plugin is unregistered', async () => {
+        const manager = createManager();
+        await manager.registerAndInitialize(createFullPlugin(context => {
+            context.desktopModes.register({
+                id: 'ctx-desktop-mode',
+                name: 'Ctx Mode',
+                shell: { kind: 'traditional' },
+                composition: {
+                    version: 1,
+                    desktop: { id: 'ctx-d', kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                    mobile: { id: 'ctx-m', kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+                }
+            });
+        }));
+        expect(getDesktopMode('ctx-desktop-mode')).toBeDefined();
+
+        manager.unregister('scope-plugin');
+
+        expect(getDesktopMode('ctx-desktop-mode')).toBeUndefined();
+    });
+
     it('fails fast when no init context factory is configured', async () => {
         const manager = new PluginManager();
         managers.push(manager);
 
         await expect(manager.registerAndInitialize(createFullPlugin(vi.fn()))).rejects.toThrow('init context factory');
         expect(manager.getPlugin('scope-plugin')).toBeUndefined();
+    });
+
+    describe('deferred exposure for runtime plugins', () => {
+        const pendingInit = () => {
+            let resolveInit: () => void = () => undefined;
+            let rejectInit: (error: Error) => void = () => undefined;
+            const init = () => new Promise<void>((resolve, reject) => {
+                resolveInit = resolve;
+                rejectInit = reject;
+            });
+            return { init, resolve: () => resolveInit(), reject: (error: Error) => rejectInit(error) };
+        };
+
+        it('exposes the plugin only after init succeeds', async () => {
+            const manager = createManager();
+            const gate = pendingInit();
+            const pending = manager.registerAndInitialize(createFullPlugin(gate.init));
+
+            expect(manager.getPlugin('scope-plugin')).toBeUndefined();
+            expect(manager.getPluginsInSlot('mainView').map(plugin => plugin.id)).not.toContain('scope-plugin');
+
+            gate.resolve();
+            await pending;
+
+            expect(manager.getPlugin('scope-plugin')).toBeDefined();
+            expect(manager.getPluginsInSlot('mainView').map(plugin => plugin.id)).toContain('scope-plugin');
+            expect(manager.unregister('scope-plugin')).toBe(true);
+            expect(manager.getPluginsInSlot('mainView').map(plugin => plugin.id)).not.toContain('scope-plugin');
+        });
+
+        it('never exposes the plugin when init fails', async () => {
+            const manager = createManager();
+            const gate = pendingInit();
+            const pending = manager.registerAndInitialize(createFullPlugin(gate.init));
+            const result = pending.then(() => 'ok', (error: Error) => error.message);
+
+            gate.reject(new Error('boom'));
+
+            expect(await result).toBe('boom');
+            expect(manager.getPlugin('scope-plugin')).toBeUndefined();
+            expect(manager.getPluginsInSlot('mainView').map(plugin => plugin.id)).not.toContain('scope-plugin');
+        });
+
+        it('never exposes the plugin when it is unregistered during init', async () => {
+            const manager = createManager();
+            const gate = pendingInit();
+            const pending = manager.registerAndInitialize(createFullPlugin(gate.init));
+            const assertion = expect(pending).rejects.toThrow('unregistered during init');
+
+            manager.unregister('scope-plugin');
+            gate.resolve();
+
+            await assertion;
+            expect(manager.getPlugin('scope-plugin')).toBeUndefined();
+            expect(manager.getPluginsInSlot('mainView').map(plugin => plugin.id)).not.toContain('scope-plugin');
+        });
+
+        it('rejects a concurrent runtime registration with the same id', async () => {
+            const manager = createManager();
+            const gate = pendingInit();
+            const first = manager.registerAndInitialize(createFullPlugin(gate.init));
+            const second = manager.registerAndInitialize(createFullPlugin());
+
+            await expect(second).rejects.toThrow(/Duplicate plugin id/);
+            gate.resolve();
+            await first;
+            expect(manager.getPlugin('scope-plugin')).toBeDefined();
+        });
+    });
+
+    describe('registrationVersion', () => {
+        it('bumps when a synchronous register exposes and when unregister revokes', () => {
+            const manager = createManager();
+            const start = manager.registrationVersion.value;
+
+            manager.register(createFullPlugin());
+            expect(manager.registrationVersion.value).toBe(start + 1);
+
+            manager.unregister('scope-plugin');
+            expect(manager.registrationVersion.value).toBe(start + 2);
+        });
+
+        it('bumps once on deferred expose, not while init is pending', async () => {
+            const manager = createManager();
+            const start = manager.registrationVersion.value;
+            let resolveInit: () => void = () => undefined;
+            const pending = manager.registerAndInitialize(createFullPlugin(() => new Promise<void>(resolve => {
+                resolveInit = resolve;
+            })));
+
+            expect(manager.registrationVersion.value).toBe(start);
+            resolveInit();
+            await pending;
+            expect(manager.registrationVersion.value).toBe(start + 1);
+
+            manager.unregister('scope-plugin');
+            expect(manager.registrationVersion.value).toBe(start + 2);
+        });
+
+        it('does not change when init fails', async () => {
+            const manager = createManager();
+            const start = manager.registrationVersion.value;
+
+            await expect(manager.registerAndInitialize(createFullPlugin(() => {
+                throw new Error('nope');
+            }))).rejects.toThrow('nope');
+
+            expect(manager.registrationVersion.value).toBe(start);
+        });
     });
 });

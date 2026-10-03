@@ -37,6 +37,8 @@ import {
 import { useShellBootstrap } from './composables/shell/useShellBootstrap.js';
 import { useShellRuntimePayload } from './composables/shell/useShellRuntimePayload.js';
 import { useTelegramShell } from './composables/shell/useTelegramShell.js';
+import { shouldUpdateDesktopModeSetting } from './composables/shell/desktopModeSelection.js';
+import { useStaleUiReconciler } from './composables/shell/useStaleUiReconciler.js';
 import { useWidgetPanels } from './composables/shell/useWidgetPanels.js';
 import { useWorkspaceNavigation } from './composables/shell/useWorkspaceNavigation.js';
 import { useActivityLaunchState } from './composables/shell/useActivityLaunchState.js';
@@ -193,6 +195,7 @@ const {
   openWorkspaceApp,
   closeWorkspaceApps,
   closeTab: closeWorkspaceTab,
+  closeDisappearedApps,
   getWorkspaceAppIdForMainTab,
   workspaceAppMap
 } = useWorkspaceManager({
@@ -632,6 +635,17 @@ const closeTab = (tabId: string) => {
   closeWorkspaceTab(tabId);
 };
 
+useStaleUiReconciler({
+  getPluginIds: () => Object.keys(pluginManager.plugins),
+  getPanelIds: () => lwApi.services.desktopSurface.registeredPanels.keys(),
+  activeRightPanel,
+  activeMainTab,
+  dynamicTabs,
+  switchMainView: handleSwitchMainView,
+  closeTab,
+  onIdsDisappeared: closeDisappearedApps
+});
+
 const handleToggleWidgetPanel = (panelId: string) => {
   clearTransientActivityMetadata();
   if (layoutMode.value === 'freeform') {
@@ -748,7 +762,7 @@ const toggleWorkspaceMenu = () => {
 
 const updateDesktopMode = async (desktopModeId: string) => {
   showWorkspaceMenu.value = false;
-  if (desktopModeId === activeDesktopModeId.value) {
+  if (!shouldUpdateDesktopModeSetting(desktopModeId, activeSettings)) {
     return;
   }
   await updateSetting('lumina-settings.activeDesktopMode', desktopModeId);

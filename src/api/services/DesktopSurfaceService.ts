@@ -10,7 +10,8 @@ import type { SurfaceContractId } from '../../platform/surface/types.js';
 import {
     getDesktopMode,
     listDesktopModes,
-    registerDesktopMode
+    registerDesktopMode,
+    unregisterDesktopMode
 } from '../../desktop-modes/core/registry.js';
 import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
 
@@ -69,10 +70,19 @@ export class DesktopSurfaceService {
         this.registeredPanels.delete(id);
     }
 
-    registerDesktopMode(manifest: DesktopModeManifest) {
+    /** 返回撤销函数：只注销本次注册的 manifest（引用比较），重复调用无副作用。 */
+    registerDesktopMode(manifest: DesktopModeManifest): () => void {
         registerDesktopMode(manifest);
         this.emit('SETTINGS_CHANGED');
         this.emit('DESKTOP_MODES_CHANGED', manifest.id);
+        let disposed = false;
+        return () => {
+            if (disposed) return;
+            disposed = true;
+            if (!unregisterDesktopMode(manifest.id, manifest)) return;
+            this.emit('SETTINGS_CHANGED');
+            this.emit('DESKTOP_MODES_CHANGED', manifest.id);
+        };
     }
 
     listDesktopModes() {

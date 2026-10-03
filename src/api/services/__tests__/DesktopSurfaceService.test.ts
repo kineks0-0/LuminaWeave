@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { computed, type Component } from 'vue';
 import { z } from 'zod';
 import { DesktopSurfaceService } from '../DesktopSurfaceService.js';
+import { getDesktopMode } from '../../../desktop-modes/core/registry.js';
+import type { DesktopModeManifest } from '../../../desktop-modes/core/types.js';
 import { surfaceRegistry } from '../../../platform/surface/SurfaceRegistry.js';
 import type { EmptySurfaceData, SurfaceContractSpec } from '../../../platform/surface/types.js';
 
@@ -215,5 +217,33 @@ describe('DesktopSurfaceService panel unregistration', () => {
 
         service.unregisterPanel('panel-c');
         expect(ids.value).toEqual([]);
+    });
+
+    it('registerDesktopMode returns a disposer that unregisters the mode and emits change events', () => {
+        const emit = vi.fn();
+        const service = new DesktopSurfaceService(emit);
+        const manifest: DesktopModeManifest = {
+            id: 'svc-mode',
+            name: 'Svc',
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 1,
+                desktop: { id: 'svc-d', kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: 'svc-m', kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            }
+        };
+
+        const dispose = service.registerDesktopMode(manifest);
+        expect(getDesktopMode('svc-mode')).toBe(manifest);
+        expect(emit).toHaveBeenCalledWith('DESKTOP_MODES_CHANGED', 'svc-mode');
+        emit.mockClear();
+
+        dispose();
+        dispose();
+
+        expect(getDesktopMode('svc-mode')).toBeUndefined();
+        expect(emit).toHaveBeenCalledWith('SETTINGS_CHANGED');
+        expect(emit).toHaveBeenCalledWith('DESKTOP_MODES_CHANGED', 'svc-mode');
+        expect(emit.mock.calls.filter(call => call[0] === 'DESKTOP_MODES_CHANGED')).toHaveLength(1);
     });
 });

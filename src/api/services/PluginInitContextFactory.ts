@@ -17,7 +17,7 @@ export interface PluginInitContextDeps {
     xmlInterceptor: Pick<XMLInterceptor, 'registerXMLParser' | 'registerPatternParser'>;
     xmlTagRegistry: Pick<XMLTagRegistry, 'getDefinition' | 'resolveCanonical' | 'unregister'>;
     memoryManager: Pick<MemoryManager, 'registerProvider' | 'unregisterProvider'>;
-    desktopSurface: Pick<DesktopSurfaceService, 'registerPanel' | 'unregisterPanel'>;
+    desktopSurface: Pick<DesktopSurfaceService, 'registerPanel' | 'unregisterPanel' | 'registerDesktopMode'>;
     events: {
         on(event: string, listener: PluginEventListener): void;
         off(event: string, listener: PluginEventListener): void;
@@ -93,6 +93,13 @@ export const createPluginInitContext = (
             register(panelId, component, options) {
                 const entry = deps.desktopSurface.registerPanel(panelId, component, options);
                 return track(() => deps.desktopSurface.unregisterPanel(panelId, entry));
+            }
+        },
+        desktopModes: {
+            register(manifest) {
+                // DesktopModeManifest 目前没有 componentOverrides 字段（运行时 override 只由内置 telegram 描述符硬编码），
+                // 所以这里没有官方 contract 命名空间可检查；若将来新增该字段，需在此补校验。
+                return track(deps.desktopSurface.registerDesktopMode(manifest));
             }
         },
         events: {
