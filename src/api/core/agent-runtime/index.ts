@@ -1,3 +1,6 @@
+export * from './env/AgentExecutionEnv.js';
+export * from './env/AgentExecutionEnvWorkspace.js';
+export * from './env/JustBashExecutionEnv.js';
 export * from './events/AgentRuntimeEventBus.js';
 export * from './extensions/AgentRuntimeExtensionHost.js';
 export * from './extensions/AgentRuntimeExtensionRunner.js';
