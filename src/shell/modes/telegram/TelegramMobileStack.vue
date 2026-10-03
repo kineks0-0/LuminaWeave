@@ -17,13 +17,13 @@
     <ThemedSurfaceOutlet
       v-if="route.name === 'conversationList'"
       contract-id="conversation.sessionList"
-      :input="{ compact: true }"
+      :input="{ compact: true, onOpenSession, onStartNewChat: () => onSelectBottomNav('characters') }"
       :desktop-mode-id="activeDesktopModeId"
     />
     <ThemedSurfaceOutlet
       v-else-if="route.name === 'roleList'"
       contract-id="character.roster"
-      :input="{ compact: true }"
+      :input="{ compact: true, onOpenSession, onCreateSession }"
       :desktop-mode-id="activeDesktopModeId"
     />
     <ThemedSurfaceOutlet

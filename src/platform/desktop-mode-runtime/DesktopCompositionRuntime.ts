@@ -47,6 +47,7 @@ interface ParsedCompositionNodeLayout {
     id: string;
     size: DesktopCompositionNode['size'];
     visibility: DesktopCompositionNode['visibility'];
+    collapsesWithNavigation?: boolean;
 }
 
 interface ParsedCompositionGroupNode extends ParsedCompositionNodeLayout {
@@ -79,7 +80,8 @@ interface ParsedDesktopModeComposition {
 const nodeLayoutSchema = z.object({
     id: z.string().min(1),
     size: z.enum(['content', 'fill']),
-    visibility: z.enum(['visible', 'hidden'])
+    visibility: z.enum(['visible', 'hidden']),
+    collapsesWithNavigation: z.boolean().optional()
 });
 
 const compositionNodeSchema: z.ZodType<ParsedCompositionNode> = z.lazy(() => z.discriminatedUnion('kind', [
@@ -231,3 +233,15 @@ export const collectDesktopCompositionSurfaceIds = (
     const collected = node.children.flatMap(collectDesktopCompositionSurfaceIds);
     return [...new Set(collected)];
 };
+
+export interface DesktopCompositionDisplayState {
+    navigationCollapsed: boolean;
+}
+
+export const isDesktopCompositionNodeShown = (
+    node: DesktopCompositionNode,
+    state: DesktopCompositionDisplayState
+): boolean => (
+    node.visibility === 'visible'
+    && !(state.navigationCollapsed && node.collapsesWithNavigation === true)
+);

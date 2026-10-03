@@ -1,5 +1,12 @@
 <template>
-  <section class="character-roster-surface" :class="{ 'is-compact': input.compact }">
+  <TelegramContactList
+    v-if="context.theme.variant === 'telegram'"
+    :groups="channel.characterGroups"
+    :page="Boolean(input.compact)"
+    @open="openSession"
+    @create="createFromGroup"
+  />
+  <section v-else class="character-roster-surface" :class="{ 'is-compact': input.compact }">
     <header>
       <strong>角色</strong>
       <button type="button" title="刷新角色" aria-label="刷新角色" @click="refresh">
@@ -50,11 +57,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import type { CharacterChannelGroup } from '../../../types/ConversationContextTypes.js';
 import { ChevronDown, ChevronRight, MessageSquareText, Plus, RefreshCw } from 'lucide-vue-next';
 import {
   useSurfaceInput,
   useSurfaceRuntimeContext
 } from '../../../platform/surface/useSurfaceRuntimeContext.js';
+import TelegramContactList from '../components/telegram/TelegramContactList.vue';
 
 const input = useSurfaceInput('character.roster');
 const context = useSurfaceRuntimeContext('character.roster');
@@ -65,6 +74,10 @@ const refresh = (): void => {
   void context.value.intents.refresh();
 };
 const openSession = (sessionId: string): void => {
+  if (input.onOpenSession) {
+    input.onOpenSession(sessionId);
+    return;
+  }
   void context.value.intents.openSession(sessionId);
 };
 const createSession = (
@@ -72,7 +85,15 @@ const createSession = (
   characterName: string,
   characterAvatarUrl: string | null
 ): void => {
-  void context.value.intents.createSession({ characterId, characterName, characterAvatarUrl });
+  const target = { characterId, characterName, characterAvatarUrl };
+  if (input.onCreateSession) {
+    input.onCreateSession(target);
+    return;
+  }
+  void context.value.intents.createSession(target);
+};
+const createFromGroup = (group: CharacterChannelGroup): void => {
+  createSession(group.characterId, group.characterName, group.characterAvatarUrl);
 };
 </script>
 

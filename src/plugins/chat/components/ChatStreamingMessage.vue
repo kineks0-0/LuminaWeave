@@ -14,6 +14,7 @@
       :group-start="groupStart"
       :group-end="true"
       :time-label="timeLabel"
+      :is-group-conversation="isGroupConversation"
     >
       <template #status>
         <footer v-if="showMeta" class="chat-streaming-message__meta">
@@ -57,6 +58,7 @@ const props = defineProps<{
   defaultAvatar: string;
   groupStart: boolean;
   timeLabel: string;
+  isGroupConversation: boolean;
 }>();
 
 const emit = defineEmits<{

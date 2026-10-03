@@ -1,13 +1,14 @@
 <template>
-  <div class="chat-composer" :class="{ 'is-compact': compact }">
+  <div class="chat-composer" :class="{ 'is-compact': compact }" :data-layout="layout">
     <div v-if="viewState.isReadOnlyView" class="chat-composer__notice">
       {{ viewState.readOnlyReason }}
     </div>
-    <div class="chat-composer__input">
+    <div class="chat-composer__input" :class="{ 'has-leading': Boolean($slots.leading) }">
+      <slot name="leading" :has-draft="Boolean(draft.trim())" />
       <textarea
         ref="textarea"
         :value="draft"
-        rows="2"
+        :rows="layout === 'telegram' ? 1 : 2"
         :placeholder="effectivePlaceholder"
         :disabled="disabled"
         @keydown="handleKeydown"
@@ -26,8 +27,9 @@
       >
         <Square :size="16" fill="currentColor" />
       </button>
+      <!-- Telegram 空输入时不显示发送键（原版此处为语音键，本项目无语音功能） -->
       <button
-        v-else
+        v-else-if="layout !== 'telegram' || draft.trim()"
         type="button"
         class="chat-composer__action is-primary"
         title="发送消息"
@@ -42,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { Send, Square } from 'lucide-vue-next';
 import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
 import type { ConversationViewContext } from '../../../types/ConversationContextTypes.js';
@@ -50,10 +52,12 @@ import type {
   ChatApplicationSnapshot,
   ChatGenerationState
 } from '../application/ChatApplicationController.js';
+import type { ChatMessageLayout } from '../presentation/ChatMessageRenderPreferences.js';
 import { focusChatComposerInput } from '../presentation/ChatPresentationInteractions.js';
 import { resolveChatViewState } from '../chatViewState.js';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  layout?: ChatMessageLayout;
   context: ConversationViewContext;
   generation: ChatGenerationState;
   presentation: ChatApplicationSnapshot['presentation'];
@@ -65,7 +69,13 @@ const props = defineProps<{
   onSendMessage: (text: string) => Promise<boolean>;
   onStopGeneration: () => Promise<boolean>;
   onUpdateDraft: (text: string) => void;
-}>();
+}>(), {
+  layout: 'classic',
+  placeholder: undefined
+});
+
+/** Telegram 输入框随内容增高（单行起步，最多约 8 行），其余布局保留手动拖拽 */
+const TELEGRAM_COMPOSER_MAX_HEIGHT_PX = 200;
 
 const imeGuard = useImeSubmitGuard({ debugLabel: 'ChatComposer' });
 const textarea = ref<HTMLTextAreaElement | null>(null);
@@ -82,7 +92,26 @@ const disabled = computed(() => (
   || props.sessionSwitching
   || viewState.value.isReadOnlyView
 ));
-const effectivePlaceholder = computed(() => props.placeholder || viewState.value.inputPlaceholder);
+const effectivePlaceholder = computed(() => {
+  if (props.placeholder) return props.placeholder;
+  // Telegram 只在可正常输入时使用原版的简短提示，只读与切换中的说明保持不变
+  if (props.layout === 'telegram' && !disabled.value) return '输入消息';
+  return viewState.value.inputPlaceholder;
+});
+
+const autosize = (): void => {
+  const element = textarea.value;
+  if (!element || props.layout !== 'telegram') return;
+  element.style.height = 'auto';
+  element.style.height = `${Math.min(element.scrollHeight, TELEGRAM_COMPOSER_MAX_HEIGHT_PX)}px`;
+};
+
+watch(() => props.draft, () => void nextTick(autosize));
+watch(() => props.layout, () => {
+  if (textarea.value && props.layout !== 'telegram') textarea.value.style.height = '';
+  void nextTick(autosize);
+});
+onMounted(autosize);
 
 const sendMessage = async (): Promise<void> => {
   const text = props.draft.trim();
@@ -184,5 +213,73 @@ watch(
 .chat-composer__action:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.chat-composer__input.has-leading {
+  grid-template-columns: auto minmax(0, 1fr) 40px;
+}
+
+/* ---------- Telegram：浮动胶囊，左侧菜单键、右侧圆形发送键 ---------- */
+.chat-composer[data-layout='telegram'] .chat-composer__input {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: end;
+  border: 1px solid var(--lw-chat-floating-border, var(--lw-chat-input-border, var(--lw-border-base)));
+  border-radius: 26px;
+  background: var(--lw-chat-floating-bg, var(--lw-chat-input-surface, var(--lw-bg-surface)));
+  box-shadow: var(--lw-chat-floating-shadow, none);
+  backdrop-filter: var(--lw-chat-floating-blur, none);
+  -webkit-backdrop-filter: var(--lw-chat-floating-blur, none);
+  padding: 4px;
+}
+
+.chat-composer[data-layout='telegram'] .chat-composer__input.has-leading {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.chat-composer[data-layout='telegram'] .chat-composer__input:focus-within {
+  border-color: var(--lw-chat-floating-border, var(--lw-border-base));
+  box-shadow: var(--lw-chat-floating-shadow, none);
+}
+
+.chat-composer[data-layout='telegram'] textarea {
+  min-height: 44px;
+  max-height: 200px;
+  resize: none;
+  padding: 11px 6px 11px 12px;
+  font-size: 1.0625rem;
+  line-height: 22px;
+}
+
+.chat-composer[data-layout='telegram'] .chat-composer__input.has-leading textarea {
+  padding-left: 4px;
+}
+
+.chat-composer[data-layout='telegram'] textarea::placeholder {
+  color: var(--lw-text-muted);
+}
+
+.chat-composer[data-layout='telegram'] .chat-composer__action {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  animation: chat-composer-action-in 160ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes chat-composer-action-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.chat-composer[data-layout='telegram'] .chat-composer__notice {
+  margin: 0 12px 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-composer[data-layout='telegram'] .chat-composer__action {
+    animation: none;
+  }
 }
 </style>

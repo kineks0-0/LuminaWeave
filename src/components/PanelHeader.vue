@@ -111,7 +111,9 @@
           class="discord-channel-mark"
           :class="{ active: guildRailVisible !== false }"
           type="button"
-          title="切换 Guild Rail"
+          :title="guildRailVisible !== false ? '收起侧栏与角色列表' : '展开侧栏与角色列表'"
+          :aria-label="guildRailVisible !== false ? '收起侧栏与角色列表' : '展开侧栏与角色列表'"
+          :aria-pressed="guildRailVisible !== false"
           @click="$emit('toggleGuildRail')"
         >
           #

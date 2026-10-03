@@ -264,3 +264,41 @@ describe('Desktop composition runtime', () => {
         expect(() => surfaces.registerDesktopOverride('composable-mode', renderer)).not.toThrow();
     });
 });
+
+describe('Desktop composition navigation collapse', () => {
+    const withRosterNode = (extra: object): object => {
+        const composition = createValidComposition() as { desktop: { children: object[] } };
+        composition.desktop.children.unshift({
+            id: 'desktop-roster',
+            kind: 'surface',
+            contractId: 'chat.main',
+            input: {},
+            size: 'content',
+            visibility: 'visible',
+            ...extra
+        });
+        return composition;
+    };
+
+    it('accepts nodes that collapse with the mode navigation toggle', () => {
+        const registry = new DesktopModeRuntimeRegistry(createSurfaceRegistry());
+        registry.register(createDescriptor(withRosterNode({ collapsesWithNavigation: true })));
+        const desktop = registry.resolveComposition('composable-mode', 'desktop');
+        expect(desktop.kind === 'group' && desktop.children[0]?.collapsesWithNavigation).toBe(true);
+    });
+
+    it('rejects a non-boolean collapsesWithNavigation flag', () => {
+        const registry = new DesktopModeRuntimeRegistry(createSurfaceRegistry());
+        expect(() => registry.register(createDescriptor(withRosterNode({ collapsesWithNavigation: 'yes' }))))
+            .toThrow(compositionRuntime.DesktopCompositionRuntimeError);
+    });
+
+    it('hides only collapsible visible nodes while navigation is collapsed', () => {
+        const base = { id: 'n', kind: 'activity-slot', size: 'fill' } as const;
+        const shown = compositionRuntime.isDesktopCompositionNodeShown;
+        expect(shown({ ...base, visibility: 'visible' }, { navigationCollapsed: true })).toBe(true);
+        expect(shown({ ...base, visibility: 'visible', collapsesWithNavigation: true }, { navigationCollapsed: false })).toBe(true);
+        expect(shown({ ...base, visibility: 'visible', collapsesWithNavigation: true }, { navigationCollapsed: true })).toBe(false);
+        expect(shown({ ...base, visibility: 'hidden' }, { navigationCollapsed: false })).toBe(false);
+    });
+});

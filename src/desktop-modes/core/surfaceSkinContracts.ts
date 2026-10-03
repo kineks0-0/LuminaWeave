@@ -168,6 +168,7 @@ export const surfaceSkinContracts = new SurfaceSkinContractRegistry();
         componentId: 'telegram.infoPanel',
         exposedCssVars: [
             '--lw-telegram-info-panel-bg',
+            '--lw-telegram-info-card-bg',
             '--lw-telegram-info-panel-border',
             '--lw-telegram-avatar-radius'
         ],

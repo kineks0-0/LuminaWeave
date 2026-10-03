@@ -18,6 +18,8 @@ export type DesktopCompositionViewport = 'desktop' | 'mobile';
 export interface DesktopCompositionNodeLayout {
     size: DesktopCompositionSize;
     visibility: DesktopCompositionVisibility;
+    /** 随桌面模式的导航开关一起收起（如 Discord 点 # 同时收起角色栏） */
+    collapsesWithNavigation?: boolean;
 }
 
 export interface DesktopCompositionGroupNode extends DesktopCompositionNodeLayout {

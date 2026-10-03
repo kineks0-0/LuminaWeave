@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="node.visibility === 'visible'"
+    v-if="isDesktopCompositionNodeShown(node, { navigationCollapsed })"
     class="lw-composition-node"
     :class="[
       `is-${node.kind}`,
@@ -15,6 +15,7 @@
         :key="getNodeRenderKey(child)"
         :node="child"
         :desktop-mode-id="desktopModeId"
+        :navigation-collapsed="navigationCollapsed"
       >
         <template #activity="slotProps">
           <slot name="activity" v-bind="slotProps" />
@@ -39,11 +40,15 @@ import type {
   DesktopCompositionNode
 } from '../../desktop-modes/core/types.js';
 import ThemedSurfaceOutlet from '../surface/ThemedSurfaceOutlet.vue';
+import { isDesktopCompositionNodeShown } from './DesktopCompositionRuntime.js';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   node: DesktopCompositionNode;
   desktopModeId: string;
-}>();
+  navigationCollapsed?: boolean;
+}>(), {
+  navigationCollapsed: false
+});
 
 const getNodeRenderKey = (node: DesktopCompositionNode): string => [
   props.desktopModeId,

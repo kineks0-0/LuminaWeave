@@ -86,8 +86,8 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
     },
     'discord-channel-mark': {
         default: true,
-        label: '显示 Guild Rail',
-        description: '控制 Discord 桌面模式中的频道标记轨是否显示。',
+        label: '显示侧栏与角色列表',
+        description: '控制 Discord 桌面模式左侧的服务器栏与角色列表是否显示；也可点击顶栏的 # 切换。',
         common: true,
         type: 'boolean' as const,
         allowedScopes: ['Global']

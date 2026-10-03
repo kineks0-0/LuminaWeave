@@ -8,8 +8,9 @@
     :data-group-start="groupStart"
     :data-group-end="groupEnd"
     :data-message-shape="messageShape"
-    :data-avatar-placement="avatarPlacement"
+    :data-avatar-placement="effectiveAvatarPlacement"
     @click="handleRowClick"
+    @contextmenu="handleContextMenu"
   >
     <div v-if="hasAvatarColumn" class="chat-message__gutter">
       <img
@@ -49,6 +50,7 @@
 
       <div
         v-else
+        ref="bubbleRef"
         class="chat-message__bubble"
         :data-has-time="showBubbleTime || undefined"
         :style="bubbleTimeStyle"
@@ -71,11 +73,24 @@
           :streaming-presentation="streamingPresentation"
         />
         <slot name="status" />
+        <span v-if="showBubbleTime" class="chat-message__stamp" aria-hidden="true">
+          {{ timeLabel }}
+          <CheckCheck v-if="message.is_user" :size="16" :stroke-width="2.2" />
+        </span>
       </div>
+      <ChatPopoverMenu
+        v-if="menuOpen"
+        :items="messageMenu"
+        label="消息操作"
+        :placement="menuPlacement"
+        :align="message.is_user ? 'end' : 'start'"
+        @select="handleMenuSelect"
+        @close="menuOpen = false"
+      />
     </div>
 
     <!-- 统一的悬浮操作栏：悬停、键盘聚焦或点选消息（触屏）时显示，不占布局空间 -->
-    <div v-if="!editing && !streaming" class="chat-message__actions" role="toolbar" aria-label="消息操作">
+    <div v-if="!editing && !streaming && !usesMessageMenu" class="chat-message__actions" role="toolbar" aria-label="消息操作">
       <button type="button" title="编辑消息" aria-label="编辑消息" :disabled="disabled" @click="startEditing">
         <Pencil :size="15" />
       </button>
@@ -115,7 +130,7 @@
 <script setup lang="ts">
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { Check, GitBranch, Pencil, RefreshCw, Trash2, X } from 'lucide-vue-next';
+import { Check, CheckCheck, GitBranch, Pencil, RefreshCw, Trash2, X } from 'lucide-vue-next';
 import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
 import type {
   ChatMessageEditIntentInput,
@@ -123,6 +138,13 @@ import type {
 } from '../application/ChatApplicationController.js';
 import type { ChatMessageRenderPreferences } from '../presentation/ChatMessageRenderPreferences.js';
 import type { ChatStreamingPresentation } from '../presentation/ChatStreamingPresentation.js';
+import {
+  buildChatMessageMenu,
+  resolveChatMenuPlacement,
+  type ChatMenuPlacement,
+  type ChatMessageMenuAction
+} from '../presentation/chatMenus.js';
+import ChatPopoverMenu from './ChatPopoverMenu.vue';
 import MessageRenderer from './MessageRenderer.vue';
 import TextBlock from './blocks/TextBlock.vue';
 import { renderChatMarkdown } from './chatMarkdown.js';
@@ -143,7 +165,10 @@ const props = withDefaults(defineProps<{
   groupEnd?: boolean;
   /** HH:mm；为空时不显示时间 */
   timeLabel?: string;
+  /** 多个 AI 发言者（群聊）。Telegram 单聊不显示对方头像与名字 */
+  isGroupConversation?: boolean;
 }>(), {
+  isGroupConversation: true,
   streaming: false,
   streamingPresentation: undefined,
   groupStart: true,
@@ -176,7 +201,13 @@ const avatarPlacement = computed(() => (
     ? props.renderPreferences.userAvatarPlacement
     : props.renderPreferences.assistantAvatarPlacement
 ));
-const hasAvatarColumn = computed(() => avatarPlacement.value === 'inline');
+const isTelegram = computed(() => layout.value === 'telegram');
+// Telegram 单聊与原版一致：不显示头像与名字
+const hidesPeerIdentity = computed(() => isTelegram.value && !props.isGroupConversation);
+const hasAvatarColumn = computed(() => avatarPlacement.value === 'inline' && !hidesPeerIdentity.value);
+const effectiveAvatarPlacement = computed(() => (
+  avatarPlacement.value === 'inline' && !hasAvatarColumn.value ? 'hidden' : avatarPlacement.value
+));
 // Telegram 头像落在一组消息的最后一条，其余布局落在第一条
 const isAvatarAnchor = computed(() => (layout.value === 'telegram' ? props.groupEnd : props.groupStart));
 const showInlineAvatar = computed(() => hasAvatarColumn.value && isAvatarAnchor.value);
@@ -184,13 +215,16 @@ const showMessageMeta = computed(() => (
   props.groupStart
   && props.renderPreferences.showUsernames
   && avatarPlacement.value !== 'topbar'
-  && !(layout.value === 'telegram' && props.message.is_user)
+  && !(isTelegram.value && (props.message.is_user || hidesPeerIdentity.value))
 ));
 const showMetaTime = computed(() => Boolean(props.timeLabel) && layout.value !== 'telegram');
 const showGutterTime = computed(() => layout.value === 'discord' && Boolean(props.timeLabel));
 const showBubbleTime = computed(() => layout.value === 'telegram' && Boolean(props.timeLabel) && !props.streaming);
+// 时间戳绝对定位在气泡右下角，正文末尾留出等宽的浮动占位，末行放不下时自动换行
 const bubbleTimeStyle = computed(() => (
-  showBubbleTime.value ? { '--lw-message-time-label': JSON.stringify(props.timeLabel) } : undefined
+  showBubbleTime.value
+    ? { '--lw-message-stamp-width': props.message.is_user ? '62px' : '40px' }
+    : undefined
 ));
 
 const startEditing = (): void => {
@@ -230,14 +264,75 @@ const handleAvatarError = (event: Event): void => {
   }
 };
 
-/** 触屏没有悬停：点按消息切换操作栏；点在链接、按钮、输入控件或选中文字时不切换。 */
-const handleRowClick = (event: MouseEvent): void => {
-  if (props.streaming || editing.value) return;
+const usesMessageMenu = computed(() => isTelegram.value);
+const menuOpen = ref(false);
+const menuPlacement = ref<ChatMenuPlacement>('below');
+const bubbleRef = ref<HTMLElement | null>(null);
+const messageMenu = computed(() => buildChatMessageMenu({ isUser: props.message.is_user === true, disabled: props.disabled }));
+/** 菜单的大致高度：每项 46px + 上下内边距 */
+const estimatedMenuHeight = computed(() => messageMenu.value.length * 46 + 14);
+
+const openMenu = (): void => {
+  const bubble = bubbleRef.value;
+  const scroller = rootRef.value?.closest('.chat-transcript');
+  if (bubble && scroller) {
+    const bubbleRect = bubble.getBoundingClientRect();
+    const scrollerRect = scroller.getBoundingClientRect();
+    menuPlacement.value = resolveChatMenuPlacement({
+      anchorTop: bubbleRect.top,
+      anchorBottom: bubbleRect.bottom,
+      viewport: { top: scrollerRect.top, bottom: scrollerRect.bottom },
+      menuHeight: estimatedMenuHeight.value
+    });
+  }
+  menuOpen.value = true;
+};
+
+const isInteractiveTarget = (event: Event): boolean => {
   const target = event.target instanceof Element ? event.target : null;
-  if (target?.closest('a, button, input, textarea, select, summary, [role="button"]')) return;
+  return Boolean(target?.closest('a, button, input, textarea, select, summary, [role="button"], [role="menu"]'));
+};
+
+const hasTextSelection = (): boolean => {
   const selection = rootRef.value?.ownerDocument.getSelection();
-  if (selection && !selection.isCollapsed) return;
+  return Boolean(selection && !selection.isCollapsed);
+};
+
+/** 点按消息：Telegram 弹出消息菜单，其余布局切换操作栏（触屏没有悬停）。 */
+const handleRowClick = (event: MouseEvent): void => {
+  if (props.streaming || editing.value || isInteractiveTarget(event) || hasTextSelection()) return;
+  if (usesMessageMenu.value) {
+    if (menuOpen.value) menuOpen.value = false;
+    else openMenu();
+    return;
+  }
   selected.value = !selected.value;
+};
+
+/** 桌面右键同样弹出 Telegram 消息菜单；选中文字时保留浏览器原生菜单以便复制。 */
+const handleContextMenu = (event: MouseEvent): void => {
+  if (!usesMessageMenu.value || props.streaming || editing.value || isInteractiveTarget(event) || hasTextSelection()) return;
+  event.preventDefault();
+  openMenu();
+};
+
+const copyMessage = async (): Promise<void> => {
+  const text = props.message.mesRaw || props.message.mes;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error: unknown) {
+    console.warn('[ChatMessage] 复制消息失败', error);
+  }
+};
+
+const handleMenuSelect = (id: string): void => {
+  menuOpen.value = false;
+  const action = id as ChatMessageMenuAction;
+  if (action === 'copy') void copyMessage();
+  else if (action === 'edit') startEditing();
+  else if (action === 'regenerate') emit('regenerate');
+  else if (action === 'branch') emit('branch', { message: props.message, index: props.index });
+  else if (action === 'delete') emit('delete', { message: props.message, index: props.index });
 };
 
 const handleOutsidePointer = (event: PointerEvent): void => {
@@ -284,7 +379,7 @@ onBeforeUnmount(() => {
   gap: 0;
 }
 
-.chat-message.is-user {
+.chat-message.is-user[data-avatar-placement='inline'] {
   grid-template-columns: minmax(0, 1fr) var(--lw-chat-avatar-size, 36px);
 }
 
@@ -331,6 +426,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-message__body {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -384,6 +480,9 @@ onBeforeUnmount(() => {
 .is-user .chat-message__bubble {
   border-color: var(--lw-chat-user-bubble-border, var(--lw-border-subtle));
   background: var(--lw-chat-user-bubble, color-mix(in srgb, var(--lw-primary) 12%, var(--lw-bg-surface)));
+  /* fixed 时渐变按视口分布（Telegram 气泡随位置由紫过渡到蓝） */
+  background-attachment: var(--lw-chat-user-bubble-attachment, scroll);
+  color: var(--lw-chat-user-color, var(--lw-chat-color, var(--lw-text-main)));
   font-size: var(--lw-chat-user-font-size, var(--lw-chat-font-size, 1rem));
   line-height: var(--lw-chat-user-line-height, var(--lw-chat-line-height, 1.6));
   letter-spacing: var(--lw-chat-user-letter-spacing, var(--lw-chat-letter-spacing, normal));
@@ -660,20 +759,52 @@ onBeforeUnmount(() => {
   right: -8px;
   left: auto;
   background: var(--lw-chat-user-bubble, var(--lw-bg-subtle));
+  background-attachment: var(--lw-chat-user-bubble-attachment, scroll);
   -webkit-mask: radial-gradient(10px 14px at 100% 0, transparent 98%, #000 100%);
   mask: radial-gradient(10px 14px at 100% 0, transparent 98%, #000 100%);
 }
 
-/* 时间以浮动方式贴在最后一行末尾：末行有空位时同行显示，否则换到下一行右侧 */
+/* 正文末尾的浮动占位与时间戳等宽：末行有空位时时间与末行同行，否则换到下一行右侧 */
 .chat-message__bubble[data-has-time] :deep(.lv-text-block__chunk:last-child > :last-child)::after {
-  content: var(--lw-message-time-label);
+  content: '';
   float: right;
-  margin: 0.45em -2px -0.3em 12px;
-  color: var(--lw-text-muted);
+  width: var(--lw-message-stamp-width, 40px);
+  height: 1em;
+  margin: 0.5em -4px -0.4em 8px;
+}
+
+.chat-message__stamp {
+  position: absolute;
+  right: 10px;
+  bottom: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--lw-chat-meta-color, var(--lw-text-muted));
   font-size: var(--lw-type-label-small-size);
   line-height: var(--lw-type-label-small-line-height);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.is-user .chat-message__stamp {
+  color: var(--lw-chat-user-meta-color, var(--lw-chat-meta-color, var(--lw-text-muted)));
+}
+
+.chat-message[data-layout='telegram'].is-user .chat-message__bubble :deep(a) {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.chat-message[data-layout='telegram'] {
+  /* Telegram 不做整行悬停高亮，点按弹出菜单 */
+  cursor: default;
+}
+
+.chat-message[data-layout='telegram']:hover {
+  background: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

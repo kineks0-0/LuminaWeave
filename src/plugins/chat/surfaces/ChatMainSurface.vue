@@ -2,6 +2,8 @@
   <main
     class="chat-main-surface"
     :data-surface-variant="surfaceContext.theme.variant || 'default'"
+    :data-layout="messageLayout"
+    :class="{ 'has-floating-header': messageLayout === 'telegram' && showHeader }"
     :style="surfaceStyle"
   >
     <ChatHeader
@@ -11,6 +13,8 @@
       :avatar-url="headerAvatarUrl"
       :default-avatar="surfaceContext.state.defaultAvatar"
       :messages="snapshot.messages"
+      :layout="messageLayout"
+      :typing="snapshot.generation.isGenerating"
       :on-back="input.onBack"
       :on-open-role-profile="input.onOpenRoleProfile"
       :on-open-panel="input.onOpenPanel"
@@ -44,6 +48,7 @@
 
     <footer class="chat-main-surface__composer">
       <ChatToolbar
+        v-if="messageLayout !== 'telegram'"
         :collapsed="composerCollapsed"
         :prompt-inspector-visible="snapshot.promptInspectorVisible"
         @toggle-collapsed="composerCollapsed = !composerCollapsed"
@@ -51,6 +56,7 @@
       />
       <ChatComposer
         v-show="!composerCollapsed"
+        :layout="messageLayout"
         :context="snapshot.context"
         :generation="snapshot.generation"
         :presentation="snapshot.presentation"
@@ -61,7 +67,11 @@
         :on-send-message="surfaceContext.intents.sendMessage"
         :on-stop-generation="surfaceContext.intents.stopGeneration"
         :on-update-draft="surfaceContext.intents.setComposerDraft"
-      />
+      >
+        <template v-if="messageLayout === 'telegram' && input.onOpenPanel" #leading="{ hasDraft }">
+          <ChatComposerMenu :compact="hasDraft" :on-open-panel="input.onOpenPanel" />
+        </template>
+      </ChatComposer>
     </footer>
   </main>
 </template>
@@ -77,6 +87,7 @@ import {
   useSurfaceRuntimeContext
 } from '../../../platform/surface/useSurfaceRuntimeContext.js';
 import ChatComposer from '../components/ChatComposer.vue';
+import ChatComposerMenu from '../components/ChatComposerMenu.vue';
 import ChatHeader from '../components/ChatHeader.vue';
 import ChatToolbar from '../components/ChatToolbar.vue';
 import ChatTranscript from '../components/ChatTranscript.vue';
@@ -93,6 +104,7 @@ const messageRenderPreferences = computed(() => ({
   ...context.value.state.messageRenderPreferences.value,
   ...resolveChatThemeRenderPreferences(context.value.theme.cssVars)
 }));
+const messageLayout = computed(() => messageRenderPreferences.value.messageLayout);
 const compact = computed(() => Boolean(input.isMobile || input.workspaceCompact));
 const sessionSwitching = computed(() => characterState.value.status.kind === 'switching');
 const showHeader = computed(() => Boolean(
@@ -115,7 +127,7 @@ const headerTitle = computed(() => (
 const headerSubtitle = computed(() => (
   sessionSwitching.value
     ? characterState.value.status.text || '正在切换聊天'
-    : 'online'
+    : '在线'
 ));
 const headerAvatarUrl = computed(() => (
   latestAssistantMessage.value
@@ -181,9 +193,6 @@ watch(
   padding: 0 12px 10px;
 }
 
-.chat-main-surface[data-surface-variant='telegram'] .chat-main-surface__composer {
-  border-top: 0;
-}
 
 .chat-main-surface__composer {
   display: flex;
@@ -192,5 +201,15 @@ watch(
   border-top: 1px solid var(--lw-border-base);
   background: var(--lw-chat-input-area-bg, var(--lw-bg-surface));
   padding: 8px 12px 12px;
+}
+
+/* Telegram：顶栏与输入框浮在壁纸上，消息区从顶栏下方开始滚动 */
+.chat-main-surface.has-floating-header {
+  --chat-header-overlap: calc(64px + var(--lw-content-safe-top, 0px));
+}
+
+.chat-main-surface[data-layout='telegram'] .chat-main-surface__composer {
+  border-top: 0;
+  padding: 6px 10px calc(10px + var(--lw-content-safe-bottom, 0px));
 }
 </style>

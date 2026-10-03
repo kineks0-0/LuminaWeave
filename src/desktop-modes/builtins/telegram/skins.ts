@@ -1,6 +1,7 @@
 import { getDesktopModeSettingValue } from '../../core/registry.js';
 import type { ComponentThemeContext, DesktopModeManifest } from '../../core/types.js';
 import { createSurfaceSkinMap, mergeCssVars, resolveThemeValueMap } from '../shared.js';
+import { TELEGRAM_WALLPAPER_TILE_PX, createTelegramWallpaper } from './wallpaper.js';
 
 export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins'] => {
     const base = createSurfaceSkinMap() as NonNullable<DesktopModeManifest['surfaceSkins']>;
@@ -119,9 +120,8 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
             componentId: 'telegram.infoPanel',
             variant: 'telegram',
             cssVars: ({ resolvedAppearance }) => ({
-                '--lw-telegram-info-panel-bg': resolvedAppearance === 'dark'
-                    ? 'rgba(27, 39, 52, 0.84)'
-                    : 'rgba(255, 255, 255, 0.74)',
+                '--lw-telegram-info-panel-bg': resolvedAppearance === 'dark' ? '#151e27' : '#f0f2f5',
+                '--lw-telegram-info-card-bg': resolvedAppearance === 'dark' ? '#1d2733' : '#ffffff',
                 '--lw-telegram-info-panel-border': 'var(--lw-border-base)',
                 '--lw-telegram-avatar-radius': '999px'
             })
@@ -199,36 +199,59 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
             cssVars: (context: ComponentThemeContext) => {
                 const density = getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'messageDensity');
                 const isDark = context.resolvedAppearance === 'dark';
+                const isCompact = density === 'compact';
+                const wallpaper = createTelegramWallpaper(isDark ? 'rgba(255, 255, 255, 0.055)' : 'rgba(36, 80, 40, 0.17)');
+                const wallpaperLayer = `${wallpaper} 0 0 / ${TELEGRAM_WALLPAPER_TILE_PX}px ${TELEGRAM_WALLPAPER_TILE_PX}px repeat`;
                 return {
                     ...resolveThemeValueMap(base['chat.main']?.cssVars, context),
                     '--lw-chat-layout': 'telegram',
+                    // 壁纸铺在整个聊天面，顶栏与输入框浮在其上
                     '--lw-chat-stream-bg': isDark
-                        ? 'radial-gradient(circle at 20% 0%, rgba(74, 163, 255, 0.12), transparent 26%), rgba(15, 28, 42, 0.66)'
-                        : 'radial-gradient(circle at 18% 0%, rgba(73, 164, 230, 0.16), transparent 30%), rgba(214, 233, 245, 0.72)',
-                    '--lw-chat-scroll-bg': `radial-gradient(circle at 1px 1px, ${isDark ? 'rgba(143, 192, 232, 0.10)' : 'rgba(44, 92, 130, 0.10)'} 1px, transparent 1.6px)`,
-                    '--lw-chat-scroll-bg-size': '22px 22px',
-                    '--lw-chat-header-bg': isDark ? 'rgba(20, 38, 56, 0.88)' : 'rgba(255, 255, 255, 0.86)',
+                        ? `${wallpaperLayer}, #161f2e`
+                        // 原版浅色壁纸：左上黄绿、右下浅灰绿、中间偏绿的四角渐变
+                        : `${wallpaperLayer}, radial-gradient(circle at 0% 0%, #d4d68d 0%, transparent 55%), radial-gradient(circle at 100% 100%, #ccd6b3 0%, transparent 50%), radial-gradient(circle at 100% 0%, #89b884 0%, transparent 60%), linear-gradient(170deg, #9cbf8a 0%, #82b081 50%, #7dad87 100%)`,
+                    '--lw-chat-scroll-bg': 'none',
+                    '--lw-chat-scroll-bg-size': 'auto',
+                    '--lw-chat-header-bg': 'transparent',
                     '--lw-chat-input-area-bg': 'transparent',
-                    '--lw-chat-scroll-padding': density === 'compact' ? '16px 20px' : '20px 28px',
-                    '--lw-chat-content-gap': density === 'compact' ? '10px' : '14px',
-                    '--lw-chat-group-gap': '3px',
-                    '--lw-chat-bubble': 'var(--lw-telegram-ai-bubble)',
-                    '--lw-chat-user-bubble': 'var(--lw-telegram-user-bubble)',
+                    '--lw-chat-scroll-padding': isCompact ? '10px 12px' : '14px 16px',
+                    '--lw-chat-content-gap': isCompact ? '8px' : '10px',
+                    '--lw-chat-group-gap': '4px',
+                    '--lw-chat-day-bg': isDark ? 'rgba(46, 63, 79, 0.86)' : 'rgba(40, 110, 70, 0.55)',
+                    '--lw-chat-day-color': '#ffffff',
+                    '--lw-chat-day-padding': '4px 12px',
+                    '--lw-chat-day-font-size': '0.875rem',
+                    '--lw-chat-day-font-weight': 600,
+                    '--lw-chat-floating-bg': isDark ? 'rgba(29, 43, 56, 0.94)' : 'rgba(255, 255, 255, 0.78)',
+                    '--lw-chat-floating-border': isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(30, 50, 30, 0.06)',
+                    '--lw-chat-floating-shadow': isDark ? '0 2px 10px rgba(0, 0, 0, 0.22)' : '0 2px 10px rgba(30, 50, 30, 0.14)',
+                    '--lw-chat-floating-blur': 'blur(18px) saturate(1.2)',
+                    '--lw-chat-bubble': isDark ? '#252e3d' : '#ffffff',
+                    // 原版深色的发出气泡是按屏幕位置分布的紫→蓝渐变
+                    '--lw-chat-user-bubble': isDark
+                        ? 'linear-gradient(180deg, #8d4fe3 0%, #6f52dd 38%, #4f72e2 66%, #3584e4 100%)'
+                        : '#effedd',
+                    '--lw-chat-user-bubble-attachment': isDark ? 'fixed' : 'scroll',
+                    '--lw-chat-user-color': isDark ? '#ffffff' : 'var(--lw-text-main)',
+                    '--lw-chat-meta-color': isDark ? '#7f8b98' : '#a1aab3',
+                    '--lw-chat-user-meta-color': isDark ? 'rgba(255, 255, 255, 0.78)' : '#5fae5a',
                     '--lw-chat-border': 'transparent',
                     '--lw-chat-user-bubble-border': 'transparent',
-                    '--lw-chat-bubble-radius': '16px',
-                    '--lw-chat-bubble-shadow': isDark ? '0 1px 2px rgba(0, 0, 0, 0.32)' : '0 1px 2px rgba(31, 66, 92, 0.16)',
+                    '--lw-chat-bubble-radius': '18px',
+                    '--lw-chat-bubble-shadow': isDark ? 'none' : '0 1px 1px rgba(30, 50, 30, 0.14)',
                     '--lw-chat-message-max-width': '560px',
-                    '--lw-chat-avatar-size': '34px',
+                    '--lw-chat-avatar-size': '38px',
                     '--lw-chat-avatar-radius': '999px',
-                    '--lw-chat-input-surface': isDark ? 'rgba(26, 48, 70, 0.92)' : 'rgba(255, 255, 255, 0.94)',
+                    '--lw-chat-input-surface': 'var(--lw-chat-floating-bg)',
                     '--lw-chat-input-border': 'transparent',
-                    '--lw-chat-input-radius': '22px',
-                    '--lw-chat-input-shadow': isDark ? '0 1px 3px rgba(0, 0, 0, 0.30)' : '0 1px 3px rgba(31, 66, 92, 0.16)',
+                    '--lw-chat-input-radius': '26px',
+                    '--lw-chat-input-shadow': 'none',
                     '--lw-chat-input-focus-border': 'transparent',
-                    '--lw-chat-input-focus-shadow': isDark ? '0 1px 3px rgba(0, 0, 0, 0.30), 0 0 0 2px rgba(74, 163, 255, 0.28)' : '0 1px 3px rgba(31, 66, 92, 0.16), 0 0 0 2px rgba(42, 155, 216, 0.22)',
-                    '--lw-chat-menu-shadow': isDark ? '0 18px 34px rgba(0, 0, 0, 0.24)' : '0 18px 34px rgba(44, 92, 130, 0.16)',
-                    '--lw-chat-empty-mark-bg': isDark ? 'rgba(20, 38, 56, 0.72)' : 'rgba(255, 255, 255, 0.72)',
+                    '--lw-chat-input-focus-shadow': 'none',
+                    '--lw-chat-menu-bg': isDark ? 'rgba(35, 50, 69, 0.97)' : 'rgba(255, 255, 255, 0.8)',
+                    '--lw-chat-menu-radius': '16px',
+                    '--lw-chat-menu-shadow': isDark ? '0 10px 30px rgba(0, 0, 0, 0.35)' : '0 10px 30px rgba(30, 50, 30, 0.18)',
+                    '--lw-chat-empty-mark-bg': 'var(--lw-chat-floating-bg)',
                     '--lw-chat-empty-mark-shadow': 'none'
                 };
             }

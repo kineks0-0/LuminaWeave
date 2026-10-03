@@ -285,7 +285,7 @@ describe('Official Surface Kit', () => {
         const mainSurfaceSource = readSource('../surfaces/ChatMainSurface.vue');
 
         expect(messageSource).toContain(':data-message-shape="messageShape"');
-        expect(messageSource).toContain(':data-avatar-placement="avatarPlacement"');
+        expect(messageSource).toContain(':data-avatar-placement="effectiveAvatarPlacement"');
         expect(messageSource).toContain('v-if="showInlineAvatar"');
         expect(messageSource).toContain('v-if="showMessageMeta"');
         expect(streamingSource).toContain('renderPreferences.streamingEffect');

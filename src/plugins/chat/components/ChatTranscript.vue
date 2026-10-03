@@ -27,6 +27,7 @@
           :group-start="messageGroups[index]?.groupStart ?? true"
           :group-end="messageGroups[index]?.groupEnd ?? true"
           :time-label="messageGroups[index]?.timeLabel ?? ''"
+          :is-group-conversation="groupConversation"
           @edit="emit('edit', $event)"
           @delete="emit('delete', $event)"
           @regenerate="emit('regenerate')"
@@ -48,6 +49,7 @@
         :default-avatar="defaultAvatar"
         :group-start="streamingGroup?.groupStart ?? true"
         :time-label="streamingGroup?.timeLabel ?? ''"
+        :is-group-conversation="groupConversation"
         @retry="emit('regenerate')"
       />
     </div>
@@ -68,7 +70,7 @@ import type {
 } from '../application/ChatApplicationController.js';
 import type { ChatMessageRenderPreferences } from '../presentation/ChatMessageRenderPreferences.js';
 import { resolveChatViewState } from '../chatViewState.js';
-import { buildChatMessageGroups } from '../presentation/chatMessageGrouping.js';
+import { buildChatMessageGroups, isGroupConversation } from '../presentation/chatMessageGrouping.js';
 import { useStickToBottom } from '../../../composables/useStickToBottom.js';
 import LuminaJumpToLatest from '../../../ui/primitives/LuminaJumpToLatest.vue';
 import ChatMessage from './ChatMessage.vue';
@@ -134,6 +136,7 @@ const allGroups = computed(() => buildChatMessageGroups(hasStreamingRow.value
     createdAt: streamingStartedAt.value
   }]
   : props.messages));
+const groupConversation = computed(() => isGroupConversation(props.messages));
 const messageGroups = computed(() => allGroups.value.slice(0, props.messages.length));
 const streamingGroup = computed(() => (hasStreamingRow.value ? allGroups.value[props.messages.length] : undefined));
 
@@ -182,6 +185,8 @@ watch(
   min-height: 0;
   flex: 1;
   overflow: auto;
+  /* 浮动顶栏（Telegram）覆盖的高度：内容从其下方开始，向上滚动时从顶栏后方经过 */
+  padding-top: var(--chat-header-overlap, 0px);
   overscroll-behavior: contain;
   background: var(--lw-chat-scroll-bg, none);
   background-size: var(--lw-chat-scroll-bg-size, auto);
@@ -252,12 +257,15 @@ watch(
 }
 
 .chat-transcript__day span {
-  padding: 2px 10px;
+  padding: var(--lw-chat-day-padding, 2px 10px);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-bg-elevated) 82%, transparent);
-  color: var(--lw-text-muted);
-  font-size: var(--lw-type-label-small-size);
+  background: var(--lw-chat-day-bg, color-mix(in srgb, var(--lw-bg-elevated) 82%, transparent));
+  color: var(--lw-chat-day-color, var(--lw-text-muted));
+  font-size: var(--lw-chat-day-font-size, var(--lw-type-label-small-size));
+  font-weight: var(--lw-chat-day-font-weight, 400);
   line-height: var(--lw-type-label-small-line-height);
+  backdrop-filter: var(--lw-chat-floating-blur, none);
+  -webkit-backdrop-filter: var(--lw-chat-floating-blur, none);
 }
 
 .chat-transcript__notice,

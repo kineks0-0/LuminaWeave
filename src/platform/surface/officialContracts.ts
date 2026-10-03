@@ -30,11 +30,18 @@ export interface ChatMainSurfaceInput {
 
 export interface CharacterRosterSurfaceInput {
     compact?: boolean;
+    /** 由外壳接管打开 / 新建会话（如 Telegram 移动端需同时进入聊天页）；缺省时走 surface 自身意图 */
+    onOpenSession?: (sessionId: string) => void;
+    onCreateSession?: (input: CreateChatConversationInput) => void;
 }
 
 export interface ConversationSessionListSurfaceInput {
     characterKey?: string;
     compact?: boolean;
+    /** 由外壳接管打开会话（如 Telegram 移动端需同时进入聊天页）；缺省时走 surface 自身意图 */
+    onOpenSession?: (sessionId: string) => void;
+    /** 新建聊天入口（如跳到联系人选择角色）；未提供时不显示该入口 */
+    onStartNewChat?: () => void;
 }
 
 export interface ChatTranscriptSurfaceInput {
@@ -367,11 +374,15 @@ const contextPanelInputSchema = z.object({
 
 export const OFFICIAL_SURFACE_INPUT_SCHEMAS = {
     'character.roster': z.object({
-        compact: z.boolean().optional()
+        compact: z.boolean().optional(),
+        onOpenSession: callbackSchema<(sessionId: string) => void>().optional(),
+        onCreateSession: callbackSchema<(input: CreateChatConversationInput) => void>().optional()
     }).strict(),
     'conversation.sessionList': z.object({
         characterKey: z.string().min(1).optional(),
-        compact: z.boolean().optional()
+        compact: z.boolean().optional(),
+        onOpenSession: callbackSchema<(sessionId: string) => void>().optional(),
+        onStartNewChat: callbackSchema<() => void>().optional()
     }).strict(),
     'chat.transcript': z.object({
         compact: z.boolean().optional()

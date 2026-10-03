@@ -59,7 +59,7 @@ const avatarStyle = computed(() => getTelegramAvatarStyle(userName.value));
 const items = computed(() => [
   {
     id: 'chat' as const,
-    label: '对话',
+    label: '聊天',
     active: props.activeMainTab === 'lumina-chat' && !props.characterSheetOpen && !props.settingsPanelOpen && !props.profilePanelOpen,
     icon: getTelegramIconComponent('chat')
   },

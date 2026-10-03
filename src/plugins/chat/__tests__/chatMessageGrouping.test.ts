@@ -2,6 +2,7 @@ import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { describe, expect, it } from 'vitest';
 import {
     buildChatMessageGroups,
+    isGroupConversation,
     resolveChatMessageTimestamp
 } from '../presentation/chatMessageGrouping.js';
 
@@ -78,5 +79,25 @@ describe('resolveChatMessageTimestamp', () => {
         expect(resolveChatMessageTimestamp({ ...message('a', false), extra: { send_date: 'October 4, 2026 2:59am' } }))
             .toBe(at('2026-10-04T02:59:00'));
         expect(resolveChatMessageTimestamp({ ...message('a', false), extra: { send_date: 'not a date' } })).toBeNull();
+    });
+});
+
+describe('isGroupConversation', () => {
+    const message = (name: string, isUser = false) => ({
+        id: name, parentId: null, name, role: isUser ? 'user' : 'assistant', is_user: isUser,
+        mesRaw: '', mes: '', fingerprint: '', extra: {}
+    }) as LuminaChatMessage;
+
+    it('treats a single assistant speaker as a direct chat', () => {
+        expect(isGroupConversation([message('You', true), message('Alice'), message('Alice')])).toBe(false);
+        expect(isGroupConversation([])).toBe(false);
+    });
+
+    it('treats several assistant speakers as a group chat', () => {
+        expect(isGroupConversation([message('Alice'), message('You', true), message('Bob')])).toBe(true);
+    });
+
+    it('ignores whitespace and empty names', () => {
+        expect(isGroupConversation([message('Alice'), message(' Alice '), message('')])).toBe(false);
     });
 });

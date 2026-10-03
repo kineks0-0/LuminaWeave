@@ -36,6 +36,7 @@
         <DesktopCompositionOutlet
           :desktop-mode-id="runtimeContext.activeDesktopModeId"
           :is-mobile="runtimeContext.isMobile"
+          :navigation-collapsed="!runtimeFrame.discordChannelMarkVisible"
         >
           <template #activity>
             <component

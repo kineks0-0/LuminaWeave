@@ -1,5 +1,16 @@
 <template>
-  <section class="conversation-session-list" :class="{ 'is-compact': input.compact }">
+  <TelegramChatList
+    v-if="context.theme.variant === 'telegram'"
+    :groups="channel.characterGroups"
+    :active-session-id="channel.activeSessionId"
+    :page="Boolean(input.compact)"
+    :can-compose="Boolean(input.onStartNewChat)"
+    @open="openSession"
+    @compose="input.onStartNewChat?.()"
+    @rename="renameSessionTo"
+    @delete="deleteSession"
+  />
+  <section v-else class="conversation-session-list" :class="{ 'is-compact': input.compact }">
     <template v-for="group in visibleGroups" :key="group.key">
       <header>
         <strong>{{ group.characterName }}</strong>
@@ -57,6 +68,7 @@ import {
   useSurfaceInput,
   useSurfaceRuntimeContext
 } from '../../../platform/surface/useSurfaceRuntimeContext.js';
+import TelegramChatList from '../components/telegram/TelegramChatList.vue';
 
 const input = useSurfaceInput('conversation.sessionList');
 const context = useSurfaceRuntimeContext('conversation.sessionList');
@@ -73,6 +85,10 @@ const expanded = (groupKey: string): boolean => {
   return channel.value.expandedSessionGroups[groupKey] === true;
 };
 const openSession = (sessionId: string): void => {
+  if (input.onOpenSession) {
+    input.onOpenSession(sessionId);
+    return;
+  }
   void context.value.intents.openSession(sessionId);
 };
 const startRename = (sessionId: string, title: string): void => {
@@ -88,6 +104,9 @@ const saveRename = (sessionId: string): void => {
   if (!nextTitle) return;
   void context.value.intents.renameSession(sessionId, nextTitle);
   cancelRename();
+};
+const renameSessionTo = (sessionId: string, title: string): void => {
+  void context.value.intents.renameSession(sessionId, title);
 };
 const deleteSession = (sessionId: string): void => {
   void context.value.intents.deleteSession(sessionId);

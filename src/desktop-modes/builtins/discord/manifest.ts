@@ -26,7 +26,8 @@ export const discordDesktopMode: DesktopModeManifest = {
                     contractId: 'character.roster',
                     input: { compact: true },
                     size: 'content',
-                    visibility: 'visible'
+                    visibility: 'visible',
+                    collapsesWithNavigation: true
                 },
                 {
                     id: 'discord-desktop-activity',

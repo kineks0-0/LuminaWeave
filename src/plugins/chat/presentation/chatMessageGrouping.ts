@@ -78,3 +78,16 @@ export const buildChatMessageGroups = (
         };
     });
 };
+
+/** 出现多个 AI 发言者时视为群聊（Telegram 布局据此决定是否显示对方头像与名字） */
+export const isGroupConversation = (messages: readonly LuminaChatMessage[]): boolean => {
+    const speakers = new Set<string>();
+    for (const message of messages) {
+        if (message.is_user) continue;
+        const name = message.name?.trim();
+        if (!name) continue;
+        speakers.add(name);
+        if (speakers.size > 1) return true;
+    }
+    return false;
+};
