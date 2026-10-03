@@ -37,4 +37,16 @@ describe('Agent Runtime SDK browser guard', () => {
             expect(source, `${relative(repoRoot, file)} must not import Node built-ins`).not.toMatch(NODE_IMPORT_PATTERN);
         }
     });
+
+    // 通用 AgentSession 是 Forge 等适配器的下层，不得反向依赖适配器、前后端共享协议或宿主 HAL。
+    it('keeps the generic session layer free of adapter, shared and HAL imports', () => {
+        const files = collectSourceFiles(join(sdkDir, 'session'));
+        expect(files.length).toBeGreaterThan(0);
+        for (const file of files) {
+            const source = readFileSync(file, 'utf8');
+            for (const pattern of ['/forge/', '@shared/', '/hal/']) {
+                expect(source, `${relative(repoRoot, file)} must not contain ${pattern}`).not.toContain(pattern);
+            }
+        }
+    });
 });
