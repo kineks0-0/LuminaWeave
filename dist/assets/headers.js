@@ -1,1 +1,1 @@
-function e(e){let t={};for(let[n,r]of e.entries())t[n]=r;return t}function t(e){if(!e)return;let t={};for(let[n,r]of Object.entries(e))r!==null&&(t[n]=r);return Object.keys(t).length>0?t:void 0}export{t as n,e as t};
+function e(e){let t={};for(let[n,r]of e.entries())t[n]=r;return t}function t(...e){let t=new Map;for(let n of e)for(let[e,r]of Object.entries(n??{})){let n=e.toLowerCase();t.delete(n),r!==null&&t.set(n,[e,r])}return t.size>0?Object.fromEntries(t.values()):void 0}export{t as n,e as t};

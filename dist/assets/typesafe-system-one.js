@@ -1,0 +1,1 @@
+import{n as e,t}from"./system-one-shared.js";var n={api:`typesafe-system-one`,label:`System One API`,url:e=>new URL(`systemone`,`${e.baseUrl.replace(/\/+$/u,``)}/`),payload:(e,t)=>({model:e.id,...t}),output:t=>{if(!e(t))throw Error(`System One API returned an unexpected response`);return t}},r=(e,r,i)=>t(n,e,r,i);export{r as classify};
