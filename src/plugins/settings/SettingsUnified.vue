@@ -348,6 +348,7 @@ import { SettingsBlockHeader, SettingsDescription, SettingsInsetPanel, SettingsM
 import { activeSettings, useSettings } from './useSettings.js';
 import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
 import { LuminaWeaveAPI } from '../../api/index.js';
+import { HostDetector } from '../../api/core/host-drivers/HostDetector.js';
 import { getSettingsEntry, getVisibleSettingsEntries } from './settingsRegistry.js';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
 import { getActiveDesktopModeIdFromSettings, getDesktopModeOrDefault, getDesktopModeSettingsPluginId } from '../../desktop-modes/core/registry.js';
@@ -386,7 +387,7 @@ defineEmits<{
 const isIndependent = ref(settingsDomainService.isIndependentGlobalStorageEnabled());
 
 const storageState = computed(() => {
-  const isTauri = (window as any).__TAURITAVERN__;
+  const isTauri = HostDetector.isTauriTavern;
   if (isTauri) {
     return {
       title: '独立 JSON 存储 (TauriTavern 本地模式)',

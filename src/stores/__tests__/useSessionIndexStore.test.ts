@@ -5,7 +5,6 @@ import { useSessionIndexStore } from '../useSessionIndexStore.js';
 import { chatSessionIndexService } from '../../api/core/conversation/ChatSessionIndexService.js';
 import { forgeSessionRepository } from '../../api/core/forge/project/ForgeSessionRepository.js';
 import { lwStorage } from '../../api/storage.js';
-import { STClient } from '../../api/core/host-drivers/st/STClient.js';
 
 vi.mock('../../api/core/conversation/ChatSessionIndexService.js', () => ({
     chatSessionIndexService: {
@@ -30,20 +29,6 @@ vi.mock('../../api/core/forge/project/ForgeSessionRepository.js', () => ({
 vi.mock('../../api/storage.js', () => ({
     lwStorage: {
         _getContextIds: vi.fn(() => ({ chatId: 'chat_live' }))
-    }
-}));
-
-vi.mock('../../api/core/host-drivers/st/STClient.js', () => ({
-    STClient: {
-        normalizeChatId: vi.fn((value: unknown) => {
-            if (typeof value !== 'string' && typeof value !== 'number') {
-                return null;
-            }
-            const normalized = String(value).trim();
-            return !normalized || normalized === 'null' || normalized === 'undefined' || normalized === 'default'
-                ? null
-                : normalized;
-        })
     }
 }));
 
@@ -82,16 +67,7 @@ describe('useSessionIndexStore', () => {
             }
         ]);
         vi.mocked(forgeSessionRepository.listSessions).mockReturnValue([]);
-        vi.mocked(lwStorage._getContextIds).mockReturnValue({ chatId: 'default' } as any);
-        vi.mocked(STClient.normalizeChatId).mockImplementation((value: unknown) => {
-            if (typeof value !== 'string' && typeof value !== 'number') {
-                return null;
-            }
-            const normalized = String(value).trim();
-            return !normalized || normalized === 'null' || normalized === 'undefined' || normalized === 'default'
-                ? null
-                : normalized;
-        });
+        vi.mocked(lwStorage._getContextIds).mockReturnValue({ charId: 'Global', chatId: '' });
     });
 
     it('clears selected chat session when current live chat disappears instead of falling back to the first archived session', async () => {

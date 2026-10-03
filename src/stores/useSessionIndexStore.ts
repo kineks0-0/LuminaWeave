@@ -2,7 +2,6 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { chatSessionIndexService } from '../api/core/conversation/ChatSessionIndexService.js';
 import { forgeSessionRepository } from '../api/core/forge/project/ForgeSessionRepository.js';
-import { STClient } from '../api/core/host-drivers/st/STClient.js';
 import { lwStorage } from '../api/storage.js';
 import type { ChatSessionRef, ForgeWorkspaceSessionRef } from '../types/SessionTypes.js';
 
@@ -19,7 +18,8 @@ export const useSessionIndexStore = defineStore('lumina-session-index', () => {
             await forgeSessionRepository.refreshFromServer();
             chatSessions.value = await chatSessionIndexService.listChatSessions();
             forgeSessions.value = forgeSessionRepository.listSessions();
-            const currentChatId = STClient.normalizeChatId(lwStorage._getContextIds().chatId);
+            // _getContextIds 已通过 HAL sessionIdNormalizer 规范化，无当前会话时为空串
+            const currentChatId = lwStorage._getContextIds().chatId || null;
             const matchedCurrentChat = chatSessions.value.find(chat => chat.id === currentChatId);
             if (matchedCurrentChat) {
                 selectedChatSessionId.value = matchedCurrentChat.id;
