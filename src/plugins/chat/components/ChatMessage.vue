@@ -75,7 +75,7 @@
         <slot name="status" />
         <span v-if="showBubbleTime" class="chat-message__stamp" aria-hidden="true">
           {{ timeLabel }}
-          <CheckCheck v-if="message.is_user" :size="16" :stroke-width="2.2" />
+          <CheckCheck v-if="message.is_user" :size="14" :stroke-width="2.2" />
         </span>
       </div>
       <ChatPopoverMenu
@@ -223,7 +223,7 @@ const showBubbleTime = computed(() => layout.value === 'telegram' && Boolean(pro
 // 时间戳绝对定位在气泡右下角，正文末尾留出等宽的浮动占位，末行放不下时自动换行
 const bubbleTimeStyle = computed(() => (
   showBubbleTime.value
-    ? { '--lw-message-stamp-width': props.message.is_user ? '62px' : '40px' }
+    ? { '--lw-message-stamp-width': props.message.is_user ? '58px' : '40px' }
     : undefined
 ));
 
@@ -731,7 +731,34 @@ onBeforeUnmount(() => {
 }
 
 .chat-message[data-layout='telegram'] .chat-message__bubble {
+  /* 留出对侧空白与尾巴，窄屏上气泡不撑满整行 */
+  max-width: min(100%, var(--lw-chat-message-max-width, 560px));
   padding: 7px 12px 8px;
+}
+
+@media (max-width: 767px) {
+  .chat-message[data-layout='telegram'] .chat-message__bubble {
+    max-width: min(86%, var(--lw-chat-message-max-width, 560px));
+  }
+}
+
+/* 同一发言组内相接的两侧收小圆角，视觉上连成一串（与原版一致） */
+.chat-message[data-layout='telegram'][data-message-shape='bubble'][data-group-start='false'] .chat-message__bubble {
+  border-top-left-radius: var(--lw-chat-bubble-join-radius, 5px);
+}
+
+.chat-message[data-layout='telegram'][data-message-shape='bubble'][data-group-end='false'] .chat-message__bubble {
+  border-bottom-left-radius: var(--lw-chat-bubble-join-radius, 5px);
+}
+
+.chat-message[data-layout='telegram'][data-message-shape='bubble'].is-user[data-group-start='false'] .chat-message__bubble {
+  border-top-left-radius: var(--lw-chat-bubble-radius, 16px);
+  border-top-right-radius: var(--lw-chat-bubble-join-radius, 5px);
+}
+
+.chat-message[data-layout='telegram'][data-message-shape='bubble'].is-user[data-group-end='false'] .chat-message__bubble {
+  border-bottom-left-radius: var(--lw-chat-bubble-radius, 16px);
+  border-bottom-right-radius: var(--lw-chat-bubble-join-radius, 5px);
 }
 
 .chat-message[data-layout='telegram'][data-message-shape='bubble'][data-group-end='true'] .chat-message__bubble {
@@ -746,7 +773,8 @@ onBeforeUnmount(() => {
 .chat-message[data-layout='telegram'][data-message-shape='bubble'][data-group-end='true'] .chat-message__bubble::before {
   content: '';
   position: absolute;
-  bottom: 0;
+  /* 气泡有 1px 透明边框，相对 padding box 下移 1px 才与气泡底边齐平 */
+  bottom: -1px;
   left: -8px;
   width: 9px;
   height: 14px;

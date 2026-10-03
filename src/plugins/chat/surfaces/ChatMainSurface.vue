@@ -205,7 +205,9 @@ watch(
 
 /* Telegram：顶栏与输入框浮在壁纸上，消息区从顶栏下方开始滚动 */
 .chat-main-surface.has-floating-header {
-  --chat-header-overlap: calc(64px + var(--lw-content-safe-top, 0px));
+  --chat-header-control-size: 48px;
+  /* 浮动顶栏占位 = 控件高度 + 上下各 8px 内边距（与 ChatHeader 的 --floating padding 一致） */
+  --chat-header-overlap: calc(var(--chat-header-control-size) + 16px + var(--lw-content-safe-top, 0px));
 }
 
 .chat-main-surface[data-layout='telegram'] .chat-main-surface__composer {

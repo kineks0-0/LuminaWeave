@@ -33,6 +33,7 @@ import {
   UserRound,
   X
 } from 'lucide-vue-next';
+import { resolveAvatarHue } from '../../../plugins/chat/presentation/telegramChatList.js';
 
 export type TelegramIconName =
   | 'archive'
@@ -109,32 +110,18 @@ const ICONS: Record<TelegramIconName, Component> = {
 
 export const getTelegramIconComponent = (name: TelegramIconName): Component => ICONS[name];
 
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg, #4aa3ff, #2a6fe6)',
-  'linear-gradient(135deg, #6ed36e, #39a94a)',
-  'linear-gradient(135deg, #f2b45c, #d46c35)',
-  'linear-gradient(135deg, #9b7cff, #6654de)',
-  'linear-gradient(135deg, #54c7d5, #2588a7)',
-  'linear-gradient(135deg, #e95c67, #c94157)'
-];
-
 export const getTelegramInitial = (value?: string | null) => {
   const trimmed = value?.trim();
   return trimmed ? trimmed.slice(0, 1).toUpperCase() : '?';
 };
 
-const hashText = (value: string) => {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash) + value.charCodeAt(index);
-    hash |= 0;
-  }
-  return Math.abs(hash);
+/** 与会话列表的 TelegramAvatar 共用同一色相算法，同一角色在各处的占位色一致 */
+export const getTelegramAvatarStyle = (seed?: string | null) => {
+  const hue = resolveAvatarHue(seed || 'telegram');
+  return {
+    '--lw-telegram-avatar-bg': `linear-gradient(180deg, oklch(0.74 0.13 ${hue}), oklch(0.62 0.14 ${hue}))`
+  };
 };
-
-export const getTelegramAvatarStyle = (seed?: string | null) => ({
-  '--lw-telegram-avatar-bg': AVATAR_GRADIENTS[hashText(seed || 'telegram') % AVATAR_GRADIENTS.length]
-});
 
 export const hideBrokenTelegramAvatar = (event: Event) => {
   const image = event.currentTarget;

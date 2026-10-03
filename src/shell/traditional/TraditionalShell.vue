@@ -399,7 +399,7 @@ const telegramLeftRailStyle = computed<CSSProperties>(() => ({
   align-content: stretch;
   overflow: hidden;
   border: 1px solid var(--lw-telegram-frame-border, rgba(255, 255, 255, 0.54));
-  border-radius: var(--lw-telegram-frame-radius);
+  border-radius: var(--lw-telegram-frame-radius, 0);
   background: var(--lw-telegram-frame-bg, rgba(226, 241, 252, 0.58));
   box-shadow: var(--lw-telegram-frame-shadow, 0 26px 70px rgba(44, 92, 130, 0.18));
   backdrop-filter: var(--lw-telegram-glass-blur, blur(24px) saturate(1.2));
@@ -434,6 +434,25 @@ const telegramLeftRailStyle = computed<CSSProperties>(() => ({
   min-width: 520px;
   border-radius: var(--lw-telegram-pane-radius, 0);
   border: 1px solid var(--lw-telegram-pane-border, transparent);
+  box-shadow: var(--lw-telegram-pane-shadow, none);
+}
+
+.lw-traditional-shell.is-telegram-desktop .lw-main-wrapper {
+  overflow: hidden;
+}
+
+/* Desktop Composition Runtime 渲染的中栏不经过 .lw-main-wrapper，同样按三栏统一的圆角裁剪 */
+.lw-traditional-shell.is-telegram-desktop > .lw-composition-node {
+  overflow: hidden;
+  border: 1px solid var(--lw-telegram-pane-border, transparent);
+  border-radius: var(--lw-telegram-pane-radius, 0);
+  box-shadow: var(--lw-telegram-pane-shadow, none);
+}
+
+/* 面板内非自由布局会把 .lw-main-wrapper 圆角清零；Telegram 桌面的中栏需要保留圆角与裁剪，不依赖 surface variant */
+.lw-panel-body:not(.is-freeform) .lw-traditional-shell.is-telegram-desktop .lw-main-wrapper {
+  border: 1px solid var(--lw-telegram-pane-border, transparent);
+  border-radius: var(--lw-telegram-pane-radius, 0);
   box-shadow: var(--lw-telegram-pane-shadow, none);
 }
 

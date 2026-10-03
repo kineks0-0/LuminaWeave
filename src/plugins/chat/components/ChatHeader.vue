@@ -384,8 +384,8 @@ const handleClassicMenu = (id: string): void => {
 
 .chat-header__round {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: var(--chat-header-control-size, 48px);
+  height: var(--chat-header-control-size, 48px);
   place-items: center;
   border-radius: 999px;
   cursor: pointer;
@@ -399,7 +399,7 @@ const handleClassicMenu = (id: string): void => {
 .chat-header__pill {
   display: flex;
   min-width: 0;
-  height: 48px;
+  height: var(--chat-header-control-size, 48px);
   align-items: center;
   border-radius: 999px;
   font: inherit;
@@ -421,13 +421,13 @@ button.chat-header__peer {
 }
 
 .chat-header--floating .chat-header__identity strong {
-  font-size: 1.0625rem;
-  font-weight: 600;
+  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
+  font-weight: var(--lw-telegram-list-title-weight, 600);
   line-height: 1.25;
 }
 
 .chat-header--floating .chat-header__identity small {
-  font-size: 0.875rem;
+  font-size: var(--lw-telegram-list-meta-size, 0.875rem);
   line-height: 1.25;
 }
 

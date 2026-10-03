@@ -70,11 +70,19 @@ defineProps<{
 }
 
 .lw-telegram-left-stack {
+  /* 标签条与列表共用一块圆角玻璃面板；列表本身透明，不再是嵌在里面的不透明方块 */
+  --lw-telegram-pane-list-bg: transparent;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--lw-telegram-pane-border, transparent);
+  border-radius: var(--lw-telegram-pane-radius, 0);
+  background: var(--lw-telegram-pane-bg, var(--lw-telegram-chat-list-bg, var(--lw-character-rail-bg)));
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
 }
 
 .lw-telegram-left-stack__tabs {
@@ -82,15 +90,15 @@ defineProps<{
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   padding: 10px 10px 0;
-  background: var(--lw-telegram-chat-list-bg, var(--lw-character-rail-bg));
 }
 
 .lw-telegram-left-stack__tabs button {
   min-height: 34px;
   border: none;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-surface-container-highest) 52%, transparent);
+  background: color-mix(in srgb, var(--lw-text-main) 6%, transparent);
   color: var(--lw-text-secondary);
+  cursor: pointer;
   font-size: var(--lw-type-label-medium-size);
   line-height: var(--lw-type-label-medium-line-height);
   font-weight: var(--lw-type-label-medium-weight);
@@ -110,9 +118,6 @@ defineProps<{
   height: auto;
   min-height: 0;
   flex: 1 1 0;
-  border-radius: var(--lw-telegram-pane-radius, 0);
-  border: 1px solid var(--lw-telegram-pane-border, transparent);
-  box-shadow: var(--lw-telegram-pane-shadow, none);
 }
 
 .lw-telegram-left-resizer {

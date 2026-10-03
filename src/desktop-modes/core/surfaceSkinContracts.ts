@@ -144,6 +144,7 @@ export const surfaceSkinContracts = new SurfaceSkinContractRegistry();
             '--lw-telegram-frame-border',
             '--lw-telegram-frame-radius',
             '--lw-telegram-frame-shadow',
+            '--lw-telegram-pane-bg',
             '--lw-telegram-diffuse-bg',
             '--lw-telegram-mobile-sheet-bg',
             '--lw-telegram-mobile-sheet-backdrop'

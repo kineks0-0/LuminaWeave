@@ -74,7 +74,12 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     '--lw-telegram-frame-border': context.resolvedAppearance === 'dark'
                         ? 'rgba(143, 192, 232, 0.22)'
                         : 'rgba(255, 255, 255, 0.58)',
-                    '--lw-telegram-frame-radius': isFloating ? '24px' : '18px',
+                    // 最外层不再做圆角裁剪，铺满宿主；圆角只留给内部三栏
+                    '--lw-telegram-frame-radius': '0px',
+                    // 左栏/右栏共用的通透面板底：以右栏的明亮磨砂为基准，再透一点让背景渐变透出
+                    '--lw-telegram-pane-bg': context.resolvedAppearance === 'dark'
+                        ? 'linear-gradient(180deg, rgba(30, 46, 63, 0.78), rgba(20, 33, 46, 0.70))'
+                        : 'linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(245, 251, 255, 0.62))',
                     '--lw-telegram-frame-shadow': context.resolvedAppearance === 'dark'
                         ? '0 26px 70px rgba(0, 0, 0, 0.34)'
                         : '0 26px 70px rgba(44, 92, 130, 0.18)',
@@ -217,12 +222,12 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     '--lw-chat-scroll-padding': isCompact ? '10px 12px' : '14px 16px',
                     '--lw-chat-content-gap': isCompact ? '8px' : '10px',
                     '--lw-chat-group-gap': '4px',
-                    '--lw-chat-day-bg': isDark ? 'rgba(46, 63, 79, 0.86)' : 'rgba(40, 110, 70, 0.55)',
+                    '--lw-chat-day-bg': isDark ? 'rgba(46, 63, 79, 0.86)' : 'rgba(38, 92, 60, 0.68)',
                     '--lw-chat-day-color': '#ffffff',
                     '--lw-chat-day-padding': '4px 12px',
                     '--lw-chat-day-font-size': '0.875rem',
                     '--lw-chat-day-font-weight': 600,
-                    '--lw-chat-floating-bg': isDark ? 'rgba(29, 43, 56, 0.94)' : 'rgba(255, 255, 255, 0.78)',
+                    '--lw-chat-floating-bg': isDark ? 'rgba(29, 43, 56, 0.94)' : 'rgba(255, 255, 255, 0.88)',
                     '--lw-chat-floating-border': isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(30, 50, 30, 0.06)',
                     '--lw-chat-floating-shadow': isDark ? '0 2px 10px rgba(0, 0, 0, 0.22)' : '0 2px 10px rgba(30, 50, 30, 0.14)',
                     '--lw-chat-floating-blur': 'blur(18px) saturate(1.2)',
@@ -233,11 +238,12 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                         : '#effedd',
                     '--lw-chat-user-bubble-attachment': isDark ? 'fixed' : 'scroll',
                     '--lw-chat-user-color': isDark ? '#ffffff' : 'var(--lw-text-main)',
-                    '--lw-chat-meta-color': isDark ? '#7f8b98' : '#a1aab3',
-                    '--lw-chat-user-meta-color': isDark ? 'rgba(255, 255, 255, 0.78)' : '#5fae5a',
+                    '--lw-chat-meta-color': isDark ? '#8794a1' : '#7d8890',
+                    '--lw-chat-user-meta-color': isDark ? 'rgba(255, 255, 255, 0.78)' : '#4e9c47',
                     '--lw-chat-border': 'transparent',
                     '--lw-chat-user-bubble-border': 'transparent',
                     '--lw-chat-bubble-radius': '18px',
+                    '--lw-chat-bubble-join-radius': '5px',
                     '--lw-chat-bubble-shadow': isDark ? 'none' : '0 1px 1px rgba(30, 50, 30, 0.14)',
                     '--lw-chat-message-max-width': '560px',
                     '--lw-chat-avatar-size': '38px',
@@ -252,7 +258,12 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     '--lw-chat-menu-radius': '16px',
                     '--lw-chat-menu-shadow': isDark ? '0 10px 30px rgba(0, 0, 0, 0.35)' : '0 10px 30px rgba(30, 50, 30, 0.18)',
                     '--lw-chat-empty-mark-bg': 'var(--lw-chat-floating-bg)',
-                    '--lw-chat-empty-mark-shadow': 'none'
+                    '--lw-chat-empty-mark-shadow': 'none',
+                    // 空状态文字不直接压在涂鸦壁纸上：放进浮动卡，与顶栏/输入栏同一材质
+                    '--lw-chat-empty-card-bg': 'var(--lw-chat-floating-bg)',
+                    '--lw-chat-empty-card-padding': '20px 26px',
+                    '--lw-chat-empty-card-radius': '22px',
+                    '--lw-chat-empty-card-shadow': 'var(--lw-chat-floating-shadow)'
                 };
             }
         },

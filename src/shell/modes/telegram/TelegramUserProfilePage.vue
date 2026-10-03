@@ -1,5 +1,5 @@
 <template>
-  <section class="lw-telegram-user-profile" aria-label="Telegram user profile">
+  <section class="lw-telegram-user-profile" :style="infoPanelStyle" aria-label="Telegram user profile">
     <header class="lw-telegram-user-profile__hero">
       <div class="lw-telegram-user-profile__avatar-wrap">
         <span class="lw-telegram-user-profile__avatar" :style="userAvatarStyle">
@@ -144,6 +144,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import type { CSSProperties } from 'vue';
+import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
 import type { WidgetPanelGroup } from '../../types.js';
 import {
   TELEGRAM_ICON_STROKE_WIDTH,
@@ -166,6 +168,10 @@ const emit = defineEmits<{
   (e: 'openPanel', panelId: string): void;
   (e: 'close'): void;
 }>();
+
+// 与角色资料页共用同一套面板/卡片底色，避免两张资料页像两个产品
+const { cssVars: infoPanelVars } = useSurfaceSkin('telegram.infoPanel');
+const infoPanelStyle = computed<CSSProperties>(() => infoPanelVars.value as CSSProperties);
 
 const activeTab = ref<'profile' | 'panels' | 'desktop'>('profile');
 const isMenuOpen = ref(false);
@@ -200,7 +206,7 @@ const selectDesktopMode = (modeId: string) => {
   overflow: auto;
   padding: calc(34px + var(--lw-content-safe-top, var(--lw-safe-top, 0px))) 20px calc(98px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
   color: var(--lw-text-main);
-  background: var(--lw-telegram-conversation-bg, transparent);
+  background: transparent;
 }
 
 .lw-telegram-user-profile__hero {
@@ -224,14 +230,12 @@ const selectDesktopMode = (modeId: string) => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 3px solid color-mix(in srgb, var(--lw-surface-container-highest) 92%, transparent);
   background: var(--lw-telegram-avatar-bg, color-mix(in srgb, var(--lw-primary) 18%, var(--lw-surface-container-high)));
   color: var(--lw-text-main);
   font-size: var(--lw-type-headline-large-size);
   line-height: var(--lw-type-headline-large-line-height);
   font-weight: var(--lw-type-headline-large-weight);
   letter-spacing: var(--lw-type-headline-large-tracking);
-  box-shadow: 0 18px 34px rgba(44, 92, 130, 0.16);
 }
 
 .lw-telegram-user-profile__avatar img {
@@ -249,7 +253,7 @@ const selectDesktopMode = (modeId: string) => {
   border: 2px solid color-mix(in srgb, var(--lw-bg-app) 86%, transparent);
   border-radius: 999px;
   background: var(--lw-primary);
-  color: #f7fbff;
+  color: var(--lw-text-inverse);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -268,7 +272,7 @@ const selectDesktopMode = (modeId: string) => {
   border: 0;
   border-radius: 22px;
   background: var(--lw-telegram-glass-bg-strong, color-mix(in srgb, var(--lw-surface-container-highest) 92%, transparent));
-  box-shadow: var(--lw-telegram-panel-shadow, 0 20px 42px rgba(44, 92, 130, 0.16));
+  box-shadow: var(--lw-shadow-card);
   backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
   -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
 }
@@ -293,7 +297,7 @@ const selectDesktopMode = (modeId: string) => {
 }
 
 .lw-telegram-user-profile__menu button.is-danger {
-  color: #d64242;
+  color: var(--lw-danger);
 }
 
 .lw-telegram-user-profile__menu span,
@@ -325,15 +329,15 @@ const selectDesktopMode = (modeId: string) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 24px;
-  line-height: 30px;
+  font-size: var(--lw-type-headline-small-size);
+  line-height: var(--lw-type-headline-small-line-height);
   font-weight: 700;
   letter-spacing: 0;
 }
 
 .lw-telegram-user-profile__identity span {
-  font-size: 14px;
-  line-height: 20px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
   font-weight: 450;
   letter-spacing: 0;
 }
@@ -347,8 +351,8 @@ const selectDesktopMode = (modeId: string) => {
 .lw-telegram-user-profile__actions button {
   min-height: 62px;
   border: 0;
-  border-radius: 18px;
-  background: var(--lw-telegram-glass-bg, color-mix(in srgb, var(--lw-surface-container-highest) 58%, transparent));
+  border-radius: 16px;
+  background: var(--lw-telegram-info-card-bg, var(--lw-bg-surface));
   color: var(--lw-text-main);
   display: flex;
   flex-direction: column;
@@ -356,11 +360,10 @@ const selectDesktopMode = (modeId: string) => {
   justify-content: center;
   gap: 8px;
   box-shadow: none;
-  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
-  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 650;
+  cursor: pointer;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -374,7 +377,7 @@ const selectDesktopMode = (modeId: string) => {
   padding: 5px;
   border: 0.5px solid var(--lw-telegram-tab-rim, color-mix(in srgb, var(--lw-border-base) 42%, transparent));
   border-radius: 999px;
-  background: var(--lw-telegram-tab-bg, color-mix(in srgb, var(--lw-surface-container-highest) 52%, transparent));
+  background: var(--lw-telegram-info-card-bg, var(--lw-bg-surface));
   box-shadow: none;
 }
 
@@ -385,10 +388,11 @@ const selectDesktopMode = (modeId: string) => {
   border-radius: 999px;
   background: transparent;
   color: var(--lw-text-secondary);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
   font-weight: 650;
   letter-spacing: 0;
+  cursor: pointer;
 }
 
 .lw-telegram-user-profile__tabs button.active {
@@ -405,8 +409,8 @@ const selectDesktopMode = (modeId: string) => {
 
 .lw-telegram-user-profile__section h3 {
   margin: 0;
-  font-size: 15px;
-  line-height: 20px;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
   font-weight: 700;
   letter-spacing: 0;
 }
@@ -414,8 +418,8 @@ const selectDesktopMode = (modeId: string) => {
 .lw-telegram-user-profile__section p {
   margin: 0;
   color: var(--lw-text-secondary);
-  font-size: 13px;
-  line-height: 19px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
   font-weight: var(--lw-type-body-medium-weight);
   letter-spacing: var(--lw-type-body-medium-tracking);
 }
@@ -429,8 +433,8 @@ const selectDesktopMode = (modeId: string) => {
   gap: 12px;
   padding: 0 16px;
   border: 0;
-  border-radius: 18px;
-  background: var(--lw-telegram-glass-bg, color-mix(in srgb, var(--lw-surface-container-highest) 58%, transparent));
+  border-radius: 16px;
+  background: var(--lw-telegram-info-card-bg, var(--lw-bg-surface));
   color: var(--lw-text-main);
   box-shadow: none;
 }
@@ -438,8 +442,8 @@ const selectDesktopMode = (modeId: string) => {
 .lw-telegram-user-profile__setting-row span,
 .lw-telegram-user-profile__panel-row small {
   color: var(--lw-text-secondary);
-  font-size: 12px;
-  line-height: 17px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
   font-weight: 450;
   letter-spacing: 0;
 }
@@ -450,8 +454,8 @@ const selectDesktopMode = (modeId: string) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
   font-weight: 650;
   letter-spacing: 0;
 }

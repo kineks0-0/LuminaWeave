@@ -2,11 +2,13 @@
   <div ref="scrollArea" class="chat-transcript" :class="{ 'is-compact': compact }">
     <div ref="contentArea" class="chat-transcript__content">
       <div v-if="showEmptyState" class="chat-transcript__empty">
-        <span class="chat-transcript__empty-mark" aria-hidden="true">
-          <MessageCircle :size="22" />
-        </span>
-        <strong>{{ viewState.isNoActiveChatView ? '没有打开的聊天' : '开始新的对话' }}</strong>
-        <p>{{ viewState.isNoActiveChatView ? viewState.emptyStateMessage : '在下方输入第一条消息。' }}</p>
+        <div class="chat-transcript__empty-card">
+          <span class="chat-transcript__empty-mark" aria-hidden="true">
+            <MessageCircle :size="22" />
+          </span>
+          <strong>{{ viewState.isNoActiveChatView ? '没有打开的聊天' : '开始新的对话' }}</strong>
+          <p>{{ viewState.isNoActiveChatView ? viewState.emptyStateMessage : '在下方输入第一条消息。' }}</p>
+        </div>
       </div>
       <div v-if="viewState.readOnlyReason" class="chat-transcript__notice">
         {{ viewState.readOnlyReason }}
@@ -224,6 +226,21 @@ watch(
   text-align: center;
 }
 
+/* 仅在皮肤声明了提示卡背景时成卡（Telegram：壁纸之上承托文字） */
+.chat-transcript__empty-card {
+  display: flex;
+  max-width: min(100%, 320px);
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: var(--lw-chat-empty-card-padding, 0);
+  border-radius: var(--lw-chat-empty-card-radius, 0);
+  background: var(--lw-chat-empty-card-bg, transparent);
+  box-shadow: var(--lw-chat-empty-card-shadow, none);
+  backdrop-filter: var(--lw-chat-floating-blur, none);
+  -webkit-backdrop-filter: var(--lw-chat-floating-blur, none);
+}
+
 .chat-transcript__empty-mark {
   display: grid;
   width: 48px;
@@ -246,6 +263,7 @@ watch(
 .chat-transcript__empty p {
   max-width: 36ch;
   margin: 0;
+  color: var(--lw-text-secondary);
   font-size: var(--lw-type-body-small-size);
   line-height: var(--lw-type-body-small-line-height);
 }

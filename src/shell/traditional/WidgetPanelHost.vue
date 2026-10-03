@@ -250,7 +250,9 @@ const emit = defineEmits<{
 }
 
 .lw-widget-container[data-surface-variant='telegram'] {
-  background: var(--lw-telegram-info-panel-bg, var(--lw-shell-widget-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent)));
+  /* 内容（角色资料等）有自己的背景，必须按圆角裁剪 */
+  overflow: hidden;
+  background: var(--lw-telegram-pane-bg, var(--lw-telegram-info-panel-bg, var(--lw-shell-widget-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent))));
   border-color: var(--lw-telegram-info-panel-border, var(--lw-shell-widget-border, var(--lw-border-subtle)));
   box-shadow: var(--lw-telegram-panel-shadow, var(--lw-shadow-card));
   backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
@@ -261,7 +263,7 @@ const emit = defineEmits<{
   border: 1px solid var(--lw-telegram-pane-border, var(--lw-border-subtle));
   border-radius: var(--lw-telegram-pane-radius, 0);
   box-shadow: var(--lw-telegram-pane-shadow, none);
-  background: var(--lw-shell-widget-pane-bg, linear-gradient(180deg, color-mix(in srgb, var(--lw-surface-container-high) 86%, transparent), color-mix(in srgb, var(--lw-surface-container) 70%, transparent)));
+  background: var(--lw-telegram-pane-bg, var(--lw-shell-widget-pane-bg, linear-gradient(180deg, color-mix(in srgb, var(--lw-surface-container-high) 86%, transparent), color-mix(in srgb, var(--lw-surface-container) 70%, transparent))));
 }
 
 .lw-widget-container[data-surface-variant='telegram'] .widget-container-header {

@@ -36,6 +36,7 @@ export const CHAT_SKIN_STYLE_VARS = {
     '--lw-chat-border': 'AI 气泡边框颜色',
     '--lw-chat-user-bubble-border': '用户气泡边框颜色',
     '--lw-chat-bubble-radius': '气泡圆角',
+    '--lw-chat-bubble-join-radius': '同一发言组内相接一侧的气泡圆角（连续气泡串）',
     '--lw-chat-bubble-shadow': '气泡阴影',
     '--lw-chat-message-max-width': '气泡最大宽度',
     '--lw-chat-message-hover-bg': '消息行悬停背景',
@@ -67,7 +68,11 @@ export const CHAT_SKIN_STYLE_VARS = {
     '--lw-chat-menu-shadow': '聊天菜单阴影',
     // 空状态
     '--lw-chat-empty-mark-bg': '空会话标记背景',
-    '--lw-chat-empty-mark-shadow': '空会话标记阴影'
+    '--lw-chat-empty-mark-shadow': '空会话标记阴影',
+    '--lw-chat-empty-card-bg': '空会话提示卡背景（壁纸之上需要承托文字的模式使用）',
+    '--lw-chat-empty-card-padding': '空会话提示卡内边距',
+    '--lw-chat-empty-card-radius': '空会话提示卡圆角',
+    '--lw-chat-empty-card-shadow': '空会话提示卡阴影'
 } as const;
 
 /** 由 JS 解析为展示偏好（不直接参与 CSS）的值 */

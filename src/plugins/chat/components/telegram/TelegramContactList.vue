@@ -156,7 +156,7 @@ onBeforeUnmount(cancelLongPress);
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  background: var(--lw-bg-surface);
+  background: var(--lw-telegram-pane-list-bg, var(--lw-bg-surface));
   color: var(--lw-text-main);
 }
 
@@ -172,7 +172,7 @@ onBeforeUnmount(cancelLongPress);
   color: var(--lw-telegram-title-color, var(--lw-text-main));
   flex: 1;
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--lw-telegram-page-title-size, 1.5rem);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -289,13 +289,13 @@ onBeforeUnmount(cancelLongPress);
 }
 
 .telegram-contacts__copy strong {
-  font-size: 1.0625rem;
-  font-weight: 600;
+  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
+  font-weight: var(--lw-telegram-list-title-weight, 600);
 }
 
 .telegram-contacts__copy small {
   color: var(--lw-text-muted);
-  font-size: 0.9375rem;
+  font-size: var(--lw-telegram-list-preview-size, 1rem);
 }
 
 .telegram-contacts__item :deep(.chat-popover-menu) {

@@ -58,7 +58,21 @@
         </template>
       </li>
     </ul>
-    <p v-else class="telegram-chat-list__empty">{{ query.trim() ? '没有匹配的聊天' : '还没有聊天，去联系人里选一个角色开始吧' }}</p>
+    <div v-else class="telegram-chat-list__empty">
+      <span class="telegram-chat-list__empty-mark" aria-hidden="true">
+        <MessageCircle :size="30" />
+      </span>
+      <strong>{{ query.trim() ? '没有匹配的聊天' : '还没有聊天' }}</strong>
+      <p v-if="!query.trim()">去联系人里选一个角色，开始第一段对话</p>
+      <button
+        v-if="page && canCompose && !query.trim()"
+        type="button"
+        class="telegram-chat-list__empty-action"
+        @click="emit('compose')"
+      >
+        选择联系人
+      </button>
+    </div>
     <button
       v-if="page && canCompose"
       type="button"
@@ -74,7 +88,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
-import { Check, MessageCirclePlus, Search, X } from 'lucide-vue-next';
+import { Check, MessageCircle, MessageCirclePlus, Search, X } from 'lucide-vue-next';
 import type { CharacterChannelGroup } from '../../../../types/ConversationContextTypes.js';
 import type { ChatMenuItem } from '../../presentation/chatMenus.js';
 import { buildTelegramChatListRows, type TelegramChatListRow } from '../../presentation/telegramChatList.js';
@@ -184,7 +198,7 @@ onBeforeUnmount(cancelLongPress);
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  background: var(--lw-bg-surface);
+  background: var(--lw-telegram-pane-list-bg, var(--lw-bg-surface));
   color: var(--lw-text-main);
 }
 
@@ -200,7 +214,7 @@ onBeforeUnmount(cancelLongPress);
   color: var(--lw-telegram-title-color, var(--lw-text-main));
   flex: 1;
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--lw-telegram-page-title-size, 1.5rem);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -240,7 +254,7 @@ onBeforeUnmount(cancelLongPress);
   gap: 14px;
   margin: 6px 12px 8px;
   padding: 0 18px;
-  font-size: 1.0625rem;
+  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
 }
 
 .telegram-chat-list__search input {
@@ -257,7 +271,7 @@ onBeforeUnmount(cancelLongPress);
   min-height: 0;
   flex: 1;
   margin: 0;
-  padding: 4px 0 calc(96px + var(--lw-content-safe-bottom, 0px));
+  padding: 4px 0 calc(var(--lw-telegram-bottom-nav-clearance, 96px) + var(--lw-content-safe-bottom, 0px));
   overflow: auto;
   list-style: none;
 }
@@ -302,7 +316,8 @@ onBeforeUnmount(cancelLongPress);
   background: var(--lw-bg-hover);
 }
 
-.telegram-chat-list__row.is-active {
+/* 仅桌面左栏高亮当前会话（原版桌面行为）；移动整页不高亮任何行 */
+.telegram-chat-list:not(.is-page) .telegram-chat-list__row.is-active {
   background: var(--lw-primary);
   color: var(--lw-text-inverse);
 }
@@ -325,14 +340,14 @@ onBeforeUnmount(cancelLongPress);
   min-width: 0;
   flex: 1;
   overflow: hidden;
-  font-size: 1.0625rem;
-  font-weight: 600;
+  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
+  font-weight: var(--lw-telegram-list-title-weight, 600);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .telegram-chat-list__line strong small {
-  font-size: 0.9375rem;
+  font-size: var(--lw-telegram-list-preview-size, 1rem);
   font-weight: 400;
   opacity: 0.7;
 }
@@ -344,19 +359,19 @@ onBeforeUnmount(cancelLongPress);
 
 .telegram-chat-list__line time {
   flex: 0 0 auto;
-  font-size: 0.875rem;
+  font-size: var(--lw-telegram-list-meta-size, 0.875rem);
   font-variant-numeric: tabular-nums;
 }
 
 .telegram-chat-list__preview {
   overflow: hidden;
-  font-size: 1rem;
+  font-size: var(--lw-telegram-list-preview-size, 1rem);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.telegram-chat-list__row.is-active time,
-.telegram-chat-list__row.is-active .telegram-chat-list__preview {
+.telegram-chat-list:not(.is-page) .telegram-chat-list__row.is-active time,
+.telegram-chat-list:not(.is-page) .telegram-chat-list__row.is-active .telegram-chat-list__preview {
   color: inherit;
   opacity: 0.8;
 }
@@ -386,7 +401,7 @@ onBeforeUnmount(cancelLongPress);
 .telegram-chat-list__fab {
   position: absolute;
   right: 18px;
-  bottom: calc(100px + var(--lw-content-safe-bottom, 0px));
+  bottom: calc(var(--lw-telegram-bottom-nav-clearance, 96px) + 8px + var(--lw-content-safe-bottom, 0px));
   display: grid;
   width: 58px;
   height: 58px;
@@ -405,9 +420,54 @@ onBeforeUnmount(cancelLongPress);
 }
 
 .telegram-chat-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  padding: 48px 32px;
+  padding: 56px 32px;
   color: var(--lw-text-muted);
   text-align: center;
+}
+
+.telegram-chat-list__empty-mark {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-primary) 12%, transparent);
+  color: var(--lw-primary);
+}
+
+.telegram-chat-list__empty strong {
+  color: var(--lw-text-main);
+  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
+  font-weight: var(--lw-telegram-list-title-weight, 600);
+}
+
+.telegram-chat-list__empty p {
+  max-width: 24ch;
+  margin: 0;
+  font-size: var(--lw-telegram-list-preview-size, 1rem);
+  line-height: 1.5;
+}
+
+.telegram-chat-list__empty-action {
+  margin-top: 8px;
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--lw-primary);
+  color: var(--lw-text-inverse);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter var(--lw-transition);
+}
+
+.telegram-chat-list__empty-action:hover {
+  filter: brightness(1.06);
 }
 </style>

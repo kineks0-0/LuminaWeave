@@ -1,6 +1,18 @@
 import { getDesktopModeSettingValue } from '../../core/registry.js';
 import type { ComponentThemeContext, ThemeValueMap } from '../../core/types.js';
 
+/** 即时通讯的列表/标题排版：比通用 title-small 略大，保证手机上扫读（见 typography.md Desktop Theme Freedom） */
+const TELEGRAM_TYPE_TOKENS: ThemeValueMap = {
+    '--lw-telegram-page-title-size': '1.5rem',
+    '--lw-telegram-list-title-size': '1.0625rem',
+    '--lw-telegram-list-title-weight': 600,
+    '--lw-telegram-list-preview-size': '1rem',
+    '--lw-telegram-list-meta-size': '0.875rem',
+    '--lw-telegram-input-size': '1.0625rem',
+    /** 移动端悬浮底部导航占用的高度（不含安全区）：列表底部留白与悬浮键据此避让 */
+    '--lw-telegram-bottom-nav-clearance': '96px'
+};
+
 export const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance, desktopModeId }: ComponentThemeContext): ThemeValueMap => {
     const isDark = resolvedAppearance === 'dark';
     const glassIntensity = getDesktopModeSettingValue(activeSettings, desktopModeId, 'glassIntensity', 'medium');
@@ -15,7 +27,7 @@ export const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance
             ? (isDark ? '0 18px 44px rgba(0, 0, 0, 0.22)' : '0 18px 44px rgba(44, 92, 130, 0.12)')
             : (isDark ? '0 24px 60px rgba(0, 0, 0, 0.28)' : '0 24px 58px rgba(44, 92, 130, 0.16)');
 
-    return isDark
+    const palette: ThemeValueMap = isDark
         ? {
             '--lw-primary': '#2a9df0',
             '--lw-primary-rgb': '42, 157, 240',
@@ -94,4 +106,6 @@ export const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance
             '--lw-telegram-user-bubble': 'linear-gradient(135deg, #dff7d6, #c9f0bf)',
             '--lw-telegram-ai-bubble': 'rgba(255, 255, 255, 0.92)'
         };
+
+    return { ...TELEGRAM_TYPE_TOKENS, ...palette };
 };

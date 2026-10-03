@@ -51,7 +51,9 @@
       </button>
     </div>
 
-    <section class="lw-telegram-profile__card">
+    <p v-if="!activeGroup" class="lw-telegram-profile__hint">从左侧选择一个聊天，这里会显示对应角色的资料与会话。</p>
+
+    <section v-if="activeGroup" class="lw-telegram-profile__card">
       <div class="lw-telegram-profile__field">
         <p class="lw-telegram-profile__bio">{{ bioText }}</p>
         <small>最近消息</small>
@@ -78,8 +80,8 @@
       </button>
     </section>
 
-    <h3 class="lw-telegram-profile__section-title">会话 · {{ allSessions.length }}</h3>
-    <section class="lw-telegram-profile__card is-list" aria-label="会话">
+    <h3 v-if="activeGroup" class="lw-telegram-profile__section-title">会话 · {{ allSessions.length }}</h3>
+    <section v-if="activeGroup" class="lw-telegram-profile__card is-list" aria-label="会话">
       <button
         v-for="session in allSessions"
         :key="session.id"
@@ -94,7 +96,7 @@
         </span>
         <time>{{ formatSessionTime(session.updatedAt) }}</time>
       </button>
-      <button type="button" class="lw-telegram-profile__session is-new" :disabled="!activeGroup" @click="createSession">
+      <button type="button" class="lw-telegram-profile__session is-new" @click="createSession">
         <MessageCirclePlus :size="20" :stroke-width="2.2" aria-hidden="true" />
         <strong>新建会话</strong>
       </button>
@@ -234,9 +236,25 @@ const formatSessionTime = (timestamp: number): string => {
   flex-direction: column;
   gap: 12px;
   padding: 0 12px calc(24px + var(--lw-content-safe-bottom, 0px));
-  background: var(--lw-telegram-info-panel-bg, var(--lw-bg-app));
+  /* 面板底由外层通透玻璃提供（桌面右栏容器 / 移动端 stack），卡片略透出背景 */
+  --lw-telegram-profile-card-bg: color-mix(in srgb, var(--lw-telegram-info-card-bg, var(--lw-bg-surface)) 74%, transparent);
+  /* 桌面右栏较窄，整体排版比手机整页收一档；.is-mobile 恢复为大号 */
+  --lw-telegram-profile-avatar-size: 84px;
+  --lw-telegram-profile-name-size: var(--lw-type-title-large-size);
+  --lw-telegram-profile-name-line-height: var(--lw-type-title-large-line-height);
+  --lw-telegram-profile-body-size: var(--lw-type-body-large-size);
+  --lw-telegram-profile-secondary-size: var(--lw-type-body-medium-size);
+  background: transparent;
   color: var(--lw-text-main);
   overflow: auto;
+}
+
+.lw-telegram-profile.is-mobile {
+  --lw-telegram-profile-avatar-size: 108px;
+  --lw-telegram-profile-name-size: var(--lw-type-headline-small-size);
+  --lw-telegram-profile-name-line-height: var(--lw-type-headline-small-line-height);
+  --lw-telegram-profile-body-size: var(--lw-telegram-list-title-size, 1.0625rem);
+  --lw-telegram-profile-secondary-size: var(--lw-telegram-list-meta-size, 0.875rem);
 }
 
 .lw-telegram-profile > * {
@@ -255,13 +273,16 @@ const formatSessionTime = (timestamp: number): string => {
   gap: 8px;
   margin: 0 -12px;
   padding: calc(6px + var(--lw-content-safe-top, 0px)) 8px 6px;
-  background: var(--lw-telegram-info-panel-bg, var(--lw-bg-app));
+  background: color-mix(in srgb, var(--lw-telegram-info-card-bg, var(--lw-bg-surface)) 46%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .lw-telegram-profile__topbar strong {
   padding-left: 10px;
-  font-size: 1.125rem;
-  font-weight: 600;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
 }
 
 .lw-telegram-profile__bar-button {
@@ -291,15 +312,15 @@ const formatSessionTime = (timestamp: number): string => {
 
 .lw-telegram-profile__avatar {
   display: grid;
-  width: 108px;
-  height: 108px;
+  width: var(--lw-telegram-profile-avatar-size);
+  height: var(--lw-telegram-profile-avatar-size);
   margin-bottom: 12px;
   place-items: center;
   overflow: hidden;
   border-radius: 999px;
   background: var(--lw-telegram-avatar-bg);
   color: var(--lw-text-inverse);
-  font-size: 2.5rem;
+  font-size: calc(var(--lw-telegram-profile-avatar-size) * 0.4);
   font-weight: 600;
 }
 
@@ -313,9 +334,9 @@ const formatSessionTime = (timestamp: number): string => {
   max-width: 100%;
   margin: 0;
   overflow: hidden;
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.25;
+  font-size: var(--lw-telegram-profile-name-size);
+  font-weight: 650;
+  line-height: var(--lw-telegram-profile-name-line-height);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -323,7 +344,8 @@ const formatSessionTime = (timestamp: number): string => {
 .lw-telegram-profile__hero p {
   margin: 0;
   color: var(--lw-text-muted);
-  font-size: 1rem;
+  font-size: var(--lw-telegram-profile-secondary-size);
+  line-height: var(--lw-type-body-medium-line-height);
 }
 
 .lw-telegram-profile__actions {
@@ -342,17 +364,27 @@ const formatSessionTime = (timestamp: number): string => {
   gap: 4px;
   border: 0;
   border-radius: 14px;
-  background: var(--lw-telegram-info-card-bg, var(--lw-bg-surface));
+  background: var(--lw-telegram-profile-card-bg);
   color: var(--lw-text-main);
   font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 500;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: 600;
   cursor: pointer;
   transition: background-color var(--lw-transition);
 }
 
 .lw-telegram-profile__actions button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--lw-text-main) 6%, var(--lw-telegram-info-card-bg, var(--lw-bg-surface)));
+  background: color-mix(in srgb, var(--lw-text-main) 6%, var(--lw-telegram-profile-card-bg));
+}
+
+.lw-telegram-profile__hint {
+  margin: 0;
+  padding: 4px 20px 8px;
+  color: var(--lw-text-muted);
+  font-size: var(--lw-telegram-list-meta-size, 0.875rem);
+  line-height: 1.5;
+  text-align: center;
 }
 
 .lw-telegram-profile__actions button:disabled {
@@ -365,7 +397,7 @@ const formatSessionTime = (timestamp: number): string => {
   flex-direction: column;
   overflow: hidden;
   border-radius: 16px;
-  background: var(--lw-telegram-info-card-bg, var(--lw-bg-surface));
+  background: var(--lw-telegram-profile-card-bg);
 }
 
 .lw-telegram-profile__field {
@@ -377,7 +409,7 @@ const formatSessionTime = (timestamp: number): string => {
 
 .lw-telegram-profile__field p {
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: var(--lw-telegram-profile-body-size);
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -391,7 +423,7 @@ const formatSessionTime = (timestamp: number): string => {
 
 .lw-telegram-profile__field small {
   color: var(--lw-text-muted);
-  font-size: 0.875rem;
+  font-size: var(--lw-telegram-profile-secondary-size);
 }
 
 .lw-telegram-profile__link,
@@ -405,7 +437,7 @@ const formatSessionTime = (timestamp: number): string => {
   color: var(--lw-text-main);
   padding: 8px 14px 8px 16px;
   font: inherit;
-  font-size: 1.0625rem;
+  font-size: var(--lw-telegram-profile-body-size);
   text-align: left;
   cursor: pointer;
   transition: background-color var(--lw-transition);
@@ -445,8 +477,9 @@ const formatSessionTime = (timestamp: number): string => {
 .lw-telegram-profile__section-title {
   margin: 8px 6px -4px;
   color: var(--lw-primary);
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
 }
 
 .lw-telegram-profile__session-copy {
@@ -471,7 +504,7 @@ const formatSessionTime = (timestamp: number): string => {
 .lw-telegram-profile__session-copy small,
 .lw-telegram-profile__session time {
   color: var(--lw-text-muted);
-  font-size: 0.875rem;
+  font-size: var(--lw-telegram-profile-secondary-size);
 }
 
 .lw-telegram-profile__session.is-current strong {

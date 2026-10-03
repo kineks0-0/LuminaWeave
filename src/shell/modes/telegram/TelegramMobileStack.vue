@@ -134,6 +134,14 @@ defineProps<{
   position: relative;
 }
 
+/* 移动端三个 tab 页共用桌面右栏同款的通透磨砂底，列表/资料页自身不再铺不透明底色 */
+.lw-main-wrapper.lw-telegram-mobile-stack {
+  --lw-telegram-pane-list-bg: transparent;
+  background:
+    var(--lw-telegram-pane-bg, linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(245, 251, 255, 0.62))),
+    var(--lw-telegram-frame-bg, var(--lw-bg-app));
+}
+
 .lw-telegram-mobile-stack__bar {
   min-height: 52px;
   display: grid;

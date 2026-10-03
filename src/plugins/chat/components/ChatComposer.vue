@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Send, Square } from 'lucide-vue-next';
 import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
 import type { ConversationViewContext } from '../../../types/ConversationContextTypes.js';
@@ -103,6 +103,12 @@ const autosize = (): void => {
   const element = textarea.value;
   if (!element || props.layout !== 'telegram') return;
   element.style.height = 'auto';
+  // 空草稿回到 CSS 的单行最小高度：挂载时宿主可能尚未完成布局（宽度极窄），
+  // 此时测得的 scrollHeight 会把 placeholder 折成多行，导致输入栏凭空变高
+  if (!element.value) {
+    element.style.height = '';
+    return;
+  }
   element.style.height = `${Math.min(element.scrollHeight, TELEGRAM_COMPOSER_MAX_HEIGHT_PX)}px`;
 };
 
@@ -111,7 +117,23 @@ watch(() => props.layout, () => {
   if (textarea.value && props.layout !== 'telegram') textarea.value.style.height = '';
   void nextTick(autosize);
 });
-onMounted(autosize);
+
+// 宽度变化（侧栏拖拽、窗口缩放、首次布局完成）会改变折行，需要重新测量
+let resizeObserver: ResizeObserver | null = null;
+let observedWidth = 0;
+onMounted(() => {
+  autosize();
+  const element = textarea.value;
+  if (!element || typeof ResizeObserver === 'undefined') return;
+  observedWidth = element.clientWidth;
+  resizeObserver = new ResizeObserver(() => {
+    if (element.clientWidth === observedWidth) return;
+    observedWidth = element.clientWidth;
+    autosize();
+  });
+  resizeObserver.observe(element);
+});
+onBeforeUnmount(() => resizeObserver?.disconnect());
 
 const sendMessage = async (): Promise<void> => {
   const text = props.draft.trim();
@@ -225,7 +247,7 @@ watch(
   gap: 6px;
   align-items: end;
   border: 1px solid var(--lw-chat-floating-border, var(--lw-chat-input-border, var(--lw-border-base)));
-  border-radius: 26px;
+  border-radius: var(--lw-chat-input-radius, 26px);
   background: var(--lw-chat-floating-bg, var(--lw-chat-input-surface, var(--lw-bg-surface)));
   box-shadow: var(--lw-chat-floating-shadow, none);
   backdrop-filter: var(--lw-chat-floating-blur, none);
@@ -247,7 +269,7 @@ watch(
   max-height: 200px;
   resize: none;
   padding: 11px 6px 11px 12px;
-  font-size: 1.0625rem;
+  font-size: var(--lw-telegram-input-size, var(--lw-type-body-large-size));
   line-height: 22px;
 }
 

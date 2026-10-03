@@ -53,8 +53,8 @@ const handleSelect = (panelId: string): void => {
 
 .chat-composer-menu__trigger {
   display: inline-flex;
-  height: 44px;
-  min-width: 44px;
+  height: 40px;
+  min-width: 40px;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -64,8 +64,8 @@ const handleSelect = (panelId: string): void => {
   color: var(--lw-text-inverse);
   padding: 0 16px 0 12px;
   font: inherit;
-  font-size: 1.0625rem;
-  font-weight: 600;
+  font-size: var(--lw-type-label-large-size);
+  font-weight: var(--lw-type-label-large-weight);
   cursor: pointer;
   transition: padding 160ms cubic-bezier(0.25, 1, 0.5, 1), filter var(--lw-transition);
 }
