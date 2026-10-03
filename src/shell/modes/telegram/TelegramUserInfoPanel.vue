@@ -29,11 +29,33 @@
       </button>
     </header>
 
-    <section class="lw-telegram-profile__hero">
-      <div class="lw-telegram-profile__avatar" :style="getTelegramAvatarStyle(profile.name)">
+    <!-- 手机端：点头像展开为通栏封面（原版资料页的封面形态），再点收起 -->
+    <button
+      v-if="isCoverExpanded"
+      type="button"
+      class="lw-telegram-profile__cover"
+      aria-label="收起头像"
+      @click="isCoverExpanded = false"
+    >
+      <img :src="profile.avatarUrl" :alt="profile.name" @error="isCoverExpanded = false">
+      <span class="lw-telegram-profile__cover-copy">
+        <strong>{{ profile.name }}</strong>
+        <small>{{ statusText }}</small>
+      </span>
+    </button>
+    <section v-else class="lw-telegram-profile__hero">
+      <component
+        :is="canExpandCover ? 'button' : 'div'"
+        :type="canExpandCover ? 'button' : undefined"
+        class="lw-telegram-profile__avatar"
+        :class="{ 'is-expandable': canExpandCover }"
+        :style="getTelegramAvatarStyle(profile.name)"
+        :aria-label="canExpandCover ? '展开头像' : undefined"
+        @click="canExpandCover && (isCoverExpanded = true)"
+      >
         <img v-if="profile.avatarUrl" :src="profile.avatarUrl" :alt="profile.name" @error="hideBrokenTelegramAvatar">
         <span v-else>{{ getTelegramInitial(profile.name) }}</span>
-      </div>
+      </component>
       <h2>{{ profile.name }}</h2>
       <p>{{ statusText }}</p>
     </section>
@@ -105,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { Component, CSSProperties } from 'vue';
 import {
   Activity,
@@ -171,6 +193,11 @@ const profile = computed(() => {
     avatarUrl: group?.characterAvatarUrl || ''
   };
 });
+
+const isCoverExpanded = ref(false);
+const canExpandCover = computed(() => props.isMobile && Boolean(profile.value.avatarUrl));
+// 切换角色后回到默认的圆形头像，避免封面停留在上一个角色
+watch(() => profile.value.avatarUrl, () => { isCoverExpanded.value = false; });
 
 const statusText = computed(() => {
   if (props.state.status.kind === 'switching') return '正在切换…';
@@ -322,6 +349,57 @@ const formatSessionTime = (timestamp: number): string => {
   color: var(--lw-text-inverse);
   font-size: calc(var(--lw-telegram-profile-avatar-size) * 0.4);
   font-weight: 600;
+}
+
+.lw-telegram-profile__avatar.is-expandable {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+}
+
+/* 通栏封面：抵消面板左右 12px 内边距，名称与状态压在底部渐隐遮罩上 */
+.lw-telegram-profile__cover {
+  position: relative;
+  display: block;
+  width: calc(100% + 24px);
+  margin: 0 -12px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  aspect-ratio: 1;
+  background: var(--lw-telegram-avatar-bg);
+  color: var(--lw-telegram-cover-text, var(--lw-text-inverse));
+  text-align: left;
+  cursor: pointer;
+}
+
+.lw-telegram-profile__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lw-telegram-profile__cover-copy {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 48px 16px 14px;
+  background: linear-gradient(180deg, transparent, var(--lw-telegram-cover-scrim));
+}
+
+.lw-telegram-profile__cover-copy strong {
+  font-size: var(--lw-type-headline-small-size);
+  line-height: var(--lw-type-headline-small-line-height);
+  font-weight: 650;
+}
+
+.lw-telegram-profile__cover-copy small {
+  font-size: var(--lw-type-body-medium-size);
+  opacity: 0.85;
 }
 
 .lw-telegram-profile__avatar img {

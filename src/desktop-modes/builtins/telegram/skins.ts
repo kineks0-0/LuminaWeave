@@ -102,6 +102,9 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
             cssVars: () => ({
                 '--lw-telegram-info-panel-bg': 'var(--lw-telegram-layer-base)',
                 '--lw-telegram-info-card-bg': 'var(--lw-telegram-layer-surface)',
+                // 封面上叠名称的底部遮罩与文字：与头像图无关，固定深色渐隐 + 白字
+                '--lw-telegram-cover-scrim': 'rgba(0, 0, 0, 0.55)',
+                '--lw-telegram-cover-text': '#ffffff',
                 '--lw-telegram-info-panel-border': 'var(--lw-border-base)',
                 '--lw-telegram-avatar-radius': '999px'
             })

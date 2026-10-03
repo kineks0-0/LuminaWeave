@@ -139,26 +139,3 @@ export const getTelegramToolIconName = (toolId: string): TelegramIconName => {
   if (toolId.includes('lorebook')) return 'book';
   return 'grid';
 };
-
-export const getTelegramSettingsIconName = (pluginId: string): TelegramIconName => {
-  if (pluginId.includes('desktop-mode')) return 'palette';
-  if (pluginId.includes('chat')) return 'chat';
-  if (pluginId.includes('forge')) return 'forge';
-  if (pluginId.includes('director')) return 'bot';
-  if (pluginId.includes('timeline')) return 'timeline';
-  if (pluginId.includes('lorebook')) return 'book';
-  if (pluginId.includes('stats')) return 'spark';
-  if (pluginId.includes('dev')) return 'settings';
-  return 'settings';
-};
-
-export const getTelegramSettingsIconTone = (pluginId: string) => {
-  if (pluginId.includes('desktop-mode')) return 'blue';
-  if (pluginId.includes('chat')) return 'sky';
-  if (pluginId.includes('forge')) return 'orange';
-  if (pluginId.includes('director')) return 'violet';
-  if (pluginId.includes('timeline')) return 'green';
-  if (pluginId.includes('lorebook')) return 'cyan';
-  if (pluginId.includes('stats')) return 'red';
-  return 'blue';
-};

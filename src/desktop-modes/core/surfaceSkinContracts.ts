@@ -171,7 +171,9 @@ export const surfaceSkinContracts = new SurfaceSkinContractRegistry();
             '--lw-telegram-info-panel-bg',
             '--lw-telegram-info-card-bg',
             '--lw-telegram-info-panel-border',
-            '--lw-telegram-avatar-radius'
+            '--lw-telegram-avatar-radius',
+            '--lw-telegram-cover-scrim',
+            '--lw-telegram-cover-text'
         ],
         supportedVariants: ['telegram']
     },
