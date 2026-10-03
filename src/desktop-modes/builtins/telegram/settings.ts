@@ -69,10 +69,10 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
     ...createChatTypographySettings({
         fontFamily: 'sans-serif',
         fontWeight: 400,
-        fontSize: 12,
+        fontSize: 16,
         pageWidth: 900,
         lineHeight: 1.45,
-        paragraphSpacing: 12,
+        paragraphSpacing: 10,
         letterSpacing: 0
     }),
     rightInfoPanel: {

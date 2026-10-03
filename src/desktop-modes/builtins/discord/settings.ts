@@ -22,8 +22,8 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
     }),
     ...createChatTypographySettings({
         fontFamily: 'sans-serif',
-        fontWeight: 500,
-        fontSize: 15,
+        fontWeight: 400,
+        fontSize: 16,
         pageWidth: 'auto',
         lineHeight: 1.6,
         paragraphSpacing: 10,

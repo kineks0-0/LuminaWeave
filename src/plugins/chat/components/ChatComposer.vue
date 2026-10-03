@@ -119,7 +119,7 @@ watch(
 
 <style scoped>
 .chat-composer {
-  width: min(100%, var(--lw-chat-composer-width, 920px));
+  width: min(100%, var(--lw-chat-page-width, 920px));
   margin: 0 auto;
 }
 
@@ -137,12 +137,14 @@ watch(
   border: 1px solid var(--lw-chat-input-border, var(--lw-border-base));
   border-radius: var(--lw-chat-input-radius, 8px);
   background: var(--lw-chat-input-surface, var(--lw-bg-surface));
-  padding: 8px;
+  box-shadow: var(--lw-chat-input-shadow, none);
+  padding: 6px;
+  transition: border-color var(--lw-transition), box-shadow var(--lw-transition);
 }
 
 .chat-composer__input:focus-within {
-  border-color: var(--lw-primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lw-primary) 14%, transparent);
+  border-color: var(--lw-chat-input-focus-border, var(--lw-primary));
+  box-shadow: var(--lw-chat-input-focus-shadow, 0 0 0 2px color-mix(in srgb, var(--lw-primary) 14%, transparent));
 }
 
 .chat-composer textarea {
@@ -153,7 +155,7 @@ watch(
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
   padding: 8px 9px;
   font: inherit;
 }
@@ -164,18 +166,19 @@ watch(
   height: 40px;
   place-items: center;
   border: 0;
-  border-radius: 6px;
+  /* 跟随输入框圆角，避免圆角输入框里出现方形按钮 */
+  border-radius: max(6px, calc(var(--lw-chat-input-radius, 8px) - 6px));
   cursor: pointer;
 }
 
 .chat-composer__action.is-primary {
   background: var(--lw-primary);
-  color: var(--lw-on-primary, #fff);
+  color: var(--lw-text-inverse);
 }
 
 .chat-composer__action.is-danger {
-  background: var(--lw-danger, #b91c1c);
-  color: #fff;
+  background: var(--lw-danger);
+  color: var(--lw-text-inverse);
 }
 
 .chat-composer__action:disabled {

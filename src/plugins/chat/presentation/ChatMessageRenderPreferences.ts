@@ -5,8 +5,11 @@ import type {
 
 export type ChatThinkingDisplayMode = 'hidden' | 'collapsible';
 export type ChatStreamingEffect = 'instant' | 'fade-in' | 'gpt-style' | 'typewriter';
+/** 桌面模式决定的消息呈现布局；交互在各布局下保持一致，只有视觉不同 */
+export type ChatMessageLayout = 'classic' | 'discord' | 'telegram';
 
 export interface ChatThemeRenderPreferences {
+    messageLayout: ChatMessageLayout;
     assistantMessageShape: ThemeMessageShape;
     userMessageShape: ThemeMessageShape;
     assistantAvatarPlacement: ThemeAvatarPlacement;
@@ -24,6 +27,7 @@ export interface ChatMessageRenderPreferences extends ChatThemeRenderPreferences
 }
 
 export const DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES: Readonly<ChatMessageRenderPreferences> = Object.freeze({
+    messageLayout: 'classic',
     thinkingDisplayMode: 'collapsible',
     thinkingAutoExpand: true,
     filterChatReply: false,
@@ -50,9 +54,16 @@ const resolveAvatarPlacement = (
         : fallback
 );
 
+const resolveMessageLayout = (value: unknown): ChatMessageLayout => (
+    value === 'classic' || value === 'discord' || value === 'telegram'
+        ? value
+        : DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.messageLayout
+);
+
 export const resolveChatThemeRenderPreferences = (
     cssVars: Record<string, string | number> | undefined
 ): ChatThemeRenderPreferences => ({
+    messageLayout: resolveMessageLayout(cssVars?.['--lw-chat-layout']),
     assistantMessageShape: resolveMessageShape(
         cssVars?.['--lw-chat-assistant-shape'],
         DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.assistantMessageShape

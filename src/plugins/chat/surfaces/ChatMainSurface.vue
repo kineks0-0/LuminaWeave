@@ -168,8 +168,9 @@ watch(
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  background: var(--lw-chat-background, var(--lw-bg-app));
-  color: var(--lw-text-primary);
+  background: var(--lw-chat-stream-bg, var(--lw-bg-app));
+  color: var(--lw-chat-color, var(--lw-text-main));
+  font-family: var(--lw-chat-font, var(--lw-font-main));
   overflow: hidden;
 }
 
@@ -180,12 +181,16 @@ watch(
   padding: 0 12px 10px;
 }
 
+.chat-main-surface[data-surface-variant='telegram'] .chat-main-surface__composer {
+  border-top: 0;
+}
+
 .chat-main-surface__composer {
   display: flex;
   flex-direction: column;
   gap: 7px;
   border-top: 1px solid var(--lw-border-base);
-  background: var(--lw-chat-composer-background, var(--lw-bg-surface));
+  background: var(--lw-chat-input-area-bg, var(--lw-bg-surface));
   padding: 8px 12px 12px;
 }
 </style>

@@ -8,6 +8,7 @@ import type {
     ThemeValueMap,
     ThemeValueResolver
 } from '../core/types.js';
+import { resolveChatPageWidth } from '../core/chatSkinContract.js';
 
 const resolveAvatarRadius = (shape: string | undefined) => {
     if (shape === 'square') return '14px';
@@ -326,6 +327,11 @@ const resolveRoleTypographyVars = (
     };
 };
 
+/** 只取指定前缀的覆盖值，避免模式级覆盖把无关变量带进其他皮肤契约。 */
+const pickOverrides = (overrides: ThemeValueMap, prefix: string): ThemeValueMap => Object.fromEntries(
+    Object.entries(overrides).filter(([key]) => key.startsWith(prefix))
+);
+
 export const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopModeManifest['surfaceSkins'] => ({
     'shell.app': {
         componentId: 'shell.app',
@@ -480,39 +486,52 @@ export const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopMode
             const bubbleStyle = getDesktopModeSettingValue(activeSettings, desktopModeId, 'bubbleStyle');
             const chatFontFamily = getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontFamily', 'sans-serif');
             const isDark = resolvedAppearance === 'dark';
+            const isCompact = density === 'compact';
             return {
-                '--lw-chat-stream-bg': isDark ? 'var(--lw-bg-app)' : 'transparent',
-                '--lw-chat-scroll-bg': 'transparent',
-                '--lw-chat-scroll-padding': density === 'compact' ? '18px 28px' : '24px 40px',
+                '--lw-chat-layout': 'classic',
+                '--lw-chat-stream-bg': 'var(--lw-bg-app)',
+                '--lw-chat-scroll-bg': 'none',
+                '--lw-chat-scroll-bg-size': 'auto',
+                '--lw-chat-header-bg': 'var(--lw-bg-surface)',
+                '--lw-chat-input-area-bg': 'var(--lw-bg-surface)',
+                '--lw-chat-scroll-padding': isCompact ? '18px 28px' : '24px 40px',
                 '--lw-chat-content-gap': resolveMessageGap(density),
-                '--lw-chat-avatar-size': density === 'compact' ? '36px' : '40px',
+                '--lw-chat-group-gap': isCompact ? '6px' : '8px',
+                '--lw-chat-color': 'var(--lw-text-main)',
+                '--lw-chat-bubble': 'var(--lw-bg-surface)',
+                '--lw-chat-user-bubble': isDark ? 'color-mix(in srgb, var(--lw-bg-surface) 92%, white 8%)' : 'var(--lw-bg-subtle)',
+                '--lw-chat-border': 'var(--lw-border-base)',
+                '--lw-chat-user-bubble-border': 'var(--lw-border-subtle)',
+                '--lw-chat-bubble-radius': resolveBubbleRadius(bubbleStyle),
+                '--lw-chat-bubble-shadow': 'none',
+                '--lw-chat-message-max-width': '760px',
+                '--lw-chat-message-hover-bg': 'transparent',
+                '--lw-chat-avatar-size': isCompact ? '32px' : '36px',
                 '--lw-chat-avatar-radius': resolveAvatarRadius(avatarShape),
                 '--lw-chat-avatar-shadow': 'none',
-                '--lw-chat-bubble-radius': resolveBubbleRadius(bubbleStyle),
-                '--lw-chat-input-radius': bubbleStyle === 'soft' ? '20px' : '16px',
-                '--lw-chat-input-toolbar-bg': 'var(--lw-surface-container-high)',
-                '--lw-chat-input-toolbar-shadow': 'var(--lw-shadow-card)',
-                '--lw-chat-input-shadow': 'var(--lw-shadow-card)',
-                '--lw-chat-menu-shadow': 'var(--lw-shadow-card)',
-                '--lw-chat-empty-mark-bg': 'var(--lw-primary)',
-                '--lw-chat-empty-mark-shadow': 'var(--lw-shadow-card)',
-                '--lw-chat-user-name-display': getDesktopModeSettingValue(activeSettings, desktopModeId, 'showUsernames', true) === false ? 'none' : 'inline-flex',
-                '--lw-chat-user-bubble': isDark ? 'color-mix(in srgb, var(--lw-bg-surface) 92%, white 8%)' : 'var(--lw-bg-subtle)',
-                '--lw-chat-user-bubble-border': 'var(--lw-chat-border, var(--lw-border-subtle))',
-                '--lw-chat-message-hover-bg': 'transparent',
-                '--lw-chat-assistant-shape': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantMessageShape', 'bubble')),
-                '--lw-chat-user-shape': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userMessageShape', 'bubble')),
-                '--lw-chat-assistant-avatar-placement': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantAvatarPlacement', 'inline')),
-                '--lw-chat-user-avatar-placement': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userAvatarPlacement', 'inline')),
                 '--lw-chat-font': resolveFontFamily(chatFontFamily),
                 '--lw-chat-font-weight': Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontWeight', 400)),
                 '--lw-chat-font-size': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontSize', 16))}px`,
                 '--lw-chat-line-height': Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLineHeight', 1.6)),
                 '--lw-chat-paragraph-spacing': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatParagraphSpacing', 16))}px`,
                 '--lw-chat-letter-spacing': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLetterSpacing', 0))}px`,
-                '--lw-chat-page-width': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatPageWidth', 'auto')),
+                '--lw-chat-page-width': resolveChatPageWidth(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatPageWidth', 'auto')),
                 ...resolveRoleTypographyVars(activeSettings, desktopModeId, '--lw-chat'),
-                ...overrides
+                '--lw-chat-input-surface': 'var(--lw-bg-surface)',
+                '--lw-chat-input-border': 'var(--lw-border-base)',
+                '--lw-chat-input-radius': bubbleStyle === 'soft' ? '20px' : '16px',
+                '--lw-chat-input-shadow': 'none',
+                '--lw-chat-input-focus-border': 'var(--lw-primary)',
+                '--lw-chat-input-focus-shadow': '0 0 0 2px color-mix(in srgb, var(--lw-primary) 14%, transparent)',
+                '--lw-chat-menu-shadow': 'var(--lw-shadow-card)',
+                '--lw-chat-empty-mark-bg': 'color-mix(in srgb, var(--lw-primary) 12%, var(--lw-bg-surface))',
+                '--lw-chat-empty-mark-shadow': 'none',
+                '--lw-chat-user-name-display': getDesktopModeSettingValue(activeSettings, desktopModeId, 'showUsernames', true) === false ? 'none' : 'inline-flex',
+                '--lw-chat-assistant-shape': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantMessageShape', 'bubble')),
+                '--lw-chat-user-shape': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userMessageShape', 'bubble')),
+                '--lw-chat-assistant-avatar-placement': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'assistantAvatarPlacement', 'inline')),
+                '--lw-chat-user-avatar-placement': String(getDesktopModeSettingValue(activeSettings, desktopModeId, 'userAvatarPlacement', 'inline')),
+                ...pickOverrides(overrides, '--lw-chat-')
             };
         }
     },

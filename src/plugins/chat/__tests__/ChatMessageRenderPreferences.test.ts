@@ -12,8 +12,10 @@ describe('ChatMessageRenderPreferences', () => {
             '--lw-chat-user-shape': 'bubble',
             '--lw-chat-assistant-avatar-placement': 'topbar',
             '--lw-chat-user-avatar-placement': 'hidden',
-            '--lw-chat-user-name-display': 'none'
+            '--lw-chat-user-name-display': 'none',
+            '--lw-chat-layout': 'telegram'
         })).toEqual({
+            messageLayout: 'telegram',
             assistantMessageShape: 'document',
             userMessageShape: 'bubble',
             assistantAvatarPlacement: 'topbar',
@@ -28,8 +30,10 @@ describe('ChatMessageRenderPreferences', () => {
             '--lw-chat-user-shape': 'rounded-bubble',
             '--lw-chat-assistant-avatar-placement': 'top-bar',
             '--lw-chat-user-avatar-placement': 'INLINE',
-            '--lw-chat-user-name-display': 'hidden'
+            '--lw-chat-user-name-display': 'hidden',
+            '--lw-chat-layout': 'Discord'
         })).toEqual({
+            messageLayout: DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.messageLayout,
             assistantMessageShape: DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.assistantMessageShape,
             userMessageShape: DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.userMessageShape,
             assistantAvatarPlacement: DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.assistantAvatarPlacement,

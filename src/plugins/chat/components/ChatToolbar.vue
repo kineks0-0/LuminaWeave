@@ -63,6 +63,6 @@ const emit = defineEmits<{
 .chat-toolbar button.is-active {
   border-color: var(--lw-border-base);
   background: var(--lw-bg-hover);
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
 }
 </style>

@@ -2,27 +2,37 @@
   <div ref="scrollArea" class="chat-transcript" :class="{ 'is-compact': compact }">
     <div ref="contentArea" class="chat-transcript__content">
       <div v-if="showEmptyState" class="chat-transcript__empty">
-        {{ viewState.emptyStateMessage }}
+        <span class="chat-transcript__empty-mark" aria-hidden="true">
+          <MessageCircle :size="22" />
+        </span>
+        <strong>{{ viewState.isNoActiveChatView ? '没有打开的聊天' : '开始新的对话' }}</strong>
+        <p>{{ viewState.isNoActiveChatView ? viewState.emptyStateMessage : '在下方输入第一条消息。' }}</p>
       </div>
       <div v-if="viewState.isReadOnlyView" class="chat-transcript__notice">
         {{ viewState.readOnlyReason }}
       </div>
 
-      <ChatMessage
-        v-for="(message, index) in messages"
-        :key="message.id || index"
-        :message="message"
-        :index="index"
-        :avatar-url="resolveMessageAvatar(message)"
-        :default-avatar="defaultAvatar"
-        :disabled="interactionLocked"
-        :render-preferences="renderPreferences"
-        :on-select-choice="onSelectChoice"
-        @edit="emit('edit', $event)"
-        @delete="emit('delete', $event)"
-        @regenerate="emit('regenerate')"
-        @branch="emit('branch', $event)"
-      />
+      <template v-for="(message, index) in messages" :key="message.id || index">
+        <div v-if="messageGroups[index]?.dayLabel" class="chat-transcript__day" role="separator">
+          <span>{{ messageGroups[index].dayLabel }}</span>
+        </div>
+        <ChatMessage
+          :message="message"
+          :index="index"
+          :avatar-url="resolveMessageAvatar(message)"
+          :default-avatar="defaultAvatar"
+          :disabled="interactionLocked"
+          :render-preferences="renderPreferences"
+          :on-select-choice="onSelectChoice"
+          :group-start="messageGroups[index]?.groupStart ?? true"
+          :group-end="messageGroups[index]?.groupEnd ?? true"
+          :time-label="messageGroups[index]?.timeLabel ?? ''"
+          @edit="emit('edit', $event)"
+          @delete="emit('delete', $event)"
+          @regenerate="emit('regenerate')"
+          @branch="emit('branch', $event)"
+        />
+      </template>
 
       <div v-if="sessionSwitching" class="chat-transcript__switching">
         <LoaderCircle :size="16" />
@@ -36,6 +46,8 @@
         :assistant-name="assistantName"
         :assistant-avatar-url="assistantAvatarUrl"
         :default-avatar="defaultAvatar"
+        :group-start="streamingGroup?.groupStart ?? true"
+        :time-label="streamingGroup?.timeLabel ?? ''"
         @retry="emit('regenerate')"
       />
     </div>
@@ -46,7 +58,7 @@
 <script setup lang="ts">
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { computed, ref, watch } from 'vue';
-import { LoaderCircle } from 'lucide-vue-next';
+import { LoaderCircle, MessageCircle } from 'lucide-vue-next';
 import type { CharacterChannelState, ConversationViewContext } from '../../../types/ConversationContextTypes.js';
 import type {
   ChatApplicationSnapshot,
@@ -56,6 +68,7 @@ import type {
 } from '../application/ChatApplicationController.js';
 import type { ChatMessageRenderPreferences } from '../presentation/ChatMessageRenderPreferences.js';
 import { resolveChatViewState } from '../chatViewState.js';
+import { buildChatMessageGroups } from '../presentation/chatMessageGrouping.js';
 import { useStickToBottom } from '../../../composables/useStickToBottom.js';
 import LuminaJumpToLatest from '../../../ui/primitives/LuminaJumpToLatest.vue';
 import ChatMessage from './ChatMessage.vue';
@@ -100,6 +113,29 @@ const showStreaming = computed(() => props.context.meta?.isLive === true && (
   || Boolean(props.generation.errorMessage)
 ));
 const showEmptyState = computed(() => props.messages.length === 0 && !showStreaming.value && !sessionSwitching.value);
+
+// 流式回复作为虚拟末条参与分组，结束后替换为正式消息时分组结果不变，不产生头像/名称跳动
+const streamingStartedAt = ref(Date.now());
+watch(() => props.generation.phase, (phase, previousPhase) => {
+  if (phase === 'running' && previousPhase !== 'running') streamingStartedAt.value = Date.now();
+});
+const hasStreamingRow = computed(() => showStreaming.value && Boolean(props.generation.stream?.processed));
+const allGroups = computed(() => buildChatMessageGroups(hasStreamingRow.value
+  ? [...props.messages, {
+    id: '__lumina_streaming__',
+    parentId: null,
+    name: assistantName.value,
+    role: 'assistant',
+    is_user: false,
+    mesRaw: '',
+    mes: '',
+    fingerprint: '',
+    extra: {},
+    createdAt: streamingStartedAt.value
+  }]
+  : props.messages));
+const messageGroups = computed(() => allGroups.value.slice(0, props.messages.length));
+const streamingGroup = computed(() => (hasStreamingRow.value ? allGroups.value[props.messages.length] : undefined));
 
 const latestAssistantMessage = computed(() => {
   for (let index = props.messages.length - 1; index >= 0; index -= 1) {
@@ -147,11 +183,9 @@ watch(
   flex: 1;
   overflow: auto;
   overscroll-behavior: contain;
-}
-
-/* 跟随由 useStickToBottom 负责；未跟随时浏览器锚定保持阅读位置 */
-.chat-transcript__content {
-  overflow-anchor: auto;
+  background: var(--lw-chat-scroll-bg, none);
+  background-size: var(--lw-chat-scroll-bg-size, auto);
+  background-attachment: local;
 }
 
 .chat-transcript__content {
@@ -161,20 +195,69 @@ watch(
   margin: 0 auto;
   padding: var(--lw-chat-scroll-padding, 24px 32px);
   flex-direction: column;
-  gap: 16px;
+  /* 消息间距由 ChatMessage 按发言组控制；未跟随时浏览器锚定保持阅读位置 */
+  overflow-anchor: auto;
+}
+
+.chat-transcript__content > :first-child {
+  margin-top: 0;
 }
 
 .chat-transcript.is-compact .chat-transcript__content {
   padding: 14px 12px;
-  gap: 12px;
 }
 
 .chat-transcript__empty {
-  display: grid;
-  min-height: 180px;
-  place-items: center;
+  display: flex;
+  flex: 1;
+  min-height: 220px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   color: var(--lw-text-muted);
   text-align: center;
+}
+
+.chat-transcript__empty-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--lw-chat-empty-mark-bg, var(--lw-bg-subtle));
+  box-shadow: var(--lw-chat-empty-mark-shadow, none);
+  color: var(--lw-primary);
+}
+
+.chat-transcript__empty strong {
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+}
+
+.chat-transcript__empty p {
+  max-width: 36ch;
+  margin: 0;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+}
+
+.chat-transcript__day {
+  display: flex;
+  justify-content: center;
+  margin: var(--lw-chat-content-gap, 20px) 0 0;
+}
+
+.chat-transcript__day span {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-bg-elevated) 82%, transparent);
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
 }
 
 .chat-transcript__notice,
@@ -182,8 +265,9 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-top: var(--lw-chat-content-gap, 20px);
   border: 1px solid var(--lw-border-base);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--lw-bg-subtle);
   color: var(--lw-text-secondary);
   padding: 9px 11px;

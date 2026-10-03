@@ -337,7 +337,7 @@ watch(
 
 .scv-send-btn {
   background: var(--lw-primary);
-  color: var(--lw-on-primary, #fff);
+  color: var(--lw-text-inverse);
 }
 
 .scv-send-btn:hover:not(:disabled) {

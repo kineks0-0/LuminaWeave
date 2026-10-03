@@ -270,7 +270,7 @@ onUnmounted(() => {
 .prompt-inspector button.is-active {
   border-color: var(--lw-border-base);
   background: var(--lw-bg-hover);
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
 }
 
 .prompt-inspector button:disabled {
@@ -351,7 +351,7 @@ onUnmounted(() => {
 .prompt-inspector__messages pre,
 .prompt-inspector__raw {
   margin: 0;
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
   padding: 10px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -400,7 +400,7 @@ onUnmounted(() => {
   border: 1px solid var(--lw-border-base);
   border-radius: 6px;
   background: var(--lw-bg-surface);
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
   padding: 10px;
   font-family: ui-monospace, Consolas, monospace;
 }
@@ -409,7 +409,7 @@ onUnmounted(() => {
   align-self: flex-end;
   border-color: var(--lw-primary);
   background: var(--lw-primary);
-  color: var(--lw-on-primary, #fff);
+  color: var(--lw-text-inverse);
 }
 
 .is-spinning {

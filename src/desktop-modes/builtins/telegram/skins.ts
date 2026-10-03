@@ -84,9 +84,8 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     '--lw-telegram-pane-border': isFloating
                         ? (context.resolvedAppearance === 'dark' ? 'rgba(143, 192, 232, 0.18)' : 'rgba(255, 255, 255, 0.64)')
                         : 'transparent',
-                    '--lw-telegram-pane-shadow': isFloating
-                        ? (context.resolvedAppearance === 'dark' ? '0 18px 44px rgba(0, 0, 0, 0.22)' : '0 18px 44px rgba(44, 92, 130, 0.12)')
-                        : 'none',
+                    // 外框已承担玻璃与阴影，内部面板只保留细边界，避免卡中卡
+                    '--lw-telegram-pane-shadow': 'none',
                     '--lw-telegram-mobile-sheet-bg': context.resolvedAppearance === 'dark'
                         ? 'rgba(4, 12, 20, 0.38)'
                         : 'rgba(15, 38, 58, 0.26)',
@@ -113,10 +112,7 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
             cssVars: ({ resolvedAppearance }) => ({
                 '--lw-telegram-conversation-bg': resolvedAppearance === 'dark'
                     ? 'rgba(16, 24, 32, 0.74)'
-                    : 'rgba(231, 244, 253, 0.58)',
-                '--lw-chat-message-max-width': '560px',
-                '--lw-chat-bubble': 'var(--lw-telegram-ai-bubble)',
-                '--lw-chat-user-bubble': 'var(--lw-telegram-user-bubble)'
+                    : 'rgba(231, 244, 253, 0.58)'
             })
         },
         'telegram.infoPanel': {
@@ -128,17 +124,6 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                     : 'rgba(255, 255, 255, 0.74)',
                 '--lw-telegram-info-panel-border': 'var(--lw-border-base)',
                 '--lw-telegram-avatar-radius': '999px'
-            })
-        },
-        'telegram.composer': {
-            componentId: 'telegram.composer',
-            variant: 'telegram',
-            cssVars: ({ resolvedAppearance }) => ({
-                '--lw-chat-input-surface': resolvedAppearance === 'dark'
-                    ? 'rgba(26, 48, 70, 0.84)'
-                    : 'rgba(255, 255, 255, 0.86)',
-                '--lw-chat-input-border': 'var(--lw-border-base)',
-                '--lw-chat-input-radius': '999px'
             })
         },
         'shell.mainSurface': {
@@ -213,56 +198,38 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
             ...base['chat.main'],
             cssVars: (context: ComponentThemeContext) => {
                 const density = getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'messageDensity');
+                const isDark = context.resolvedAppearance === 'dark';
                 return {
                     ...resolveThemeValueMap(base['chat.main']?.cssVars, context),
-                    '--lw-chat-stream-bg': context.resolvedAppearance === 'dark'
+                    '--lw-chat-layout': 'telegram',
+                    '--lw-chat-stream-bg': isDark
                         ? 'radial-gradient(circle at 20% 0%, rgba(74, 163, 255, 0.12), transparent 26%), rgba(15, 28, 42, 0.66)'
-                        : 'radial-gradient(circle at 18% 0%, rgba(73, 164, 230, 0.16), transparent 30%), rgba(238, 248, 255, 0.44)',
-                    '--lw-chat-scroll-bg': 'linear-gradient(135deg, color-mix(in srgb, var(--lw-text-main) 4%, transparent) 1px, transparent 1px), linear-gradient(45deg, color-mix(in srgb, var(--lw-text-main) 3%, transparent) 1px, transparent 1px)',
-                    '--lw-chat-scroll-padding': density === 'compact' ? '18px 26px' : '24px 36px',
-                    '--lw-chat-content-gap': density === 'compact' ? '14px' : '20px',
-                    '--lw-chat-avatar-radius': '999px',
-                    '--lw-chat-avatar-shadow': context.resolvedAppearance === 'dark'
-                        ? '0 10px 24px rgba(0, 0, 0, 0.22)'
-                        : '0 10px 24px rgba(44, 92, 130, 0.12)',
-                    '--lw-chat-bubble-radius': '20px',
+                        : 'radial-gradient(circle at 18% 0%, rgba(73, 164, 230, 0.16), transparent 30%), rgba(214, 233, 245, 0.72)',
+                    '--lw-chat-scroll-bg': `radial-gradient(circle at 1px 1px, ${isDark ? 'rgba(143, 192, 232, 0.10)' : 'rgba(44, 92, 130, 0.10)'} 1px, transparent 1.6px)`,
+                    '--lw-chat-scroll-bg-size': '22px 22px',
+                    '--lw-chat-header-bg': isDark ? 'rgba(20, 38, 56, 0.88)' : 'rgba(255, 255, 255, 0.86)',
+                    '--lw-chat-input-area-bg': 'transparent',
+                    '--lw-chat-scroll-padding': density === 'compact' ? '16px 20px' : '20px 28px',
+                    '--lw-chat-content-gap': density === 'compact' ? '10px' : '14px',
+                    '--lw-chat-group-gap': '3px',
                     '--lw-chat-bubble': 'var(--lw-telegram-ai-bubble)',
                     '--lw-chat-user-bubble': 'var(--lw-telegram-user-bubble)',
-                    '--lw-chat-border': 'rgba(255, 255, 255, 0.22)',
-                    '--lw-chat-user-bubble-border': 'color-mix(in srgb, var(--lw-success, #6ccf7d) 26%, transparent)',
-                    '--lw-chat-color': 'var(--lw-text-main)',
-                    '--lw-chat-message-hover-bg': 'transparent',
-                    '--lw-chat-input-area-bg': 'transparent',
-                    '--lw-chat-input-surface': context.resolvedAppearance === 'dark'
-                        ? 'rgba(26, 48, 70, 0.84)'
-                        : 'rgba(255, 255, 255, 0.82)',
-                    '--lw-chat-input-border': 'var(--lw-border-base)',
-                    '--lw-chat-input-radius': '999px',
-                    '--lw-chat-input-toolbar-bg': 'color-mix(in srgb, var(--lw-surface-container-highest) 84%, transparent)',
-                    '--lw-chat-input-toolbar-shadow': context.resolvedAppearance === 'dark'
-                        ? '0 12px 26px rgba(0, 0, 0, 0.24)'
-                        : '0 12px 26px rgba(44, 92, 130, 0.12)',
-                    '--lw-chat-input-shadow': context.resolvedAppearance === 'dark'
-                        ? '0 12px 30px rgba(0, 0, 0, 0.20)'
-                        : '0 12px 30px rgba(44, 92, 130, 0.10)',
-                    '--lw-chat-menu-shadow': context.resolvedAppearance === 'dark'
-                        ? '0 18px 34px rgba(0, 0, 0, 0.24)'
-                        : '0 18px 34px rgba(44, 92, 130, 0.16)',
-                    '--lw-chat-empty-mark-bg': context.resolvedAppearance === 'dark'
-                        ? 'linear-gradient(135deg, #2a9bd8, #0f6ea8)'
-                        : 'linear-gradient(135deg, #58c4ff, #168bd4)',
-                    '--lw-chat-empty-mark-shadow': context.resolvedAppearance === 'dark'
-                        ? '0 18px 34px rgba(0, 0, 0, 0.24)'
-                        : '0 18px 34px rgba(44, 92, 130, 0.16)',
-                    '--lw-chat-bubble-shadow': context.resolvedAppearance === 'dark'
-                        ? '0 12px 28px rgba(0, 0, 0, 0.22)'
-                        : '0 12px 28px rgba(62, 113, 150, 0.13)',
-                    '--lw-chat-streaming-surface': 'rgba(var(--lw-primary-rgb), 0.12)',
-                    '--lw-chat-streaming-border': 'rgba(var(--lw-primary-rgb), 0.22)',
-                    '--lw-chat-font-size': `${Number(getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'chatFontSize', 12))}px`,
-                    '--lw-chat-line-height': Number(getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'chatLineHeight', 1.45)),
-                    '--lw-chat-paragraph-spacing': `${Number(getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'chatParagraphSpacing', 12))}px`,
-                    '--lw-chat-page-width': String(getDesktopModeSettingValue(context.activeSettings, context.desktopModeId, 'chatPageWidth', 900))
+                    '--lw-chat-border': 'transparent',
+                    '--lw-chat-user-bubble-border': 'transparent',
+                    '--lw-chat-bubble-radius': '16px',
+                    '--lw-chat-bubble-shadow': isDark ? '0 1px 2px rgba(0, 0, 0, 0.32)' : '0 1px 2px rgba(31, 66, 92, 0.16)',
+                    '--lw-chat-message-max-width': '560px',
+                    '--lw-chat-avatar-size': '34px',
+                    '--lw-chat-avatar-radius': '999px',
+                    '--lw-chat-input-surface': isDark ? 'rgba(26, 48, 70, 0.92)' : 'rgba(255, 255, 255, 0.94)',
+                    '--lw-chat-input-border': 'transparent',
+                    '--lw-chat-input-radius': '22px',
+                    '--lw-chat-input-shadow': isDark ? '0 1px 3px rgba(0, 0, 0, 0.30)' : '0 1px 3px rgba(31, 66, 92, 0.16)',
+                    '--lw-chat-input-focus-border': 'transparent',
+                    '--lw-chat-input-focus-shadow': isDark ? '0 1px 3px rgba(0, 0, 0, 0.30), 0 0 0 2px rgba(74, 163, 255, 0.28)' : '0 1px 3px rgba(31, 66, 92, 0.16), 0 0 0 2px rgba(42, 155, 216, 0.22)',
+                    '--lw-chat-menu-shadow': isDark ? '0 18px 34px rgba(0, 0, 0, 0.24)' : '0 18px 34px rgba(44, 92, 130, 0.16)',
+                    '--lw-chat-empty-mark-bg': isDark ? 'rgba(20, 38, 56, 0.72)' : 'rgba(255, 255, 255, 0.72)',
+                    '--lw-chat-empty-mark-shadow': 'none'
                 };
             }
         },

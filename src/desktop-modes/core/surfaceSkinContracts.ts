@@ -1,4 +1,5 @@
 import { shallowReactive } from 'vue';
+import { CHAT_SKIN_VARS } from './chatSkinContract.js';
 import type { SurfaceSkinContract } from './types.js';
 
 class SurfaceSkinContractRegistry {
@@ -160,12 +161,7 @@ export const surfaceSkinContracts = new SurfaceSkinContractRegistry();
     },
     {
         componentId: 'telegram.conversation',
-        exposedCssVars: [
-            '--lw-telegram-conversation-bg',
-            '--lw-chat-bubble',
-            '--lw-chat-user-bubble',
-            '--lw-chat-message-max-width'
-        ],
+        exposedCssVars: ['--lw-telegram-conversation-bg'],
         supportedVariants: ['telegram']
     },
     {
@@ -178,33 +174,8 @@ export const surfaceSkinContracts = new SurfaceSkinContractRegistry();
         supportedVariants: ['telegram']
     },
     {
-        componentId: 'telegram.composer',
-        exposedCssVars: [
-            '--lw-chat-input-surface',
-            '--lw-chat-input-border',
-            '--lw-chat-input-radius'
-        ],
-        supportedVariants: ['telegram']
-    },
-    {
         componentId: 'chat.main',
-        exposedCssVars: [
-            '--lw-chat-stream-bg',
-            '--lw-chat-scroll-bg',
-            '--lw-chat-avatar-shadow',
-            '--lw-chat-bubble',
-            '--lw-chat-user-bubble',
-            '--lw-chat-user-bubble-border',
-            '--lw-chat-message-hover-bg',
-            '--lw-chat-input-toolbar-bg',
-            '--lw-chat-input-toolbar-shadow',
-            '--lw-chat-input-shadow',
-            '--lw-chat-menu-shadow',
-            '--lw-chat-empty-mark-bg',
-            '--lw-chat-empty-mark-shadow',
-            '--lw-chat-input-focus-border',
-            '--lw-chat-input-focus-shadow'
-        ],
+        exposedCssVars: [...CHAT_SKIN_VARS],
         supportedVariants: ['default', 'discord', 'telegram']
     },
     {

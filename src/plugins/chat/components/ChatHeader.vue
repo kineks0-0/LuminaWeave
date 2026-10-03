@@ -143,7 +143,7 @@ const togglePromptInspector = (): void => {
   z-index: 2;
   flex: 0 0 auto;
   border-bottom: 1px solid var(--lw-border-base);
-  background: var(--lw-chat-header-background, var(--lw-bg-surface));
+  background: var(--lw-chat-header-bg, var(--lw-bg-surface));
 }
 
 .chat-header {
@@ -192,7 +192,7 @@ const togglePromptInspector = (): void => {
 }
 
 .chat-header__identity strong {
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
   font-size: var(--lw-type-title-small-size);
 }
 
@@ -218,7 +218,7 @@ const togglePromptInspector = (): void => {
 .chat-header__icon-button.is-active {
   border-color: var(--lw-border-base);
   background: var(--lw-bg-hover);
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
 }
 
 .chat-header__menu-wrap {
@@ -235,14 +235,14 @@ const togglePromptInspector = (): void => {
   border: 1px solid var(--lw-border-base);
   border-radius: 6px;
   background: var(--lw-bg-surface);
-  box-shadow: var(--lw-shadow-lg);
+  box-shadow: var(--lw-chat-menu-shadow, var(--lw-shadow-card));
 }
 
 .chat-header__menu button {
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
   padding: 8px 10px;
   text-align: left;
   cursor: pointer;
@@ -266,7 +266,7 @@ const togglePromptInspector = (): void => {
   border-radius: 5px;
   outline: 0;
   background: var(--lw-bg-app);
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
   padding: 7px 9px;
 }
 

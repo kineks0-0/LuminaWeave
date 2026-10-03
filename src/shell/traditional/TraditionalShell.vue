@@ -406,6 +406,12 @@ const telegramLeftRailStyle = computed<CSSProperties>(() => ({
   -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(24px) saturate(1.2));
 }
 
+/* 省电 / 禁用动效时移除高开销的背景模糊（与 motionPerformance 设置的说明一致） */
+.luminaweave-app-root:not([data-motion='full']) .lw-traditional-shell.is-telegram-desktop {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .lw-main-wrapper {
   flex: 1;
   min-width: 0;
@@ -420,7 +426,6 @@ const telegramLeftRailStyle = computed<CSSProperties>(() => ({
         color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent),
         color-mix(in srgb, var(--lw-bg-surface) 88%, transparent)));
   box-shadow: var(--lw-shell-main-shadow, 0 20px 44px rgba(15, 23, 42, 0.08));
-  backdrop-filter: blur(10px);
 }
 
 .lw-traditional-shell.is-telegram-desktop .lw-main-wrapper {

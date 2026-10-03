@@ -168,7 +168,7 @@ const deleteSession = (sessionId: string): void => {
   border: 1px solid var(--lw-border-base);
   border-radius: 5px;
   background: var(--lw-bg-surface);
-  color: var(--lw-text-primary);
+  color: var(--lw-text-main);
   padding: 7px 8px;
 }
 

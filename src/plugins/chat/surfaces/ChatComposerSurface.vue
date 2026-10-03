@@ -59,7 +59,7 @@ watch(
   width: 100%;
   flex-direction: column;
   gap: 7px;
-  background: var(--lw-chat-composer-background, var(--lw-bg-surface));
+  background: var(--lw-chat-input-area-bg, var(--lw-bg-surface));
   padding: 8px 12px 12px;
 }
 </style>

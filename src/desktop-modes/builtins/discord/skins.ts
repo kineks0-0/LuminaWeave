@@ -218,50 +218,31 @@ export const createDiscordSurfaceSkinMap = (): DesktopModeManifest['surfaceSkins
         },
         'chat.main': {
             ...base['chat.main'],
-            cssVars: (context: ComponentThemeContext) => ({
-                ...resolveThemeValueMap(base['chat.main']?.cssVars, context),
-                '--lw-chat-stream-bg': context.resolvedAppearance === 'dark'
-                    ? '#313338'
-                    : 'var(--lw-surface-container-low)',
-                '--lw-chat-bubble': context.resolvedAppearance === 'dark'
-                    ? '#2b2d31'
-                    : 'var(--lw-surface-container-lowest)',
-                '--lw-chat-user-bubble': context.resolvedAppearance === 'dark'
-                    ? '#383a40'
-                    : 'var(--lw-surface-container-high)',
-                '--lw-chat-border': 'var(--lw-border-strong)',
-                '--lw-chat-message-hover-bg': context.resolvedAppearance === 'dark'
-                    ? 'rgba(255, 255, 255, 0.02)'
-                    : 'rgba(31, 35, 40, 0.04)',
-                '--lw-chat-color': 'var(--lw-text-main)',
-                '--lw-chat-input-area-bg': context.resolvedAppearance === 'dark'
-                    ? '#313338'
-                    : 'var(--lw-surface-container)',
-                '--lw-chat-input-surface': context.resolvedAppearance === 'dark'
-                    ? '#383a40'
-                    : 'var(--lw-surface-container-lowest)',
-                '--lw-chat-input-border': context.resolvedAppearance === 'dark'
-                    ? '#4e5058'
-                    : 'var(--lw-border-strong)',
-                '--lw-chat-input-focus-border': context.resolvedAppearance === 'dark'
-                    ? 'rgba(88, 101, 242, 0.42)'
-                    : 'rgba(88, 101, 242, 0.26)',
-                '--lw-chat-input-focus-shadow': context.resolvedAppearance === 'dark'
-                    ? '0 0 0 1px rgba(88, 101, 242, 0.24)'
-                    : '0 0 0 1px rgba(88, 101, 242, 0.16)',
-                '--lw-chat-bubble-shadow': 'none',
-                '--lw-chat-streaming-surface': context.resolvedAppearance === 'dark'
-                    ? 'rgba(88, 101, 242, 0.08)'
-                    : 'rgba(88, 101, 242, 0.08)',
-                '--lw-chat-streaming-border': context.resolvedAppearance === 'dark'
-                    ? 'rgba(88, 101, 242, 0.18)'
-                    : 'rgba(88, 101, 242, 0.16)',
-                '--lw-chat-streaming-status-bg': context.resolvedAppearance === 'dark'
-                    ? 'rgba(49, 51, 56, 0.92)'
-                    : 'rgba(255, 255, 255, 0.88)',
-                '--lw-chat-streaming-status-border': 'var(--lw-border-base)',
-                '--lw-chat-streaming-status-color': 'var(--lw-text-secondary)'
-            })
+            cssVars: (context: ComponentThemeContext) => {
+                const isDark = context.resolvedAppearance === 'dark';
+                return {
+                    ...resolveThemeValueMap(base['chat.main']?.cssVars, context),
+                    '--lw-chat-layout': 'discord',
+                    '--lw-chat-stream-bg': isDark ? '#313338' : 'var(--lw-surface-container-low)',
+                    '--lw-chat-header-bg': isDark ? '#313338' : 'var(--lw-surface-container-low)',
+                    '--lw-chat-input-area-bg': isDark ? '#313338' : 'var(--lw-surface-container-low)',
+                    '--lw-chat-scroll-padding': '16px 16px 24px',
+                    '--lw-chat-content-gap': '17px',
+                    '--lw-chat-group-gap': '2px',
+                    '--lw-chat-bubble': isDark ? '#2b2d31' : 'var(--lw-surface-container-lowest)',
+                    '--lw-chat-user-bubble': isDark ? '#383a40' : 'var(--lw-surface-container-high)',
+                    '--lw-chat-border': 'var(--lw-border-strong)',
+                    '--lw-chat-user-bubble-border': 'var(--lw-border-strong)',
+                    '--lw-chat-message-max-width': '100%',
+                    '--lw-chat-message-hover-bg': isDark ? 'rgba(2, 2, 2, 0.06)' : 'rgba(6, 6, 7, 0.03)',
+                    '--lw-chat-avatar-size': '40px',
+                    '--lw-chat-input-surface': isDark ? '#383a40' : 'var(--lw-surface-container-lowest)',
+                    '--lw-chat-input-border': isDark ? 'transparent' : 'var(--lw-border-strong)',
+                    '--lw-chat-input-radius': '8px',
+                    '--lw-chat-input-focus-border': isDark ? 'transparent' : 'rgba(88, 101, 242, 0.32)',
+                    '--lw-chat-input-focus-shadow': 'none'
+                };
+            }
         },
         'chat.preview': {
             ...base['chat.preview'],

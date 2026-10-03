@@ -11,6 +11,9 @@
       :on-select-choice="ignoreChoice"
       :streaming="true"
       :streaming-presentation="streamPresentation"
+      :group-start="groupStart"
+      :group-end="true"
+      :time-label="timeLabel"
     >
       <template #status>
         <footer v-if="showMeta" class="chat-streaming-message__meta">
@@ -52,6 +55,8 @@ const props = defineProps<{
   assistantName: string;
   assistantAvatarUrl: string;
   defaultAvatar: string;
+  groupStart: boolean;
+  timeLabel: string;
 }>();
 
 const emit = defineEmits<{
@@ -99,6 +104,7 @@ const ignoreChoice = (): void => {};
 }
 
 .chat-streaming-message__pending {
+  margin-top: var(--lw-chat-content-gap, 20px);
   display: flex;
   align-items: center;
   gap: 8px;

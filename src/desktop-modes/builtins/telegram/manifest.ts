@@ -49,7 +49,6 @@ export const telegramDesktopMode: DesktopModeManifest = {
         'telegram.chatList': 'telegram',
         'telegram.conversation': 'telegram',
         'telegram.infoPanel': 'telegram',
-        'telegram.composer': 'telegram',
         'shell.header': 'telegram',
         'shell.widget': 'telegram',
         'shell.mainSurface': 'telegram',
