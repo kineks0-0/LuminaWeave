@@ -128,3 +128,15 @@ describe('forgeAgentProcessPresentation', () => {
         ]);
     });
 });
+
+describe('forgeAgentProcessPresentation activity', () => {
+    it('stays running while the turn is active even without running operations', () => {
+        const presentation = buildForgeAgentProcessPresentation({
+            id: 'process-active',
+            operations: [],
+            streamProcessText: 'thinking',
+            isActive: true
+        });
+        expect(presentation.isDone).toBe(false);
+    });
+});

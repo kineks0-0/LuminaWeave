@@ -1,7 +1,8 @@
 <template>
   <article
     class="chat-message"
-    :class="{ 'is-user': message.is_user }"
+    :class="{ 'is-user': message.is_user, 'is-streaming': streaming }"
+    :aria-busy="streaming || undefined"
     :data-message-shape="messageShape"
     :data-avatar-placement="avatarPlacement"
   >
@@ -51,8 +52,12 @@
           :render-markdown="renderChatMarkdown"
           :render-preferences="renderPreferences"
           :on-select-choice="onSelectChoice"
+          :is-streaming="streaming"
+          :streaming-presentation="streamingPresentation"
         />
-        <div class="chat-message__actions">
+        <slot name="status" />
+        <!-- 流式中保留操作栏占位（不可见），结束后切换为最终消息时高度不变 -->
+        <div class="chat-message__actions" :aria-hidden="streaming || undefined">
           <button type="button" title="编辑消息" aria-label="编辑消息" :disabled="disabled" @click="startEditing">
             <Pencil :size="15" />
           </button>
@@ -101,6 +106,7 @@ import type {
   ChatMessageIntentInput
 } from '../application/ChatApplicationController.js';
 import type { ChatMessageRenderPreferences } from '../presentation/ChatMessageRenderPreferences.js';
+import type { ChatStreamingPresentation } from '../presentation/ChatStreamingPresentation.js';
 import MessageRenderer from './MessageRenderer.vue';
 import TextBlock from './blocks/TextBlock.vue';
 import { renderChatMarkdown } from './chatMarkdown.js';
@@ -113,6 +119,9 @@ const props = defineProps<{
   disabled: boolean;
   renderPreferences: ChatMessageRenderPreferences;
   onSelectChoice: (text: string) => void;
+  /** 正在流式输出的回复：复用同一行布局，保证结束时无缝替换为最终消息 */
+  streaming?: boolean;
+  streamingPresentation?: ChatStreamingPresentation;
 }>();
 
 const emit = defineEmits<{
@@ -270,6 +279,10 @@ const handleAvatarError = (event: Event): void => {
 .chat-message__editor-actions button:hover:not(:disabled) {
   background: var(--lw-bg-hover);
   color: var(--lw-text-primary);
+}
+
+.chat-message.is-streaming .chat-message__actions {
+  visibility: hidden;
 }
 
 .chat-message__actions button:disabled {

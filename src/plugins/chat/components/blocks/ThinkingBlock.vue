@@ -5,7 +5,7 @@
       :class="`variant-${variant}`"
       type="button"
       :aria-expanded="isOpen"
-      @click="toggleOpen"
+      @click="toggleByUser"
     >
       <span class="thinking-summary-main">
         <span v-if="variant !== 'codex'" class="thinking-icon" :class="{ 'is-streaming': isStreaming }" aria-hidden="true">
@@ -34,16 +34,16 @@
       </span>
     </button>
 
-    <div class="thinking-panel" :style="panelStyle">
-      <div ref="panelInnerRef" class="thinking-flow" role="list" aria-label="thinking trace">
+    <div v-show="isOpen" class="thinking-panel">
+      <div class="thinking-flow" role="list" aria-label="thinking trace">
         <div
-          v-for="(entry, index) in entries"
-          :key="`${index}-${entry.slice(0, 24)}`"
+          v-for="(entry, index) in renderedEntries"
+          :key="index"
           class="thinking-entry"
           role="listitem"
         >
           <span class="thinking-entry-node" aria-hidden="true"></span>
-          <div class="thinking-entry-content" v-html="renderFn(entry)"></div>
+          <div class="thinking-entry-content" v-html="entry"></div>
         </div>
       </div>
     </div>
@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps<{
   text: string;
@@ -70,8 +70,13 @@ const props = defineProps<{
 const isOpen = ref(Boolean(props.isStreaming) || (props.autoExpand && !props.hasVisibleContent));
 const variant = computed(() => props.variant || 'default');
 const elapsedSeconds = ref<number | null>(props.isStreaming ? 1 : null);
-const panelInnerRef = ref<HTMLElement | null>(null);
-const panelHeight = ref(0);
+// 用户手动展开/收起后，不再根据流式状态自动切换，避免与用户操作打架。
+const userToggled = ref(false);
+
+const setOpenAutomatically = (open: boolean): void => {
+  if (userToggled.value) return;
+  isOpen.value = open;
+};
 let durationTimer: ReturnType<typeof setInterval> | null = null;
 
 const stopDurationTimer = () => {
@@ -95,7 +100,7 @@ watch(
   (nextStreaming, previousStreaming) => {
     if (nextStreaming && !previousStreaming) {
       if (!props.hasVisibleContent) {
-        isOpen.value = true;
+        setOpenAutomatically(true);
       }
       startDurationTimer();
       return;
@@ -106,7 +111,7 @@ watch(
       // autoExpand 模式：流式结束后，若无内容则保持展开；否则（默认）收起
       if (!props.hasVisibleContent) {
         if (!props.autoExpand) {
-          isOpen.value = false;
+          setOpenAutomatically(false);
         }
         // autoExpand=true 时保持展开，等待 hasVisibleContent 变化再收起
       }
@@ -119,11 +124,11 @@ watch(
   () => props.hasVisibleContent,
   (nextHasVisibleContent, previousHasVisibleContent) => {
     if (nextHasVisibleContent && !previousHasVisibleContent) {
-      isOpen.value = false;
+      setOpenAutomatically(false);
     }
     // autoExpand 模式：内容消失时重新展开（例如切换消息）
     if (!nextHasVisibleContent && previousHasVisibleContent && props.autoExpand) {
-      isOpen.value = true;
+      setOpenAutomatically(true);
     }
   },
   { immediate: true }
@@ -148,53 +153,34 @@ const metaText = computed(() => {
   return props.isStreaming ? '正在生成内部推演轨迹' : '展开查看内部推演过程';
 });
 
-const entries = computed(() => {
-  const blocks = props.text
-    .split(/\n{2,}/)
-    .map(block => block.trim())
-    .filter(Boolean);
+// 只按空行切分条目，流式过程中条目结构保持稳定；已渲染条目按文本缓存，只重算变化的末条。
+const entries = computed(() => props.text
+  .split(/\n{2,}/)
+  .map(block => block.trim())
+  .filter(Boolean));
 
-  if (blocks.length !== 1) {
-    return blocks;
+let renderCache = new Map<string, string>();
+let cachedRenderFn: ((text: string) => string) | null = null;
+
+const renderedEntries = computed(() => {
+  if (cachedRenderFn !== props.renderFn) {
+    renderCache = new Map();
+    cachedRenderFn = props.renderFn;
   }
-
-  const singleBlockLines = blocks[0]
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean);
-
-  const looksLikeList = singleBlockLines.length > 1 && singleBlockLines.every(line => /^([-*•]|\d+\.)\s+/.test(line));
-  if (!looksLikeList) {
-    return blocks;
-  }
-
-  return singleBlockLines.map(line => line.replace(/^([-*•]|\d+\.)\s+/, '').trim()).filter(Boolean);
+  const nextCache = new Map<string, string>();
+  const rendered = entries.value.map((entry) => {
+    const html = renderCache.get(entry) ?? props.renderFn(entry);
+    nextCache.set(entry, html);
+    return html;
+  });
+  renderCache = nextCache;
+  return rendered;
 });
 
-const measurePanel = () => {
-  panelHeight.value = panelInnerRef.value?.scrollHeight || 0;
-};
-
-watch(entries, () => {
-  void nextTick(measurePanel);
-}, { deep: true });
-
-watch(isOpen, () => {
-  void nextTick(measurePanel);
-});
-
-const panelStyle = computed(() => ({
-  maxHeight: isOpen.value ? `${Math.max(panelHeight.value, 1)}px` : '0px',
-  opacity: isOpen.value ? '1' : '0'
-}));
-
-const toggleOpen = () => {
+const toggleByUser = () => {
+  userToggled.value = true;
   isOpen.value = !isOpen.value;
 };
-
-onMounted(() => {
-  void nextTick(measurePanel);
-});
 
 onUnmounted(() => {
   stopDurationTimer();
@@ -332,10 +318,24 @@ onUnmounted(() => {
 }
 
 .thinking-panel {
-  overflow: hidden;
-  transition:
-    max-height 200ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: thinking-panel-in 200ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes thinking-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-panel {
+    animation: none;
+  }
 }
 
 .thinking-flow {

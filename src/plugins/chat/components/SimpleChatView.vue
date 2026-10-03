@@ -2,7 +2,7 @@
   <div class="scv-root" data-lw-ime-scope>
     <!-- 消息列表 -->
     <div ref="scrollRef" class="scv-messages" data-lw-ime-scroll-root>
-      <template v-if="messages.length > 0">
+      <div v-if="messages.length > 0" ref="contentRef" class="scv-messages-content">
         <div
           v-for="msg in messages"
           :key="msg.id"
@@ -29,7 +29,7 @@
             </div>
           </div>
         </div>
-      </template>
+      </div>
 
       <!-- 空状态插槽 -->
       <div v-else class="scv-empty">
@@ -38,6 +38,7 @@
           <p>开始对话</p>
         </slot>
       </div>
+      <LuminaJumpToLatest :visible="showJumpToLatest" @jump="jumpToLatest" />
     </div>
 
     <!-- 输入区 -->
@@ -77,9 +78,11 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import MessageRenderer from './MessageRenderer.vue';
 import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
+import { useStickToBottom } from '../../../composables/useStickToBottom.js';
+import LuminaJumpToLatest from '../../../ui/primitives/LuminaJumpToLatest.vue';
 
 export interface SimpleChatMessage {
   id: string;
@@ -103,6 +106,8 @@ const emit = defineEmits<{
 }>();
 
 const scrollRef = ref<HTMLElement | null>(null);
+const contentRef = ref<HTMLElement | null>(null);
+const { showJumpToLatest, forceFollow, jumpToLatest } = useStickToBottom(scrollRef, contentRef);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const inputText = ref('');
 const imeGuard = useImeSubmitGuard({ debugLabel: 'SimpleChatInput' });
@@ -140,14 +145,13 @@ const handleTextareaKeydown = (event: KeyboardEvent) => {
   handleSend('enter');
 };
 
-const scrollToBottom = () => {
-  if (scrollRef.value) {
-    scrollRef.value.scrollTop = scrollRef.value.scrollHeight;
+// 用户发出新消息时回到底部；流式增高由 useStickToBottom 跟随。
+watch(
+  () => props.messages[props.messages.length - 1]?.id,
+  () => {
+    if (props.messages[props.messages.length - 1]?.role === 'user') forceFollow();
   }
-};
-
-watch(() => props.messages, () => void nextTick(scrollToBottom), { deep: true });
-watch(() => props.isStreaming, () => void nextTick(scrollToBottom));
+);
 </script>
 
 <style scoped>
@@ -167,6 +171,12 @@ watch(() => props.isStreaming, () => void nextTick(scrollToBottom));
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+}
+
+.scv-messages-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .scv-empty {

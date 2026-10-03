@@ -63,9 +63,22 @@
           </div>
         </div>
 
-        <!-- 场景2: 流式模拟 -->
-        <div v-if="activeTab === 'streaming'" class="scene-streaming">
+        <!-- 场景2: 流式模拟：与真实聊天共用节奏器（StreamPacer）与渲染管线（TextBlock） -->
+        <div v-if="activeTab === 'streaming'" ref="streamingContentRef" class="scene-streaming">
           <div class="sim-dashboard">
+            <div class="sim-effects" role="radiogroup" aria-label="流式文本显示效果">
+              <button
+                v-for="option in effectOptions"
+                :key="option.value"
+                type="button"
+                role="radio"
+                :aria-checked="simConfig.effect === option.value"
+                :class="{ active: simConfig.effect === option.value }"
+                @click="simConfig.effect = option.value"
+              >
+                {{ option.label }}
+              </button>
+            </div>
             <div class="sim-param">
               <label>原始流速 (字/块)</label>
               <input type="range" min="1" max="20" step="1" v-model.number="simConfig.chunkSize" />
@@ -94,26 +107,41 @@
             <div class="preview-bubble ai streaming" :class="{ 'is-simulating': isSimulating }">
               <div class="bubble-content">
                 <div v-if="showPreviewMeta('assistant')" class="preview-meta">Assistant</div>
-                <div v-if="simulationText" v-html="renderText(simulationText)"></div>
-                <div v-else class="placeholder-text">配置上方参数并启动模拟...</div>
-                <span v-if="isSimulating" class="sim-cursor"></span>
+                <TextBlock
+                  v-if="simulationText"
+                  :text="simulationText"
+                  :render-fn="renderChatMarkdown"
+                  :streaming="isSimulating"
+                  :presentation="streamPresentation"
+                />
+                <div v-else class="placeholder-text">选择效果并启动模拟...</div>
               </div>
             </div>
           </div>
 
           <div class="sim-live-stats" v-if="isSimulating">
-            <span>队列积压: {{ queue.length }}</span>
+            <span>队列积压: {{ backlogSize }}</span>
             <span>当前帧步长: {{ currentStep }}</span>
           </div>
         </div>
+        <LuminaJumpToLatest v-if="activeTab === 'streaming'" :visible="showJumpToLatest" @jump="jumpToLatest" />
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted, reactive, watch, nextTick } from 'vue';
+import { ref, computed, onUnmounted, reactive } from 'vue';
 import { useSurfaceRuntimeContext } from '../../platform/surface/useSurfaceRuntimeContext.js';
+import { settingsDomainService } from '../../api/services/SettingsDomainService.js';
+import { createDefaultFrameScheduler, StreamPacer } from '../../api/core/generation/StreamPacer.js';
+import { useMotionPreference } from '../../composables/useMotionPreference.js';
+import { useStickToBottom } from '../../composables/useStickToBottom.js';
+import LuminaJumpToLatest from '../../ui/primitives/LuminaJumpToLatest.vue';
+import TextBlock from './components/blocks/TextBlock.vue';
+import { renderChatMarkdown } from './components/chatMarkdown.js';
+import { resolveChatStreamingEffect, type ChatStreamingEffect } from './presentation/ChatMessageRenderPreferences.js';
+import { resolveChatStreamingPresentation } from './presentation/ChatStreamingPresentation.js';
 
 const isCollapsed = ref(false);
 const activeTab = ref<'typography' | 'streaming'>('typography');
@@ -121,31 +149,52 @@ const isSimulating = ref(false);
 const simulationText = ref('');
 
 const viewportRef = ref<HTMLElement | null>(null);
+const streamingContentRef = ref<HTMLElement | null>(null);
+const { showJumpToLatest, jumpToLatest } = useStickToBottom(viewportRef, streamingContentRef);
+const motionPreference = useMotionPreference(viewportRef);
 
-// 自动滚动到底部
-watch(simulationText, async () => {
-  if (viewportRef.value && activeTab.value === 'streaming') {
-    await nextTick();
-    viewportRef.value.scrollTop = viewportRef.value.scrollHeight;
-  }
-});
-const fullText = "这就是 LuminaWeave 的流式模拟实验室。在这里，你可以模拟各种极端网络环境下的生成效果。比如，当你调高“卡顿概率”后，你会发现文字包的到达变得极不规则，此时你可以观察下方的“流式输出平滑”设置能否有效地过滤掉这种抖动，维持一个优雅的出字节奏。如果是长文本瞬间爆发，我们的“最高限速”逻辑则会确保文字不会瞬间刷屏，维持阅读的连贯性。";
+const fullText = [
+  '这就是 LuminaWeave 的**流式模拟实验室**。在这里，你可以模拟各种极端网络环境下的生成效果。',
+  '',
+  '调高“卡顿概率”后，文字包的到达会变得极不规则，此时可以观察“平滑输出”能否过滤掉这种抖动，维持稳定的出字节奏。',
+  '',
+  '- 淡入：新到的文字短暂淡入',
+  '- GPT 风格：最新的文字带一段柔和的渐显拖尾',
+  '- 打字机：匀速出字，光标跟在文末'
+].join('\n');
+
+const effectOptions: ReadonlyArray<{ value: ChatStreamingEffect; label: string }> = [
+  { value: 'instant', label: '即时' },
+  { value: 'fade-in', label: '淡入' },
+  { value: 'gpt-style', label: 'GPT 风格' },
+  { value: 'typewriter', label: '打字机' }
+];
+
+const readNumberSetting = (key: string, fallback: number): number => {
+  const value = Number(settingsDomainService.getEffectiveValue(key));
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
 
 const simConfig = reactive({
+  effect: resolveChatStreamingEffect(settingsDomainService.getEffectiveValue('lumina-chat.streamingEffect')),
   chunkSize: 5,
   stutterChance: 10,
   smooth: true,
-  smoothnessFactor: 2,
-  maxSpeed: 20,
+  smoothnessFactor: readNumberSetting('lumina-chat.streamingSmoothnessFactor', 2),
+  maxSpeed: readNumberSetting('lumina-chat.streamingMaxSpeed', 20),
   autoLoop: false
 });
 
+const streamPresentation = computed(() => resolveChatStreamingPresentation(simConfig.effect, motionPreference.value));
+
+const frameScheduler = createDefaultFrameScheduler();
+const pacer = new StreamPacer({ speedFactor: 2, maxCharsPerFrame: 20 });
 const currentStep = ref(0);
-let simTimer: ReturnType<typeof setInterval> | null = null;
+const backlogSize = ref(0);
+let cancelFrame: (() => void) | null = null;
 let chunkTimer: ReturnType<typeof setInterval> | null = null;
 let loopTimer: ReturnType<typeof setTimeout> | null = null;
-let buffer = '';
-let queue: string[] = [];
+let backlog = '';
 let charIndex = 0;
 const surfaceContext = useSurfaceRuntimeContext('chat.preview');
 const chatVariant = computed(() => surfaceContext.value.theme.variant || 'default');
@@ -176,10 +225,6 @@ const showPreviewMeta = (role: 'assistant' | 'user'): boolean => {
   return placement !== 'hidden' && placement !== 'topbar' && shape !== 'document';
 };
 
-const renderText = (text: string): string => {
-  return text.split('\n').map(p => `<p>${p}</p>`).join('');
-};
-
 const toggleSimulation = (): void => {
   if (isSimulating.value) {
     stopSimulation();
@@ -188,80 +233,73 @@ const toggleSimulation = (): void => {
   }
 };
 
+const finishOrLoop = (): void => {
+  if (simConfig.autoLoop) {
+    stopSimulation();
+    loopTimer = setTimeout(startSimulation, 1000);
+    return;
+  }
+  stopSimulation();
+};
+
+const runFrame = (): void => {
+  cancelFrame = null;
+  const arrivalsDone = charIndex >= fullText.length;
+  if (backlog.length > 0) {
+    const step = pacer.take(frameScheduler.now(), backlog.length, arrivalsDone);
+    currentStep.value = step;
+    simulationText.value += backlog.slice(0, step);
+    backlog = backlog.slice(step);
+    backlogSize.value = backlog.length;
+  } else if (arrivalsDone) {
+    finishOrLoop();
+    return;
+  }
+  cancelFrame = frameScheduler.request(runFrame);
+};
+
 const startSimulation = (): void => {
-  stopSimulation(); // 先清理
+  stopSimulation();
   isSimulating.value = true;
   simulationText.value = '';
-  buffer = '';
-  queue = [];
+  backlog = '';
+  backlogSize.value = 0;
   charIndex = 0;
-  
-  const isSmooth = simConfig.smooth;
-  const smoothness = simConfig.smoothnessFactor;
 
-  // 这里把分块大小和卡顿概率作为网络到达节奏的唯一输入。
+  // 打字机效果在真实聊天中会强制开启平滑节奏，这里保持一致
+  const paced = simConfig.smooth || simConfig.effect === 'typewriter';
+  pacer.setConfig({ speedFactor: simConfig.smoothnessFactor, maxCharsPerFrame: simConfig.maxSpeed });
+  pacer.reset(frameScheduler.now());
+
+  // 分块大小和卡顿概率作为网络到达节奏的输入
   chunkTimer = setInterval(() => {
     if (charIndex >= fullText.length) {
       if (chunkTimer !== null) {
         clearInterval(chunkTimer);
         chunkTimer = null;
       }
+      if (!paced) finishOrLoop();
       return;
     }
+    if (Math.random() * 100 < simConfig.stutterChance) return;
 
-    // 模拟由于网络阻塞产生的随机卡顿
-    if (Math.random() * 100 < simConfig.stutterChance) {
-        return; // 本次跳过，模拟卡顿
-    }
-
-    const len = simConfig.chunkSize;
-    const chunk = fullText.substring(charIndex, charIndex + len);
-    charIndex += len;
-    
-    buffer += chunk;
-    if (isSmooth) {
-      for (const char of chunk) {
-        queue.push(char);
-      }
+    const chunk = fullText.substring(charIndex, charIndex + simConfig.chunkSize);
+    charIndex += simConfig.chunkSize;
+    if (paced) {
+      backlog += chunk;
+      backlogSize.value = backlog.length;
     } else {
-      simulationText.value = buffer;
+      simulationText.value += chunk;
     }
   }, 100);
 
-  // 模拟平滑渲染 (50fps)
-  simTimer = setInterval(() => {
-    if (isSmooth && queue.length > 0) {
-        let step = Math.ceil(queue.length / (8 - smoothness));
-        if (queue.length > 50) step = Math.max(step, 2);
-        const maxSpeed = simConfig.maxSpeed;
-        step = Math.min(step, maxSpeed); // 限速保护
-        currentStep.value = step;
-        
-        const batch = queue.splice(0, step).join('');
-        simulationText.value += batch;
-    } else if (!isSmooth) {
-        // 非平滑模式下，直接检查是否结束且循环
-    }
-
-    // 检测是否完成并处理循环
-    if (charIndex >= fullText.length && (isSmooth ? queue.length === 0 : true)) {
-        if (simConfig.autoLoop) {
-            loopTimer = setTimeout(startSimulation, 1000); // 1秒后自动重起
-            if (simTimer !== null) clearInterval(simTimer);
-            if (chunkTimer !== null) clearInterval(chunkTimer);
-        } else {
-            stopSimulation();
-        }
-    }
-  }, 20);
+  if (paced) cancelFrame = frameScheduler.request(runFrame);
 };
 
 const stopSimulation = (): void => {
   isSimulating.value = false;
-  if (simTimer !== null) {
-    clearInterval(simTimer);
-    simTimer = null;
-  }
+  cancelFrame?.();
+  cancelFrame = null;
   if (chunkTimer !== null) {
     clearInterval(chunkTimer);
     chunkTimer = null;
@@ -512,9 +550,36 @@ onUnmounted(stopSimulation);
 .bubble-content p:last-child { margin-bottom: 0; }
 
 /* 模拟控制面板 */
+.sim-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sim-effects button {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--lw-border-base);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  font-family: var(--lw-font-main);
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: var(--lw-type-label-medium-weight);
+  cursor: pointer;
+  transition: background var(--lw-transition), color var(--lw-transition), border-color var(--lw-transition);
+}
+
+.sim-effects button.active {
+  border-color: var(--lw-primary);
+  background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
+  color: var(--lw-primary);
+}
+
 .sim-dashboard {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--lw-bg-subtle);
+  border: 1px solid var(--lw-border-base);
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 16px;
@@ -531,13 +596,13 @@ onUnmounted(stopSimulation);
   line-height: var(--lw-type-body-small-line-height);
   font-weight: var(--lw-type-body-small-weight);
   letter-spacing: var(--lw-type-body-small-tracking);
-  color: #64748b;
+  color: var(--lw-text-secondary);
 }
 
 .sim-param label { width: 85px; font-weight: var(--lw-type-label-medium-weight); }
 .sim-param input[type="range"] { flex: 1; accent-color: var(--lw-primary); height: 4px; }
-.sim-param span { min-width: 35px; text-align: right; font-family: monospace; }
-.sim-param.flex-row { justify-content: space-between; margin-top: 4px; border-top: 1px dashed #e2e8f0; padding-top: 8px; }
+.sim-param span { min-width: 35px; text-align: right; font-family: var(--lw-font-mono); }
+.sim-param.flex-row { justify-content: space-between; margin-top: 4px; border-top: 1px dashed var(--lw-border-base); padding-top: 8px; }
 
 .toggle-label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 
@@ -555,35 +620,23 @@ onUnmounted(stopSimulation);
   transition: 0.2s;
 }
 
-.sim-main-btn.running { background: #ef4444; }
+.sim-main-btn.running { background: var(--lw-text-secondary); }
 
 .sim-live-stats {
   margin-top: 8px;
-  font-family: monospace;
+  font-family: var(--lw-font-mono);
   font-size: var(--lw-type-label-small-size);
   line-height: var(--lw-type-label-small-line-height);
   font-weight: var(--lw-type-label-small-weight);
   letter-spacing: var(--lw-type-label-small-tracking);
-  color: #94a3b8;
+  color: var(--lw-text-muted);
   display: flex;
   gap: 16px;
   justify-content: center;
 }
 
-.sim-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1.2em;
-  background: var(--lw-primary);
-  vertical-align: middle;
-  margin-left: 2px;
-  animation: blink 0.8s infinite;
-}
-
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
 .placeholder-text {
-  color: #cbd5e1;
+  color: var(--lw-text-muted);
   font-style: italic;
   font-size: var(--lw-type-body-medium-size);
   line-height: var(--lw-type-body-medium-line-height);

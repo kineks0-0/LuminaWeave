@@ -10,3 +10,4 @@ export { default as LuminaSlider } from './LuminaSlider.vue';
 export { default as LuminaPanel } from './LuminaPanel.vue';
 export { default as LuminaEmptyState } from './LuminaEmptyState.vue';
 export { default as LuminaModalShell } from './LuminaModalShell.vue';
+export { default as LuminaJumpToLatest } from './LuminaJumpToLatest.vue';

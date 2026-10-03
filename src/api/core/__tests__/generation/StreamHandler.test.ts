@@ -415,4 +415,79 @@ describe('StreamHandler reconnect buffer sync', () => {
 
         expect(pollSpy).toHaveBeenCalled();
     });
+
+    describe('paced output', () => {
+        const createManualScheduler = () => {
+            let time = 0;
+            let pending: (() => void) | null = null;
+            return {
+                scheduler: {
+                    request(callback: () => void) {
+                        pending = callback;
+                        return () => {
+                            if (pending === callback) pending = null;
+                        };
+                    },
+                    now: () => time
+                },
+                frame(ms = 16) {
+                    time += ms;
+                    const callback = pending;
+                    pending = null;
+                    callback?.();
+                },
+                get hasPending() {
+                    return pending !== null;
+                }
+            };
+        };
+
+        it('emits buffer updates on scheduler frames and ends only after the backlog drains', () => {
+            vi.mocked(lwStorage.get).mockImplementation((key: string, defaultValue: unknown) => {
+                if (key === 'lumina-chat.streamingSmoothness') return true;
+                return defaultValue;
+            });
+            const clock = createManualScheduler();
+            const handler = new StreamHandler(clock.scheduler);
+            const texts: string[] = [];
+            let ended = 0;
+            handler.on('BUFFER_UPDATED', (text: string) => texts.push(text));
+            handler.on('GENERATION_ENDED', () => { ended += 1; });
+
+            handler.handleRestart();
+            handler.handleChunk('Hello world, this is paced.', 'Hello world, this is paced.');
+            expect(texts[texts.length - 1] ?? '').toBe('');
+
+            clock.frame();
+            clock.frame();
+            const partial = texts[texts.length - 1];
+            expect(partial.length).toBeGreaterThan(0);
+            expect(partial.length).toBeLessThan('Hello world, this is paced.'.length);
+
+            handler.handleEnd();
+            expect(ended).toBe(0);
+
+            for (let frame = 0; frame < 60 && clock.hasPending; frame += 1) clock.frame();
+            expect(texts[texts.length - 1]).toBe('Hello world, this is paced.');
+            expect(ended).toBe(1);
+            handler.clearSmoothTimer();
+        });
+
+        it('forces paced output for the typewriter effect even when smoothing is off', () => {
+            vi.mocked(lwStorage.get).mockImplementation((key: string, defaultValue: unknown) => {
+                if (key === 'lumina-chat.streamingEffect') return 'typewriter';
+                return defaultValue;
+            });
+            const clock = createManualScheduler();
+            const handler = new StreamHandler(clock.scheduler);
+            const texts: string[] = [];
+            handler.on('BUFFER_UPDATED', (text: string) => texts.push(text));
+
+            handler.handleRestart();
+            handler.handleChunk('Typewriter text', 'Typewriter text');
+            expect(texts.includes('Typewriter text')).toBe(false);
+            expect(clock.hasPending).toBe(true);
+            handler.clearSmoothTimer();
+        });
+    });
 });

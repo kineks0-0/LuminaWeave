@@ -126,6 +126,63 @@ const createHarness = (initialContext: ConversationViewContext = createContext()
 };
 
 describe('ChatApplicationController', () => {
+    const streamState = (processed: string) => ({
+        processed,
+        text: processed,
+        filteredCount: 0,
+        pendingText: ''
+    });
+
+    it('keeps the finished stream visible until the final message arrives', async () => {
+        const userMessage = createMessage('node-1', 'Hello');
+        const harness = createHarness(createContext([userMessage]));
+        await harness.controller.start();
+
+        harness.emitGeneration({ type: 'started' });
+        harness.emitGeneration({ type: 'updated', state: streamState('Final reply') });
+        harness.emitGeneration({ type: 'ended', finalText: '' });
+
+        expect(harness.controller.getSnapshot().generation).toMatchObject({
+            phase: 'settling',
+            isGenerating: false,
+            stream: { processed: 'Final reply' }
+        });
+
+        harness.emitConversation({ type: 'context_changed', context: createContext([userMessage]) });
+        expect(harness.controller.getSnapshot().generation.phase).toBe('settling');
+
+        const reply = { ...createMessage('node-2', 'Final reply'), is_user: false, role: 'assistant' as const };
+        harness.emitConversation({ type: 'context_changed', context: createContext([userMessage, reply]) });
+        const snapshot = harness.controller.getSnapshot();
+        expect(snapshot.messages.map(message => message.id)).toEqual(['node-1', 'node-2']);
+        expect(snapshot.generation).toMatchObject({ phase: 'ended', stream: null });
+    });
+
+    it('clears a settling stream after a bounded timeout when no message arrives', async () => {
+        vi.useFakeTimers();
+        try {
+            const harness = createHarness();
+            await harness.controller.start();
+            harness.emitGeneration({ type: 'started' });
+            harness.emitGeneration({ type: 'updated', state: streamState('Orphan') });
+            harness.emitGeneration({ type: 'ended', finalText: '' });
+            expect(harness.controller.getSnapshot().generation.phase).toBe('settling');
+
+            vi.advanceTimersByTime(1600);
+            expect(harness.controller.getSnapshot().generation).toMatchObject({ phase: 'ended', stream: null });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('ends immediately when the stream produced no visible text', async () => {
+        const harness = createHarness();
+        await harness.controller.start();
+        harness.emitGeneration({ type: 'started' });
+        harness.emitGeneration({ type: 'ended', finalText: '' });
+        expect(harness.controller.getSnapshot().generation).toMatchObject({ phase: 'ended', stream: null });
+    });
+
     it('projects conversation and generation events through one subscription path', async () => {
         const initialMessage = createMessage('node-1', 'Hello');
         const harness = createHarness(createContext([initialMessage]));

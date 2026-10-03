@@ -289,7 +289,7 @@ describe('Official Surface Kit', () => {
         expect(messageSource).toContain('v-if="showInlineAvatar"');
         expect(messageSource).toContain('v-if="showMessageMeta"');
         expect(streamingSource).toContain('renderPreferences.streamingEffect');
-        expect(streamingSource).toContain('typing-cursor');
+        expect(streamingSource).toContain(':streaming-presentation="streamPresentation"');
         expect(transcriptSource).toContain('props.presentation.scrollRequest?.revision');
         expect(composerSource).toContain('props.presentation.composerFocusRequest?.revision');
         expect(mainSurfaceSource).toContain('composerCollapsed.value = false');

@@ -5,6 +5,7 @@ import { llmEngine } from '../../llmEngine.js';
 import { NexusClient } from '../hal/network/NexusClient.js';
 import type { NexusStatusResponse } from '../../../types/nexus.js';
 import { HALContext } from '../hal/HALContext.js';
+import { createDefaultFrameScheduler, StreamPacer, type FrameScheduler } from './StreamPacer.js';
 
 /**
  * 流式输出的聚合状态 (MVI 模式)
@@ -29,7 +30,8 @@ export class StreamHandler extends LuminaWeaveAPIBase {
     public isSyncing: boolean = false;
     public isGenerating: boolean = false;
     private _smoothRemaining: string = "";
-    private _smoothTimer: any = null;
+    private _cancelSmoothFrame: (() => void) | null = null;
+    private readonly _pacer = new StreamPacer({ speedFactor: 2, maxCharsPerFrame: 20 });
     private _smoothEmitText: string = "";
     private _lastDisplayFullText: string = "";
     /** 已确认显示的文本（无动画），用于流式效果的双层输出 */
@@ -54,8 +56,14 @@ export class StreamHandler extends LuminaWeaveAPIBase {
     private _resumeChatId: string | null = null;
     private _resumeAbort: AbortController | null = null;
 
-    constructor() {
+    constructor(private readonly frameScheduler: FrameScheduler = createDefaultFrameScheduler()) {
         super();
+    }
+
+    /** 平滑吐字开关；打字机效果依赖匀速出字，因此强制开启。 */
+    private isPacingEnabled(): boolean {
+        return lwStorage.get('lumina-chat.streamingSmoothness', false, 'Global') === true
+            || lwStorage.get('lumina-chat.streamingEffect', 'instant', 'Global') === 'typewriter';
     }
 
     init(providedEventSource?: any): void {
@@ -115,7 +123,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
      * @param rawFullText 截止目前的完整原始文本
      */
     handleChunk(chunk: string, rawFullText: string): void {
-        const isSmooth = lwStorage.get('lumina-chat.streamingSmoothness', false, 'Global');
+        const isSmooth = this.isPacingEnabled();
         const smoothness = lwStorage.get('lumina-chat.streamingSmoothnessFactor', 2, 'Global');
         const filterChatReply = lwStorage.get('lumina-chat.filterChatReply', false, 'Global');
         const allowTopLevel = lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global');
@@ -200,19 +208,26 @@ export class StreamHandler extends LuminaWeaveAPIBase {
     }
 
     private startSmoothTimer(smoothness: number) {
-        if (this._smoothTimer) return;
-        this._smoothTimer = setInterval(() => {
-            if (this._smoothRemaining.length > 0) {
-                const divisor = Math.max(0.1, 8 - smoothness);
-                let step = Math.ceil(this._smoothRemaining.length / divisor);
+        if (this._cancelSmoothFrame) return;
+        this._pacer.setConfig({
+            speedFactor: smoothness,
+            maxCharsPerFrame: lwStorage.get('lumina-chat.streamingMaxSpeed', 20, 'Global')
+        });
+        this._pacer.reset(this.frameScheduler.now());
+        this._cancelSmoothFrame = this.frameScheduler.request(() => this.runSmoothFrame());
+    }
 
-                if (this._smoothRemaining.length > 50) step = Math.max(step, 2);
-                if (this._smoothRemaining.length > 150) step = Math.max(step, 5);
-                if (this._smoothRemaining.length > 300) step = Math.max(step, 10);
+    private runSmoothFrame(): void {
+        this._cancelSmoothFrame = null;
+        if (this._smoothRemaining.length > 0) {
+            let step = this._pacer.take(this.frameScheduler.now(), this._smoothRemaining.length, !this.isGenerating);
+            // 不在代理对中间截断，避免 emoji 等字符被拆成半个
+            const lastCode = this._smoothRemaining.charCodeAt(step - 1);
+            if (step > 0 && step < this._smoothRemaining.length && lastCode >= 0xd800 && lastCode <= 0xdbff) {
+                step += 1;
+            }
 
-                const maxSpeed = lwStorage.get('lumina-chat.streamingMaxSpeed', 20, 'Global');
-                step = Math.min(step, maxSpeed);
-
+            if (step > 0) {
                 const batch = this._smoothRemaining.substring(0, step);
                 this._smoothRemaining = this._smoothRemaining.substring(step);
                 this._confirmedText = this._smoothEmitText;
@@ -227,15 +242,16 @@ export class StreamHandler extends LuminaWeaveAPIBase {
                     this._latestSemanticState.thinkingText,
                     batch
                 );
-                
+
                 // 平滑吐字时也广播聚合状态
                 this.emitStateUpdate(batch);
-            } else if (!this.isGenerating) {
-                this.clearSmoothTimer();
-                this.emit('GENERATION_ENDED', this.responseBuffer);
-                this.emitStateUpdate();
             }
-        }, 20);
+        } else if (!this.isGenerating) {
+            this.emit('GENERATION_ENDED', this.responseBuffer);
+            this.emitStateUpdate();
+            return;
+        }
+        this._cancelSmoothFrame = this.frameScheduler.request(() => this.runSmoothFrame());
     }
 
     private resolveDisplayState(rawFullText: string, policy: any): StreamSemanticState {
@@ -253,7 +269,7 @@ export class StreamHandler extends LuminaWeaveAPIBase {
             this.stopWatchdog();
         }
 
-        const isSmooth = lwStorage.get('lumina-chat.streamingSmoothness', false, 'Global');
+        const isSmooth = this.isPacingEnabled();
         if ((!isSmooth || this._smoothRemaining.length === 0) && !options.stayActive) {
             this.clearSmoothTimer();
             this.emit('GENERATION_ENDED', this.responseBuffer);
@@ -272,9 +288,9 @@ export class StreamHandler extends LuminaWeaveAPIBase {
     }
 
     clearSmoothTimer(): void {
-        if (this._smoothTimer) {
-            clearInterval(this._smoothTimer);
-            this._smoothTimer = null;
+        if (this._cancelSmoothFrame) {
+            this._cancelSmoothFrame();
+            this._cancelSmoothFrame = null;
         }
     }
 

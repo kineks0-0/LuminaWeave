@@ -141,8 +141,8 @@
                 </div>
               </div>
 
-              <div class="conversation-shell">
-                <template v-for="item in groupedFeed" :key="item.id">
+              <div ref="conversationShell" class="conversation-shell">
+                <template v-for="item in groupedFeed" :key="item.renderKey">
                   <div v-if="item.kind === 'message'" class="forge-msg" :class="`role-${item.message.role}`">
                     <div class="msg-avatar" :class="item.message.role">
                       <span v-if="item.message.role === 'user'">U</span>
@@ -211,7 +211,7 @@
                       <div v-if="item.presentation.processBlocks.length" class="agent-process-text">
                         <p
                           v-for="(block, index) in item.presentation.processBlocks"
-                          :key="`${item.id}:process:${index}`"
+                          :key="`${item.renderKey}:process:${index}`"
                         >
                           {{ block }}
                         </p>
@@ -240,6 +240,7 @@
                     }}</span>
                 </div>
               </div>
+              <LuminaJumpToLatest :visible="showJumpToLatest" @jump="jumpToLatest" />
             </div>
 
             <div class="composer-section" data-lw-ime-anchor :class="{ 'is-collapsed': isComposerCollapsed && !activeComposerApproval }">
@@ -469,7 +470,6 @@ import SeedSnippetSelector from '../SeedSnippetSelector.vue';
 import { useForgeSeedImport } from '../useForgeSeedImport.js';
 import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
 import type { ForgeDetailMode } from '../../../types/ForgeStructuredTypes.js';
-import type { ForgeTimelineOperationItem } from '../../../types/ForgeTimelineTypes.js';
 import type { ForgeToolApprovalGrantMode, ForgeToolApprovalRequest } from '../../../types/ForgeRuntimeTypes.js';
 import type { ForgeAuxPanelKind, ForgeVisiblePhase } from '../../../types/ForgeWorkflowTypes.js';
 import type { ForgeWorkspaceChangedFile } from '@shared/ForgePiTypes.js';
@@ -480,9 +480,12 @@ import {
   type ForgeFeedWorkspaceChange
 } from '../project/forgeWorkspaceChangePresentation.js';
 import {
-  buildForgeAgentProcessPresentation,
-  type ForgeAgentProcessPresentation
-} from '../project/forgeAgentProcessPresentation.js';
+  buildForgeGroupedFeed,
+  type ForgeGroupedFeedItem,
+  type ForgeGroupedFeedProcess
+} from '../project/forgeGroupedFeed.js';
+import { useStickToBottom } from '../../../composables/useStickToBottom.js';
+import LuminaJumpToLatest from '../../../ui/primitives/LuminaJumpToLatest.vue';
 import { ForgeAuxPanelView } from './forgeAsyncComponents.js';
 import {
   createForgeWorkspaceInstanceState,
@@ -498,6 +501,8 @@ const workspaceActions = inject<{
   openWorkspaceApp?: (appId: string) => void;
 } | null>('lwWorkspaceActions', null);
 const msgScroller = ref<HTMLElement | null>(null);
+const conversationShell = ref<HTMLElement | null>(null);
+const { showJumpToLatest, forceFollow, jumpToLatest } = useStickToBottom(msgScroller, conversationShell);
 const composerMenuRef = ref<HTMLElement | null>(null);
 const composerTextarea = ref<HTMLTextAreaElement | null>(null);
 const composerImeGuard = useImeSubmitGuard({ debugLabel: 'ForgeComposer' });
@@ -589,94 +594,30 @@ const forgeTypographyStyle = computed<Record<string, string>>(() => ({
   '--lw-forge-component-letter-spacing': `${forgeTypographySettings.componentLetterSpacing}px`
 }));
 
-// 连续的 agent operation 聚合为“执行过程”，完成后默认折叠。
+// 连续的 agent operation 聚合为“执行过程”，完成后默认折叠；展开状态按稳定的 renderKey 记录。
 const expandedProcessGroups = reactive<Set<string>>(new Set());
-
-interface FeedMessage {
-  kind: 'message';
-  id: string;
-  message: any;
-  workspaceChanges?: ForgeFeedWorkspaceChange[];
-  suppressThinking?: boolean;
-}
-interface FeedAgentProcess {
-  kind: 'agent-process';
-  id: string;
-  presentation: ForgeAgentProcessPresentation;
-}
-type GroupedFeedItem = FeedMessage | FeedAgentProcess;
 
 const workspaceWriteGroupsByAssistantTurn = computed<ForgeFeedWorkspaceChange[][]>(() =>
   buildWorkspaceWriteGroupsByAssistantTurn(forgeStore.piSessionEntries, forgeStore.activePiNodeId)
 );
 
-const groupedFeed = computed((): GroupedFeedItem[] => {
-  const result: GroupedFeedItem[] = [];
-  let opBuffer: ForgeTimelineOperationItem[] = [];
-  let groupIndex = 0;
-  let assistantIndex = 0;
+const groupedFeed = computed((): ForgeGroupedFeedItem[] => buildForgeGroupedFeed({
+  feed: store.timelineFeed,
+  workspaceChangesByAssistantTurn: workspaceWriteGroupsByAssistantTurn.value,
+  streamThinkingText: store.streamThinkingText,
+  isGenerating: store.isGenerating
+}));
 
-  const flushProcess = (options: {
-    workspaceChanges?: ForgeFeedWorkspaceChange[];
-    hasAssistantReply?: boolean;
-    streamProcessText?: string | null;
-  } = {}) => {
-    const workspaceChanges = options.workspaceChanges ?? [];
-    const streamProcessText = options.streamProcessText?.trim() || null;
-    if (opBuffer.length === 0 && workspaceChanges.length === 0 && !streamProcessText) return;
-    const groupId = `agent-process-${groupIndex}-${opBuffer[0]?.id ?? 'stream'}`;
-    const presentation = buildForgeAgentProcessPresentation({
-      id: groupId,
-      operations: [...opBuffer],
-      workspaceChanges,
-      streamProcessText,
-      hasAssistantReply: options.hasAssistantReply ?? false
-    });
-    result.push({ kind: 'agent-process', id: groupId, presentation });
-    opBuffer = [];
-    groupIndex++;
-  };
+const isAgentProcessCollapsed = (item: ForgeGroupedFeedProcess): boolean =>
+  item.presentation.isDone && !expandedProcessGroups.has(item.renderKey);
 
-  for (const item of store.timelineFeed) {
-    if (item.kind === 'message') {
-      const messageItem = item as FeedMessage;
-      if (messageItem.message.role === 'assistant') {
-        const workspaceChanges = workspaceWriteGroupsByAssistantTurn.value[assistantIndex] ?? [];
-        const isStreamingAssistant = messageItem.message.syncStatus === 'streaming';
-        const streamProcessText = isStreamingAssistant ? store.streamThinkingText : null;
-        flushProcess({
-          workspaceChanges,
-          hasAssistantReply: !isStreamingAssistant && Boolean(messageItem.message.mes || messageItem.message.mesRaw),
-          streamProcessText
-        });
-        result.push({
-          ...messageItem,
-          suppressThinking: Boolean(streamProcessText),
-          workspaceChanges
-        });
-        assistantIndex++;
-      } else {
-        flushProcess();
-        result.push(messageItem);
-      }
-    } else {
-      opBuffer.push(item.item);
-    }
-  }
-  flushProcess();
-  return result;
-});
-
-const isAgentProcessCollapsed = (item: FeedAgentProcess): boolean =>
-  item.presentation.isDone && !expandedProcessGroups.has(item.id);
-
-const toggleAgentProcessGroup = (item: FeedAgentProcess): void => {
+const toggleAgentProcessGroup = (item: ForgeGroupedFeedProcess): void => {
   if (!item.presentation.isDone) return;
-  if (expandedProcessGroups.has(item.id)) {
-    expandedProcessGroups.delete(item.id);
+  if (expandedProcessGroups.has(item.renderKey)) {
+    expandedProcessGroups.delete(item.renderKey);
     return;
   }
-  expandedProcessGroups.add(item.id);
+  expandedProcessGroups.add(item.renderKey);
 };
 
 const workspaceChangeKindLabel = (kind: ForgeWorkspaceChangedFile['kind']): string => {
@@ -978,12 +919,6 @@ const handleSwitchAuxMode = (mode: 'left' | 'right' | 'widget') => {
   luminaWeaveApi.emit('SWITCH_AUX_SIDEBAR_MODE', mode);
 };
 
-const scrollToBottom = () => {
-  if (msgScroller.value) {
-    msgScroller.value.scrollTop = msgScroller.value.scrollHeight;
-  }
-};
-
 const handleGlobalPointerDown = (event: PointerEvent) => {
   const target = event.target as Node | null;
   if (!target) return;
@@ -998,8 +933,15 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
   closePromptPreview();
 };
 
-watch(() => store.timelineFeed.length, () => nextTick(scrollToBottom));
-watch(() => store.streamText, () => nextTick(scrollToBottom));
+// 用户发出新消息时回到底部并恢复跟随；流式增高由 useStickToBottom 的尺寸观察处理。
+watch(
+  () => groupedFeed.value[groupedFeed.value.length - 1],
+  (lastItem, previousLastItem) => {
+    if (lastItem?.kind === 'message' && lastItem.message.role === 'user' && lastItem.renderKey !== previousLastItem?.renderKey) {
+      forceFollow();
+    }
+  }
+);
 watch(() => store.isGenerating, (isGenerating) => {
   if (isGenerating) {
     closeComposerMenu();

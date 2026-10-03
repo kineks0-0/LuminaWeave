@@ -1,6 +1,6 @@
 <template>
-  <div ref="scrollArea" class="chat-transcript" :class="{ 'is-compact': compact }" @scroll="handleScroll">
-    <div class="chat-transcript__content">
+  <div ref="scrollArea" class="chat-transcript" :class="{ 'is-compact': compact }">
+    <div ref="contentArea" class="chat-transcript__content">
       <div v-if="showEmptyState" class="chat-transcript__empty">
         {{ viewState.emptyStateMessage }}
       </div>
@@ -33,14 +33,19 @@
         :generation="generation"
         :visible="showStreaming"
         :render-preferences="renderPreferences"
+        :assistant-name="assistantName"
+        :assistant-avatar-url="assistantAvatarUrl"
+        :default-avatar="defaultAvatar"
+        @retry="emit('regenerate')"
       />
     </div>
+    <LuminaJumpToLatest :visible="showJumpToLatest" @jump="jumpToLatest" />
   </div>
 </template>
 
 <script setup lang="ts">
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { LoaderCircle } from 'lucide-vue-next';
 import type { CharacterChannelState, ConversationViewContext } from '../../../types/ConversationContextTypes.js';
 import type {
@@ -51,7 +56,8 @@ import type {
 } from '../application/ChatApplicationController.js';
 import type { ChatMessageRenderPreferences } from '../presentation/ChatMessageRenderPreferences.js';
 import { resolveChatViewState } from '../chatViewState.js';
-import { scrollChatTranscriptToBottom } from '../presentation/ChatPresentationInteractions.js';
+import { useStickToBottom } from '../../../composables/useStickToBottom.js';
+import LuminaJumpToLatest from '../../../ui/primitives/LuminaJumpToLatest.vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatStreamingMessage from './ChatStreamingMessage.vue';
 
@@ -76,7 +82,8 @@ const emit = defineEmits<{
 }>();
 
 const scrollArea = ref<HTMLElement | null>(null);
-const isAtBottom = ref(true);
+const contentArea = ref<HTMLElement | null>(null);
+const { showJumpToLatest, forceFollow, followIfNeeded, jumpToLatest } = useStickToBottom(scrollArea, contentArea);
 const sessionSwitching = computed(() => props.characterState.status.kind === 'switching');
 const viewState = computed(() => resolveChatViewState({
   sourceId: props.context.source,
@@ -94,40 +101,42 @@ const showStreaming = computed(() => props.context.meta?.isLive === true && (
 ));
 const showEmptyState = computed(() => props.messages.length === 0 && !showStreaming.value && !sessionSwitching.value);
 
-const handleScroll = (): void => {
-  const area = scrollArea.value;
-  if (!area) return;
-  isAtBottom.value = area.scrollHeight - area.scrollTop - area.clientHeight < 48;
-};
-
-const scrollToBottom = (): void => {
-  const area = scrollArea.value;
-  if (!area) return;
-  if (scrollChatTranscriptToBottom(area, false)) {
-    isAtBottom.value = true;
+const latestAssistantMessage = computed(() => {
+  for (let index = props.messages.length - 1; index >= 0; index -= 1) {
+    if (!props.messages[index].is_user) return props.messages[index];
   }
-};
+  return null;
+});
+const assistantName = computed(() => (
+  latestAssistantMessage.value?.name?.trim()
+  || props.characterState.status.characterName.trim()
+  || 'Assistant'
+));
+const assistantAvatarUrl = computed(() => (
+  latestAssistantMessage.value ? props.resolveMessageAvatar(latestAssistantMessage.value) : props.defaultAvatar
+));
 
+// 用户发送新消息时回到底部并恢复跟随；其余增高由 useStickToBottom 的尺寸观察处理。
 watch(
-  () => [props.messages.length, props.generation.revision, sessionSwitching.value],
-  () => {
-    if (!isAtBottom.value) return;
-    void nextTick(scrollToBottom);
+  () => props.messages[props.messages.length - 1],
+  (lastMessage, previousLastMessage) => {
+    if (lastMessage?.is_user && lastMessage.id !== previousLastMessage?.id) forceFollow();
   }
 );
+
+// 切换会话后从最新处开始阅读
+watch(() => props.context.sessionId, () => forceFollow());
 
 watch(
   () => props.presentation.scrollRequest?.revision,
   () => {
     const request = props.presentation.scrollRequest;
     if (!request) return;
-    void nextTick(() => {
-      const area = scrollArea.value;
-      if (!area) return;
-      if (scrollChatTranscriptToBottom(area, request.force)) {
-        isAtBottom.value = true;
-      }
-    });
+    if (request.force) {
+      forceFollow();
+    } else {
+      followIfNeeded();
+    }
   }
 );
 </script>
@@ -138,6 +147,11 @@ watch(
   flex: 1;
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+/* 跟随由 useStickToBottom 负责；未跟随时浏览器锚定保持阅读位置 */
+.chat-transcript__content {
+  overflow-anchor: auto;
 }
 
 .chat-transcript__content {

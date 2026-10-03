@@ -9,13 +9,19 @@
       :variant="thinkingVariant"
       :auto-expand="thinkingAutoExpand"
     />
-    <template v-for="(segment, idx) in renderSegments" :key="idx">
-      <!-- 文本段：使用 TextBlock 渲染 Markdown -->
-      <TextBlock v-if="segment.type === 'text'" :text="segment.raw" :renderFn="renderMarkdown" />
+    <template v-for="(segment, idx) in renderSegments" :key="`${idx}-${segment.type}`">
+      <!-- 文本段：使用 TextBlock 渲染 Markdown；仅最后一个文本段承载流式显现效果 -->
+      <TextBlock
+        v-if="segment.type === 'text'"
+        :text="segment.raw"
+        :render-fn="renderMarkdown"
+        :streaming="Boolean(isStreaming) && idx === lastTextSegmentIndex"
+        :presentation="streamingPresentation"
+      />
 
       <!-- 视图段：遍历组件列表并动态渲染 -->
       <div v-else-if="segment.type === 'view'" class="lv-view-segment">
-        <template v-for="(comp, cIdx) in segment.components" :key="cIdx">
+        <template v-for="(comp, cIdx) in segment.components" :key="`${cIdx}-${comp.component}`">
           <component
             :is="resolveRenderedComponent(comp.component)"
             v-if="resolveRenderedComponent(comp.component)"
@@ -46,6 +52,7 @@ import {
   DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES,
   type ChatMessageRenderPreferences
 } from '../presentation/ChatMessageRenderPreferences.js';
+import type { ChatStreamingPresentation } from '../presentation/ChatStreamingPresentation.js';
 
 const ForgeMessageAutoSubmit = defineAsyncComponent(() =>
   import('../../forge/blocks/forgeBlockComponents.js').then(module => module.ForgeMessageAutoSubmit)
@@ -74,6 +81,8 @@ const props = defineProps<{
   onSelectChoice?: (text: string) => void;
   /** 由 Surface context 投影的消息渲染设置 */
   renderPreferences?: ChatMessageRenderPreferences;
+  /** 流式显现效果（淡入 / 拖尾 / 光标） */
+  streamingPresentation?: ChatStreamingPresentation;
 }>();
 
 const effectiveRenderContext = computed<ViewRenderContext>(() => props.renderContext || 'chat');
@@ -172,6 +181,13 @@ const renderSegments = computed<MessageSegment[]>(() => {
   });
 });
 
+const lastTextSegmentIndex = computed(() => {
+  for (let index = renderSegments.value.length - 1; index >= 0; index -= 1) {
+    if (renderSegments.value[index].type === 'text') return index;
+  }
+  return -1;
+});
+
 const hasVisibleContent = computed(() => renderSegments.value.some((segment) => {
   if (segment.type === 'text') {
     return Boolean(segment.raw.trim());
@@ -197,18 +213,18 @@ const hasVisibleContent = computed(() => renderSegments.value.some((segment) => 
 /* 未识别组件的降级展示 */
 .lv-unknown-block {
   padding: 8px 12px;
-  background: #fef3c7;
-  border: 1px dashed #f59e0b;
+  background: var(--lw-bg-subtle);
+  border: 1px dashed var(--lw-border-base);
   border-radius: 6px;
   font-size: var(--lw-type-body-small-size);
   line-height: var(--lw-type-body-small-line-height);
   font-weight: var(--lw-type-body-small-weight);
   letter-spacing: var(--lw-type-body-small-tracking);
-  color: #92400e;
+  color: var(--lw-text-secondary);
 }
 
 .lv-unknown-block code {
-  font-family: monospace;
+  font-family: var(--lw-font-mono);
   font-size: var(--lw-type-label-small-size);
   line-height: var(--lw-type-label-small-line-height);
   font-weight: var(--lw-type-label-small-weight);

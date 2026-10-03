@@ -33,6 +33,8 @@ export interface BuildForgeAgentProcessPresentationInput {
     workspaceChanges?: ForgeFeedWorkspaceChange[];
     streamProcessText?: string | null;
     hasAssistantReply?: boolean;
+    /** 所在回合仍在进行且回复正文尚未开始；为 true 时过程保持"运行中" */
+    isActive?: boolean;
 }
 
 const TOOL_CALL_TITLE_PREFIX = '工具调用 · ';
@@ -53,14 +55,15 @@ export const buildForgeAgentProcessPresentation = ({
     operations,
     workspaceChanges = [],
     streamProcessText,
-    hasAssistantReply = false
+    hasAssistantReply = false,
+    isActive = false
 }: BuildForgeAgentProcessPresentationInput): ForgeAgentProcessPresentation => {
     const toolCalls = operations.filter(operation => operation.origin?.entryType === 'tool_call');
     const readCount = countUniqueToolCalls(toolCalls, READ_TOOL_NAMES);
     const editToolCount = countUniqueToolCalls(toolCalls, EDIT_TOOL_NAMES);
     const editCount = editToolCount > 0 ? editToolCount : workspaceChanges.length;
     const replyCount = hasAssistantReply ? 1 : 0;
-    const isDone = hasAssistantReply || operations.every(operation => operation.status !== 'running');
+    const isDone = !isActive && (hasAssistantReply || operations.every(operation => operation.status !== 'running'));
     const processBlocks = buildProcessTextBlocks({
         operations,
         streamProcessText: streamProcessText?.trim() || null

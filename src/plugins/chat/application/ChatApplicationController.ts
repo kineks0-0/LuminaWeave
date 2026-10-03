@@ -17,7 +17,12 @@ import type {
     ChatPresentationCommandService
 } from '../../../api/services/ChatPresentationCommandService.js';
 
-export type ChatGenerationPhase = 'idle' | 'running' | 'ended' | 'failed';
+/**
+ * settling：生成已结束但最终消息尚未进入会话上下文，此时保留流式内容，避免气泡消失再出现。
+ */
+export type ChatGenerationPhase = 'idle' | 'running' | 'settling' | 'ended' | 'failed';
+
+const SETTLING_TIMEOUT_MS = 1500;
 
 export interface ChatGenerationState {
     revision: number;
@@ -134,6 +139,8 @@ export class ChatApplicationController {
     private contextRevision = 0;
     private started = false;
     private disposed = false;
+    private settlingTimer: ReturnType<typeof setTimeout> | null = null;
+    private settlingMessageSignature = '';
 
     public readonly intents: ChatApplicationIntents;
 
@@ -331,6 +338,7 @@ export class ChatApplicationController {
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
+        this.clearSettlingTimer();
         this.disposeSubscriptions();
         this.listeners.clear();
     }
@@ -348,12 +356,49 @@ export class ChatApplicationController {
     private handleConversationEvent(event: ConversationDomainEvent): void {
         if (this.disposed || event.type === 'sessions_updated') return;
         this.contextRevision += 1;
+        if (
+            this.snapshot.generation.phase === 'settling'
+            && this.resolveMessageSignature(event.context.messages) !== this.settlingMessageSignature
+        ) {
+            // 最终消息与流式气泡的移除在同一次快照中完成，保证高度连续
+            this.clearSettlingTimer();
+            this.updateSnapshot({
+                context: event.context,
+                messages: event.context.messages,
+                generation: this.createEndedGeneration(this.snapshot.generation.revision + 1)
+            });
+            return;
+        }
         this.applyContext(event.context);
+    }
+
+    private resolveMessageSignature(messages: readonly LuminaChatMessage[]): string {
+        const lastMessage = messages[messages.length - 1];
+        return `${messages.length}:${lastMessage?.id ?? ''}:${lastMessage?.mesRaw?.length ?? 0}`;
+    }
+
+    private createEndedGeneration(revision: number): ChatGenerationState {
+        return {
+            revision,
+            phase: 'ended',
+            isGenerating: false,
+            isSyncing: false,
+            stream: null,
+            errorMessage: ''
+        };
+    }
+
+    private clearSettlingTimer(): void {
+        if (this.settlingTimer) {
+            clearTimeout(this.settlingTimer);
+            this.settlingTimer = null;
+        }
     }
 
     private handleGenerationEvent(event: GenerationDomainEvent): void {
         if (this.disposed) return;
         const revision = this.snapshot.generation.revision + 1;
+        this.clearSettlingTimer();
 
         if (event.type === 'started') {
             this.updateGeneration({
@@ -378,14 +423,25 @@ export class ChatApplicationController {
             return;
         }
         if (event.type === 'ended') {
+            const stream = this.snapshot.generation.stream;
+            if (!stream?.processed) {
+                this.updateGeneration(this.createEndedGeneration(revision));
+                return;
+            }
+            this.settlingMessageSignature = this.resolveMessageSignature(this.snapshot.messages);
             this.updateGeneration({
                 revision,
-                phase: 'ended',
+                phase: 'settling',
                 isGenerating: false,
                 isSyncing: false,
-                stream: null,
+                stream,
                 errorMessage: ''
             });
+            this.settlingTimer = setTimeout(() => {
+                this.settlingTimer = null;
+                if (this.disposed || this.snapshot.generation.phase !== 'settling') return;
+                this.updateGeneration(this.createEndedGeneration(this.snapshot.generation.revision + 1));
+            }, SETTLING_TIMEOUT_MS);
             return;
         }
         this.updateGeneration({
