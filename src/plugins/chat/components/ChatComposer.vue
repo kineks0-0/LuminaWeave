@@ -1,6 +1,6 @@
 <template>
   <div class="chat-composer" :class="{ 'is-compact': compact }" :data-layout="layout">
-    <div v-if="viewState.isReadOnlyView" class="chat-composer__notice">
+    <div v-if="viewState.readOnlyReason" class="chat-composer__notice">
       {{ viewState.readOnlyReason }}
     </div>
     <div class="chat-composer__input" :class="{ 'has-leading': Boolean($slots.leading) }">

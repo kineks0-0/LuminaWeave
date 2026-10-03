@@ -8,7 +8,7 @@
         <strong>{{ viewState.isNoActiveChatView ? '没有打开的聊天' : '开始新的对话' }}</strong>
         <p>{{ viewState.isNoActiveChatView ? viewState.emptyStateMessage : '在下方输入第一条消息。' }}</p>
       </div>
-      <div v-if="viewState.isReadOnlyView" class="chat-transcript__notice">
+      <div v-if="viewState.readOnlyReason" class="chat-transcript__notice">
         {{ viewState.readOnlyReason }}
       </div>
 
