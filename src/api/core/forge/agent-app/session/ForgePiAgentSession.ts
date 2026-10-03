@@ -6,7 +6,7 @@ import {
     type BeforeToolCallContext,
     type BeforeToolCallResult
 } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, ToolResultMessage } from '@earendil-works/pi-ai';
+import type { AssistantMessage, JsonObject, ToolResultMessage } from '@earendil-works/pi-ai';
 import type { Static, TSchema } from 'typebox';
 import type {
     ForgePiBranchFromUserResult,
@@ -48,6 +48,7 @@ import {
     type ForgePiToolBridge
 } from '../tools/ForgePiToolBridge.js';
 import { AgentPromptAssembler } from '../../../agent-runtime/prompt/AgentPromptAssembler.js';
+import { toJsonObject, toJsonValue } from '../../../agent-runtime/runtime/AgentJsonValue.js';
 import {
     type AgentRuntimeContentBlock,
     AgentRuntimeEventBus
@@ -781,7 +782,7 @@ export class ForgePiAgentSession {
                     toolCallId,
                     toolName: pending.toolName,
                     content: resolution.result.content as AgentToolResult<unknown>['content'],
-                    details: resolution.result.details,
+                    details: toJsonValue(resolution.result.details),
                     isError: true,
                     timestamp: Date.now()
                 }
@@ -809,7 +810,7 @@ export class ForgePiAgentSession {
                 toolCallId,
                 toolName: pending.toolName,
                 content: resolution.result.content as AgentToolResult<unknown>['content'],
-                details: resolution.result.details,
+                details: toJsonValue(resolution.result.details),
                 isError: false,
                 timestamp: Date.now()
             }
@@ -1432,9 +1433,8 @@ export class ForgePiAgentSession {
         };
     }
 
-    private toToolCallArguments(args: unknown): Record<string, unknown> {
-        if (!this.isRecord(args)) return {};
-        return { ...args };
+    private toToolCallArguments(args: unknown): JsonObject {
+        return toJsonObject(args);
     }
 
     private findReplayToolCallMessage(toolCallId: string): AgentMessage | null {

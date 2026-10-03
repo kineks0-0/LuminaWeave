@@ -68,6 +68,7 @@ import {
     forgeWorkspaceWriteService
 } from '../../project/ForgeWorkspaceWriteService.js';
 import { AgentToolRegistry, type AgentRuntimeTool } from '../../../agent-runtime/tools/AgentToolRegistry.js';
+import { toJsonValue } from '../../../agent-runtime/runtime/AgentJsonValue.js';
 import {
     TavilyResearchProvider,
     createWebResearchTool,
@@ -1554,7 +1555,7 @@ export class ForgePiToolBridge {
             toolCallId: input.toolCallId,
             toolName: input.toolName,
             content: result.content,
-            details: result.details,
+            details: toJsonValue(result.details),
             isError,
             timestamp: Date.now()
         };

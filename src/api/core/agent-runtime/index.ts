@@ -11,6 +11,7 @@ export * from './research/index.js';
 export * from './runtime/AgentRuntime.js';
 export * from './runtime/AgentRuntimeCore.js';
 export * from './runtime/AgentRuntimeTypes.js';
+export * from './runtime/AgentJsonValue.js';
 export * from './session/AgentSessionTree.js';
 export * from './skills/AgentSkillParser.js';
 export * from './testing/AgentRuntimeTestHarness.js';
