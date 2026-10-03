@@ -1,6 +1,6 @@
 import type { AgentMessage, AgentTool, StreamFn, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
-import type { AgentRuntimeEventBus } from '../events/AgentRuntimeEventBus.js';
+import type { AgentRuntimeApprovalSource, AgentRuntimeEventBus } from '../events/AgentRuntimeEventBus.js';
 import type { AgentRuntimeToolResult, AgentToolRegistry } from '../tools/AgentToolRegistry.js';
 
 /** 适配器为每个回合提供的运行计划。 */
@@ -27,7 +27,7 @@ export interface AgentSessionToolCall {
 }
 
 export interface AgentSessionPendingApproval extends AgentSessionToolCall {
-    source: 'registry' | 'policy';
+    source: AgentRuntimeApprovalSource;
     details?: unknown;
 }
 
@@ -39,7 +39,18 @@ export interface AgentSessionApprovalPolicy {
     execute(call: AgentSessionToolCall): Promise<AgentRuntimeToolResult>;
 }
 
-/** 适配器附加投影（持久化、领域事件）的观察点；均为同步通知，异常由 session 隔离。 */
+/**
+ * 适配器附加投影（持久化、领域事件）的观察点；均为同步通知，异常由 session 隔离。
+ *
+ * 审批回调约定：
+ * - onApprovalNeeded 与 onApprovalResolved 成对出现，每个已宣告的审批各一次；
+ * - 审批先在总线上宣告（approval_required），onApprovalNeeded 在其之后触发；
+ *   onApprovalResolved 晚于总线上的 approval_resolved；
+ * - 未宣告的审批（运行中先中止、随后才登记）两者都不触发，总线上也没有对应事件；
+ * - 允许在 onApprovalNeeded 中同步处理审批（resolveToolApproval / abort），此时 runTurn 返回重入后的真实结果；
+ * - 若总线监听器已在 approval_required 上同步处理了审批，onApprovalNeeded 不再触发，
+ *   为保持成对，onApprovalResolved 也不触发（总线上的 approval_required / approval_resolved 照常成对）。
+ */
 export interface AgentSessionObserver {
     onApprovalNeeded?(approval: AgentSessionPendingApproval): void;
     onApprovalResolved?(input: { approval: AgentSessionPendingApproval; approved: boolean; message?: string }): void;
@@ -49,7 +60,10 @@ export interface AgentSessionObserver {
      * 持久化应以 onTurnEnd / AgentSessionTurnResult.messages 的顺序为准。
      */
     onMessageEnd?(input: { turnId: string; message: AgentMessage }): void;
-    /** 回合收口时恰好调用一次（completed / error / aborted，含拒绝审批与等待审批时中止）；暂停等待审批不触发。 */
+    /**
+     * 回合收口时恰好调用一次（completed / error / aborted，含拒绝审批与等待审批时中止）；暂停等待审批不触发。
+     * 触发时会话已回到 idle，可在回调中直接开始下一回合。
+     */
     onTurnEnd?(result: AgentSessionTurnResult): void;
 }
 

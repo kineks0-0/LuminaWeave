@@ -38,6 +38,12 @@ describe('Agent Runtime SDK browser guard', () => {
         }
     });
 
+    // 测试辅助（faux 模型、harness）只能经 agent-runtime/testing 子入口引用，不进入 SDK 主入口的公开 API 面。
+    it('keeps testing helpers out of the SDK main entry', () => {
+        const source = readFileSync(join(sdkDir, 'index.ts'), 'utf8');
+        expect(source).not.toMatch(/['"]\.\/testing(['"/])/);
+    });
+
     // 通用 AgentSession 是 Forge 等适配器的下层，不得反向依赖适配器、前后端共享协议或宿主 HAL。
     it('keeps the generic session layer free of adapter, shared and HAL imports', () => {
         const files = collectSourceFiles(join(sdkDir, 'session'));

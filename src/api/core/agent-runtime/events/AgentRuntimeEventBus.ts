@@ -11,7 +11,9 @@ export type AgentRuntimeEventType =
     | 'tool_execution_end'
     | 'turn_end'
     | 'agent_end'
-    | 'queue_update';
+    | 'queue_update'
+    | 'approval_required'
+    | 'approval_resolved';
 
 export interface AgentRuntimeEventFilter {
     sessionId?: string;
@@ -51,6 +53,18 @@ export interface AgentRuntimePendingToolCall {
     updates: AgentRuntimeContentBlock[][];
 }
 
+/** 审批来源：registry 工具自身的 needsApproval，或适配器工具的审批策略。 */
+export type AgentRuntimeApprovalSource = 'registry' | 'policy';
+
+/** 回合因工具审批暂停时的等待项；回合仍处于活动状态，只是不再流式输出。 */
+export interface AgentRuntimeAwaitingApproval {
+    turnId: string;
+    toolCallId: string;
+    toolName: string;
+    args: unknown;
+    source: AgentRuntimeApprovalSource;
+}
+
 export interface AgentRuntimeQueueSnapshot {
     queuedTurns: number;
     activeTurnId?: string;
@@ -66,6 +80,7 @@ export interface AgentRuntimeSnapshot {
     errorMessage?: string;
     activeTools: AgentRuntimeToolSummary[];
     queue?: AgentRuntimeQueueSnapshot;
+    awaitingApproval?: AgentRuntimeAwaitingApproval;
 }
 
 export interface CreateAgentRuntimeEventBusOptions {
@@ -118,6 +133,18 @@ export type AgentRuntimeEvent =
         errorMessage?: string;
     })
     | (AgentRuntimeScopedEvent & { type: 'agent_end' })
+    | (AgentRuntimeScopedEvent & {
+        type: 'approval_required';
+        toolCallId: string;
+        toolName: string;
+        args: unknown;
+        source: AgentRuntimeApprovalSource;
+    })
+    | (AgentRuntimeScopedEvent & {
+        type: 'approval_resolved';
+        toolCallId: string;
+        approved: boolean;
+    })
     | {
         type: 'queue_update';
         sessionId: string;
@@ -186,7 +213,8 @@ export class AgentRuntimeEventBus {
             messages: [],
             errorMessage: undefined,
             activeTools: clone(this.activeTools),
-            queue: undefined
+            queue: undefined,
+            awaitingApproval: undefined
         };
     }
 }
@@ -283,6 +311,7 @@ const reduceSnapshot = (
                 ...snapshot,
                 isStreaming: false,
                 streamingMessage: undefined,
+                awaitingApproval: undefined,
                 errorMessage: event.errorMessage ?? snapshot.errorMessage
             };
         case 'agent_end':
@@ -292,7 +321,33 @@ const reduceSnapshot = (
                 activeTurnId: undefined,
                 isStreaming: false,
                 streamingMessage: undefined,
+                awaitingApproval: undefined,
                 pendingToolCalls: snapshot.pendingToolCalls.filter(toolCall => toolCall.turnId !== event.turnId)
+            };
+        case 'approval_required':
+            // 回合未结束：activeTurnId 与 pendingToolCalls（等待中的工具仍为 running）保持不变，只停止流式状态。
+            return {
+                ...snapshot,
+                isStreaming: false,
+                streamingMessage: undefined,
+                awaitingApproval: {
+                    turnId: event.turnId,
+                    toolCallId: event.toolCallId,
+                    toolName: event.toolName,
+                    args: event.args,
+                    source: event.source
+                }
+            };
+        case 'approval_resolved':
+            if (
+                snapshot.awaitingApproval?.turnId !== event.turnId
+                || snapshot.awaitingApproval.toolCallId !== event.toolCallId
+            ) return snapshot;
+            // 批准后马上续跑，因此恢复流式；拒绝时保持 false，随后会收到 turn_end。
+            return {
+                ...snapshot,
+                isStreaming: event.approved ? true : snapshot.isStreaming,
+                awaitingApproval: undefined
             };
         case 'queue_update':
             return {

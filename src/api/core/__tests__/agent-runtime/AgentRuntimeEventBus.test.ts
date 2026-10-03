@@ -134,6 +134,64 @@ describe('AgentRuntimeEventBus', () => {
         expect(bus.getSnapshot('session_1').pendingToolCalls).toEqual([]);
     });
 
+    it('stops streaming while awaiting approval without ending the turn', () => {
+        const bus = new AgentRuntimeEventBus();
+        emitPausedTurn(bus);
+
+        const snapshot = bus.getSnapshot('session_1');
+        expect(snapshot).toMatchObject({
+            activeTurnId: 'turn_1',
+            isStreaming: false,
+            awaitingApproval: {
+                turnId: 'turn_1',
+                toolCallId: 'call_1',
+                toolName: 'write',
+                args: { path: 'a.txt' },
+                source: 'registry'
+            },
+            pendingToolCalls: [expect.objectContaining({ toolCallId: 'call_1', status: 'running' })]
+        });
+        expect(snapshot.streamingMessage).toBeUndefined();
+    });
+
+    it('resumes streaming and clears awaitingApproval when the approval is granted', () => {
+        const bus = new AgentRuntimeEventBus();
+        emitPausedTurn(bus);
+
+        bus.emit({ type: 'approval_resolved', sessionId: 'session_1', turnId: 'turn_1', toolCallId: 'call_1', approved: true });
+
+        const snapshot = bus.getSnapshot('session_1');
+        expect(snapshot.isStreaming).toBe(true);
+        expect(snapshot.awaitingApproval).toBeUndefined();
+        expect(snapshot.activeTurnId).toBe('turn_1');
+    });
+
+    it('keeps streaming off after a denial and ignores mismatched approval resolutions', () => {
+        const bus = new AgentRuntimeEventBus();
+        emitPausedTurn(bus);
+
+        bus.emit({ type: 'approval_resolved', sessionId: 'session_1', turnId: 'turn_1', toolCallId: 'call_other', approved: true });
+        bus.emit({ type: 'approval_resolved', sessionId: 'session_1', turnId: 'turn_other', toolCallId: 'call_1', approved: true });
+        expect(bus.getSnapshot('session_1')).toMatchObject({
+            isStreaming: false,
+            awaitingApproval: { toolCallId: 'call_1' }
+        });
+
+        bus.emit({ type: 'approval_resolved', sessionId: 'session_1', turnId: 'turn_1', toolCallId: 'call_1', approved: false });
+        const snapshot = bus.getSnapshot('session_1');
+        expect(snapshot.isStreaming).toBe(false);
+        expect(snapshot.awaitingApproval).toBeUndefined();
+    });
+
+    it('clears awaitingApproval when the active turn ends', () => {
+        const bus = new AgentRuntimeEventBus();
+        emitPausedTurn(bus);
+
+        bus.emit({ type: 'turn_end', sessionId: 'session_1', turnId: 'turn_1' });
+
+        expect(bus.getSnapshot('session_1').awaitingApproval).toBeUndefined();
+    });
+
     it('returns immutable scoped snapshots and events', () => {
         const bus = new AgentRuntimeEventBus();
         emitMessage(bus, 'session_1', 'turn_1', 'message_1', 'answer');
@@ -189,5 +247,27 @@ const emitMessage = (
         turnId,
         messageId,
         block: { type: 'text', contentIndex: 0, text }
+    });
+};
+
+/** 一个正在流式输出、随后因工具审批暂停的回合。 */
+const emitPausedTurn = (bus: AgentRuntimeEventBus): void => {
+    emitMessage(bus, 'session_1', 'turn_1', 'message_1', 'writing');
+    bus.emit({
+        type: 'tool_execution_start',
+        sessionId: 'session_1',
+        turnId: 'turn_1',
+        toolCallId: 'call_1',
+        toolName: 'write',
+        args: { path: 'a.txt' }
+    });
+    bus.emit({
+        type: 'approval_required',
+        sessionId: 'session_1',
+        turnId: 'turn_1',
+        toolCallId: 'call_1',
+        toolName: 'write',
+        args: { path: 'a.txt' },
+        source: 'registry'
     });
 };

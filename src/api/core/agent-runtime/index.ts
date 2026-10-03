@@ -20,8 +20,6 @@ export * from './session/AgentSession.js';
 export * from './session/AgentSessionTree.js';
 export * from './session/AgentSessionTypes.js';
 export * from './skills/AgentSkillParser.js';
-export * from './testing/AgentRuntimeTestHarness.js';
-export * from './testing/createFauxAgentModel.js';
 export * from './tools/AgentToolRegistry.js';
 export * from './workspace-tools/AgentWorkspaceTools.js';
 export * from './workspace-tools/JustBashWorkspaceAdapter.js';

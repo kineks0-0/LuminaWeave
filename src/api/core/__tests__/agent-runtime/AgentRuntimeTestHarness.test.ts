@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createAgentRuntimeTestHarness } from '@/api/core/agent-runtime/testing/AgentRuntimeTestHarness.js';
+import { createAgentRuntimeTestHarness } from '@/api/core/agent-runtime/testing/index.js';
 
 describe('AgentRuntimeTestHarness', () => {
     it('provides mock model, tool, session store, approval, and VFS helpers', async () => {

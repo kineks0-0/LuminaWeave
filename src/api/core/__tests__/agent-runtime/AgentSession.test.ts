@@ -16,10 +16,11 @@ import { AgentSession } from '@/api/core/agent-runtime/session/AgentSession.js';
 import type {
     AgentSessionApprovalPolicy,
     AgentSessionObserver,
+    AgentSessionPendingApproval,
     AgentSessionTurnPlan,
     AgentSessionTurnResult
 } from '@/api/core/agent-runtime/session/AgentSessionTypes.js';
-import { createFauxAgentModel } from '@/api/core/agent-runtime/testing/createFauxAgentModel.js';
+import { createFauxAgentModel } from '@/api/core/agent-runtime/testing/index.js';
 
 interface SetupOptions {
     approvalPolicy?: AgentSessionApprovalPolicy;
@@ -264,6 +265,13 @@ describe('AgentSession', () => {
         expect(events.getSnapshot('s1').pendingToolCalls.map(call => call.toolCallId)).toContain('call_1');
         expect(toolResultIndex(paused.messages, 'call_1')).toBe(-1);
         expect(execute).not.toHaveBeenCalled();
+        expect(ofType('approval_required')).toEqual([
+            expect.objectContaining({ turnId: 't1', toolCallId: 'call_1', toolName: 'write', source: 'registry' })
+        ]);
+        const pausedSnapshot = events.getSnapshot('s1');
+        expect(pausedSnapshot.isStreaming).toBe(false);
+        expect(pausedSnapshot.activeTurnId).toBe('t1');
+        expect(pausedSnapshot.awaitingApproval).toMatchObject({ toolCallId: 'call_1', source: 'registry' });
 
         const eventsBeforeApproval = received.length;
         const resumed = await session.resolveToolApproval('t1', 'call_1', true);
@@ -274,6 +282,10 @@ describe('AgentSession', () => {
         expect(afterApproval.some(event =>
             event.type === 'message_update' && event.block.type === 'text' && event.block.text === 'after'
         )).toBe(true);
+        const resolvedIndex = afterApproval.findIndex(event => event.type === 'approval_resolved');
+        expect(afterApproval[resolvedIndex]).toMatchObject({ toolCallId: 'call_1', approved: true });
+        expect(resolvedIndex).toBeLessThan(afterApproval.findIndex(event => event.type === 'message_start'));
+        expect(events.getSnapshot('s1').awaitingApproval).toBeUndefined();
         expect(ofType('turn_end')).toHaveLength(1);
         expect(ofType('agent_end')).toHaveLength(1);
         expect(types.slice(-2)).toEqual(['turn_end', 'agent_end']);
@@ -313,6 +325,10 @@ describe('AgentSession', () => {
             expect.objectContaining({ toolCallId: 'call_1', status: 'denied' })
         ]);
         expect(types.slice(deniedIndex + 1)).toEqual(['turn_end', 'agent_end']);
+        expect(ofType('approval_resolved')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', approved: false })
+        ]);
+        expect(types.indexOf('approval_resolved')).toBeLessThan(types.indexOf('turn_end'));
         expect(faux.state.callCount).toBe(1);
     });
 
@@ -324,7 +340,7 @@ describe('AgentSession', () => {
         const check = vi.fn(() => ({ details: { domain: 'x.com' } }));
         const onApprovalNeeded = vi.fn();
         const onApprovalResolved = vi.fn();
-        const { faux, session, plan, ofType, types } = setup({
+        const { faux, session, plan, ofType, types, events } = setup({
             approvalPolicy: { check, execute },
             observer: { onApprovalNeeded, onApprovalResolved }
         });
@@ -355,6 +371,13 @@ describe('AgentSession', () => {
             details: { domain: 'x.com' }
         });
         expect(onApprovalNeeded).toHaveBeenCalledTimes(1);
+        expect(ofType('approval_required')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', toolName: 'fetch', source: 'policy' })
+        ]);
+        expect(events.getSnapshot('s1')).toMatchObject({
+            isStreaming: false,
+            awaitingApproval: { toolCallId: 'call_1', source: 'policy' }
+        });
         expect(ofType('tool_execution_start')).toHaveLength(1);
         expect(ofType('tool_execution_end')).toHaveLength(0);
         expect(types).not.toContain('turn_end');
@@ -372,6 +395,10 @@ describe('AgentSession', () => {
         }));
         expect(fetchExecute).not.toHaveBeenCalled();
         expect(onApprovalResolved).toHaveBeenCalledWith(expect.objectContaining({ approved: true }));
+        expect(ofType('approval_resolved')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', approved: true })
+        ]);
+        expect(types.indexOf('approval_resolved')).toBeLessThan(types.indexOf('tool_execution_end'));
         expect(ofType('tool_execution_end')).toEqual([
             expect.objectContaining({ toolCallId: 'call_1', status: 'completed' })
         ]);
@@ -481,7 +508,7 @@ describe('AgentSession', () => {
     });
 
     it('keeps a single bus turn across consecutive approvals in one turn', async () => {
-        const { faux, session, tools, plan, ofType, turnEnds } = setup();
+        const { faux, session, tools, plan, ofType, turnEnds, received } = setup();
         const execute = registerWriteTool(tools);
         faux.setResponses([
             fauxAssistantMessage(fauxToolCall('write', { path: 'a.txt' }, { id: 'call_1' }), { stopReason: 'toolUse' }),
@@ -506,6 +533,173 @@ describe('AgentSession', () => {
         if (done.status === 'not_found') throw new Error('expected a turn result');
         expect(unpairedToolCalls(done.messages)).toEqual([]);
         expect(turnEnds).toEqual([done]);
+        const approvalEvents = received.flatMap(event =>
+            event.type === 'approval_required' ? [`required:${event.toolCallId}`]
+                : event.type === 'approval_resolved' ? [`resolved:${event.toolCallId}:${event.approved}`]
+                    : []
+        );
+        expect(approvalEvents).toEqual([
+            'required:call_1',
+            'resolved:call_1:true',
+            'required:call_2',
+            'resolved:call_2:true'
+        ]);
+    });
+
+    it('handles an approval resolved synchronously inside onApprovalNeeded', async () => {
+        const holder: { session?: AgentSession } = {};
+        const onApprovalNeeded = vi.fn((approval: AgentSessionPendingApproval) => {
+            void holder.session?.resolveToolApproval(approval.turnId, approval.toolCallId, true);
+        });
+        const { faux, session, tools, plan, ofType, types, turnEnds } = setup({ observer: { onApprovalNeeded } });
+        holder.session = session;
+        const execute = registerWriteTool(tools);
+        faux.setResponses([
+            toolCallResponse('write', { path: 'a.txt' }),
+            fauxAssistantMessage(fauxText('after'))
+        ]);
+
+        const result = await session.runTurn(plan('t1'));
+
+        expect(onApprovalNeeded).toHaveBeenCalledTimes(1);
+        expect(execute).toHaveBeenCalledTimes(1);
+        expect(result).toMatchObject({ turnId: 't1', status: 'completed' });
+        expect(turnEnds).toEqual([result]);
+        expect(ofType('approval_required')).toHaveLength(1);
+        expect(ofType('approval_resolved')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', approved: true })
+        ]);
+        expect(types.indexOf('approval_required')).toBeLessThan(types.indexOf('approval_resolved'));
+        expect(ofType('turn_end')).toHaveLength(1);
+        expect(ofType('agent_end')).toHaveLength(1);
+        expect(session.getPendingApproval()).toBeUndefined();
+    });
+
+    it('handles an approval resolved synchronously by a bus listener on approval_required', async () => {
+        const onApprovalNeeded = vi.fn();
+        const onApprovalResolved = vi.fn();
+        const { faux, session, tools, plan, ofType, events, turnEnds } = setup({
+            observer: { onApprovalNeeded, onApprovalResolved }
+        });
+        events.subscribe({ sessionId: 's1' }, event => {
+            if (event.type !== 'approval_required') return;
+            void session.resolveToolApproval(event.turnId, event.toolCallId, true);
+        });
+        const execute = registerWriteTool(tools);
+        faux.setResponses([
+            toolCallResponse('write', { path: 'a.txt' }),
+            fauxAssistantMessage(fauxText('after'))
+        ]);
+
+        const result = await session.runTurn(plan('t1'));
+
+        expect(result).toMatchObject({ turnId: 't1', status: 'completed' });
+        expect(execute).toHaveBeenCalledTimes(1);
+        expect(onApprovalNeeded).not.toHaveBeenCalled();
+        expect(onApprovalResolved).not.toHaveBeenCalled();
+        expect(ofType('approval_resolved')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', approved: true })
+        ]);
+        expect(ofType('turn_end')).toHaveLength(1);
+        expect(ofType('agent_end')).toHaveLength(1);
+        expect(turnEnds).toEqual([result]);
+    });
+
+    it('handles an abort issued synchronously inside onApprovalNeeded', async () => {
+        const holder: { session?: AgentSession } = {};
+        const onApprovalResolved = vi.fn();
+        const onApprovalNeeded = vi.fn(() => {
+            void holder.session?.abort();
+        });
+        const { faux, session, tools, plan, ofType, turnEnds } = setup({
+            observer: { onApprovalNeeded, onApprovalResolved }
+        });
+        holder.session = session;
+        registerWriteTool(tools);
+        faux.setResponses([toolCallResponse('write', { path: 'a.txt' })]);
+
+        const result = await session.runTurn(plan('t1'));
+
+        expect(result).toMatchObject({ turnId: 't1', status: 'aborted', errorMessage: 'Agent runtime aborted.' });
+        expect(ofType('approval_resolved')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', approved: false })
+        ]);
+        expect(onApprovalResolved).toHaveBeenCalledTimes(1);
+        expect(turnEnds).toEqual([result]);
+    });
+
+    it('handles a denial issued synchronously inside onApprovalNeeded', async () => {
+        const holder: { session?: AgentSession } = {};
+        const onApprovalNeeded = vi.fn((approval: AgentSessionPendingApproval) => {
+            void holder.session?.resolveToolApproval(approval.turnId, approval.toolCallId, false, 'no');
+        });
+        const { faux, session, tools, plan, ofType, turnEnds } = setup({ observer: { onApprovalNeeded } });
+        holder.session = session;
+        const execute = registerWriteTool(tools);
+        faux.setResponses([toolCallResponse('write', { path: 'a.txt' })]);
+
+        const result = await session.runTurn(plan('t1'));
+
+        expect(result).toMatchObject({ turnId: 't1', status: 'completed' });
+        expect(execute).not.toHaveBeenCalled();
+        expect(ofType('tool_execution_end')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', status: 'denied' })
+        ]);
+        expect(ofType('approval_resolved')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', approved: false })
+        ]);
+        expect(turnEnds).toEqual([result]);
+    });
+
+    it('keeps the pause when onApprovalNeeded resolves a mismatched approval', async () => {
+        const holder: { session?: AgentSession } = {};
+        const onApprovalNeeded = vi.fn((approval: AgentSessionPendingApproval) => {
+            void holder.session?.resolveToolApproval(approval.turnId, 'call_other', true);
+        });
+        const { faux, session, tools, plan, ofType, turnEnds } = setup({ observer: { onApprovalNeeded } });
+        holder.session = session;
+        registerWriteTool(tools);
+        faux.setResponses([toolCallResponse('write', { path: 'a.txt' })]);
+
+        const result = await session.runTurn(plan('t1'));
+
+        expect(result).toMatchObject({ status: 'awaiting_approval', pendingApproval: { toolCallId: 'call_1' } });
+        expect(session.getPendingApproval()).toMatchObject({ toolCallId: 'call_1' });
+        expect(ofType('approval_resolved')).toHaveLength(0);
+        expect(turnEnds).toHaveLength(0);
+    });
+
+    it('does not announce an approval registered after the running turn was aborted', async () => {
+        const checkStarted = deferred<void>();
+        const gate = deferred<void>();
+        const check = vi.fn(async () => {
+            checkStarted.resolve();
+            await gate.promise;
+            return {};
+        });
+        const onApprovalNeeded = vi.fn();
+        const onApprovalResolved = vi.fn();
+        const { faux, session, plan, ofType, turnEnds } = setup({
+            approvalPolicy: { check, execute: vi.fn() },
+            observer: { onApprovalNeeded, onApprovalResolved }
+        });
+        const fetchTool: AgentTool = { ...echoTool, name: 'fetch', parameters: Type.Object({ url: Type.String() }) };
+        faux.setResponses([toolCallResponse('fetch', { url: 'https://x.com' })]);
+
+        const running = session.runTurn(plan('t1', { tools: [fetchTool] }));
+        await checkStarted.promise;
+        const aborting = session.abort();
+        gate.resolve();
+        const result = await running;
+        await aborting;
+
+        expect(result).toMatchObject({ status: 'aborted', errorMessage: 'Agent runtime aborted.' });
+        expect(ofType('approval_required')).toHaveLength(0);
+        expect(ofType('approval_resolved')).toHaveLength(0);
+        expect(onApprovalNeeded).not.toHaveBeenCalled();
+        expect(onApprovalResolved).not.toHaveBeenCalled();
+        expect(turnEnds).toEqual([result]);
+        expect(unpairedToolCalls(result.messages)).toEqual([]);
     });
 
     it('settles as aborted when aborted while the approved policy tool is executing', async () => {
@@ -559,7 +753,10 @@ describe('AgentSession', () => {
         expect(ofType('tool_execution_end')).toEqual([
             expect.objectContaining({ toolCallId: 'call_1', status: 'denied', errorMessage: 'no' })
         ]);
-        expect(types.slice(-3)).toEqual(['tool_execution_end', 'turn_end', 'agent_end']);
+        expect(types.slice(-4)).toEqual(['approval_resolved', 'tool_execution_end', 'turn_end', 'agent_end']);
+        expect(ofType('approval_resolved')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', approved: false })
+        ]);
         expect(faux.state.callCount).toBe(1);
         expect(turnEnds).toHaveLength(1);
     });
@@ -606,9 +803,35 @@ describe('AgentSession', () => {
         const result = await session.resolveToolApproval('t1', 'call_1', false);
 
         expect(result).toMatchObject({ turnId: 't1', status: 'error', errorMessage: 'registry down' });
+        expect(ofType('approval_resolved')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', approved: false })
+        ]);
         expect(ofType('agent_end')).toHaveLength(1);
         expect(turnEnds).toHaveLength(1);
         await expect(session.runTurn(plan('t2'))).resolves.toMatchObject({ status: 'completed' });
+    });
+
+    it('keeps the real error message when the run rejects unexpectedly during an abort', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const { faux, session, tools, plan, ofType, turnEnds } = setup();
+        registerWriteTool(tools);
+        faux.setResponses([toolCallResponse('write', { path: 'a.txt' })]);
+        await session.runTurn(plan('t1'));
+        const registryCall = deferred<void>();
+        vi.spyOn(tools, 'resolveToolApproval').mockImplementation(async () => {
+            await registryCall.promise;
+            throw new Error('registry down');
+        });
+
+        const resolving = session.resolveToolApproval('t1', 'call_1', false);
+        const aborting = session.abort();
+        registryCall.resolve();
+        const result = await resolving;
+        await aborting;
+
+        expect(result).toMatchObject({ turnId: 't1', status: 'error', errorMessage: 'registry down' });
+        expect(ofType('turn_end')).toEqual([expect.objectContaining({ errorMessage: 'registry down' })]);
+        expect(turnEnds).toHaveLength(1);
     });
 
     it('rejects a plan whose history contains system messages', async () => {
@@ -702,7 +925,7 @@ describe('AgentSession', () => {
 
     it('cancels a pending approval on abort and ends the turn', async () => {
         const onApprovalResolved = vi.fn();
-        const { faux, session, tools, plan, ofType, types, turnEnds } = setup({ observer: { onApprovalResolved } });
+        const { faux, session, tools, plan, ofType, types, turnEnds, events } = setup({ observer: { onApprovalResolved } });
         registerWriteTool(tools);
         faux.setResponses([
             toolCallResponse('write', { path: 'a.txt' }),
@@ -720,6 +943,11 @@ describe('AgentSession', () => {
         ]);
         expect(ofType('agent_end')).toHaveLength(1);
         expect(types.slice(-2)).toEqual(['turn_end', 'agent_end']);
+        expect(ofType('approval_resolved')).toEqual([
+            expect.objectContaining({ toolCallId: 'call_1', approved: false })
+        ]);
+        expect(types.indexOf('approval_resolved')).toBeLessThan(types.indexOf('turn_end'));
+        expect(events.getSnapshot('s1').awaitingApproval).toBeUndefined();
         expect(onApprovalResolved).toHaveBeenCalledWith(expect.objectContaining({ approved: false }));
         expect(turnEnds).toHaveLength(1);
         expect(turnEnds[0]).toMatchObject({ status: 'aborted', errorMessage: 'Agent runtime aborted.' });
