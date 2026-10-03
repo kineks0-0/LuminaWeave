@@ -19,22 +19,10 @@
     />
     <template v-else>
     <div class="widget-container-header">
-      <div v-if="activeRightPanel === 'lumina-settings' && currentDetailedView" class="widget-back-nav">
-        <button class="icon-action-btn" @click="emit('backFromDetailedSettings')" title="返回概览">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none">
-            <polyline points="15 18 9 12 15 6"></polyline>
-          </svg>
-        </button>
-        <div class="current-widget-info">
-          <span class="widget-sub-title">{{ getPluginName(currentDetailedView) }} 专属设置</span>
-        </div>
-      </div>
-
-      <div v-else-if="activeWidgetPlugin" class="widget-dropdown" @click="emit('toggleWidgetDropdown')">
+      <div v-if="activeWidgetPlugin" class="widget-dropdown" @click="emit('toggleWidgetDropdown')">
         <div class="current-widget-info">
           <span v-html="activeWidgetPlugin.icon" class="tab-icon-wrapper"></span>
-          <span v-if="activeRightPanel === 'lumina-settings'">所有插件概览</span>
-          <span v-else>{{ activeWidgetPlugin.name }}</span>
+          <span>{{ activeWidgetPlugin.name }}</span>
           <svg class="chevron-down" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
@@ -143,7 +131,6 @@ const props = defineProps<{
   widgetStyle: CSSProperties;
   widgetWidth: number;
   isResizing: boolean;
-  currentDetailedView: string | null;
   saveStatus: string;
   auxSidebarMode: 'left' | 'right' | 'widget' | 'hidden';
   activeWidgetPlugin: LuminaPlugin | null;
@@ -151,7 +138,6 @@ const props = defineProps<{
   activeRightPanelActivity: ActivityPanelPayload | null;
   widgetGroups: WidgetPanelGroup[];
   showWidgetDropdown: boolean;
-  getPluginName: (pluginId: string | null) => string;
   onCreateChatSession: (payload: CreateChatConversationInput) => void;
   onOpenSession: (sessionId: string) => void;
 }>();
@@ -196,7 +182,6 @@ const getActivePanelSurfaceInput = (contractId: SurfaceContractId) => projectSur
 
 const emit = defineEmits<{
   (e: 'resizeStart', event: MouseEvent): void;
-  (e: 'backFromDetailedSettings'): void;
   (e: 'toggleWidgetDropdown'): void;
   (e: 'switchRightPanel', panelId: string): void;
   (e: 'closePanel'): void;
@@ -412,20 +397,6 @@ const emit = defineEmits<{
   display: flex;
   flex-direction: column;
   overflow: auto;
-}
-
-.widget-back-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.widget-sub-title {
-  font-size: var(--lw-type-title-small-size);
-  line-height: var(--lw-type-title-small-line-height);
-  font-weight: var(--lw-type-title-small-weight);
-  letter-spacing: var(--lw-type-title-small-tracking);
-  color: var(--lw-text-main);
 }
 
 .header-sync-status {

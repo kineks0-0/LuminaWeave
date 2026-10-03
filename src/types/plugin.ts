@@ -20,19 +20,38 @@ export interface SettingOption {
 
 export type SettingOptionsResolver = SettingOption[] | (() => SettingOption[]);
 
+/** 设置页按任务划分的分类；未声明或无法识别的设置归入“高级”。 */
+export type SettingsCategoryId =
+    | 'appearance'
+    | 'conversation'
+    | 'generation'
+    | 'context'
+    | 'workshop'
+    | 'storage'
+    | 'advanced';
+
+export type SettingScope = 'Global' | 'Character' | 'Chat' | 'Session';
+
 export interface SettingDefinition {
-    default: any;
+    default: unknown;
     label: string;
     description?: string;
-    common?: boolean;
     type: 'theme' | 'options' | 'stepper' | 'nexus-select' | 'slider' | 'boolean' | 'text' | 'password';
     options?: SettingOptionsResolver;
-    allowedScopes?: ('Global' | 'Character' | 'Chat' | 'Session')[];
+    allowedScopes?: SettingScope[];
     min?: number;
     max?: number;
     step?: number;
+    /** 所属分类；桌面模式的设置固定归入“外观与桌面” */
+    category?: SettingsCategoryId;
+    /** 分类页内的分组标题；未声明时按插件名分组 */
+    group?: string;
+    /** 高级选项：默认折叠，需在分类页打开“显示高级选项” */
+    advanced?: boolean;
+    /** 额外的搜索关键词（同义词、英文名等） */
+    keywords?: string[];
     /** 条件显示：根据当前设置状态决定该项是否显示 */
-    showIf?: (settings: Record<string, any>) => boolean;
+    showIf?: (settings: Readonly<Record<string, unknown>>) => boolean;
 }
 
 export interface LuminaPlugin {
@@ -45,8 +64,10 @@ export interface LuminaPlugin {
     headerRightComponent?: Component;
     settingsPreviewComponent?: Component;
     settingsPreviewSurface?: SettingsPreviewSurface;
-    /** 内嵌于 SettingsUnified 对应插件 card 底部的自定义组件（无需跳转至 SettingsDetailed 即可访问） */
+    /** 设置页中插件自带的设置组件，显示在该插件分类页的设置项之后 */
     settingsInlineComponent?: Component;
+    /** settingsPreviewComponent / settingsPreviewSurface / settingsInlineComponent 所在的分类；未声明时取第一个设置项的分类 */
+    settingsCategory?: SettingsCategoryId;
     settingsManifest?: Record<string, SettingDefinition>;
     platformManifest?: PluginManifestV2;
     init?: () => void;

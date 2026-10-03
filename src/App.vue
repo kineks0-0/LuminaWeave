@@ -26,7 +26,7 @@ import { luminaWeaveApi as lwApi } from './api/index.js';
 import { lwStorage } from './api/storage.js';
 import { pluginManager } from './core/PluginManager.js';
 import { getPrimarySurfaceContractIdForPlugin } from './platform/plugin/officialPluginSurfaces.js';
-import { useSettings, currentDetailedView } from './plugins/settings/useSettings.js';
+import { useSettings } from './plugins/settings/useSettings.js';
 import { useResponsiveLayout } from './composables/useResponsiveLayout.js';
 import { useWorkspaceManager } from './composables/useWorkspaceManager.js';
 import { useHostLayoutViewport } from './composables/shell/useHostLayoutViewport.js';
@@ -512,10 +512,6 @@ const handleCreateDiscordMobileChatSession = async (payload: Parameters<typeof c
   await createDiscordMobileChatSession(payload);
 };
 
-const backFromDetailedSettings = () => {
-  currentDetailedView.value = null;
-};
-
 const toggleWidgetDropdown = () => {
   showWidgetDropdown.value = !showWidgetDropdown.value;
 };
@@ -818,7 +814,6 @@ const {
     desktopModeOptions,
     activeMainTab,
     isMobile,
-    currentDetailedView,
     saveStatus,
     widgetGroups,
     characterChannelState,
@@ -910,7 +905,6 @@ const {
       popTelegramMobileRoute: popTelegramMobileRouteWithActivityReset,
       resizeStart: initResize,
       telegramLeftRailResizeStart: initLeftRailResize,
-      backFromDetailedSettings,
       toggleWidgetDropdown,
       switchRightPanel: handleSwitchRightPanel,
       closePanel: handleCloseWidgetPanel,

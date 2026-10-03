@@ -16,7 +16,6 @@ interface ShellRuntimePayloadContextInput {
   desktopModeOptions: Source<ShellRuntimeContext['desktopModeOptions']>;
   activeMainTab: Source<ShellRuntimeContext['activeMainTab']>;
   isMobile: Source<ShellRuntimeContext['isMobile']>;
-  currentDetailedView: Source<ShellRuntimeContext['currentDetailedView']>;
   saveStatus: Source<ShellRuntimeContext['saveStatus']>;
   widgetGroups: Source<ShellRuntimeContext['widgetGroups']>;
   characterChannelState: Source<ShellRuntimeContext['characterChannelState']>;
@@ -103,7 +102,6 @@ export const useShellRuntimePayload = (input: UseShellRuntimePayloadInput) => {
     desktopModeOptions: read(input.context.desktopModeOptions),
     activeMainTab: read(input.context.activeMainTab),
     isMobile: read(input.context.isMobile),
-    currentDetailedView: read(input.context.currentDetailedView),
     saveStatus: read(input.context.saveStatus),
     widgetGroups: read(input.context.widgetGroups),
     characterChannelState: read(input.context.characterChannelState),

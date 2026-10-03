@@ -2,8 +2,10 @@ import type { Component } from 'vue';
 import { pluginManager } from '../../core/PluginManager.js';
 import type {
     SettingDefinition,
+    SettingsCategoryId,
     SettingsPreviewSurface
 } from '../../types/plugin.js';
+import type { SettingsSourceDescriptor } from './settingsTaxonomy.js';
 import {
     getDesktopModeIdFromSettingsPluginId,
     getDesktopModeSettingsPluginId,
@@ -22,6 +24,9 @@ export interface SettingsSourceEntry {
     settingsPreviewComponent?: Component;
     settingsPreviewSurface?: SettingsPreviewSurface;
     settingsInlineComponent?: Component;
+    settingsCategory?: SettingsCategoryId;
+    /** 插件是否启用（插件未声明 isEnabled 时视为启用） */
+    isEnabled: () => boolean;
 }
 
 export const getRegisteredSettingsCatalog = (): Record<string, Record<string, SettingDefinition>> => {
@@ -48,7 +53,8 @@ export const getSettingsEntry = (pluginId: string): SettingsSourceEntry | null =
             pluginName: `${desktopMode.name}`,
             pluginIcon: desktopMode.icon || '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 3a9 9 0 1 0 9 9c0-.34-.02-.67-.06-1A7 7 0 0 1 12 3z"></path></svg>',
             manifest: getDesktopModeSettingsManifest(desktopModeId),
-            kind: 'desktop-mode'
+            kind: 'desktop-mode',
+            isEnabled: () => true
         };
     }
 
@@ -65,7 +71,9 @@ export const getSettingsEntry = (pluginId: string): SettingsSourceEntry | null =
         kind: 'plugin',
         settingsPreviewComponent: plugin.settingsPreviewComponent,
         settingsPreviewSurface: plugin.settingsPreviewSurface,
-        settingsInlineComponent: plugin.settingsInlineComponent
+        settingsInlineComponent: plugin.settingsInlineComponent,
+        settingsCategory: plugin.settingsCategory,
+        isEnabled: () => plugin.isEnabled?.() !== false
     };
 };
 
@@ -85,3 +93,12 @@ export const getVisibleSettingsEntries = (activeDesktopModeId: string): Settings
 
     return entries;
 };
+
+export const toSettingsSourceDescriptor = (entry: SettingsSourceEntry): SettingsSourceDescriptor => ({
+    pluginId: entry.pluginId,
+    pluginName: entry.pluginName,
+    kind: entry.kind,
+    manifest: entry.manifest,
+    settingsCategory: entry.settingsCategory,
+    hasPluginComponent: Boolean(entry.settingsPreviewSurface || entry.settingsPreviewComponent || entry.settingsInlineComponent)
+});

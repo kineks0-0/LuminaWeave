@@ -6,7 +6,6 @@ export const classicDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'cozy',
         label: '消息密度',
         description: '控制聊天区消息间距。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -33,7 +32,6 @@ export const classicDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'circle',
         label: '头像形状',
         description: '控制聊天头像圆角。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -45,7 +43,6 @@ export const classicDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'default',
         label: '消息气泡样式',
         description: '控制默认消息卡片的圆角强度。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -56,7 +53,6 @@ export const classicDesktopModeSettings: Record<string, SettingDefinition> = {
     showUsernames: {
         default: true,
         label: '显示用户名',
-        common: true,
         type: 'boolean' as const,
         allowedScopes: ['Global']
     }

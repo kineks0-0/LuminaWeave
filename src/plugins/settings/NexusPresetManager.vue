@@ -327,6 +327,7 @@ import { llmEngine } from '../../api/llmEngine.js';
 import { LuminaWeaveAPI } from '../../api/index.js';
 import LuminaButton from '../../ui/primitives/LuminaButton.vue';
 import { cn } from '../../ui/cn.js';
+import { useModalStore } from '../../stores/useModalStore.js';
 
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
@@ -400,11 +401,16 @@ const createApi = () => {
     saveApis();
 };
 
-const deleteApi = (index: number) => {
-    if (confirm('确定要删除这个接口吗？如果您此前在预设中使用了该接口，它将被自动丢弃。')) {
-        customApis.value.splice(index, 1);
-        saveApis();
-    }
+const deleteApi = async (index: number) => {
+    const confirmed = await useModalStore().confirm({
+        title: '删除接口',
+        message: '删除后无法恢复，预设里用到这个接口的节点也会失效。',
+        confirmText: '删除',
+        danger: true
+    });
+    if (!confirmed) return;
+    customApis.value.splice(index, 1);
+    saveApis();
 };
 
 const createPreset = () => {
@@ -418,11 +424,16 @@ const createPreset = () => {
     save();
 };
 
-const deletePreset = (index: number) => {
-    if (confirm('确定要删除这个预设吗？')) {
-        presets.value.splice(index, 1);
-        save();
-    }
+const deletePreset = async (index: number) => {
+    const confirmed = await useModalStore().confirm({
+        title: '删除预设',
+        message: '删除后无法恢复。',
+        confirmText: '删除',
+        danger: true
+    });
+    if (!confirmed) return;
+    presets.value.splice(index, 1);
+    save();
 };
 
 const addNode = (preset: NexusPreset) => {

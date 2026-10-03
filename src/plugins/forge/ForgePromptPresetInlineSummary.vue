@@ -32,7 +32,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { promptPresetRegistry } from '../../api/core/hal/prompt/PromptPresetRegistry.js';
 import { lwStorage } from '../../api/storage.js';
-import { currentDetailedView } from '../settings/useSettings.js';
+import { openSettingsCategory } from '../settings/settingsViewState.js';
 import { summarizeForgePromptPreset } from './store/forgePromptPresetPresentation.js';
 import type { PromptPresetDefinition, PromptPresetProfileId } from '../../types/PromptPresetTypes.js';
 
@@ -67,7 +67,7 @@ const rows = computed(() => {
 });
 
 const openDetail = () => {
-    currentDetailedView.value = 'lumina-forge';
+    openSettingsCategory('workshop', 'plugin:lumina-forge');
 };
 
 onMounted(() => {

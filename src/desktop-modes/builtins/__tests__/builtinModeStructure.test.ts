@@ -60,4 +60,9 @@ describe('builtin desktop mode structure', () => {
             expect(source).not.toContain(`export { ${exportName} } from '../shared.js';`);
         });
     });
+
+    it('no longer marks desktop mode settings with the removed common flag', () => {
+        ['shared.ts', 'classic/settings.ts', 'stage/settings.ts', 'discord/settings.ts', 'telegram/settings.ts']
+            .forEach(filePath => expect(readSource(filePath), filePath).not.toMatch(/\bcommon:\s*(true|false)/));
+    });
 });

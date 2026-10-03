@@ -5,7 +5,7 @@ import type { PluginManifestV2 } from '../../platform/plugin/types.js';
 const LuminaStats = defineAsyncComponent(() => import('./LuminaStats.vue'));
 
 const settingsSchema = {
-    nexusPreset: { default: '', label: '状态分析专用模型预设', common: true, type: 'nexus-select', allowedScopes: ['Global', 'Character'] }
+    nexusPreset: { category: 'generation', group: '专用模型', default: '', label: '状态分析专用模型预设', type: 'nexus-select', allowedScopes: ['Global', 'Character'] }
 } satisfies LuminaPlugin['settingsManifest'];
 
 const platformManifest: PluginManifestV2 = {

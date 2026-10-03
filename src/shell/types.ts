@@ -141,7 +141,6 @@ export interface ShellRuntimeContext {
   desktopModeOptions: Array<{ value: string; label: string; description?: string }>;
   activeMainTab: string;
   isMobile: boolean;
-  currentDetailedView: string | null;
   saveStatus: string;
   widgetGroups: WidgetPanelGroup[];
   characterChannelState: CharacterChannelState;
@@ -235,7 +234,6 @@ export interface ShellRuntimeActions {
     popTelegramMobileRoute: () => void;
     resizeStart: (event?: MouseEvent) => void;
     telegramLeftRailResizeStart: (event?: MouseEvent) => void;
-    backFromDetailedSettings: () => void;
     toggleWidgetDropdown: () => void;
     switchRightPanel: (panelId: string) => void;
     closePanel: () => void;

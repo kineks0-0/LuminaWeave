@@ -88,7 +88,6 @@ export const createRoleMessageSettings = (defaults: {
         default: defaults.assistantShape,
         label: 'AI 消息形态',
         description: '控制 Assistant 正文以气泡还是文档流承载。',
-        common: true,
         type: 'options' as const,
         allowedScopes: GLOBAL_SCOPES,
         options: CHAT_SHAPE_OPTIONS.map(option => ({ ...option }))
@@ -97,7 +96,6 @@ export const createRoleMessageSettings = (defaults: {
         default: defaults.userShape,
         label: '用户消息形态',
         description: '控制用户消息以气泡还是文档流承载。',
-        common: true,
         type: 'options' as const,
         allowedScopes: GLOBAL_SCOPES,
         options: CHAT_SHAPE_OPTIONS.map(option => ({ ...option }))
@@ -106,7 +104,6 @@ export const createRoleMessageSettings = (defaults: {
         default: defaults.assistantAvatarPlacement,
         label: 'AI 头像位置',
         description: '控制 Assistant 头像显示在消息旁、顶栏、侧栏或隐藏。',
-        common: true,
         type: 'options' as const,
         allowedScopes: GLOBAL_SCOPES,
         options: CHAT_AVATAR_PLACEMENT_OPTIONS.map(option => ({ ...option }))
@@ -115,7 +112,6 @@ export const createRoleMessageSettings = (defaults: {
         default: defaults.userAvatarPlacement,
         label: '用户头像位置',
         description: '控制用户头像显示在消息旁、顶栏、侧栏或隐藏。',
-        common: true,
         type: 'options' as const,
         allowedScopes: GLOBAL_SCOPES,
         options: CHAT_AVATAR_PLACEMENT_OPTIONS.map(option => ({ ...option }))
@@ -135,7 +131,6 @@ export const createChatTypographySettings = (defaults: {
         default: defaults.fontFamily ?? 'sans-serif',
         label: '聊天字体',
         description: '控制当前桌面模式聊天正文的字体族。',
-        common: true,
         type: 'options' as const,
         allowedScopes: GLOBAL_SCOPES,
         options: CHAT_FONT_OPTIONS.map(option => ({ ...option }))
@@ -143,7 +138,6 @@ export const createChatTypographySettings = (defaults: {
     chatFontWeight: {
         default: defaults.fontWeight ?? 400,
         label: '聊天字重',
-        common: true,
         type: 'stepper' as const,
         min: 100,
         max: 900,
@@ -153,7 +147,6 @@ export const createChatTypographySettings = (defaults: {
     chatFontSize: {
         default: defaults.fontSize ?? 16,
         label: '聊天字号',
-        common: true,
         type: 'stepper' as const,
         min: 12,
         max: 72,
@@ -162,7 +155,6 @@ export const createChatTypographySettings = (defaults: {
     chatPageWidth: {
         default: defaults.pageWidth ?? 'auto',
         label: '聊天最大宽度',
-        common: false,
         type: 'options' as const,
         allowedScopes: GLOBAL_SCOPES,
         options: [
@@ -177,7 +169,6 @@ export const createChatTypographySettings = (defaults: {
     chatLineHeight: {
         default: defaults.lineHeight ?? 1.6,
         label: '聊天行高',
-        common: false,
         type: 'slider' as const,
         min: 1,
         max: 3,
@@ -187,7 +178,6 @@ export const createChatTypographySettings = (defaults: {
     chatParagraphSpacing: {
         default: defaults.paragraphSpacing ?? 16,
         label: '段落间距',
-        common: false,
         type: 'slider' as const,
         min: 0,
         max: 64,
@@ -197,7 +187,6 @@ export const createChatTypographySettings = (defaults: {
     chatLetterSpacing: {
         default: defaults.letterSpacing ?? 0,
         label: '文字间距',
-        common: false,
         type: 'slider' as const,
         min: 0,
         max: 10,
@@ -208,7 +197,6 @@ export const createChatTypographySettings = (defaults: {
         default: 'follow',
         label: 'AI 回复排版',
         description: '控制 AI 回复是否跟随统一聊天排版。',
-        common: false,
         type: 'options' as const,
         allowedScopes: GLOBAL_SCOPES,
         options: CHAT_ROLE_TYPOGRAPHY_OPTIONS.map(option => ({ ...option }))
@@ -216,7 +204,6 @@ export const createChatTypographySettings = (defaults: {
     assistantFontSize: {
         default: defaults.fontSize ?? 16,
         label: 'AI 回复字号',
-        common: false,
         type: 'stepper' as const,
         min: 12,
         max: 72,
@@ -226,7 +213,6 @@ export const createChatTypographySettings = (defaults: {
     assistantLineHeight: {
         default: defaults.lineHeight ?? 1.6,
         label: 'AI 回复行高',
-        common: false,
         type: 'slider' as const,
         min: 1,
         max: 3,
@@ -237,7 +223,6 @@ export const createChatTypographySettings = (defaults: {
     assistantLetterSpacing: {
         default: defaults.letterSpacing ?? 0,
         label: 'AI 回复字距',
-        common: false,
         type: 'slider' as const,
         min: 0,
         max: 10,
@@ -249,7 +234,6 @@ export const createChatTypographySettings = (defaults: {
         default: 'follow',
         label: '用户输入排版',
         description: '控制用户消息和输入框是否跟随统一聊天排版。',
-        common: false,
         type: 'options' as const,
         allowedScopes: GLOBAL_SCOPES,
         options: CHAT_ROLE_TYPOGRAPHY_OPTIONS.map(option => ({ ...option }))
@@ -257,7 +241,6 @@ export const createChatTypographySettings = (defaults: {
     userFontSize: {
         default: defaults.fontSize ?? 16,
         label: '用户输入字号',
-        common: false,
         type: 'stepper' as const,
         min: 12,
         max: 72,
@@ -267,7 +250,6 @@ export const createChatTypographySettings = (defaults: {
     userLineHeight: {
         default: defaults.lineHeight ?? 1.6,
         label: '用户输入行高',
-        common: false,
         type: 'slider' as const,
         min: 1,
         max: 3,
@@ -278,7 +260,6 @@ export const createChatTypographySettings = (defaults: {
     userLetterSpacing: {
         default: defaults.letterSpacing ?? 0,
         label: '用户输入字距',
-        common: false,
         type: 'slider' as const,
         min: 0,
         max: 10,

@@ -6,7 +6,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'follow-setting',
         label: '配色模式',
         description: '控制 Telegram 桌面跟随全局外观，或固定为浅色 / 深色。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -19,7 +18,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'medium',
         label: '玻璃强度',
         description: '控制 Telegram 桌面玻璃层的透明度和模糊感。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -32,7 +30,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'cozy',
         label: '消息密度',
         description: '控制 Telegram 聊天消息间距。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -44,7 +41,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'floating-rounded',
         label: '桌面面板样式',
         description: '控制 Telegram 桌面三栏是否使用设计稿式圆角外边距。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -56,7 +52,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: true,
         label: '顶部留白',
         description: 'Telegram 桌面三栏顶部保留设计稿式呼吸空间。关闭后贴近容器顶部。',
-        common: true,
         type: 'boolean' as const,
         allowedScopes: ['Global']
     },
@@ -79,7 +74,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'auto',
         label: '右侧资料栏',
         description: '控制 Telegram 桌面右侧个人资料 / 会话详情栏的显示策略。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -92,7 +86,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: true,
         label: '显示用户名',
         description: '在消息气泡上方显示发言者名称。',
-        common: true,
         type: 'boolean' as const,
         allowedScopes: ['Global']
     },
@@ -100,7 +93,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'circle',
         label: '头像形状',
         description: 'Telegram 桌面默认使用圆形头像。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -112,7 +104,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'cozy',
         label: '角色列表密度',
         description: '控制 Telegram 角色列表项的垂直留白。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -124,7 +115,6 @@ export const telegramDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 2,
         label: '角色预览行数',
         description: '角色频道列表中保留的最近消息预览行数。',
-        common: true,
         type: 'stepper' as const,
         min: 1,
         max: 4,

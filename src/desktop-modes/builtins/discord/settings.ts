@@ -6,7 +6,6 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'compact',
         label: '消息密度',
         description: '控制聊天消息之间的垂直间距与整体紧凑度。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -33,7 +32,6 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'rounded',
         label: '头像形状',
         description: '控制角色卡和聊天头像的圆角风格。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -46,7 +44,6 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'compact',
         label: '消息气泡样式',
         description: '控制消息块的圆角和背景强度。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -58,7 +55,6 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
         default: true,
         label: '显示用户名',
         description: '关闭后仅保留头像与消息主体。',
-        common: true,
         type: 'boolean' as const,
         allowedScopes: ['Global']
     },
@@ -66,7 +62,6 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'cozy',
         label: '角色卡密度',
         description: '用于 Discord 风格角色卡侧栏的留白密度。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -78,7 +73,6 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 2,
         label: '侧栏预览行数',
         description: '角色卡会话预览保留的文本行数。',
-        common: true,
         type: 'stepper' as const,
         min: 1,
         max: 4,
@@ -88,7 +82,6 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
         default: true,
         label: '显示侧栏与角色列表',
         description: '控制 Discord 桌面模式左侧的服务器栏与角色列表是否显示；也可点击顶栏的 # 切换。',
-        common: true,
         type: 'boolean' as const,
         allowedScopes: ['Global']
     },
@@ -96,7 +89,6 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'top',
         label: '移动端 Guild Rail 位置',
         description: '控制 Discord 移动端主导航条固定在哪个边缘。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [
@@ -110,7 +102,6 @@ export const discordDesktopModeSettings: Record<string, SettingDefinition> = {
         default: 'top',
         label: '移动端角色频道入口位置',
         description: '控制 Discord 移动端 DM / 角色历史入口固定在哪个边缘。',
-        common: true,
         type: 'options' as const,
         allowedScopes: ['Global'],
         options: [

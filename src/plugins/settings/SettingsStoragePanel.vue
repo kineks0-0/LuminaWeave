@@ -90,6 +90,7 @@ import {
 } from '../../api/core/storage/RuntimeStorageAdminService.js';
 import { SettingsBlockHeader, SettingsDescription, SettingsInsetPanel, SettingsMetaItem, SettingsSectionPanel, SettingsStatusBadge } from './components';
 import { LuminaIconButton } from '../../ui/primitives';
+import { useModalStore } from '../../stores/useModalStore.js';
 
 type ToastKind = 'success' | 'warning' | 'error' | 'info';
 
@@ -190,7 +191,12 @@ const handleImportFile = (event: Event): void => {
 };
 
 const resetItem = async (item: RuntimeStorageUsageItem): Promise<void> => {
-  const confirmed = confirm(`确定重置「${item.title}」吗？`);
+  const confirmed = await useModalStore().confirm({
+    title: '重置存储',
+    message: `重置「${item.title}」后，这部分数据会被清空，无法撤销。`,
+    confirmText: '重置',
+    danger: true
+  });
   if (!confirmed) return;
   busyId.value = item.id;
   errorMessage.value = '';

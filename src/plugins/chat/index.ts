@@ -18,43 +18,120 @@ import {
 } from './surfaces/createChatSurfaceContexts.js';
 
 const settingsSchema = {
-    nexusPreset: { default: '', label: '专用模型/网关预设', common: true, type: 'nexus-select', allowedScopes: ['Global', 'Character'] },
+    nexusPreset: { category: 'generation', group: '专用模型', default: '', label: '专用模型/网关预设', type: 'nexus-select', allowedScopes: ['Global', 'Character'] },
     syncIgnoreST: {
+        category: 'storage',
+        group: '同步策略',
         default: false,
         label: '强制忽略 ST 侧改动',
         description: '开启后，同步时不拉取 ST 侧新增/编辑内容，始终以插件侧数据为准回写 ST（除非显式选择以 ST 为准或执行强制全量同步）。',
-        common: true,
         type: 'boolean',
         allowedScopes: ['Global']
     },
+    'streamingEffect': {
+        category: 'conversation',
+        group: '流式显示',
+        keywords: ['吐字', '打字机', '动画'],
+        default: 'instant',
+        label: '流式文本显示效果',
+        type: 'options',
+        options: [
+            { value: 'instant', label: '即时显示' },
+            { value: 'fade-in', label: '淡入效果' },
+            { value: 'gpt-style', label: 'GPT 风格（淡入+颜色过渡）' },
+            { value: 'typewriter', label: '打字机效果' }
+        ],
+        allowedScopes: ['Global']
+    },
     streamingSmoothness: {
+        category: 'conversation',
+        group: '流式显示',
         default: false,
         label: '流式输出平滑',
-        common: true,
         type: 'boolean',
-        allowedScopes: ['Global', 'Character']
+        allowedScopes: ['Global']
     },
     streamingSmoothnessFactor: {
+        showIf: (settings) => settings['lumina-chat.streamingSmoothness'] === true || settings['lumina-chat.streamingEffect'] === 'typewriter',
+        category: 'conversation',
+        group: '流式显示',
         default: 2,
         label: '平滑速度因子',
-        common: true,
         type: 'slider',
         min: 1,
         max: 7,
         step: 1,
-        allowedScopes: ['Global', 'Character']
+        allowedScopes: ['Global']
     },
     streamingMaxSpeed: {
+        showIf: (settings) => settings['lumina-chat.streamingSmoothness'] === true || settings['lumina-chat.streamingEffect'] === 'typewriter',
+        category: 'conversation',
+        group: '流式显示',
+        advanced: true,
         default: 20,
         label: '平滑输出最高限速 (字/帧)',
-        common: false,
         type: 'slider',
         min: 1,
         max: 100,
         step: 1,
-        allowedScopes: ['Global', 'Character']
+        allowedScopes: ['Global']
+    },
+    filterChatReply: {
+        category: 'conversation',
+        group: '回复过滤',
+        keywords: ['Chat_Reply', '标签'],
+        default: false,
+        label: '只显示 Chat_Reply 内容',
+        description: '屏蔽预思考与动作标签（如 Character_Action），只展示回复主体。',
+        type: 'boolean',
+        allowedScopes: ['Global']
+    },
+    allowTopLevelInFilter: {
+        category: 'conversation',
+        group: '回复过滤',
+        default: true,
+        label: '保留不在标签内的正文',
+        description: '模型输出了不带任何标签的文本时照常显示；关闭则只显示指定标签内的内容。',
+        type: 'boolean',
+        allowedScopes: ['Global'],
+        showIf: (settings) => settings['lumina-chat.filterChatReply'] === true
+    },
+    implicitThinkingInFilter: {
+        category: 'conversation',
+        group: '回复过滤',
+        advanced: true,
+        default: false,
+        label: '开头的无标签文本视为思考',
+        description: '消息以普通文本而不是标签开头时，把这段文本当作思考过程隐藏，直到遇到下一个标签。',
+        type: 'boolean',
+        allowedScopes: ['Global'],
+        showIf: (settings) => settings['lumina-chat.filterChatReply'] === true
+    },
+    aggressiveThinking: {
+        category: 'conversation',
+        group: '回复过滤',
+        advanced: true,
+        default: false,
+        label: '隐藏到第一个 </thinking> 为止',
+        description: '第一个 </thinking> 标签及其之前的所有内容都视为思考过程并隐藏。',
+        type: 'boolean',
+        allowedScopes: ['Global'],
+        showIf: (settings) => settings['lumina-chat.filterChatReply'] === true
+            && settings['lumina-chat.implicitThinkingInFilter'] === true
+    },
+    unlimitedResponse: {
+        category: 'generation',
+        group: '输出长度',
+        keywords: ['max_tokens', '长度'],
+        default: false,
+        label: '不限制回复长度',
+        description: '不向后端传递 max_tokens，由模型自行决定输出长度。',
+        type: 'boolean',
+        allowedScopes: ['Global']
     },
     'dialogueUIFrequency': {
+        category: 'conversation',
+        group: '互动组件',
         label: '互动 UI 出现频率',
         description: '控制 AI 在回复中输出交互组件（如行动选项、数值变化）的倾向性。',
         type: 'options',
@@ -69,6 +146,8 @@ const settingsSchema = {
         ]
     },
     'dialogueUIInteraction': {
+        category: 'conversation',
+        group: '互动组件',
         label: '互动 UI 点击行为',
         description: '设置点击 UI 选项（如 Choices）时的触发逻辑。',
         type: 'options',
@@ -79,20 +158,10 @@ const settingsSchema = {
             { value: 'fill', label: '填写框', description: '点击选项后仅将指令填入输入框，由用户确认后手动发送。' }
         ]
     },
-    'streamingEffect': {
-        default: 'instant',
-        label: '流式文本显示效果',
-        common: true,
-        type: 'options',
-        options: [
-            { value: 'instant', label: '即时显示' },
-            { value: 'fade-in', label: '淡入效果' },
-            { value: 'gpt-style', label: 'GPT 风格（淡入+颜色过渡）' },
-            { value: 'typewriter', label: '打字机效果' }
-        ],
-        allowedScopes: ['Global', 'Character']
-    },
     'contextControl.fullMode': {
+        category: 'context',
+        group: '全量发送范围',
+        keywords: ['DCC'],
         label: '全量发送限制类型',
         type: 'options',
         default: 'count',
@@ -101,42 +170,50 @@ const settingsSchema = {
             { value: 'token', label: '按 Token 数量' },
             { value: 'char', label: '按字符长度' }
         ],
-        common: true,
         allowedScopes: ['Global', 'Character']
     },
     'contextControl.fullValueCount': {
+        category: 'context',
+        group: '全量发送范围',
+        keywords: ['DCC'],
         label: '全量发送范围 (条数)',
         type: 'stepper',
         default: 10,
         min: 1,
         max: 500,
-        common: true,
         allowedScopes: ['Global', 'Character'],
         showIf: (s) => s['lumina-chat.contextControl.fullMode'] === 'count'
     },
     'contextControl.fullValueToken': {
+        category: 'context',
+        group: '全量发送范围',
+        keywords: ['DCC'],
         label: '全量发送范围 (Token)',
         type: 'stepper',
         default: 2000,
         min: 100,
         max: 8000,
         step: 100,
-        common: true,
         allowedScopes: ['Global', 'Character'],
         showIf: (s) => s['lumina-chat.contextControl.fullMode'] === 'token'
     },
     'contextControl.fullValueChar': {
+        category: 'context',
+        group: '全量发送范围',
+        keywords: ['DCC'],
         label: '全量发送范围 (字符数)',
         type: 'stepper',
         default: 5000,
         min: 100,
         max: 20000,
         step: 100,
-        common: true,
         allowedScopes: ['Global', 'Character'],
         showIf: (s) => s['lumina-chat.contextControl.fullMode'] === 'char'
     },
     'contextControl.summaryMode': {
+        category: 'context',
+        group: '概览发送范围',
+        keywords: ['DCC', '摘要'],
         label: '概览发送限制类型',
         type: 'options',
         default: 'count',
@@ -145,64 +222,75 @@ const settingsSchema = {
             { value: 'token', label: '按额外 Token 数量' },
             { value: 'char', label: '按额外字符长度' }
         ],
-        common: true,
         allowedScopes: ['Global', 'Character']
     },
     'contextControl.summaryValueCount': {
+        category: 'context',
+        group: '概览发送范围',
+        keywords: ['DCC', '摘要'],
         label: '概览额外发送范围 (条数)',
         type: 'stepper',
         default: 30,
         min: 0,
         max: 1000,
-        common: true,
         allowedScopes: ['Global', 'Character'],
         showIf: (s) => s['lumina-chat.contextControl.summaryMode'] === 'count'
     },
     'contextControl.summaryValueToken': {
+        category: 'context',
+        group: '概览发送范围',
+        keywords: ['DCC', '摘要'],
         label: '概览额外发送范围 (Token)',
         type: 'stepper',
         default: 4000,
         min: 0,
         max: 20000,
         step: 100,
-        common: true,
         allowedScopes: ['Global', 'Character'],
         showIf: (s) => s['lumina-chat.contextControl.summaryMode'] === 'token'
     },
     'contextControl.summaryValueChar': {
+        category: 'context',
+        group: '概览发送范围',
+        keywords: ['DCC', '摘要'],
         label: '概览额外发送范围 (字符数)',
         type: 'stepper',
         default: 10000,
         min: 0,
         max: 50000,
         step: 100,
-        common: true,
         allowedScopes: ['Global', 'Character'],
         showIf: (s) => s['lumina-chat.contextControl.summaryMode'] === 'char'
     },
     'contextControl.tokenSplitAllowed': {
+        category: 'context',
+        group: '截断与兜底',
+        advanced: true,
         label: '允许 Token/字数 强制截断文本',
         type: 'boolean',
         default: false,
         description: '超出全量限制后，是否允许在单词/句子中间截断以严格遵守物理限制。',
-        common: false,
         allowedScopes: ['Global', 'Character']
     },
     'contextControl.tokenMaxFloat': {
+        category: 'context',
+        group: '截断与兜底',
+        advanced: true,
         label: 'Token/字数 允许浮动范围',
         type: 'stepper',
         default: 200,
         min: 0,
         max: 2000,
-        common: false,
         allowedScopes: ['Global', 'Character']
     },
     'contextControl.enableFallbackSummary': {
+        category: 'context',
+        group: '截断与兜底',
+        advanced: true,
         label: '无摘要消息兜底截断',
         type: 'boolean',
         default: false,
         description: '开启后，概况区内没有有效摘要的 AI 消息将截取原文前 100 字作为摘要（而非保留全量）。关闭（默认）则这类消息在概况区内以全量形式保留，更安全但占用更多 token。',
-        common: false,
         allowedScopes: ['Global', 'Character']
     }
 } satisfies LuminaPlugin['settingsManifest'];
@@ -312,6 +400,7 @@ const plugin: LuminaPlugin = {
     icon: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>',
     component: ChatRoot,
     settingsPreviewSurface: { contractId: 'chat.preview', input: {} },
+    settingsCategory: 'conversation',
     settingsManifest: settingsSchema,
     platformManifest
 };

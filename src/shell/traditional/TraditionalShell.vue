@@ -124,7 +124,6 @@
       :widgetStyle="shellWidgetStyle"
       :widgetWidth="widgetWidth"
       :isResizing="isResizing"
-      :currentDetailedView="currentDetailedView"
       :saveStatus="saveStatus"
       :auxSidebarMode="surfaceAuxSidebarMode"
       :activeWidgetPlugin="activeWidgetPlugin"
@@ -132,11 +131,9 @@
       :activeRightPanelActivity="activeRightPanelActivity"
       :widgetGroups="widgetGroups"
       :showWidgetDropdown="showWidgetDropdown"
-      :getPluginName="getPluginName"
       :onCreateChatSession="onCreateDiscordChatSession"
       :onOpenSession="onOpenDiscordChatSession"
       @resizeStart="onResizeStart"
-      @backFromDetailedSettings="onBackFromDetailedSettings"
       @toggleWidgetDropdown="onToggleWidgetDropdown"
       @switchRightPanel="onSwitchRightPanel"
       @closePanel="onClosePanel"
@@ -191,7 +188,6 @@ const desktopModeOptions = computed(() => props.runtimeContext.desktopModeOption
 const activeMainTab = computed(() => props.runtimeContext.activeMainTab);
 const dynamicTabs = computed(() => props.runtimeSurfaces.dynamicTabs);
 const isMobile = computed(() => props.runtimeContext.isMobile);
-const currentDetailedView = computed(() => props.runtimeContext.currentDetailedView);
 const saveStatus = computed(() => props.runtimeContext.saveStatus);
 const widgetGroups = computed(() => props.runtimeContext.widgetGroups);
 const characterChannelState = computed(() => props.runtimeContext.characterChannelState);
@@ -252,7 +248,6 @@ const getMainSurfaceInput = (contractId: SurfaceContractId) => {
   });
 };
 
-const getPluginName = (pluginId: string | null) => props.runtimeActions.getPluginName(pluginId);
 const onSwitchMainView = (tabId: string) => props.runtimeActions.navigation.switchMainView(tabId);
 const onToggleSettings = () => props.runtimeActions.navigation.openSettingsPanel();
 const onClose = () => props.runtimeActions.navigation.close();
@@ -274,7 +269,6 @@ const onPushTelegramMobileRoute: ShellRuntimeActions['traditional']['pushTelegra
 const onPopTelegramMobileRoute = () => props.runtimeActions.traditional.popTelegramMobileRoute();
 const onResizeStart = (event?: MouseEvent) => props.runtimeActions.traditional.resizeStart(event);
 const onTelegramLeftRailResizeStart = (event?: MouseEvent) => props.runtimeActions.traditional.telegramLeftRailResizeStart(event);
-const onBackFromDetailedSettings = () => props.runtimeActions.traditional.backFromDetailedSettings();
 const onToggleWidgetDropdown = () => props.runtimeActions.traditional.toggleWidgetDropdown();
 const onSwitchRightPanel = (panelId: string) => props.runtimeActions.traditional.switchRightPanel(panelId);
 const onOpenTelegramDesktopRoleProfile = () => onSwitchRightPanel('telegram-profile');

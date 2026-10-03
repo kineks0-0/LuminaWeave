@@ -126,16 +126,16 @@ describe('Official Surface Kit', () => {
     it('mounts the settings preview through SurfaceOutlet metadata', () => {
         const pluginSource = readSource('../index.ts');
         const settingsRegistrySource = readSource('../../settings/settingsRegistry.ts');
-        const settingsDetailedSource = readSource('../../settings/SettingsDetailed.vue');
+        const settingsCategorySource = readSource('../../settings/SettingsCategoryView.vue');
 
         expect(pluginSource).toContain("settingsPreviewSurface: { contractId: 'chat.preview', input: {} }");
         expect(pluginSource).not.toContain('settingsPreviewComponent: ChatPreview');
         expect(settingsRegistrySource).toContain('settingsPreviewSurface: plugin.settingsPreviewSurface');
-        expect(settingsDetailedSource).toContain('v-if="plugin?.settingsPreviewSurface"');
-        expect(settingsDetailedSource).toContain('<ThemedSurfaceOutlet');
-        expect(settingsDetailedSource).toContain(':contract-id="plugin.settingsPreviewSurface.contractId"');
-        expect(settingsDetailedSource).toContain(':input="plugin.settingsPreviewSurface.input"');
-        expect(settingsDetailedSource).toMatch(/<SurfaceOutlet\s+v-for="key in Object\.keys\(manifest\)"/);
+        expect(settingsCategorySource).toContain('v-if="plugin?.settingsPreviewSurface"');
+        expect(settingsCategorySource).toContain('<ThemedSurfaceOutlet');
+        expect(settingsCategorySource).toContain(':contract-id="plugin.settingsPreviewSurface.contractId"');
+        expect(settingsCategorySource).toContain(':input="plugin.settingsPreviewSurface.input"');
+        expect(settingsCategorySource).toContain('contract-id="settings.control"');
     });
 
     it('keeps an unrecorded conversation group collapsed until the first toggle', () => {

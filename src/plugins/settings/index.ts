@@ -8,10 +8,12 @@ const SettingControl = defineAsyncComponent(() => import('./SettingControl.vue')
 
 const settingsSchema = {
     appearance: {
+        category: 'appearance',
+        group: '外观',
+        keywords: ['深色', '浅色', '暗色', '主题', 'dark', 'light'],
         default: 'system',
         label: '界面外观',
         description: '统一 LuminaWeave 全局外观。若当前桌面模式强制指定浅/深色，则以桌面模式为准。',
-        common: true,
         type: 'options',
         allowedScopes: ['Global'],
         options: [
@@ -21,19 +23,23 @@ const settingsSchema = {
         ]
     },
     activeDesktopMode: {
+        category: 'appearance',
+        group: '外观',
+        keywords: ['主题', 'Discord', 'Telegram', '皮肤'],
         default: 'classic',
         label: '桌面模式',
         description: '切换整套桌面模式。它会统一控制工作模式、导航组织、界面承载方式与对应表层样式。',
-        common: true,
         type: 'options',
         allowedScopes: ['Global'],
         options: getDesktopModeOptions
     },
     motionPerformance: {
+        category: 'appearance',
+        group: '外观',
+        keywords: ['动画', '模糊', '卡顿', '性能'],
         default: 'full',
         label: '动效性能',
         description: '控制工作台的动画与滤镜效果。若在低端设备上感到卡顿，建议使用省电模式。',
-        common: true,
         type: 'options',
         allowedScopes: ['Global'],
         options: [
@@ -42,34 +48,66 @@ const settingsSchema = {
             { value: 'none', label: '禁用动效 (None)', description: '完全关闭所有 UI 过渡与动画。' }
         ]
     },
+    thinkingDisplayMode: {
+        category: 'conversation',
+        group: '思维链',
+        keywords: ['thinking', '推理', '思考'],
+        default: 'collapsible',
+        label: '思维链显示方式',
+        description: '同时作用于聊天面板和 Forge 工作台。正文保持独立显示，思维链只作为单独的折叠区出现。',
+        type: 'options',
+        allowedScopes: ['Global'],
+        options: [
+            { value: 'collapsible', label: '可折叠显示' },
+            { value: 'hidden', label: '隐藏' }
+        ]
+    },
+    thinkingAutoExpand: {
+        category: 'conversation',
+        group: '思维链',
+        default: true,
+        label: '只有思维链时自动展开',
+        description: '消息只有思维链、还没有正文时自动展开；出现正文后自动收起。',
+        type: 'boolean',
+        allowedScopes: ['Global'],
+        showIf: (settings) => settings['lumina-settings.thinkingDisplayMode'] !== 'hidden'
+    },
     useShadowDom: {
+        category: 'advanced',
+        group: '兼容性',
+        keywords: ['样式隔离', 'CSS'],
         default: true,
         label: '启用 Shadow DOM 样式隔离 (需要刷新)',
-        common: true,
         type: 'boolean',
         allowedScopes: ['Global']
     },
     isPromptInjectionEnabled: {
+        category: 'generation',
+        group: '提示词注入',
+        keywords: ['宏', '世界书'],
         default: true,
         label: '启用插件提示词 (世界书与宏)',
         description: '如果关闭，LuminaWeave 将停止同步系统世界书和宏替换，完全使用 ST 原生提示词。',
-        common: true,
         type: 'boolean',
         allowedScopes: ['Global']
     },
     dedicatedPromptLorebookName: {
+        category: 'generation',
+        group: '提示词注入',
+        advanced: true,
         default: 'LuminaWeave_System',
         label: '提示词专用世界书名称',
         description: '插件将提示词和宏注入到该独立世界书中。修改后需点击“强制同步”以生效。',
-        common: true,
         type: 'text',
         allowedScopes: ['Global']
     },
     luminaViewSyntaxStyle: {
+        category: 'generation',
+        group: '提示词注入',
+        keywords: ['LuminaView', 'DSL', 'V 语法'],
         default: 'functional',
         label: 'V 语法风格',
         description: '控制提示词中 `<V>` DSL 只使用函数式还是管道式，避免同时给模型两套语法。',
-        common: true,
         type: 'options',
         allowedScopes: ['Global'],
         options: [
@@ -78,52 +116,60 @@ const settingsSchema = {
         ]
     },
     workspaceAllowUnderStageStrip: {
+        category: 'appearance',
+        group: '自由工作台',
+        advanced: true,
         default: false,
         label: '自由工作台窗口允许压到台前调度下方',
         description: '开启后，窗口拖拽和布局将不再避让左侧台前调度区域，可延伸到其下方。',
-        common: true,
         type: 'boolean',
         allowedScopes: ['Global']
     },
     workspaceShowStageStrip: {
+        category: 'appearance',
+        group: '自由工作台',
         default: true,
         label: '显示自由工作台台前调度栏',
         description: '关闭后，左侧台前调度栏将被隐藏，工作台按钮也不会再显示它。',
-        common: true,
         type: 'boolean',
         allowedScopes: ['Global']
     },
     workspaceAllowUnderDock: {
+        category: 'appearance',
+        group: '自由工作台',
+        advanced: true,
         default: false,
         label: '自由工作台窗口允许压到 Dock 下方',
         description: '开启后，窗口拖拽和布局将不再避让底部 Dock，可延伸到其下方。',
-        common: true,
         type: 'boolean',
         allowedScopes: ['Global']
     },
     workspaceShowDock: {
+        category: 'appearance',
+        group: '自由工作台',
         default: true,
         label: '显示自由工作台 Dock 栏',
         description: '关闭后，底部 Dock 将被隐藏，工作台按钮也不会再显示它。',
-        common: true,
         type: 'boolean',
         allowedScopes: ['Global']
     },
     workspaceMaxWindowsPerStage: {
+        category: 'appearance',
+        group: '自由工作台',
         default: 4,
         label: '台前调度限制窗口数量',
         description: '当当前舞台窗口达到此限制时，新打开的窗口将自动创建并跳转至新舞台。',
-        common: true,
         type: 'stepper',
         min: 1,
         max: 10,
         allowedScopes: ['Global']
     },
     traditionalHeaderDesktopPosition: {
+        category: 'appearance',
+        group: '传统桌面',
         default: 'top',
         label: '传统桌面顶栏位置（桌面）',
         description: '控制桌面端传统桌面的主导航条固定在顶部还是底部。',
-        common: true,
         type: 'options',
         allowedScopes: ['Global'],
         options: [
@@ -132,10 +178,11 @@ const settingsSchema = {
         ]
     },
     traditionalHeaderMobilePosition: {
+        category: 'appearance',
+        group: '传统桌面',
         default: 'top',
         label: '传统桌面顶栏位置（移动）',
         description: '控制移动端传统桌面的主导航条固定在顶部还是底部。',
-        common: true,
         type: 'options',
         allowedScopes: ['Global'],
         options: [

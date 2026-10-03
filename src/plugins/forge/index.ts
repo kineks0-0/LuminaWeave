@@ -12,26 +12,30 @@ const ForgePromptPresetWorkbench = defineAsyncComponent(() => import('./ForgePro
 
 const settingsSchema = {
     nexusPreset: {
+        category: 'workshop',
+        group: '模型',
         default: '',
         label: '制卡专用 Nexus 预设',
         description: '为 Forge 制卡流程指定独立的生成链路。若未指定，将自动跟随聊天主预设。',
-        common: true,
         type: 'nexus-select',
         allowedScopes: ['Global']
     },
     tavilyApiKey: {
+        category: 'workshop',
+        group: '联网研究',
+        keywords: ['密钥', 'API Key', 'webResearch'],
         default: '',
         label: 'Tavily API Key',
         description: '用于 Forge Agent 的 webResearch 联网研究工具。该值按现有设置存储持久化，界面仅遮罩显示，不提供加密 secret storage。',
-        common: true,
         type: 'password',
         allowedScopes: ['Global']
     },
     formAssistanceMode: {
+        category: 'workshop',
+        group: '制卡流程',
         default: 'prefill',
         label: '表单辅助模式',
         description: '选择 Forge 如何辅助你填写表单。自动预填 (Prefill) 会直接写入建议值；预设建议 (Suggestion) 则在输入框下方显示可选芯片供你点击；关闭则完全手动。',
-        common: true,
         type: 'options',
         options: [
             { value: 'prefill', label: '自动预填 (Prefill)' },
@@ -41,10 +45,11 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     maxHistoryMessages: {
+        category: 'workshop',
+        group: '制卡流程',
         default: 20,
         label: '对话历史发送条数',
         description: '发送给模型时，对话历史最多保留的最近 N 条消息（Planner / Conversation 角色）。Analyst 角色有独立的截断配置，默认 10 条。设为 0 表示不限制。',
-        common: true,
         type: 'stepper',
         min: 0,
         max: 200,
@@ -52,10 +57,12 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     entryContentFormat: {
+        category: 'workshop',
+        group: '制卡流程',
+        advanced: true,
         default: 'json',
         label: '条目内容格式',
         description: '指定模型通过 tool calling 生成写入提案时使用的数据格式。JSON 最易被系统解析；YAML 更易阅读；TOML 适合键值配置；自由格式则不限制结构。',
-        common: true,
         type: 'options',
         options: [
             { value: 'json', label: 'JSON（推荐）' },
@@ -66,10 +73,11 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     aiReplyFontSize: {
+        category: 'workshop',
+        group: '排版',
         default: 14,
         label: 'AI 回复字号',
         description: '仅影响 Forge 工作台中 AI 回复正文，不影响主聊天或其他桌面模式。',
-        common: true,
         type: 'slider',
         min: 11,
         max: 20,
@@ -77,10 +85,11 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     aiReplyLineHeight: {
+        category: 'workshop',
+        group: '排版',
         default: 1.7,
         label: 'AI 回复行距',
         description: '控制 Forge AI 回复正文行高。长文本建议保持 1.55 以上。',
-        common: true,
         type: 'slider',
         min: 1.2,
         max: 2.2,
@@ -88,10 +97,12 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     aiReplyLetterSpacing: {
+        category: 'workshop',
+        group: '排版',
+        advanced: true,
         default: 0,
         label: 'AI 回复字距',
         description: '控制 Forge AI 回复正文的字距，单位 px。中文正文通常保持 0。',
-        common: true,
         type: 'slider',
         min: 0,
         max: 1.2,
@@ -99,10 +110,11 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     userInputFontSize: {
+        category: 'workshop',
+        group: '排版',
         default: 14,
         label: '用户输入字号',
         description: '影响 Forge 用户消息与底部输入框文字。',
-        common: true,
         type: 'slider',
         min: 11,
         max: 20,
@@ -110,10 +122,11 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     userInputLineHeight: {
+        category: 'workshop',
+        group: '排版',
         default: 1.5,
         label: '用户输入行距',
         description: '影响 Forge 用户消息与底部输入框行高。',
-        common: true,
         type: 'slider',
         min: 1.2,
         max: 2,
@@ -121,10 +134,12 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     userInputLetterSpacing: {
+        category: 'workshop',
+        group: '排版',
+        advanced: true,
         default: 0,
         label: '用户输入字距',
         description: '控制 Forge 用户消息与输入框字距，单位 px。',
-        common: true,
         type: 'slider',
         min: 0,
         max: 1.2,
@@ -132,10 +147,11 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     componentFontSize: {
+        category: 'workshop',
+        group: '排版',
         default: 12,
         label: '组件字号',
         description: '影响 Forge 消息内表单、选项、提案等组件文本。',
-        common: true,
         type: 'slider',
         min: 10,
         max: 18,
@@ -143,10 +159,11 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     componentLineHeight: {
+        category: 'workshop',
+        group: '排版',
         default: 1.45,
         label: '组件行距',
         description: '影响 Forge 消息内组件文本行高。',
-        common: true,
         type: 'slider',
         min: 1.15,
         max: 2,
@@ -154,10 +171,12 @@ const settingsSchema = {
         allowedScopes: ['Global']
     },
     componentLetterSpacing: {
+        category: 'workshop',
+        group: '排版',
+        advanced: true,
         default: 0,
         label: '组件字距',
         description: '影响 Forge 消息内组件文本字距，单位 px。',
-        common: true,
         type: 'slider',
         min: 0,
         max: 1.2,
@@ -222,6 +241,7 @@ const plugin: LuminaPlugin = {
     icon: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>',
     component: CardMakerPanel,
     settingsInlineComponent: ForgePromptPresetInlineSummary,
+    settingsCategory: 'workshop',
     settingsPreviewComponent: ForgePromptPresetWorkbench,
     settingsManifest: settingsSchema,
     platformManifest

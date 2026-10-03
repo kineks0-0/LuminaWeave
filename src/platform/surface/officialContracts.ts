@@ -282,13 +282,16 @@ const settingDefinitionSchema: z.ZodType<SettingDefinition> = z.object({
     default: z.unknown(),
     label: z.string(),
     description: z.string().optional(),
-    common: z.boolean().optional(),
     type: z.enum(['theme', 'options', 'stepper', 'nexus-select', 'slider', 'boolean', 'text', 'password']),
     options: settingOptionsSchema.optional(),
     allowedScopes: z.array(z.enum(['Global', 'Character', 'Chat', 'Session'])).optional(),
     min: z.number().optional(),
     max: z.number().optional(),
     step: z.number().optional(),
+    category: z.enum(['appearance', 'conversation', 'generation', 'context', 'workshop', 'storage', 'advanced']).optional(),
+    group: z.string().optional(),
+    advanced: z.boolean().optional(),
+    keywords: z.array(z.string()).optional(),
     showIf: settingShowIfSchema.optional()
 }).strict().superRefine((definition, context) => {
     if (!Object.prototype.hasOwnProperty.call(definition, 'default')) {

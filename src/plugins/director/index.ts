@@ -24,10 +24,11 @@ export const DirectorPlugin: LuminaPlugin = {
     component: DirectorPanel,
     settingsManifest: {
         orchestrationMode: {
+            category: 'generation',
+            group: '导演编排',
             label: "请求编排与规划模式",
             type: "options",
             default: "piggyback",
-            common: true,
             options: [
                 { label: "随显挂载 - 快/省Token", value: "piggyback" },
                 { label: "独立后台推演 - 极稳", value: "async" }
@@ -35,18 +36,21 @@ export const DirectorPlugin: LuminaPlugin = {
             allowedScopes: ["Global", "Character"]
         },
         enableVectorMemory: {
+            category: 'context',
+            group: '长线记忆',
+            keywords: ['向量', '语义检索'],
             label: "启用类人向量记忆",
             description: "基于语义搜索动态检索并注入历史瞬间",
             type: "boolean",
             default: true,
-            common: true,
             allowedScopes: ["Global", "Character"]
         },
         memoryMode: {
+            category: 'context',
+            group: '长线记忆',
             label: "长线记忆同步模式",
             type: "options",
             default: "async",
-            common: true,
             options: [
                 { label: "随显挂载 - 快/省Token", value: "piggyback" },
                 { label: "独立后台总结 - 极稳", value: "async" }

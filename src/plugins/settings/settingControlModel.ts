@@ -103,3 +103,66 @@ export const clampSettingNumber = (
     const max = config.max ?? 100;
     return Math.max(min, Math.min(max, value));
 };
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isStructurallyEqual = (left: unknown, right: unknown): boolean => {
+    if (Object.is(left, right)) return true;
+    if (Array.isArray(left) && Array.isArray(right)) {
+        return left.length === right.length && left.every((item, index) => isStructurallyEqual(item, right[index]));
+    }
+    if (isPlainObject(left) && isPlainObject(right)) {
+        const leftKeys = Object.keys(left);
+        return leftKeys.length === Object.keys(right).length
+            && leftKeys.every(key => Object.prototype.hasOwnProperty.call(right, key) && isStructurallyEqual(left[key], right[key]));
+    }
+    return false;
+};
+
+/** 未写入（null/undefined）的值视为默认值 */
+export const isSettingAtDefault = (value: unknown, defaultValue: unknown): boolean =>
+    value === undefined || value === null || isStructurallyEqual(value, defaultValue);
+
+export type SettingControlKind =
+    | 'theme'
+    | 'segmented'
+    | 'select'
+    | 'toggle'
+    | 'stepper'
+    | 'slider'
+    | 'nexus-select'
+    | 'text'
+    | 'password';
+
+/** 选项不超过该数量时用分段控件，否则用下拉框 */
+export const SEGMENTED_OPTION_LIMIT = 3;
+
+export const resolveControlKind = (config: SettingControlConfig): SettingControlKind => {
+    switch (config.type) {
+        case 'boolean': return 'toggle';
+        case 'options': return resolveSettingOptions(config).length <= SEGMENTED_OPTION_LIMIT ? 'segmented' : 'select';
+        case 'theme': return 'theme';
+        case 'stepper': return 'stepper';
+        case 'slider': return 'slider';
+        case 'nexus-select': return 'nexus-select';
+        case 'text': return 'text';
+        case 'password': return 'password';
+    }
+};
+
+/** 存储值不在当前可选项中（例如已卸载的桌面模式）时，显示实际生效的默认项，存储值不变 */
+export const resolveDisplayedOptionValue = (
+    options: readonly SettingOption[],
+    value: unknown,
+    defaultValue: unknown
+): unknown => {
+    if (options.length === 0) return value;
+    return options.some(option => option.value === value) ? value : defaultValue;
+};
+
+/** 原生 select 只回传字符串，按字符串比对还原为选项原始值（保留数字类型） */
+export const resolveSelectedOptionValue = (
+    options: readonly SettingOption[],
+    rawValue: string
+): string | number => options.find(option => String(option.value) === rawValue)?.value ?? rawValue;

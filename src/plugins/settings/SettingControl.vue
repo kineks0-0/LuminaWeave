@@ -18,6 +18,17 @@
     <div class="setting-left">
       <div class="label-row">
         <label class="setting-label">{{ props.config.label }}</label>
+        <button
+          v-if="!isAtDefault"
+          type="button"
+          class="setting-meta-control setting-reset"
+          :title="`恢复默认：${defaultValueLabel}`"
+          :aria-label="`恢复 ${props.config.label} 的默认值`"
+          @click.stop="resetSetting(storageKey, props.config)"
+        >
+          <RotateCcw :size="13" :stroke-width="2.2" aria-hidden="true" />
+          <span>恢复默认</span>
+        </button>
         <div v-if="hasScopeSelector" class="setting-meta-control setting-scope">
           <LuminaSelect class="scope-select compact-scope" size="sm" :modelValue="currentScope" @update:modelValue="onScopeValueChange" aria-label="设置作用域" title="作用域">
             <option v-for="scope in props.config.allowedScopes" :key="scope" :value="scope">
@@ -31,7 +42,7 @@
 
     <div
       class="setting-options"
-      :class="[controlClass, !isVerticalLayout && 'tw:max-[720px]:w-full tw:max-[720px]:justify-start']"
+      :class="[controlClass, !isVerticalLayout && controlKind !== 'toggle' && 'tw:max-[720px]:w-full tw:max-[720px]:justify-start']"
     >
       <div class="setting-control-body" :class="controlBodyClass">
         <!-- Theme Color Buttons -->
@@ -77,10 +88,19 @@
               </div>
             </div>
           </template>
+          <template v-else-if="controlKind === 'select'">
+            <div class="segment-control-container">
+              <LuminaSelect class="lw-select" :modelValue="String(displayedOptionValue)" :aria-label="props.config.label" @update:modelValue="value => updateValue(resolveSelectedOptionValue(resolvedOptions, value))">
+                <option v-for="opt in resolvedOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              </LuminaSelect>
+              <div v-if="activeOptionDescription" class="option-description-tip">{{ activeOptionDescription }}</div>
+            </div>
+          </template>
           <template v-else>
             <div class="segment-control-container">
               <div class="segment-control">
-                <button v-for="opt in resolvedOptions" :key="opt.value" :class="{ active: currentValue === opt.value }"
+                <button v-for="opt in resolvedOptions" :key="opt.value" type="button" :class="{ active: displayedOptionValue === opt.value }"
+                  :aria-pressed="displayedOptionValue === opt.value"
                   @click="updateValue(opt.value)">
                   {{ opt.label }}
                 </button>
@@ -154,6 +174,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { RotateCcw } from 'lucide-vue-next';
 import { activeSettings, activeScopes, useSettings } from './useSettings.js';
 import { lwStorage } from '../../api/storage.js';
 import LuminaStepper from './LuminaStepper.vue';
@@ -171,13 +192,17 @@ import {
   getSettingValue,
   hasSettingScopeSelector,
   isRowToggleSetting,
+  isSettingAtDefault,
   isSettingVisible,
+  resolveControlKind,
+  resolveDisplayedOptionValue,
+  resolveSelectedOptionValue,
   resolveSettingOptions,
   settingScopeLabels,
   shouldUseVerticalSettingLayout
 } from './settingControlModel.js';
 
-const { updateSetting, updateScope } = useSettings();
+const { updateSetting, updateScope, resetSetting } = useSettings();
 const { cssVars: settingsControlSkinVars, variant: settingsControlVariant } = useSurfaceSkin('settings.control');
 
 const props = useSurfaceInput('settings.control');
@@ -201,8 +226,23 @@ const isRowToggleEnabled = computed(() => isRowToggleSetting(props.config, props
 
 const resolvedOptions = computed(() => resolveSettingOptions(props.config));
 
+const controlKind = computed(() => resolveControlKind(props.config));
+
+// 存储值不在可选项中时（例如已卸载的桌面模式）显示实际生效的默认项
+const displayedOptionValue = computed(() => resolveDisplayedOptionValue(resolvedOptions.value, currentValue.value, props.config.default));
+
 // 计算当前激活选项的描述文字
-const activeOptionDescription = computed(() => getActiveSettingOptionDescription(resolvedOptions.value, currentValue.value));
+const activeOptionDescription = computed(() => getActiveSettingOptionDescription(resolvedOptions.value, displayedOptionValue.value));
+
+const isAtDefault = computed(() => isSettingAtDefault(activeSettings[storageKey.value], props.config.default));
+
+const defaultValueLabel = computed(() => {
+  const option = resolvedOptions.value.find(item => item.value === props.config.default);
+  if (option) return option.label;
+  if (typeof props.config.default === 'boolean') return props.config.default ? '开启' : '关闭';
+  const text = String(props.config.default ?? '');
+  return text === '' ? '空' : text;
+});
 
 const hasScopeSelector = computed(() => hasSettingScopeSelector(props.config));
 
@@ -389,6 +429,29 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   color: var(--lw-text-muted);
   font-weight: var(--lw-type-label-small-weight);
   text-transform: uppercase;
+}
+
+.setting-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-muted);
+  font: inherit;
+  font-size: var(--lw-type-label-small-size);
+  line-height: var(--lw-type-label-small-line-height);
+  cursor: pointer;
+  transition: background-color var(--lw-transition), color var(--lw-transition);
+}
+
+.setting-reset:hover,
+.setting-reset:focus-visible {
+  background: var(--lw-bg-hover);
+  color: var(--lw-primary);
 }
 
 .setting-description {

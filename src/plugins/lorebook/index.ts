@@ -6,12 +6,13 @@ const LorebookRoot = defineAsyncComponent(() => import('./LorebookRoot.vue'));
 const LorebookWorkspace = defineAsyncComponent(() => import('./components/LorebookWorkspace.vue'));
 
 const settingsSchema = {
-    autoSync: { default: true, label: '自动同步世界书', common: true, type: 'boolean', allowedScopes: ['Global'] },
-    displayMode: { default: 'list', label: '显示模式', common: true, type: 'options', options: [{ value: 'list', label: '列表' }, { value: 'grid', label: '卡片' }, { value: 'table', label: '表格' }], allowedScopes: ['Global'] },
+    autoSync: { category: 'context', group: '世界书', default: true, label: '自动同步世界书', type: 'boolean', allowedScopes: ['Global'] },
+    displayMode: { category: 'context', group: '世界书', default: 'list', label: '显示模式', type: 'options', options: [{ value: 'list', label: '列表' }, { value: 'grid', label: '卡片' }, { value: 'table', label: '表格' }], allowedScopes: ['Global'] },
     interactMode: {
+        category: 'context',
+        group: '世界书',
         default: 'none',
         label: '点击交互模式',
-        common: true,
         type: 'options',
         options: [
             { value: 'none', label: '关闭 (同窗口编辑)' },
@@ -20,7 +21,7 @@ const settingsSchema = {
         ],
         allowedScopes: ['Global']
     },
-    autoOpenSidebar: { default: true, label: '自动展开/切换侧边栏编辑器', common: true, type: 'boolean', allowedScopes: ['Global'] }
+    autoOpenSidebar: { category: 'context', group: '世界书', default: true, label: '自动展开/切换侧边栏编辑器', type: 'boolean', allowedScopes: ['Global'] }
 } satisfies LuminaPlugin['settingsManifest'];
 
 const platformManifest: PluginManifestV2 = {

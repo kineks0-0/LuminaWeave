@@ -142,4 +142,36 @@ describe('official plugin platform manifests', () => {
         })).toEqual(['widget']);
     });
 
+    it('assigns every official setting to a task category without the legacy common flag', async () => {
+        const { isSettingsCategoryId } = await import('../../../plugins/settings/settingsTaxonomy.js');
+        officialPlugins.forEach(plugin => {
+            Object.entries(plugin.settingsManifest ?? {}).forEach(([key, definition]) => {
+                expect(isSettingsCategoryId(definition.category), `${plugin.id}.${key}`).toBe(true);
+                expect(Object.prototype.hasOwnProperty.call(definition, 'common'), `${plugin.id}.${key}`).toBe(false);
+            });
+        });
+    });
+
+    it('declares the formerly hand-coded chat and thinking settings in schema', () => {
+        const manifestOf = (id: string) => officialPlugins.find(plugin => plugin.id === id)?.settingsManifest ?? {};
+        const chat = manifestOf('lumina-chat');
+        const settings = manifestOf('lumina-settings');
+
+        ['filterChatReply', 'allowTopLevelInFilter', 'implicitThinkingInFilter', 'aggressiveThinking', 'unlimitedResponse']
+            .forEach(key => expect(chat[key], key).toBeDefined());
+        expect(settings.thinkingDisplayMode?.default).toBe('collapsible');
+        expect(settings.thinkingAutoExpand?.default).toBe(true);
+
+        // 这些值只按全局读取，作用域选择器不能提供其它作用域
+        ['streamingEffect', 'streamingSmoothness', 'streamingSmoothnessFactor', 'streamingMaxSpeed',
+            'filterChatReply', 'allowTopLevelInFilter', 'implicitThinkingInFilter', 'aggressiveThinking', 'unlimitedResponse']
+            .forEach(key => expect(chat[key]?.allowedScopes, key).toEqual(['Global']));
+    });
+
+    it('keeps developer mode off by default', () => {
+        const dev = officialPlugins.find(plugin => plugin.id === 'lumina-dev');
+        expect(dev?.settingsManifest?.devMode?.default).toBe(false);
+        expect(dev?.settingsManifest?.devMode?.category).toBe('advanced');
+    });
+
 });
