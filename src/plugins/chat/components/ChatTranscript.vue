@@ -107,7 +107,8 @@ const viewState = computed(() => resolveChatViewState({
   sessionId: props.context.sessionId,
   currentChatSessionId: props.context.meta?.currentChatSessionId || null,
   isLive: props.context.meta?.isLive === true,
-  isSessionSwitching: sessionSwitching.value
+  isSessionSwitching: sessionSwitching.value,
+  isGenerating: props.generation.isGenerating
 }));
 const interactionLocked = computed(() => viewState.value.isReadOnlyView || sessionSwitching.value);
 const showStreaming = computed(() => props.context.meta?.isLive === true && (

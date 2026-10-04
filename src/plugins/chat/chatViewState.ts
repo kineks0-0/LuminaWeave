@@ -12,6 +12,7 @@ export type ChatViewStateInput = {
     currentChatSessionId: string | null;
     isLive: boolean;
     isSessionSwitching: boolean;
+    isGenerating: boolean;
 };
 
 export type ChatViewStateResolved = {
@@ -57,6 +58,8 @@ export function resolveChatViewState(input: ChatViewStateInput): ChatViewStateRe
     if (input.isSessionSwitching) {
         inputPlaceholder = '正在切换聊天，请稍候...';
         sendButtonTitle = '聊天切换中，请稍候';
+    } else if (input.isGenerating) {
+        inputPlaceholder = '';
     } else if (isNoActiveChatView) {
         inputPlaceholder = NO_ACTIVE_CHAT_INPUT_HINT;
         sendButtonTitle = NO_ACTIVE_CHAT_INPUT_HINT;

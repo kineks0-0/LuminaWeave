@@ -14,7 +14,8 @@ describe('resolveChatViewState', () => {
             sessionId: null,
             currentChatSessionId: null,
             isLive: false,
-            isSessionSwitching: false
+            isSessionSwitching: false,
+            isGenerating: false
         });
 
         expect(resolved.isLiveChatView).toBe(false);
@@ -34,7 +35,8 @@ describe('resolveChatViewState', () => {
             sessionId: 'chat_archive',
             currentChatSessionId: null,
             isLive: false,
-            isSessionSwitching: false
+            isSessionSwitching: false,
+            isGenerating: false
         });
 
         expect(resolved.isLiveChatView).toBe(false);
@@ -48,13 +50,41 @@ describe('resolveChatViewState', () => {
         expect(resolved.emptyStateMessage).toBe('');
     });
 
+    it('should clear the input placeholder while generating', () => {
+        const resolved = resolveChatViewState({
+            sourceId: 'chat',
+            sessionId: 'chat_live',
+            currentChatSessionId: 'chat_live',
+            isLive: true,
+            isSessionSwitching: false,
+            isGenerating: true
+        });
+
+        expect(resolved.isLiveChatView).toBe(true);
+        expect(resolved.inputPlaceholder).toBe('');
+    });
+
+    it('should keep the session-switching placeholder over the generating state', () => {
+        const resolved = resolveChatViewState({
+            sourceId: 'chat',
+            sessionId: 'chat_live',
+            currentChatSessionId: 'chat_live',
+            isLive: true,
+            isSessionSwitching: true,
+            isGenerating: true
+        });
+
+        expect(resolved.inputPlaceholder).toBe('正在切换聊天，请稍候...');
+    });
+
     it('should show the no-active-chat center empty state without rendering a readonly banner', () => {
         const viewState = resolveChatViewState({
             sourceId: 'chat',
             sessionId: null,
             currentChatSessionId: null,
             isLive: false,
-            isSessionSwitching: false
+            isSessionSwitching: false,
+            isGenerating: false
         });
 
         const surfaceState = resolveChatSurfaceState({
@@ -77,7 +107,8 @@ describe('resolveChatViewState', () => {
             sessionId: 'chat_archive',
             currentChatSessionId: null,
             isLive: false,
-            isSessionSwitching: false
+            isSessionSwitching: false,
+            isGenerating: false
         });
 
         const surfaceState = resolveChatSurfaceState({

@@ -84,7 +84,8 @@ const viewState = computed(() => resolveChatViewState({
   sessionId: props.context.sessionId,
   currentChatSessionId: props.context.meta?.currentChatSessionId || null,
   isLive: props.context.meta?.isLive === true,
-  isSessionSwitching: props.sessionSwitching
+  isSessionSwitching: props.sessionSwitching,
+  isGenerating: props.generation.isGenerating
 }));
 const disabled = computed(() => (
   props.collapsed
