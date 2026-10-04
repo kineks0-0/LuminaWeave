@@ -66,16 +66,44 @@ export const CHAT_CONTEXT_TOOLS: ReadonlyArray<ChatMenuItem> = [
 
 export type ChatMenuPlacement = 'above' | 'below';
 
-/** 下方放得下就放下方，否则放上方；两边都放不下时取空间更大的一侧。 */
-export const resolveChatMenuPlacement = ({ anchorTop, anchorBottom, viewport, menuHeight }: {
-    anchorTop: number;
-    anchorBottom: number;
-    viewport: { top: number; bottom: number };
-    menuHeight: number;
-}): ChatMenuPlacement => {
-    const spaceBelow = viewport.bottom - anchorBottom;
-    const spaceAbove = anchorTop - viewport.top;
-    if (spaceBelow >= menuHeight) return 'below';
-    if (spaceAbove >= menuHeight) return 'above';
-    return spaceAbove > spaceBelow ? 'above' : 'below';
+export interface ChatPopoverAnchorPoint {
+    x: number;
+    y: number;
+}
+
+export interface ChatPopoverBounds {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+}
+
+export interface ChatPopoverPosition {
+    left: number;
+    top: number;
+}
+
+/** 指针锚定定位：默认落在指针右下方，空间不足时向左/上翻转，最后夹在可用区域内。 */
+export const resolveChatPopoverPosition = ({
+    anchor,
+    size,
+    bounds,
+    offset = 4,
+    margin = 8
+}: {
+    anchor: ChatPopoverAnchorPoint;
+    size: { width: number; height: number };
+    bounds: ChatPopoverBounds;
+    offset?: number;
+    margin?: number;
+}): ChatPopoverPosition => {
+    let left = anchor.x + offset;
+    let top = anchor.y + offset;
+    if (left + size.width > bounds.right - margin) left = anchor.x - offset - size.width;
+    if (top + size.height > bounds.bottom - margin) top = anchor.y - offset - size.height;
+    const minLeft = bounds.left + margin;
+    const minTop = bounds.top + margin;
+    left = Math.min(Math.max(left, minLeft), Math.max(minLeft, bounds.right - margin - size.width));
+    top = Math.min(Math.max(top, minTop), Math.max(minTop, bounds.bottom - margin - size.height));
+    return { left, top };
 };

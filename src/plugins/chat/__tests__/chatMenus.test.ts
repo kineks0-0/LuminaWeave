@@ -3,7 +3,7 @@ import {
     CHAT_CONTEXT_TOOLS,
     buildChatHeaderMenu,
     buildChatMessageMenu,
-    resolveChatMenuPlacement
+    resolveChatPopoverPosition
 } from '../presentation/chatMenus.js';
 
 describe('chat message menu', () => {
@@ -43,19 +43,46 @@ describe('chat header menu', () => {
     });
 });
 
-describe('chat menu placement', () => {
-    const viewport = { top: 0, bottom: 800 };
+describe('chat popover position', () => {
+    const bounds = { left: 0, top: 0, right: 1000, bottom: 800 };
+    const size = { width: 200, height: 300 };
 
-    it('opens below the anchor when there is room', () => {
-        expect(resolveChatMenuPlacement({ anchorTop: 100, anchorBottom: 160, viewport, menuHeight: 240 })).toBe('below');
+    it('anchors the menu under the pointer by default', () => {
+        expect(resolveChatPopoverPosition({ anchor: { x: 100, y: 100 }, size, bounds })).toEqual({
+            left: 104,
+            top: 104
+        });
     });
 
-    it('flips above when the space below is too small', () => {
-        expect(resolveChatMenuPlacement({ anchorTop: 600, anchorBottom: 660, viewport, menuHeight: 240 })).toBe('above');
+    it('flips to the left of the pointer when there is no room on the right', () => {
+        expect(resolveChatPopoverPosition({ anchor: { x: 900, y: 100 }, size, bounds })).toEqual({
+            left: 696,
+            top: 104
+        });
     });
 
-    it('picks the roomier side when neither fits', () => {
-        expect(resolveChatMenuPlacement({ anchorTop: 200, anchorBottom: 560, viewport, menuHeight: 300 })).toBe('below');
-        expect(resolveChatMenuPlacement({ anchorTop: 280, anchorBottom: 620, viewport, menuHeight: 300 })).toBe('above');
+    it('flips above the pointer when there is no room below', () => {
+        expect(resolveChatPopoverPosition({ anchor: { x: 100, y: 700 }, size, bounds })).toEqual({
+            left: 104,
+            top: 396
+        });
+    });
+
+    it('flips on both axes when the pointer is near the bottom-right corner', () => {
+        expect(resolveChatPopoverPosition({ anchor: { x: 900, y: 700 }, size, bounds })).toEqual({
+            left: 696,
+            top: 396
+        });
+    });
+
+    it('clamps inside a bounds area that is narrower than the menu', () => {
+        expect(resolveChatPopoverPosition({
+            anchor: { x: 200, y: 100 },
+            size: { width: 320, height: 200 },
+            bounds: { left: 0, top: 0, right: 300, bottom: 800 }
+        })).toEqual({
+            left: 8,
+            top: 104
+        });
     });
 });

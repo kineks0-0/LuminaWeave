@@ -82,8 +82,8 @@
         v-if="menuOpen"
         :items="messageMenu"
         label="消息操作"
-        :placement="menuPlacement"
-        :align="message.is_user ? 'end' : 'start'"
+        :anchor="menuAnchor"
+        :bounds="menuBounds"
         @select="handleMenuSelect"
         @close="menuOpen = false"
       />
@@ -140,9 +140,9 @@ import type { ChatMessageRenderPreferences } from '../presentation/ChatMessageRe
 import type { ChatStreamingPresentation } from '../presentation/ChatStreamingPresentation.js';
 import {
   buildChatMessageMenu,
-  resolveChatMenuPlacement,
-  type ChatMenuPlacement,
-  type ChatMessageMenuAction
+  type ChatMessageMenuAction,
+  type ChatPopoverAnchorPoint,
+  type ChatPopoverBounds
 } from '../presentation/chatMenus.js';
 import ChatPopoverMenu from './ChatPopoverMenu.vue';
 import MessageRenderer from './MessageRenderer.vue';
@@ -266,27 +266,42 @@ const handleAvatarError = (event: Event): void => {
 
 const usesMessageMenu = computed(() => isTelegram.value);
 const menuOpen = ref(false);
-const menuPlacement = ref<ChatMenuPlacement>('below');
+const menuAnchor = ref<ChatPopoverAnchorPoint | null>(null);
+const menuBounds = ref<ChatPopoverBounds | null>(null);
 const bubbleRef = ref<HTMLElement | null>(null);
 const messageMenu = computed(() => buildChatMessageMenu({ isUser: props.message.is_user === true, disabled: props.disabled }));
-/** 菜单的大致高度：每项 46px + 上下内边距 */
-const estimatedMenuHeight = computed(() => messageMenu.value.length * 46 + 14);
 
-const openMenu = (): void => {
-  const bubble = bubbleRef.value;
-  const scroller = rootRef.value?.closest('.chat-transcript');
-  if (bubble && scroller) {
-    const bubbleRect = bubble.getBoundingClientRect();
-    const scrollerRect = scroller.getBoundingClientRect();
-    menuPlacement.value = resolveChatMenuPlacement({
-      anchorTop: bubbleRect.top,
-      anchorBottom: bubbleRect.bottom,
-      viewport: { top: scrollerRect.top, bottom: scrollerRect.bottom },
-      menuHeight: estimatedMenuHeight.value
-    });
-  }
+const transcriptScroller = (): HTMLElement | null => rootRef.value?.closest('.chat-transcript') ?? null;
+
+/** 菜单可用区取聊天滚动区，避免盖住顶栏与输入栏 */
+const resolveTranscriptBounds = (): ChatPopoverBounds | null => {
+  const scroller = transcriptScroller();
+  if (!scroller) return null;
+  const rect = scroller.getBoundingClientRect();
+  return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+};
+
+/** 在触摸 / 右键位置弹出菜单；没有指针坐标（键盘或合成点击）时退回气泡左下角 */
+const openMenu = (anchor: ChatPopoverAnchorPoint): void => {
+  const bubbleRect = bubbleRef.value?.getBoundingClientRect();
+  menuAnchor.value = anchor.x === 0 && anchor.y === 0 && bubbleRect
+    ? { x: bubbleRect.left, y: bubbleRect.bottom }
+    : anchor;
+  menuBounds.value = resolveTranscriptBounds();
   menuOpen.value = true;
 };
+
+const closeMenu = (): void => {
+  menuOpen.value = false;
+};
+
+// 固定定位的菜单不随内容滚动，滚动聊天时直接关闭，避免悬在不同消息上
+watch(menuOpen, (open) => {
+  const scroller = transcriptScroller();
+  if (!scroller) return;
+  if (open) scroller.addEventListener('scroll', closeMenu, { passive: true });
+  else scroller.removeEventListener('scroll', closeMenu);
+});
 
 const isInteractiveTarget = (event: Event): boolean => {
   const target = event.target instanceof Element ? event.target : null;
@@ -303,7 +318,7 @@ const handleRowClick = (event: MouseEvent): void => {
   if (props.streaming || editing.value || isInteractiveTarget(event) || hasTextSelection()) return;
   if (usesMessageMenu.value) {
     if (menuOpen.value) menuOpen.value = false;
-    else openMenu();
+    else openMenu({ x: event.clientX, y: event.clientY });
     return;
   }
   selected.value = !selected.value;
@@ -313,7 +328,7 @@ const handleRowClick = (event: MouseEvent): void => {
 const handleContextMenu = (event: MouseEvent): void => {
   if (!usesMessageMenu.value || props.streaming || editing.value || isInteractiveTarget(event) || hasTextSelection()) return;
   event.preventDefault();
-  openMenu();
+  openMenu({ x: event.clientX, y: event.clientY });
 };
 
 const copyMessage = async (): Promise<void> => {
@@ -351,6 +366,7 @@ watch(selected, (isSelected) => {
 
 onBeforeUnmount(() => {
   rootRef.value?.ownerDocument.removeEventListener('pointerdown', handleOutsidePointer, true);
+  transcriptScroller()?.removeEventListener('scroll', closeMenu);
 });
 </script>
 

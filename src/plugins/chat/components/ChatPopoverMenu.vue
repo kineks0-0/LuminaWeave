@@ -2,10 +2,12 @@
   <div
     ref="rootRef"
     class="chat-popover-menu"
+    :class="{ 'is-anchored': anchored }"
     role="menu"
     :aria-label="label"
-    :data-placement="placement"
-    :data-align="align"
+    :data-placement="anchored ? undefined : placement"
+    :data-align="anchored ? undefined : align"
+    :style="anchored ? anchoredStyle : undefined"
     @keydown="handleKeydown"
   >
     <button
@@ -18,26 +20,40 @@
       :disabled="item.disabled"
       @click="select(item)"
     >
-      <component :is="CHAT_MENU_ICONS[item.icon]" :size="21" :stroke-width="1.9" aria-hidden="true" />
+      <component :is="CHAT_MENU_ICONS[item.icon]" :size="20" :stroke-width="1.9" aria-hidden="true" />
       <span>{{ item.label }}</span>
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import type { ChatMenuItem, ChatMenuPlacement } from '../presentation/chatMenus.js';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import type {
+  ChatMenuItem,
+  ChatMenuPlacement,
+  ChatPopoverAnchorPoint,
+  ChatPopoverBounds
+} from '../presentation/chatMenus.js';
+import { resolveChatPopoverPosition } from '../presentation/chatMenus.js';
 import { CHAT_MENU_ICONS } from './chatMenuIcons.js';
 import { useOutsidePointer } from '../../../composables/useOutsidePointer.js';
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   items: ReadonlyArray<ChatMenuItem>;
   label: string;
   placement?: ChatMenuPlacement;
   align?: 'start' | 'end';
+  /** 指针锚定：提供后在触摸 / 右键位置弹出，空间不足时向左 / 上翻转 */
+  anchor?: ChatPopoverAnchorPoint | null;
+  /** 指针锚定的可用区域；缺省为窗口视口 */
+  bounds?: ChatPopoverBounds | null;
+  offset?: number;
 }>(), {
   placement: 'below',
-  align: 'end'
+  align: 'end',
+  anchor: null,
+  bounds: null,
+  offset: 4
 });
 
 const emit = defineEmits<{
@@ -46,6 +62,40 @@ const emit = defineEmits<{
 }>();
 
 const rootRef = ref<HTMLElement | null>(null);
+const anchored = computed(() => props.anchor !== null);
+const anchoredStyle = ref<Record<string, string>>({});
+
+const resolveBounds = (): ChatPopoverBounds => props.bounds ?? {
+  left: 0,
+  top: 0,
+  right: window.innerWidth,
+  bottom: window.innerHeight
+};
+
+const updateAnchoredStyle = (): void => {
+  const element = rootRef.value;
+  const anchor = props.anchor;
+  if (!element || !anchor) return;
+  const position = resolveChatPopoverPosition({
+    anchor,
+    // offsetWidth/offsetHeight 不受入场缩放动画影响，保证翻转判断用的是最终尺寸
+    size: { width: element.offsetWidth, height: element.offsetHeight },
+    bounds: resolveBounds(),
+    offset: props.offset
+  });
+  // 从最靠近指针的角展开，翻转后原点跟着换边
+  const originX = position.left < anchor.x ? 'right' : 'left';
+  const originY = position.top < anchor.y ? 'bottom' : 'top';
+  anchoredStyle.value = {
+    left: `${position.left}px`,
+    top: `${position.top}px`,
+    transformOrigin: `${originX} ${originY}`
+  };
+};
+
+watch(() => props.anchor, () => {
+  if (anchored.value) void nextTick(updateAnchoredStyle);
+});
 
 const enabledButtons = (): HTMLButtonElement[] => (
   rootRef.value ? [...rootRef.value.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')] : []
@@ -87,6 +137,7 @@ const handleKeydown = (event: KeyboardEvent): void => {
 useOutsidePointer([() => rootRef.value?.parentElement ?? null], () => emit('close'));
 
 onMounted(() => {
+  updateAnchoredStyle();
   enabledButtons()[0]?.focus({ preventScroll: true });
 });
 </script>
@@ -116,17 +167,23 @@ onMounted(() => {
 .chat-popover-menu[data-placement='above'][data-align='end'] { transform-origin: bottom right; }
 .chat-popover-menu[data-placement='above'][data-align='start'] { transform-origin: bottom left; }
 
+/* 指针锚定：固定在最上层，位置由 resolveChatPopoverPosition 计算 */
+.chat-popover-menu.is-anchored {
+  position: fixed;
+  z-index: 30;
+}
+
 .chat-popover-menu__item {
   display: flex;
-  min-height: 46px;
+  min-height: 44px;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   border: 0;
   background: transparent;
   color: inherit;
-  padding: 0 20px 0 18px;
+  padding: 0 18px 0 16px;
   font: inherit;
-  font-size: var(--lw-type-body-large-size, 1rem);
+  font-size: var(--lw-type-body-medium-size, 0.875rem);
   line-height: 1.3;
   text-align: left;
   white-space: nowrap;
