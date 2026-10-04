@@ -149,7 +149,12 @@ export class STConversationHostDriver {
     }
 
     private static convertRawToLumina(raw: ChatMessage[]): LuminaChatMessage[] {
-        const converted = raw.map(m => STProtocol.fromST(m));
+        // ST 线性导入阶段 parentId 尚未重建，首条非用户消息即角色卡招呼，需显式告知
+        const converted = raw.map((m, index) => {
+            const item = m as unknown as { is_user?: boolean; role?: string };
+            const isUser = item.is_user === true || item.role === 'user';
+            return STProtocol.fromST(m, undefined, { isGreeting: index === 0 && !isUser });
+        });
         const seen = new Set<string>();
 
         for (const msg of converted) {

@@ -1,4 +1,4 @@
-import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { BaseXMLInterceptor } from '@shared/BaseXMLInterceptor.js';
 import { lwStorage } from '../../../storage.js';
 
@@ -71,10 +71,15 @@ export class MessageTextProjection {
             text = message.mes ?? message.mesRaw ?? message.extra?.mesRaw ?? '';
         }
 
+        // 角色卡招呼是作者内容，不经模型生成，跳过内置回复过滤的提纯
+        if (MessageUtils.isGreeting(message)) {
+            return this.normalize(text);
+        }
+
         const cleaned = interceptor.cleanText(text, {
             filterChatReply: Boolean(lwStorage.get('lumina-chat.filterChatReply', false, 'Global')),
             allowTopLevel: Boolean(lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global')),
-            implicitThinking: Boolean(lwStorage.get('lumina-chat.implicitStartThinking', false, 'Global')),
+            implicitThinking: Boolean(lwStorage.get('lumina-chat.implicitThinkingInFilter', false, 'Global')),
             aggressiveThinking: Boolean(lwStorage.get('lumina-chat.aggressiveThinking', false, 'Global'))
         });
 

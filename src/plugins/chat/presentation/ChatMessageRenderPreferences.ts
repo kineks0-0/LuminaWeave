@@ -90,6 +90,14 @@ export const resolveChatThemeRenderPreferences = (
             : DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.showUsernames
 });
 
+/** 内置回复过滤只在非流式、且非角色卡招呼的消息上生效；正则脚本不经过此判定。 */
+export const shouldApplyChatReplyFilter = (
+    preferences: Pick<ChatMessageRenderPreferences, 'filterChatReply'>,
+    context: { isStreaming?: boolean; isGreeting?: boolean } = {}
+): boolean => preferences.filterChatReply === true
+    && context.isStreaming !== true
+    && context.isGreeting !== true;
+
 export const resolveChatStreamingEffect = (value: unknown): ChatStreamingEffect => (
     value === 'instant'
     || value === 'fade-in'

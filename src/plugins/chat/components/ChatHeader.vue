@@ -229,7 +229,7 @@ const headerMenuItems = computed<ChatMenuItem[]>(() => {
 const classicMenu = computed<ChatMenuItem[]>(() => [
   ...CHAT_CONTEXT_TOOLS,
   { id: 'prompt', label: 'Prompt 预览', icon: 'prompt' },
-  { id: 'regex-scripts', label: '正则脚本', icon: 'regex' }
+  { id: 'regex-scripts', label: '消息净化', icon: 'regex' }
 ]);
 
 const searchMatchCount = computed(() => {

@@ -52,6 +52,7 @@ import { globalXMLInterceptor, XMLInterceptor } from '../../../api/core/xml-view
 import { viewRenderRegistry, type ViewRenderContext } from '../../../api/core/xml-view/ViewRenderRegistry.js';
 import {
   DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES,
+  shouldApplyChatReplyFilter,
   type ChatMessageRenderPreferences
 } from '../presentation/ChatMessageRenderPreferences.js';
 import type { ChatStreamingPresentation } from '../presentation/ChatStreamingPresentation.js';
@@ -73,6 +74,8 @@ const props = defineProps<{
   renderMarkdown: (text: string) => string;
   /** 是否处于流式生成状态 */
   isStreaming?: boolean;
+  /** 角色卡招呼 / 第一条助手消息：内置回复过滤跳过 */
+  isGreeting?: boolean;
   /** 当前消息的视图渲染上下文 */
   renderContext?: ViewRenderContext;
   /** Forge 上下文下的消息作用域 ID */
@@ -146,9 +149,12 @@ const segments = computed<MessageSegment[]>(() => {
   if (!targetText) return [];
   
   // 核心修复：同步流式过滤设置，且区分阶段应用猜测逻辑
-  const filterChatReply = renderPreferences.value.filterChatReply;
-  
-  if (filterChatReply && !props.isStreaming) {
+  const applyReplyFilter = shouldApplyChatReplyFilter(renderPreferences.value, {
+    isStreaming: props.isStreaming,
+    isGreeting: props.isGreeting
+  });
+
+  if (applyReplyFilter) {
     // 只有在从原始 pluginRaw 降级渲染时，才由设置开关决定猜测逻辑
     // 如果是 mes/mesRaw，我们明确认为其顶层即为回复主体
     const usePluginAsSource = !props.mes && !props.mesRaw && props.pluginRaw;

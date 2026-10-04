@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { MessageTextProjection } from '../../hal/prompt/MessageTextProjection.js';
 
+vi.mock('@/api/storage.js', () => ({
+    lwStorage: {
+        get: vi.fn((_key: string, def: unknown) => def)
+    }
+}));
+
 const buildMessage = (overrides: Partial<LuminaChatMessage> = {}): LuminaChatMessage => ({
     id: 'msg_1',
     parentId: null,
@@ -49,5 +55,36 @@ describe('MessageTextProjection.projectForDisplay', () => {
 
         expect(apply).not.toHaveBeenCalled();
         expect(chat[0].mes).toBe('current');
+    });
+});
+
+describe('MessageTextProjection.extractMessageText', () => {
+    it('keeps raw tag content for the character greeting', () => {
+        const raw = '<thinking>先想</thinking><Character_Action>挥手</Character_Action>你好';
+        const greeting = buildMessage({
+            parentId: null,
+            is_user: false,
+            conversationType: 'chat',
+            mesRaw: raw,
+            pluginRaw: raw
+        });
+
+        const text = MessageTextProjection.extractMessageText(greeting);
+
+        expect(text).toContain('<thinking>');
+        expect(text).toContain('<Character_Action>');
+    });
+
+    it('cleans tags for non-greeting assistant messages', () => {
+        const raw = '<thinking>先想</thinking><Character_Action>挥手</Character_Action><Chat_Reply>你好</Chat_Reply>';
+        const reply = buildMessage({
+            parentId: 'node_prev',
+            is_user: false,
+            conversationType: 'chat',
+            mesRaw: raw,
+            pluginRaw: raw
+        });
+
+        expect(MessageTextProjection.extractMessageText(reply)).toBe('你好');
     });
 });

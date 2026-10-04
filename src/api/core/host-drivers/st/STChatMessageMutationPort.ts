@@ -35,7 +35,10 @@ class STChatMessageMutationPort implements ChatMessageMutationPort {
         return SyncUtils.generateNodeId();
     }
 
-    syncMessageCalculatedFields(message: LuminaChatMessage, options: { force?: boolean; skipFingerprint?: boolean } = {}): void {
+    syncMessageCalculatedFields(
+        message: LuminaChatMessage,
+        options: { force?: boolean; skipFingerprint?: boolean; isGreeting?: boolean } = {}
+    ): void {
         STProtocol.syncMessageCalculatedFields(message, options);
     }
 

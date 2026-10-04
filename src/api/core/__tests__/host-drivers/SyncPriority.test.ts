@@ -12,8 +12,8 @@ describe('SyncPriority - STProtocol 数据提取优先级', () => {
             }
         };
 
-        const result = STProtocol.fromST(mockSTMessage);
-        
+        const result = STProtocol.fromST(mockSTMessage, undefined, { isGreeting: false });
+
         // 验证优先级：pluginRaw(extracted) 胜出，且 mes (呈现层) 被自动纠偏同步
         expect(result.mesRaw).toBe('AI 原始生成的回答');
         expect(result.pluginRaw).toBe(mockSTMessage.extra.pluginRaw);
@@ -30,8 +30,8 @@ describe('SyncPriority - STProtocol 数据提取优先级', () => {
             }
         };
 
-        const result = STProtocol.fromST(mockSTMessage);
-        
+        const result = STProtocol.fromST(mockSTMessage, undefined, { isGreeting: false });
+
         // 验证降级：pluginRaw(full) 胜出
         expect(result.mesRaw).toBe('无标签的原始输出');
     });
@@ -61,5 +61,22 @@ describe('SyncPriority - STProtocol 数据提取优先级', () => {
 
         const result = STProtocol.fromST(mockSTMessage);
         expect(result.mesRaw).toBe('你好');
+    });
+
+    it('招呼消息保留 pluginRaw 原文，不做回复过滤提纯', () => {
+        const raw = '<Thoughts>思考中...</Thoughts><Character_Action>挥手</Character_Action>你好';
+        const mockSTMessage: any = {
+            role: 'assistant',
+            message: '你好',
+            extra: {
+                mesRaw: raw,
+                pluginRaw: raw
+            }
+        };
+
+        const result = STProtocol.fromST(mockSTMessage, undefined, { isGreeting: true });
+
+        expect(result.mesRaw).toBe(raw);
+        expect(result.mes).toBe(raw);
     });
 });

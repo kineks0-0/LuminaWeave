@@ -121,7 +121,7 @@ describe('ConversationCommandService', () => {
 
     it('extracts the chat reply block when editing an assistant message', async () => {
         const { service, setConversation } = createHarness();
-        const message = buildMessage('m1', null, { role: 'assistant', is_user: false, mesRaw: 'old' });
+        const message = buildMessage('m1', 'm0', { role: 'assistant', is_user: false, mesRaw: 'old' });
         setConversation([message]);
 
         await service.mutateChatRecord('m1', 'edit', '<Chat_Reply>cleaned</Chat_Reply>');

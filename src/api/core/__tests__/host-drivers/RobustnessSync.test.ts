@@ -21,6 +21,29 @@ describe('RobustnessSync Pipeline', () => {
         expect(msg.fingerprint).toMatch(/^fp_/);
     });
 
+    it('should keep the character greeting raw and clean other messages', () => {
+        const raw = '<thinking>先想</thinking><Character_Action>挥手</Character_Action><Chat_Reply>你好</Chat_Reply>';
+        const greeting: any = {
+            is_user: false,
+            parentId: null,
+            conversationType: 'chat',
+            pluginRaw: raw,
+            extra: {}
+        };
+        MessageUtils.syncCore(greeting as LuminaChatMessage, globalXMLInterceptor, { force: true });
+        expect(greeting.mes).toContain('<thinking>');
+
+        const reply: any = {
+            is_user: false,
+            parentId: 'node-parent',
+            conversationType: 'chat',
+            pluginRaw: raw,
+            extra: {}
+        };
+        MessageUtils.syncCore(reply as LuminaChatMessage, globalXMLInterceptor, { force: true });
+        expect(reply.mes).toBe('你好');
+    });
+
     it('should automatically update mesST and stFingerprint in extension sync', () => {
         const msg: any = {
             id: 'test-1',
@@ -46,7 +69,8 @@ describe('RobustnessSync Pipeline', () => {
         const store = new WorldlineStore();
         const msg: any = {
             id: 'node-sync-test',
-            parentId: null,
+            parentId: 'node-parent',
+            conversationType: 'chat',
             role: 'assistant',
             is_user: false,
             pluginRaw: '<Chat_Reply>Automated</Chat_Reply>',

@@ -1,4 +1,4 @@
-import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { pluginManager } from '../../../core/PluginManager.js';
 import { lwStorage } from '../../storage.js';
 import { BuiltinXMLTags, globalXMLInterceptor, XMLInterceptor } from '../xml-view/XMLInterceptor.js';
@@ -99,7 +99,8 @@ export class ConversationCommandService {
         const source = isUser ? 'user_input' : 'ai_output';
         const depth = chat.length - 1 - index;
         const now = Date.now();
-        const finalMesRaw = this.resolveMessageBody(newText, isUser);
+        // 角色卡招呼是作者内容，编辑时按原样保存，不做回复过滤提纯
+        const finalMesRaw = MessageUtils.isGreeting(msg) ? newText : this.resolveMessageBody(newText, isUser);
 
         msg.mesRaw = finalMesRaw;
         msg.mesST = finalMesRaw;

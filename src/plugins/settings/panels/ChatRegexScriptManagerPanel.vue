@@ -1,8 +1,13 @@
 <template>
-  <SettingsSectionPanel class="regex-block" :class="{ 'is-expanded': expanded }" core>
-    <div ref="rootRef" class="regex-manager">
-      <SettingsBlockHeader title="正则脚本">
-        <template #icon>
+  <SettingsSectionPanel
+    class="regex-block"
+    :class="{ 'is-expanded': expanded && !props.embedded }"
+    :core="!props.embedded"
+    :plain="props.embedded"
+  >
+    <div ref="rootRef" class="regex-manager" :class="{ 'is-embedded': props.embedded }">
+      <SettingsBlockHeader :title="props.embedded ? '' : '消息净化'">
+        <template v-if="!props.embedded" #icon>
           <Regex :size="18" :stroke-width="2" aria-hidden="true" />
         </template>
         <template #actions>
@@ -18,6 +23,7 @@
             <Download :size="14" :stroke-width="2" aria-hidden="true" />
           </LuminaIconButton>
           <LuminaIconButton
+            v-if="!props.embedded"
             :ariaLabel="expanded ? '退出展开' : '展开编辑'"
             :title="expanded ? '退出展开' : '展开编辑'"
             size="sm"
@@ -30,6 +36,57 @@
       </SettingsBlockHeader>
 
       <input ref="fileInput" class="tw:hidden" type="file" accept=".json,application/json" @change="handleImportFile" />
+
+      <section class="builtin-panel">
+        <div class="section-label">
+          <span>内置处理</span>
+          <span class="section-hint">XML 标签过滤由内置拦截器按标签注册表执行，此处只读展示</span>
+        </div>
+        <ul class="builtin-tag-list">
+          <li v-for="rule in builtinTagRules" :key="rule.tag" class="builtin-tag">
+            <code class="builtin-tag-name">&lt;{{ rule.tag }}&gt;</code>
+            <span class="builtin-tag-badge" :data-disposition="rule.disposition">{{ rule.dispositionLabel }}</span>
+            <span v-if="rule.description" class="builtin-tag-desc">{{ rule.description }}</span>
+          </li>
+        </ul>
+        <div class="builtin-filter">
+          <div class="builtin-filter-head">
+            <span class="builtin-filter-title">回复过滤</span>
+            <span class="builtin-filter-state" :data-on="replyFilterState.enabled">
+              {{ replyFilterState.enabled ? '已启用' : '已关闭' }}
+            </span>
+          </div>
+          <ul class="builtin-filter-options">
+            <li>
+              <span>保留不在标签内的正文</span>
+              <b class="builtin-option-state" :data-on="replyFilterState.allowTopLevel">
+                {{ replyFilterState.allowTopLevel ? '开' : '关' }}
+              </b>
+            </li>
+            <li>
+              <span>开头的无标签文本视为思考</span>
+              <b class="builtin-option-state" :data-on="replyFilterState.implicitThinking">
+                {{ replyFilterState.implicitThinking ? '开' : '关' }}
+              </b>
+            </li>
+            <li>
+              <span>隐藏到第一个 &lt;/thinking&gt; 为止</span>
+              <b class="builtin-option-state" :data-on="replyFilterState.aggressiveThinking">
+                {{ replyFilterState.aggressiveThinking ? '开' : '关' }}
+              </b>
+            </li>
+          </ul>
+          <p class="builtin-note">仅作用于模型回复的显示与写回；角色卡招呼（第一条消息）不处理，正则脚本不受影响。</p>
+          <button type="button" class="builtin-link" @click="openReplyFilterSettings">
+            前往「对话与流式 › 回复过滤」调整
+          </button>
+        </div>
+      </section>
+
+      <div class="section-label">
+        <span>正则脚本</span>
+        <span class="section-hint">按顺序应用，支持导入导出与内联测试</span>
+      </div>
 
       <LuminaEmptyState
         v-if="scripts.length === 0"
@@ -217,6 +274,13 @@ import {
   Upload
 } from 'lucide-vue-next';
 import { SettingsBlockHeader, SettingsSectionPanel } from '../components';
+import { openSettingsCategory } from '../settingsViewState.js';
+import {
+  listBuiltinTagRules,
+  resolveReplyFilterState,
+  type BuiltinReplyFilterState,
+  type BuiltinTagRule
+} from './chatSanitizerBuiltins.js';
 import {
   LuminaButton,
   LuminaCheckbox,
@@ -230,6 +294,13 @@ import {
 } from '../../../api/core/hal/prompt/chat/RegexScriptLibraryService.js';
 import { compileFindRegex } from '../../../api/core/hal/regex/RegexScriptEngine.js';
 import { REGEX_PLACEMENTS, type RegexPlacement, type RegexScript } from '../../../types/RegexScriptTypes.js';
+
+const props = withDefaults(defineProps<{
+  /** 嵌入聊天底部抽屉时去掉卡片外壳与重复标题 */
+  embedded?: boolean;
+}>(), {
+  embedded: false
+});
 
 type ToastKind = 'success' | 'warning' | 'error' | 'info';
 
@@ -248,6 +319,8 @@ const modal = useModalStore();
 const rootRef = ref<HTMLElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const scripts = ref<RegexScript[]>([]);
+const builtinTagRules = ref<BuiltinTagRule[]>([]);
+const replyFilterState = ref<BuiltinReplyFilterState>(resolveReplyFilterState());
 const selectedId = ref('');
 const view = ref<'list' | 'detail'>('list');
 const isWide = ref(false);
@@ -317,8 +390,18 @@ const nullableNumber = (event: Event): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const refreshBuiltinState = (): void => {
+  builtinTagRules.value = listBuiltinTagRules();
+  replyFilterState.value = resolveReplyFilterState();
+};
+
+const openReplyFilterSettings = (): void => {
+  openSettingsCategory('conversation');
+};
+
 const refresh = (): void => {
   suppressSave = true;
+  refreshBuiltinState();
   scripts.value = regexScriptLibraryService.list();
   if (!scripts.value.some(script => script.id === selectedId.value)) {
     selectedId.value = scripts.value[0]?.id ?? '';
@@ -461,6 +544,195 @@ onBeforeUnmount(() => {
 .save-state {
   font-size: var(--lw-type-label-small-size, 11px);
   color: var(--lw-text-muted);
+}
+
+.builtin-panel {
+  margin-top: 12px;
+  border-radius: var(--lw-radius-md, 14px);
+  background: var(--lw-bg-subtle);
+  padding: 10px 12px 12px;
+}
+
+.regex-manager.is-embedded .builtin-panel {
+  background: var(--lw-bg-surface);
+}
+
+.regex-manager.is-embedded .regex-list {
+  background: var(--lw-bg-surface);
+}
+
+.builtin-tag-list {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.builtin-tag {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--lw-border-subtle);
+}
+
+.builtin-tag:last-child {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+
+.builtin-tag-name {
+  color: var(--lw-text-main);
+  font-family: var(--lw-font-mono);
+  font-size: 11px;
+}
+
+.builtin-tag-badge {
+  border-radius: 999px;
+  background: var(--lw-bg-surface);
+  color: var(--lw-text-secondary);
+  padding: 1px 8px;
+  font-size: 10px;
+}
+
+.builtin-tag-badge[data-disposition='hide-content'],
+.builtin-tag-badge[data-disposition='hidden-from-ui'] {
+  background: color-mix(in srgb, var(--lw-text-main) 8%, transparent);
+  color: var(--lw-text-muted);
+}
+
+.builtin-tag-badge[data-disposition='body'],
+.builtin-tag-badge[data-disposition='preserve'] {
+  background: color-mix(in srgb, var(--lw-primary) 12%, transparent);
+  color: var(--lw-primary);
+}
+
+.builtin-tag-desc {
+  min-width: 0;
+  flex: 1 1 160px;
+  color: var(--lw-text-muted);
+  font-size: 11px;
+}
+
+.builtin-filter {
+  margin-top: 10px;
+  border-top: 1px solid var(--lw-border-subtle);
+  padding-top: 10px;
+}
+
+.builtin-filter-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.builtin-filter-title {
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-label-small-size, 12px);
+  font-weight: 600;
+}
+
+.builtin-filter-state {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-text-main) 8%, transparent);
+  color: var(--lw-text-muted);
+  padding: 1px 8px;
+  font-size: 10px;
+}
+
+.builtin-filter-state[data-on='true'] {
+  background: color-mix(in srgb, var(--lw-primary) 14%, transparent);
+  color: var(--lw-primary);
+}
+
+.builtin-filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.builtin-filter-options li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--lw-text-secondary);
+  font-size: 11px;
+}
+
+.builtin-filter-options li > span {
+  min-width: 0;
+}
+
+.builtin-option-state {
+  flex-shrink: 0;
+  min-width: 26px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--lw-text-main) 8%, transparent);
+  color: var(--lw-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  text-align: center;
+}
+
+.builtin-option-state[data-on='true'] {
+  background: color-mix(in srgb, var(--lw-primary) 14%, transparent);
+  color: var(--lw-primary);
+}
+
+.builtin-note {
+  margin: 8px 0 0;
+  color: var(--lw-text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.builtin-link {
+  margin-top: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--lw-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 0;
+}
+
+.builtin-link:hover {
+  text-decoration: underline;
+}
+
+.section-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin-top: 12px;
+}
+
+.builtin-panel .section-label {
+  margin-top: 0;
+}
+
+.section-label > span:first-child {
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-label-size, 13px);
+  font-weight: 600;
+}
+
+.section-hint {
+  min-width: 0;
+  flex: 1 1 220px;
+  color: var(--lw-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .regex-body {

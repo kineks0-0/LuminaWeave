@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
     DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES,
     resolveChatStreamingEffect,
-    resolveChatThemeRenderPreferences
+    resolveChatThemeRenderPreferences,
+    shouldApplyChatReplyFilter
 } from '../presentation/ChatMessageRenderPreferences.js';
 
 describe('ChatMessageRenderPreferences', () => {
@@ -50,5 +51,12 @@ describe('ChatMessageRenderPreferences', () => {
         ['fadeIn', DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.streamingEffect]
     ] as const)('resolves streaming effect %s as %s', (value, expected) => {
         expect(resolveChatStreamingEffect(value)).toBe(expected);
+    });
+
+    it('applies the built-in reply filter only to non-streaming, non-greeting messages', () => {
+        expect(shouldApplyChatReplyFilter({ filterChatReply: true }, {})).toBe(true);
+        expect(shouldApplyChatReplyFilter({ filterChatReply: true }, { isStreaming: true })).toBe(false);
+        expect(shouldApplyChatReplyFilter({ filterChatReply: true }, { isGreeting: true })).toBe(false);
+        expect(shouldApplyChatReplyFilter({ filterChatReply: false }, {})).toBe(false);
     });
 });

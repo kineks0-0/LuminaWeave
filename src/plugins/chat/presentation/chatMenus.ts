@@ -104,7 +104,7 @@ export const buildChatHeaderMenu = ({ canOpenProfile, showPromptAssets = false, 
     { id: 'prompt', label: 'Prompt 预览', icon: 'prompt' },
     ...(showPromptAssets ? [
         { id: 'prompt-presets' as const, label: '提示词预设', icon: 'preset' as const },
-        { id: 'regex-scripts' as const, label: '正则脚本', icon: 'regex' as const }
+        { id: 'regex-scripts' as const, label: '消息净化', icon: 'regex' as const }
     ] : [])
 ];
 

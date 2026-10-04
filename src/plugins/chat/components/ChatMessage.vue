@@ -73,6 +73,7 @@
           :on-select-choice="onSelectChoice"
           :on-html-action="onHtmlAction"
           :is-streaming="streaming"
+          :is-greeting="isGreeting"
           :streaming-presentation="streamingPresentation"
         />
         <slot name="status" />
@@ -110,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Check, CheckCheck, X } from 'lucide-vue-next';
 import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
@@ -177,6 +178,7 @@ const editor = ref<HTMLTextAreaElement | null>(null);
 const selected = ref(false);
 const imeGuard = useImeSubmitGuard({ debugLabel: 'ChatMessageEditor' });
 
+const isGreeting = computed(() => MessageUtils.isGreeting(props.message));
 const layout = computed(() => props.renderPreferences.messageLayout);
 const messageShape = computed(() => (
   props.message.is_user

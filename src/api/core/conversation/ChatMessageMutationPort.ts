@@ -10,7 +10,10 @@ export interface ChatMessageMutationPort {
     getFingerprint(text: string): string;
     getHostFingerprint(text: string): string;
     generateNodeId(): string;
-    syncMessageCalculatedFields(message: LuminaChatMessage, options?: { force?: boolean; skipFingerprint?: boolean }): void;
+    syncMessageCalculatedFields(
+        message: LuminaChatMessage,
+        options?: { force?: boolean; skipFingerprint?: boolean; isGreeting?: boolean }
+    ): void;
     resolveHostWriteText(message: LuminaChatMessage): string;
     updateHostMessage(input: {
         index: number;

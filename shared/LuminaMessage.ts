@@ -80,13 +80,32 @@ export class MessageUtils {
     }
 
     /**
+     * 角色卡招呼 / 第一条助手消息：无父节点且非用户消息（Forge 会话除外）。
+     * 用于让内置回复过滤跳过问候语，正则脚本不受影响。
+     */
+    public static isGreeting(
+        message: Pick<LuminaChatMessage, 'is_user' | 'parentId' | 'conversationType'>
+    ): boolean {
+        return message.is_user !== true
+            && message.conversationType !== 'forge'
+            && message.parentId === null;
+    }
+
+    /**
      * 核心同步管道：确保 mesRaw, mes 和 fingerprint 的一致性 (前后端共享)
      * @param msg 消息对象
      * @param interceptor XML 拦截器实例
      * @param options 同步选项
      */
-    public static syncCore(msg: LuminaChatMessage, interceptor: any, options: { force?: boolean; skipFingerprint?: boolean } = {}): void {
+    public static syncCore(
+        msg: LuminaChatMessage,
+        interceptor: any,
+        options: { force?: boolean; skipFingerprint?: boolean; isGreeting?: boolean } = {}
+    ): void {
         const isAI = msg.is_user === false;
+        // 角色卡招呼是作者内容，不经模型生成，跳过内置回复过滤的提纯。
+        // ST 导入阶段 parentId 尚未重建，由调用方通过 options.isGreeting 显式告知。
+        const isGreeting = options.isGreeting ?? this.isGreeting(msg);
         
         // 1. 确定计算指纹的原始输入源
         // 对于 AI，优先使用 pluginRaw (含 XML)；对于用户，优先使用 mesRaw
@@ -103,7 +122,7 @@ export class MessageUtils {
         }
 
         // 3. 同步 mesRaw (原始内容)
-        if (isAI && msg.pluginRaw) {
+        if (isAI && msg.pluginRaw && !isGreeting) {
             // 对于 AI 消息，pluginRaw 是权威源码。即便 mesRaw 已有值 (例如来自持久化旧数据)，也应以 pluginRaw 为准进行提取
             const extracted = (interceptor.constructor as any).extractTagContent(msg.pluginRaw, 'Chat_Reply');
             const nextMesRaw = (extracted && extracted.length > 0) ? extracted.join('\n') : interceptor.cleanText(msg.pluginRaw, { allowTopLevel: true });
@@ -118,10 +137,12 @@ export class MessageUtils {
         }
 
         // 4. 同步 mes (呈现内容)
-        // 使用 interceptor 执行排除 Chat_Reply 标签的最终提纯
+        // 使用 interceptor 执行排除 Chat_Reply 标签的最终提纯；招呼保留原文
         const rawToClean = msg.mesRaw || msg.pluginRaw || '';
         if (rawToClean) {
-            msg.mes = interceptor.cleanText(rawToClean, { filterChatReply: true });
+            msg.mes = isGreeting
+                ? rawToClean
+                : interceptor.cleanText(rawToClean, { filterChatReply: true });
         }
 
         // 5. 更新指纹

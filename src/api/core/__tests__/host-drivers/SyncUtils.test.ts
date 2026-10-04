@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncUtils, MessageTextResolver, MessageComparator } from '@/api/core/host-drivers/st/SyncUtils.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { STProtocol } from '@/api/core/host-drivers/st/STProtocol.js';
+import { lwStorage } from '@/api/storage.js';
 
 vi.mock('@/api/storage.js', () => ({
     lwStorage: {
@@ -80,6 +81,45 @@ describe('SyncUtils', () => {
             expect(MessageTextResolver.resolveForSync({ mes: 'mes' })).toBe('mes');
             expect(MessageTextResolver.resolveForSync({})).toBe('');
         });
+    });
+
+    describe('MessageTextResolver.extractMessageText', () => {
+        it('keeps raw tag content for the character greeting', () => {
+            const raw = '<thinking>先想</thinking><Character_Action>挥手</Character_Action>你好';
+            const greeting = {
+                parentId: null,
+                is_user: false,
+                conversationType: 'chat',
+                mesRaw: raw,
+                pluginRaw: raw
+            } as LuminaChatMessage;
+
+            const text = MessageTextResolver.extractMessageText(greeting);
+
+            expect(text).toContain('<thinking>');
+            expect(text).toContain('<Character_Action>');
+        });
+
+        it('cleans tags for non-greeting assistant messages', () => {
+            const raw = '<thinking>先想</thinking><Character_Action>挥手</Character_Action><Chat_Reply>你好</Chat_Reply>';
+            const reply = {
+                parentId: 'node_prev',
+                is_user: false,
+                conversationType: 'chat',
+                mesRaw: raw,
+                pluginRaw: raw
+            } as LuminaChatMessage;
+
+            expect(MessageTextResolver.extractMessageText(reply)).toBe('你好');
+        });
+    });
+
+    it('reads implicit thinking from the registered setting key', () => {
+        vi.mocked(lwStorage.get).mockImplementation((key: string, defaultValue: unknown) => (
+            key === 'lumina-chat.implicitThinkingInFilter' ? true : defaultValue
+        ));
+
+        expect(SyncUtils.getStreamingPolicy().implicitThinking).toBe(true);
     });
 
     describe('MessageComparator', () => {

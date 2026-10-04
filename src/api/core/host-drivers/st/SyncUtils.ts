@@ -98,11 +98,16 @@ export class MessageTextResolver {
             text = msg?.mes ?? msg?.mesRaw ?? msg?.extra?.mesRaw ?? '';
         }
 
-        // 2. 统一策略清洗 (对齐流式过滤偏好)
-        const policy = SyncUtils.getStreamingPolicy();
-        let cleaned = textSanitizer.cleanText(text, policy);
+        // 2. 角色卡招呼是作者内容，不经模型生成，跳过内置回复过滤的提纯
+        if (MessageUtils.isGreeting(msg)) {
+            return MessageTextResolver.normalize(text);
+        }
 
-        // 3. 终极清理 (不可见字符处理)
+        // 3. 统一策略清洗 (对齐流式过滤偏好)
+        const policy = SyncUtils.getStreamingPolicy();
+        const cleaned = textSanitizer.cleanText(text, policy);
+
+        // 4. 终极清理 (不可见字符处理)
         return MessageTextResolver.normalize(cleaned);
     }
 
@@ -164,7 +169,7 @@ export class SyncUtils {
         return {
             filterChatReply: Boolean(lwStorage.get('lumina-chat.filterChatReply', false, 'Global')),
             allowTopLevel: Boolean(lwStorage.get('lumina-chat.allowTopLevelInFilter', true, 'Global')),
-            implicitThinking: Boolean(lwStorage.get('lumina-chat.implicitStartThinking', false, 'Global')),
+            implicitThinking: Boolean(lwStorage.get('lumina-chat.implicitThinkingInFilter', false, 'Global')),
             aggressiveThinking: Boolean(lwStorage.get('lumina-chat.aggressiveThinking', false, 'Global'))
         };
     }

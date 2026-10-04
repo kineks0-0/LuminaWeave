@@ -12,7 +12,7 @@
         <option value="lumina-assembly">Lumina 合成（预设库 / 正则 / 世界书）</option>
       </LuminaSelect>
       <p class="tw:m-0 tw:text-[length:var(--lw-type-body-small-size)] tw:text-lw-text-muted">
-        提示词预设、正则脚本可在“提示词预设库”和“正则脚本”面板管理。
+        提示词预设、正则脚本可在“提示词预设库”和“消息净化”面板管理。
       </p>
     </div>
   </SettingsSectionPanel>

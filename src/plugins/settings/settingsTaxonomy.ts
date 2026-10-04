@@ -95,9 +95,9 @@ export const SETTINGS_PANELS: readonly SettingsPanelDefinition[] = [
     {
         id: 'chat-regex-scripts',
         category: 'generation',
-        title: '正则脚本',
-        description: '管理输入输出与提示词的正则替换，支持内联测试。',
-        keywords: ['正则', 'regex', '替换', '过滤', '脚本', '测试']
+        title: '消息净化',
+        description: '内置 XML 标签过滤与正则脚本，控制消息在显示、写回与提示词中的形态。',
+        keywords: ['正则', 'regex', '替换', '过滤', '脚本', '测试', '净化', '后处理', '标签', 'XML']
     },
     {
         id: 'sync-status',

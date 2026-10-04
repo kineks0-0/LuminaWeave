@@ -30,7 +30,7 @@
           </div>
         </header>
         <div class="lw-prompt-assets-sheet__body">
-          <component :is="panelComponent" v-if="panelComponent" />
+          <component :is="panelComponent" v-if="panelComponent" v-bind="panelProps" />
         </div>
       </section>
     </div>
@@ -53,13 +53,17 @@ const emit = defineEmits<{
 
 const closeButton = ref<HTMLButtonElement | null>(null);
 
-const title = computed(() => (props.target === 'regex-scripts' ? '正则脚本' : '提示词预设'));
+const title = computed(() => (props.target === 'regex-scripts' ? '消息净化' : '提示词预设'));
 const panelComponent = computed(() => {
   if (!props.target) return null;
   return SETTINGS_PANEL_COMPONENTS[
     props.target === 'regex-scripts' ? 'chat-regex-scripts' : 'chat-prompt-presets'
   ];
 });
+
+const panelProps = computed<Record<string, unknown>>(() => (
+  props.target === 'regex-scripts' ? { embedded: true } : {}
+));
 
 const handleKeydown = (event: KeyboardEvent): void => {
   if (!props.target || event.key !== 'Escape') return;
@@ -172,6 +176,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown));
   overflow-y: auto;
   padding: 14px 14px calc(16px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
   overscroll-behavior: contain;
+  background: var(--lw-bg-subtle);
 }
 
 .lw-prompt-assets-sheet-enter-active {

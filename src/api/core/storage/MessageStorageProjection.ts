@@ -18,7 +18,7 @@ export class MessageStorageProjection {
 
     static syncMessageCalculatedFields(
         message: LuminaChatMessage,
-        options: { force?: boolean; skipFingerprint?: boolean } = {}
+        options: { force?: boolean; skipFingerprint?: boolean; isGreeting?: boolean } = {}
     ): void {
         MessageUtils.syncCore(message, globalXMLInterceptor, options);
         if (!message.mesST) {

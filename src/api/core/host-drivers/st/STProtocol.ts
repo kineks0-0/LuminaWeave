@@ -176,7 +176,10 @@ export class STProtocol {
      * 包装了 shared 层的 syncCore，并补充 ST 特有字段。
      * 该方法确保了节点在进入 WorldlineStore 之前，其派生字段 (mes, mesST) 与指纹是完全对齐的。
      */
-    public static syncMessageCalculatedFields(msg: LuminaChatMessage, options: { force?: boolean; skipFingerprint?: boolean } = {}): void {
+    public static syncMessageCalculatedFields(
+        msg: LuminaChatMessage,
+        options: { force?: boolean; skipFingerprint?: boolean; isGreeting?: boolean } = {}
+    ): void {
         // 1. 调用共享层核心逻辑 (同步 mesRaw, mes, fingerprint)
         MessageUtils.syncCore(msg, getTextInterceptor(), options);
 
@@ -202,7 +205,11 @@ export class STProtocol {
     /**
      * 将 ST 的原始消息对象规范化为 Lumina 的 LuminaChatMessage
      */
-    public static fromST(m: Record<string, any>, defaultCharId?: string | number): LuminaChatMessage {
+    public static fromST(
+        m: Record<string, any>,
+        defaultCharId?: string | number,
+        options: { isGreeting?: boolean } = {}
+    ): LuminaChatMessage {
         const extra: Record<string, unknown> = { ...(m.extra || {}) };
 
         const isUser = m.role === 'user';
@@ -259,7 +266,7 @@ export class STProtocol {
         };
 
         // 3. 运行自动对齐管道：补全清洗后的 mes, 矫正 fingerprint
-        this.syncMessageCalculatedFields(msg);
+        this.syncMessageCalculatedFields(msg, { isGreeting: options.isGreeting });
 
         return msg;
     }
