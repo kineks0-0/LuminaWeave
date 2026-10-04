@@ -410,6 +410,23 @@ export class ChatApplicationController {
         }
     }
 
+    /**
+     * 生成收口后主动拉取一次会话上下文。
+     * 独立运行模式没有 ST 宿主事件（MESSAGE_RECEIVED / DATA_RELOAD），
+     * 若只等待 conversation 事件，最终消息永远不会进入快照，settling 结束后气泡会消失。
+     */
+    private async reloadContextAfterGeneration(): Promise<void> {
+        const revision = this.contextRevision;
+        try {
+            const context = await this.dependencies.conversation.getContext();
+            if (this.disposed || revision !== this.contextRevision) return;
+            if (this.snapshot.generation.isGenerating) return;
+            this.handleConversationEvent({ type: 'context_changed', context });
+        } catch (error) {
+            console.error('[ChatApplicationController] Post-generation context reload failed', { error });
+        }
+    }
+
     private handleGenerationEvent(event: GenerationDomainEvent): void {
         if (this.disposed) return;
         const revision = this.snapshot.generation.revision + 1;
@@ -441,6 +458,7 @@ export class ChatApplicationController {
             const stream = this.snapshot.generation.stream;
             if (!stream?.processed) {
                 this.updateGeneration(this.createEndedGeneration(revision));
+                void this.reloadContextAfterGeneration();
                 return;
             }
             this.settlingMessageSignature = this.resolveMessageSignature(this.snapshot.messages);
@@ -457,6 +475,7 @@ export class ChatApplicationController {
                 if (this.disposed || this.snapshot.generation.phase !== 'settling') return;
                 this.updateGeneration(this.createEndedGeneration(this.snapshot.generation.revision + 1));
             }, SETTLING_TIMEOUT_MS);
+            void this.reloadContextAfterGeneration();
             return;
         }
         this.updateGeneration({

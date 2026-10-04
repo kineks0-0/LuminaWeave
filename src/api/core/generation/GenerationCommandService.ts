@@ -111,6 +111,10 @@ export class GenerationCommandService {
         const presets = lwStorage.get('nexus.presets', [], 'Global');
         const targetPreset = presets.find((preset: any) => preset.id === chatPresetId);
         const firstNode = targetPreset?.nodes?.[0];
+        const stNativeAvailable = Boolean(await getHostRuntimePort().getHostFunction('generate'));
+        const defaultEngine = stNativeAvailable
+            ? (!firstNode || firstNode.provider === 'st_current' ? 'st-native' : 'lumina')
+            : 'lumina-assembly';
         const promptRoute = PromptAssemblyRouter.route({
             target: 'chat.continuation',
             sessionBinding: options.promptAssembly?.sessionBinding ?? (
@@ -129,7 +133,7 @@ export class GenerationCommandService {
                     }
             ),
             policy: {
-                engine: options.promptAssembly?.engine ?? (!firstNode || firstNode.provider === 'st_current' ? 'st-native' : 'lumina'),
+                engine: options.promptAssembly?.engine ?? defaultEngine,
                 sourceMode: options.promptAssembly?.sourceMode ?? 'bound-session'
             },
             presetId: chatPresetId || undefined,

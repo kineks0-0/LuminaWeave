@@ -1,11 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const resolverMock = vi.hoisted(() => ({ resolve: vi.fn() }));
+const hostMock = vi.hoisted(() => ({ getHostFunction: vi.fn() }));
+const taskRunMock = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock('@/api/core/hal/resource/index.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@/api/core/hal/resource/index.js')>();
     return { ...actual, promptResourceResolver: resolverMock };
 });
+
+vi.mock('@/api/core/facade/HostRuntimePort.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/api/core/facade/HostRuntimePort.js')>();
+    return { ...actual, getHostRuntimePort: () => hostMock };
+});
+
+vi.mock('@/api/core/generation/LuminaGenerationTask.js', () => ({
+    LuminaGenerationTask: class {
+        run = taskRunMock;
+        abort = vi.fn();
+    }
+}));
 
 import { GenerationCommandService } from '@/api/core/generation/GenerationCommandService.js';
 import { lwStorage } from '@/api/storage.js';
@@ -60,6 +74,68 @@ const characterBundle = () => ({
     },
     presetRaw: null,
     diagnostics: []
+});
+
+const createSendService = (): GenerationCommandService => new GenerationCommandService({
+    chatManager: { activeLeafId: null } as never,
+    streamHandler: {
+        handleRestart: vi.fn(),
+        responseBuffer: '',
+        isGenerating: false,
+        clearSmoothTimer: vi.fn()
+    } as never,
+    promptCommandService: { lastPromptPayload: null, probePrompt: vi.fn(async () => null) } as never,
+    waitForReady: vi.fn(async () => true),
+    beforeGenerationStart: vi.fn(),
+    crudChatRecord: vi.fn(async () => true),
+    getAssistantName: () => 'Alice',
+    getCharName: () => 'Alice',
+    getUserName: () => '旅行者',
+    getLastMessageId: () => null,
+    getConversationMessages: vi.fn(async () => []),
+    commitToST: vi.fn(),
+    syncFromST: vi.fn(),
+    emit: vi.fn(),
+    getLastStreamState: () => null,
+    setManualAbortPending: vi.fn()
+});
+
+describe('GenerationCommandService send routing', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        hostMock.getHostFunction.mockReset();
+        taskRunMock.mockClear();
+    });
+
+    it('falls back to lumina assembly when the host provides no ST generate', async () => {
+        hostMock.getHostFunction.mockResolvedValue(null);
+        vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ charId: undefined, chatId: 'lw_chat_1' } as never);
+        vi.spyOn(lwStorage, 'get').mockImplementation((_key: string, fallback: unknown) => fallback);
+
+        const service = createSendService();
+        const triggerSpy = vi.spyOn(service, 'triggerGenerate');
+
+        await expect(service.sendMessage('你好')).resolves.toBe(true);
+
+        expect(triggerSpy).not.toHaveBeenCalled();
+        expect(taskRunMock).toHaveBeenCalled();
+    });
+
+    it('keeps ST native generation when the host provides generate', async () => {
+        const generate = vi.fn(async () => {});
+        hostMock.getHostFunction.mockResolvedValue(generate);
+        vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ charId: undefined, chatId: 'lw_chat_1' } as never);
+        vi.spyOn(lwStorage, 'get').mockImplementation((_key: string, fallback: unknown) => fallback);
+
+        const service = createSendService();
+        const triggerSpy = vi.spyOn(service, 'triggerGenerate');
+
+        await expect(service.sendMessage('你好')).resolves.toBe(true);
+
+        expect(triggerSpy).toHaveBeenCalled();
+        expect(generate).toHaveBeenCalled();
+        expect(taskRunMock).not.toHaveBeenCalled();
+    });
 });
 
 describe('GenerationCommandService local character injection', () => {

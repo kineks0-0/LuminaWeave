@@ -24,10 +24,13 @@ export class LuminaFetch {
      */
     public static async stream(url: string, options: any): Promise<ReadableStream<Uint8Array>> {
         if (this.isTauri()) {
-            return this.tauriStream(url, options);
-        } else {
-            return this.browserStream(url, options);
+            try {
+                return await this.tauriStream(url, options);
+            } catch (error) {
+                console.warn('[LuminaFetch] Tauri 原生网桥不可用，回退到浏览器 fetch。', error);
+            }
         }
+        return this.browserStream(url, options);
     }
 
     /**

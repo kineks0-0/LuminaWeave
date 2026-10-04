@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OpenAIProvider } from '@shared/api/llm/OpenAIProvider';
 import { LuminaFetch } from '@shared/api/llm/LuminaFetch';
 
@@ -87,5 +87,25 @@ describe('OpenAIProvider', () => {
         expect(models).toContain('gpt-4');
         expect(models).toContain('claude-3');
         expect(models.length).toBe(3);
+    });
+});
+
+describe('LuminaFetch', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it('falls back to browser fetch when a Tauri marker exists without invoke/listen', async () => {
+        vi.restoreAllMocks();
+        vi.stubGlobal('window', { __TAURI_POST_MESSAGE__: true });
+        const responseBody = new ReadableStream<Uint8Array>();
+        const fetchMock = vi.fn(async () => ({ ok: true, body: responseBody }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const stream = await LuminaFetch.stream('http://api.test/chat/completions', { method: 'POST' });
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(stream).toBe(responseBody);
     });
 });

@@ -158,6 +158,24 @@ describe('ChatApplicationController', () => {
         expect(snapshot.generation).toMatchObject({ phase: 'ended', stream: null });
     });
 
+    it('reloads the final messages itself when no conversation event arrives', async () => {
+        const userMessage = createMessage('node-1', 'Hello');
+        const reply = { ...createMessage('node-2', 'Final reply'), is_user: false, role: 'assistant' as const };
+        const harness = createHarness(createContext([userMessage]));
+        await harness.controller.start();
+
+        harness.conversation.getContext.mockResolvedValue(createContext([userMessage, reply]));
+
+        harness.emitGeneration({ type: 'started' });
+        harness.emitGeneration({ type: 'updated', state: streamState('Final reply') });
+        harness.emitGeneration({ type: 'ended', finalText: '' });
+
+        await vi.waitFor(() => {
+            expect(harness.controller.getSnapshot().messages.map(message => message.id)).toEqual(['node-1', 'node-2']);
+        });
+        expect(harness.controller.getSnapshot().generation).toMatchObject({ phase: 'ended', stream: null });
+    });
+
     it('clears a settling stream after a bounded timeout when no message arrives', async () => {
         vi.useFakeTimers();
         try {
