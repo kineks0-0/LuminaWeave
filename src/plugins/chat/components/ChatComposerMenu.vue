@@ -10,7 +10,7 @@
       :aria-expanded="open"
       @click="open = !open"
     >
-      <Menu :size="22" :stroke-width="2.2" aria-hidden="true" />
+      <Menu :size="18" :stroke-width="2.2" aria-hidden="true" />
       <span v-if="!compact">菜单</span>
     </button>
     <ChatPopoverMenu
@@ -48,7 +48,7 @@ const handleSelect = (panelId: string): void => {
 <style scoped>
 .chat-composer-menu {
   position: relative;
-  align-self: end;
+  align-self: center;
 }
 
 .chat-composer-menu__trigger {
@@ -57,15 +57,15 @@ const handleSelect = (panelId: string): void => {
   min-width: 40px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   border: 0;
   border-radius: 999px;
   background: var(--lw-primary);
   color: var(--lw-text-inverse);
-  padding: 0 16px 0 12px;
+  padding: 0 14px 0 10px;
   font: inherit;
-  font-size: var(--lw-type-label-large-size);
-  font-weight: var(--lw-type-label-large-weight);
+  font-size: var(--lw-type-label-medium-size);
+  font-weight: var(--lw-type-label-medium-weight);
   cursor: pointer;
   transition: padding 160ms cubic-bezier(0.25, 1, 0.5, 1), filter var(--lw-transition);
 }

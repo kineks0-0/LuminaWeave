@@ -8,7 +8,7 @@
       <textarea
         ref="textarea"
         :value="draft"
-        :rows="layout === 'telegram' ? 1 : 2"
+        rows="1"
         :placeholder="effectivePlaceholder"
         :disabled="disabled"
         @keydown="handleKeydown"
@@ -109,7 +109,10 @@ const autosize = (): void => {
     element.style.height = '';
     return;
   }
-  element.style.height = `${Math.min(element.scrollHeight, TELEGRAM_COMPOSER_MAX_HEIGHT_PX)}px`;
+  // 内容仍能放进单行最小高度时不写死内联高度：避免挂载竞态或宽度抖动残留出多行高度
+  const singleLineHeight = Number.parseFloat(getComputedStyle(element).minHeight) || 0;
+  const contentHeight = Math.min(element.scrollHeight, TELEGRAM_COMPOSER_MAX_HEIGHT_PX);
+  element.style.height = contentHeight <= singleLineHeight ? '' : `${contentHeight}px`;
 };
 
 watch(() => props.draft, () => void nextTick(autosize));
@@ -200,7 +203,7 @@ watch(
 
 .chat-composer textarea {
   width: 100%;
-  min-height: 42px;
+  min-height: 40px;
   max-height: 180px;
   resize: vertical;
   border: 0;
@@ -265,11 +268,11 @@ watch(
 }
 
 .chat-composer[data-layout='telegram'] textarea {
-  min-height: 44px;
+  min-height: 40px;
   max-height: 200px;
   resize: none;
-  padding: 11px 6px 11px 12px;
-  font-size: var(--lw-telegram-input-size, var(--lw-type-body-large-size));
+  padding: 9px 6px 9px 12px;
+  font-size: var(--lw-chat-font-size, var(--lw-type-body-large-size));
   line-height: 22px;
 }
 
@@ -282,8 +285,9 @@ watch(
 }
 
 .chat-composer[data-layout='telegram'] .chat-composer__action {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
+  align-self: center;
   border-radius: 999px;
   animation: chat-composer-action-in 160ms cubic-bezier(0.25, 1, 0.5, 1);
 }

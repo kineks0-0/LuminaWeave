@@ -14,9 +14,10 @@ describe('chat message menu', () => {
         expect(items.every(item => !item.disabled)).toBe(true);
     });
 
-    it('omits assistant-only actions for user messages', () => {
+    it('offers branch-and-reedit instead of assistant-only actions for user messages', () => {
         const items = buildChatMessageMenu({ isUser: true, disabled: false });
-        expect(items.map(item => item.id)).toEqual(['copy', 'edit', 'delete']);
+        expect(items.map(item => item.id)).toEqual(['copy', 'edit', 'branch-rerun', 'delete']);
+        expect(items.find(item => item.id === 'branch-rerun')?.label).toBe('从此分支重发');
     });
 
     it('keeps copy available while mutating actions are locked', () => {

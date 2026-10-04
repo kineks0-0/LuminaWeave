@@ -267,15 +267,30 @@ export class ChatApplicationController {
 
     async branchMessage(input: ChatMessageIntentInput): Promise<boolean> {
         if (!this.canMutateWithoutActiveGeneration()) return false;
-        const targetNodeId = input.message.id.trim();
+        const isUserMessage = input.message.is_user === true;
+        // 用户消息按时间线口径从父节点分叉，便于改写后重新发送；助手消息从自身分叉
+        const targetNodeId = (isUserMessage
+            ? input.message.parentId || input.message.id
+            : input.message.id).trim();
         if (!targetNodeId) {
             this.dependencies.feedback.showToast('无法解析消息节点，不能创建分支。', 'error');
             return false;
         }
-        return this.dependencies.conversation.branchNode({
+        const succeeded = await this.dependencies.conversation.branchNode({
             sourceId: 'chat',
             targetNodeId
         });
+        if (succeeded && isUserMessage) {
+            const revision = (this.snapshot.presentation.composerFocusRequest?.revision || 0) + 1;
+            this.updateSnapshot({
+                composerDraft: input.message.mesRaw || input.message.mes,
+                presentation: {
+                    ...this.snapshot.presentation,
+                    composerFocusRequest: { revision }
+                }
+            });
+        }
+        return succeeded;
     }
 
     setComposerDraft(text: string): void {

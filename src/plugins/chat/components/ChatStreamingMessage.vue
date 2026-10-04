@@ -122,27 +122,46 @@ const ignoreChoice = (): void => {};
   align-items: center;
   gap: 10px;
   margin-top: 8px;
+  border: 1px solid color-mix(in srgb, var(--lw-danger) 26%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--lw-danger) 7%, var(--lw-chat-floating-bg, var(--lw-bg-elevated)));
+  backdrop-filter: var(--lw-chat-floating-blur, none);
+  -webkit-backdrop-filter: var(--lw-chat-floating-blur, none);
+  padding: 9px 10px 9px 12px;
   color: var(--lw-danger, var(--lw-text-main));
   font-size: var(--lw-type-body-small-size);
   line-height: var(--lw-type-body-small-line-height);
 }
 
+.chat-streaming-message__error > span,
+.chat-streaming-message__pending.is-error > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .chat-streaming-message__error button,
 .chat-streaming-message__pending.is-error button {
-  height: 28px;
-  padding: 0 12px;
-  border: 1px solid var(--lw-border-base);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 30px;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--lw-danger) 30%, transparent);
   border-radius: 999px;
   background: var(--lw-bg-elevated);
-  color: var(--lw-text-main);
+  color: var(--lw-danger, var(--lw-text-main));
   font: inherit;
+  font-size: var(--lw-type-label-medium-size);
+  font-weight: var(--lw-type-label-medium-weight);
+  white-space: nowrap;
   cursor: pointer;
-  transition: background var(--lw-transition);
+  transition: background var(--lw-transition), border-color var(--lw-transition);
 }
 
 .chat-streaming-message__error button:hover,
 .chat-streaming-message__pending.is-error button:hover {
-  background: var(--lw-bg-subtle);
+  background: color-mix(in srgb, var(--lw-danger) 10%, var(--lw-bg-elevated));
 }
 
 .is-spinning {

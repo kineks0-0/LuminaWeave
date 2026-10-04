@@ -24,7 +24,7 @@ export interface ChatMenuItem<Id extends string = string> {
     disabled?: boolean;
 }
 
-export type ChatMessageMenuAction = 'copy' | 'edit' | 'regenerate' | 'branch' | 'delete';
+export type ChatMessageMenuAction = 'copy' | 'edit' | 'regenerate' | 'branch' | 'branch-rerun' | 'delete';
 
 export const buildChatMessageMenu = ({ isUser, disabled }: {
     isUser: boolean;
@@ -39,6 +39,8 @@ export const buildChatMessageMenu = ({ isUser, disabled }: {
             { id: 'regenerate', label: '重新生成', icon: 'regenerate', disabled },
             { id: 'branch', label: '从此处分支', icon: 'branch', disabled }
         );
+    } else {
+        items.push({ id: 'branch-rerun', label: '从此分支重发', icon: 'branch', disabled });
     }
     items.push({ id: 'delete', label: '删除', icon: 'delete', danger: true, disabled });
     return items;

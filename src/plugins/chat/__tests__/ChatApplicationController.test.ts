@@ -248,6 +248,42 @@ describe('ChatApplicationController', () => {
         expect(harness.controller.getSnapshot().promptInspectorVisible).toBe(true);
     });
 
+    it('branches a user message at its parent and refills the composer for re-editing', async () => {
+        const parent = { ...createMessage('parent-1', 'Assistant reply'), is_user: false, role: 'assistant' as const };
+        const userMessage = { ...createMessage('user-1', '原始输入'), parentId: 'parent-1' };
+        const harness = createHarness(createContext([parent, userMessage]));
+        await harness.controller.start();
+
+        await expect(harness.controller.branchMessage({ message: userMessage, index: 1 })).resolves.toBe(true);
+
+        expect(harness.conversation.branchNode).toHaveBeenCalledWith({
+            sourceId: 'chat',
+            targetNodeId: 'parent-1'
+        });
+        expect(harness.controller.getSnapshot().composerDraft).toBe('原始输入');
+        expect(harness.controller.getSnapshot().presentation.composerFocusRequest).toEqual({ revision: 1 });
+    });
+
+    it('branches an assistant message in place without touching the composer draft', async () => {
+        const assistantMessage = {
+            ...createMessage('assistant-1', '已生成的回复'),
+            is_user: false,
+            role: 'assistant' as const,
+            parentId: 'user-1'
+        };
+        const harness = createHarness(createContext([createMessage('user-1', '输入'), assistantMessage]));
+        await harness.controller.start();
+
+        await expect(harness.controller.branchMessage({ message: assistantMessage, index: 1 })).resolves.toBe(true);
+
+        expect(harness.conversation.branchNode).toHaveBeenCalledWith({
+            sourceId: 'chat',
+            targetNodeId: 'assistant-1'
+        });
+        expect(harness.controller.getSnapshot().composerDraft).toBe('');
+        expect(harness.controller.getSnapshot().presentation.composerFocusRequest).toBeNull();
+    });
+
     it('shares the composer draft and clears it after a successful send', async () => {
         const harness = createHarness();
         await harness.controller.start();

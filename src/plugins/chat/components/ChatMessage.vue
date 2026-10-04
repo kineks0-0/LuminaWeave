@@ -331,7 +331,9 @@ const handleMenuSelect = (id: string): void => {
   if (action === 'copy') void copyMessage();
   else if (action === 'edit') startEditing();
   else if (action === 'regenerate') emit('regenerate');
-  else if (action === 'branch') emit('branch', { message: props.message, index: props.index });
+  else if (action === 'branch' || action === 'branch-rerun') {
+    emit('branch', { message: props.message, index: props.index });
+  }
   else if (action === 'delete') emit('delete', { message: props.message, index: props.index });
 };
 
