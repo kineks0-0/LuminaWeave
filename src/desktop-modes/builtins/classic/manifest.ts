@@ -38,9 +38,6 @@ export const classicDesktopMode: DesktopModeManifest = {
     surfacePreset: {
         mainSurfaceVariant: 'default',
         widgetSurfaceVariant: 'default',
-        chatVariant: 'default',
-        settingsVariant: 'default',
-        timelineVariant: 'default',
     },
     designTokens: resolveClassicDesignTokens,
     surfaceSkins: createClassicSurfaceSkinMap(),

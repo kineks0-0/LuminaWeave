@@ -38,9 +38,6 @@ export const telegramDesktopMode: DesktopModeManifest = {
     surfacePreset: {
         mainSurfaceVariant: 'telegram',
         widgetSurfaceVariant: 'telegram',
-        chatVariant: 'telegram',
-        settingsVariant: 'telegram',
-        timelineVariant: 'telegram',
     },
     designTokens: resolveTelegramDesignTokens,
     surfaceSkins: createTelegramSurfaceSkinMap(),

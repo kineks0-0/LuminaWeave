@@ -76,7 +76,6 @@ export interface SurfaceSkinDefinition {
     componentId: string;
     tokens?: ThemeValueResolver;
     cssVars?: ThemeValueResolver;
-    classMap?: Record<string, string>;
     variant?: string;
 }
 
@@ -118,9 +117,6 @@ export interface ThemeNavigationPreset {
 export interface ThemeSurfacePreset {
     mainSurfaceVariant?: ThemeSurfaceVariant;
     widgetSurfaceVariant?: ThemeSurfaceVariant;
-    chatVariant?: ThemeSurfaceVariant;
-    settingsVariant?: ThemeSurfaceVariant;
-    timelineVariant?: ThemeSurfaceVariant;
 }
 
 export interface ThemeWindowPreset {
@@ -178,6 +174,8 @@ export interface DesktopModeShellChrome {
 export interface DesktopModePackage {
     manifest: DesktopModeManifest;
     shellRenderer?: Component;
+    /** 替换全局 header 左侧区域的模式组件（如 Discord 的频道栏）；缺省时渲染品牌 + 启动器 + 标签。 */
+    headerLeftRenderer?: Component;
     componentOverrides?: DesktopModeComponentOverrideUnion[];
     shellChrome?: DesktopModeShellChrome;
     styles?: string;

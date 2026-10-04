@@ -179,10 +179,6 @@
   z-index: 1;
 }
 
-.lw-fullscreen-panel[data-shell-variant='discord']::before {
-  opacity: 0.18;
-}
-
 .lw-panel-body {
   position: relative;
   z-index: 1;
@@ -197,12 +193,6 @@
 }
 
 .lw-panel-body:not(.is-freeform) {
-  background: var(--lw-shell-body-bg,
-      linear-gradient(180deg, rgba(var(--lw-primary-rgb), 0.16) 0%, rgba(var(--lw-primary-rgb), 0.08) 18%, transparent 44%),
-      linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-surface) 98%, white), color-mix(in srgb, var(--lw-bg-subtle) 96%, white)));
-}
-
-.luminaweave-app-root[data-desktop-mode='discord'][data-layout-mode='traditional'] .lw-panel-body:not(.is-freeform) {
   background: var(--lw-shell-body-bg,
       linear-gradient(180deg, rgba(var(--lw-primary-rgb), 0.16) 0%, rgba(var(--lw-primary-rgb), 0.08) 18%, transparent 44%),
       linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-surface) 98%, white), color-mix(in srgb, var(--lw-bg-subtle) 96%, white)));

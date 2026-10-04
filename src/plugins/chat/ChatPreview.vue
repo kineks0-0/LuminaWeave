@@ -646,9 +646,5 @@ onUnmounted(stopSimulation);
   padding: 20px 0;
 }
 
-.preview-viewport[data-skin-variant='discord'] .preview-bubble {
-  max-width: 100%;
-  border-color: var(--lw-border-base);
-  box-shadow: none;
-}
+
 </style>

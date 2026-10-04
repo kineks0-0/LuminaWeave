@@ -763,54 +763,20 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   box-shadow: var(--lw-shadow);
 }
 
-.setting-row[data-skin-variant='discord'] .segment-control {
-  border-radius: 14px;
-}
 
-.setting-row[data-skin-variant='discord'] .segment-control button {
-  border-radius: 12px;
-}
 
-.setting-row[data-skin-variant='discord'] .scope-select,
-.setting-row[data-skin-variant='discord'] .setting-control-body .lw-select,
-.setting-row[data-skin-variant='discord'] .setting-control-body .lw-input,
-.setting-row[data-skin-variant='discord'] .slider-number-input {
-  border-radius: 12px;
-}
 
-.setting-row[data-skin-variant='telegram'] {
-  border-bottom-color: var(--lw-border-subtle);
-  min-height: 44px;
-}
 
-.setting-row[data-skin-variant='telegram'].layout-horizontal:hover {
-  background: color-mix(in srgb, var(--lw-primary) 7%, transparent);
-}
 
-.setting-row[data-skin-variant='telegram'] .segment-control,
-.setting-row[data-skin-variant='telegram'] .scope-select,
-.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select,
-.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-input,
-.setting-row[data-skin-variant='telegram'] .slider-number-input,
-.setting-row[data-skin-variant='telegram'] .remote-font-picker,
-.setting-row[data-skin-variant='telegram'] .font-preview-card,
-.setting-row[data-skin-variant='telegram'] .option-description-tip {
-  border-color: var(--lw-setting-control-border, var(--lw-border-subtle));
-  background: color-mix(in srgb, var(--lw-setting-control-bg, var(--lw-surface-container)) 84%, transparent);
-}
 
-.setting-row[data-skin-variant='telegram'] .segment-control,
-.setting-row[data-skin-variant='telegram'] .segment-control button,
-.setting-row[data-skin-variant='telegram'] .scope-select,
-.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select,
-.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-input {
-  border-radius: 999px;
-  min-height: 40px;
-}
 
-.setting-row[data-skin-variant='telegram'] .segment-control button.active {
-  background: var(--lw-setting-control-active-bg, var(--lw-surface-container-high));
-  box-shadow: var(--lw-setting-control-active-shadow, 0 8px 18px rgba(44, 92, 130, 0.1));
-}
+
+
+
+
+
+
+
+
 
 </style>

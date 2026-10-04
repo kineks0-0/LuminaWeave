@@ -38,9 +38,6 @@ export const stageDesktopMode: DesktopModeManifest = {
     surfacePreset: {
         mainSurfaceVariant: 'default',
         widgetSurfaceVariant: 'default',
-        chatVariant: 'default',
-        settingsVariant: 'default',
-        timelineVariant: 'default',
     },
     designTokens: resolveStageDesignTokens,
     surfaceSkins: createStageSurfaceSkinMap(),

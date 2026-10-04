@@ -1,0 +1,468 @@
+/* plugins/timeline/LuminaTimeline.vue */
+.lw-timeline-container[data-skin-variant='telegram'] {
+  background: var(--lw-timeline-canvas-bg, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%), rgba(232, 245, 255, 0.58));
+  color: var(--lw-text-main);
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .small-timeline-wrapper {
+  padding: 14px;
+  background: transparent;
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .timeline-context-pill,
+.lw-timeline-container[data-skin-variant='telegram'] .header-source-pill,
+.lw-timeline-container[data-skin-variant='telegram'] .source-chip {
+  min-height: 34px;
+  border-radius: 999px;
+  border-color: var(--lw-timeline-chip-border, rgba(148, 190, 219, 0.34));
+  background: var(--lw-timeline-chip-bg, rgba(255, 255, 255, 0.68));
+  color: var(--lw-text-secondary);
+  box-shadow: none;
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .source-chip.active {
+  color: var(--lw-primary);
+  background: var(--lw-timeline-chip-active-bg, rgba(227, 244, 255, 0.82));
+  border-color: var(--lw-timeline-chip-active-border, rgba(82, 171, 233, 0.46));
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .s-card,
+.lw-timeline-container[data-skin-variant='telegram'] .s-action-card,
+.lw-timeline-container[data-skin-variant='telegram'] .s-actions-group,
+.lw-timeline-container[data-skin-variant='telegram'] .large-header,
+.lw-timeline-container[data-skin-variant='telegram'] .canvas-controls,
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-container {
+  background: var(--lw-timeline-card-bg, rgba(255, 255, 255, 0.74));
+  border-color: var(--lw-timeline-card-border, rgba(148, 190, 219, 0.38));
+  border-radius: 18px;
+  box-shadow: var(--lw-timeline-card-shadow, var(--lw-telegram-panel-shadow, 0 18px 42px rgba(44, 92, 130, 0.12)));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .s-card.active {
+  border-color: var(--lw-timeline-card-active-border, rgba(82, 171, 233, 0.52));
+  background: var(--lw-timeline-card-active-bg, rgba(255, 255, 255, 0.86));
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .s-action-card,
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-action-btn {
+  min-height: 44px;
+  border-radius: 999px;
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-overlay {
+  background: var(--lw-timeline-modal-overlay-bg, rgba(212, 235, 250, 0.42));
+}
+
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-body,
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-footer {
+  background: var(--lw-timeline-modal-body-bg, rgba(255, 255, 255, 0.62));
+}
+
+@media (max-width: 720px) {.lw-timeline-container[data-skin-variant='telegram'] .small-timeline-wrapper {
+    padding: 12px 12px calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
+  }
+.lw-timeline-container[data-skin-variant='telegram'] .l-modal-overlay {
+    padding: 12px;
+  }}
+
+/* plugins/director/components/DirectorPanel.vue */
+.director-panel[data-skin-variant='telegram'] {
+  background:
+    var(--lw-director-panel-highlight, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%)),
+    var(--lw-director-panel-bg, rgba(232, 245, 255, 0.58));
+  padding: 0;
+}
+
+.director-panel[data-skin-variant='telegram'] .panel-header {
+  padding: 12px 14px;
+  background: var(--lw-director-header-bg, rgba(255, 255, 255, 0.62));
+  border-bottom-color: var(--lw-director-header-border, rgba(148, 190, 219, 0.34));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.director-panel[data-skin-variant='telegram'] .header-actions {
+  flex-wrap: wrap;
+}
+
+.director-panel[data-skin-variant='telegram'] .action-btn {
+  min-height: 40px;
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.director-panel[data-skin-variant='telegram'].is-mobile .action-btn {
+  min-height: 44px;
+  flex: 1 1 0;
+}
+
+.director-panel[data-skin-variant='telegram'] .panel-content-scroll {
+  padding: 14px;
+  gap: 14px;
+}
+
+.director-panel[data-skin-variant='telegram'].is-mobile .panel-content-scroll {
+  padding: 12px 12px calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
+}
+
+.director-panel[data-skin-variant='telegram'] .content-section {
+  background: var(--lw-director-section-bg, rgba(255, 255, 255, 0.74));
+  border-color: var(--lw-director-section-border, rgba(148, 190, 219, 0.38));
+  border-radius: 18px;
+  box-shadow: var(--lw-director-section-shadow, var(--lw-telegram-panel-shadow, 0 18px 42px rgba(44, 92, 130, 0.1)));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.director-panel[data-skin-variant='telegram'] .plan-bubble,
+.director-panel[data-skin-variant='telegram'] .table-card,
+.director-panel[data-skin-variant='telegram'] .memory-card,
+.director-panel[data-skin-variant='telegram'] .relationship-item {
+  background: var(--lw-director-control-bg, rgba(255, 255, 255, 0.7));
+  border-color: var(--lw-director-control-border, rgba(148, 190, 219, 0.32));
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.director-panel[data-skin-variant='telegram'] .table-card-header {
+  min-height: 44px;
+  background: var(--lw-director-control-header-bg, rgba(227, 244, 255, 0.5));
+  border-bottom-color: var(--lw-director-control-border, rgba(148, 190, 219, 0.28));
+}
+
+.director-panel[data-skin-variant='telegram'] .summary-textarea,
+.director-panel[data-skin-variant='telegram'] .inline-input,
+.director-panel[data-skin-variant='telegram'] .inline-textarea {
+  min-height: 44px;
+  border-radius: 14px;
+  border-color: var(--lw-director-input-border, rgba(148, 190, 219, 0.36));
+  background: var(--lw-director-input-bg, rgba(255, 255, 255, 0.72));
+}
+
+.director-panel[data-skin-variant='telegram'] .data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.director-panel[data-skin-variant='telegram'] .data-table td {
+  min-height: 44px;
+  padding: 10px 8px;
+  border-bottom-color: var(--lw-director-table-border, rgba(148, 190, 219, 0.22));
+}
+
+.director-panel[data-skin-variant='telegram'] .data-tag,
+.director-panel[data-skin-variant='telegram'] .lw-badge,
+.director-panel[data-skin-variant='telegram'] .table-schema-id {
+  border-radius: 999px;
+}
+
+.director-panel[data-skin-variant='telegram'].is-mobile .dynamic-tables-grid,
+.director-panel[data-skin-variant='telegram'].is-small .dynamic-tables-grid {
+  gap: 12px;
+}
+
+.director-panel[data-skin-variant='telegram'].is-mobile .content-section,
+.director-panel[data-skin-variant='telegram'].is-small .content-section {
+  padding: 14px;
+}
+
+/* plugins/settings/SettingControl.vue */
+.setting-row[data-skin-variant='telegram'] {
+  border-bottom-color: var(--lw-border-subtle);
+  min-height: 44px;
+}
+
+.setting-row[data-skin-variant='telegram'].layout-horizontal:hover {
+  background: color-mix(in srgb, var(--lw-primary) 7%, transparent);
+}
+
+.setting-row[data-skin-variant='telegram'] .segment-control,
+.setting-row[data-skin-variant='telegram'] .scope-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-input,
+.setting-row[data-skin-variant='telegram'] .slider-number-input,
+.setting-row[data-skin-variant='telegram'] .remote-font-picker,
+.setting-row[data-skin-variant='telegram'] .font-preview-card,
+.setting-row[data-skin-variant='telegram'] .option-description-tip {
+  border-color: var(--lw-setting-control-border, var(--lw-border-subtle));
+  background: color-mix(in srgb, var(--lw-setting-control-bg, var(--lw-surface-container)) 84%, transparent);
+}
+
+.setting-row[data-skin-variant='telegram'] .segment-control,
+.setting-row[data-skin-variant='telegram'] .segment-control button,
+.setting-row[data-skin-variant='telegram'] .scope-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-input {
+  border-radius: 999px;
+  min-height: 40px;
+}
+
+.setting-row[data-skin-variant='telegram'] .segment-control button.active {
+  background: var(--lw-setting-control-active-bg, var(--lw-surface-container-high));
+  box-shadow: var(--lw-setting-control-active-shadow, 0 8px 18px rgba(44, 92, 130, 0.1));
+}
+
+/* plugins/lorebook/components/LorebookWorkspace.vue */
+.lorebook-root[data-skin-variant='telegram'] {
+  background: var(--lw-lorebook-workspace-bg, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%), rgba(232, 245, 255, 0.58));
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-header {
+  background: var(--lw-lorebook-header-bg, rgba(255, 255, 255, 0.62));
+  border-bottom-color: var(--lw-lorebook-header-border, rgba(148, 190, 219, 0.34));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lorebook-root[data-skin-variant='telegram'] .book-selector-trigger,
+.lorebook-root[data-skin-variant='telegram'] .view-toggle-group,
+.lorebook-root[data-skin-variant='telegram'] .version-status-bar,
+.lorebook-root[data-skin-variant='telegram'] .version-history-panel,
+.lorebook-root[data-skin-variant='telegram'] .search-input-wrapper {
+  background: var(--lw-lorebook-control-bg, rgba(255, 255, 255, 0.7));
+  border-color: var(--lw-lorebook-control-border, rgba(148, 190, 219, 0.34));
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-list {
+  background: transparent;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-item,
+.lorebook-root[data-skin-variant='telegram'] .grid-card,
+.lorebook-root[data-skin-variant='telegram'] .table-row {
+  min-height: 44px;
+  background: var(--lw-lorebook-item-bg, rgba(255, 255, 255, 0.72));
+  border-color: var(--lw-lorebook-item-border, rgba(148, 190, 219, 0.3));
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-item:hover,
+.lorebook-root[data-skin-variant='telegram'] .grid-card:hover,
+.lorebook-root[data-skin-variant='telegram'] .table-row:hover {
+  background: var(--lw-lorebook-item-hover-bg, rgba(255, 255, 255, 0.88));
+  transform: none;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .view-toggle-btn,
+.lorebook-root[data-skin-variant='telegram'] .version-mode-btn,
+.lorebook-root[data-skin-variant='telegram'] .history-toggle-btn,
+.lorebook-root[data-skin-variant='telegram'] .lw-btn {
+  min-height: 40px;
+  border-radius: 999px;
+}
+
+.lorebook-root[data-skin-variant='telegram'][data-mode='small'] .lore-list,
+.lorebook-root[data-skin-variant='telegram'].is-mobile .lore-list {
+  padding-bottom: calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
+}
+
+/* plugins/lorebook/LorebookEditor.vue */
+.lore-editor[data-skin-variant='telegram'] {
+  background: var(--lw-lorebook-editor-bg, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%), rgba(232, 245, 255, 0.58));
+}
+
+.lore-editor[data-skin-variant='telegram'] .editor-header {
+  background: var(--lw-lorebook-editor-header-bg, rgba(255, 255, 255, 0.68));
+  border-bottom-color: var(--lw-lorebook-editor-header-border, rgba(148, 190, 219, 0.34));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lore-editor[data-skin-variant='telegram'] .editor-section,
+.lore-editor[data-skin-variant='telegram'] .toggle-card,
+.lore-editor[data-skin-variant='telegram'] .field-item,
+.lore-editor[data-skin-variant='telegram'] .locked-status,
+.lore-editor[data-skin-variant='telegram'] .version-badge,
+.lore-editor[data-skin-variant='telegram'] .remote-font-picker {
+  background: var(--lw-lorebook-editor-section-bg, rgba(255, 255, 255, 0.74));
+  border-color: var(--lw-lorebook-editor-section-border, rgba(148, 190, 219, 0.34));
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.lore-editor[data-skin-variant='telegram'] .lw-input,
+.lore-editor[data-skin-variant='telegram'] .lw-select,
+.lore-editor[data-skin-variant='telegram'] .keyword-input-group,
+.lore-editor[data-skin-variant='telegram'] .key-chip {
+  min-height: 44px;
+  border-radius: 16px;
+  border-color: var(--lw-lorebook-editor-control-border, rgba(148, 190, 219, 0.36));
+  background: var(--lw-lorebook-editor-control-bg, rgba(255, 255, 255, 0.76));
+}
+
+.lore-editor[data-skin-variant='telegram'] .action-toggle-btn {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  border-color: var(--lw-lorebook-editor-control-border, rgba(148, 190, 219, 0.34));
+  background: var(--lw-lorebook-editor-control-bg, rgba(255, 255, 255, 0.72));
+}
+
+.lore-editor[data-skin-variant='telegram'] .save-button {
+  min-height: 44px;
+  border-radius: 999px;
+  background: var(--lw-primary);
+}
+
+.lore-editor[data-skin-variant='telegram'] .editor-body {
+  padding-bottom: calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
+}
+
+/* plugins/stats/LuminaStats.vue */
+.lw-widgets-pane[data-skin-variant='telegram'] {
+  background:
+    var(--lw-stats-panel-highlight, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%)),
+    var(--lw-stats-panel-bg, rgba(232, 245, 255, 0.58));
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .widget-content {
+  padding: 14px;
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'].is-mobile .widget-content {
+  padding: 12px 12px calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .stats-shell {
+  gap: 14px;
+  background: var(--lw-stats-shell-bg, rgba(255, 255, 255, 0.74));
+  border-color: var(--lw-stats-shell-border, rgba(148, 190, 219, 0.42));
+  border-radius: 18px;
+  box-shadow: var(--lw-stats-shell-shadow, var(--lw-telegram-panel-shadow, 0 18px 42px rgba(44, 92, 130, 0.12)));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .stats-badge {
+  min-height: 30px;
+  color: var(--lw-primary);
+  background: var(--lw-stats-badge-bg, rgba(227, 244, 255, 0.76));
+  border-color: var(--lw-stats-badge-border, rgba(118, 184, 230, 0.36));
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .stat-card {
+  min-height: 112px;
+  background: var(--lw-stats-card-bg, rgba(255, 255, 255, 0.76));
+  border-color: var(--lw-stats-card-border, rgba(148, 190, 219, 0.34));
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .metric-fill {
+  background: var(--lw-stats-metric-fill-bg, linear-gradient(90deg, #35a8eb, #77cdf6));
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .tag-pill {
+  min-height: 32px;
+  background: var(--lw-stats-tag-bg, rgba(255, 255, 255, 0.72));
+  border-color: var(--lw-stats-tag-border, rgba(148, 190, 219, 0.32));
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'] .helper-info {
+  padding: 12px 14px;
+  border: 1px solid var(--lw-stats-helper-border, rgba(148, 190, 219, 0.3));
+  border-radius: 16px;
+  background: var(--lw-stats-helper-bg, rgba(255, 255, 255, 0.58));
+}
+
+.lw-widgets-pane[data-skin-variant='telegram'].is-small .stats-grid,
+.lw-widgets-pane[data-skin-variant='telegram'].is-mobile .stats-grid {
+  grid-template-columns: 1fr;
+}
+
+/* shell/traditional/WidgetPanelHost.vue */
+.lw-widget-container[data-surface-variant='telegram'] {
+  /* 内容（角色资料等）有自己的背景，必须按圆角裁剪 */
+  overflow: hidden;
+  background: var(--lw-telegram-pane-bg, var(--lw-telegram-info-panel-bg, var(--lw-shell-widget-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent))));
+  border-color: var(--lw-telegram-info-panel-border, var(--lw-shell-widget-border, var(--lw-border-subtle)));
+  box-shadow: var(--lw-telegram-panel-shadow, var(--lw-shadow-card));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
+}
+
+.lw-panel-body:not(.is-freeform) .lw-widget-container[data-surface-variant='telegram'] {
+  border: 1px solid var(--lw-telegram-pane-border, var(--lw-border-subtle));
+  border-radius: var(--lw-telegram-pane-radius, 0);
+  box-shadow: var(--lw-telegram-pane-shadow, none);
+  background: var(--lw-telegram-pane-bg, var(--lw-shell-widget-pane-bg, linear-gradient(180deg, color-mix(in srgb, var(--lw-surface-container-high) 86%, transparent), color-mix(in srgb, var(--lw-surface-container) 70%, transparent))));
+}
+
+.lw-widget-container[data-surface-variant='telegram'] .widget-container-header {
+  border-bottom-color: var(--lw-border-subtle);
+  background: var(--lw-shell-widget-header-bg, color-mix(in srgb, var(--lw-surface-container-high) 68%, transparent));
+}
+
+.lw-widget-container[data-surface-variant='telegram'] .current-widget-info,
+.lw-widget-container[data-surface-variant='telegram'] .widget-actions button {
+  border-radius: 999px;
+}
+
+.lw-widget-container[data-surface-variant='telegram'] .dropdown-menu {
+  background: var(--lw-shell-widget-dropdown-bg, color-mix(in srgb, var(--lw-surface-container-high) 88%, transparent));
+  border-color: var(--lw-shell-widget-dropdown-border, var(--lw-border-subtle));
+  box-shadow: var(--lw-telegram-panel-shadow, var(--lw-shadow-card));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lw-widget-container[data-surface-variant='telegram'] .widget-main-content {
+  background: var(--lw-shell-widget-content-overlay, radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--lw-primary) 12%, transparent), transparent 34%), transparent);
+}
+
+/* plugins/settings/SettingsRoot.vue */
+.lw-settings-root[data-skin-variant='telegram'] {
+  --lw-settings-unified-padding: clamp(18px, 3vw, 32px);
+  --lw-settings-detail-outer-padding: var(--lw-panel-padding);
+  --lw-settings-detail-content-padding: 24px;
+  background:
+    var(--lw-settings-shell-overlay, radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--lw-primary) 12%, transparent), transparent 30%)),
+    var(--lw-settings-shell-bg, var(--lw-bg-app));
+}
+
+.lw-settings-root[data-skin-variant='telegram']:not(.is-large) {
+  --lw-settings-unified-padding: 12px;
+  --lw-settings-detail-outer-padding: 12px;
+  --lw-settings-detail-content-padding: 16px;
+}
+
+.lw-settings-root[data-skin-variant='telegram']:not(.is-large) .settings-scroll-area {
+  /* 留出 Telegram 移动端底部导航的高度 */
+  padding: 0 12px calc(96px + var(--lw-content-safe-bottom, 0px));
+  box-sizing: border-box;
+}
+
+.lw-settings-root[data-skin-variant='telegram'] .settings-sidebar {
+  width: 256px;
+  background: var(--lw-settings-sidebar-bg, color-mix(in srgb, var(--lw-surface-container-high) 72%, transparent));
+  border-right-color: var(--lw-settings-sidebar-border, var(--lw-border-subtle));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lw-settings-root[data-skin-variant='telegram'] .sidebar-header,
+.lw-settings-root[data-skin-variant='telegram'] .small-back-bar {
+  background: var(--lw-settings-header-bg, color-mix(in srgb, var(--lw-surface-container-high) 70%, transparent));
+  border-bottom-color: var(--lw-settings-header-border, var(--lw-border-subtle));
+}
+
+.lw-settings-root[data-skin-variant='telegram'] .settings-nav__item {
+  border-radius: 16px;
+}
+
+.lw-settings-root[data-skin-variant='telegram'] .settings-nav__item.is-active {
+  background: var(--lw-settings-nav-active-bg, color-mix(in srgb, var(--lw-primary) 14%, transparent));
+}
+
+/* plugins/settings/SettingsCategoryView.vue */
+.settings-category[data-skin-variant='telegram'] .plugin-settings-block.lw-card {
+  border-color: var(--lw-settings-detail-border, var(--lw-border-subtle));
+  background: var(--lw-settings-detail-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent));
+  border-radius: 18px;
+  box-shadow: none;
+}

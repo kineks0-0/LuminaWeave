@@ -12,6 +12,7 @@
     :widgetGroups="runtimeContext.widgetGroups"
     :activeWidgetId="runtimeContext.traditional.activeRightPanel !== 'none' ? runtimeContext.traditional.activeRightPanel : ''"
     :guildRailVisible="runtimeFrame.headerRailVisible"
+    :leftRenderer="headerLeftRenderer"
     @switchMainView="runtimeActions.navigation.switchMainView"
     @closeTab="runtimeActions.navigation.closeTab"
     @close="runtimeActions.navigation.close"
@@ -62,6 +63,7 @@
     :widgetGroups="runtimeContext.widgetGroups"
     :activeWidgetId="runtimeContext.traditional.activeRightPanel !== 'none' ? runtimeContext.traditional.activeRightPanel : ''"
     :guildRailVisible="runtimeFrame.headerRailVisible"
+    :leftRenderer="headerLeftRenderer"
     @switchMainView="runtimeActions.navigation.switchMainView"
     @closeTab="runtimeActions.navigation.closeTab"
     @close="runtimeActions.navigation.close"
@@ -99,9 +101,13 @@ const props = defineProps<{
 
 const layoutMode = computed(() => props.runtimeContext.shellKind);
 
-// 全局 header 的显隐由模式包声明（shellChrome），平台不按模式 ID 特判。
+// 全局 header 的显隐与左侧区域由模式包声明（shellChrome / headerLeftRenderer），平台不按模式 ID 特判。
 const shouldRenderTraditionalHeader = computed(() =>
   desktopModeRuntimeRegistry.get(props.runtimeContext.activeDesktopModeId)?.shellChrome?.hideGlobalHeader !== true
+);
+
+const headerLeftRenderer = computed(() =>
+  desktopModeRuntimeRegistry.get(props.runtimeContext.activeDesktopModeId)?.headerLeftRenderer
 );
 
 const currentShellRenderer = computed(() => {

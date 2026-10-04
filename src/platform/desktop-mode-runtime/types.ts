@@ -33,13 +33,13 @@ export interface DesktopModeRuntimeDescriptor {
     icon?: string;
     shellKind: DesktopShellKind;
     shellRenderer?: Component;
+    headerLeftRenderer?: Component;
     navigationModel: DesktopNavigationModel;
     surfaceMap?: Partial<Record<SurfaceContractId, SurfaceContractId>>;
     componentOverrides?: Partial<{
         [K in SurfaceContractId]: SurfaceRendererDefinition<K>;
     }>;
     interactionPolicy: DesktopInteractionPolicy;
-    tokens?: Record<string, string | number>;
     settingsSchema?: Record<string, SettingDefinition>;
     composition: DesktopModeComposition;
     shellChrome?: DesktopModeShellChrome;

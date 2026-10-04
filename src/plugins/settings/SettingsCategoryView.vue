@@ -264,10 +264,5 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
-.settings-category[data-skin-variant='telegram'] :deep(.plugin-settings-block.lw-card) {
-  border-color: var(--lw-settings-detail-border, var(--lw-border-subtle));
-  background: var(--lw-settings-detail-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent));
-  border-radius: 18px;
-  box-shadow: none;
-}
+
 </style>

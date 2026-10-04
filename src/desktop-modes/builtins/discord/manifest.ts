@@ -56,9 +56,6 @@ export const discordDesktopMode: DesktopModeManifest = {
     surfacePreset: {
         mainSurfaceVariant: 'discord',
         widgetSurfaceVariant: 'discord',
-        chatVariant: 'discord',
-        settingsVariant: 'discord',
-        timelineVariant: 'discord',
     },
     designTokens: resolveDiscordDesignTokens,
     surfaceSkins: createDiscordSurfaceSkinMap(),

@@ -201,9 +201,7 @@ const emit = defineEmits<{
   box-shadow: var(--lw-shadow-card);
 }
 
-.lw-widget-container[data-surface-variant='discord'] {
-  backdrop-filter: none;
-}
+
 
 .lw-panel-body:not(.is-freeform) .lw-widget-container {
   border-radius: 0;
@@ -214,44 +212,17 @@ const emit = defineEmits<{
   border-left: var(--lw-shell-widget-divider-border, 1px solid var(--lw-shell-widget-border, var(--lw-border-base)));
 }
 
-.lw-widget-container[data-surface-variant='telegram'] {
-  /* 内容（角色资料等）有自己的背景，必须按圆角裁剪 */
-  overflow: hidden;
-  background: var(--lw-telegram-pane-bg, var(--lw-telegram-info-panel-bg, var(--lw-shell-widget-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent))));
-  border-color: var(--lw-telegram-info-panel-border, var(--lw-shell-widget-border, var(--lw-border-subtle)));
-  box-shadow: var(--lw-telegram-panel-shadow, var(--lw-shadow-card));
-  backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
-  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(22px));
-}
 
-.lw-panel-body:not(.is-freeform) .lw-widget-container[data-surface-variant='telegram'] {
-  border: 1px solid var(--lw-telegram-pane-border, var(--lw-border-subtle));
-  border-radius: var(--lw-telegram-pane-radius, 0);
-  box-shadow: var(--lw-telegram-pane-shadow, none);
-  background: var(--lw-telegram-pane-bg, var(--lw-shell-widget-pane-bg, linear-gradient(180deg, color-mix(in srgb, var(--lw-surface-container-high) 86%, transparent), color-mix(in srgb, var(--lw-surface-container) 70%, transparent))));
-}
 
-.lw-widget-container[data-surface-variant='telegram'] .widget-container-header {
-  border-bottom-color: var(--lw-border-subtle);
-  background: var(--lw-shell-widget-header-bg, color-mix(in srgb, var(--lw-surface-container-high) 68%, transparent));
-}
 
-.lw-widget-container[data-surface-variant='telegram'] .current-widget-info,
-.lw-widget-container[data-surface-variant='telegram'] .widget-actions button {
-  border-radius: 999px;
-}
 
-.lw-widget-container[data-surface-variant='telegram'] .dropdown-menu {
-  background: var(--lw-shell-widget-dropdown-bg, color-mix(in srgb, var(--lw-surface-container-high) 88%, transparent));
-  border-color: var(--lw-shell-widget-dropdown-border, var(--lw-border-subtle));
-  box-shadow: var(--lw-telegram-panel-shadow, var(--lw-shadow-card));
-  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-}
 
-.lw-widget-container[data-surface-variant='telegram'] .widget-main-content {
-  background: var(--lw-shell-widget-content-overlay, radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--lw-primary) 12%, transparent), transparent 34%), transparent);
-}
+
+
+
+
+
+
 
 .widget-container-header {
   padding: 14px 16px;

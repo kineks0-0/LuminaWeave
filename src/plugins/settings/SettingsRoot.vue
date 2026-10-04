@@ -150,26 +150,11 @@ onMounted(initSettings);
   background: var(--lw-text-muted);
 }
 
-.lw-settings-root[data-skin-variant='telegram'] {
-  --lw-settings-unified-padding: clamp(18px, 3vw, 32px);
-  --lw-settings-detail-outer-padding: var(--lw-panel-padding);
-  --lw-settings-detail-content-padding: 24px;
-  background:
-    var(--lw-settings-shell-overlay, radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--lw-primary) 12%, transparent), transparent 30%)),
-    var(--lw-settings-shell-bg, var(--lw-bg-app));
-}
 
-.lw-settings-root[data-skin-variant='telegram']:not(.is-large) {
-  --lw-settings-unified-padding: 12px;
-  --lw-settings-detail-outer-padding: 12px;
-  --lw-settings-detail-content-padding: 16px;
-}
 
-.lw-settings-root[data-skin-variant='telegram']:not(.is-large) .settings-scroll-area {
-  /* 留出 Telegram 移动端底部导航的高度 */
-  padding: 0 12px calc(96px + var(--lw-content-safe-bottom, 0px));
-  box-sizing: border-box;
-}
+
+
+
 
 .lw-settings-root.is-small :deep(.settings-overview),
 .lw-settings-root.is-small :deep(.settings-category) {
@@ -188,25 +173,11 @@ onMounted(initSettings);
   padding-bottom: 10px;
 }
 
-.lw-settings-root[data-skin-variant='telegram'] .settings-sidebar {
-  width: 256px;
-  background: var(--lw-settings-sidebar-bg, color-mix(in srgb, var(--lw-surface-container-high) 72%, transparent));
-  border-right-color: var(--lw-settings-sidebar-border, var(--lw-border-subtle));
-  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-}
 
-.lw-settings-root[data-skin-variant='telegram'] .sidebar-header,
-.lw-settings-root[data-skin-variant='telegram'] .small-back-bar {
-  background: var(--lw-settings-header-bg, color-mix(in srgb, var(--lw-surface-container-high) 70%, transparent));
-  border-bottom-color: var(--lw-settings-header-border, var(--lw-border-subtle));
-}
 
-.lw-settings-root[data-skin-variant='telegram'] :deep(.settings-nav__item) {
-  border-radius: 16px;
-}
 
-.lw-settings-root[data-skin-variant='telegram'] :deep(.settings-nav__item.is-active) {
-  background: var(--lw-settings-nav-active-bg, color-mix(in srgb, var(--lw-primary) 14%, transparent));
-}
+
+
+
+
 </style>

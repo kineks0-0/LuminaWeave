@@ -63,6 +63,7 @@ export const createDesktopModeRuntimeDescriptor = (input: DesktopModePackage): D
         icon: manifest.icon,
         shellKind,
         shellRenderer: modePackage.shellRenderer ?? getFallbackShellRenderer(shellKind),
+        headerLeftRenderer: modePackage.headerLeftRenderer,
         navigationModel: {
             id: `${manifest.id}.navigation`,
             primarySurfaces: [],
@@ -75,7 +76,6 @@ export const createDesktopModeRuntimeDescriptor = (input: DesktopModePackage): D
             supportsOverlappingWindows: shellKind === 'freeform',
             supportsContextualTools: true
         },
-        tokens: {},
         settingsSchema: manifest.settingsManifest,
         componentOverrides,
         composition: manifest.composition,

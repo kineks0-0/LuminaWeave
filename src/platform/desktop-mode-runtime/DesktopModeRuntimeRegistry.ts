@@ -63,7 +63,8 @@ export class DesktopModeRuntimeRegistry {
                 primarySurfaces: collectDesktopCompositionSurfaceIds(composition.desktop),
                 mobileSurfaces: collectDesktopCompositionSurfaceIds(composition.mobile)
             },
-            shellRenderer: manifest.shellRenderer ? markRaw(manifest.shellRenderer) : undefined
+            shellRenderer: manifest.shellRenderer ? markRaw(manifest.shellRenderer) : undefined,
+            headerLeftRenderer: manifest.headerLeftRenderer ? markRaw(manifest.headerLeftRenderer) : undefined
         };
 
         this.overrideDisposers.set(manifest.id, this.surfaces.registerDesktopOverrides(manifest.id, normalizedOverrides, manifest.ownerPluginId));

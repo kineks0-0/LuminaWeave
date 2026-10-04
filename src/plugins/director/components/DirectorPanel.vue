@@ -268,12 +268,7 @@ const saveTable = (tableId: string) => {
   font-family: var(--lw-font-main);
 }
 
-.director-panel[data-skin-variant='telegram'] {
-  background:
-    var(--lw-director-panel-highlight, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%)),
-    var(--lw-director-panel-bg, rgba(232, 245, 255, 0.58));
-  padding: 0;
-}
+
 
 /* 1. Header Styles */
 .panel-header {
@@ -283,13 +278,7 @@ const saveTable = (tableId: string) => {
   z-index: 10;
 }
 
-.director-panel[data-skin-variant='telegram'] .panel-header {
-  padding: 12px 14px;
-  background: var(--lw-director-header-bg, rgba(255, 255, 255, 0.62));
-  border-bottom-color: var(--lw-director-header-border, rgba(148, 190, 219, 0.34));
-  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-}
+
 
 .header-actions {
   display: flex;
@@ -319,20 +308,11 @@ const saveTable = (tableId: string) => {
   gap: 18px;
 }
 
-.director-panel[data-skin-variant='telegram'] .header-actions {
-  flex-wrap: wrap;
-}
 
-.director-panel[data-skin-variant='telegram'] .action-btn {
-  min-height: 40px;
-  border-radius: 999px;
-  box-shadow: none;
-}
 
-.director-panel[data-skin-variant='telegram'].is-mobile .action-btn {
-  min-height: 44px;
-  flex: 1 1 0;
-}
+
+
+
 
 .content-section {
   background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
@@ -342,23 +322,11 @@ const saveTable = (tableId: string) => {
   box-shadow: var(--lw-shadow);
 }
 
-.director-panel[data-skin-variant='telegram'] .panel-content-scroll {
-  padding: 14px;
-  gap: 14px;
-}
 
-.director-panel[data-skin-variant='telegram'].is-mobile .panel-content-scroll {
-  padding: 12px 12px calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
-}
 
-.director-panel[data-skin-variant='telegram'] .content-section {
-  background: var(--lw-director-section-bg, rgba(255, 255, 255, 0.74));
-  border-color: var(--lw-director-section-border, rgba(148, 190, 219, 0.38));
-  border-radius: 18px;
-  box-shadow: var(--lw-director-section-shadow, var(--lw-telegram-panel-shadow, 0 18px 42px rgba(44, 92, 130, 0.1)));
-  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
-}
+
+
+
 
 .section-title-wrapper {
   display: flex;
@@ -655,57 +623,21 @@ const saveTable = (tableId: string) => {
   width: 45%;
 }
 
-.director-panel[data-skin-variant='telegram'] .plan-bubble,
-.director-panel[data-skin-variant='telegram'] .table-card,
-.director-panel[data-skin-variant='telegram'] .memory-card,
-.director-panel[data-skin-variant='telegram'] .relationship-item {
-  background: var(--lw-director-control-bg, rgba(255, 255, 255, 0.7));
-  border-color: var(--lw-director-control-border, rgba(148, 190, 219, 0.32));
-  border-radius: 16px;
-  box-shadow: none;
-}
 
-.director-panel[data-skin-variant='telegram'] .table-card-header {
-  min-height: 44px;
-  background: var(--lw-director-control-header-bg, rgba(227, 244, 255, 0.5));
-  border-bottom-color: var(--lw-director-control-border, rgba(148, 190, 219, 0.28));
-}
 
-.director-panel[data-skin-variant='telegram'] .summary-textarea,
-.director-panel[data-skin-variant='telegram'] .inline-input,
-.director-panel[data-skin-variant='telegram'] .inline-textarea {
-  min-height: 44px;
-  border-radius: 14px;
-  border-color: var(--lw-director-input-border, rgba(148, 190, 219, 0.36));
-  background: var(--lw-director-input-bg, rgba(255, 255, 255, 0.72));
-}
 
-.director-panel[data-skin-variant='telegram'] .data-table {
-  border-collapse: separate;
-  border-spacing: 0;
-}
 
-.director-panel[data-skin-variant='telegram'] .data-table td {
-  min-height: 44px;
-  padding: 10px 8px;
-  border-bottom-color: var(--lw-director-table-border, rgba(148, 190, 219, 0.22));
-}
 
-.director-panel[data-skin-variant='telegram'] .data-tag,
-.director-panel[data-skin-variant='telegram'] .lw-badge,
-.director-panel[data-skin-variant='telegram'] .table-schema-id {
-  border-radius: 999px;
-}
 
-.director-panel[data-skin-variant='telegram'].is-mobile .dynamic-tables-grid,
-.director-panel[data-skin-variant='telegram'].is-small .dynamic-tables-grid {
-  gap: 12px;
-}
 
-.director-panel[data-skin-variant='telegram'].is-mobile .content-section,
-.director-panel[data-skin-variant='telegram'].is-small .content-section {
-  padding: 14px;
-}
+
+
+
+
+
+
+
+
 
 .tags-container { display: flex; flex-wrap: wrap; gap: 6px; }
 .data-tag { 

@@ -1,6 +1,9 @@
 import TelegramUserInfoPanel from './telegram/shell/TelegramUserInfoPanel.vue';
 import TelegramShell from './telegram/shell/TelegramShell.vue';
 import DiscordShell from './discord/shell/DiscordShell.vue';
+import DiscordChannelBar from './discord/shell/DiscordChannelBar.vue';
+import discordStyles from './discord/styles.css?raw';
+import telegramStyles from './telegram/styles.css?raw';
 import type { DesktopModePackage } from '../core/types.js';
 
 /**
@@ -21,15 +24,18 @@ export const builtinDesktopModeBindings = new Map<string, DesktopModeBinding>([
                 component: TelegramUserInfoPanel,
                 variant: 'telegram'
             }
-        ]
+        ],
+        styles: telegramStyles
     }],
     ['discord', {
         shellRenderer: DiscordShell,
+        headerLeftRenderer: DiscordChannelBar,
         shellChrome: {
             headerRailToggle: {
                 settingKey: 'discord-channel-mark',
                 default: true
             }
-        }
+        },
+        styles: discordStyles
     }]
 ]);

@@ -6,78 +6,69 @@
     :style="headerSkinStyle"
   >
     <div class="header-left">
-      <template v-if="variant !== 'discord'">
-      <div class="lw-brand" v-if="!isMobile">
-        <span class="lw-title-main">LuminaWeave</span>
-      </div>
+      <slot name="left">
+        <component
+          v-if="leftRenderer"
+          :is="leftRenderer"
+          :active-tab-label="activeTabEntry?.name || '频道'"
+          :guild-rail-visible="guildRailVisible !== false"
+          @toggle-guild-rail="$emit('toggleGuildRail')"
+        />
 
-      <div class="header-launcher">
-        <button
-          class="launcher-btn"
-          :class="{ active: activeMainTab === 'lumina-launcher' }"
-          @click="$emit('switchMainView', 'lumina-launcher')"
-          title="启动台"
-        >
-          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
-          </svg>
-        </button>
-      </div>
+        <template v-else>
+          <div class="lw-brand" v-if="!isMobile">
+            <span class="lw-title-main">LuminaWeave</span>
+          </div>
 
-      <div class="lw-tabs" ref="tabsContainerRef">
-        <template v-for="(plugin, index) in tabOrder" :key="plugin.type === 'plugin' ? plugin.id : 'dyn-' + plugin.id">
-          <template v-if="plugin.type === 'plugin'">
+          <div class="header-launcher">
             <button
-              v-if="plugin.id !== 'lumina-launcher'"
-              class="lw-tab"
-              :class="{ active: activeMainTab === plugin.id }"
-              @click="$emit('switchMainView', plugin.id)"
+              class="launcher-btn"
+              :class="{ active: activeMainTab === 'lumina-launcher' }"
+              @click="$emit('switchMainView', 'lumina-launcher')"
+              title="启动台"
             >
-              <span v-html="plugin.icon" class="tab-icon-wrapper"></span>
-              {{ plugin.name }}
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
             </button>
-          </template>
-          <template v-else>
-            <button
-              class="lw-tab dynamic"
-              :class="{ active: activeMainTab === plugin.id }"
-              @click="$emit('switchMainView', plugin.id)"
-            >
-              <span v-html="plugin.icon" class="tab-icon-wrapper"></span>
-              {{ plugin.name }}
-              <div class="tab-close" @click.stop="$emit('closeTab', plugin.id)">
-                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </div>
-            </button>
-          </template>
+          </div>
+
+          <div class="lw-tabs" ref="tabsContainerRef">
+            <template v-for="(plugin, index) in tabOrder" :key="plugin.type === 'plugin' ? plugin.id : 'dyn-' + plugin.id">
+              <template v-if="plugin.type === 'plugin'">
+                <button
+                  v-if="plugin.id !== 'lumina-launcher'"
+                  class="lw-tab"
+                  :class="{ active: activeMainTab === plugin.id }"
+                  @click="$emit('switchMainView', plugin.id)"
+                >
+                  <span v-html="plugin.icon" class="tab-icon-wrapper"></span>
+                  {{ plugin.name }}
+                </button>
+              </template>
+              <template v-else>
+                <button
+                  class="lw-tab dynamic"
+                  :class="{ active: activeMainTab === plugin.id }"
+                  @click="$emit('switchMainView', plugin.id)"
+                >
+                  <span v-html="plugin.icon" class="tab-icon-wrapper"></span>
+                  {{ plugin.name }}
+                  <div class="tab-close" @click.stop="$emit('closeTab', plugin.id)">
+                    <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </div>
+                </button>
+              </template>
+            </template>
+          </div>
         </template>
-
-      </div>
-      </template>
-
-      <div v-else class="discord-channel-bar">
-        <button
-          class="discord-channel-mark"
-          :class="{ active: guildRailVisible !== false }"
-          type="button"
-          :title="guildRailVisible !== false ? '收起侧栏与角色列表' : '展开侧栏与角色列表'"
-          :aria-label="guildRailVisible !== false ? '收起侧栏与角色列表' : '展开侧栏与角色列表'"
-          :aria-pressed="guildRailVisible !== false"
-          @click="$emit('toggleGuildRail')"
-        >
-          #
-        </button>
-        <div class="discord-channel-copy">
-          <strong>{{ activeTabEntry?.name || '频道' }}</strong>
-          <span>当前桌面模式中的主工作区视图</span>
-        </div>
-      </div>
+      </slot>
     </div>
 
     <div class="header-center">
@@ -250,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref, type CSSProperties } from 'vue';
+import { computed, inject, ref, type Component, type CSSProperties } from 'vue';
 import { useOutsidePointer } from '../composables/useOutsidePointer.js';
 import { LuminaWeaveAPI } from '@/api';
 import { pluginManager } from '@/core/PluginManager';
@@ -268,6 +259,7 @@ const props = withDefaults(defineProps<{
   widgetGroups?: { label?: string; items: { id: string; name: string; icon: string }[] }[];
   activeWidgetId?: string;
   guildRailVisible?: boolean;
+  leftRenderer?: Component;
 }>(), {
   activeMainTab: 'lumina-chat',
   dynamicTabs: () => [],
@@ -473,75 +465,6 @@ useOutsidePointer([widgetBtnWrapperRef, profileMenuWrapperRef], () => {
   font-weight: var(--lw-type-title-large-weight);
   letter-spacing: var(--lw-type-title-large-tracking);
   color: #111827;
-}
-
-.discord-channel-bar {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.discord-channel-mark {
-  width: 28px;
-  height: 28px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: var(--lw-header-channel-mark-bg, var(--lw-bg-elevated));
-  color: var(--lw-header-channel-mark-color, var(--lw-text-muted));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--lw-type-title-medium-size);
-  line-height: var(--lw-type-title-medium-line-height);
-  font-weight: var(--lw-type-title-medium-weight);
-  letter-spacing: var(--lw-type-title-medium-tracking);
-  cursor: pointer;
-  transition:
-    background 160ms ease,
-    color 160ms ease,
-    border-color 160ms ease,
-    transform 160ms ease;
-}
-
-.discord-channel-mark:hover,
-.discord-channel-mark.active {
-  background: var(--lw-header-channel-mark-active-bg, var(--lw-bg-hover));
-  color: var(--lw-header-channel-mark-active-color, var(--lw-text-main));
-  border-color: var(--lw-header-channel-mark-active-border, rgba(var(--lw-primary-rgb), 0.3));
-}
-
-.discord-channel-mark:active {
-  transform: translateY(1px);
-}
-
-.discord-channel-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.discord-channel-copy strong {
-  font-size: var(--lw-type-title-medium-size);
-  line-height: var(--lw-type-title-medium-line-height);
-  font-weight: var(--lw-type-title-medium-weight);
-  letter-spacing: var(--lw-type-title-medium-tracking);
-  color: var(--lw-text-main);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.discord-channel-copy span {
-  font-size: var(--lw-type-body-small-size);
-  line-height: var(--lw-type-body-small-line-height);
-  font-weight: var(--lw-type-body-small-weight);
-  letter-spacing: var(--lw-type-body-small-tracking);
-  color: var(--lw-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .header-center {
@@ -1108,115 +1031,6 @@ useOutsidePointer([widgetBtnWrapperRef, profileMenuWrapperRef], () => {
 .avatar-sm.placeholder {
   display: block;
   background: var(--lw-bg-subtle);
-}
-
-.lw-panel-header[data-skin-variant='discord'] {
-  background: var(--lw-header-bg, var(--lw-bg-elevated));
-  border-bottom-color: var(--lw-header-border, var(--lw-border-strong));
-  box-shadow: var(--lw-header-shadow, inset 0 -1px 0 color-mix(in srgb, var(--lw-text-inverse) 4%, transparent));
-}
-
-.lw-panel-header[data-skin-variant='discord'] .lw-brand {
-  display: none;
-}
-
-.lw-panel-header[data-skin-variant='discord'] .launcher-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
-  background: var(--lw-header-control-bg, var(--lw-surface-container));
-  border-color: var(--lw-header-control-border, var(--lw-border-strong));
-  color: var(--lw-text-secondary);
-  box-shadow: none;
-}
-
-.lw-panel-header[data-skin-variant='discord'] .launcher-btn:hover,
-.lw-panel-header[data-skin-variant='discord'] .launcher-btn.active {
-  background: var(--lw-header-control-hover-bg, color-mix(in srgb, var(--lw-primary) 18%, var(--lw-surface-container)));
-  border-color: var(--lw-border-active);
-  color: var(--lw-text-main);
-  box-shadow: none;
-}
-
-.lw-panel-header[data-skin-variant='discord'] .lw-tabs {
-  background: var(--lw-header-tab-bg, var(--lw-surface-container));
-  border-color: var(--lw-header-control-border, var(--lw-border-strong));
-  border-radius: 14px;
-}
-
-.lw-panel-header[data-skin-variant='discord'] .lw-tab {
-  color: var(--lw-text-secondary);
-  border-radius: 10px;
-}
-
-.lw-panel-header[data-skin-variant='discord'] .lw-tab:hover {
-  color: var(--lw-text-main);
-  background: var(--lw-header-tab-hover-bg, var(--lw-surface-container-high));
-}
-
-.lw-panel-header[data-skin-variant='discord'] .lw-tab.active {
-  background: var(--lw-header-tab-active-bg, color-mix(in srgb, var(--lw-primary) 16%, var(--lw-surface-container-high)));
-  color: var(--lw-text-main);
-  box-shadow: none;
-}
-
-.lw-panel-header[data-skin-variant='discord'] .header-floating-controls,
-.lw-panel-header[data-skin-variant='discord'] .profile-trigger,
-.lw-panel-header[data-skin-variant='discord'] .profile-menu,
-.lw-panel-header[data-skin-variant='discord'] .widget-dropdown,
-.lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown {
-  background: var(--lw-header-control-bg, var(--lw-surface-container));
-  border-color: var(--lw-header-control-border, var(--lw-border-strong));
-  box-shadow: var(--lw-header-control-shadow, var(--lw-shadow-card));
-}
-
-.lw-panel-header[data-skin-variant='discord'] .profile-trigger,
-.lw-panel-header[data-skin-variant='discord'] .header-floating-controls {
-  color: var(--lw-text-main);
-}
-
-.lw-panel-header[data-skin-variant='discord'] .profile-trigger-copy strong,
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-copy strong,
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-label,
-.lw-panel-header[data-skin-variant='discord'] .widget-dropdown-item,
-.lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown-item {
-  color: var(--lw-text-main);
-}
-
-.lw-panel-header[data-skin-variant='discord'] .profile-trigger-copy small,
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-copy span:last-child,
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-value,
-.lw-panel-header[data-skin-variant='discord'] .widget-dropdown-label,
-.lw-panel-header[data-skin-variant='discord'] .widget-group-chevron,
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-kicker {
-  color: var(--lw-text-muted);
-}
-
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-item,
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-choice {
-  background: var(--lw-surface-container-low);
-  border-color: var(--lw-border-strong);
-}
-
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-item:hover,
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-choice:hover,
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-choice.active,
-.lw-panel-header[data-skin-variant='discord'] .widget-dropdown-item:hover,
-.lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown-item:hover {
-  background: var(--lw-surface-container-high);
-  border-color: color-mix(in srgb, var(--lw-primary) 34%, var(--lw-border-strong));
-  color: var(--lw-text-main);
-}
-
-.lw-panel-header[data-skin-variant='discord'] .profile-menu-icon {
-  background: var(--lw-surface-container);
-  color: var(--lw-text-secondary);
-}
-
-.lw-panel-header[data-skin-variant='discord'] .avatar-sm,
-.lw-panel-header[data-skin-variant='discord'] .avatar-sm.placeholder {
-  background: var(--lw-surface-container-high);
-  border-color: var(--lw-border-strong);
 }
 
 @media (max-width: 768px) {

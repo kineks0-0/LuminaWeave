@@ -48,7 +48,7 @@ export const useSurfaceSkin = (componentId: MaybeRefOrGetter<string>) => {
         desktopMode: computed(() => resolved.value.desktopMode),
         cssVars: computed(() => resolved.value.cssVars),
         tokens: computed(() => resolved.value.tokens),
-        classMap: computed(() => resolved.value.classMap),
+
         variant: computed(() => resolved.value.variant)
     };
 };

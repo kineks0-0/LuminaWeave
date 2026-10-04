@@ -212,9 +212,6 @@ export const getDesktopModeSurfacePreset = (desktopModeId: string): ThemeSurface
     return {
         mainSurfaceVariant: mode.surfacePreset?.mainSurfaceVariant || 'default',
         widgetSurfaceVariant: mode.surfacePreset?.widgetSurfaceVariant || 'default',
-        chatVariant: mode.surfacePreset?.chatVariant || 'default',
-        settingsVariant: mode.surfacePreset?.settingsVariant || 'default',
-        timelineVariant: mode.surfacePreset?.timelineVariant || 'default',
     };
 };
 
@@ -256,7 +253,6 @@ export const resolveSurfaceSkin = (
     skin?: SurfaceSkinDefinition;
     cssVars: Record<string, string | number>;
     tokens: Record<string, string | number>;
-    classMap: Record<string, string>;
     variant?: string;
 } => {
     const desktopMode = getDesktopModeOrDefault(desktopModeId);
@@ -266,7 +262,6 @@ export const resolveSurfaceSkin = (
         skin,
         cssVars: resolveDesktopModeValues(skin?.cssVars, context),
         tokens: resolveDesktopModeValues(skin?.tokens, context),
-        classMap: skin?.classMap || {},
         variant: skin?.variant || desktopMode.rendererVariants?.[componentId]
     };
 };

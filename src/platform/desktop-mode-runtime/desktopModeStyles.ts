@@ -52,6 +52,8 @@ export const applyDesktopModeStyles = (
     if (!styles) return;
     const element = createStyleElement();
     element.setAttribute(DESKTOP_MODE_STYLE_ATTRIBUTE, desktopModeId);
+    // 启动早期影子根尚未创建：带上该标记，挂载时注入器会把样式克隆进 Shadow DOM。
+    element.setAttribute('data-lw-style', 'desktop-mode');
     element.textContent = styles;
     hosts[0].appendToHost(element);
 };

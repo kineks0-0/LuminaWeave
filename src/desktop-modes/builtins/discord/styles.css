@@ -1,0 +1,237 @@
+/* Discord 桌面模式设计系统：header 频道栏、控制件与面板表现。
+   通过 DesktopModePackage.styles 注入，注销模式时移除。 */
+
+.discord-channel-bar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.discord-channel-mark {
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--lw-header-channel-mark-bg, var(--lw-bg-elevated));
+  color: var(--lw-header-channel-mark-color, var(--lw-text-muted));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.discord-channel-mark:hover,
+.discord-channel-mark.active {
+  background: var(--lw-header-channel-mark-active-bg, var(--lw-bg-hover));
+  color: var(--lw-header-channel-mark-active-color, var(--lw-text-main));
+  border-color: var(--lw-header-channel-mark-active-border, rgba(var(--lw-primary-rgb), 0.3));
+}
+
+.discord-channel-mark:active {
+  transform: translateY(1px);
+}
+
+.discord-channel-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.discord-channel-copy strong {
+  font-size: var(--lw-type-title-medium-size);
+  line-height: var(--lw-type-title-medium-line-height);
+  font-weight: var(--lw-type-title-medium-weight);
+  letter-spacing: var(--lw-type-title-medium-tracking);
+  color: var(--lw-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discord-channel-copy span {
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
+  font-weight: var(--lw-type-body-small-weight);
+  letter-spacing: var(--lw-type-body-small-tracking);
+  color: var(--lw-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lw-panel-header[data-skin-variant='discord'] {
+  background: var(--lw-header-bg, var(--lw-bg-elevated));
+  border-bottom-color: var(--lw-header-border, var(--lw-border-strong));
+  box-shadow: var(--lw-header-shadow, inset 0 -1px 0 color-mix(in srgb, var(--lw-text-inverse) 4%, transparent));
+}
+
+.lw-panel-header[data-skin-variant='discord'] .header-floating-controls,
+.lw-panel-header[data-skin-variant='discord'] .profile-trigger,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu,
+.lw-panel-header[data-skin-variant='discord'] .widget-dropdown,
+.lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown {
+  background: var(--lw-header-control-bg, var(--lw-surface-container));
+  border-color: var(--lw-header-control-border, var(--lw-border-strong));
+  box-shadow: var(--lw-header-control-shadow, var(--lw-shadow-card));
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-trigger,
+.lw-panel-header[data-skin-variant='discord'] .header-floating-controls {
+  color: var(--lw-text-main);
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-trigger-copy strong,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-copy strong,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-label,
+.lw-panel-header[data-skin-variant='discord'] .widget-dropdown-item,
+.lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown-item {
+  color: var(--lw-text-main);
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-trigger-copy small,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-copy span:last-child,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-value,
+.lw-panel-header[data-skin-variant='discord'] .widget-dropdown-label,
+.lw-panel-header[data-skin-variant='discord'] .widget-group-chevron,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-kicker {
+  color: var(--lw-text-muted);
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-item,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-choice {
+  background: var(--lw-surface-container-low);
+  border-color: var(--lw-border-strong);
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-item:hover,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-choice:hover,
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-choice.active,
+.lw-panel-header[data-skin-variant='discord'] .widget-dropdown-item:hover,
+.lw-panel-header[data-skin-variant='discord'] .lw-tab-dropdown-item:hover {
+  background: var(--lw-surface-container-high);
+  border-color: color-mix(in srgb, var(--lw-primary) 34%, var(--lw-border-strong));
+  color: var(--lw-text-main);
+}
+
+.lw-panel-header[data-skin-variant='discord'] .profile-menu-icon {
+  background: var(--lw-surface-container);
+  color: var(--lw-text-secondary);
+}
+
+.lw-panel-header[data-skin-variant='discord'] .avatar-sm,
+.lw-panel-header[data-skin-variant='discord'] .avatar-sm.placeholder {
+  background: var(--lw-surface-container-high);
+  border-color: var(--lw-border-strong);
+}
+
+.luminaweave-app-root[data-desktop-mode='discord'][data-layout-mode='traditional'] .lw-panel-body:not(.is-freeform) {
+  background: var(--lw-shell-body-bg,
+      linear-gradient(180deg, rgba(var(--lw-primary-rgb), 0.16) 0%, rgba(var(--lw-primary-rgb), 0.08) 18%, transparent 44%),
+      linear-gradient(180deg, color-mix(in srgb, var(--lw-bg-surface) 98%, white), color-mix(in srgb, var(--lw-bg-subtle) 96%, white)));
+}
+
+.lw-fullscreen-panel[data-shell-variant='discord']::before {
+  opacity: 0.18;
+}
+
+/* plugins/timeline/LuminaTimeline.vue */
+.lw-timeline-container[data-skin-variant='discord'] .header-source-pill,
+.lw-timeline-container[data-skin-variant='discord'] .timeline-context-pill {
+  background: color-mix(in srgb, var(--lw-primary) 18%, var(--lw-bg-surface));
+}
+
+.lw-timeline-container[data-skin-variant='discord'] {
+  background: var(--lw-timeline-canvas-bg, var(--lw-bg-app));
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .large-header,
+.lw-timeline-container[data-skin-variant='discord'] .canvas-controls {
+  background: var(--lw-timeline-header-bg, var(--lw-surface-container-high));
+  border-color: var(--lw-timeline-header-border, var(--lw-border-strong));
+  backdrop-filter: none;
+  box-shadow: var(--lw-shadow-card);
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .header-source-pill,
+.lw-timeline-container[data-skin-variant='discord'] .timeline-context-pill,
+.lw-timeline-container[data-skin-variant='discord'] .source-chip {
+  background: var(--lw-timeline-chip-bg, var(--lw-surface-container-high));
+  color: var(--lw-timeline-chip-color, var(--lw-text-secondary));
+  border-color: var(--lw-timeline-chip-border, var(--lw-border-strong));
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .source-chip.active {
+  background: var(--lw-timeline-chip-active-bg, color-mix(in srgb, var(--lw-primary) 24%, var(--lw-timeline-chip-bg, var(--lw-surface-container-high))));
+  border-color: var(--lw-timeline-chip-active-border, var(--lw-border-active));
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-card,
+.lw-timeline-container[data-skin-variant='discord'] .s-actions-group,
+.lw-timeline-container[data-skin-variant='discord'] .s-action-card {
+  background: var(--lw-timeline-card-bg, var(--lw-surface-container-low));
+  border-color: var(--lw-timeline-card-border, var(--lw-border-strong));
+  box-shadow: var(--lw-timeline-card-shadow, none);
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-card.active {
+  background: var(--lw-timeline-card-active-bg, var(--lw-surface-container-lowest));
+  border-color: var(--lw-timeline-card-active-border, var(--lw-border-active));
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-card:hover {
+  background: var(--lw-bg-hover);
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-text,
+.lw-timeline-container[data-skin-variant='discord'] .loading-title {
+  color: var(--lw-text-main);
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .s-variant-info,
+.lw-timeline-container[data-skin-variant='discord'] .l-modal-header,
+.lw-timeline-container[data-skin-variant='discord'] .l-modal-footer {
+  border-color: var(--lw-timeline-modal-border, var(--lw-border-strong));
+}
+
+.lw-timeline-container[data-skin-variant='discord'] .global-loading-overlay {
+  background: var(--lw-timeline-loading-overlay-bg, rgba(30, 31, 34, 0.72));
+}
+
+/* plugins/settings/SettingControl.vue */
+.setting-row[data-skin-variant='discord'] .segment-control {
+  border-radius: 14px;
+}
+
+.setting-row[data-skin-variant='discord'] .segment-control button {
+  border-radius: 12px;
+}
+
+.setting-row[data-skin-variant='discord'] .scope-select,
+.setting-row[data-skin-variant='discord'] .setting-control-body .lw-select,
+.setting-row[data-skin-variant='discord'] .setting-control-body .lw-input,
+.setting-row[data-skin-variant='discord'] .slider-number-input {
+  border-radius: 12px;
+}
+
+/* shell/traditional/WidgetPanelHost.vue */
+.lw-widget-container[data-surface-variant='discord'] {
+  backdrop-filter: none;
+}
+
+/* plugins/chat/ChatPreview.vue */
+.preview-viewport[data-skin-variant='discord'] .preview-bubble {
+  max-width: 100%;
+  border-color: var(--lw-border-base);
+  box-shadow: none;
+}
