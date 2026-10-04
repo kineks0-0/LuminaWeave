@@ -79,6 +79,7 @@ const characterBundle = () => ({
 const createSendService = (options: {
     chatManager?: unknown;
     getConversationMessages?: () => Promise<unknown>;
+    promptCommandService?: unknown;
 } = {}): GenerationCommandService => new GenerationCommandService({
     chatManager: (options.chatManager ?? { activeLeafId: null }) as never,
     streamHandler: {
@@ -87,7 +88,10 @@ const createSendService = (options: {
         isGenerating: false,
         clearSmoothTimer: vi.fn()
     } as never,
-    promptCommandService: { lastPromptPayload: null, probePrompt: vi.fn(async () => null) } as never,
+    promptCommandService: (options.promptCommandService ?? {
+        lastPromptPayload: null,
+        probePrompt: vi.fn(async () => null)
+    }) as never,
     waitForReady: vi.fn(async () => true),
     beforeGenerationStart: vi.fn(),
     crudChatRecord: vi.fn(async () => true),
@@ -278,5 +282,48 @@ describe('GenerationCommandService regenerate routing', () => {
 
         await expect(service.regenerateLast()).resolves.toBe(false);
         expect(taskRunMock).not.toHaveBeenCalled();
+    });
+});
+
+describe('GenerationCommandService prompt preview', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        hostMock.getHostFunction.mockReset();
+        taskRunMock.mockReset();
+        taskRunMock.mockImplementation(async () => {});
+        resolverMock.resolve.mockReset();
+    });
+
+    it('assembles through the Lumina pipeline in standalone without staging variables', async () => {
+        hostMock.getHostFunction.mockResolvedValue(null);
+        vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ charId: undefined, chatId: 'lw_chat_1' } as never);
+        vi.spyOn(lwStorage, 'get').mockImplementation((_key: string, fallback: unknown) => fallback);
+
+        const service = createSendService({
+            getConversationMessages: async () => ([
+                { id: 'u1', parentId: null, is_user: true, is_hidden: false, mes: '你好' }
+            ]) as never
+        });
+        const payload = await service.probePrompt();
+
+        expect(payload).not.toBeNull();
+        expect(payload!.messages!.length).toBeGreaterThan(0);
+        expect(payload!.settings).toMatchObject({ temperature: 1 });
+        expect(Reflect.get(service, 'pendingPromptVariables')).toBeNull();
+        expect(taskRunMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps host dry-run probing when the ST engine owns generation', async () => {
+        hostMock.getHostFunction.mockResolvedValue(vi.fn(async () => {}));
+        vi.spyOn(lwStorage, 'get').mockImplementation((_key: string, fallback: unknown) => fallback);
+
+        const probe = vi.fn(async () => ({ messages: [{ role: 'system', content: 'st-probe' }], settings: {} }));
+        const service = createSendService({
+            promptCommandService: { lastPromptPayload: null, probePrompt: probe }
+        });
+        const payload = await service.probePrompt();
+
+        expect(probe).toHaveBeenCalledTimes(1);
+        expect(payload).toMatchObject({ settings: {} });
     });
 });

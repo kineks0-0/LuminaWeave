@@ -1254,7 +1254,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     }
 
     async probePrompt(): Promise<any> {
-        return this.promptCommandService.probePrompt();
+        return this.generationCommandService.probePrompt();
     }
 
     /**

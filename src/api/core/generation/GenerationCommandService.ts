@@ -287,6 +287,20 @@ export class GenerationCommandService {
         return false;
     }
 
+    /**
+     * 提示词预览探测：ST 引擎沿用宿主 dry-run probe；
+     * Lumina 合成引擎直接走 RoleplayPromptPipeline，预览只读、不落变量暂存。
+     */
+    async probePrompt(): Promise<LuminaPromptPayload | null> {
+        const engine = await this.resolveDefaultEngine();
+        if (engine !== 'lumina-assembly') {
+            return this.promptCommandService.probePrompt();
+        }
+        const payload = await this.assembleLuminaPromptPayload();
+        this.discardPromptVariables();
+        return payload;
+    }
+
     async regenerateLast(): Promise<unknown> {
         const engine = await this.resolveDefaultEngine();
         if (engine === 'st-native') {
