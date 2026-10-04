@@ -1189,4 +1189,80 @@ describe('STClient - extra normalization', () => {
             method: 'POST'
         }));
     });
+
+    it('getCharacterRoster should prefer helper name and avatar id lists', () => {
+        helper = {
+            getCharacterNames: () => ['Alpha', 'Beta'],
+            getCharacterIds: () => ['alpha.png', 'beta.png'],
+            getCharAvatarPath: (name: string) => `/avatars/${name}.png`
+        };
+        stMain = {
+            getThumbnailUrl: (_type: string, file: string) => `thumb:${file}`
+        };
+        ctx = {
+            characters: [
+                { name: 'Alpha', avatar: 'alpha.png' },
+                { name: 'Beta', avatar: 'beta.png' }
+            ]
+        };
+
+        expect(STClient.getCharacterRoster()).toEqual([
+            { characterId: '0', characterName: 'Alpha', characterAvatarUrl: 'thumb:alpha.png' },
+            { characterId: '1', characterName: 'Beta', characterAvatarUrl: 'thumb:beta.png' }
+        ]);
+    });
+
+    it('getCharacterRoster should fall back to helper lists when ctx.characters is empty', () => {
+        helper = {
+            getCharacterNames: () => ['Alpha', 'Beta'],
+            getCharacterIds: () => ['alpha.png', 'beta.png'],
+            getCharAvatarPath: (name: string) => `/avatars/${name}.png`
+        };
+        ctx = { characters: [] };
+
+        expect(STClient.getCharacterRoster()).toEqual([
+            { characterId: '0', characterName: 'Alpha', characterAvatarUrl: '/avatars/Alpha.png' },
+            { characterId: '1', characterName: 'Beta', characterAvatarUrl: '/avatars/Beta.png' }
+        ]);
+    });
+
+    it('getCharacterAvatarUrlById should resolve the helper avatar id for the index', () => {
+        helper = {
+            getCharacterNames: () => ['Alpha', 'Beta'],
+            getCharacterIds: () => ['alpha.png', 'beta.png']
+        };
+        stMain = {
+            getThumbnailUrl: (_type: string, file: string) => `thumb:${file}`
+        };
+        ctx = {
+            characters: [
+                { name: 'Alpha', avatar: 'alpha.png' },
+                { name: 'Beta', avatar: 'beta.png' }
+            ]
+        };
+
+        expect(STClient.getCharacterAvatarUrlById('1')).toBe('thumb:beta.png');
+        expect(STClient.getCharacterAvatarUrlById('9')).toBeNull();
+    });
+
+    it('getResolvedCurrentCharacterId should fall back to the helper current character name', () => {
+        const windowMock = (globalThis as unknown as { window: { this_chid?: unknown } }).window;
+        const previousThisChid = windowMock.this_chid;
+        windowMock.this_chid = undefined;
+        try {
+            helper = {
+                getCurrentCharacterName: () => 'Beta'
+            };
+            ctx = {
+                characters: [
+                    { name: 'Alpha', avatar: 'alpha.png' },
+                    { name: 'Beta', avatar: 'beta.png' }
+                ]
+            };
+
+            expect(STClient.getResolvedCurrentCharacterId()).toBe('1');
+        } finally {
+            windowMock.this_chid = previousThisChid;
+        }
+    });
 });

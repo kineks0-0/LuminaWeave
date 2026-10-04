@@ -85,10 +85,11 @@ export class HALBootstrap {
         const { STHostProvider } = await import('./adapters/st/STHostProvider.js');
         HALContext.instance = new STHostProvider().createContext();
 
-        // 执行环境等待 (TavernHelper 探测)
+        // 执行环境等待 (TavernHelper 探测；酒馆宿主强依赖缺失时直接失败)
         const { getHostRuntimePort } = await import('../facade/HostRuntimePort.js');
         await getHostRuntimePort().waitForReady({
-            onProgress: options.onProgress
+            onProgress: options.onProgress,
+            requireReady: true
         });
     }
 
@@ -105,7 +106,8 @@ export class HALBootstrap {
         // TauriTavern 承载的是 SillyTavern Web 内容，宿主事件和聊天同步仍由 ST driver 负责。
         const { getHostRuntimePort } = await import('../facade/HostRuntimePort.js');
         await getHostRuntimePort().waitForReady({
-            onProgress: options.onProgress
+            onProgress: options.onProgress,
+            requireReady: true
         });
     }
 

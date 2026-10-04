@@ -9,6 +9,8 @@ export interface STEnvironmentSnapshot {
 export interface STEnvironmentWaitOptions {
     timeoutMs?: number;
     onProgress?: (message: string) => void;
+    /** 宿主强依赖未就绪时直接抛错，而不是带病降级运行 */
+    requireReady?: boolean;
 }
 
 /**
@@ -137,7 +139,7 @@ export class STEnvironmentDriver {
         }
 
         options.onProgress?.('等待 ST 核心环境就绪...');
-        return new Promise((resolve) => {
+        const ready = await new Promise<boolean>((resolve) => {
             const check = () => {
                 const snapshot = this.snapshot();
                 if (snapshot.hasST && snapshot.hasEventSource && snapshot.hasHelper) {
@@ -158,5 +160,30 @@ export class STEnvironmentDriver {
             };
             check();
         });
+
+        if (!ready && options.requireReady) {
+            const snapshot = this.snapshot();
+            const reason = !snapshot.hasST
+                ? '未检测到 SillyTavern 宿主'
+                : !snapshot.hasHelper
+                    ? '未检测到酒馆助手 (TavernHelper / JS-Slash-Runner)'
+                    : 'SillyTavern 事件源未就绪';
+            const message = `${reason}。LuminaWeave 在酒馆中强依赖酒馆助手，请安装并启用后重载页面。`;
+            this.showHostErrorToast(message);
+            throw new Error(`[LuminaWeave] 环境未就绪: ${reason}`);
+        }
+
+        return ready;
+    }
+
+    private static showHostErrorToast(message: string): void {
+        const toastr = (globalThis as {
+            window?: { toastr?: { error?: (message: string, title?: string, options?: { timeOut?: number }) => void } };
+        }).window?.toastr;
+        try {
+            toastr?.error?.(message, 'LuminaWeave 启动失败', { timeOut: 10000 });
+        } catch {
+            // 宿主 toastr 不可用时仅依赖 console 与抛错信息。
+        }
     }
 }

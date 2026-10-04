@@ -32,6 +32,8 @@ export interface HostRuntimeDiagnostics {
 export interface HostRuntimeWaitOptions {
     timeoutMs?: number;
     onProgress?: (message: string) => void;
+    /** 宿主强依赖未就绪时直接抛错，而不是带病降级运行 */
+    requireReady?: boolean;
 }
 
 export interface HostRuntimePort {

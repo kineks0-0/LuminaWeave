@@ -323,24 +323,49 @@ export class STClient {
     }
 
     static getCharacterNames(): string[] {
-        const helper = this.stHelper as any;
-        if (helper && typeof helper.getCharacterNames === 'function') {
-            try {
-                const names = helper.getCharacterNames();
-                if (Array.isArray(names)) {
-                    return names
-                        .filter((name): name is string => typeof name === 'string')
-                        .map((name) => name.trim())
-                        .filter(Boolean);
-                }
-            } catch {
-                // Ignore helper failures and fall back to host character metadata.
-            }
-        }
-
-        return this.getCharacters()
+        return this.getHelperCharacterNames() ?? this.getCharacters()
             .map((character) => typeof character?.name === 'string' ? character.name.trim() : '')
             .filter(Boolean);
+    }
+
+    /** 酒馆助手角色显示名列表；不可用时返回 null 以便调用方回退宿主数据 */
+    private static getHelperCharacterNames(): string[] | null {
+        const helper = this.stHelper;
+        if (!helper || typeof helper.getCharacterNames !== 'function') {
+            return null;
+        }
+        try {
+            const names = helper.getCharacterNames();
+            if (Array.isArray(names)) {
+                return names
+                    .filter((name): name is string => typeof name === 'string')
+                    .map((name) => name.trim())
+                    .filter(Boolean);
+            }
+        } catch {
+            // Ignore helper failures and fall back to host character metadata.
+        }
+        return null;
+    }
+
+    /** 酒馆助手角色头像 id (`xxx.png`) 列表；不可用时返回 null 以便调用方回退宿主数据 */
+    private static getHelperCharacterAvatarIds(): string[] | null {
+        const helper = this.stHelper;
+        if (!helper || typeof helper.getCharacterIds !== 'function') {
+            return null;
+        }
+        try {
+            const avatarIds = helper.getCharacterIds();
+            if (Array.isArray(avatarIds)) {
+                return avatarIds
+                    .filter((avatarId): avatarId is string => typeof avatarId === 'string')
+                    .map((avatarId) => avatarId.trim())
+                    .filter(Boolean);
+            }
+        } catch {
+            // Ignore helper failures and fall back to host character metadata.
+        }
+        return null;
     }
 
     static getCharacterNameById(characterId: string | number | null | undefined): string | null {
@@ -369,7 +394,13 @@ export class STClient {
             return null;
         }
 
-        return this.getCharacterRoster().find((character) => character.characterId === normalized)?.characterAvatarUrl ?? null;
+        const index = Number(normalized);
+        const characterName = this.getCharacterNameById(normalized);
+        if (!characterName) {
+            return null;
+        }
+
+        return this.resolveCharacterAvatarUrl(characterName, this.getCharacterAvatarIdById(normalized) ?? '');
     }
 
     private static getCharacterAvatarIdById(characterId: string | number | null | undefined): string | null {
@@ -379,6 +410,11 @@ export class STClient {
         }
 
         const index = Number(normalized);
+        const helperAvatarId = this.getHelperCharacterAvatarIds()?.[index];
+        if (helperAvatarId) {
+            return helperAvatarId;
+        }
+
         const characters = this.getCharacters();
         const avatarId = typeof characters[index]?.avatar === 'string'
             ? characters[index].avatar.trim()
@@ -387,51 +423,62 @@ export class STClient {
     }
 
     static getCharacterRoster(): STCharacterRosterItem[] {
-        const stMain = this.stMain as any;
+        const characters = this.getCharacters();
+        const helperNames = this.getHelperCharacterNames();
+        const helperAvatarIds = this.getHelperCharacterAvatarIds();
+        const count = Math.max(characters.length, helperNames?.length ?? 0, helperAvatarIds?.length ?? 0);
 
-        return this.getCharacters()
-            .map((character, index): STCharacterRosterItem | null => {
-                const characterName = typeof character?.name === 'string' ? character.name.trim() : '';
-                if (!characterName) {
-                    return null;
+        const roster: STCharacterRosterItem[] = [];
+        for (let index = 0; index < count; index++) {
+            const hostCharacter = characters[index];
+            const characterName = (
+                helperNames?.[index]
+                ?? (typeof hostCharacter?.name === 'string' ? hostCharacter.name.trim() : '')
+            ).trim();
+            if (!characterName) {
+                continue;
+            }
+
+            const avatarId = (
+                helperAvatarIds?.[index]
+                ?? (typeof hostCharacter?.avatar === 'string' ? hostCharacter.avatar.trim() : '')
+            ).trim();
+
+            roster.push({
+                characterId: String(index),
+                characterName,
+                characterAvatarUrl: this.resolveCharacterAvatarUrl(characterName, avatarId)
+            });
+        }
+        return roster;
+    }
+
+    private static resolveCharacterAvatarUrl(characterName: string, avatarId: string): string | null {
+        const stMain = this.stMain;
+        if (avatarId && typeof stMain?.getThumbnailUrl === 'function') {
+            try {
+                const thumbnail = stMain.getThumbnailUrl('avatar', avatarId);
+                if (typeof thumbnail === 'string' && thumbnail.trim()) {
+                    return thumbnail.trim();
                 }
+            } catch {
+                // Ignore thumbnail resolution failures and fall back below.
+            }
+        }
 
-                let characterAvatarUrl: string | null = null;
-                const avatarId = typeof character?.avatar === 'string' ? character.avatar.trim() : '';
-                if (avatarId) {
-                    if (typeof stMain?.getThumbnailUrl === 'function') {
-                        try {
-                            const thumbnail = stMain.getThumbnailUrl('avatar', avatarId);
-                            if (typeof thumbnail === 'string' && thumbnail.trim()) {
-                                characterAvatarUrl = thumbnail.trim();
-                            }
-                        } catch {
-                            // Ignore thumbnail resolution failures and fall back below.
-                        }
-                    }
-
-                    if (!characterAvatarUrl) {
-                        const helper = this.stHelper as any;
-                        if (helper && typeof helper.getCharAvatarPath === 'function') {
-                            try {
-                                const avatarPath = helper.getCharAvatarPath(characterName);
-                                if (typeof avatarPath === 'string' && avatarPath.trim()) {
-                                    characterAvatarUrl = avatarPath.trim();
-                                }
-                            } catch {
-                                // Ignore helper fallback failures and keep the avatar empty.
-                            }
-                        }
-                    }
+        const helper = this.stHelper;
+        if (characterName && helper && typeof helper.getCharAvatarPath === 'function') {
+            try {
+                const avatarPath = helper.getCharAvatarPath(characterName);
+                if (typeof avatarPath === 'string' && avatarPath.trim()) {
+                    return avatarPath.trim();
                 }
+            } catch {
+                // Ignore helper fallback failures and keep the avatar empty.
+            }
+        }
 
-                return {
-                    characterId: String(index),
-                    characterName,
-                    characterAvatarUrl
-                };
-            })
-            .filter((item): item is STCharacterRosterItem => item !== null);
+        return null;
     }
 
     private static getRawCharacterHelper(): {
@@ -646,6 +693,26 @@ export class STClient {
         );
         if (globalCharacterId) {
             return globalCharacterId;
+        }
+
+        // ctx / this_chid 缺失时，用酒馆助手的当前角色名反查宿主数字索引，保持对外契约不变。
+        const helper = this.stHelper;
+        if (helper && typeof helper.getCurrentCharacterName === 'function') {
+            try {
+                const helperName = helper.getCurrentCharacterName();
+                if (helperName && helperName.trim()) {
+                    const resolvedIndex = this.resolveCharacterId({
+                        characterId: null,
+                        characterName: helperName,
+                        characterAvatarUrl: null
+                    });
+                    if (resolvedIndex) {
+                        return resolvedIndex;
+                    }
+                }
+            } catch {
+                // Ignore helper failures and keep the null result.
+            }
         }
 
         return null;

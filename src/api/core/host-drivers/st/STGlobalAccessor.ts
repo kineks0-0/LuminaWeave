@@ -69,7 +69,13 @@ export class STGlobalAccessor {
         const core = this.ctx;
         const main = this.stMain;
 
-        return core?.eventTypes || core?.event_types || main?.eventTypes || main?.event_types;
+        return core?.eventTypes || this.readLegacyEventTypes(core) || main?.eventTypes || this.readLegacyEventTypes(main);
+    }
+
+    /** 旧版宿主将事件类型映射暴露为 event_types，保留运行时兼容 */
+    private static readLegacyEventTypes(value: unknown): Record<string, string> | undefined {
+        const legacy = (value as { event_types?: unknown } | undefined)?.event_types;
+        return legacy && typeof legacy === 'object' ? legacy as Record<string, string> : undefined;
     }
 
     /** 等待指定全局变量初始化完成 */
