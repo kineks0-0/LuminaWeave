@@ -68,6 +68,7 @@ export interface CharacterRosterSurfaceIntents {
     openSession(sessionId: string): Promise<void>;
     createSession(input: CreateChatConversationInput): Promise<void>;
     toggleGroup(groupKey: string): void;
+    importCharacter(file: File): Promise<void>;
 }
 
 export interface ConversationSessionListSurfaceIntents {
@@ -344,7 +345,8 @@ const characterChannelCapabilitiesSchema = z.object({
     supportsHostSearch: z.boolean(),
     supportsFindLastMessage: z.boolean(),
     supportsStableSessionId: z.boolean(),
-    supportsCurrentWindowInfo: z.boolean()
+    supportsCurrentWindowInfo: z.boolean(),
+    supportsCharacterImport: z.boolean()
 }).strict();
 
 const characterChannelStatusSchema = z.object({

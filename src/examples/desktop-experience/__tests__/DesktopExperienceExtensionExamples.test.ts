@@ -89,7 +89,8 @@ const createCharacterState = (
             supportsHostSearch: true,
             supportsFindLastMessage: true,
             supportsStableSessionId: true,
-            supportsCurrentWindowInfo: true
+            supportsCurrentWindowInfo: true,
+            supportsCharacterImport: false
         },
         status: {
             kind: 'idle',

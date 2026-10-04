@@ -11,6 +11,13 @@ import { deepClone } from '../CommonUtils.js';
 const asRecord = (value: unknown): Record<string, unknown> =>
     value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
+/** 角色卡顶层字段源：优先 v2/v3 的 data，回退 flat 布局。 */
+export const resolveCharacterCardSource = (raw: unknown): Record<string, unknown> => {
+    const root = asRecord(raw);
+    const data = asRecord(root.data);
+    return Object.keys(data).length > 0 ? data : root;
+};
+
 const asString = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 
 const asStringArray = (value: unknown): string[] => {
@@ -52,8 +59,7 @@ export const summarizeSTCharacter = (
     payload: STCharacterRawPayload | Record<string, unknown>
 ): ResourceSummary => {
     const raw = 'raw' in payload ? asRecord(payload.raw) : asRecord(payload);
-    const data = asRecord(raw.data);
-    const source = Object.keys(data).length > 0 ? data : raw;
+    const source = resolveCharacterCardSource(raw);
     const name = asString(source.name) || asString(raw.name) || resourceId;
     const description = asString(source.description) || asString(source.personality) || asString(source.scenario);
     const firstMessage = asString(source.first_mes) || asString(source.firstMessage);
@@ -63,7 +69,7 @@ export const summarizeSTCharacter = (
         name,
         description: description || firstMessage || undefined,
         keywords: [name].filter(Boolean),
-        format: asString(raw.spec) || asString(raw.spec_version) || (Object.keys(data).length > 0 ? 'tavern-card-v2' : 'st-character')
+        format: asString(raw.spec) || asString(raw.spec_version) || (source !== raw ? 'tavern-card-v2' : 'st-character')
     };
 };
 

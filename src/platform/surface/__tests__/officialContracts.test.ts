@@ -21,7 +21,8 @@ const createCharacterChannelState = (): CharacterChannelState => ({
         supportsHostSearch: true,
         supportsFindLastMessage: true,
         supportsStableSessionId: true,
-        supportsCurrentWindowInfo: true
+        supportsCurrentWindowInfo: true,
+        supportsCharacterImport: true
     },
     status: {
         kind: 'idle',

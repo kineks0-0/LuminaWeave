@@ -2,6 +2,15 @@
  * 提示词工具类：提供针对大模型提示词 (Long Text Blocks) 的优化处理功能。
  */
 
+import type { CleanedMessage } from '../../../../types/nexus.js';
+import type { PromptWorldbookActivatedEntry } from '../../../../types/PromptPresetTypes.js';
+
+/** 世界书激活条目的统一消息格式，供 Composer / Profiles / 本地角色注入共用。 */
+export const worldbookMessageFor = (entry: PromptWorldbookActivatedEntry): CleanedMessage => ({
+    role: entry.insertion.role ?? entry.role ?? 'system',
+    content: `[World Info: ${entry.uid ?? entry.comment}]\n${entry.content}`
+});
+
 /**
  * Tagged Template Literal: p (prompt)
  * 用于处理多行提示词字符串，自动消除公共前导缩进，并修整首尾空行。

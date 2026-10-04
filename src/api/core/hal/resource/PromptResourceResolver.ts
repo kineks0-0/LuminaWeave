@@ -1,4 +1,5 @@
 import {
+    resolveCharacterCardSource,
     worldbookEntriesToLorebookEntries,
     type ResourceDiagnostic,
     type ResourceDocument,
@@ -43,8 +44,7 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 
 const toCharCard = (raw: unknown): PromptPresetCharCard | null => {
     const root = asRecord(raw);
-    const data = asRecord(root.data);
-    const source = Object.keys(data).length > 0 ? data : root;
+    const source = resolveCharacterCardSource(root);
     const name = typeof source.name === 'string' ? source.name : typeof root.name === 'string' ? root.name : '';
     const hasUseful = ['description', 'personality', 'scenario', 'system_prompt', 'systemPrompt']
         .some(key => typeof source[key] === 'string' && String(source[key]).trim());

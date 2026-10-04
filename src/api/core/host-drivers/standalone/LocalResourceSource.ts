@@ -1,4 +1,5 @@
 import { HALContext } from '../../hal/HALContext.js';
+import { slugifyId } from '@shared/CommonUtils.js';
 import {
     buildSourceResourcePath,
     cloneSTRawPayload,
@@ -37,15 +38,13 @@ const fromKey = (key: string): { resourceType: ResourceType; resourceId: string 
 
 const createResourceId = (payload: unknown, fallbackType: ResourceType): string => {
     const raw = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
-    const name = typeof raw.name === 'string' && raw.name.trim()
-        ? raw.name.trim()
-        : `${fallbackType}-${Date.now()}`;
-    return name
-        .replace(/\.[a-z0-9]+$/i, '')
-        .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-        || `${fallbackType}-${Date.now()}`;
+    const data = raw.data && typeof raw.data === 'object' ? raw.data as Record<string, unknown> : {};
+    const name = typeof data.name === 'string' && data.name.trim()
+        ? data.name.trim()
+        : typeof raw.name === 'string' && raw.name.trim()
+            ? raw.name.trim()
+            : `${fallbackType}-${Date.now()}`;
+    return slugifyId(name, `${fallbackType}-${Date.now()}`);
 };
 
 export class LocalResourceSource implements ResourceSource {

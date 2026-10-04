@@ -19,6 +19,7 @@ import {
     FORGE_AGENT_PRESET_SLOT_TO_FORGE_SLOTS,
     getForgePromptSlotPolicy
 } from './ForgePromptSlotPolicies.js';
+import { worldbookMessageFor } from './PromptUtils.js';
 
 interface PromptPresetSlotResolver {
     slot: PromptPresetSlotDefinition;
@@ -57,11 +58,6 @@ const activeWorldbookEntriesFor = (sources: PromptComposeSources): PromptWorldbo
             }
         }));
 };
-
-const worldbookMessageFor = (entry: PromptWorldbookActivatedEntry): CleanedMessage => ({
-    role: entry.insertion.role ?? entry.role ?? 'system',
-    content: `[World Info: ${entry.uid ?? entry.comment}]\n${entry.content}`
-});
 
 const historyWithAtDepthWorldbookEntries = (sources: PromptComposeSources): CleanedMessage[] => {
     const history = (sources.conversationHistory || []).filter(message => trimText(message.content));

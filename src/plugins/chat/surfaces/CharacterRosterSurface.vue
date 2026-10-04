@@ -3,16 +3,40 @@
     v-if="context.theme.variant === 'telegram'"
     :groups="channel.characterGroups"
     :page="Boolean(input.compact)"
+    :can-import="channel.capabilityFlags.supportsCharacterImport"
     @open="openSession"
     @create="createFromGroup"
+    @import="importCharacter"
   />
   <section v-else class="character-roster-surface" :class="{ 'is-compact': input.compact }">
     <header>
       <strong>角色</strong>
-      <button type="button" title="刷新角色" aria-label="刷新角色" @click="refresh">
-        <RefreshCw :size="16" />
-      </button>
+      <div class="character-roster-surface__header-actions">
+        <button
+          v-if="channel.capabilityFlags.supportsCharacterImport"
+          type="button"
+          title="导入角色卡"
+          aria-label="导入角色卡"
+          :disabled="importing"
+          @click="importInput?.click()"
+        >
+          <Upload :size="16" />
+        </button>
+        <button type="button" title="刷新角色" aria-label="刷新角色" :disabled="importing" @click="refresh">
+          <RefreshCw :size="16" />
+        </button>
+      </div>
     </header>
+
+    <p v-if="importError" class="character-roster-surface__error tw:text-lw-danger">{{ importError }}</p>
+
+    <input
+      ref="importInput"
+      class="tw:hidden"
+      type="file"
+      accept=".png,.json,image/png,application/json"
+      @change="handleImportFile"
+    >
 
     <div class="character-roster-surface__list">
       <article v-for="group in channel.characterGroups" :key="group.key">
@@ -56,9 +80,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { CharacterChannelGroup } from '../../../types/ConversationContextTypes.js';
-import { ChevronDown, ChevronRight, MessageSquareText, Plus, RefreshCw } from 'lucide-vue-next';
+import { ChevronDown, ChevronRight, MessageSquareText, Plus, RefreshCw, Upload } from 'lucide-vue-next';
 import {
   useSurfaceInput,
   useSurfaceRuntimeContext
@@ -69,9 +93,34 @@ const input = useSurfaceInput('character.roster');
 const context = useSurfaceRuntimeContext('character.roster');
 const surface = computed(() => context.value);
 const channel = computed(() => context.value.state.channel.value);
+const importInput = ref<HTMLInputElement | null>(null);
+const importing = ref(false);
+const importError = computed(() => (
+  channel.value.status.kind === 'error'
+    ? channel.value.status.error || channel.value.status.text
+    : ''
+));
 
 const refresh = (): void => {
   void context.value.intents.refresh();
+};
+
+const importCharacter = async (file: File): Promise<void> => {
+  importing.value = true;
+  try {
+    await context.value.intents.importCharacter(file);
+  } finally {
+    importing.value = false;
+  }
+};
+
+const handleImportFile = (event: Event): void => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  target.value = '';
+  if (file) {
+    void importCharacter(file);
+  }
 };
 const openSession = (sessionId: string): void => {
   if (input.onOpenSession) {
@@ -129,6 +178,12 @@ const createFromGroup = (group: CharacterChannelGroup): void => {
   font: inherit;
 }
 
+.character-roster-surface__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .character-roster-surface > header button {
   display: grid;
   width: 30px;
@@ -139,6 +194,17 @@ const createFromGroup = (group: CharacterChannelGroup): void => {
   background: transparent;
   color: var(--lw-text-muted);
   cursor: pointer;
+}
+
+.character-roster-surface > header button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.character-roster-surface__error {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: var(--lw-type-label-small-size);
 }
 
 .character-roster-surface__list {

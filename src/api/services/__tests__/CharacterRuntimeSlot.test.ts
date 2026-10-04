@@ -10,6 +10,7 @@ const createRuntime = (): DesktopCharacterRuntime => ({
     refresh: vi.fn(async () => undefined),
     openSession: vi.fn(async () => undefined),
     createSession: vi.fn(async () => undefined),
+    importCharacterCard: vi.fn(async () => undefined),
     renameSession: vi.fn(async () => undefined),
     deleteSession: vi.fn(async () => undefined),
     closeCurrentSession: vi.fn(async () => true),

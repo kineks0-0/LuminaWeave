@@ -109,6 +109,7 @@ export interface CharacterChannelCapabilities {
     supportsFindLastMessage: boolean;
     supportsStableSessionId: boolean;
     supportsCurrentWindowInfo: boolean;
+    supportsCharacterImport: boolean;
 }
 
 export interface CharacterChannelSessionItem extends ChatSessionRef {

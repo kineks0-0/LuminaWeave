@@ -27,10 +27,12 @@ vi.mock('@shared/api/llm/OpenAIProvider.js', () => ({
 }));
 
 import { StandaloneLocalRuntime } from '@/api/core/hal/adapters/standalone/StandaloneLocalRuntime.js';
+import { lwStorage } from '@/api/storage.js';
 
 describe('StandaloneLocalRuntime generation', () => {
     beforeEach(() => {
         generateStreamMock.mockClear();
+        (lwStorage.set as unknown as ReturnType<typeof vi.fn>).mockClear();
     });
 
     it('passes Nexus cleaned messages to OpenAI provider as a message array', async () => {
@@ -66,5 +68,40 @@ describe('StandaloneLocalRuntime generation', () => {
             maxTokens: 1024,
             topP: 0.9
         });
+    });
+
+    it('persists finalized nodes into the local conversation document', async () => {
+        const runtime = new StandaloneLocalRuntime();
+        generateStreamMock.mockImplementationOnce(async (...args: unknown[]) => {
+            const callbacks = args[4] as { onToken: (token: string) => void; onDone: () => Promise<void> };
+            callbacks.onToken('Hello');
+            await callbacks.onDone();
+        });
+
+        const committed: any[] = [];
+        runtime.generation.generateStream({
+            chatId: 'lw_chat_test',
+            charName: 'Alice',
+            parentId: null,
+            messages: [{ role: 'user', content: 'hi' }],
+            nodes: [{ provider: 'deepseek', model: 'deepseek-chat' }]
+        }).onCommitted((data: any) => {
+            committed.push(data);
+        });
+
+        await vi.waitFor(() => expect(committed).toHaveLength(1));
+        expect(committed[0]).toMatchObject({
+            activeLeafId: expect.any(String),
+            seq: expect.any(Number),
+            node: expect.objectContaining({ role: 'assistant', mes: 'Hello' })
+        });
+
+        const documentCalls = (lwStorage.set as unknown as ReturnType<typeof vi.fn>).mock.calls
+            .filter(([key]: unknown[]) => key === 'lumina_conversations');
+        const savedDocument = documentCalls
+            .map(([, documents]: any[]) => documents?.[0])
+            .find((document: any) => document?.nodes?.length === 1);
+        expect(savedDocument).toBeDefined();
+        expect(savedDocument.activeLeafId).toBe(committed[0].node.id);
     });
 });

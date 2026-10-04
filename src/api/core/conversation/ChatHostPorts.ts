@@ -56,9 +56,13 @@ export interface ChatSessionMutationResult {
     resolvedChatFile: string | null;
     reason?: string;
     previousChatFile?: string | null;
+    /** 宿主创建会话时自带的初始节点（如 standalone 的 first_mes 问候语）。 */
+    initialNodes?: LuminaChatMessage[];
 }
 
 export interface ChatSessionDirectoryPort {
+    /** 宿主是否支持从本地文件导入角色卡。 */
+    readonly supportsCharacterImport?: boolean;
     listCharacterRoster(): Promise<Array<{
         characterId: string;
         characterName: string;
@@ -335,7 +339,8 @@ export class CompositeChatHostProvider implements ChatSessionDirectoryPort, Chat
             supportsHostSearch: false,
             supportsFindLastMessage: false,
             supportsStableSessionId: false,
-            supportsCurrentWindowInfo: false
+            supportsCurrentWindowInfo: false,
+            supportsCharacterImport: this.directory.supportsCharacterImport === true
         };
     }
 

@@ -72,7 +72,8 @@ describe('CompositeChatHostProvider', () => {
             supportsHostSearch: false,
             supportsFindLastMessage: false,
             supportsStableSessionId: false,
-            supportsCurrentWindowInfo: false
+            supportsCurrentWindowInfo: false,
+            supportsCharacterImport: false
         });
     });
 

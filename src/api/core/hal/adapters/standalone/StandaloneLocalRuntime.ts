@@ -319,17 +319,27 @@ export class StandaloneLocalRuntime implements HALRuntimePorts {
         };
 
         const interceptor = new BaseXMLInterceptor();
+        let lastTransaction: { id: string; seq: number } = { id: `local_tx_${Date.now()}`, seq: 0 };
         const localPersistence: PersistenceDelegate = {
             appendChatRecord: async (chatId, node) => {
-                // 模拟本地写入逻辑
-                console.log(`[LocalBridge] Persisted message node into local storage: ${node.id}`);
+                const result = await this.conversation.mutateConversation(chatId, {
+                    nodes: { added: [node] }
+                }) as any;
+                lastTransaction = {
+                    id: result?.transaction?.id ?? `local_tx_${Date.now()}`,
+                    seq: result?.lastCommittedSeq ?? lastTransaction.seq
+                };
             },
             updateChatMetadata: async (chatId, metadata) => {
-                console.log(`[LocalBridge] Update metadata: ${JSON.stringify(metadata)}`);
+                const result = await this.conversation.mutateConversation(chatId, {
+                    activeLeafId: metadata.activeLeafId
+                }) as any;
+                lastTransaction = {
+                    id: result?.transaction?.id ?? lastTransaction.id,
+                    seq: result?.lastCommittedSeq ?? lastTransaction.seq
+                };
             },
-            commitTransaction: async (chatId, scope, payload, idempotencyKey) => {
-                return { id: `local_tx_${Date.now()}`, seq: 0 };
-            }
+            commitTransaction: async () => lastTransaction
         };
 
         let activeProvider: OpenAIProvider | null = null;
@@ -382,8 +392,10 @@ export class StandaloneLocalRuntime implements HALRuntimePorts {
                                     },
                                     onDone: async () => {
                                         const newNode = await flow.finalize();
+                                        const transaction = newNode.extra.transactionId as { id?: string; seq?: number } | undefined;
                                         handle._emitCommitted({
-                                            lastTransactionId: (newNode.extra.transactionId as any).id,
+                                            lastTransactionId: transaction?.id ?? `local_tx_${Date.now()}`,
+                                            seq: transaction?.seq,
                                             activeLeafId: newNode.id,
                                             node: newNode
                                         });
@@ -418,8 +430,10 @@ export class StandaloneLocalRuntime implements HALRuntimePorts {
                         } else {
                             clearInterval(interval);
                             const newNode = await flow.finalize();
+                            const transaction = newNode.extra.transactionId as { id?: string; seq?: number } | undefined;
                             handle._emitCommitted({
-                                lastTransactionId: (newNode.extra.transactionId as any).id,
+                                lastTransactionId: transaction?.id ?? `local_tx_${Date.now()}`,
+                                seq: transaction?.seq,
                                 activeLeafId: newNode.id,
                                 node: newNode
                             });

@@ -23,12 +23,14 @@ export type CharacterChannelApiPort = Pick<LuminaWeaveAPI,
     'on'
     | 'off'
     | 'waitForReady'
+    | 'syncFromST'
     | 'createChatSession'
     | 'renameChatSession'
     | 'deleteChatSession'
     | 'getAssistantName'
     | 'getCharAvatar'
     | 'getUserAvatar'
+    | 'importCharacterCard'
     | 'DEFAULT_AVATAR'
 >;
 
@@ -72,7 +74,8 @@ const EMPTY_CAPABILITIES: CharacterChannelCapabilities = {
     supportsHostSearch: false,
     supportsFindLastMessage: false,
     supportsStableSessionId: false,
-    supportsCurrentWindowInfo: false
+    supportsCurrentWindowInfo: false,
+    supportsCharacterImport: false
 };
 
 const EMPTY_STATUS: CharacterChannelStatus = {
@@ -471,6 +474,26 @@ export class CharacterChannelService {
         return this.refreshPromise;
     }
 
+    async importCharacterCard(file: File): Promise<void> {
+        this.updateStatus({
+            kind: 'loading',
+            text: `正在导入 ${file.name}...`,
+            error: null
+        });
+
+        try {
+            await this.api.importCharacterCard(file);
+            await this.refresh();
+        } catch (error) {
+            console.error('[CharacterChannelService] 角色导入失败', error);
+            this.updateStatus({
+                kind: 'error',
+                text: '角色导入失败',
+                error: error instanceof Error ? error.message : String(error ?? 'unknown_error')
+            });
+        }
+    }
+
     getSession(sessionId: string): CharacterChannelSessionItem | null {
         for (const group of this.state.value.characterGroups) {
             const session = group.sessions.find((item) => item.id === sessionId);
@@ -533,6 +556,7 @@ export class CharacterChannelService {
         try {
             const opened = await this.hostProvider.openSession(this.buildSessionDescriptor(session));
             if (opened) {
+                await this.api.syncFromST();
                 this.contextStore.updateSessionSwitch({
                     sessionId: session.id,
                     characterName: session.characterName,

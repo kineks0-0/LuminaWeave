@@ -24,7 +24,8 @@ const createCharacterState = (): CharacterChannelState => ({
         supportsHostSearch: false,
         supportsFindLastMessage: false,
         supportsStableSessionId: false,
-        supportsCurrentWindowInfo: false
+        supportsCurrentWindowInfo: false,
+        supportsCharacterImport: false
     },
     status: { kind: 'idle', text: '', sessionId: null, characterName: '', error: null }
 });
@@ -78,6 +79,7 @@ describe('DesktopExperienceRuntime', () => {
             refresh: vi.fn(async () => undefined),
             openSession: vi.fn(async () => undefined),
             createSession: vi.fn(async () => undefined),
+            importCharacterCard: vi.fn(async () => undefined),
             renameSession: vi.fn(async () => undefined),
             deleteSession: vi.fn(async () => undefined),
             closeCurrentSession: vi.fn(async () => true),

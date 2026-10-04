@@ -107,7 +107,8 @@ export const createCharacterRosterSurfaceContext = (
         refresh: () => context.runtime.character.refresh(),
         openSession: (sessionId) => context.runtime.character.openSession(sessionId),
         createSession: (input) => context.runtime.character.createSession(input),
-        toggleGroup: (groupKey) => context.runtime.character.toggleGroup(groupKey)
+        toggleGroup: (groupKey) => context.runtime.character.toggleGroup(groupKey),
+        importCharacter: (file) => context.runtime.character.importCharacterCard(file)
     }
 });
 

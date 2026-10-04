@@ -29,6 +29,7 @@ export interface DesktopCharacterRuntime {
     refresh(): Promise<void>;
     openSession(sessionId: string): Promise<void>;
     createSession(input: CreateChatConversationInput): Promise<void>;
+    importCharacterCard(file: File): Promise<void>;
     renameSession(input: RenameChatConversationInput): Promise<void>;
     deleteSession(input: DeleteChatConversationInput): Promise<void>;
     closeCurrentSession(): Promise<boolean>;

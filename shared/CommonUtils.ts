@@ -17,6 +17,16 @@ export const truncate = (text: string | null | undefined, maxLength: number, suf
 export const escapeRegExp = (value: string): string =>
     value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** 资源 id / 路径片段：去扩展名，保留中文，压缩分隔符。 */
+export const slugifyId = (value: string, fallback: string): string => {
+    const slug = value
+        .replace(/\.[a-z0-9]+$/i, '')
+        .replace(/[^\w\u4e00-\u9fa5-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    return slug || fallback;
+};
+
 export const createPrefixedId = (prefix: string): string => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return `${prefix}_${crypto.randomUUID()}`;

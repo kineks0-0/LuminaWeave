@@ -19,6 +19,24 @@ import {
 
 const settingsSchema = {
     nexusPreset: { category: 'generation', group: '专用模型', default: '', label: '专用模型/网关预设', type: 'nexus-select', allowedScopes: ['Global', 'Character'] },
+    userName: {
+        category: 'conversation',
+        group: '本地身份',
+        default: 'User',
+        label: '本地用户名称',
+        description: '独立运行模式下用于消息署名与 {{user}} 宏；SillyTavern 模式下仍使用酒馆 persona。',
+        type: 'text',
+        allowedScopes: ['Global']
+    },
+    personaDescription: {
+        category: 'conversation',
+        group: '本地身份',
+        default: '',
+        label: '本地 persona 描述',
+        description: '非空时作为 system 提示注入独立运行模式的 Lumina 生成。',
+        type: 'text',
+        allowedScopes: ['Global']
+    },
     syncIgnoreST: {
         category: 'storage',
         group: '同步策略',
@@ -309,7 +327,7 @@ const platformManifest: PluginManifestV2 = {
             id: 'character.roster',
             ownerPluginId: 'lumina-chat',
             description: '角色列表 surface。',
-            requiredIntents: ['refresh', 'openSession', 'createSession', 'toggleGroup']
+            requiredIntents: ['refresh', 'openSession', 'createSession', 'toggleGroup', 'importCharacter']
         },
         {
             id: 'conversation.sessionList',

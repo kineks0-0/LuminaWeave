@@ -10,10 +10,21 @@ import { globalXMLInterceptor } from '../xml-view/XMLInterceptor.js';
 import type { ChatManager } from '../conversation/ChatManager.js';
 import type { StreamHandler } from './StreamHandler.js';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import type { CleanedMessage } from '../../../types/nexus.js';
 import { GenerationSession } from './GenerationSession.js';
 import { LuminaGenerationTask } from './LuminaGenerationTask.js';
 import type { PromptCommandService } from './PromptCommandService.js';
 import type { GenerationStreamState } from '../../services/GenerationDomainService.js';
+import {
+    injectCharacterPromptMessages,
+    type CharacterPromptInjectionResult
+} from '../hal/prompt/CharacterPromptInjection.js';
+import { promptResourceResolver } from '../hal/resource/index.js';
+import {
+    buildSourceResourcePath,
+    characterBookToLorebookEntries,
+    type ResourceRef
+} from '@shared/resources/index.js';
 
 export interface GenerationCommandServiceDependencies {
     chatManager: ChatManager;
@@ -24,6 +35,7 @@ export interface GenerationCommandServiceDependencies {
     crudChatRecord(target: number | string, action: 'edit' | 'add' | 'delete', newText?: string, meta?: any): Promise<boolean>;
     getAssistantName(): string;
     getCharName(): string;
+    getUserName(): string;
     getLastMessageId(): string | null;
     getConversationMessages(): Promise<LuminaChatMessage[]>;
     commitToST(): Promise<void>;
@@ -42,6 +54,7 @@ export class GenerationCommandService {
     private readonly crudChatRecord: GenerationCommandServiceDependencies['crudChatRecord'];
     private readonly getAssistantName: () => string;
     private readonly getCharName: () => string;
+    private readonly getUserName: () => string;
     private readonly getLastMessageId: () => string | null;
     private readonly getConversationMessages: () => Promise<LuminaChatMessage[]>;
     private readonly commitToST: () => Promise<void>;
@@ -63,6 +76,7 @@ export class GenerationCommandService {
         this.crudChatRecord = dependencies.crudChatRecord;
         this.getAssistantName = dependencies.getAssistantName;
         this.getCharName = dependencies.getCharName;
+        this.getUserName = dependencies.getUserName;
         this.getLastMessageId = dependencies.getLastMessageId;
         this.getConversationMessages = dependencies.getConversationMessages;
         this.commitToST = dependencies.commitToST;
@@ -303,7 +317,7 @@ export class GenerationCommandService {
         });
     }
 
-    private async assembleLuminaPromptPayload(): Promise<{ messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>; settings: Record<string, unknown>; trace: any[] }> {
+    private async assembleLuminaPromptPayload(): Promise<{ messages: CleanedMessage[]; settings: Record<string, unknown>; trace: any[] }> {
         const messages = await this.getConversationMessages();
         const payloadMessages = messages
             .filter(message => !message.is_hidden)
@@ -313,22 +327,65 @@ export class GenerationCommandService {
             }))
             .filter(message => message.content.trim().length > 0);
 
+        const injection = await this.resolveLocalCharacterPromptInjection(payloadMessages);
+        const finalMessages = injection?.messages ?? payloadMessages;
+        const historyTrace = messages.map((message, index) => ({
+            sourceUnitId: message.id,
+            sourceKind: 'history',
+            label: message.name || message.role || `message-${index}`,
+            outputMessageIndex: finalMessages.findIndex(item => item.content === (message.mesST || message.mesRaw || message.mes || '')),
+            rawLength: (message.pluginRaw || message.mesRaw || message.mes || '').length,
+            finalLength: (message.mesST || message.mesRaw || message.mes || '').length
+        }));
+
         const payload = {
-            messages: payloadMessages,
+            messages: finalMessages,
             settings: {},
-            trace: messages.map((message, index) => ({
-                sourceUnitId: message.id,
-                sourceKind: 'history',
-                label: message.name || message.role || `message-${index}`,
-                outputMessageIndex: payloadMessages.findIndex(item => item.content === (message.mesST || message.mesRaw || message.mes || '')),
-                rawLength: (message.pluginRaw || message.mesRaw || message.mes || '').length,
-                finalLength: (message.mesST || message.mesRaw || message.mes || '').length
-            }))
+            trace: [...historyTrace, ...(injection?.trace ?? [])]
         };
 
         this.promptCommandService.lastPromptPayload = payload;
         this.emit('LUMINA_PROMPT_BUILT', payload.messages);
         return payload;
+    }
+
+    /**
+     * 独立模式下当前会话绑定本地角色资源时，注入 persona、角色卡与卡内 character_book。
+     * ST 数字角色 id 无法命中本地资源，因此 ST 宿主路径行为不变。
+     */
+    private async resolveLocalCharacterPromptInjection(
+        messages: CleanedMessage[]
+    ): Promise<CharacterPromptInjectionResult | null> {
+        const { chatId, charId } = lwStorage._getContextIds();
+        const resourceId = typeof charId === 'string' ? charId : String(charId ?? '');
+        if (!chatId || !resourceId || resourceId === 'Global') return null;
+
+        try {
+            const ref: ResourceRef = {
+                sourceId: 'local',
+                resourceType: 'character',
+                resourceId,
+                path: buildSourceResourcePath('local', 'character', resourceId),
+                writable: true
+            };
+            const bundle = await promptResourceResolver.resolve([ref]);
+            if (!bundle.charCard) return null;
+
+            const personaDescription = lwStorage.get('lumina-chat.personaDescription', '', 'Global');
+            const characterDocument = bundle.documents.find(document => document.ref.resourceType === 'character');
+
+            return injectCharacterPromptMessages({
+                messages,
+                charCard: bundle.charCard,
+                personaDescription: typeof personaDescription === 'string' ? personaDescription : '',
+                worldbookEntries: characterDocument ? characterBookToLorebookEntries(characterDocument.raw) : [],
+                userName: this.getUserName(),
+                charName: bundle.charCard.name || this.getAssistantName()
+            });
+        } catch (error) {
+            console.warn('[LuminaWeave] 本地角色提示注入失败，按纯历史生成。', error);
+            return null;
+        }
     }
 
     private normalizePromptRole(message: LuminaChatMessage): 'system' | 'user' | 'assistant' {

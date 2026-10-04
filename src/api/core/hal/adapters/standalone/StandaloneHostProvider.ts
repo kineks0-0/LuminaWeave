@@ -6,7 +6,7 @@ import { STMacroResolver } from "../st/STMacroResolver.js";
 import { SLEventBridge } from "./SLEventBridge.js";
 import { StandaloneHostStorage } from "./StandaloneHostStorage.js";
 import { STHostNetwork } from "../st/STHostNetwork.js";
-import { STResourceProvider } from "../st/STResourceProvider.js";
+import { StandaloneResourceProvider } from "./StandaloneResourceProvider.js";
 import { DefaultBootstrapStorage } from "../../defaults/DefaultBootstrapStorage.js";
 import { DefaultTokenCounter } from "../../defaults/DefaultTokenCounter.js";
 
@@ -22,7 +22,7 @@ export class StandaloneHostProvider implements IHostProvider {
       new SLEventBridge(),
       new StandaloneHostStorage(),
       new STHostNetwork(),
-      new STResourceProvider(),
+      new StandaloneResourceProvider(),
       new DefaultBootstrapStorage(),
       new DefaultTokenCounter(),
     );

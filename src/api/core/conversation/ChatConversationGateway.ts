@@ -83,11 +83,13 @@ export class ChatConversationGateway {
             throw new Error(creation.reason || 'chat_session_create_failed');
         }
 
-        const { title } = buildTitleAndSummary(creation.resolvedChatFile, '');
+        const initialNodes = creation.initialNodes ?? [];
+        const { title } = buildTitleAndSummary(creation.resolvedChatFile, initialNodes[0]?.mes ?? '');
         const document = createEmptyConversationDocument({
             id: creation.resolvedChatFile,
             conversationType: 'chat',
             title,
+            nodes: initialNodes,
             pluginState: {
                 chat: {
                     characterId: creation.resolvedCharacterId,

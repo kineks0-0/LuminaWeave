@@ -58,6 +58,8 @@ import type { DesktopModeManifest } from '../desktop-modes/core/types.js';
 
 import { getChatMessageMutationPort } from './core/conversation/ChatMessageMutationPort.js';
 import { getConversationHostFacadePort } from './core/facade/ConversationHostFacadePort.js';
+import { characterImportService } from './core/hal/resource/index.js';
+import type { ResourceDocument } from '@shared/resources/index.js';
 import { PromptCommandService } from './core/generation/PromptCommandService.js';
 import { GenerationCommandService } from './core/generation/GenerationCommandService.js';
 import { ForgeAgentController } from './core/forge/runtime/ForgeAgentController.js';
@@ -208,6 +210,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             crudChatRecord: (target, action, newText, meta) => this.crudChatRecord(target, action, newText, meta),
             getAssistantName: () => this.getAssistantName(),
             getCharName: () => this.getCharName(),
+            getUserName: () => this.getUserName(),
             getLastMessageId: () => this.getLastMessageId(),
             getConversationMessages: () => this.services.conversation.getMessages({ sourceId: 'chat' }),
             commitToST: () => this.commitToST(),
@@ -1384,6 +1387,11 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     /** 获取当前角色名称 */
     getCharName(): string {
         return this.getAssistantName();
+    }
+
+    /** 导入 PNG/JSON 角色卡到本地资源源 */
+    async importCharacterCard(file: File): Promise<ResourceDocument> {
+        return characterImportService.importFile(file);
     }
 
     getAssistantName() {

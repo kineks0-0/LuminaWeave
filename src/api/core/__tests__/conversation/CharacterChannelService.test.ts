@@ -6,6 +6,7 @@ import type {
     RenameChatConversationInput
 } from '@/types/ConversationContextTypes.js';
 import type { ChatSessionRef } from '@/types/SessionTypes.js';
+import type { ResourceDocument } from '@shared/resources/index.js';
 
 const CAPABILITIES = {
     supportsCharacterRoster: true,
@@ -18,7 +19,8 @@ const CAPABILITIES = {
     supportsHostSearch: true,
     supportsFindLastMessage: true,
     supportsStableSessionId: true,
-    supportsCurrentWindowInfo: true
+    supportsCurrentWindowInfo: true,
+    supportsCharacterImport: true
 };
 
 class MockCharacterChannelApi {
@@ -45,6 +47,26 @@ class MockCharacterChannelApi {
         characterAvatarUrl: input.characterAvatarUrl ?? null
     }));
     public readonly waitForReady = vi.fn(async () => false);
+    public readonly syncFromST = vi.fn(async () => undefined);
+    public readonly importCharacterCard = vi.fn(async (): Promise<ResourceDocument> => ({
+        ref: {
+            sourceId: 'local',
+            resourceType: 'character',
+            resourceId: 'alice',
+            path: '/sources/local/characters/alice',
+            writable: true
+        },
+        raw: {},
+        summary: { id: 'alice', type: 'character', name: 'Alice', format: 'st-character' },
+        capabilities: {
+            readable: true,
+            writable: true,
+            forkable: true,
+            importable: true,
+            exportable: true,
+            searchable: true
+        }
+    }));
     public readonly getAssistantName = vi.fn(() => 'Assistant');
     public readonly getCharAvatar = vi.fn((name: string) => `/avatar/${name}.png`);
     public readonly getUserAvatar = vi.fn((name?: string) => `/avatar/user/${name || 'User'}.png`);
@@ -346,6 +368,39 @@ describe('CharacterChannelService', () => {
             recentPreview: '暂无历史对话'
         });
         expect(service.state.value.expandedCharacterKey).toBe('alice');
+    });
+
+    it('syncs the live store after the host opens a session', async () => {
+        const service = new CharacterChannelService(api as any, contextStore as any, hostProvider);
+        await service.refresh();
+
+        await service.openSession('session_live');
+
+        expect(api.syncFromST).toHaveBeenCalled();
+        expect(contextStore.selectViewSession).toHaveBeenCalledWith(null);
+    });
+
+    it('imports a character card and refreshes the roster', async () => {
+        const service = new CharacterChannelService(api as any, contextStore as any, hostProvider);
+        const refresh = vi.spyOn(service, 'refresh').mockResolvedValue();
+
+        await service.importCharacterCard(new File(['{}'], 'hero.json', { type: 'application/json' }));
+
+        expect(api.importCharacterCard).toHaveBeenCalledTimes(1);
+        expect(refresh).toHaveBeenCalled();
+    });
+
+    it('records an error status when character import fails', async () => {
+        const service = new CharacterChannelService(api as any, contextStore as any, hostProvider);
+        api.importCharacterCard.mockRejectedValueOnce(new Error('bad card'));
+
+        await service.importCharacterCard(new File(['x'], 'hero.png', { type: 'image/png' }));
+
+        expect(service.state.value.status).toMatchObject({
+            kind: 'error',
+            text: '角色导入失败',
+            error: 'bad card'
+        });
     });
 
     it('renames the selected session through the unified chat service and rebinds selected view state', async () => {

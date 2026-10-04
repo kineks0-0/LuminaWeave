@@ -17,15 +17,38 @@
       </template>
       <template v-else>
         <h2>联系人</h2>
+        <button
+          v-if="canImport"
+          type="button"
+          class="telegram-contacts__icon"
+          title="导入角色卡"
+          aria-label="导入角色卡"
+          @click="importInput?.click()"
+        >
+          <Upload :size="24" />
+        </button>
         <button type="button" class="telegram-contacts__icon" title="搜索" aria-label="搜索联系人" @click="openSearch">
           <Search :size="24" />
         </button>
       </template>
     </header>
-    <label v-else class="telegram-contacts__search">
-      <Search :size="18" aria-hidden="true" />
-      <input v-model="query" type="search" placeholder="搜索联系人" aria-label="搜索联系人">
-    </label>
+    <div v-else class="telegram-contacts__search-row">
+      <label class="telegram-contacts__search">
+        <Search :size="18" aria-hidden="true" />
+        <input v-model="query" type="search" placeholder="搜索联系人" aria-label="搜索联系人">
+      </label>
+      <button
+        v-if="canImport"
+        type="button"
+        class="telegram-contacts__icon telegram-contacts__import"
+        title="导入角色卡"
+        aria-label="导入角色卡"
+        @click="importInput?.click()"
+      >
+        <Upload :size="20" />
+      </button>
+    </div>
+    <input ref="importInput" class="tw:hidden" type="file" accept=".png,.json,image/png,application/json" @change="handleImportFile">
 
     <ul v-if="contacts.length > 0" class="telegram-contacts__rows">
       <li v-for="group in contacts" :key="group.key" class="telegram-contacts__item">
@@ -61,7 +84,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
-import { ArrowLeft, Search } from 'lucide-vue-next';
+import { ArrowLeft, Search, Upload } from 'lucide-vue-next';
 import type { CharacterChannelGroup } from '../../../../types/ConversationContextTypes.js';
 import type { ChatMenuItem } from '../../presentation/chatMenus.js';
 import ChatPopoverMenu from '../ChatPopoverMenu.vue';
@@ -70,14 +93,27 @@ import TelegramAvatar from './TelegramAvatar.vue';
 const props = withDefaults(defineProps<{
   groups: readonly CharacterChannelGroup[];
   page?: boolean;
+  canImport?: boolean;
 }>(), {
-  page: false
+  page: false,
+  canImport: false
 });
 
 const emit = defineEmits<{
   open: [sessionId: string];
   create: [group: CharacterChannelGroup];
+  import: [file: File];
 }>();
+
+const importInput = ref<HTMLInputElement | null>(null);
+
+const handleImportFile = (event: Event): void => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  target.value = '';
+  if (!file) return;
+  emit('import', file);
+};
 
 const LONG_PRESS_MS = 480;
 const query = ref('');
@@ -205,16 +241,31 @@ onBeforeUnmount(cancelLongPress);
   background: var(--lw-bg-hover);
 }
 
+.telegram-contacts__search-row {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  margin: 10px 12px 6px;
+}
+
 .telegram-contacts__search {
   display: flex;
   height: 40px;
-  flex: 0 0 auto;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 10px;
-  margin: 10px 12px 6px;
   padding: 0 14px;
   border-radius: 999px;
   background: var(--lw-bg-subtle);
+  color: var(--lw-text-muted);
+}
+
+.telegram-contacts__import {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
   color: var(--lw-text-muted);
 }
 
