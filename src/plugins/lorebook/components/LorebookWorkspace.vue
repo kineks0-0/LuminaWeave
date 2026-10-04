@@ -105,6 +105,25 @@
         </div>
       </div>
       <div class="lore-actions">
+        <div class="book-admin-group">
+          <button class="book-admin-btn" title="新建世界书" @click="handleCreateBook">＋ 世界书</button>
+          <button class="book-admin-btn" title="导入世界书 JSON" @click="triggerImportBook">导入</button>
+          <button
+            v-if="canDeleteBooks"
+            class="book-admin-btn is-danger"
+            title="删除当前世界书"
+            @click="handleDeleteBook"
+          >
+            删除
+          </button>
+          <input
+            ref="importInput"
+            type="file"
+            accept=".json,application/json"
+            class="book-import-input"
+            @change="handleImportFile"
+          />
+        </div>
         <!-- 视图模式切换按钮组 -->
         <div class="view-toggle-group">
           <button class="view-toggle-btn" :class="{ 'is-active': displayMode === 'list' }" @click="setDisplayMode('list')" title="列表视图">
@@ -134,6 +153,15 @@
           新建条目
         </button>
       </div>
+    </div>
+
+    <!-- 按聊天启用开关 -->
+    <div v-if="selectedBookRef" class="book-chat-toggle">
+      <label class="book-chat-toggle-control">
+        <input type="checkbox" :checked="enabledForCurrentChat" @change="handleToggleChatEnable" />
+        <span>本聊天启用</span>
+      </label>
+      <span class="book-chat-toggle-hint">{{ enabledForCurrentChat ? '生成时注入这本书' : '仅编辑，不参与生成' }}</span>
     </div>
 
     <!-- 搜索栏 -->
@@ -272,6 +300,11 @@ import type { LorebookVersionMode } from '../../../types/LorebookViewTypes.js';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../../platform/activity/activityLaunchResolver.js';
 import { useSurfaceInput } from '../../../platform/surface/useSurfaceRuntimeContext.js';
 import LorebookEditor from '../LorebookEditor.vue';
+import { buildSourceResourcePath, type ResourceRef } from '@shared/resources/index.js';
+import {
+  isWorldbookEnabledForCurrentChat,
+  setWorldbookEnabledForCurrentChat
+} from '../sessionWorldbookBindings.js';
 import { truncate, deepClone } from '@shared/CommonUtils.js';
 
 const props = useSurfaceInput('lorebook.workspace');
@@ -309,6 +342,28 @@ const currentBookName = computed(() => {
   return book ? book.name : '选择世界书';
 });
 
+const importInput = ref<HTMLInputElement | null>(null);
+const canDeleteBooks = computed(() => lorebookManager.canDeleteBooks());
+const selectedBookRef = computed<ResourceRef | null>(() => {
+  const book = allBooks.value.find(item => item.id === currentSelectedBookName.value);
+  if (!book?.sourceId) return null;
+  return {
+    sourceId: book.sourceId,
+    resourceType: 'worldbook',
+    resourceId: book.id,
+    path: buildSourceResourcePath(book.sourceId, 'worldbook', book.id),
+    writable: true
+  };
+});
+const enabledForCurrentChat = ref(false);
+const syncChatEnableState = (): void => {
+  enabledForCurrentChat.value = selectedBookRef.value
+    ? isWorldbookEnabledForCurrentChat(selectedBookRef.value)
+    : false;
+};
+watch(selectedBookRef, syncChatEnableState, { immediate: true });
+watch(() => contextStore.activeSessionId, syncChatEnableState);
+
 const interactMode = computed(() => lwStorage.get('lumina-lorebook.interactMode', 'none', 'Global'));
 const autoOpenSidebar = computed(() => lwStorage.get('lumina-lorebook.autoOpenSidebar', true, 'Global'));
 const displayMode = ref(lwStorage.get('lumina-lorebook.displayMode', 'list', 'Global'));
@@ -318,7 +373,7 @@ const setDisplayMode = (mode: string): void => {
 };
 
 const localEntries = ref<LuminaLorebookEntry[]>([]);
-const localBooks = ref<{ name: string; id: string }[]>([...lorebookManager.books]);
+const localBooks = ref([...lorebookManager.books]);
 const resolvedSourceId = computed<TimelineSourceId>(() => props.timelineSourceId || contextStore.activeSourceId);
 const resolvedSource = computed(() => {
   return contextStore.sources.find(source => source.id === resolvedSourceId.value) || null;
@@ -561,6 +616,58 @@ const handleDelete = async (uid: string | number) => {
     captureCurrentSnapshot();
     closeEditor();
   }
+};
+
+const handleCreateBook = async () => {
+  const name = window.prompt('新建世界书名称')?.trim();
+  if (!name) return;
+  await lorebookManager.ensureBookExists(name);
+  await lorebookManager.syncFromST();
+  await lorebookManager.loadLorebook(name);
+  currentSelectedBookName.value = lorebookManager.selectedBook;
+  localBooks.value = [...lorebookManager.books];
+  localEntries.value = [...lorebookManager.entries];
+};
+
+const triggerImportBook = () => importInput.value?.click();
+
+const handleImportFile = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+
+  const success = await lorebookManager.importBook(file.name, await file.text());
+  if (!success) {
+    lwApi.showToast('世界书导入失败：仅支持 ST world info JSON', 'error');
+    return;
+  }
+  const importedId = file.name.replace(/\.json$/i, '').trim();
+  await lorebookManager.syncFromST();
+  await lorebookManager.loadLorebook(importedId);
+  currentSelectedBookName.value = lorebookManager.selectedBook;
+  localBooks.value = [...lorebookManager.books];
+  localEntries.value = [...lorebookManager.entries];
+};
+
+const handleDeleteBook = async () => {
+  const name = currentSelectedBookName.value;
+  if (!name) return;
+  if (!(await lwApi.confirm(`确定删除世界书「${name}」吗？此操作不可恢复。`))) return;
+  const success = await lorebookManager.deleteBook(name);
+  if (!success) return;
+  currentSelectedBookName.value = lorebookManager.selectedBook;
+  localBooks.value = [...lorebookManager.books];
+  localEntries.value = [];
+  syncChatEnableState();
+};
+
+const handleToggleChatEnable = (event: Event) => {
+  const bookRef = selectedBookRef.value;
+  if (!bookRef) return;
+  const enabled = (event.target as HTMLInputElement).checked;
+  setWorldbookEnabledForCurrentChat(bookRef, enabled);
+  enabledForCurrentChat.value = enabled;
 };
 
 
@@ -1499,6 +1606,7 @@ onUnmounted(() => {
 /* 侧边栏下视图切换组紧凑化 */
 .lorebook-root[data-mode="small"] .lore-actions {
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .lorebook-root[data-mode="small"] .view-toggle-group {
@@ -1525,19 +1633,57 @@ onUnmounted(() => {
   max-height: 180px;
 }
 
+.book-admin-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
+.book-admin-btn {
+  padding: 5px 10px;
+  border: 1px solid var(--lw-border-base);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-label-medium-size, 12px);
+  cursor: pointer;
+  transition: background-color var(--lw-transition), color var(--lw-transition);
+}
 
+.book-admin-btn:hover {
+  color: var(--lw-text-main);
+  background: var(--lw-bg-subtle);
+}
 
+.book-admin-btn.is-danger:hover {
+  color: var(--lw-danger, #d9534f);
+}
 
+.book-import-input {
+  display: none;
+}
 
+.book-chat-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--lw-border-subtle);
+  background: color-mix(in srgb, var(--lw-bg-elevated) 72%, transparent);
+}
 
+.book-chat-toggle-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-label-medium-size, 12px);
+  cursor: pointer;
+}
 
-
-
-
-
-
-
-
+.book-chat-toggle-hint {
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size, 11px);
+}
 
 </style>

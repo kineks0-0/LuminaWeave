@@ -1,6 +1,6 @@
 import { LuminaWeaveAPIBase } from '../facade/LuminaWeaveAPIBase.js';
 import { LorebookTimelineResolver } from './LorebookTimelineResolver.js';
-import { getLorebookHostPort, type LorebookHostPort } from './LorebookHostPort.js';
+import { getLorebookHostPort, type LorebookHostPort, type LorebookHostWorldbookRef } from './LorebookHostPort.js';
 import { HALContext } from '../hal/HALContext.js';
 import type {
     LorebookEntrySnapshot,
@@ -19,11 +19,18 @@ const LOREBOOK_SNAPSHOT_KEY = 'entry-snapshots';
  */
 export class LorebookManager extends LuminaWeaveAPIBase {
     private parentApi: any;
-    private readonly host: LorebookHostPort;
+    private readonly hostOverride: LorebookHostPort | undefined;
+    /**
+     * 宿主端口在 boot() 中才注册，而本管理器在模块加载时就已构造；
+     * 动态解析避免捕获注册前的空实现。
+     */
+    private get host(): LorebookHostPort {
+        return this.hostOverride ?? getLorebookHostPort();
+    }
     /** 每本书最多保留的快照数量，超出时删除最旧的 */
     private readonly MAX_SNAPSHOTS_PER_BOOK = 5;
     public entries: LuminaLorebookEntry[] = [];
-    public books: { name: string, id: string }[] = [];
+    public books: LorebookHostWorldbookRef[] = [];
     public selectedBook: string | null = null;
     public currentBookData: LorebookData | null = null; // 存储当前独立编辑的书籍全量数据
     public activeEditingEntry: LuminaLorebookEntry | null = null; // 全局活跃编辑项 (多窗口协作用)
@@ -34,10 +41,10 @@ export class LorebookManager extends LuminaWeaveAPIBase {
     public snapshotRevision: number = 0;
     private snapshots = new Map<string, LorebookEntrySnapshot>();
 
-    constructor(parentApi: any, host: LorebookHostPort = getLorebookHostPort()) {
+    constructor(parentApi: any, host?: LorebookHostPort) {
         super();
         this.parentApi = parentApi;
-        this.host = host;
+        this.hostOverride = host;
     }
 
     /**
@@ -100,6 +107,7 @@ export class LorebookManager extends LuminaWeaveAPIBase {
         this.isLoading = true;
         try {
             console.log('[LorebookManager] 正在同步世界书列表...');
+            await this.host.refreshWorldbookRefs?.();
             this.books = this.host.getWorldbookRefs();
 
             console.log(`[LorebookManager] 成功发现 ${this.books.length} 本世界书`);
@@ -204,6 +212,37 @@ export class LorebookManager extends LuminaWeaveAPIBase {
         const created = await this.host.createWorldbook(normalizedTarget, []);
         if (created) await new Promise(resolve => setTimeout(resolve, 100));
         return created;
+    }
+
+    public canDeleteBooks(): boolean {
+        return typeof this.host.deleteWorldbook === 'function';
+    }
+
+    public supportsSystemPromptMount(): boolean {
+        return this.host.supportsSystemPromptMount === true;
+    }
+
+    /** 导入宿主格式世界书文件（独立模式为 ST world info JSON）。 */
+    async importBook(filename: string, data: string): Promise<boolean> {
+        return this.host.importRawWorldbook(filename, data);
+    }
+
+    /** 删除整本世界书（仅宿主支持时可用）。 */
+    async deleteBook(name: string): Promise<boolean> {
+        if (!this.host.deleteWorldbook) return false;
+        const normalized = name.replace(/\.json$/, '');
+        const deleted = await this.host.deleteWorldbook(normalized);
+        if (deleted) {
+            this.books = this.books.filter(book => book.id.replace(/\.json$/, '') !== normalized);
+            if (this.selectedBook === normalized) {
+                this.selectedBook = null;
+                this.currentBookData = null;
+                this.entries = [];
+            }
+            this.emit('LOREBOOK_SYNCED', { entries: this.entries, book: this.selectedBook, books: this.books });
+            this.emit('UPDATED');
+        }
+        return deleted;
     }
 
     /**

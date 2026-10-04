@@ -88,17 +88,19 @@ export const buildChatMessageToolbar = ({ isUser, disabled }: {
     withDisabled(MESSAGE_ACTION_ITEMS.delete, disabled)
 ];
 
-export type ChatHeaderMenuAction = 'search' | 'profile' | 'prompt' | 'prompt-presets' | 'regex-scripts';
+export type ChatHeaderMenuAction = 'search' | 'profile' | 'worldbook' | 'prompt' | 'prompt-presets' | 'regex-scripts';
 
 /** 聊天内管理的提示词资产面板（移动端以底部抽屉展示，桌面端跳设置页） */
 export type ChatPromptAssetsTarget = 'prompt-presets' | 'regex-scripts';
 
-export const buildChatHeaderMenu = ({ canOpenProfile, showPromptAssets = false }: {
+export const buildChatHeaderMenu = ({ canOpenProfile, showPromptAssets = false, showWorldbook = false }: {
     canOpenProfile: boolean;
     showPromptAssets?: boolean;
+    showWorldbook?: boolean;
 }): ChatMenuItem<ChatHeaderMenuAction>[] => [
     { id: 'search', label: '搜索', icon: 'search' },
     ...(canOpenProfile ? [{ id: 'profile' as const, label: '角色资料', icon: 'profile' as const }] : []),
+    ...(showWorldbook ? [{ id: 'worldbook' as const, label: '世界书', icon: 'lorebook' as const }] : []),
     { id: 'prompt', label: 'Prompt 预览', icon: 'prompt' },
     ...(showPromptAssets ? [
         { id: 'prompt-presets' as const, label: '提示词预设', icon: 'preset' as const },

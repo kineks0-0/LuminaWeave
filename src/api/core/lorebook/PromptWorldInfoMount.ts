@@ -38,6 +38,11 @@ export class PromptWorldInfoMount {
     }
 
     private async _performSync() {
+        if (!this.lorebookManager.supportsSystemPromptMount()) {
+            // 独立模式没有 ST 原生生成链路，伪装同步不适用；也避免在本地资源里创建系统书。
+            return;
+        }
+
         const bookName = this.getBookName();
         const isGlobalEnabled = lwStorage.get('lumina-settings.isPromptInjectionEnabled', true, 'Global');
 

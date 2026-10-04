@@ -71,6 +71,13 @@ describe('chat header menu', () => {
         expect(buildChatHeaderMenu({ canOpenProfile: true, showPromptAssets: true }).map(item => item.id))
             .toEqual(['search', 'profile', 'prompt', 'prompt-presets', 'regex-scripts']);
     });
+
+    it('adds the worldbook panel entry when the host can open panels', () => {
+        expect(buildChatHeaderMenu({ canOpenProfile: false, showWorldbook: true }).map(item => item.id))
+            .toEqual(['search', 'worldbook', 'prompt']);
+        expect(buildChatHeaderMenu({ canOpenProfile: true, showWorldbook: true }).map(item => item.id))
+            .toEqual(['search', 'profile', 'worldbook', 'prompt']);
+    });
 });
 
 describe('prompt preset menu', () => {

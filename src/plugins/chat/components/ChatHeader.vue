@@ -222,7 +222,8 @@ const headerMenuItems = computed<ChatMenuItem[]>(() => {
   }
   return buildChatHeaderMenu({
     canOpenProfile: Boolean(props.onOpenRoleProfile),
-    showPromptAssets: Boolean(props.onManagePromptAssets)
+    showPromptAssets: Boolean(props.onManagePromptAssets),
+    showWorldbook: Boolean(props.onOpenPanel)
   });
 });
 const classicMenu = computed<ChatMenuItem[]>(() => [
@@ -282,6 +283,7 @@ const handleHeaderMenu = (id: string): void => {
   const action = id as ChatHeaderMenuAction;
   if (action === 'search') openSearch();
   else if (action === 'profile') props.onOpenRoleProfile?.();
+  else if (action === 'worldbook') props.onOpenPanel?.('lumina-lorebook');
   else if (action === 'prompt') props.onTogglePromptInspector();
   else if (action === 'regex-scripts') props.onManagePromptAssets?.('regex-scripts');
   else if (id.startsWith('preset:')) props.onSelectPromptPreset?.(id.slice('preset:'.length));
