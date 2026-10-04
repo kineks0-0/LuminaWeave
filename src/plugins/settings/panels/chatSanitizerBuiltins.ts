@@ -6,12 +6,7 @@ import {
     resolveBoundRegexEnabled,
     type BoundRegexOverride
 } from '../../../api/core/hal/regex/BoundRegexOverrideStore.js';
-import {
-    buildTagFilterRegex,
-    resolveTagFilterTags,
-    TAG_FILTER_RULE_NAME
-} from '../../../api/core/hal/regex/TagFilterPattern.js';
-import type { RegexPlacement } from '../../../types/RegexScriptTypes.js';
+import type { RegexPlacement, RegexSubstituteMode } from '../../../types/RegexScriptTypes.js';
 
 /**
  * 「消息净化」面板内置处理区的只读视图模型。
@@ -105,23 +100,6 @@ export const resolveReplyFilterState = (
     aggressiveThinking: Boolean(read('lumina-chat.aggressiveThinking', false))
 });
 
-export interface BuiltinTagFilterRule {
-    /** ST 宿主同步的全局规则名。 */
-    name: string;
-    tags: string[];
-    pattern: string;
-}
-
-/** 内置标签过滤规则内容（与 `RegexSyncService` 同步的 find_regex 同源）。 */
-export const resolveBuiltinTagFilterRule = (): BuiltinTagFilterRule => {
-    const tags = resolveTagFilterTags();
-    return {
-        name: TAG_FILTER_RULE_NAME,
-        tags,
-        pattern: buildTagFilterRegex(tags)
-    };
-};
-
 export type BoundRegexSource = 'preset' | 'character';
 
 export interface BoundRegexRule {
@@ -136,6 +114,16 @@ export interface BoundRegexRule {
     /** 实际是否参与执行。 */
     effectiveEnabled: boolean;
     placement: RegexPlacement[];
+    /** 以下为只读的脚本内容，供面板展开查看。 */
+    findRegex: string;
+    replaceString: string;
+    trimStrings: string[];
+    markdownOnly: boolean;
+    promptOnly: boolean;
+    runOnEdit: boolean;
+    substituteRegex: RegexSubstituteMode;
+    minDepth: number | null;
+    maxDepth: number | null;
 }
 
 /**
@@ -161,7 +149,16 @@ export const listBoundRegexRules = (): BoundRegexRule[] => {
                 sourceEnabled: script.enabled,
                 override: overrides[script.id] ?? null,
                 effectiveEnabled: resolveBoundRegexEnabled(script.id, script.enabled, overrides),
-                placement: [...script.placement]
+                placement: [...script.placement],
+                findRegex: script.findRegex,
+                replaceString: script.replaceString,
+                trimStrings: [...script.trimStrings],
+                markdownOnly: script.markdownOnly,
+                promptOnly: script.promptOnly,
+                runOnEdit: script.runOnEdit,
+                substituteRegex: script.substituteRegex,
+                minDepth: script.minDepth,
+                maxDepth: script.maxDepth
             });
         });
     };

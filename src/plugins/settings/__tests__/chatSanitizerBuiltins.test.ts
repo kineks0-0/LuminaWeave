@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     listBoundRegexRules,
     listBuiltinTagRules,
-    resolveBuiltinTagFilterRule,
     resolveReplyFilterState
 } from '../panels/chatSanitizerBuiltins.js';
 import {
@@ -56,14 +55,6 @@ describe('chatSanitizerBuiltins', () => {
         expect(byTag.has('forge_skill')).toBe(false);
     });
 
-    it('exposes the built-in tag filter rule content', () => {
-        const rule = resolveBuiltinTagFilterRule();
-
-        expect(rule.name).toBe('[Lumina] Tag Filter');
-        expect(rule.tags).toContain('thinking');
-        expect(rule.pattern).toContain('<thinking\\b');
-    });
-
     it('reads reply filter switches from the registered setting keys', () => {
         const values: Record<string, unknown> = {
             'lumina-chat.filterChatReply': true,
@@ -110,7 +101,8 @@ describe('chatSanitizerBuiltins', () => {
                 })
             ], '角色B');
 
-            expect(listBoundRegexRules()).toEqual([
+            const rules = listBoundRegexRules();
+            expect(rules).toMatchObject([
                 {
                     id: 'shared',
                     name: '预设脚本',
@@ -132,6 +124,18 @@ describe('chatSanitizerBuiltins', () => {
                     placement: [REGEX_PLACEMENTS.userInput]
                 }
             ]);
+            // 展开查看用的脚本内容字段
+            expect(rules[0]).toMatchObject({
+                findRegex: '/a/g',
+                replaceString: 'b',
+                trimStrings: [],
+                markdownOnly: true,
+                promptOnly: false,
+                runOnEdit: false,
+                substituteRegex: 0,
+                minDepth: null,
+                maxDepth: null
+            });
         });
 
         it('supports disabling enabled scripts and force-enabling source-disabled scripts', () => {
@@ -189,7 +193,7 @@ describe('chatSanitizerBuiltins', () => {
 
         it('falls back to generic source labels and returns empty when nothing is bound', () => {
             setCachedPresetRegexScripts('preset-a', [buildScript({ id: 'p', scriptName: '' })]);
-            expect(listBoundRegexRules()).toEqual([
+            expect(listBoundRegexRules()).toMatchObject([
                 {
                     id: 'p',
                     name: '未命名脚本',

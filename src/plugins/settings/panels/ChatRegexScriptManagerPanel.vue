@@ -49,27 +49,6 @@
             <span v-if="rule.description" class="builtin-tag-desc">{{ rule.description }}</span>
           </li>
         </ul>
-        <div class="builtin-regex">
-          <button
-            type="button"
-            class="builtin-regex-toggle"
-            :aria-expanded="showTagFilterPattern"
-            @click="showTagFilterPattern = !showTagFilterPattern"
-          >
-            <ChevronRight
-              :size="12"
-              :stroke-width="2"
-              class="builtin-regex-chevron"
-              :class="{ 'is-open': showTagFilterPattern }"
-              aria-hidden="true"
-            />
-            查看正则内容（{{ builtinTagFilter.tags.length }} 个标签）
-          </button>
-          <div v-if="showTagFilterPattern" class="builtin-regex-body">
-            <p class="builtin-regex-label">ST 宿主同步为全局正则「{{ builtinTagFilter.name }}」，以下为匹配模式。</p>
-            <pre class="builtin-regex-pattern">{{ builtinTagFilter.pattern }}</pre>
-          </div>
-        </div>
         <div class="builtin-filter">
           <div class="builtin-filter-head">
             <span class="builtin-filter-title">回复过滤</span>
@@ -116,7 +95,22 @@
             class="bound-row"
             :class="{ 'is-disabled': !rule.effectiveEnabled }"
           >
-            <span class="bound-name">{{ rule.name }}</span>
+            <button
+              type="button"
+              class="bound-name bound-name-button"
+              :aria-expanded="expandedBoundKey === boundKey(rule)"
+              :title="expandedBoundKey === boundKey(rule) ? '收起内容' : '查看内容'"
+              @click="toggleBoundDetail(rule)"
+            >
+              <ChevronRight
+                :size="11"
+                :stroke-width="2"
+                class="bound-name-chevron"
+                :class="{ 'is-open': expandedBoundKey === boundKey(rule) }"
+                aria-hidden="true"
+              />
+              {{ rule.name }}
+            </button>
             <span class="bound-source" :data-source="rule.source">{{ rule.sourceLabel }}</span>
             <span class="bound-placements">
               <span v-for="placement in rule.placement" :key="placement" class="bound-tag">
@@ -129,6 +123,26 @@
               :title="boundToggleTitle(rule)"
               @update:modelValue="toggleBoundRegex(rule, $event)"
             />
+            <div v-if="expandedBoundKey === boundKey(rule)" class="bound-detail">
+              <div class="bound-detail-field">
+                <span class="bound-detail-label">匹配</span>
+                <pre class="bound-detail-code">{{ rule.findRegex || '（空）' }}</pre>
+              </div>
+              <div class="bound-detail-field">
+                <span class="bound-detail-label">替换</span>
+                <pre class="bound-detail-code">{{ rule.replaceString || '（空）' }}</pre>
+              </div>
+              <div v-if="rule.trimStrings.length > 0" class="bound-detail-field">
+                <span class="bound-detail-label">裁剪字符串</span>
+                <pre class="bound-detail-code">{{ rule.trimStrings.join('\n') }}</pre>
+              </div>
+              <ul class="bound-detail-meta">
+                <li>作用位置：{{ rule.placement.map(placementLabel).join('、') || '未选择' }}</li>
+                <li>深度：{{ boundDepthLabel(rule) }}</li>
+                <li>选项：{{ boundOptionLabels(rule) }}</li>
+                <li>状态：{{ boundToggleTitle(rule) }}</li>
+              </ul>
+            </div>
           </li>
         </ul>
       </section>
@@ -329,11 +343,9 @@ import { openSettingsCategory } from '../settingsViewState.js';
 import {
   listBoundRegexRules,
   listBuiltinTagRules,
-  resolveBuiltinTagFilterRule,
   resolveReplyFilterState,
   type BoundRegexRule,
   type BuiltinReplyFilterState,
-  type BuiltinTagFilterRule,
   type BuiltinTagRule
 } from './chatSanitizerBuiltins.js';
 import {
@@ -377,9 +389,8 @@ const rootRef = ref<HTMLElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const scripts = ref<RegexScript[]>([]);
 const builtinTagRules = ref<BuiltinTagRule[]>([]);
-const builtinTagFilter = ref<BuiltinTagFilterRule>(resolveBuiltinTagFilterRule());
-const showTagFilterPattern = ref(false);
 const boundRegexRules = ref<BoundRegexRule[]>([]);
+const expandedBoundKey = ref<string | null>(null);
 const replyFilterState = ref<BuiltinReplyFilterState>(resolveReplyFilterState());
 const selectedId = ref('');
 const view = ref<'list' | 'detail'>('list');
@@ -452,9 +463,30 @@ const nullableNumber = (event: Event): number | null => {
 
 const refreshBuiltinState = (): void => {
   builtinTagRules.value = listBuiltinTagRules();
-  builtinTagFilter.value = resolveBuiltinTagFilterRule();
   boundRegexRules.value = listBoundRegexRules();
   replyFilterState.value = resolveReplyFilterState();
+};
+
+const boundKey = (rule: BoundRegexRule): string => `${rule.source}:${rule.id}`;
+
+const toggleBoundDetail = (rule: BoundRegexRule): void => {
+  const key = boundKey(rule);
+  expandedBoundKey.value = expandedBoundKey.value === key ? null : key;
+};
+
+const boundDepthLabel = (rule: BoundRegexRule): string => {
+  if (rule.minDepth === null && rule.maxDepth === null) return '不限';
+  return `最小 ${rule.minDepth ?? '不限'} / 最大 ${rule.maxDepth ?? '不限'}`;
+};
+
+const boundOptionLabels = (rule: BoundRegexRule): string => {
+  const labels: string[] = [];
+  if (rule.markdownOnly) labels.push('仅显示层');
+  if (rule.promptOnly) labels.push('仅提示词');
+  if (rule.runOnEdit) labels.push('编辑时运行');
+  if (rule.substituteRegex === 1) labels.push('宏原始替换');
+  if (rule.substituteRegex === 2) labels.push('宏替换并转义');
+  return labels.length > 0 ? labels.join('、') : '无';
 };
 
 const boundToggleTitle = (rule: BoundRegexRule): string => {
@@ -697,64 +729,6 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
-.builtin-regex {
-  margin-top: 8px;
-}
-
-.builtin-regex-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 0;
-  background: transparent;
-  color: var(--lw-primary);
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  padding: 0;
-}
-
-.builtin-regex-toggle:hover {
-  text-decoration: underline;
-}
-
-.builtin-regex-chevron {
-  transition: transform var(--lw-transition, 150ms ease);
-}
-
-.builtin-regex-chevron.is-open {
-  transform: rotate(90deg);
-}
-
-.builtin-regex-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
-}
-
-.builtin-regex-label {
-  margin: 0;
-  color: var(--lw-text-muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.builtin-regex-pattern {
-  margin: 0;
-  max-height: 140px;
-  overflow: auto;
-  border-radius: var(--lw-radius-sm);
-  background: color-mix(in srgb, var(--lw-text-main) 6%, transparent);
-  color: var(--lw-text-secondary);
-  font-family: var(--lw-font-mono);
-  font-size: 10px;
-  line-height: 1.5;
-  padding: 8px;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
 .builtin-filter {
   margin-top: 10px;
   border-top: 1px solid var(--lw-border-subtle);
@@ -899,6 +873,78 @@ onBeforeUnmount(() => {
   min-width: 0;
   color: var(--lw-text-main);
   font-size: 11px;
+}
+
+.bound-name-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 0;
+  text-align: left;
+}
+
+.bound-name-button:hover {
+  color: var(--lw-primary);
+}
+
+.bound-name-chevron {
+  flex-shrink: 0;
+  transition: transform var(--lw-transition, 150ms ease);
+}
+
+.bound-name-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.bound-detail {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 4px;
+  border-radius: var(--lw-radius-sm);
+  background: color-mix(in srgb, var(--lw-text-main) 5%, transparent);
+  padding: 8px;
+}
+
+.bound-detail-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bound-detail-label {
+  color: var(--lw-text-muted);
+  font-size: 10px;
+}
+
+.bound-detail-code {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  color: var(--lw-text-secondary);
+  font-family: var(--lw-font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.bound-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--lw-text-muted);
+  font-size: 10px;
 }
 
 .bound-source {
