@@ -10,6 +10,7 @@ import {
 import type {
     CreateChatConversationInput,
     DeleteChatConversationInput,
+    DuplicateChatConversationInput,
     RenameChatConversationInput
 } from '../../../../types/ConversationContextTypes.js';
 import { STConversationHostDriver } from './STConversationHostDriver.js';
@@ -57,6 +58,16 @@ class STChatSessionDirectoryProvider implements ChatSessionDirectoryPort {
             characterName: input.characterName || '',
             characterAvatarUrl: input.characterAvatarUrl ?? null,
             chatFile: input.sessionId
+        });
+    }
+
+    async duplicateSession(input: DuplicateChatConversationInput): Promise<ChatSessionMutationResult> {
+        return STConversationHostDriver.duplicateCharacterChat({
+            characterId: input.characterId ?? null,
+            characterName: input.characterName || '',
+            characterAvatarUrl: input.characterAvatarUrl ?? null,
+            chatFile: input.sessionId,
+            sourceTitle: input.title ?? null
         });
     }
 

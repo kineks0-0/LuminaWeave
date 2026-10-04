@@ -3,6 +3,7 @@ import { CharacterChannelService } from '@/api/core/conversation/CharacterChanne
 import type {
     CreateChatConversationInput,
     DeleteChatConversationInput,
+    DuplicateChatConversationInput,
     RenameChatConversationInput
 } from '@/types/ConversationContextTypes.js';
 import type { ChatSessionRef } from '@/types/SessionTypes.js';
@@ -42,6 +43,14 @@ class MockCharacterChannelApi {
     }));
     public readonly deleteChatSession = vi.fn(async (input: DeleteChatConversationInput) => ({
         sessionId: input.sessionId,
+        characterId: input.characterId == null ? null : String(input.characterId),
+        characterName: input.characterName || '',
+        characterAvatarUrl: input.characterAvatarUrl ?? null
+    }));
+    public readonly duplicateChatSession = vi.fn(async (input: DuplicateChatConversationInput) => ({
+        previousSessionId: input.sessionId,
+        sessionId: `${input.sessionId}_copy`,
+        title: `${input.title || input.sessionId} 副本`,
         characterId: input.characterId == null ? null : String(input.characterId),
         characterName: input.characterName || '',
         characterAvatarUrl: input.characterAvatarUrl ?? null
@@ -423,6 +432,29 @@ describe('CharacterChannelService', () => {
             characterAvatarUrl: '/alice.png'
         });
         expect(contextStore.selectViewSession).toHaveBeenCalledWith('session_live_renamed');
+        expect(contextStore.refreshFromApi).toHaveBeenCalled();
+        expect(service.state.value.busySessionIds).toEqual([]);
+    });
+
+    it('duplicates a session through the unified chat service and refreshes the session options', async () => {
+        const service = new CharacterChannelService(api as any, contextStore as any, hostProvider);
+
+        await service.duplicateSession({
+            sessionId: 'session_live',
+            title: 'Alice latest',
+            characterId: 'alice',
+            characterName: 'Alice',
+            characterAvatarUrl: '/alice.png'
+        });
+
+        expect(api.duplicateChatSession).toHaveBeenCalledWith({
+            sessionId: 'session_live',
+            title: 'Alice latest',
+            characterId: 'alice',
+            characterName: 'Alice',
+            characterAvatarUrl: '/alice.png'
+        });
+        expect(contextStore.refreshSessionOptions).toHaveBeenCalled();
         expect(contextStore.refreshFromApi).toHaveBeenCalled();
         expect(service.state.value.busySessionIds).toEqual([]);
     });

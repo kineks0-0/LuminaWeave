@@ -48,6 +48,14 @@ export interface STRenameCharacterChatResult extends STCharacterChatMutationResu
     previousChatFile: string | null;
 }
 
+export interface STDuplicateCharacterChatInput {
+    characterId?: string | number | null;
+    characterName?: string;
+    characterAvatarUrl?: string | null;
+    chatFile: string;
+    sourceTitle?: string | null;
+}
+
 export interface STDeleteCharacterChatInput {
     characterId?: string | number | null;
     characterName?: string;
@@ -1802,6 +1810,138 @@ export class STClient {
             resolvedChatFile,
             previousChatFile
         };
+    }
+
+    /**
+     * 复制会话：用 ST 的 /api/chats/get + /api/chats/save 原样搬运聊天文件，
+     * 保留 swipes / extra 等全部字段，不做 ST ↔ Lumina 往返转换。
+     */
+    static async duplicateCharacterChat(input: STDuplicateCharacterChatInput): Promise<STCharacterChatMutationResult> {
+        const sourceChatFile = this.normalizeChatId(input.chatFile);
+        this.log('duplicateCharacterChat:start', {
+            input: { ...input, chatFile: sourceChatFile },
+            snapshot: this.getHostSnapshot()
+        });
+
+        if (!sourceChatFile) {
+            return {
+                success: false,
+                resolvedCharacterId: null,
+                resolvedCharacterName: null,
+                resolvedCharacterAvatarUrl: null,
+                resolvedChatFile: null,
+                reason: 'chat_file_missing'
+            };
+        }
+
+        const resolvedCharacterId = await this.resolveCharacterIdForSwitch(input);
+        const resolvedCharacterMeta = this.resolveCharacterMetaForTarget(input, resolvedCharacterId);
+        const avatarId = this.getCharacterAvatarIdById(resolvedCharacterId);
+        if (!resolvedCharacterId || !avatarId) {
+            return {
+                success: false,
+                resolvedCharacterId,
+                resolvedCharacterName: resolvedCharacterMeta.resolvedCharacterName,
+                resolvedCharacterAvatarUrl: resolvedCharacterMeta.resolvedCharacterAvatarUrl,
+                resolvedChatFile: null,
+                reason: 'character_not_resolved'
+            };
+        }
+
+        const fail = (reason: string): STCharacterChatMutationResult => ({
+            success: false,
+            resolvedCharacterId,
+            resolvedCharacterName: resolvedCharacterMeta.resolvedCharacterName,
+            resolvedCharacterAvatarUrl: resolvedCharacterMeta.resolvedCharacterAvatarUrl,
+            resolvedChatFile: null,
+            reason
+        });
+
+        let sourceChat: unknown[];
+        try {
+            const readResponse = await this.fetchWithCsrf('/api/chats/get', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    avatar_url: avatarId,
+                    file_name: sourceChatFile
+                })
+            });
+            if (!readResponse.ok) {
+                return fail(`duplicate_chat_read_failed_${readResponse.status}`);
+            }
+            const payload = await readResponse.json() as unknown;
+            if (!Array.isArray(payload) || payload.length === 0) {
+                return fail('duplicate_chat_empty');
+            }
+            sourceChat = payload;
+        } catch (error) {
+            this.warn('duplicateCharacterChat:read-error', { sourceChatFile, error });
+            return fail('duplicate_chat_read_error');
+        }
+
+        const baseTitle = this.sanitizeChatTitle(this.normalizeChatTitle(input.sourceTitle) ?? sourceChatFile);
+        const existingFiles = await this.listCharacterChatFiles({
+            characterId: resolvedCharacterId,
+            characterName: resolvedCharacterMeta.resolvedCharacterName,
+            avatarId
+        });
+        const existingTitles = new Set((existingFiles ?? []).map(file => file.toLowerCase()));
+        let newTitle = `${baseTitle} 副本`;
+        let suffix = 2;
+        while (existingTitles.has(newTitle.toLowerCase())) {
+            newTitle = `${baseTitle} 副本 ${suffix}`;
+            suffix += 1;
+        }
+
+        try {
+            const saveResponse = await this.fetchWithCsrf('/api/chats/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    avatar_url: avatarId,
+                    file_name: newTitle,
+                    chat: sourceChat
+                })
+            });
+            if (!saveResponse.ok) {
+                return fail(`duplicate_chat_save_failed_${saveResponse.status}`);
+            }
+        } catch (error) {
+            this.warn('duplicateCharacterChat:save-error', { newTitle, error });
+            return fail('duplicate_chat_save_error');
+        }
+
+        this.cacheChatSessionCharacterMeta(newTitle, {
+            characterId: resolvedCharacterId,
+            characterName: resolvedCharacterMeta.resolvedCharacterName,
+            characterAvatarUrl: resolvedCharacterMeta.resolvedCharacterAvatarUrl
+        });
+
+        this.log('duplicateCharacterChat:success', {
+            sourceChatFile,
+            resolvedChatFile: newTitle,
+            resolvedCharacterId,
+            messageCount: sourceChat.length,
+            snapshot: this.getHostSnapshot()
+        });
+
+        return {
+            success: true,
+            resolvedCharacterId,
+            resolvedCharacterName: resolvedCharacterMeta.resolvedCharacterName,
+            resolvedCharacterAvatarUrl: resolvedCharacterMeta.resolvedCharacterAvatarUrl,
+            resolvedChatFile: newTitle
+        };
+    }
+
+    private static sanitizeChatTitle(value: string): string {
+        const sanitized = value.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim();
+        return sanitized || '会话';
     }
 
     static async deleteCharacterChat(input: STDeleteCharacterChatInput): Promise<STCharacterChatMutationResult> {

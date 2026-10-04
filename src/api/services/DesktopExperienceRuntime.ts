@@ -7,6 +7,7 @@ import type {
     ConversationNodeSwitchInput,
     CreateChatConversationInput,
     DeleteChatConversationInput,
+    DuplicateChatConversationInput,
     RenameChatConversationInput
 } from '../../types/ConversationContextTypes.js';
 import type { ConversationDomainService } from './ConversationDomainService.js';
@@ -32,6 +33,7 @@ export interface DesktopCharacterRuntime {
     importCharacterCard(file: File): Promise<void>;
     renameSession(input: RenameChatConversationInput): Promise<void>;
     deleteSession(input: DeleteChatConversationInput): Promise<void>;
+    duplicateSession(input: DuplicateChatConversationInput): Promise<void>;
     closeCurrentSession(): Promise<boolean>;
     toggleGroup(groupKey: string): void;
     toggleGroupSessionExpansion(groupKey: string): void;

@@ -290,6 +290,25 @@ const { openSession: openConversationSession, createSession: createConversationS
 const updateDesktopModeSetting = (key: string, value: unknown) =>
   updateSetting(getDesktopModeSettingStorageKey(activeDesktopModeId.value, key), value);
 
+const renameConversationSession = async (sessionId: string, nextTitle: string): Promise<void> => {
+  await desktopExperienceRuntime.character.renameSession({ sessionId, nextTitle });
+};
+
+const duplicateConversationSession = async (sessionId: string, title?: string): Promise<void> => {
+  await desktopExperienceRuntime.character.duplicateSession({ sessionId, title });
+};
+
+const deleteConversationSession = async (sessionId: string): Promise<void> => {
+  const confirmed = await desktopExperienceRuntime.activity.confirm({
+    title: '删除会话',
+    message: '确定要删除这个会话吗？此操作无法撤销。',
+    confirmText: '确认删除',
+    danger: true
+  });
+  if (!confirmed) return;
+  await desktopExperienceRuntime.character.deleteSession({ sessionId });
+};
+
 const activityModeHandlers = new Set<ActivityModeHandler>();
 const registerActivityModeHandler = (handler: ActivityModeHandler) => {
   activityModeHandlers.add(handler);
@@ -796,6 +815,9 @@ const {
       handleOpenWidget: handleOpenWidgetWithActivityReset,
       openConversationSession,
       createConversationSession,
+      renameConversationSession,
+      duplicateConversationSession,
+      deleteConversationSession,
       updateDesktopModeSetting,
       registerActivityModeHandler,
       resizeStart: initResize,

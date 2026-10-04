@@ -82,6 +82,7 @@ describe('DesktopExperienceRuntime', () => {
             importCharacterCard: vi.fn(async () => undefined),
             renameSession: vi.fn(async () => undefined),
             deleteSession: vi.fn(async () => undefined),
+            duplicateSession: vi.fn(async () => undefined),
             closeCurrentSession: vi.fn(async () => true),
             toggleGroup: vi.fn(),
             toggleGroupSessionExpansion: vi.fn(),

@@ -15,6 +15,8 @@ import type {
     CreateChatConversationResult,
     DeleteChatConversationInput,
     DeleteChatConversationResult,
+    DuplicateChatConversationInput,
+    DuplicateChatConversationResult,
     ConversationNodeSwitchInput,
     ConversationSessionRef,
     ConversationSourceAdapter,
@@ -267,6 +269,10 @@ class ChatConversationSourceAdapter implements ConversationSourceAdapter {
 
     async deleteSession(input: DeleteChatConversationInput): Promise<DeleteChatConversationResult> {
         return this.gateway.deleteSession(input);
+    }
+
+    async duplicateSession(input: DuplicateChatConversationInput): Promise<DuplicateChatConversationResult> {
+        return this.gateway.duplicateSession(input);
     }
 }
 
@@ -698,6 +704,18 @@ export class ConversationService extends LuminaWeaveAPIBase {
             const result = await chatAdapter.deleteSession(input);
             await this.emitSessionsUpdated();
             await this.emitContextChangedIfCurrent('chat');
+            return result;
+        } finally {
+            await this.endChatSessionMutation();
+        }
+    }
+
+    async duplicateChatSession(input: DuplicateChatConversationInput): Promise<DuplicateChatConversationResult> {
+        const chatAdapter = this.getAdapter('chat') as ChatConversationSourceAdapter;
+        this.beginChatSessionMutation();
+        try {
+            const result = await chatAdapter.duplicateSession(input);
+            await this.emitSessionsUpdated();
             return result;
         } finally {
             await this.endChatSessionMutation();

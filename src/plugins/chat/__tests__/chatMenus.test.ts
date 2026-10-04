@@ -3,7 +3,9 @@ import {
     CHAT_CONTEXT_TOOLS,
     buildChatHeaderMenu,
     buildChatMessageMenu,
-    resolveChatPopoverPosition
+    buildConversationSessionMenu,
+    resolveChatPopoverPosition,
+    resolveSessionMenuPlacement
 } from '../presentation/chatMenus.js';
 
 describe('chat message menu', () => {
@@ -40,6 +42,20 @@ describe('chat header menu', () => {
             'lumina-director',
             'lumina-stats'
         ]);
+    });
+});
+
+describe('conversation session menu', () => {
+    it('offers rename, duplicate and delete with delete marked dangerous', () => {
+        const items = buildConversationSessionMenu();
+        expect(items.map(item => item.id)).toEqual(['rename', 'duplicate', 'delete']);
+        expect(items.find(item => item.id === 'delete')?.danger).toBe(true);
+        expect(items.find(item => item.id === 'duplicate')?.icon).toBe('copy');
+    });
+
+    it('flips the menu above when the row sits near the container bottom', () => {
+        expect(resolveSessionMenuPlacement({ bottom: 100 }, { bottom: 500 })).toBe('below');
+        expect(resolveSessionMenuPlacement({ bottom: 480 }, { bottom: 500 })).toBe('above');
     });
 });
 

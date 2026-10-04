@@ -14,6 +14,8 @@ import type {
     CreateChatConversationResult,
     DeleteChatConversationInput,
     DeleteChatConversationResult,
+    DuplicateChatConversationInput,
+    DuplicateChatConversationResult,
     RenameChatConversationInput,
     RenameChatConversationResult
 } from '../../../types/ConversationContextTypes.js';
@@ -169,6 +171,56 @@ export class ChatConversationGateway {
             characterId: deleted.resolvedCharacterId,
             characterName: deleted.resolvedCharacterName || input.characterName || '',
             characterAvatarUrl: deleted.resolvedCharacterAvatarUrl ?? input.characterAvatarUrl ?? null
+        };
+    }
+
+    async duplicateSession(input: DuplicateChatConversationInput): Promise<DuplicateChatConversationResult> {
+        const duplicated = await this.hostProvider.duplicateSession(input);
+
+        if (!duplicated.success || !duplicated.resolvedChatFile) {
+            throw new Error(duplicated.reason || 'chat_session_duplicate_failed');
+        }
+
+        const current = await HALContext.instance.runtime.conversation.getConversation(input.sessionId);
+        const fallbackTitle = buildTitleAndSummary(input.sessionId, '').title;
+        const previous = current.document || createEmptyConversationDocument({
+            id: input.sessionId,
+            conversationType: 'chat',
+            title: input.title?.trim() || fallbackTitle
+        });
+        const now = Date.now();
+        const nextDocument = {
+            ...previous,
+            id: duplicated.resolvedChatFile,
+            title: `${previous.title.trim() || input.title?.trim() || '会话'} 副本`,
+            createdAt: now,
+            updatedAt: now,
+            nodes: previous.nodes.map(node => ({ ...node })),
+            pluginState: {
+                ...previous.pluginState,
+                chat: {
+                    ...previous.pluginState.chat,
+                    characterId: duplicated.resolvedCharacterId,
+                    characterName: duplicated.resolvedCharacterName || input.characterName || '',
+                    characterAvatarUrl: duplicated.resolvedCharacterAvatarUrl ?? input.characterAvatarUrl ?? null
+                }
+            },
+            transaction: {
+                lastCommittedSeq: 0,
+                lastTransactionId: null
+            },
+            legacy: undefined
+        };
+
+        await HALContext.instance.runtime.conversation.saveConversation(duplicated.resolvedChatFile, nextDocument);
+
+        return {
+            previousSessionId: input.sessionId,
+            sessionId: duplicated.resolvedChatFile,
+            title: nextDocument.title,
+            characterId: duplicated.resolvedCharacterId,
+            characterName: duplicated.resolvedCharacterName || input.characterName || '',
+            characterAvatarUrl: duplicated.resolvedCharacterAvatarUrl ?? input.characterAvatarUrl ?? null
         };
     }
 }

@@ -32,10 +32,11 @@
             :class="{ 'is-active': row.isActive }"
             :aria-current="row.isActive ? 'true' : undefined"
             @click="handleRowClick(row.sessionId)"
-            @contextmenu.prevent="openMenu(row.sessionId)"
-            @pointerdown="startLongPress(row.sessionId, $event)"
-            @pointerup="cancelLongPress"
-            @pointerleave="cancelLongPress"
+            @contextmenu.prevent="openMenu(row.sessionId, $event)"
+            @pointerdown="onRowPointerdown(row.sessionId, $event)"
+            @pointermove="longPress.handlePointermove"
+            @pointerup="longPress.handlePointerup"
+            @pointercancel="longPress.handlePointercancel"
           >
             <TelegramAvatar :src="row.avatarUrl" :name="row.name" :initial="row.initial" :size="avatarSize" :default-avatar="luminaWeaveApi.DEFAULT_AVATAR" />
             <span class="telegram-chat-list__copy">
@@ -46,11 +47,20 @@
               <span class="telegram-chat-list__preview">{{ row.preview || '暂无消息' }}</span>
             </span>
           </button>
+          <button
+            type="button"
+            class="telegram-chat-list__more"
+            :title="`管理 ${row.sessionTitle || row.name}`"
+            :aria-label="`管理 ${row.sessionTitle || row.name}`"
+            @click.stop="openMenu(row.sessionId, $event)"
+          >
+            <MoreHorizontal :size="18" aria-hidden="true" />
+          </button>
           <ChatPopoverMenu
             v-if="menuSessionId === row.sessionId"
             :items="rowMenu"
             label="会话操作"
-            placement="below"
+            :placement="menuPlacement"
             align="end"
             @select="handleRowMenu(row, $event)"
             @close="menuSessionId = null"
@@ -77,12 +87,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
-import { Check, MessageCircle, Search, X } from 'lucide-vue-next';
+import { computed, nextTick, ref } from 'vue';
+import { Check, MessageCircle, MoreHorizontal, Search, X } from 'lucide-vue-next';
 import { luminaWeaveApi } from '@/api';
 import type { CharacterChannelGroup } from '../../../../types/ConversationContextTypes.js';
-import type { ChatMenuItem } from '../../presentation/chatMenus.js';
+import { buildConversationSessionMenu, resolveSessionMenuPlacement, type ChatMenuPlacement } from '../../presentation/chatMenus.js';
 import { buildTelegramChatListRows, type TelegramChatListRow } from '../../presentation/telegramChatList.js';
+import { useLongPressMenu } from '../../../../composables/useLongPressMenu.js';
 import ChatPopoverMenu from '../ChatPopoverMenu.vue';
 import TelegramAvatar from './TelegramAvatar.vue';
 
@@ -103,61 +114,59 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   open: [sessionId: string];
   rename: [sessionId: string, title: string];
+  duplicate: [sessionId: string];
   delete: [sessionId: string];
   compose: [];
 }>();
 
-const LONG_PRESS_MS = 480;
 const query = ref('');
 const menuSessionId = ref<string | null>(null);
+const menuPlacement = ref<ChatMenuPlacement>('below');
 const renamingSessionId = ref<string | null>(null);
 const renameTitle = ref('');
 const renameInput = ref<HTMLInputElement[] | null>(null);
-let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-/** 长按已弹出菜单时，吞掉随后的 click，避免同时打开会话 */
-let suppressNextClick = false;
+let menuSourceElement: HTMLElement | null = null;
 
 const avatarSize = computed(() => (props.page ? 54 : 48));
 const rows = computed(() => buildTelegramChatListRows(props.groups, {
   query: query.value,
   activeSessionId: props.activeSessionId
 }));
-const rowMenu: ChatMenuItem[] = [
-  { id: 'rename', label: '重命名', icon: 'edit' },
-  { id: 'delete', label: '删除聊天', icon: 'delete', danger: true }
-];
+const rowMenu = buildConversationSessionMenu();
+const longPress = useLongPressMenu<string>({
+  onTrigger: (sessionId) => openMenu(sessionId)
+});
 
-const openMenu = (sessionId: string): void => {
+const openMenu = (sessionId: string, event?: Event): void => {
+  if (event?.currentTarget instanceof HTMLElement) {
+    menuSourceElement = event.currentTarget;
+  }
+  const rowRect = menuSourceElement?.getBoundingClientRect();
+  const scrollerRect = menuSourceElement?.closest('.telegram-chat-list__rows')?.getBoundingClientRect();
+  if (rowRect && scrollerRect) {
+    menuPlacement.value = resolveSessionMenuPlacement(rowRect, scrollerRect);
+  }
   menuSessionId.value = sessionId;
 };
 
-// 触屏长按弹出会话菜单（与原版一致）；鼠标走右键
-const startLongPress = (sessionId: string, event: PointerEvent): void => {
-  if (event.pointerType === 'mouse') return;
-  cancelLongPress();
-  longPressTimer = setTimeout(() => {
-    suppressNextClick = true;
-    openMenu(sessionId);
-  }, LONG_PRESS_MS);
+const onRowPointerdown = (sessionId: string, event: PointerEvent): void => {
+  menuSourceElement = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  longPress.handlePointerdown(sessionId, event);
 };
 
 const handleRowClick = (sessionId: string): void => {
-  if (suppressNextClick) {
-    suppressNextClick = false;
-    return;
-  }
+  if (longPress.consumeClick()) return;
   emit('open', sessionId);
-};
-
-const cancelLongPress = (): void => {
-  if (longPressTimer) clearTimeout(longPressTimer);
-  longPressTimer = null;
 };
 
 const handleRowMenu = (row: TelegramChatListRow, action: string): void => {
   menuSessionId.value = null;
   if (action === 'delete') {
     emit('delete', row.sessionId);
+    return;
+  }
+  if (action === 'duplicate') {
+    emit('duplicate', row.sessionId);
     return;
   }
   const session = props.groups.find(group => group.key === row.characterKey)?.sessions.find(item => item.id === row.sessionId);
@@ -177,8 +186,6 @@ const cancelRename = (): void => {
   renamingSessionId.value = null;
   renameTitle.value = '';
 };
-
-onBeforeUnmount(cancelLongPress);
 </script>
 
 <style scoped>
@@ -384,8 +391,7 @@ onBeforeUnmount(cancelLongPress);
 }
 
 .telegram-chat-list__item :deep(.chat-popover-menu) {
-  top: calc(100% - 6px);
-  right: 16px;
+  right: 8px;
 }
 
 .telegram-chat-list {
@@ -444,5 +450,46 @@ onBeforeUnmount(cancelLongPress);
 
 .telegram-chat-list__empty-action:hover {
   filter: brightness(1.06);
+}
+
+/* 桌面悬停「…」：替换行内时间显示，鼠标左键也能打开会话菜单 */
+.telegram-chat-list__more {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-muted);
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity var(--lw-transition), background-color var(--lw-transition), color var(--lw-transition);
+}
+
+@media (hover: hover) {
+  .telegram-chat-list__item:hover .telegram-chat-list__more,
+  .telegram-chat-list__more:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .telegram-chat-list__item:hover .telegram-chat-list__line time {
+    visibility: hidden;
+  }
+}
+
+.telegram-chat-list__more:hover {
+  background: color-mix(in srgb, var(--lw-text-main) 8%, transparent);
+  color: var(--lw-text-main);
+}
+
+.telegram-chat-list__row.is-active + .telegram-chat-list__more {
+  color: var(--lw-text-inverse);
 }
 </style>

@@ -36,6 +36,14 @@ describe('CompositeChatHostProvider', () => {
             resolvedCharacterAvatarUrl: null,
             resolvedChatFile: null
         })),
+        duplicateSession: vi.fn(async () => ({
+            success: true,
+            resolvedCharacterId: null,
+            resolvedCharacterName: null,
+            resolvedCharacterAvatarUrl: null,
+            resolvedChatFile: 'chat_copy',
+            previousChatFile: 'chat_source'
+        })),
         closeCurrentSession: vi.fn(async () => true),
         resolveSessionCharacterMeta: vi.fn(async () => null)
     };

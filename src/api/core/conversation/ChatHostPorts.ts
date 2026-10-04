@@ -3,6 +3,7 @@ import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type {
     CreateChatConversationInput,
     DeleteChatConversationInput,
+    DuplicateChatConversationInput,
     RenameChatConversationInput,
     CharacterChannelCapabilities
 } from '../../../types/ConversationContextTypes.js';
@@ -72,6 +73,7 @@ export interface ChatSessionDirectoryPort {
     createSession(input: CreateChatConversationInput): Promise<ChatSessionMutationResult>;
     renameSession(input: RenameChatConversationInput): Promise<ChatSessionMutationResult>;
     deleteSession(input: DeleteChatConversationInput): Promise<ChatSessionMutationResult>;
+    duplicateSession(input: DuplicateChatConversationInput): Promise<ChatSessionMutationResult>;
     closeCurrentSession(): Promise<boolean>;
     resolveSessionCharacterMeta(sessionId: string, target?: Partial<ChatSessionCharacterMeta>): Promise<ChatSessionCharacterMeta | null>;
 }
@@ -255,6 +257,19 @@ class EmptyChatSessionDirectoryPort implements ChatSessionDirectoryPort {
         };
     }
 
+    async duplicateSession(input: DuplicateChatConversationInput): Promise<ChatSessionMutationResult> {
+        void input;
+        return {
+            success: false,
+            resolvedCharacterId: null,
+            resolvedCharacterName: null,
+            resolvedCharacterAvatarUrl: null,
+            resolvedChatFile: null,
+            reason: 'chat-host-unavailable',
+            previousChatFile: null
+        };
+    }
+
     async closeCurrentSession(): Promise<boolean> {
         return false;
     }
@@ -370,6 +385,10 @@ export class CompositeChatHostProvider implements ChatSessionDirectoryPort, Chat
 
     async deleteSession(input: DeleteChatConversationInput): Promise<ChatSessionMutationResult> {
         return this.directory.deleteSession(input);
+    }
+
+    async duplicateSession(input: DuplicateChatConversationInput): Promise<ChatSessionMutationResult> {
+        return this.directory.duplicateSession(input);
     }
 
     async closeCurrentSession(): Promise<boolean> {

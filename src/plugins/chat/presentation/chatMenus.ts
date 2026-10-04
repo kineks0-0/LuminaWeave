@@ -56,6 +56,22 @@ export const buildChatHeaderMenu = ({ canOpenProfile }: {
     { id: 'prompt', label: 'Prompt 预览', icon: 'prompt' }
 ];
 
+export type ConversationSessionMenuAction = 'rename' | 'duplicate' | 'delete';
+
+/** 会话管理菜单：聊天列表与角色资料页共用同一套菜单项 */
+export const buildConversationSessionMenu = (): ChatMenuItem<ConversationSessionMenuAction>[] => [
+    { id: 'rename', label: '重命名', icon: 'edit' },
+    { id: 'duplicate', label: '复制', icon: 'copy' },
+    { id: 'delete', label: '删除', icon: 'delete', danger: true }
+];
+
+/** 会话行菜单弹出方向：下方空间不足（滚动容器 / 资料卡会裁剪）时向上弹 */
+export const resolveSessionMenuPlacement = (
+    rowRect: Pick<DOMRect, 'bottom'>,
+    containerRect: Pick<DOMRect, 'bottom'>,
+    menuHeight = 170
+): ChatMenuPlacement => (rowRect.bottom + menuHeight > containerRect.bottom ? 'above' : 'below');
+
 /** 输入框“菜单”键里的 Lumina 工具（对应 Telegram 机器人菜单） */
 export const CHAT_CONTEXT_TOOLS: ReadonlyArray<ChatMenuItem> = [
     { id: 'lumina-timeline', label: '时间线', icon: 'timeline' },

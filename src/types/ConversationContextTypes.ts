@@ -97,6 +97,24 @@ export interface DeleteChatConversationResult {
     characterAvatarUrl: string | null;
 }
 
+export interface DuplicateChatConversationInput {
+    sessionId: string;
+    /** 源会话标题，用于生成副本标题；缺省时由宿主 / 文档标题兜底 */
+    title?: string;
+    characterId?: string | number | null;
+    characterName?: string;
+    characterAvatarUrl?: string | null;
+}
+
+export interface DuplicateChatConversationResult {
+    previousSessionId: string;
+    sessionId: string;
+    title: string;
+    characterId: string | null;
+    characterName: string;
+    characterAvatarUrl: string | null;
+}
+
 export interface CharacterChannelCapabilities {
     supportsCharacterRoster: boolean;
     supportsCreateSession: boolean;

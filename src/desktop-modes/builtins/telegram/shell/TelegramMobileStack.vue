@@ -34,6 +34,9 @@
         isMobile: true,
         onOpenSession,
         onCreateSession,
+        onRenameSession,
+        onDuplicateSession,
+        onDeleteSession,
         onOpenTool: onHandleRoleProfileTool
       }"
       :desktop-mode-id="activeDesktopModeId"
@@ -114,6 +117,9 @@ defineProps<{
   onPopRoute: () => void;
   onOpenSession: (sessionId: string) => void;
   onCreateSession: (payload: CreateChatConversationInput) => void;
+  onRenameSession: (sessionId: string, nextTitle: string) => void;
+  onDuplicateSession: (sessionId: string, title?: string) => void;
+  onDeleteSession: (sessionId: string) => void;
   onOpenPanel: (panelId: string) => void;
   onHandleRoleProfileTool: (panelId: string) => void;
   onOpenRoleProfile: () => void;
@@ -124,8 +130,9 @@ defineProps<{
 </script>
 
 <style>
+/* 底部导航悬浮在内容之上：整页不再为它预留 padding，底部留白由各页自身承担 */
 .lw-main-wrapper.has-telegram-mobile-nav {
-  padding-bottom: calc(78px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
+  padding-bottom: 0;
 }
 
 .lw-telegram-mobile-stack {
@@ -153,9 +160,9 @@ defineProps<{
   --lw-primary-rgb: 94, 181, 247;
 }
 
-/* 移动端设置/工具页不再自带玻璃底，统一跟随移动页纯色背景 */
+/* 移动端设置页与资料页同层级：自铺 layer-base 灰底，白色卡片在其上 */
 .lw-main-wrapper.lw-telegram-mobile-stack .lw-settings-root[data-skin-variant='telegram'] {
-  background: transparent;
+  background: var(--lw-telegram-layer-base, var(--lw-bg-app));
 }
 
 .lw-telegram-mobile-stack__bar {

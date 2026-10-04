@@ -73,6 +73,8 @@ import type {
     CreateChatConversationResult,
     DeleteChatConversationInput,
     DeleteChatConversationResult,
+    DuplicateChatConversationInput,
+    DuplicateChatConversationResult,
     ConversationNodeSwitchInput,
     ConversationSessionRef,
     ConversationContextOption,
@@ -1186,6 +1188,10 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
     async deleteChatSession(input: DeleteChatConversationInput): Promise<DeleteChatConversationResult> {
         return this.conversation.deleteChatSession(input);
+    }
+
+    async duplicateChatSession(input: DuplicateChatConversationInput): Promise<DuplicateChatConversationResult> {
+        return this.conversation.duplicateChatSession(input);
     }
 
     beginControlledChatCreation(targetCharacterId: string | number | null | undefined): void {

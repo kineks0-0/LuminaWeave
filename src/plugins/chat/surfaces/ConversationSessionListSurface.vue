@@ -8,6 +8,7 @@
     @open="openSession"
     @compose="input.onStartNewChat?.()"
     @rename="renameSessionTo"
+    @duplicate="duplicateSession"
     @delete="deleteSession"
   />
   <section v-else class="conversation-session-list" :class="{ 'is-compact': input.compact }">
@@ -107,6 +108,13 @@ const saveRename = (sessionId: string): void => {
 };
 const renameSessionTo = (sessionId: string, title: string): void => {
   void context.value.intents.renameSession(sessionId, title);
+};
+const duplicateSession = (sessionId: string): void => {
+  const group = channel.value.characterGroups.find(item => (
+    item.sessions.some(session => session.id === sessionId)
+  ));
+  const title = group?.sessions.find(session => session.id === sessionId)?.title;
+  void context.value.intents.duplicateSession(sessionId, title);
 };
 const deleteSession = (sessionId: string): void => {
   void context.value.intents.deleteSession(sessionId);

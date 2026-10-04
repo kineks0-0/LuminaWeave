@@ -11,6 +11,7 @@ const createHost = (): CharacterRuntimeHost => ({
     createChatSession: vi.fn(),
     renameChatSession: vi.fn(),
     deleteChatSession: vi.fn(),
+    duplicateChatSession: vi.fn(),
     importCharacterCard: vi.fn(),
     getAssistantName: vi.fn(() => 'Assistant'),
     getCharAvatar: vi.fn(() => ''),

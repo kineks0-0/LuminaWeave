@@ -168,6 +168,14 @@ const hostDirectoryPort: ChatSessionDirectoryPort = {
         resolvedCharacterAvatarUrl: null,
         resolvedChatFile: null
     })),
+    duplicateSession: vi.fn(async () => ({
+        success: true,
+        previousChatFile: null,
+        resolvedCharacterId: null,
+        resolvedCharacterName: null,
+        resolvedCharacterAvatarUrl: null,
+        resolvedChatFile: null
+    })),
     closeCurrentSession: vi.fn(async () => true),
     resolveSessionCharacterMeta: vi.fn(async (_sessionId, target = {}) => ({
         characterId: target.characterId ?? null,
@@ -687,6 +695,79 @@ describe('ConversationService', () => {
             sourceId: 'chat',
             sessionId: 'Renamed Archive'
         });
+    });
+
+    it('duplicates a chat session with a cloned document and keeps the source untouched', async () => {
+        vi.mocked(hostDirectoryPort.duplicateSession).mockResolvedValue({
+            success: true,
+            previousChatFile: 'chat_archive',
+            resolvedCharacterId: '1',
+            resolvedCharacterName: 'Beta',
+            resolvedCharacterAvatarUrl: '/thumbnail/avatar/beta.png',
+            resolvedChatFile: 'Archived Chat 副本'
+        });
+        mockState.savedConversationDocuments.set('chat_archive', {
+            schemaVersion: 1,
+            id: 'chat_archive',
+            conversationType: 'chat',
+            title: 'Archived Chat',
+            createdAt: 3,
+            updatedAt: 4,
+            activeLeafId: 'chat_archive_leaf',
+            nodes: [{
+                id: 'node_1',
+                parentId: null,
+                name: 'Beta',
+                role: 'assistant',
+                is_user: false,
+                mesRaw: 'hi',
+                mes: 'hi',
+                fingerprint: '',
+                extra: {}
+            }],
+            pluginState: {
+                chat: {
+                    characterId: '1',
+                    characterName: 'Beta',
+                    characterAvatarUrl: '/thumbnail/avatar/beta.png'
+                }
+            },
+            transaction: { lastCommittedSeq: 5, lastTransactionId: 'tx_5' },
+            summary: { previewMessage: 'hi', messageCount: 1 }
+        });
+
+        const result = await service.duplicateChatSession({
+            sessionId: 'chat_archive',
+            title: 'Archived Chat',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+
+        expect(hostDirectoryPort.duplicateSession).toHaveBeenCalledWith({
+            sessionId: 'chat_archive',
+            title: 'Archived Chat',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+        expect(result).toEqual({
+            previousSessionId: 'chat_archive',
+            sessionId: 'Archived Chat 副本',
+            title: 'Archived Chat 副本',
+            characterId: '1',
+            characterName: 'Beta',
+            characterAvatarUrl: '/thumbnail/avatar/beta.png'
+        });
+        const cloned = mockState.savedConversationDocuments.get('Archived Chat 副本');
+        expect(cloned).toMatchObject({
+            id: 'Archived Chat 副本',
+            title: 'Archived Chat 副本',
+            activeLeafId: 'chat_archive_leaf',
+            transaction: { lastCommittedSeq: 0, lastTransactionId: null }
+        });
+        expect(cloned?.nodes?.[0]?.id).toBe('node_1');
+        expect(mockState.savedConversationDocuments.has('chat_archive')).toBe(true);
     });
 
     it('deletes the current archived chat session and falls back to the default live chat context', async () => {

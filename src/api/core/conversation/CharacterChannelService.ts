@@ -9,6 +9,7 @@ import type {
     CharacterChannelStatus,
     CreateChatConversationInput,
     DeleteChatConversationInput,
+    DuplicateChatConversationInput,
     RenameChatConversationInput
 } from '../../../types/ConversationContextTypes.js';
 import type { ChatSessionRef } from '../../../types/SessionTypes.js';
@@ -27,6 +28,7 @@ export type CharacterChannelApiPort = Pick<LuminaWeaveAPI,
     | 'createChatSession'
     | 'renameChatSession'
     | 'deleteChatSession'
+    | 'duplicateChatSession'
     | 'getAssistantName'
     | 'getCharAvatar'
     | 'getUserAvatar'
@@ -677,5 +679,33 @@ export class CharacterChannelService {
         await this.contextStore.refreshFromApi?.();
         await this.refresh();
         return true;
+    }
+
+    async duplicateSession(input: DuplicateChatConversationInput): Promise<void> {
+        if (!input.sessionId) {
+            return;
+        }
+
+        const session = this.getSession(input.sessionId);
+        const group = this.state.value.characterGroups.find((item) => (
+            item.sessions.some(entry => entry.id === input.sessionId)
+        ));
+        const payload: DuplicateChatConversationInput = {
+            ...input,
+            title: input.title?.trim() || session?.title,
+            characterId: input.characterId ?? group?.characterId ?? null,
+            characterName: input.characterName || group?.characterName || '',
+            characterAvatarUrl: input.characterAvatarUrl ?? group?.characterAvatarUrl ?? null
+        };
+
+        this.setBusy(input.sessionId, true);
+        try {
+            await this.api.duplicateChatSession(payload);
+            await this.contextStore.refreshSessionOptions();
+            await this.contextStore.refreshFromApi?.();
+            await this.refresh();
+        } finally {
+            this.setBusy(input.sessionId, false);
+        }
     }
 }

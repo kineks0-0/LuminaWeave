@@ -77,6 +77,7 @@ export interface ConversationSessionListSurfaceIntents {
     openSession(sessionId: string): Promise<void>;
     renameSession(sessionId: string, nextTitle: string): Promise<void>;
     deleteSession(sessionId: string): Promise<void>;
+    duplicateSession(sessionId: string, title?: string): Promise<void>;
     closeCurrentSession(): Promise<boolean>;
     toggleGroupSessionExpansion(groupKey: string): void;
 }
@@ -164,6 +165,9 @@ export interface TelegramInfoPanelSurfaceInput {
     onOpenTool(panelId: string): void;
     onCreateSession(input: CreateChatConversationInput): void;
     onOpenSession(sessionId: string): void;
+    onRenameSession(sessionId: string, nextTitle: string): void;
+    onDuplicateSession(sessionId: string, title?: string): void;
+    onDeleteSession(sessionId: string): void;
 }
 
 declare module './types.js' {
@@ -454,7 +458,10 @@ export const OFFICIAL_SURFACE_INPUT_SCHEMAS = {
         isMobile: z.boolean().optional(),
         onOpenTool: callbackSchema<(panelId: string) => void>(),
         onCreateSession: callbackSchema<(input: CreateChatConversationInput) => void>(),
-        onOpenSession: callbackSchema<(sessionId: string) => void>()
+        onOpenSession: callbackSchema<(sessionId: string) => void>(),
+        onRenameSession: callbackSchema<(sessionId: string, nextTitle: string) => void>(),
+        onDuplicateSession: callbackSchema<(sessionId: string, title?: string) => void>(),
+        onDeleteSession: callbackSchema<(sessionId: string) => void>()
     }).strict()
 } satisfies { [K in OfficialSurfaceContractId]: SurfaceInputSchema<K> };
 

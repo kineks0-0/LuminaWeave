@@ -105,20 +105,63 @@
 
     <h3 v-if="activeGroup" class="lw-telegram-profile__section-title">会话 · {{ allSessions.length }}</h3>
     <section v-if="activeGroup" class="lw-telegram-profile__card is-list" aria-label="会话">
-      <button
-        v-for="session in allSessions"
-        :key="session.id"
-        type="button"
-        class="lw-telegram-profile__session"
-        :class="{ 'is-current': session.id === currentSession?.id }"
-        @click="props.onOpenSession(session.id)"
-      >
-        <span class="lw-telegram-profile__session-copy">
-          <strong>{{ session.title }}</strong>
-          <small>{{ session.recentHistoryPreview || session.previewMessage || session.summary || '暂无消息' }}</small>
-        </span>
-        <time>{{ formatSessionTime(session.updatedAt) }}</time>
-      </button>
+      <div v-for="session in allSessions" :key="session.id" class="lw-telegram-profile__session-row">
+        <form
+          v-if="renamingSessionId === session.id"
+          class="lw-telegram-profile__rename"
+          @submit.prevent="saveRename(session.id)"
+        >
+          <input
+            ref="renameInput"
+            v-model="renameTitle"
+            :aria-label="`重命名 ${session.title}`"
+            @keydown.esc="cancelRename"
+          >
+          <button type="submit" class="lw-telegram-profile__icon" title="保存名称" aria-label="保存名称">
+            <Check :size="20" />
+          </button>
+          <button type="button" class="lw-telegram-profile__icon" title="取消重命名" aria-label="取消重命名" @click="cancelRename">
+            <X :size="20" />
+          </button>
+        </form>
+        <template v-else>
+          <button
+            type="button"
+            class="lw-telegram-profile__session"
+            :class="{ 'is-current': session.id === currentSession?.id }"
+            @click="handleSessionClick(session.id)"
+            @contextmenu.prevent="openSessionMenu(session.id, $event)"
+            @pointerdown="onSessionPointerdown(session.id, $event)"
+            @pointermove="longPress.handlePointermove"
+            @pointerup="longPress.handlePointerup"
+            @pointercancel="longPress.handlePointercancel"
+          >
+            <span class="lw-telegram-profile__session-copy">
+              <strong>{{ session.title }}</strong>
+              <small>{{ session.recentHistoryPreview || session.previewMessage || session.summary || '暂无消息' }}</small>
+            </span>
+            <time>{{ formatSessionTime(session.updatedAt) }}</time>
+          </button>
+          <button
+            type="button"
+            class="lw-telegram-profile__session-more"
+            :title="`管理 ${session.title}`"
+            :aria-label="`管理 ${session.title}`"
+            @click.stop="openSessionMenu(session.id, $event)"
+          >
+            <MoreHorizontal :size="18" aria-hidden="true" />
+          </button>
+          <ChatPopoverMenu
+            v-if="menuSessionId === session.id"
+            :items="sessionMenu"
+            label="会话操作"
+            :placement="menuPlacement"
+            align="end"
+            @select="handleSessionMenu(session, $event)"
+            @close="menuSessionId = null"
+          />
+        </template>
+      </div>
       <button type="button" class="lw-telegram-profile__session is-new" @click="createSession">
         <MessageCirclePlus :size="20" :stroke-width="2.2" aria-hidden="true" />
         <strong>新建会话</strong>
@@ -128,17 +171,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { padNumber as pad } from '../../../../api/utils/dateFormat.js';
 import type { Component, CSSProperties } from 'vue';
 import {
   Activity,
   ArrowLeft,
   BookOpen,
+  Check,
   ChevronRight,
   Clapperboard,
   MessageCircle,
   MessageCirclePlus,
+  MoreHorizontal,
   Waypoints,
   X
 } from 'lucide-vue-next';
@@ -146,6 +191,9 @@ import { useSurfaceSkin } from '../../../core/useSurfaceSkin.js';
 import LuminaAvatarPlaceholder from '../../../../ui/primitives/LuminaAvatarPlaceholder.vue';
 import { luminaWeaveApi } from '@/api';
 import { isPlaceholderTelegramAvatar } from '../../../../plugins/chat/presentation/telegramChatList.js';
+import { buildConversationSessionMenu, resolveSessionMenuPlacement, type ChatMenuPlacement } from '../../../../plugins/chat/presentation/chatMenus.js';
+import ChatPopoverMenu from '../../../../plugins/chat/components/ChatPopoverMenu.vue';
+import { useLongPressMenu } from '../../../../composables/useLongPressMenu.js';
 import type {
   CharacterChannelGroup,
   CharacterChannelSessionItem
@@ -189,6 +237,74 @@ const currentSession = computed<CharacterChannelSessionItem | null>(() => {
   return allSessions.value.find((session) => session.id === sessionId)
     || allSessions.value[0]
     || null;
+});
+
+const menuSessionId = ref<string | null>(null);
+const menuPlacement = ref<ChatMenuPlacement>('below');
+const renamingSessionId = ref<string | null>(null);
+const renameTitle = ref('');
+const renameInput = ref<HTMLInputElement[] | null>(null);
+const sessionMenu = buildConversationSessionMenu();
+const longPress = useLongPressMenu<string>({
+  onTrigger: (sessionId) => openSessionMenu(sessionId)
+});
+let menuSourceElement: HTMLElement | null = null;
+
+const openSessionMenu = (sessionId: string, event?: Event): void => {
+  if (event?.currentTarget instanceof HTMLElement) {
+    menuSourceElement = event.currentTarget;
+  }
+  const rowRect = menuSourceElement?.getBoundingClientRect();
+  const panelRect = menuSourceElement?.closest('.lw-telegram-profile')?.getBoundingClientRect();
+  if (rowRect && panelRect) {
+    menuPlacement.value = resolveSessionMenuPlacement(rowRect, panelRect);
+  }
+  menuSessionId.value = sessionId;
+};
+
+const onSessionPointerdown = (sessionId: string, event: PointerEvent): void => {
+  menuSourceElement = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  longPress.handlePointerdown(sessionId, event);
+};
+
+const handleSessionClick = (sessionId: string): void => {
+  if (longPress.consumeClick()) return;
+  props.onOpenSession(sessionId);
+};
+
+const handleSessionMenu = (session: CharacterChannelSessionItem, action: string): void => {
+  menuSessionId.value = null;
+  if (action === 'rename') {
+    renamingSessionId.value = session.id;
+    renameTitle.value = session.title;
+    void nextTick(() => renameInput.value?.[0]?.select());
+    return;
+  }
+  if (action === 'duplicate') {
+    props.onDuplicateSession(session.id, session.title);
+    return;
+  }
+  if (action === 'delete') {
+    props.onDeleteSession(session.id);
+  }
+};
+
+const saveRename = (sessionId: string): void => {
+  const nextTitle = renameTitle.value.trim();
+  if (!nextTitle) return;
+  props.onRenameSession(sessionId, nextTitle);
+  cancelRename();
+};
+
+const cancelRename = (): void => {
+  renamingSessionId.value = null;
+  renameTitle.value = '';
+};
+
+// 切换角色后清掉上一角色的菜单 / 重命名状态
+watch(() => activeGroup.value?.key, () => {
+  menuSessionId.value = null;
+  cancelRename();
 });
 
 const hasProfile = computed(() => Boolean(activeGroup.value));
@@ -290,6 +406,9 @@ const formatSessionTime = (timestamp: number): string => {
   --lw-telegram-profile-body-size: var(--lw-type-body-large-size);
   --lw-telegram-profile-secondary-size: var(--lw-type-body-medium-size);
   --lw-telegram-profile-secondary-line-height: var(--lw-type-body-medium-line-height);
+  /* 移动端一级页是纯色底：资料页自铺 layer-base，卡片实底，避免白卡白底丢失层级 */
+  --lw-telegram-profile-card-bg: var(--lw-telegram-info-card-bg, var(--lw-bg-surface));
+  background: var(--lw-telegram-info-panel-bg, var(--lw-telegram-layer-base));
 }
 
 .lw-telegram-profile > * {
@@ -622,5 +741,108 @@ const formatSessionTime = (timestamp: number): string => {
 
 .lw-telegram-profile__card.is-list > * + * {
   box-shadow: inset 0 1px 0 var(--lw-border-subtle, var(--lw-border-base));
+}
+
+/* 列表卡不裁剪：会话管理菜单需要弹出卡片；首末行自行圆角避免悬停底色出框 */
+.lw-telegram-profile__card.is-list {
+  overflow: visible;
+}
+
+.lw-telegram-profile__card.is-list > :first-child {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.lw-telegram-profile__card.is-list > :last-child {
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+}
+
+.lw-telegram-profile__session-row:first-child .lw-telegram-profile__session {
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+}
+
+.lw-telegram-profile__session-row {
+  position: relative;
+}
+
+.lw-telegram-profile__session-row .lw-telegram-profile__session {
+  width: 100%;
+}
+
+/* 会话管理：「…」悬停出现（触屏走长按，鼠标走右键） */
+.lw-telegram-profile__session-more {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-muted);
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity var(--lw-transition), background-color var(--lw-transition), color var(--lw-transition);
+}
+
+@media (hover: hover) {
+  .lw-telegram-profile__session-row:hover .lw-telegram-profile__session-more,
+  .lw-telegram-profile__session-more:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .lw-telegram-profile__session-row:hover .lw-telegram-profile__session time {
+    visibility: hidden;
+  }
+}
+
+.lw-telegram-profile__session-more:hover {
+  background: var(--lw-bg-hover);
+  color: var(--lw-text-main);
+}
+
+.lw-telegram-profile__rename {
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 8px 16px;
+}
+
+.lw-telegram-profile__rename input {
+  min-width: 0;
+  flex: 1;
+  height: 40px;
+  border: 1px solid var(--lw-border-active, var(--lw-primary));
+  border-radius: 10px;
+  outline: 0;
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-main);
+  padding: 0 12px;
+  font: inherit;
+}
+
+.lw-telegram-profile__icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lw-text-main);
+  cursor: pointer;
+}
+
+.lw-telegram-profile__icon:hover {
+  background: var(--lw-bg-hover);
 }
 </style>

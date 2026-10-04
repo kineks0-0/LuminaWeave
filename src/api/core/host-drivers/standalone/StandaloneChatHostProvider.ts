@@ -15,6 +15,7 @@ import type {
 import type {
     CreateChatConversationInput,
     DeleteChatConversationInput,
+    DuplicateChatConversationInput,
     RenameChatConversationInput
 } from '../../../../types/ConversationContextTypes.js';
 import {
@@ -102,6 +103,18 @@ export class StandaloneChatSessionDirectoryProvider implements ChatSessionDirect
             resolvedCharacterName: input.characterName ?? null,
             resolvedCharacterAvatarUrl: input.characterAvatarUrl ?? null,
             resolvedChatFile: input.sessionId
+        };
+    }
+
+    async duplicateSession(input: DuplicateChatConversationInput): Promise<ChatSessionMutationResult> {
+        const characterId = input.characterId == null ? null : String(input.characterId);
+        return {
+            success: true,
+            resolvedCharacterId: characterId,
+            resolvedCharacterName: input.characterName ?? null,
+            resolvedCharacterAvatarUrl: input.characterAvatarUrl ?? null,
+            resolvedChatFile: buildChatId(characterId),
+            previousChatFile: input.sessionId
         };
     }
 

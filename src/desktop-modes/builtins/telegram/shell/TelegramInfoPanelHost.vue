@@ -34,6 +34,9 @@ const props = defineProps<{
   onOpenTool: (panelId: string) => void;
   onCreateSession: (payload: CreateChatConversationInput) => void;
   onOpenSession: (sessionId: string) => void;
+  onRenameSession: (sessionId: string, nextTitle: string) => void;
+  onDuplicateSession: (sessionId: string, title?: string) => void;
+  onDeleteSession: (sessionId: string) => void;
 }>();
 
 const panelInput = computed(() => ({
@@ -41,6 +44,9 @@ const panelInput = computed(() => ({
   isMobile: props.isMobile,
   onOpenTool: props.onOpenTool,
   onCreateSession: props.onCreateSession,
-  onOpenSession: props.onOpenSession
+  onOpenSession: props.onOpenSession,
+  onRenameSession: props.onRenameSession,
+  onDuplicateSession: props.onDuplicateSession,
+  onDeleteSession: props.onDeleteSession
 }));
 </script>

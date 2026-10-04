@@ -54,7 +54,10 @@ describe('official surface input schemas', () => {
         const handlers = {
             onOpenTool: (): void => undefined,
             onCreateSession: (): void => undefined,
-            onOpenSession: (): void => undefined
+            onOpenSession: (): void => undefined,
+            onRenameSession: (): void => undefined,
+            onDuplicateSession: (): void => undefined,
+            onDeleteSession: (): void => undefined
         };
 
         expect(OFFICIAL_SURFACE_INPUT_SCHEMAS['telegram.infoPanel'].safeParse({

@@ -132,6 +132,7 @@ export const createConversationSessionListSurfaceContext = (
             if (!confirmed) return;
             await context.runtime.character.deleteSession({ sessionId });
         },
+        duplicateSession: (sessionId, title) => context.runtime.character.duplicateSession({ sessionId, title }),
         closeCurrentSession: () => context.runtime.character.closeCurrentSession(),
         toggleGroupSessionExpansion: (groupKey) => context.runtime.character.toggleGroupSessionExpansion(groupKey)
     }

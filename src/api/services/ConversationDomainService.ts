@@ -12,6 +12,8 @@ import type {
     CreateChatConversationResult,
     DeleteChatConversationInput,
     DeleteChatConversationResult,
+    DuplicateChatConversationInput,
+    DuplicateChatConversationResult,
     RenameChatConversationInput,
     RenameChatConversationResult
 } from '../../types/ConversationContextTypes.js';
@@ -94,6 +96,11 @@ export class ConversationDomainService {
     async deleteChatSession(input: DeleteChatConversationInput): Promise<DeleteChatConversationResult> {
         await this.waitForReady();
         return this.conversationService.deleteChatSession(input);
+    }
+
+    async duplicateChatSession(input: DuplicateChatConversationInput): Promise<DuplicateChatConversationResult> {
+        await this.waitForReady();
+        return this.conversationService.duplicateChatSession(input);
     }
 
     async switchNode(input: ConversationNodeSwitchInput): Promise<boolean> {

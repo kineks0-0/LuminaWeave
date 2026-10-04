@@ -52,6 +52,10 @@ export class STConversationHostDriver {
         return STClient.deleteCharacterChat(input);
     }
 
+    static duplicateCharacterChat(input: Parameters<typeof STClient.duplicateCharacterChat>[0]) {
+        return STClient.duplicateCharacterChat(input);
+    }
+
     static closeCurrentChatView(): Promise<boolean> {
         return STClient.closeCurrentChatView();
     }

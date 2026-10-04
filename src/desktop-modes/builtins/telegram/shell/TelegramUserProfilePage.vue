@@ -221,7 +221,8 @@ const selectDesktopMode = (modeId: string) => {
   overflow: auto;
   padding: calc(34px + var(--lw-content-safe-top, var(--lw-safe-top, 0px))) 20px calc(98px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
   color: var(--lw-text-main);
-  background: transparent;
+  /* 移动端一级页纯色底：自铺 layer-base，卡片实底才可见（桌面右栏由外层玻璃提供对比） */
+  background: var(--lw-telegram-info-panel-bg, var(--lw-telegram-layer-base));
 }
 
 .lw-telegram-user-profile__hero {

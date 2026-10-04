@@ -36,6 +36,9 @@
         :onOpenTool="runtimeActions.traditional.switchRightPanel"
         :onCreateSession="runtimeActions.traditional.createConversationSession"
         :onOpenSession="runtimeActions.traditional.openConversationSession"
+        :onRenameSession="runtimeActions.traditional.renameConversationSession"
+        :onDuplicateSession="runtimeActions.traditional.duplicateConversationSession"
+        :onDeleteSession="runtimeActions.traditional.deleteConversationSession"
       />
       <WidgetPanelHost
         v-else-if="showWidget"
@@ -279,6 +282,9 @@ const resolvedActivityComponentProps = computed<Record<string, unknown> | undefi
     onPopRoute: popTelegramMobileRoute,
     onOpenSession: onOpenMobileSession,
     onCreateSession: onCreateMobileSession,
+    onRenameSession: props.runtimeActions.traditional.renameConversationSession,
+    onDuplicateSession: props.runtimeActions.traditional.duplicateConversationSession,
+    onDeleteSession: props.runtimeActions.traditional.deleteConversationSession,
     onOpenPanel: onOpenMobilePanel,
     onHandleRoleProfileTool,
     onOpenRoleProfile: () => pushTelegramMobileRoute({ name: 'roleProfile' }),

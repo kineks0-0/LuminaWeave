@@ -185,6 +185,9 @@ export interface ShellRuntimeActions {
     /** 通用会话导航：不在聊天页时先切页再打开。 */
     openConversationSession: (sessionId: string) => void;
     createConversationSession: (payload: CreateChatConversationInput) => void;
+    renameConversationSession: (sessionId: string, nextTitle: string) => void;
+    duplicateConversationSession: (sessionId: string, title?: string) => void;
+    deleteConversationSession: (sessionId: string) => void;
     /** 写当前模式的设置键（内部拼接 `desktop-mode-<id>.<key>`）。 */
     updateDesktopModeSetting: (key: string, value: unknown) => void | Promise<void>;
     resizeStart: (event?: MouseEvent) => void;
