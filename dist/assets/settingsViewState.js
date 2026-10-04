@@ -1,1 +1,0 @@
-import{X as e,Z as t}from"./vendor-vue.js";import{yt as n}from"../index.js";var r=e({}),i=t(null),a=(e,t=null)=>{n.value=e,i.value=t};export{i as n,r,a as t};

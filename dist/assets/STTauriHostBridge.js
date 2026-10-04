@@ -1,0 +1,1 @@
+import{i as e,t}from"./STClient.js";var n=()=>({getMainApi:()=>t.getMainApi(),getCharacterName:()=>{let t=e.ctx;return t?.characterName||t?.name||`Global`}});export{n as createTauriTavernHostBridge};
