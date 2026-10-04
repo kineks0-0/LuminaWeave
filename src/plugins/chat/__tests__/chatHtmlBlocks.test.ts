@@ -1,9 +1,29 @@
 import { describe, expect, it } from 'vitest';
+import { renderChatMarkdown } from '../components/chatMarkdown.js';
+import { advanceTextBlocks } from '../presentation/incrementalTextBlocks.js';
 import {
     HTML_BLOCK_MESSAGE_SOURCE,
     buildHtmlBlockDocument,
+    isHtmlDocumentBlock,
     parseHtmlBlockMessage
 } from '../presentation/chatHtmlBlocks.js';
+
+describe('isHtmlDocumentBlock', () => {
+    it('recognizes full HTML documents with or without doctype', () => {
+        expect(isHtmlDocumentBlock('<!DOCTYPE html>\n<html lang="zh-CN"><body>x</body></html>')).toBe(true);
+        expect(isHtmlDocumentBlock('  <!doctype HTML><html></html>  ')).toBe(true);
+        expect(isHtmlDocumentBlock('<html>\n<body><script>use()</script></body>\n</html>')).toBe(true);
+    });
+
+    it('rejects ordinary code, data and HTML fragments', () => {
+        expect(isHtmlDocumentBlock('const a = 1;')).toBe(false);
+        expect(isHtmlDocumentBlock('{"a":1}')).toBe(false);
+        expect(isHtmlDocumentBlock('<div>hi</div>')).toBe(false);
+        expect(isHtmlDocumentBlock('<html>unclosed')).toBe(false);
+        expect(isHtmlDocumentBlock('')).toBe(false);
+        expect(isHtmlDocumentBlock('   ')).toBe(false);
+    });
+});
 
 describe('buildHtmlBlockDocument', () => {
     it('rewrites parent/top host access to the injected virtual objects', () => {
@@ -36,6 +56,22 @@ describe('buildHtmlBlockDocument', () => {
 
         expect(built.startsWith('<script>')).toBe(true);
         expect(built.endsWith('<div>hi</div>')).toBe(true);
+    });
+});
+
+describe('regex-injected HTML blocks', () => {
+    it('keeps body text alongside the bare-fenced HTML document', () => {
+        const text = '正文开头\n\n```\n<!DOCTYPE html>\n<html><body>x</body></html>\n```\n\n正文结尾';
+        const state = advanceTextBlocks(null, text, renderChatMarkdown);
+
+        expect(state.blocks).toHaveLength(3);
+        expect(state.blocks[0].html).toContain('正文开头');
+        expect(state.blocks[2].html).toContain('正文结尾');
+
+        const fenceMatch = state.blocks[1].source.match(/^```[^\n]*\n([\s\S]*?)\n```\s*$/);
+        expect(fenceMatch).not.toBeNull();
+        expect(isHtmlDocumentBlock(fenceMatch![1])).toBe(true);
+        expect(state.blocks[1].html).toContain('<pre><code>');
     });
 });
 

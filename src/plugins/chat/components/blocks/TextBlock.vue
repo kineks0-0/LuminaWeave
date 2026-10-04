@@ -22,7 +22,7 @@ import {
   type TextRenderBlock
 } from '../../presentation/incrementalTextBlocks.js';
 import type { ChatStreamingPresentation } from '../../presentation/ChatStreamingPresentation.js';
-import { buildHtmlBlockDocument, parseHtmlBlockMessage } from '../../presentation/chatHtmlBlocks.js';
+import { buildHtmlBlockDocument, isHtmlDocumentBlock, parseHtmlBlockMessage } from '../../presentation/chatHtmlBlocks.js';
 import {
   createRevealTracker,
   recordRevealProgress,
@@ -98,17 +98,21 @@ const isTrailingChunk = (element: HTMLElement): boolean => {
   return chunks[chunks.length - 1] === chunk;
 };
 
-/** 把 ```html 代码块替换为沙箱 iframe；流式末段保持代码展示，避免半截 HTML 反复重建。 */
+/**
+ * 把 ```html 代码块（含无语言标记的完整 HTML 文档）原位替换为沙箱 iframe；
+ * 仅替换该代码块节点，同消息的其他正文块照常展示。流式末段保持代码展示，避免半截 HTML 反复重建。
+ */
 const mountHtmlBlocks = (): void => {
   const root = rootRef.value;
   if (!root || !props.renderHtmlBlocks) return;
-  const codes = Array.from(root.querySelectorAll<HTMLElement>('pre > code.language-html'));
+  const codes = Array.from(root.querySelectorAll<HTMLElement>('pre > code'));
   for (const code of codes) {
+    const raw = code.textContent ?? '';
+    if (!raw.trim()) continue;
+    if (!code.classList.contains('language-html') && !isHtmlDocumentBlock(raw)) continue;
     const pre = code.parentElement;
     if (!pre) continue;
     if (props.streaming && isTrailingChunk(pre)) continue;
-    const raw = code.textContent ?? '';
-    if (!raw.trim()) continue;
     const frame = root.ownerDocument.createElement('iframe');
     frame.className = 'lv-html-block-frame';
     frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');

@@ -112,6 +112,19 @@ export const buildHtmlBlockDocument = (rawHtml: string): string => {
     return `${BRIDGE_SCRIPT}${html}`;
 };
 
+/**
+ * 代码块内容是否为完整 HTML 文档。
+ *
+ * 用于识别无语言标记的围栏（如预设正则注入的 ` ```\n<!DOCTYPE html>…\n``` `），
+ * 普通代码、JSON 与 HTML 片段返回 false，避免误判为交互块。
+ */
+export const isHtmlDocumentBlock = (raw: string): boolean => {
+    const text = raw.trim();
+    if (!text) return false;
+    if (/^<!doctype\s+html[\s>]/i.test(text)) return true;
+    return /^<html[\s>]/i.test(text) && /<\/html>$/i.test(text);
+};
+
 const toText = (value: unknown): string => typeof value === 'string' ? value : '';
 
 /** 解析来自 HTML 块 iframe 的消息；不匹配返回 null。 */

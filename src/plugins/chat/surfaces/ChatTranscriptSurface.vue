@@ -12,6 +12,7 @@
     :resolve-message-avatar="context.state.resolveMessageAvatar"
     :render-preferences="messageRenderPreferences"
     :on-select-choice="selectChoice"
+    :on-html-action="handleHtmlAction"
     @edit="editMessage"
     @delete="deleteMessage"
     @regenerate="regenerate"
@@ -64,6 +65,15 @@ const selectChoice = (text: string): void => {
     return;
   }
   void surface.value.intents.sendMessage(text);
+};
+
+/** 消息内 HTML 交互块的动作桥：填入草稿或直接发送。 */
+const handleHtmlAction = (text: string, mode: 'fill' | 'send'): void => {
+  if (mode === 'send') {
+    void surface.value.intents.sendMessage(text);
+    return;
+  }
+  surface.value.intents.setComposerDraft(text);
 };
 </script>
 

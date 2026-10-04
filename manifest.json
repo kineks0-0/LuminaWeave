@@ -6,7 +6,7 @@
   "js": "dist/index.js",
   "css": "dist/style.css",
   "author": "kineks0-0",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "homePage": "https://github.com/kineks0-0/LuminaWeave",
   "auto_update": false,
   "minimum_client_version": "1.12.0"
