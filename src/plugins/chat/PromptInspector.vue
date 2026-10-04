@@ -2,11 +2,21 @@
   <section class="prompt-inspector" :class="{ 'is-probing': inspection.isProbing }">
     <header class="prompt-inspector__header">
       <div class="prompt-inspector__modes">
-        <button type="button" :class="{ 'is-active': mode === 'preview' }" @click="mode = 'preview'">
+        <button
+          type="button"
+          class="lw-btn"
+          :class="mode === 'preview' ? 'lw-btn-primary' : 'lw-btn-ghost'"
+          @click="mode = 'preview'"
+        >
           <Eye :size="15" />
           <span>预览</span>
         </button>
-        <button type="button" :class="{ 'is-active': mode === 'edit' }" @click="openEditor">
+        <button
+          type="button"
+          class="lw-btn"
+          :class="mode === 'edit' ? 'lw-btn-primary' : 'lw-btn-ghost'"
+          @click="openEditor"
+        >
           <Pencil :size="15" />
           <span>自由编辑</span>
         </button>
@@ -16,13 +26,22 @@
         <LoaderCircle v-if="inspection.isProbing" :size="15" class="is-spinning" />
         <span v-if="inspection.errorMessage" class="is-error">{{ inspection.errorMessage }}</span>
         <span v-else-if="inspection.isProbing">正在探测 Prompt</span>
-        <span v-else-if="inspection.source">{{ sourceLabel }}</span>
+        <template v-else-if="inspection.source || hasPayload">
+          <span
+            v-if="inspection.source"
+            class="payload-badge"
+            :class="inspection.source === 'st' ? 'is-st' : 'is-lumina'"
+          >
+            {{ sourceLabel }}
+          </span>
+          <span v-if="hasPayload" class="payload-badge">{{ payloadCountLabel }}</span>
+        </template>
         <span v-else>尚无 Prompt 数据</span>
       </div>
 
       <button
         type="button"
-        class="prompt-inspector__probe"
+        class="lw-btn lw-btn-secondary lw-btn-icon prompt-inspector__probe"
         title="重新探测 Prompt"
         aria-label="重新探测 Prompt"
         :disabled="inspection.isProbing"
@@ -40,10 +59,15 @@
       </nav>
 
       <div class="prompt-inspector__body">
-        <div v-if="!hasPayload" class="prompt-inspector__empty">
+        <div v-if="inspection.isProbing && !hasPayload" class="prompt-inspector__loading">
+          <span class="probe-dots"></span>
+          <span>向 SillyTavern 发送探测请求，等待 Prompt 组装返回…</span>
+        </div>
+
+        <div v-else-if="!hasPayload" class="prompt-inspector__empty">
           <SearchCode :size="28" />
           <span>暂无 Prompt 数据</span>
-          <button type="button" @click="runProbe">开始探测</button>
+          <button type="button" class="prompt-inspector__cta" @click="runProbe">开始探测</button>
         </div>
 
         <div v-else-if="view === 'messages'" class="prompt-inspector__messages">
@@ -72,8 +96,17 @@
     </template>
 
     <div v-else class="prompt-inspector__editor">
+      <div class="prompt-inspector__edit-hint">
+        <TriangleAlert :size="13" />
+        <span>手动修改后点击运行，将直接使用编辑内容，跳过 ST 重新组装</span>
+      </div>
       <textarea v-model="editContent" aria-label="编辑 Prompt" />
-      <button type="button" :disabled="!editContent.trim()" @click="runEditedPrompt">
+      <button
+        type="button"
+        class="lw-btn lw-btn-primary"
+        :disabled="!editContent.trim()"
+        @click="runEditedPrompt"
+      >
         <Play :size="15" />
         <span>运行编辑后的 Prompt</span>
       </button>
@@ -83,7 +116,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Eye, LoaderCircle, Pencil, Play, RefreshCw, SearchCode } from 'lucide-vue-next';
+import { Eye, LoaderCircle, Pencil, Play, RefreshCw, SearchCode, TriangleAlert } from 'lucide-vue-next';
 import type { ChatPromptInspectionState } from './application/ChatApplicationController.js';
 import { isRecord } from '@shared/CommonUtils.js';
 
@@ -172,7 +205,10 @@ const rawPayload = computed(() => {
   return JSON.stringify(props.inspection.payload, null, 2);
 });
 const hasPayload = computed(() => Boolean(rawPayload.value));
-const sourceLabel = computed(() => props.inspection.source === 'st' ? 'SillyTavern Prompt' : 'Lumina Prompt');
+const sourceLabel = computed(() => props.inspection.source === 'st' ? 'ST 原始' : '幻光组装完成');
+const payloadCountLabel = computed(() =>
+  Array.isArray(payloadBody.value) ? `${payloadBody.value.length} 条 Messages` : '字符串'
+);
 
 const roleLabel = (role: string): string => {
   const labels: Record<string, string> = {
@@ -233,47 +269,44 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.prompt-inspector__header,
-.prompt-inspector__views {
+.prompt-inspector__header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   border-bottom: 1px solid var(--lw-border-base);
   background: var(--lw-bg-surface);
-  padding: 7px 9px;
+  padding: 8px 12px;
 }
 
 .prompt-inspector__modes {
   display: flex;
-  gap: 4px;
+  gap: 6px;
 }
 
-.prompt-inspector button {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--lw-text-muted);
-  padding: 0 8px;
-  cursor: pointer;
-  font: inherit;
+.prompt-inspector__modes .lw-btn {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
   font-size: var(--lw-type-label-small-size);
 }
 
-.prompt-inspector button:hover:not(:disabled),
-.prompt-inspector button.is-active {
-  border-color: var(--lw-border-base);
-  background: var(--lw-bg-hover);
-  color: var(--lw-text-main);
+.payload-badge {
+  border-radius: 4px;
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-secondary);
+  padding: 2px 8px;
+  font-size: var(--lw-type-label-small-size);
+  white-space: nowrap;
 }
 
-.prompt-inspector button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+.payload-badge.is-st {
+  background: color-mix(in srgb, var(--lw-danger) 12%, transparent);
+  color: var(--lw-danger);
+}
+
+.payload-badge.is-lumina {
+  background: color-mix(in srgb, var(--lw-success) 14%, transparent);
+  color: var(--lw-success);
 }
 
 .prompt-inspector__status {
@@ -292,13 +325,34 @@ onUnmounted(() => {
 }
 
 .prompt-inspector__probe {
-  width: 32px;
-  padding: 0 !important;
+  flex-shrink: 0;
 }
 
 .prompt-inspector__views {
-  border-bottom-color: var(--lw-border-base);
-  padding-block: 5px;
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  margin: 10px 12px 0;
+  padding: 3px;
+  border: 1px solid var(--lw-border-base);
+  border-radius: 8px;
+  background: var(--lw-bg-surface);
+}
+
+.prompt-inspector__views button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--lw-text-muted);
+  padding: 4px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--lw-type-label-small-size);
+}
+
+.prompt-inspector__views button.is-active {
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-main);
 }
 
 .prompt-inspector__body,
@@ -323,6 +377,43 @@ onUnmounted(() => {
   min-height: 100px;
 }
 
+.prompt-inspector__loading {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-body-small-size);
+  text-align: center;
+}
+
+.probe-dots {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--lw-border-base);
+  border-top-color: var(--lw-primary);
+  border-radius: 50%;
+  animation: prompt-inspector-spin 0.9s linear infinite;
+}
+
+.prompt-inspector__cta {
+  border: 1px solid color-mix(in srgb, var(--lw-primary) 32%, var(--lw-border-base));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
+  color: var(--lw-primary);
+  padding: 6px 14px;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--lw-type-label-medium-size);
+  transition: var(--lw-transition);
+}
+
+.prompt-inspector__cta:hover {
+  background: color-mix(in srgb, var(--lw-primary) 16%, transparent);
+}
+
 .prompt-inspector__messages,
 .prompt-inspector__sources {
   display: flex;
@@ -342,8 +433,23 @@ onUnmounted(() => {
   display: block;
   border-bottom: 1px solid var(--lw-border-base);
   color: var(--lw-text-secondary);
-  padding: 6px 10px;
+  padding: 6px 12px;
   font-size: var(--lw-type-label-small-size);
+}
+
+.prompt-inspector__messages article[data-role='system'] strong {
+  background: color-mix(in srgb, var(--lw-success) 14%, transparent);
+  color: var(--lw-success);
+}
+
+.prompt-inspector__messages article[data-role='user'] strong {
+  background: color-mix(in srgb, var(--lw-primary) 14%, transparent);
+  color: var(--lw-primary);
+}
+
+.prompt-inspector__messages article[data-role='assistant'] strong {
+  background: color-mix(in srgb, var(--lw-warning) 16%, transparent);
+  color: color-mix(in srgb, var(--lw-warning) 72%, var(--lw-text-main));
 }
 
 .prompt-inspector__messages pre,
@@ -391,6 +497,18 @@ onUnmounted(() => {
   gap: 9px;
 }
 
+.prompt-inspector__edit-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--lw-warning) 36%, var(--lw-border-base));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--lw-warning) 10%, transparent);
+  color: var(--lw-text-secondary);
+  padding: 7px 10px;
+  font-size: var(--lw-type-body-small-size);
+}
+
 .prompt-inspector__editor textarea {
   min-height: 240px;
   flex: 1;
@@ -405,9 +523,6 @@ onUnmounted(() => {
 
 .prompt-inspector__editor > button {
   align-self: flex-end;
-  border-color: var(--lw-primary);
-  background: var(--lw-primary);
-  color: var(--lw-text-inverse);
 }
 
 .is-spinning {
