@@ -10,28 +10,23 @@ type BuildProfile = {
 };
 
 type ConfigHelpers = typeof viteConfig & {
-  resolveNodeModulePackageName: (id: string) => string | undefined;
-  vendorChunkName: (id: string) => string | undefined;
   assetFileNames: (assetInfo: { names?: string[]; name?: string }) => string;
   resolveBuildProfile: (command: 'serve' | 'build', mode: string) => BuildProfile;
 };
 
 const helpers = viteConfig as ConfigHelpers;
+const resolveVendorGroup = (id: string): string | undefined =>
+  helpers.vendorChunkGroups.find(group => group.test.test(id))?.name;
 
 describe('vite config helpers', () => {
-  it('resolves package names from node_modules ids', () => {
-    expect(helpers.resolveNodeModulePackageName('D:/app/node_modules/vue/dist/vue.runtime.esm-bundler.js')).toBe('vue');
-    expect(helpers.resolveNodeModulePackageName('D:/app/node_modules/@ai-sdk/openai/dist/index.js')).toBe('@ai-sdk/openai');
-    expect(helpers.resolveNodeModulePackageName('D:/app/src/main.ts')).toBeUndefined();
-  });
-
   it('maps vendor packages to stable chunk names', () => {
-    expect(helpers.vendorChunkName('D:/app/node_modules/vue/dist/vue.runtime.esm-bundler.js')).toBe('vendor-vue');
-    expect(helpers.vendorChunkName('D:/app/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js')).toBe('vendor-vue');
-    expect(helpers.vendorChunkName('D:/app/node_modules/@langchain/core/dist/index.js')).toBe('vendor-langchain');
-    expect(helpers.vendorChunkName('D:/app/node_modules/@ai-sdk/openai/dist/index.js')).toBe('vendor-ai-sdk');
-    expect(helpers.vendorChunkName('D:/app/node_modules/openai/index.mjs')).toBe('vendor-openai');
-    expect(helpers.vendorChunkName('D:/app/src/main.ts')).toBeUndefined();
+    expect(resolveVendorGroup('D:/app/node_modules/vue/dist/vue.runtime.esm-bundler.js')).toBe('vendor-vue');
+    expect(resolveVendorGroup('D:/app/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js')).toBe('vendor-vue');
+    expect(resolveVendorGroup('D:/app/node_modules/@langchain/core/dist/index.js')).toBe('vendor-langchain');
+    expect(resolveVendorGroup('D:/app/node_modules/@ai-sdk/openai/dist/index.js')).toBe('vendor-ai-sdk');
+    expect(resolveVendorGroup('D:/app/node_modules/openai/index.mjs')).toBe('vendor-openai');
+    expect(resolveVendorGroup('D:/app/node_modules/zod/index.js')).toBe('vendor-zod');
+    expect(resolveVendorGroup('D:/app/src/main.ts')).toBeUndefined();
   });
 
   it('keeps CSS fixed and assets extension-correct', () => {

@@ -4,51 +4,23 @@ import tailwindcss from '@tailwindcss/vite'
 import { analyzer } from 'vite-bundle-analyzer'
 import { resolve } from 'path'
 
-export const toNormalizedId = (id: string) => id.replace(/\\/g, '/');
 const tauriDevHost = process.env.TAURI_DEV_HOST;
 
-export const resolveNodeModulePackageName = (id: string) => {
-  const normalizedId = toNormalizedId(id);
-  const optimizedDepsMarker = '/node_modules/.vite/deps/';
-  const optimizedDepsIndex = normalizedId.lastIndexOf(optimizedDepsMarker);
-  if (optimizedDepsIndex >= 0) {
-    const optimizedName = normalizedId
-      .slice(optimizedDepsIndex + optimizedDepsMarker.length)
-      .split(/[?#]/)[0];
-    if (optimizedName.startsWith('vue')) return 'vue';
-    if (optimizedName.startsWith('pinia')) return 'pinia';
-    return undefined;
-  }
+export interface VendorChunkGroup {
+  name: string;
+  test: RegExp;
+}
 
-  const nodeModulesMarker = '/node_modules/';
-  const nodeModulesIndex = normalizedId.lastIndexOf(nodeModulesMarker);
-  if (nodeModulesIndex < 0) return undefined;
+export const vendorChunkGroups: VendorChunkGroup[] = [
+  { name: 'vendor-zod', test: /node_modules[\\/]zod[\\/]/ },
+  { name: 'vendor-vue', test: /node_modules[\\/](?:vue|pinia|@vue)[\\/]/ },
+  { name: 'vendor-motion', test: /node_modules[\\/]gsap[\\/]/ },
+  { name: 'vendor-ai-sdk', test: /node_modules[\\/](?:ai|@ai-sdk)[\\/]/ },
+  { name: 'vendor-openai', test: /node_modules[\\/]openai[\\/]/ },
+  { name: 'vendor-langchain', test: /node_modules[\\/]@langchain[\\/]/ }
+];
 
-  const parts = normalizedId.slice(nodeModulesIndex + nodeModulesMarker.length).split('/');
-  const [scopeOrName, packageName] = parts;
-  if (!scopeOrName) return undefined;
-  return scopeOrName.startsWith('@') && packageName ? `${scopeOrName}/${packageName}` : scopeOrName;
-};
-
-const vendorPackageGroups = new Map<string, string>([
-  ['vue', 'vendor-vue'],
-  ['pinia', 'vendor-vue'],
-  ['gsap', 'vendor-motion'],
-  ['ai', 'vendor-ai-sdk'],
-  ['openai', 'vendor-openai']
-]);
-
-export const vendorChunkName = (id: string) => {
-  const packageName = resolveNodeModulePackageName(id);
-  if (!packageName) return undefined;
-
-  const groupName = vendorPackageGroups.get(packageName);
-  if (groupName) return groupName;
-  if (packageName.startsWith('@vue/')) return 'vendor-vue';
-  if (packageName.startsWith('@langchain/')) return 'vendor-langchain';
-  if (packageName.startsWith('@ai-sdk/')) return 'vendor-ai-sdk';
-  return undefined;
-};
+const vendorCodeSplitting = { groups: vendorChunkGroups };
 
 const chunkFileNames = 'assets/[name].js';
 //const chunkFileNames = 'assets/[name]-[hash].js';
@@ -155,7 +127,7 @@ export default defineConfig(({ command, mode }) => {
             input: resolve(__dirname, 'index.html'),
             output: {
               chunkFileNames,
-              manualChunks: vendorChunkName,
+              codeSplitting: vendorCodeSplitting,
               assetFileNames
             },
             onwarn(warning, warn) {
@@ -175,7 +147,7 @@ export default defineConfig(({ command, mode }) => {
               format: 'es',
               entryFileNames: 'index.js',
               chunkFileNames,
-              manualChunks: vendorChunkName,
+              codeSplitting: vendorCodeSplitting,
               assetFileNames
             },
             onwarn(warning, warn) {

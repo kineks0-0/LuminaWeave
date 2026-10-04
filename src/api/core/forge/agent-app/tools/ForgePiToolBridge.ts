@@ -10,13 +10,15 @@ import type {
     ShellSessionRef
 } from '@shared/resources/index.js';
 import type { VirtualFileSystemService } from '../../../hal/resource/VirtualFileSystemService.js';
-import { virtualFileSystemService } from '../../../hal/shell/index.js';
+import { virtualFileSystemService } from '../../../hal/resource/index.js';
 import {
     shellNetworkPolicyService,
+    type ShellNetworkPolicyService
+} from '../../../hal/shell/ShellNetworkPolicyService.js';
+import {
     shellPermissionService,
-    type ShellNetworkPolicyService,
     type ShellPermissionService
-} from '../../../hal/shell/index.js';
+} from '../../../hal/shell/ShellPermissionService.js';
 import {
     forgeThreadWorkspacePath,
     forgeWorkspacePath,

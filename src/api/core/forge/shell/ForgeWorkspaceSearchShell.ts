@@ -1,13 +1,15 @@
 import type { ShellExecResult, ShellSessionRef } from '@shared/resources/index.js';
 import { createGit } from 'just-git';
 import type { ForgeRuntimeContext } from '../../../../types/ForgeRuntimeTypes.js';
+import { BashTerminalRuntime } from '../../hal/shell/BashTerminalRuntime.js';
 import {
-    BashTerminalRuntime,
     shellPermissionService,
-    type ShellPermissionService,
+    type ShellPermissionService
+} from '../../hal/shell/ShellPermissionService.js';
+import {
     virtualFileSystemService,
     type VirtualFileSystemService
-} from '../../hal/shell/index.js';
+} from '../../hal/resource/index.js';
 import { forgeWorkspacePath } from '../../hal/shell/ShellWorkspaceService.js';
 import {
     forgeThreadWorkspacePath,
