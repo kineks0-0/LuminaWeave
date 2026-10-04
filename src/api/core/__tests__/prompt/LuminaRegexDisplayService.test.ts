@@ -4,6 +4,10 @@ import {
     setCachedCharacterRegexScripts,
     setCachedPresetRegexScripts
 } from '@/api/core/hal/regex/LuminaRegexAssetCache.js';
+import {
+    BOUND_REGEX_OVERRIDE_STORAGE_KEY,
+    setBoundRegexOverride
+} from '@/api/core/hal/regex/BoundRegexOverrideStore.js';
 import { createDefaultRegexScript } from '@/api/core/hal/prompt/chat/RegexScriptLibraryService.js';
 import { CHAT_PROMPT_REGEX_STORAGE_KEY } from '@/api/core/hal/prompt/ChatPromptCompositionService.js';
 import { REGEX_PLACEMENTS } from '@/types/RegexScriptTypes.js';
@@ -65,5 +69,30 @@ describe('LuminaRegexDisplayService', () => {
         const service = new LuminaRegexDisplayService();
         expect(service.apply('SUOT', 'ai_output', 'display', { depth: 1 })).toBe('SUOT');
         expect(service.apply('SUOT', 'ai_output', 'display', { depth: 5 })).toBe('HTML');
+    });
+
+    it('本机覆盖可停用绑定脚本，也可强制启用来源停用的脚本', () => {
+        const overrideState = new Map<string, unknown>();
+        vi.spyOn(lwStorage, 'get').mockImplementation((key: string, fallback: unknown) => (
+            key === BOUND_REGEX_OVERRIDE_STORAGE_KEY ? (overrideState.get(key) ?? fallback) : fallback
+        ));
+        vi.spyOn(lwStorage, 'set').mockImplementation(async (key: string, value: unknown) => {
+            overrideState.set(key, value);
+        });
+
+        setCachedPresetRegexScripts('preset-1', [
+            displayScript({ id: 'p1', findRegex: '/A/g', replaceString: 'X' }),
+            displayScript({ id: 'p2', findRegex: '/B/g', replaceString: 'Y', enabled: false })
+        ]);
+
+        const service = new LuminaRegexDisplayService();
+        expect(service.apply('A', 'ai_output', 'display')).toBe('X');
+        expect(service.apply('B', 'ai_output', 'display')).toBe('B');
+
+        setBoundRegexOverride('p1', 'disabled');
+        setBoundRegexOverride('p2', 'enabled');
+
+        expect(service.apply('A', 'ai_output', 'display')).toBe('A');
+        expect(service.apply('B', 'ai_output', 'display')).toBe('Y');
     });
 });

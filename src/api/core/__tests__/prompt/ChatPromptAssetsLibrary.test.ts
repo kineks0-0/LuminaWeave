@@ -210,6 +210,41 @@ describe('ChatPromptPresetLibraryService', () => {
         expect(scripts.map(item => item.id)).toEqual(['script-a', 'script-b']);
     });
 
+    it('缺失 id 的内嵌正则获得来源稳定 id，预设与角色同名不冲突', () => {
+        const idlessScript = {
+            scriptName: '同名脚本',
+            findRegex: '/same/g',
+            replaceString: 'x',
+            placement: [2],
+            disabled: false,
+            markdownOnly: true,
+            promptOnly: false,
+            runOnEdit: false,
+            substituteRegex: 0,
+            minDepth: null,
+            maxDepth: null
+        };
+        const preset = parseChatCompletionPreset({
+            name: '预设',
+            prompts: [{ identifier: 'main' }],
+            extensions: { regex_scripts: [idlessScript] }
+        }).preset!;
+
+        const presetId = extractEmbeddedPresetAssets(preset).regexScripts[0].id;
+        const characterId = extractCharacterRegexScripts({
+            extensions: { regex_scripts: [idlessScript] }
+        })[0].id;
+
+        expect(presetId).toMatch(/^regex-preset-/);
+        expect(characterId).toMatch(/^regex-character-/);
+        expect(presetId).not.toBe(characterId);
+        // 重复提取保持稳定（与数组顺序、调用次数无关）
+        expect(extractEmbeddedPresetAssets(preset).regexScripts[0].id).toBe(presetId);
+        expect(extractCharacterRegexScripts({
+            extensions: { regex_scripts: [idlessScript] }
+        })[0].id).toBe(characterId);
+    });
+
     it('导入预设时正则作为绑定资产，不并入全局正则库', async () => {
         const regexStorage = new Map<string, unknown>();
         vi.spyOn(lwStorage, 'get').mockImplementation((key: string, fallback: unknown) => (

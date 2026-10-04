@@ -1,5 +1,6 @@
 import type { ResourceDiagnostic } from '@shared/resources/index.js';
 import { resolveCharacterCardSource } from '@shared/resources/index.js';
+import { digestString } from '@shared/hash.js';
 import type { ChatCompletionPreset } from '../../../../../types/ChatCompletionPresetTypes.js';
 import type { RegexScript } from '../../../../../types/RegexScriptTypes.js';
 import { parseRegexScripts } from '../../regex/RegexScriptDocument.js';
@@ -53,17 +54,25 @@ const extractVariables = (extensions: Record<string, unknown>): { global: Record
     return { global: toTextRecord(rawVariables), local: {} };
 };
 
-const dedupeById = (items: unknown[]): unknown[] => {
+/**
+ * 按 id 去重并为缺失 id 的脚本补一个来源稳定 id。
+ *
+ * 内嵌脚本常没有 `id`；若用数组下标生成（旧实现为 `regex-1`），预设与角色卡会
+ * 互相碰撞、排序变化后覆盖也会错位。这里改为「来源前缀 + 名称/匹配内容哈希」，
+ * 保证同源稳定、跨来源不冲突（显示层覆盖以 id 为键）。
+ */
+const dedupeById = (items: unknown[], idPrefix: string): unknown[] => {
     const seen = new Set<string>();
     const deduped: unknown[] = [];
     for (const item of items) {
         const record = asRecord(item);
-        const id = typeof record.id === 'string' || typeof record.id === 'number'
+        const explicitId = typeof record.id === 'string' || typeof record.id === 'number'
             ? String(record.id)
-            : JSON.stringify([record.scriptName, record.findRegex]);
+            : '';
+        const id = explicitId || `${idPrefix}-${digestString(`${record.scriptName ?? record.script_name ?? ''}|${record.findRegex ?? record.find_regex ?? ''}`)}`;
         if (seen.has(id)) continue;
         seen.add(id);
-        deduped.push(item);
+        deduped.push(explicitId ? item : { ...record, id });
     }
     return deduped;
 };
@@ -80,7 +89,7 @@ export const extractEmbeddedPresetAssets = (preset: ChatCompletionPreset): Embed
         return { regexScripts: [], variables, diagnostics: [] };
     }
 
-    const parsed = parseRegexScripts(dedupeById(merged));
+    const parsed = parseRegexScripts(dedupeById(merged, 'regex-preset'));
     return { regexScripts: parsed.scripts, variables, diagnostics: parsed.diagnostics };
 };
 
@@ -97,5 +106,5 @@ export const extractCharacterRegexScripts = (raw: unknown): RegexScript[] => {
         ...(Array.isArray(rootExtensions.regex_scripts) ? rootExtensions.regex_scripts : [])
     ];
     if (scripts.length === 0) return [];
-    return parseRegexScripts(dedupeById(scripts)).scripts;
+    return parseRegexScripts(dedupeById(scripts, 'regex-character')).scripts;
 };
