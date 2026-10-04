@@ -128,6 +128,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { padNumber as pad } from '../../../../api/utils/dateFormat.js';
 import type { Component, CSSProperties } from 'vue';
 import {
   Activity,
@@ -140,12 +141,12 @@ import {
   Waypoints,
   X
 } from 'lucide-vue-next';
-import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
+import { useSurfaceSkin } from '../../../core/useSurfaceSkin.js';
 import type {
   CharacterChannelGroup,
   CharacterChannelSessionItem
-} from '../../../types/ConversationContextTypes.js';
-import { useSurfaceInput } from '../../../platform/surface/useSurfaceRuntimeContext.js';
+} from '../../../../types/ConversationContextTypes.js';
+import { useSurfaceInput } from '../../../../platform/surface/useSurfaceRuntimeContext.js';
 import {
   getTelegramAvatarStyle,
   getTelegramInitial,
@@ -241,8 +242,6 @@ const extraTools = [
   { panelId: 'lumina-director', label: '导演面板', icon: Clapperboard, tone: 'violet' },
   { panelId: 'lumina-stats', label: '状态', icon: Activity, tone: 'green' }
 ] as const;
-
-const pad = (value: number): string => String(value).padStart(2, '0');
 
 const formatSessionTime = (timestamp: number): string => {
   const date = new Date(timestamp);

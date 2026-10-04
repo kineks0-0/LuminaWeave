@@ -42,21 +42,23 @@
 </template>
 
 <script setup lang="ts">
-import type { CSSProperties } from 'vue';
-import ThemedSurfaceOutlet from '../../../platform/surface/ThemedSurfaceOutlet.vue';
-import type {
-  ShellRuntimeActions,
-  TelegramDesktopLeftRoute
-} from '../../types.js';
+import { computed } from 'vue';
+import ThemedSurfaceOutlet from '../../../../platform/surface/ThemedSurfaceOutlet.vue';
+import type { TelegramDesktopLeftRoute } from './types.js';
+import { useTelegramLeftRailWidth } from './useTelegramLeftRailWidth.js';
 
-defineProps<{
+const props = defineProps<{
   activeDesktopModeId: string;
   leftRoute: TelegramDesktopLeftRoute;
-  leftRailStyle: CSSProperties;
-  isLeftRailResizing: boolean;
-  onSetLeftRoute: ShellRuntimeActions['traditional']['setTelegramDesktopLeftRoute'];
-  onLeftRailResizeStart: ShellRuntimeActions['traditional']['telegramLeftRailResizeStart'];
+  widgetWidth: number;
+  onSetLeftRoute: (route: TelegramDesktopLeftRoute) => void;
 }>();
+
+const {
+  leftRailStyle,
+  isResizing: isLeftRailResizing,
+  startResize: onLeftRailResizeStart
+} = useTelegramLeftRailWidth(computed(() => props.widgetWidth));
 </script>
 
 <style>

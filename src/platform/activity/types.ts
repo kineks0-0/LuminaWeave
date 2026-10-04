@@ -118,6 +118,25 @@ export type ActivityLaunchPlacement =
   | 'telegram-stack'
   | 'modal';
 
+export interface ActivityModeHandlerEnvironment {
+  shellKind: 'traditional' | 'freeform';
+  isMobile: boolean;
+  desktopModeId: string;
+}
+
+/**
+ * 模式 shell 可以在通用 placement 解析之前接管自己声明的 Activity 形态。
+ * 返回 false / undefined 表示不处理；返回信息时宿主只做 Activity 状态广播。
+ */
+export type ActivityModeHandlerResult =
+  | boolean
+  | { activity: NormalizedActivityDescriptor; placement: ActivityLaunchPlacement; panelId?: string };
+
+export type ActivityModeHandler = (
+  intent: ActivityLaunchIntent,
+  environment: ActivityModeHandlerEnvironment
+) => ActivityModeHandlerResult;
+
 export interface ActivityTelegramRoute {
   name: 'tool';
   panelId: string;

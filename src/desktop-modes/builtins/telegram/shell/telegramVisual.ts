@@ -33,7 +33,7 @@ import {
   UserRound,
   X
 } from 'lucide-vue-next';
-import { resolveAvatarHue } from '../../../plugins/chat/presentation/telegramChatList.js';
+import { resolveAvatarHue } from '../../../../plugins/chat/presentation/telegramChatList.js';
 
 export type TelegramIconName =
   | 'archive'

@@ -13,7 +13,9 @@ import {
     registerDesktopMode,
     unregisterDesktopMode
 } from '../../desktop-modes/core/registry.js';
-import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
+import { normalizeDesktopModePackage } from '../../desktop-modes/core/package.js';
+import type { DesktopModeManifest, DesktopModePackage } from '../../desktop-modes/core/types.js';
+import { OFFICIAL_SURFACE_CONTRACTS } from '../../platform/surface/officialContracts.js';
 
 export interface RegisteredPanelConfig {
     title: string;
@@ -72,8 +74,21 @@ export class DesktopSurfaceService {
 
     /** 返回撤销函数：只注销本次注册的 manifest（引用比较），重复调用无副作用。 */
     /** ownerPluginId：经插件 context 注册时传入，用于卸载插件时区分“自己的模式”与外部依赖。 */
-    registerDesktopMode(manifest: DesktopModeManifest, ownerPluginId?: string): () => void {
-        registerDesktopMode(manifest, ownerPluginId);
+    registerDesktopMode(input: DesktopModeManifest | DesktopModePackage, ownerPluginId?: string): () => void {
+        const modePackage = normalizeDesktopModePackage(input);
+        const { manifest } = modePackage;
+        if (ownerPluginId) {
+            // 官方 contract 是保留命名空间：运行时插件不得用自己的模式覆盖它。
+            const officialOverride = (modePackage.componentOverrides ?? []).find(override =>
+                (OFFICIAL_SURFACE_CONTRACTS as readonly string[]).includes(override.contractId)
+            );
+            if (officialOverride) {
+                throw new Error(
+                    `[DesktopSurfaceService] Runtime plugin cannot override official surface contract: ${officialOverride.contractId}`
+                );
+            }
+        }
+        registerDesktopMode(modePackage, ownerPluginId);
         this.emit('SETTINGS_CHANGED');
         this.emit('DESKTOP_MODES_CHANGED', manifest.id);
         let disposed = false;

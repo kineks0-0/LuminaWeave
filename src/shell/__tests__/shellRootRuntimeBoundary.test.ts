@@ -48,17 +48,22 @@ describe('LuminaShellRoot runtime boundary', () => {
         expect(freeformSource).toContain('name="composition"');
     });
 
-    it('keeps the Telegram mobile navigation stack as the composition activity container', () => {
+    it('keeps the Telegram mobile navigation stack inside the Telegram mode package', () => {
+        const telegramShellSource = readFileSync(
+            new URL('../../desktop-modes/builtins/telegram/shell/TelegramShell.vue', import.meta.url),
+            'utf-8'
+        );
         const traditionalSource = readFileSync(
             new URL('../traditional/TraditionalShell.vue', import.meta.url),
             'utf-8'
         );
 
-        expect(traditionalSource).toContain(':activity-component="compositionActivityComponent"');
-        expect(traditionalSource).toContain(':activity-component-props="compositionActivityComponentProps"');
-        expect(traditionalSource).toContain('isTelegramMobileMode.value ? TelegramMobileStack : ShellPrimaryActivityOutlet');
-        expect(traditionalSource).toContain('route: telegramMobileCurrentRoute.value');
-        expect(traditionalSource).toContain('showBottomNavPadding: shouldShowTelegramMobileBottomNav.value');
+        expect(traditionalSource).toContain(':activity-component="resolvedActivityComponent"');
+        expect(traditionalSource).toContain(':activity-component-props="resolvedActivityComponentProps"');
+        expect(traditionalSource).not.toContain('TelegramMobileStack');
+        expect(telegramShellSource).toContain('isTelegramMobileMode.value ? TelegramMobileStack : undefined');
+        expect(telegramShellSource).toContain('route: telegramMobileCurrentRoute.value');
+        expect(telegramShellSource).toContain('showBottomNavPadding: showBottomNav.value');
     });
 
     it('feeds the workspace manager from the complete plugin registry', () => {
@@ -145,8 +150,8 @@ describe('LuminaShellRoot runtime boundary', () => {
             expect(source).not.toContain('isForgeActiveInTraditional');
         }
 
-        expect(shellSource).toContain('auxSidebarMode: surfaceAuxSidebarMode.value');
-        expect(shellSource).toContain('activeRightPanelId: activeRightPanel.value');
+        expect(shellSource).toContain("auxSidebarMode: props.runtimeContext.isMobile ? 'hidden' : props.runtimeContext.traditional.sidebarMode");
+        expect(shellSource).toContain('activeRightPanelId: props.runtimeContext.traditional.activeRightPanel');
         expect(shellSource).not.toContain('officialPanelSurfaces');
         expect(widgetHostSource).not.toContain('officialPanelSurfaces');
         expect(forgeWorkspaceSource).toContain('<ForgeSidebar');

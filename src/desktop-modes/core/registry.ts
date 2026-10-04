@@ -1,9 +1,11 @@
 import { shallowReactive, shallowRef, type Ref } from 'vue';
 import type { SettingDefinition } from '../../types/plugin.js';
 import { builtinDesktopModes } from '../builtins/index.js';
+import { normalizeDesktopModePackage } from './package.js';
 import type {
     ComponentThemeContext,
     DesktopModeManifest,
+    DesktopModePackage,
     DesktopModeShellDefinition,
     SurfaceSkinDefinition,
     ThemeNavigationPreset,
@@ -53,9 +55,9 @@ export const resolveDesktopModeValues = (
     return cleanResolvedValues(raw);
 };
 
-export type DesktopModeRegistrationListener = (manifest: DesktopModeManifest) => void;
-export type DesktopModeUnregistrationListener = (manifest: DesktopModeManifest) => void;
-export type DesktopModeRegistrationValidator = (manifest: DesktopModeManifest) => void;
+export type DesktopModeRegistrationListener = (modePackage: DesktopModePackage) => void;
+export type DesktopModeUnregistrationListener = (modePackage: DesktopModePackage) => void;
+export type DesktopModeRegistrationValidator = (modePackage: DesktopModePackage) => void;
 
 const builtinDesktopModeIds: ReadonlySet<string> = new Set(builtinDesktopModes.map(mode => mode.id));
 
@@ -67,22 +69,27 @@ class DesktopModeRegistry {
     public readonly modes = shallowReactive<Record<string, DesktopModeManifest>>(
         {} as Record<string, DesktopModeManifest>
     );
+    // 模式包（含 shell renderer / componentOverrides / styles）不进入响应式层，组件不参与代理。
+    private readonly packages = new Map<string, DesktopModePackage>();
     // 模式 id -> 注册它的插件 id（经 context 注册时才有；内置与门面注册没有）。
     private readonly owners = new Map<string, string>();
     private readonly registrationListeners = new Set<DesktopModeRegistrationListener>();
     private readonly unregistrationListeners = new Set<DesktopModeUnregistrationListener>();
     private readonly registrationValidators = new Set<DesktopModeRegistrationValidator>();
 
-    register(manifest: DesktopModeManifest, ownerPluginId?: string): void {
+    register(input: DesktopModeManifest | DesktopModePackage, ownerPluginId?: string): void {
+        const modePackage = normalizeDesktopModePackage(input);
+        const { manifest } = modePackage;
         if (this.modes[manifest.id]) {
             throw new Error(`[DesktopModeRegistry] Duplicate desktop mode id: ${manifest.id}`);
         }
-        this.registrationValidators.forEach(validate => validate(manifest));
+        this.registrationValidators.forEach(validate => validate(modePackage));
         // owner 必须先于 listener 写入：运行时描述符在 listener 里创建并读取它。
         if (ownerPluginId) this.owners.set(manifest.id, ownerPluginId);
+        this.packages.set(manifest.id, modePackage);
         this.modes[manifest.id] = manifest;
         registrationRevision.value += 1;
-        this.registrationListeners.forEach(listener => listener(manifest));
+        this.registrationListeners.forEach(listener => listener(modePackage));
     }
 
     /** 只删除仍是同一个 manifest 对象的条目（过期句柄不误删同 id 的新注册）；内置模式不可注销。 */
@@ -91,11 +98,21 @@ class DesktopModeRegistry {
             throw new Error(`[DesktopModeRegistry] Cannot unregister built-in desktop mode: ${id}`);
         }
         if (this.modes[id] !== manifest) return false;
+        const modePackage = this.packages.get(id) ?? { manifest };
         delete this.modes[id];
+        this.packages.delete(id);
         this.owners.delete(id);
         registrationRevision.value += 1;
-        this.unregistrationListeners.forEach(listener => listener(manifest));
+        this.unregistrationListeners.forEach(listener => listener(modePackage));
         return true;
+    }
+
+    getPackage(id: string): DesktopModePackage | undefined {
+        return this.packages.get(id);
+    }
+
+    listPackages(): DesktopModePackage[] {
+        return Array.from(this.packages.values());
     }
 
     onUnregister(listener: DesktopModeUnregistrationListener): () => void {
@@ -136,8 +153,10 @@ export const desktopModeRegistry = new DesktopModeRegistry();
 
 builtinDesktopModes.forEach(mode => desktopModeRegistry.register(mode));
 
-export const registerDesktopMode = (manifest: DesktopModeManifest, ownerPluginId?: string) =>
-    desktopModeRegistry.register(manifest, ownerPluginId);
+export const registerDesktopMode = (
+    input: DesktopModeManifest | DesktopModePackage,
+    ownerPluginId?: string
+) => desktopModeRegistry.register(input, ownerPluginId);
 export const getDesktopModeOwnerPluginId = (desktopModeId: string): string | undefined =>
     desktopModeRegistry.getOwnerPluginId(desktopModeId);
 export const unregisterDesktopMode = (id: string, manifest: DesktopModeManifest): boolean =>
@@ -149,6 +168,8 @@ export const onDesktopModeRegistered = (listener: DesktopModeRegistrationListene
 export const onDesktopModeRegistering = (validator: DesktopModeRegistrationValidator): (() => void) =>
     desktopModeRegistry.onBeforeRegister(validator);
 export const listDesktopModes = () => desktopModeRegistry.list();
+export const listDesktopModePackages = () => desktopModeRegistry.listPackages();
+export const getDesktopModePackage = (desktopModeId: string) => desktopModeRegistry.getPackage(desktopModeId);
 export const getDesktopMode = (desktopModeId: string) => desktopModeRegistry.get(desktopModeId);
 export const getDesktopModeOrDefault = (desktopModeId?: string | null) =>
     getDesktopMode(desktopModeId || DEFAULT_DESKTOP_MODE_ID) || getDesktopMode(DEFAULT_DESKTOP_MODE_ID)!;

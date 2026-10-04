@@ -1,10 +1,12 @@
-import { computed, ref, watch, type ComputedRef, type Ref } from 'vue';
-import { getDesktopModeSettingValue } from '../../desktop-modes/core/registry.js';
+import { computed, ref, watch } from 'vue';
+import { getDesktopModeSettingValue } from '../../../core/registry.js';
+import { useSettings } from '../../../../plugins/settings/useSettings.js';
+import type { DesktopModeShellRuntime } from '../../../../platform/desktop-mode-runtime/shellContracts.js';
 import type {
   TelegramDesktopLeftRoute,
   TelegramMobileTabId,
   TelegramStackRoute
-} from '../../shell/types.js';
+} from './types.js';
 
 const rootRouteForMobileTab = (tabId: TelegramMobileTabId): TelegramStackRoute => {
   if (tabId === 'roles') return { name: 'roleList' };
@@ -13,29 +15,18 @@ const rootRouteForMobileTab = (tabId: TelegramMobileTabId): TelegramStackRoute =
   return { name: 'conversationList' };
 };
 
-export const useTelegramShell = ({
-  activeDesktopModeId,
-  layoutMode,
-  isMobile,
-  activeSettings,
-  viewportWidthPx,
-  widgetWidth,
-  showNexus,
-  activeRightPanel,
-  showCharacterRail,
-  switchMainView
-}: {
-  activeDesktopModeId: Ref<string> | ComputedRef<string>;
-  layoutMode: Ref<'traditional' | 'freeform'> | ComputedRef<'traditional' | 'freeform'>;
-  isMobile: Ref<boolean>;
-  activeSettings: Record<string, unknown>;
-  viewportWidthPx: Ref<number> | ComputedRef<number>;
-  widgetWidth: Ref<number>;
-  showNexus: Ref<boolean>;
-  activeRightPanel: Ref<string>;
-  showCharacterRail: Ref<boolean>;
-  switchMainView: (tabId: string) => void;
-}) => {
+/**
+ * Telegram 模式自有导航状态：桌面左栏路由、移动端四标签页栈、右侧资料面板显隐。
+ * 只通过通用 shell runtime 读写平台状态，不引用 App。
+ */
+export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
+  const { activeSettings } = useSettings();
+  const activeDesktopModeId = computed(() => shell.context.value.activeDesktopModeId);
+  const layoutMode = computed(() => shell.context.value.shellKind);
+  const isMobile = computed(() => shell.context.value.isMobile);
+  const viewportWidthPx = computed(() => shell.context.value.viewportWidthPx);
+  const activeRightPanel = computed(() => shell.context.value.traditional.activeRightPanel);
+
   const isTelegramMobileMode = computed(() =>
     layoutMode.value === 'traditional' && activeDesktopModeId.value === 'telegram' && isMobile.value
   );
@@ -73,27 +64,6 @@ export const useTelegramShell = ({
     }
     return viewportWidthPx.value >= 1180;
   });
-
-  const visibleRightPanel = computed(() => {
-    if (activeDesktopModeId.value !== 'telegram') {
-      return activeRightPanel.value;
-    }
-    if (!shouldShowRightPanel.value) {
-      return 'none';
-    }
-    return activeRightPanel.value;
-  });
-
-  const visibleWidgetWidth = computed(() => {
-    if (activeDesktopModeId.value !== 'telegram') {
-      return widgetWidth.value;
-    }
-    return Math.max(280, widgetWidth.value);
-  });
-
-  const visibleShowNexus = computed(() => (
-    activeDesktopModeId.value === 'telegram' ? false : showNexus.value
-  ));
 
   const setTelegramDesktopLeftRoute = (route: TelegramDesktopLeftRoute) => {
     telegramDesktopLeftRoute.value = route;
@@ -146,8 +116,8 @@ export const useTelegramShell = ({
       return;
     }
 
-    activeRightPanel.value = 'telegram-profile';
     isRightPanelExplicitlyOpened.value = true;
+    shell.actions.traditional.switchRightPanel('telegram-profile');
   };
 
   const openCharacters = () => {
@@ -161,21 +131,17 @@ export const useTelegramShell = ({
 
   const selectBottomNav = (itemId: 'chat' | 'characters' | 'settings' | 'profile') => {
     if (itemId === 'chat') {
-      showCharacterRail.value = false;
       telegramMobileActiveTab.value = 'conversations';
       replaceTelegramMobileRoot('conversations');
-      switchMainView('lumina-chat');
+      shell.actions.navigation.switchMainView('lumina-chat');
       return;
     }
 
     if (itemId === 'characters') {
-      showCharacterRail.value = false;
       telegramMobileActiveTab.value = 'roles';
       replaceTelegramMobileRoot('roles');
       return;
     }
-
-    showCharacterRail.value = false;
 
     if (itemId === 'settings') {
       telegramMobileActiveTab.value = 'settings';
@@ -192,8 +158,9 @@ export const useTelegramShell = ({
       if (modeId !== 'telegram' || mobile || !shouldShowPanel) {
         return;
       }
-      if (activeRightPanel.value === 'none' || activeRightPanel.value === 'lumina-settings') {
-        activeRightPanel.value = 'telegram-profile';
+      const panelId = activeRightPanel.value;
+      if (panelId === 'none' || panelId === 'lumina-settings') {
+        shell.actions.traditional.switchRightPanel('telegram-profile');
       }
     },
     { immediate: true }
@@ -206,10 +173,10 @@ export const useTelegramShell = ({
   });
 
   return {
+    activeDesktopModeId,
+    isMobile,
     isTelegramMobileMode,
-    visibleRightPanel,
-    visibleWidgetWidth,
-    visibleShowNexus,
+    shouldShowRightPanel,
     telegramDesktopLeftRoute,
     telegramMobileActiveTab,
     telegramMobileCurrentRoute,

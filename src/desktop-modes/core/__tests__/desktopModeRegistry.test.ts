@@ -1,12 +1,14 @@
-import { computed } from 'vue';
+import { computed, defineComponent } from 'vue';
 import { describe, expect, it, vi } from 'vitest';
 import {
     ACTIVE_DESKTOP_MODE_STORAGE_KEY,
     getActiveDesktopModeIdFromSettings,
     getDesktopModeOptions,
     getDesktopModeOrDefault,
+    getDesktopModePackage,
     getDesktopModeSettingStorageKey,
     getDesktopModeShell,
+    listDesktopModePackages,
     listDesktopModes,
     registerDesktopMode,
     unregisterDesktopMode,
@@ -204,7 +206,7 @@ describe('desktopModeRegistry', () => {
 
                 expect(unregisterDesktopMode(mode.id, mode)).toBe(true);
                 expect(getDesktopMode(mode.id)).toBeUndefined();
-                expect(listener).toHaveBeenCalledWith(mode);
+                expect(listener).toHaveBeenCalledWith({ manifest: mode });
                 expect(desktopModeRegistrationVersion.value).toBe(before + 1);
             } finally {
                 stop();
@@ -237,6 +239,73 @@ describe('desktopModeRegistry', () => {
                 unregisterDesktopMode(mode.id, mode);
                 expect(resolved.value).toBe('classic');
                 expect(getActiveDesktopModeIdFromSettings(settings)).toBe(mode.id);
+            } finally {
+                unregisterDesktopMode(mode.id, mode);
+            }
+        });
+    });
+
+    describe('mode packages', () => {
+        const createMode = (id: string): DesktopModeManifest => ({
+            id,
+            name: id,
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 1,
+                desktop: { id: `${id}-d`, kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: `${id}-m`, kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            }
+        });
+
+        it('keeps manifest as the public fact and exposes the package bindings separately', () => {
+            const mode = createMode('pkg-mode-a');
+            const ShellStub = defineComponent({ name: 'PkgShellStub', render: () => null });
+
+            registerDesktopMode({
+                manifest: mode,
+                shellRenderer: ShellStub,
+                styles: '[data-desktop-mode="pkg-mode-a"] { color: red; }'
+            });
+
+            try {
+                expect(getDesktopMode(mode.id)).toBe(mode);
+                expect(getDesktopModePackage(mode.id)?.shellRenderer).toBe(ShellStub);
+                expect(getDesktopModePackage(mode.id)?.styles).toContain('pkg-mode-a');
+                expect(listDesktopModePackages().some(modePackage => modePackage.manifest.id === mode.id)).toBe(true);
+            } finally {
+                unregisterDesktopMode(mode.id, mode);
+            }
+
+            expect(getDesktopModePackage(mode.id)).toBeUndefined();
+        });
+
+        it('normalizes manifest-only registrations into a manifest-only package', () => {
+            const mode = createMode('pkg-mode-b');
+            registerDesktopMode(mode);
+            try {
+                expect(getDesktopModePackage(mode.id)).toEqual({ manifest: mode });
+            } finally {
+                unregisterDesktopMode(mode.id, mode);
+            }
+        });
+
+        it('resolves custom variant names through mode rendererVariants and skin variant', () => {
+            const mode: DesktopModeManifest = {
+                ...createMode('pkg-mode-variant'),
+                rendererVariants: { 'chat.main': 'aurora' },
+                surfaceSkins: {
+                    'settings.root': { componentId: 'settings.root', variant: 'glass' }
+                }
+            };
+            registerDesktopMode(mode);
+            try {
+                const context = {
+                    activeSettings: {},
+                    resolvedAppearance: 'light' as const,
+                    desktopModeId: mode.id
+                };
+                expect(resolveSurfaceSkin(mode.id, 'chat.main', context).variant).toBe('aurora');
+                expect(resolveSurfaceSkin(mode.id, 'settings.root', context).variant).toBe('glass');
             } finally {
                 unregisterDesktopMode(mode.id, mode);
             }

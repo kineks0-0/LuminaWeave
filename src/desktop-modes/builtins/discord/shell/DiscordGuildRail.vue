@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue';
-import { useSurfaceSkin } from '../desktop-modes/core/useSurfaceSkin.js';
+import { useSurfaceSkin } from '../../../core/useSurfaceSkin.js';
 
 defineProps<{
   items: { id: string; name: string; icon?: string }[];

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 const appSourceUrl = new URL('../../App.vue', import.meta.url);
 const payloadComposableUrl = new URL('../../composables/shell/useShellRuntimePayload.ts', import.meta.url);
 const shellTypesUrl = new URL('../types.ts', import.meta.url);
-const telegramShellUrl = new URL('../../composables/shell/useTelegramShell.ts', import.meta.url);
+const telegramShellUrl = new URL('../../desktop-modes/builtins/telegram/shell/useTelegramShell.ts', import.meta.url);
 const compositionOutletUrl = new URL('../../platform/desktop-mode-runtime/DesktopCompositionOutlet.vue', import.meta.url);
 
 const readAppSource = () => readFileSync(appSourceUrl, 'utf-8');
@@ -31,7 +31,7 @@ describe('App shell runtime payload composable', () => {
     });
   });
 
-  it('keeps App as the state and lifecycle owner', () => {
+  it('keeps App as the state and lifecycle owner without mode-specific shell wiring', () => {
     const appSource = readAppSource();
 
     [
@@ -40,12 +40,15 @@ describe('App shell runtime payload composable', () => {
       'useShellBootstrap({',
       'useDesktopMode()',
       'useWorkspaceManager({',
-      'useWidgetPanels({',
-      'useTelegramShell({',
-      'useDiscordShell({'
+      'useWidgetPanels({'
     ].forEach((appOwnedBoundary) => {
       expect(appSource).toContain(appOwnedBoundary);
     });
+
+    // E6：模式状态自持，App 不再直连模式 composable。
+    expect(appSource).not.toContain('useTelegramShell(');
+    expect(appSource).not.toContain('useDiscordShell(');
+    expect(appSource).not.toContain('desktop-modes/builtins');
   });
 
   it('removes obsolete chat presentation state from the shell boundary', () => {

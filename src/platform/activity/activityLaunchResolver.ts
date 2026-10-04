@@ -137,30 +137,6 @@ export const resolveActivityLaunchPlacement = (
     };
   }
 
-  if (
-    shellKind === 'traditional'
-    && environment.desktopModeId === 'telegram'
-    && environment.isMobile
-    && activity.pageType === 'standalone'
-  ) {
-    const contractId = getSurfaceContractId(intent);
-    return {
-      placement: 'telegram-stack',
-      intent,
-      activity,
-      panelId,
-      telegramRoute: {
-        name: 'tool',
-        panelId,
-        title: intent.title,
-        icon: intent.icon || '',
-        ...(contractId ? { contractId } : {}),
-        activity,
-        props: intent.props || {}
-      }
-    };
-  }
-
   if (shellKind === 'freeform') {
     return {
       placement: 'workspace-window',

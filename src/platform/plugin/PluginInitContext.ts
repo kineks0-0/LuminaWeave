@@ -4,7 +4,7 @@ import type { PromptFragment } from '../../api/core/hal/prompt/PromptRegistry.js
 import type { InterceptorCallback } from '../../api/core/xml-view/XMLInterceptor.js';
 import type { IncrementalProvider, StateProvider } from '../../api/core/runtime-utils/MemoryManager.js';
 import type { RegisteredPanelConfig } from '../../api/services/DesktopSurfaceService.js';
-import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
+import type { DesktopModeManifest, DesktopModePackage } from '../../desktop-modes/core/types.js';
 import type { PluginRegistrationScope, RegistrationDisposer } from './PluginRegistrationScope.js';
 
 export type PluginMemoryProvider = StateProvider | IncrementalProvider;
@@ -38,8 +38,8 @@ export interface PluginInitContext {
         register(panelId: string, component: Component, options: RegisteredPanelConfig): RegistrationDisposer;
     };
     readonly desktopModes: {
-        /** 注册桌面模式；撤销时只注销本次注册的 manifest。 */
-        register(manifest: DesktopModeManifest): RegistrationDisposer;
+        /** 注册桌面模式；撤销时只注销本次注册的 manifest。传入 package 时可自带 shell renderer、componentOverrides 与 styles。 */
+        register(input: DesktopModeManifest | DesktopModePackage): RegistrationDisposer;
     };
     readonly events: {
         /** 订阅 lwApi 事件；撤销时 off。 */

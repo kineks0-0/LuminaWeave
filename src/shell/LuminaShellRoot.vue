@@ -11,12 +11,12 @@
     :widgetPanels="runtimeSurfaces.widgetPanelList"
     :widgetGroups="runtimeContext.widgetGroups"
     :activeWidgetId="runtimeContext.traditional.activeRightPanel !== 'none' ? runtimeContext.traditional.activeRightPanel : ''"
-    :guildRailVisible="runtimeFrame.discordChannelMarkVisible"
+    :guildRailVisible="runtimeFrame.headerRailVisible"
     @switchMainView="runtimeActions.navigation.switchMainView"
     @closeTab="runtimeActions.navigation.closeTab"
     @close="runtimeActions.navigation.close"
     @toggleSettings="runtimeActions.navigation.openSettingsPanel"
-    @toggleGuildRail="runtimeActions.traditional.toggleDiscordGuildRail"
+    @toggleGuildRail="runtimeActions.traditional.toggleHeaderRail"
     @setDesktopMode="runtimeActions.navigation.updateDesktopMode"
     @openWidget="runtimeActions.traditional.handleOpenWidget"
   />
@@ -36,7 +36,7 @@
         <DesktopCompositionOutlet
           :desktop-mode-id="runtimeContext.activeDesktopModeId"
           :is-mobile="runtimeContext.isMobile"
-          :navigation-collapsed="!runtimeFrame.discordChannelMarkVisible"
+          :navigation-collapsed="!runtimeFrame.headerRailVisible"
         >
           <template #activity>
             <component
@@ -61,12 +61,12 @@
     :widgetPanels="runtimeSurfaces.widgetPanelList"
     :widgetGroups="runtimeContext.widgetGroups"
     :activeWidgetId="runtimeContext.traditional.activeRightPanel !== 'none' ? runtimeContext.traditional.activeRightPanel : ''"
-    :guildRailVisible="runtimeFrame.discordChannelMarkVisible"
+    :guildRailVisible="runtimeFrame.headerRailVisible"
     @switchMainView="runtimeActions.navigation.switchMainView"
     @closeTab="runtimeActions.navigation.closeTab"
     @close="runtimeActions.navigation.close"
     @toggleSettings="runtimeActions.navigation.openSettingsPanel"
-    @toggleGuildRail="runtimeActions.traditional.toggleDiscordGuildRail"
+    @toggleGuildRail="runtimeActions.traditional.toggleHeaderRail"
     @setDesktopMode="runtimeActions.navigation.updateDesktopMode"
     @openWidget="runtimeActions.traditional.handleOpenWidget"
   />
@@ -99,9 +99,10 @@ const props = defineProps<{
 
 const layoutMode = computed(() => props.runtimeContext.shellKind);
 
-const shouldRenderTraditionalHeader = computed(() => (
-  props.runtimeContext.activeDesktopModeId !== 'telegram'
-));
+// 全局 header 的显隐由模式包声明（shellChrome），平台不按模式 ID 特判。
+const shouldRenderTraditionalHeader = computed(() =>
+  desktopModeRuntimeRegistry.get(props.runtimeContext.activeDesktopModeId)?.shellChrome?.hideGlobalHeader !== true
+);
 
 const currentShellRenderer = computed(() => {
   const renderer = desktopModeRuntimeRegistry.get(
@@ -116,7 +117,8 @@ const currentShellRenderer = computed(() => {
 const shellRendererProps = computed(() => ({
   runtimeContext: props.runtimeContext,
   runtimeSurfaces: props.runtimeSurfaces,
-  runtimeActions: props.runtimeActions
+  runtimeActions: props.runtimeActions,
+  runtimeFrame: props.runtimeFrame
 }));
 
 const openConflictViewer = () => {

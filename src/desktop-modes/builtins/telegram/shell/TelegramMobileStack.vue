@@ -84,18 +84,16 @@
 
 <script setup lang="ts">
 import type { CSSProperties } from 'vue';
-import type { ActivityDescriptor } from '../../../platform/activity/types.js';
-import type { SurfaceContractId } from '../../../platform/surface/types.js';
-import ThemedSurfaceOutlet from '../../../platform/surface/ThemedSurfaceOutlet.vue';
-import SurfaceFailure from '../../../platform/surface/SurfaceFailure.vue';
-import { projectSurfaceInput } from '../../../platform/surface/surfaceInputProjection.js';
-import type { CharacterChannelState } from '../../../types/ConversationContextTypes.js';
-import type {
-  ShellRuntimeActions,
-  TelegramStackRoute,
-  WidgetPanelGroup
-} from '../../types.js';
+import type { ActivityDescriptor } from '../../../../platform/activity/types.js';
+import type { SurfaceContractId } from '../../../../platform/surface/types.js';
+import ThemedSurfaceOutlet from '../../../../platform/surface/ThemedSurfaceOutlet.vue';
+import SurfaceFailure from '../../../../platform/surface/SurfaceFailure.vue';
+import { projectSurfaceInput } from '../../../../platform/surface/surfaceInputProjection.js';
+import type { CharacterChannelState } from '../../../../types/ConversationContextTypes.js';
+import type { WidgetPanelGroup } from '../../../../shell/types.js';
+import type { CreateChatConversationInput } from '../../../../types/ConversationContextTypes.js';
 import TelegramUserProfilePage from './TelegramUserProfilePage.vue';
+import type { TelegramStackRoute } from './types.js';
 
 defineProps<{
   route: TelegramStackRoute;
@@ -113,15 +111,15 @@ defineProps<{
   toolProps: Record<string, unknown>;
   toolActivity: ActivityDescriptor;
   toolAuxSidebarMode?: 'hidden';
-  onPopRoute: ShellRuntimeActions['traditional']['popTelegramMobileRoute'];
-  onOpenSession: ShellRuntimeActions['traditional']['openDiscordMobileChatSession'];
-  onCreateSession: ShellRuntimeActions['traditional']['createDiscordMobileChatSession'];
+  onPopRoute: () => void;
+  onOpenSession: (sessionId: string) => void;
+  onCreateSession: (payload: CreateChatConversationInput) => void;
   onOpenPanel: (panelId: string) => void;
   onHandleRoleProfileTool: (panelId: string) => void;
   onOpenRoleProfile: () => void;
-  onUpdateDesktopMode: ShellRuntimeActions['navigation']['updateDesktopMode'];
-  onSelectBottomNav: ShellRuntimeActions['traditional']['selectTelegramBottomNav'];
-  onClose: ShellRuntimeActions['navigation']['close'];
+  onUpdateDesktopMode: (desktopModeId: string) => void;
+  onSelectBottomNav: (itemId: 'chat' | 'characters' | 'settings' | 'profile') => void;
+  onClose: () => void;
 }>();
 </script>
 

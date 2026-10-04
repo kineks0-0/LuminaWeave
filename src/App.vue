@@ -36,32 +36,38 @@ import {
 } from './composables/shell/rootSafeArea.js';
 import { useShellBootstrap } from './composables/shell/useShellBootstrap.js';
 import { useShellRuntimePayload } from './composables/shell/useShellRuntimePayload.js';
-import { useTelegramShell } from './composables/shell/useTelegramShell.js';
+import { useConversationNavigation } from './composables/shell/useConversationNavigation.js';
 import { shouldUpdateDesktopModeSetting } from './composables/shell/desktopModeSelection.js';
 import { useStaleUiReconciler } from './composables/shell/useStaleUiReconciler.js';
 import { useWidgetPanels } from './composables/shell/useWidgetPanels.js';
 import { useWorkspaceNavigation } from './composables/shell/useWorkspaceNavigation.js';
 import { useActivityLaunchState } from './composables/shell/useActivityLaunchState.js';
-import { useDiscordShell } from './composables/shell/useDiscordShell.js';
 import { useDesktopExperienceRuntime } from './composables/useDesktopExperienceRuntime.js';
-import { resolveActivityLaunchPlacement } from './platform/activity/activityLaunchResolver.js';
+import {
+  normalizeActivityDescriptor,
+  resolveActivityLaunchPlacement
+} from './platform/activity/activityLaunchResolver.js';
 import {
   createActivityStatusBarStyle,
   resolveActivityStatusBarAppearance
 } from './platform/activity/statusBarAppearance.js';
 import { applyAndroidStatusBarAppearance } from './platform/activity/androidStatusBarBridge.js';
-import type { ActivityLaunchIntent, ActivityStatusBarDescriptor } from './platform/activity/types.js';
+import type {
+  ActivityLaunchIntent,
+  ActivityModeHandler,
+  ActivityStatusBarDescriptor
+} from './platform/activity/types.js';
 import {
   getDesktopModeOptions,
+  getDesktopModeSettingStorageKey,
+  getDesktopModeSettingValue,
   resolveDesktopModeValues
 } from './desktop-modes/core/registry.js';
+import { desktopModeRuntimeRegistry } from './platform/desktop-mode-runtime/DesktopModeRuntimeRegistry.js';
 import { useSurfaceSkin } from './desktop-modes/core/useSurfaceSkin.js';
 import { useDesktopMode } from './desktop-modes/core/useDesktopMode.js';
 import type { ThemeTraditionalNavigationPreset } from './desktop-modes/core/types.js';
-import type {
-  DynamicTabConfig,
-  TelegramRailToolEntry
-} from './shell/types.js';
+import type { DynamicTabConfig } from './shell/types.js';
 import { registerLuminaPlugins } from './bootstrap/registerPlugins.js';
 import { HostDetector } from './api/core/host-drivers/HostDetector.js';
 
@@ -107,7 +113,6 @@ const activeRightPanel = ref(lwStorage.get('luminaWeave.activeRightPanel', 'lumi
 const lastKnownRightPanel = ref(lwStorage.get('luminaWeave.activeRightPanel', 'lumina-settings', 'Global'));
 
 const showWidgetDropdown = ref(false);
-const showNexus = ref(lwStorage.get('luminaWeave.showNexus', true, 'Global'));
 
 const mainPlugins = computed(() => pluginManager.getPluginsInSlot('mainView'));
 const widgetPlugins = computed(() => {
@@ -226,8 +231,6 @@ const resolveRegisteredPanelSurface = (panelId: string) =>
 const {
   widgetWidth,
   isResizing,
-  telegramLeftRailWidth,
-  isTelegramLeftRailResizing,
   activeWidgetPlugin,
   activeRegisteredPanel,
   widgetPanelList,
@@ -236,17 +239,14 @@ const {
   switchRightPanel,
   handleOpenWidget,
   closeWidgetPanel,
-  initResize,
-  initLeftRailResize
+  initResize
 } = useWidgetPanels({
   activeRightPanel,
   lastKnownRightPanel,
   showWidgetDropdown,
-  showNexus,
   widgetPlugins,
   layoutMode,
   isMobile,
-  activeDesktopModeId,
   workspaceAppMap,
   openWorkspaceApp,
   getPluginName
@@ -279,41 +279,42 @@ const {
   runtime: desktopExperienceRuntime,
   contextStore
 } = useDesktopExperienceRuntime();
-const {
-  characterChannelState,
-  discordChannelMarkVisible,
-  isDiscordMobileMode,
-  shouldShowDiscordMobileShell,
-  shouldShowDiscordGuildRail,
-  discordMobileGuildRailPosition,
-  discordMobileCharacterEntryPosition,
-  shouldShowCharacterNavigationPane,
-  discordGuildEntries,
-  showDiscordMobileCharacterRail,
-  discordMobileMainStyle,
-  discordMobileCharacterEntryStyle,
-  handleDiscordMobileMainViewSwitch,
-  toggleDiscordGuildRail,
-  openDiscordChatSession,
-  openDiscordMobileChatSession,
-  createDiscordChatSession,
-  createDiscordMobileChatSession
-} = useDiscordShell({
-  activeDesktopModeId,
-  layoutMode,
-  isMobile,
-  activeSettings,
-  traditionalLeftRail: computed(() => traditionalNavigationPreset.value.leftRail),
-  mainPlugins,
-  dynamicTabs,
+
+const { openSession: openConversationSession, createSession: createConversationSession } = useConversationNavigation({
   activeMainTab,
-  desktopExperienceRuntime,
-  contextStore,
-  updateSetting,
-  onSwitchMainView: (tabId) => {
-    handleSwitchMainView(tabId);
-  }
+  runtime: desktopExperienceRuntime,
+  switchMainView: (tabId) => handleSwitchMainView(tabId)
 });
+
+const updateDesktopModeSetting = (key: string, value: unknown) =>
+  updateSetting(getDesktopModeSettingStorageKey(activeDesktopModeId.value, key), value);
+
+const activityModeHandlers = new Set<ActivityModeHandler>();
+const registerActivityModeHandler = (handler: ActivityModeHandler) => {
+  activityModeHandlers.add(handler);
+  return () => {
+    activityModeHandlers.delete(handler);
+  };
+};
+
+const characterChannelState = computed(() => desktopExperienceRuntime.character.state.value);
+
+// 全局 header 导航开关由当前模式的 shellChrome 声明，平台不按模式 ID 特判。
+const activeModeDescriptor = computed(() => desktopModeRuntimeRegistry.get(activeDesktopModeId.value));
+const headerRailToggleConfig = computed(() => activeModeDescriptor.value?.shellChrome?.headerRailToggle);
+const headerRailVisible = computed(() => {
+  const config = headerRailToggleConfig.value;
+  if (!config) return true;
+  return getDesktopModeSettingValue(activeSettings, activeDesktopModeId.value, config.settingKey, config.default ?? true) !== false;
+});
+const toggleHeaderRail = async () => {
+  const config = headerRailToggleConfig.value;
+  if (!config) return;
+  await updateSetting(
+    getDesktopModeSettingStorageKey(activeDesktopModeId.value, config.settingKey),
+    !headerRailVisible.value
+  );
+};
 
 const {
   viewportHeightPx,
@@ -455,69 +456,8 @@ const shellWidgetSurfaceVariant = computed(() =>
   traditionalNavigationPreset.value.widgetVariant || surfacePreset.value.widgetSurfaceVariant || 'default'
 );
 
-const updateShowDiscordMobileCharacterRail = (value: boolean) => {
-  showDiscordMobileCharacterRail.value = value;
-};
-
-const telegramToolEntries = computed<TelegramRailToolEntry[]>(() => {
-  const launcher = pluginManager.getPlugin('lumina-launcher');
-  const forge = pluginManager.getPlugin('lumina-forge');
-  const entries: TelegramRailToolEntry[] = [];
-
-  if (launcher) {
-    entries.push({
-      id: 'lumina-launcher',
-      label: launcher.name || '启动台',
-      description: '打开 LuminaWeave 功能入口',
-      icon: launcher.icon || '↗'
-    });
-  }
-  if (forge) {
-    entries.push({
-      id: 'lumina-forge',
-      label: forge.name || '制卡工坊',
-      description: '创建与整理角色卡',
-      icon: forge.icon || '✦'
-    });
-  }
-
-  return entries;
-});
-
-const activeTelegramToolId = computed<string | null>(() => {
-  if (activeDesktopModeId.value !== 'telegram') return null;
-  return activeMainTab.value === 'lumina-launcher' || activeMainTab.value === 'lumina-forge'
-    ? activeMainTab.value
-    : null;
-});
-
-const openTelegramToolEntry = (toolId: TelegramRailToolEntry['id']) => {
-  showDiscordMobileCharacterRail.value = false;
-  handleSwitchMainView(toolId);
-};
-
-const handleOpenDiscordChatSession = async (sessionId: string) => {
-  await openDiscordChatSession(sessionId);
-};
-
-const handleOpenDiscordMobileChatSession = async (sessionId: string) => {
-  await openDiscordMobileChatSession(sessionId);
-};
-
-const handleCreateDiscordChatSession = async (payload: Parameters<typeof createDiscordChatSession>[0]) => {
-  await createDiscordChatSession(payload);
-};
-
-const handleCreateDiscordMobileChatSession = async (payload: Parameters<typeof createDiscordMobileChatSession>[0]) => {
-  await createDiscordMobileChatSession(payload);
-};
-
 const toggleWidgetDropdown = () => {
   showWidgetDropdown.value = !showWidgetDropdown.value;
-};
-
-const updateShowNexus = (value: boolean) => {
-  showNexus.value = value;
 };
 
 const handlePanelBodyElementChange = (element: HTMLElement | null) => {
@@ -551,33 +491,44 @@ const resolveWorkspaceActivityAppId = (preferredAppId: string | undefined, panel
   return candidates.find((candidate) => workspaceAppMap.value.has(candidate)) || candidates[0] || '';
 };
 
+const dispatchActivityChange = (
+  activity: ReturnType<typeof normalizeActivityDescriptor>,
+  placement: string,
+  panelId?: string
+) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('lw:activity-change', {
+      detail: { activity, placement, panelId }
+    }));
+  }
+};
+
 const handleLaunchActivity = (intent: ActivityLaunchIntent) => {
-  const resolved = resolveActivityLaunchPlacement(intent, {
+  const environment = {
     shellKind: shellKind.value,
     isMobile: isMobile.value,
     desktopModeId: activeDesktopModeId.value
-  });
-  applyLaunchResolution(resolved);
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('lw:activity-change', {
-      detail: {
-        activity: resolved.activity,
-        placement: resolved.placement,
-        panelId: resolved.panelId
-      }
-    }));
+  };
+
+  // 模式 shell 先接管自己声明的 Activity 形态（如 Telegram 移动页面栈）。
+  for (const handler of activityModeHandlers) {
+    const result = handler(intent, environment);
+    if (!result) continue;
+    if (result === true) {
+      dispatchActivityChange(normalizeActivityDescriptor(intent.activity), 'main');
+      return;
+    }
+    dispatchActivityChange(result.activity, result.placement, result.panelId);
+    return;
   }
+
+  const resolved = resolveActivityLaunchPlacement(intent, environment);
+  applyLaunchResolution(resolved);
+  dispatchActivityChange(resolved.activity, resolved.placement, resolved.panelId);
 
   if (resolved.placement === 'modal') {
     if (resolved.modalEvent) {
       lwApi.emit(resolved.modalEvent, intent.props || {});
-    }
-    return;
-  }
-
-  if (resolved.placement === 'telegram-stack') {
-    if (resolved.telegramRoute) {
-      pushTelegramMobileRoute(resolved.telegramRoute);
     }
     return;
   }
@@ -666,33 +617,6 @@ const openSettingsPanel = () => {
   activeRightPanel.value = 'lumina-settings';
 };
 
-const {
-  isTelegramMobileMode,
-  visibleRightPanel,
-  visibleWidgetWidth,
-  visibleShowNexus,
-  telegramDesktopLeftRoute,
-  telegramMobileActiveTab,
-  telegramMobileCurrentRoute,
-  openProfilePanel: openTelegramProfilePanel,
-  openCharacters: openTelegramCharacters,
-  selectBottomNav: handleTelegramBottomNavSelect,
-  setTelegramDesktopLeftRoute,
-  pushTelegramMobileRoute,
-  popTelegramMobileRoute
-} = useTelegramShell({
-  activeDesktopModeId,
-  layoutMode,
-  isMobile,
-  activeSettings,
-  viewportWidthPx,
-  widgetWidth,
-  showNexus,
-  activeRightPanel,
-  showCharacterRail: showDiscordMobileCharacterRail,
-  switchMainView: handleSwitchMainView
-});
-
 const handleSwitchRightPanel = (panelId: string) => {
   clearTransientActivityMetadata();
   switchRightPanel(panelId);
@@ -706,23 +630,6 @@ const handleOpenWidgetWithActivityReset = (panelId: string) => {
 const handleCloseWidgetPanel = () => {
   clearTransientActivityMetadata();
   closeWidgetPanel();
-};
-
-const pushTelegramMobileRouteWithActivityReset = (route: Parameters<typeof pushTelegramMobileRoute>[0]) => {
-  clearTransientActivityMetadata();
-  pushTelegramMobileRoute(route);
-};
-
-const popTelegramMobileRouteWithActivityReset = () => {
-  clearTransientActivityMetadata();
-  popTelegramMobileRoute();
-};
-
-const handleTelegramBottomNavSelectWithActivityReset = (
-  itemId: Parameters<typeof handleTelegramBottomNavSelect>[0]
-) => {
-  clearTransientActivityMetadata();
-  handleTelegramBottomNavSelect(itemId);
 };
 
 const createWorkspaceStageAndCloseMenu = () => {
@@ -781,7 +688,6 @@ const toggleExpand = () => {
     showWorkspaceNavigation.value = false;
     workspaceNavigationPeek.value = false;
     clearWorkspaceNavigationHideTimer();
-    showDiscordMobileCharacterRail.value = false;
     return;
   }
 
@@ -814,37 +720,20 @@ const {
     desktopModeOptions,
     activeMainTab,
     isMobile,
+    viewportWidthPx,
     saveStatus,
     widgetGroups,
     characterChannelState,
     traditional: {
-      shouldShowDiscordGuildRail,
-      discordGuildEntries,
-      shouldShowCharacterNavigationPane,
-      isDiscordMobileMode,
-      isTelegramMobileMode,
-      shouldShowDiscordMobileShell,
-      discordMobileGuildRailPosition,
-      discordMobileCharacterEntryPosition,
-      showDiscordMobileCharacterRail,
-      discordMobileCharacterEntryStyle,
-      telegramToolEntries,
-      activeTelegramToolId,
-      telegramDesktopLeftRoute,
-      telegramMobileActiveTab,
-      telegramMobileCurrentRoute,
       isTimelineLoadedOnce,
       sidebarMode,
-      activeRightPanel: visibleRightPanel,
-      widgetWidth: visibleWidgetWidth,
+      activeRightPanel,
+      widgetWidth,
       isResizing,
-      telegramLeftRailWidth,
-      isTelegramLeftRailResizing,
       activeWidgetPlugin,
       activeRegisteredPanel,
       activeRightPanelActivity,
-      showWidgetDropdown,
-      showNexus: visibleShowNexus
+      showWidgetDropdown
     },
     freeform: {
       showWorkspaceMenu,
@@ -862,7 +751,6 @@ const {
       mainPlugins,
       mainSurfaceVariant: shellMainSurfaceVariant,
       mainSurfaceStyle: shellMainSurfaceStyle,
-      mobileMainStyle: discordMobileMainStyle,
       widgetSurfaceVariant: shellWidgetSurfaceVariant,
       widgetStyle: shellWidgetStyle
     },
@@ -885,31 +773,31 @@ const {
       closeTab,
       close: toggleExpand,
       updateDesktopMode,
-      openSettingsPanel
+      openSettingsPanel,
+      clearActivityMetadata: clearTransientActivityMetadata
+    },
+    events: {
+      on(event, listener) {
+        lwApi.on(event, listener);
+        return () => {
+          lwApi.off(event, listener);
+        };
+      }
     },
     frame: {
       panelBodyElementChange: handlePanelBodyElementChange
     },
     traditional: {
-      toggleDiscordGuildRail,
+      toggleHeaderRail,
       handleOpenWidget: handleOpenWidgetWithActivityReset,
-      openDiscordChatSession: handleOpenDiscordChatSession,
-      openDiscordMobileChatSession: handleOpenDiscordMobileChatSession,
-      createDiscordChatSession: handleCreateDiscordChatSession,
-      createDiscordMobileChatSession: handleCreateDiscordMobileChatSession,
-      handleDiscordMobileMainViewSwitch,
-      updateShowDiscordMobileCharacterRail,
-      openTelegramToolEntry,
-      setTelegramDesktopLeftRoute,
-      pushTelegramMobileRoute: pushTelegramMobileRouteWithActivityReset,
-      popTelegramMobileRoute: popTelegramMobileRouteWithActivityReset,
+      openConversationSession,
+      createConversationSession,
+      updateDesktopModeSetting,
+      registerActivityModeHandler,
       resizeStart: initResize,
-      telegramLeftRailResizeStart: initLeftRailResize,
       toggleWidgetDropdown,
       switchRightPanel: handleSwitchRightPanel,
-      closePanel: handleCloseWidgetPanel,
-      updateShowNexus,
-      selectTelegramBottomNav: handleTelegramBottomNavSelectWithActivityReset
+      closePanel: handleCloseWidgetPanel
     },
     freeform: {
       createWorkspaceStage: createWorkspaceStageAndCloseMenu,
@@ -933,7 +821,7 @@ const {
     traditionalHeaderPosition,
     panelBodyStyle: shellPanelBodyStyle,
     showSplash,
-    discordChannelMarkVisible
+    headerRailVisible
   }
 });
 
@@ -953,8 +841,6 @@ useShellBootstrap({
   onReady: () => { },
   onShowConflictPanel: () => shellRootRef.value?.openConflictViewer(),
   onShowSyncReportPanel: () => shellRootRef.value?.openSyncReportViewer(),
-  onOpenTelegramProfile: openTelegramProfilePanel,
-  onOpenTelegramCharacters: openTelegramCharacters,
   onLayoutReady: () => {
     if (layoutMode.value === 'freeform') {
       showWorkspaceNavigation.value = shouldShowWorkspaceNavigationOnEntry();

@@ -246,4 +246,48 @@ describe('DesktopSurfaceService panel unregistration', () => {
         expect(emit).toHaveBeenCalledWith('DESKTOP_MODES_CHANGED', 'svc-mode');
         expect(emit.mock.calls.filter(call => call[0] === 'DESKTOP_MODES_CHANGED')).toHaveLength(1);
     });
+
+    it('rejects runtime-owned mode packages that override official surface contracts', () => {
+        const service = new DesktopSurfaceService(vi.fn());
+        const manifest: DesktopModeManifest = {
+            id: 'svc-mode-owned-override',
+            name: 'Svc Owned Override',
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 1,
+                desktop: { id: 'svc-owned-d', kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: 'svc-owned-m', kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            }
+        };
+
+        expect(() => service.registerDesktopMode({
+            manifest,
+            componentOverrides: [{ contractId: 'telegram.infoPanel', component: DummyPanel }]
+        }, 'plugin-x')).toThrow(/official surface contract/i);
+
+        expect(getDesktopMode(manifest.id)).toBeUndefined();
+    });
+
+    it('allows builtin-owned mode packages to override official surface contracts when cleaned up', () => {
+        const service = new DesktopSurfaceService(vi.fn());
+        const manifest: DesktopModeManifest = {
+            id: 'svc-mode-builtin-override',
+            name: 'Svc Builtin Override',
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 1,
+                desktop: { id: 'svc-builtin-d', kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: 'svc-builtin-m', kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            }
+        };
+
+        const dispose = service.registerDesktopMode({
+            manifest,
+            componentOverrides: [{ contractId: 'telegram.infoPanel', component: DummyPanel }]
+        });
+
+        expect(getDesktopMode(manifest.id)).toBe(manifest);
+        dispose();
+        expect(getDesktopMode(manifest.id)).toBeUndefined();
+    });
 });

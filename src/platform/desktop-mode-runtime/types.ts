@@ -4,6 +4,7 @@ import type { SurfaceContractId, SurfaceRendererDefinition } from '../surface/ty
 import type {
     DesktopModeComposition,
     DesktopModeManifest,
+    DesktopModeShellChrome,
     DesktopModeShellKind
 } from '../../desktop-modes/core/types.js';
 
@@ -41,6 +42,7 @@ export interface DesktopModeRuntimeDescriptor {
     tokens?: Record<string, string | number>;
     settingsSchema?: Record<string, SettingDefinition>;
     composition: DesktopModeComposition;
+    shellChrome?: DesktopModeShellChrome;
     /** 经插件 context 注册该模式的插件 id；内置与门面注册的模式没有。 */
     ownerPluginId?: string;
 }

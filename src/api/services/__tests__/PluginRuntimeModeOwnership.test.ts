@@ -12,7 +12,7 @@ import type { EmptySurfaceData, SurfaceContractSpec } from '../../../platform/su
 import type { LuminaPlugin } from '../../../types/plugin.js';
 import { queryPluginDependents } from '../PluginRuntimeService.js';
 
-vi.mock('../../../shell/modes/telegram/TelegramUserInfoPanel.vue', () => ({
+vi.mock('../../../desktop-modes/builtins/telegram/shell/TelegramUserInfoPanel.vue', () => ({
     default: defineComponent({ name: 'TelegramUserInfoPanelStub', template: '<div />' })
 }));
 vi.mock('../../../shell/traditional/TraditionalShell.vue', () => ({

@@ -261,7 +261,7 @@ const props = withDefaults(defineProps<{
   isMobile?: boolean;
   activeDesktopModeId?: string;
   desktopModes?: { value: string; label: string; description?: string }[];
-  variant?: 'default' | 'discord';
+  variant?: string;
   headerPlacement?: 'top' | 'bottom';
   widgetPanels?: { id: string; name: string; icon: string }[];
   widgetGroups?: { label?: string; items: { id: string; name: string; icon: string }[] }[];

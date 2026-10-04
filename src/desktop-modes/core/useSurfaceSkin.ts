@@ -9,7 +9,7 @@ import {
 } from './registry.js';
 import type { ResolvedDesktopAppearance } from './types.js';
 
-const mediaQuery = typeof window !== 'undefined'
+const mediaQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     ? window.matchMedia('(prefers-color-scheme: dark)')
     : null;
 

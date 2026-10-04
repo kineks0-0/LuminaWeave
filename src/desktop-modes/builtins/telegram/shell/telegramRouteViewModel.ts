@@ -1,6 +1,6 @@
-import type { ActivityDescriptor } from '../../../platform/activity/types.js';
-import type { SurfaceContractId } from '../../../platform/surface/types.js';
-import type { TelegramStackRoute } from '../../types.js';
+import type { ActivityDescriptor } from '../../../../platform/activity/types.js';
+import type { SurfaceContractId } from '../../../../platform/surface/types.js';
+import type { TelegramStackRoute } from './types.js';
 
 type SurfaceContractResolver = (id: string) => SurfaceContractId | null;
 

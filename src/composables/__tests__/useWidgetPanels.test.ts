@@ -35,7 +35,6 @@ describe('useWidgetPanels', () => {
       activeRightPanel: ref('lumina-settings'),
       lastKnownRightPanel: ref('lumina-settings'),
       showWidgetDropdown: ref(false),
-      showNexus: ref(true),
       widgetPlugins: computed(() => []),
       layoutMode: ref<'traditional' | 'freeform'>('freeform'),
       isMobile: ref(false),
@@ -56,7 +55,6 @@ describe('useWidgetPanels', () => {
       activeRightPanel: ref('lumina-settings'),
       lastKnownRightPanel: ref('lumina-settings'),
       showWidgetDropdown: ref(false),
-      showNexus: ref(true),
       widgetPlugins: computed(() => [{
         id: 'lumina-settings',
         name: '设置',
@@ -100,7 +98,6 @@ describe('useWidgetPanels', () => {
       activeRightPanel: ref('lumina-settings'),
       lastKnownRightPanel: ref('lumina-settings'),
       showWidgetDropdown: ref(false),
-      showNexus: ref(true),
       widgetPlugins: computed(() => []),
       layoutMode: ref<'traditional' | 'freeform'>('traditional'),
       isMobile: ref(true),
@@ -133,7 +130,6 @@ describe('useWidgetPanels', () => {
       activeRightPanel,
       lastKnownRightPanel: ref('lumina-settings'),
       showWidgetDropdown: ref(true),
-      showNexus: ref(true),
       widgetPlugins: computed(() => []),
       layoutMode: ref<'traditional' | 'freeform'>('traditional'),
       isMobile: ref(false),
@@ -148,19 +144,17 @@ describe('useWidgetPanels', () => {
     scope.stop();
   });
 
-  it('allows telegram right panel resize beyond the old fixed 800px cap', () => {
+  it('clamps right panel resize to the generic width range', () => {
     const listeners = installResizeDocument();
     Object.defineProperty(window, 'innerWidth', { value: 2000, configurable: true });
     const scope = effectScope();
     const panels = scope.run(() => useWidgetPanels({
-      activeRightPanel: ref('telegram-profile'),
-      lastKnownRightPanel: ref('telegram-profile'),
+      activeRightPanel: ref('lumina-settings'),
+      lastKnownRightPanel: ref('lumina-settings'),
       showWidgetDropdown: ref(false),
-      showNexus: ref(true),
       widgetPlugins: computed(() => []),
       layoutMode: ref<'traditional' | 'freeform'>('traditional'),
       isMobile: ref(false),
-      activeDesktopModeId: ref('telegram'),
       workspaceAppMap: computed(() => new Map()),
       openWorkspaceApp: vi.fn(),
       getPluginName: (pluginId) => pluginId || ''
@@ -168,34 +162,7 @@ describe('useWidgetPanels', () => {
 
     panels.initResize();
     listeners.mousemove?.({ clientX: 1100 } as MouseEvent);
-    expect(panels.widgetWidth.value).toBe(900);
-    listeners.mouseup?.({} as MouseEvent);
-    scope.stop();
-  });
-
-  it('keeps telegram left and right panel resizing from covering the main chat width', () => {
-    const listeners = installResizeDocument();
-    Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true });
-    const scope = effectScope();
-    const panels = scope.run(() => useWidgetPanels({
-      activeRightPanel: ref('telegram-profile'),
-      lastKnownRightPanel: ref('telegram-profile'),
-      showWidgetDropdown: ref(false),
-      showNexus: ref(true),
-      widgetPlugins: computed(() => []),
-      layoutMode: ref<'traditional' | 'freeform'>('traditional'),
-      isMobile: ref(false),
-      activeDesktopModeId: ref('telegram'),
-      workspaceAppMap: computed(() => new Map()),
-      openWorkspaceApp: vi.fn(),
-      getPluginName: (pluginId) => pluginId || ''
-    }))!;
-
-    panels.widgetWidth.value = 360;
-    panels.initLeftRailResize();
-    listeners.mousemove?.({ clientX: 900 } as MouseEvent);
-    expect(panels.telegramLeftRailWidth.value).toBeLessThanOrEqual(1200 - panels.widgetWidth.value - 520);
-    expect(panels.telegramLeftRailWidth.value).toBeGreaterThanOrEqual(260);
+    expect(panels.widgetWidth.value).toBe(800);
     listeners.mouseup?.({} as MouseEvent);
     scope.stop();
   });

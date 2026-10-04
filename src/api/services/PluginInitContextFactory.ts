@@ -102,10 +102,9 @@ export const createPluginInitContext = (
             }
         },
         desktopModes: {
-            register(manifest) {
-                // DesktopModeManifest 目前没有 componentOverrides 字段（运行时 override 只由内置 telegram 描述符硬编码），
-                // 所以这里没有官方 contract 命名空间可检查；若将来新增该字段，需在此补校验。
-                return track(deps.desktopSurface.registerDesktopMode(manifest, pluginId));
+            register(input) {
+                // 官方 contract 保留检查在 registerDesktopMode 内统一执行（ownerPluginId 存在时拒绝覆盖官方 contract）。
+                return track(deps.desktopSurface.registerDesktopMode(input, pluginId));
             }
         },
         events: {

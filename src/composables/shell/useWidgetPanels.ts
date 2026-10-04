@@ -6,13 +6,10 @@ import { getPrimarySurfaceContractIdForPlugin } from '../../platform/plugin/offi
 import type { LuminaPlugin } from '../../types/plugin.js';
 import type { RegisteredPanelEntry, WidgetPanelGroup, WidgetPanelItem, WidgetPluginEntry } from '../../shell/types.js';
 
-const TELEGRAM_LEFT_RAIL_STORAGE_KEY = 'luminaWeave.telegram.leftRailWidth';
 const RIGHT_PANEL_STORAGE_KEY = 'luminaWeave.widgetWidth';
-const TELEGRAM_LEFT_RAIL_DEFAULT_WIDTH = 320;
-const TELEGRAM_LEFT_RAIL_MIN_WIDTH = 260;
-const TELEGRAM_RIGHT_PANEL_DEFAULT_WIDTH = 360;
-const TELEGRAM_RIGHT_PANEL_MIN_WIDTH = 280;
-const TELEGRAM_MAIN_MIN_WIDTH = 520;
+const RIGHT_PANEL_DEFAULT_WIDTH = 360;
+const RIGHT_PANEL_MIN_WIDTH = 300;
+const RIGHT_PANEL_MAX_WIDTH = 800;
 const desktopSurfaceService = lwApi.services.desktopSurface;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), Math.max(min, max));
@@ -38,11 +35,9 @@ export const useWidgetPanels = ({
   activeRightPanel,
   lastKnownRightPanel,
   showWidgetDropdown,
-  showNexus,
   widgetPlugins,
   layoutMode,
   isMobile,
-  activeDesktopModeId,
   workspaceAppMap,
   openWorkspaceApp,
   getPluginName
@@ -50,34 +45,16 @@ export const useWidgetPanels = ({
   activeRightPanel: Ref<string>;
   lastKnownRightPanel: Ref<string>;
   showWidgetDropdown: Ref<boolean>;
-  showNexus: Ref<boolean>;
   widgetPlugins: ComputedRef<LuminaPlugin[]>;
   layoutMode: Ref<'traditional' | 'freeform'> | ComputedRef<'traditional' | 'freeform'>;
   isMobile: Ref<boolean>;
-  activeDesktopModeId?: Ref<string> | ComputedRef<string>;
   workspaceAppMap: ComputedRef<Map<string, unknown>>;
   openWorkspaceApp: (appId: string) => void;
   getPluginName: (pluginId: string | null) => string;
 }) => {
-  const widgetWidth = ref(Number(lwStorage.get(RIGHT_PANEL_STORAGE_KEY, TELEGRAM_RIGHT_PANEL_DEFAULT_WIDTH, 'Global')));
-  const telegramLeftRailWidth = ref(Number(lwStorage.get(TELEGRAM_LEFT_RAIL_STORAGE_KEY, TELEGRAM_LEFT_RAIL_DEFAULT_WIDTH, 'Global')));
+  const widgetWidth = ref(Number(lwStorage.get(RIGHT_PANEL_STORAGE_KEY, RIGHT_PANEL_DEFAULT_WIDTH, 'Global')));
   const isResizing = ref(false);
-  const isTelegramLeftRailResizing = ref(false);
   let rightResizeStart: ResizeStartState | null = null;
-  let leftResizeStart: ResizeStartState | null = null;
-  const isTelegramDesktopMode = () => (
-    activeDesktopModeId?.value === 'telegram'
-    && layoutMode.value === 'traditional'
-    && !isMobile.value
-  );
-
-  const getTelegramRightPanelMaxWidth = () => (
-    window.innerWidth - telegramLeftRailWidth.value - TELEGRAM_MAIN_MIN_WIDTH
-  );
-
-  const getTelegramLeftRailMaxWidth = () => (
-    window.innerWidth - widgetWidth.value - TELEGRAM_MAIN_MIN_WIDTH
-  );
 
   const activeWidgetPlugin = computed<WidgetPluginEntry | null>(() => (
     pluginManager.getPlugin(activeRightPanel.value) ?? null
@@ -229,19 +206,7 @@ export const useWidgetPanels = ({
     const newWidth = rightResizeStart
       ? rightResizeStart.width + (rightResizeStart.pointerX - event.clientX)
       : window.innerWidth - event.clientX;
-    if (isTelegramDesktopMode()) {
-      widgetWidth.value = clamp(newWidth, TELEGRAM_RIGHT_PANEL_MIN_WIDTH, getTelegramRightPanelMaxWidth());
-      return;
-    }
-    widgetWidth.value = clamp(newWidth, 300, 800);
-  };
-
-  const handleLeftRailResize = (event: MouseEvent) => {
-    if (!isTelegramLeftRailResizing.value) return;
-    const newWidth = leftResizeStart
-      ? leftResizeStart.width + (event.clientX - leftResizeStart.pointerX)
-      : event.clientX;
-    telegramLeftRailWidth.value = clamp(newWidth, TELEGRAM_LEFT_RAIL_MIN_WIDTH, getTelegramLeftRailMaxWidth());
+    widgetWidth.value = clamp(newWidth, RIGHT_PANEL_MIN_WIDTH, RIGHT_PANEL_MAX_WIDTH);
   };
 
   const stopResize = () => {
@@ -256,41 +221,12 @@ export const useWidgetPanels = ({
   };
 
   const initResize = (event?: MouseEvent) => {
-    if (isTelegramLeftRailResizing.value) {
-      stopLeftRailResize();
-    }
     rightResizeStart = event
       ? { pointerX: event.clientX, width: widgetWidth.value }
       : null;
     isResizing.value = true;
     document.addEventListener('mousemove', handleResize);
     document.addEventListener('mouseup', stopResize);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  };
-
-  const stopLeftRailResize = () => {
-    if (!isTelegramLeftRailResizing.value) return;
-    isTelegramLeftRailResizing.value = false;
-    leftResizeStart = null;
-    document.removeEventListener('mousemove', handleLeftRailResize);
-    document.removeEventListener('mouseup', stopLeftRailResize);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    lwStorage.set(TELEGRAM_LEFT_RAIL_STORAGE_KEY, telegramLeftRailWidth.value, 'Global');
-  };
-
-  const initLeftRailResize = (event?: MouseEvent) => {
-    if (!isTelegramDesktopMode()) return;
-    if (isResizing.value) {
-      stopResize();
-    }
-    leftResizeStart = event
-      ? { pointerX: event.clientX, width: telegramLeftRailWidth.value }
-      : null;
-    isTelegramLeftRailResizing.value = true;
-    document.addEventListener('mousemove', handleLeftRailResize);
-    document.addEventListener('mouseup', stopLeftRailResize);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };
@@ -302,14 +238,9 @@ export const useWidgetPanels = ({
     }
   });
 
-  watch(showNexus, (value) => {
-    lwStorage.set('luminaWeave.showNexus', value, 'Global');
-  });
-
   if (getCurrentInstance()) {
     onUnmounted(() => {
       stopResize();
-      stopLeftRailResize();
     });
   }
 
@@ -317,11 +248,8 @@ export const useWidgetPanels = ({
     activeRightPanel,
     lastKnownRightPanel,
     showWidgetDropdown,
-    showNexus,
     widgetWidth,
     isResizing,
-    telegramLeftRailWidth,
-    isTelegramLeftRailResizing,
     activeWidgetPlugin,
     activeRegisteredPanel,
     registeredPanelItems,
@@ -333,8 +261,6 @@ export const useWidgetPanels = ({
     closeWidgetPanel,
     initResize,
     stopResize,
-    initLeftRailResize,
-    stopLeftRailResize,
     getPluginName
   };
 };

@@ -1,88 +1,114 @@
 import {
-    listDesktopModes,
+    listDesktopModePackages,
     onDesktopModeRegistered,
     onDesktopModeRegistering,
     onDesktopModeUnregistered,
     getDesktopModeOwnerPluginId
 } from '../../desktop-modes/core/registry.js';
-import type { DesktopModeManifest } from '../../desktop-modes/core/types.js';
+import type { DesktopModePackage } from '../../desktop-modes/core/types.js';
+import { builtinDesktopModeBindings } from '../../desktop-modes/builtins/bindings.js';
 import FreeformShell from '../../shell/freeform/FreeformShell.vue';
 import TraditionalShell from '../../shell/traditional/TraditionalShell.vue';
-import TelegramUserInfoPanel from '../../shell/modes/telegram/TelegramUserInfoPanel.vue';
+import type { SurfaceRendererDefinitionUnion } from '../surface/types.js';
 import { desktopModeRuntimeRegistry } from './DesktopModeRuntimeRegistry.js';
+import { applyDesktopModeStyles } from './desktopModeStyles.js';
 import type { DesktopModeRuntimeDescriptor, DesktopShellKind } from './types.js';
 
-const getShellKind = (mode: DesktopModeManifest): DesktopShellKind =>
-    mode.shell.kind;
+const getShellKind = (modePackage: DesktopModePackage): DesktopShellKind =>
+    modePackage.manifest.shell.kind;
 
-const getShellRenderer = (shellKind: DesktopShellKind) =>
+/** manifest-only 模式没有自带 shell 时，按 shell kind 回退通用 renderer。 */
+const getFallbackShellRenderer = (shellKind: DesktopShellKind) =>
     shellKind === 'freeform' ? FreeformShell : TraditionalShell;
 
-export const createDesktopModeRuntimeDescriptor = (mode: DesktopModeManifest): DesktopModeRuntimeDescriptor => {
-    const shellKind = getShellKind(mode);
+const normalizeComponentOverrides = (
+    modePackage: DesktopModePackage,
+    ownerPluginId: string | undefined
+): SurfaceRendererDefinitionUnion[] | undefined => {
+    const overrides = modePackage.componentOverrides;
+    if (!overrides || overrides.length === 0) return undefined;
+    const ownerId = ownerPluginId ?? modePackage.manifest.id;
+    return overrides.map(override => ({
+        contractId: override.contractId,
+        component: override.component,
+        ownerId,
+        kind: 'desktop-override',
+        ...(override.variant ? { variant: override.variant } : {}),
+        ...(override.createContext ? { createContext: override.createContext } : {})
+    }) as SurfaceRendererDefinitionUnion);
+};
 
-    const componentOverrides: DesktopModeRuntimeDescriptor['componentOverrides'] = mode.id === 'telegram'
-        ? {
-            'telegram.infoPanel': {
-                contractId: 'telegram.infoPanel',
-                component: TelegramUserInfoPanel,
-                ownerId: 'telegram',
-                kind: 'desktop-override',
-                variant: 'telegram'
-            }
-        }
+/** 内置模式 manifest 以纯数据注册，组件绑定在绑定表里补齐；运行时包自带绑定则原样优先。 */
+const withBuiltinBinding = (modePackage: DesktopModePackage): DesktopModePackage => {
+    const binding = builtinDesktopModeBindings.get(modePackage.manifest.id);
+    return binding ? { ...binding, ...modePackage, manifest: modePackage.manifest } : modePackage;
+};
+
+export const createDesktopModeRuntimeDescriptor = (input: DesktopModePackage): DesktopModeRuntimeDescriptor => {
+    const modePackage = withBuiltinBinding(input);
+    const { manifest } = modePackage;
+    const shellKind = getShellKind(modePackage);
+    const ownerPluginId = getDesktopModeOwnerPluginId(manifest.id);
+    const normalizedOverrides = normalizeComponentOverrides(modePackage, ownerPluginId);
+    const componentOverrides = normalizedOverrides
+        ? Object.fromEntries(normalizedOverrides.map(override => [override.contractId, override])) as
+            DesktopModeRuntimeDescriptor['componentOverrides']
         : undefined;
 
     return {
-        manifest: mode,
-        id: mode.id,
-        name: mode.name,
-        description: mode.description,
-        icon: mode.icon,
+        manifest,
+        id: manifest.id,
+        name: manifest.name,
+        description: manifest.description,
+        icon: manifest.icon,
         shellKind,
-        shellRenderer: getShellRenderer(shellKind),
+        shellRenderer: modePackage.shellRenderer ?? getFallbackShellRenderer(shellKind),
         navigationModel: {
-            id: `${mode.id}.navigation`,
+            id: `${manifest.id}.navigation`,
             primarySurfaces: [],
             contextualSurfaces: [],
             mobileSurfaces: []
         },
         interactionPolicy: {
-            id: `${mode.id}.interaction`,
+            id: `${manifest.id}.interaction`,
             openSurface: shellKind === 'freeform' ? 'window' : 'panel',
             supportsOverlappingWindows: shellKind === 'freeform',
             supportsContextualTools: true
         },
         tokens: {},
-        settingsSchema: mode.settingsManifest,
+        settingsSchema: manifest.settingsManifest,
         componentOverrides,
-        composition: mode.composition,
-        ownerPluginId: getDesktopModeOwnerPluginId(mode.id)
+        composition: manifest.composition,
+        shellChrome: modePackage.shellChrome,
+        ownerPluginId
     };
 };
 
-export const registerDesktopModeRuntimeDescriptor = (mode: DesktopModeManifest): void => {
-    if (desktopModeRuntimeRegistry.get(mode.id)) {
+export const registerDesktopModeRuntimeDescriptor = (modePackage: DesktopModePackage): void => {
+    const { manifest } = modePackage;
+    if (desktopModeRuntimeRegistry.get(manifest.id)) {
         return;
     }
 
-    desktopModeRuntimeRegistry.register(createDesktopModeRuntimeDescriptor(mode));
+    desktopModeRuntimeRegistry.register(createDesktopModeRuntimeDescriptor(modePackage));
+    applyDesktopModeStyles(manifest.id, modePackage.styles);
 };
 
-export const assertCanRegisterDesktopModeRuntimeDescriptor = (mode: DesktopModeManifest): void => {
-    desktopModeRuntimeRegistry.assertCanRegister(createDesktopModeRuntimeDescriptor(mode));
+export const assertCanRegisterDesktopModeRuntimeDescriptor = (modePackage: DesktopModePackage): void => {
+    desktopModeRuntimeRegistry.assertCanRegister(createDesktopModeRuntimeDescriptor(modePackage));
 };
 
 let isListeningForDesktopModeRegistrations = false;
 
 export const initializeDesktopModeRuntime = (): void => {
-    listDesktopModes().forEach(registerDesktopModeRuntimeDescriptor);
+    listDesktopModePackages().forEach(registerDesktopModeRuntimeDescriptor);
 
     if (!isListeningForDesktopModeRegistrations) {
         onDesktopModeRegistering(assertCanRegisterDesktopModeRuntimeDescriptor);
         onDesktopModeRegistered(registerDesktopModeRuntimeDescriptor);
-        onDesktopModeUnregistered(mode => {
-            desktopModeRuntimeRegistry.unregister(mode.id);
+        onDesktopModeUnregistered(modePackage => {
+            desktopModeRuntimeRegistry.unregister(modePackage.manifest.id);
+            applyDesktopModeStyles(modePackage.manifest.id, undefined);
         });
         isListeningForDesktopModeRegistrations = true;
     }

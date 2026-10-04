@@ -86,7 +86,7 @@ describe('activity launch resolver', () => {
     expect(resolved.workspaceAppId).toBe('plugin:stats.panel');
   });
 
-  it('resolves Telegram mobile standalone activities to the Telegram stack', () => {
+  it('falls back to a temporary tab for standalone mobile activities without a mode handler', () => {
     const resolved = resolveActivityLaunchPlacement({
       id: 'card_maker',
       title: '制卡工坊',
@@ -111,22 +111,7 @@ describe('activity launch resolver', () => {
       desktopModeId: 'telegram'
     });
 
-    expect(resolved.placement).toBe('telegram-stack');
-    expect(resolved.telegramRoute).toEqual({
-      name: 'tool',
-      panelId: 'card_maker',
-      title: '制卡工坊',
-      icon: 'card',
-      contractId: 'forge.workspace',
-      activity: {
-        size: 'small',
-        pageType: 'standalone',
-        statusBar: {
-          background: 'var(--lw-bg)',
-          iconColor: 'dark'
-        }
-      },
-      props: { isTabMode: true }
-    });
+    expect(resolved.placement).toBe('temporary-tab');
+    expect(resolved.tab?.id).toBe('mobile-widget:card_maker');
   });
 });

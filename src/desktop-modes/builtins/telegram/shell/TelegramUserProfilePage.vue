@@ -145,8 +145,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import type { CSSProperties } from 'vue';
-import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
-import type { WidgetPanelGroup } from '../../types.js';
+import { useSurfaceSkin } from '../../../core/useSurfaceSkin.js';
+import type { WidgetPanelGroup } from '../../../../shell/types.js';
 import {
   TELEGRAM_ICON_STROKE_WIDTH,
   getTelegramAvatarStyle,

@@ -11,13 +11,6 @@
       :class="{ 'is-resizing': isResizing }"
       @mousedown.stop.prevent="emit('resizeStart', $event)"
     ></div>
-    <SurfaceOutlet
-      v-if="surfaceVariant === 'telegram' && activeRightPanel === 'telegram-profile'"
-      contract-id="telegram.infoPanel"
-      :input="telegramInfoPanelInput"
-      :desktop-mode-id="desktopModeId"
-    />
-    <template v-else>
     <div class="widget-container-header">
       <div v-if="activeWidgetPlugin" class="widget-dropdown" @click="emit('toggleWidgetDropdown')">
         <div class="current-widget-info">
@@ -107,14 +100,12 @@
         />
       </div>
     </div>
-    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue';
 import type { LuminaPlugin } from '../../types/plugin.js';
-import type { CharacterChannelState, CreateChatConversationInput } from '../../types/ConversationContextTypes.js';
 import type { RegisteredPanelEntry, WidgetPanelGroup } from '../types.js';
 import type { ActivityPanelPayload } from '../../platform/activity/types.js';
 import SurfaceOutlet from '../../platform/surface/SurfaceOutlet.vue';
@@ -126,7 +117,6 @@ const props = defineProps<{
   activeRightPanel: string;
   desktopModeId: string;
   isMobile: boolean;
-  characterChannelState: CharacterChannelState;
   surfaceVariant: string;
   widgetStyle: CSSProperties;
   widgetWidth: number;
@@ -138,8 +128,6 @@ const props = defineProps<{
   activeRightPanelActivity: ActivityPanelPayload | null;
   widgetGroups: WidgetPanelGroup[];
   showWidgetDropdown: boolean;
-  onCreateChatSession: (payload: CreateChatConversationInput) => void;
-  onOpenSession: (sessionId: string) => void;
 }>();
 
 const defaultPanelActivity = { size: 'small', pageType: 'nested' } as const;
@@ -160,14 +148,6 @@ const activeRegisteredPanelSurfaceContractId = computed<SurfaceContractId | null
   || props.activeRegisteredPanel?.config.surfaceContractId
   || null
 ));
-
-const telegramInfoPanelInput = computed(() => ({
-  state: props.characterChannelState,
-  isMobile: props.isMobile,
-  onOpenTool: (panelId: string): void => emit('switchRightPanel', panelId),
-  onCreateSession: props.onCreateChatSession,
-  onOpenSession: props.onOpenSession
-}));
 
 const getActivePanelSurfaceInput = (contractId: SurfaceContractId) => projectSurfaceInput(
   contractId,

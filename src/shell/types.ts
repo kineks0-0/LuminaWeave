@@ -1,11 +1,12 @@
 import type { Component, CSSProperties } from 'vue';
-import type {
-  CharacterChannelState,
-  CreateChatConversationInput
-} from '../types/ConversationContextTypes.js';
+import type { CharacterChannelState, CreateChatConversationInput } from '../types/ConversationContextTypes.js';
 import type { LuminaPlugin } from '../types/plugin.js';
 import type { SurfaceContractId } from '../platform/surface/types.js';
-import type { ActivityDescriptor, ActivityPanelPayload } from '../platform/activity/types.js';
+import type {
+  ActivityDescriptor,
+  ActivityModeHandler,
+  ActivityPanelPayload
+} from '../platform/activity/types.js';
 
 export interface DynamicTabConfig {
   id: string;
@@ -44,37 +45,6 @@ export interface WidgetPanelItem {
 export interface WidgetPanelGroup {
   label?: string;
   items: WidgetPanelItem[];
-}
-
-export interface TelegramRailToolEntry {
-  id: 'lumina-launcher' | 'lumina-forge';
-  label: string;
-  description: string;
-  icon: string;
-}
-
-export type TelegramDesktopLeftRoute = 'conversationList' | 'roleList';
-export type TelegramMobileTabId = 'conversations' | 'roles' | 'settings' | 'profile';
-export type TelegramStackRouteName =
-  | 'conversationList'
-  | 'roleList'
-  | 'roleProfile'
-  | 'chat'
-  | 'tool'
-  | 'settings'
-  | 'profile';
-
-export interface TelegramStackRoute {
-  name: TelegramStackRouteName;
-  groupKey?: string | null;
-  sessionId?: string;
-  panelId?: string;
-  toolId?: TelegramRailToolEntry['id'];
-  title?: string;
-  icon?: string;
-  contractId?: SurfaceContractId;
-  activity?: ActivityDescriptor;
-  props?: Record<string, unknown>;
 }
 
 export type WidgetPluginEntry = LuminaPlugin;
@@ -128,11 +98,12 @@ export interface WorkspaceWindowEntry {
 }
 
 export interface ShellRuntimeFrame {
-  panelHeaderVariant: 'default' | 'discord';
+  panelHeaderVariant: string;
   traditionalHeaderPosition: 'top' | 'bottom';
   panelBodyStyle: CSSProperties;
   showSplash: boolean;
-  discordChannelMarkVisible: boolean;
+  /** 全局 header 的导航开关可见性（由模式 chrome 配置解析，Discord 用它收起角色栏）。 */
+  headerRailVisible: boolean;
 }
 
 export interface ShellRuntimeContext {
@@ -141,37 +112,20 @@ export interface ShellRuntimeContext {
   desktopModeOptions: Array<{ value: string; label: string; description?: string }>;
   activeMainTab: string;
   isMobile: boolean;
+  viewportWidthPx: number;
   saveStatus: string;
   widgetGroups: WidgetPanelGroup[];
   characterChannelState: CharacterChannelState;
   traditional: {
-    shouldShowDiscordGuildRail: boolean;
-    discordGuildEntries: Array<{ id: string; name: string; icon: string }>;
-    shouldShowCharacterNavigationPane: boolean;
-    isDiscordMobileMode: boolean;
-    isTelegramMobileMode: boolean;
-    shouldShowDiscordMobileShell: boolean;
-    discordMobileGuildRailPosition: 'top' | 'bottom' | 'left' | 'right';
-    discordMobileCharacterEntryPosition: 'top' | 'bottom' | 'left' | 'right';
-    showDiscordMobileCharacterRail: boolean;
-    discordMobileCharacterEntryStyle: CSSProperties;
-    telegramToolEntries: TelegramRailToolEntry[];
-    activeTelegramToolId: string | null;
-    telegramDesktopLeftRoute: TelegramDesktopLeftRoute;
-    telegramMobileActiveTab: TelegramMobileTabId;
-    telegramMobileCurrentRoute: TelegramStackRoute;
     isTimelineLoadedOnce: boolean;
     sidebarMode: 'left' | 'right' | 'widget' | 'hidden';
     activeRightPanel: string;
     widgetWidth: number;
     isResizing: boolean;
-    telegramLeftRailWidth: number;
-    isTelegramLeftRailResizing: boolean;
     activeWidgetPlugin: LuminaPlugin | null;
     activeRegisteredPanel: RegisteredPanelEntry | null;
     activeRightPanelActivity: ActivityPanelPayload | null;
     showWidgetDropdown: boolean;
-    showNexus: boolean;
   };
   freeform: {
     showWorkspaceMenu: boolean;
@@ -190,7 +144,6 @@ export interface ShellRuntimeSurfaces {
     mainPlugins: LuminaPlugin[];
     mainSurfaceVariant: string;
     mainSurfaceStyle: CSSProperties;
-    mobileMainStyle: CSSProperties;
     widgetSurfaceVariant: string;
     widgetStyle: CSSProperties;
   };
@@ -215,30 +168,31 @@ export interface ShellRuntimeActions {
     close: () => void;
     updateDesktopMode: (desktopModeId: string) => void;
     openSettingsPanel: () => void;
+    /** 清除当前 Activity 的标题栏 / 状态栏等临时元数据。 */
+    clearActivityMetadata: () => void;
+  };
+  events: {
+    /** 订阅 lwApi 事件；返回退订函数。 */
+    on(event: string, listener: (...args: unknown[]) => void): () => void;
   };
   frame: {
     panelBodyElementChange: (element: HTMLElement | null) => void;
   };
   traditional: {
-    toggleDiscordGuildRail: () => void;
+    /** 全局 header 导航开关：按模式 chrome 配置切换模式设置。 */
+    toggleHeaderRail: () => void;
     handleOpenWidget: (panelId: string) => void;
-    openDiscordChatSession: (sessionId: string) => void;
-    openDiscordMobileChatSession: (sessionId: string) => void;
-    createDiscordChatSession: (payload: CreateChatConversationInput) => void;
-    createDiscordMobileChatSession: (payload: CreateChatConversationInput) => void;
-    handleDiscordMobileMainViewSwitch: (tabId: string) => void;
-    updateShowDiscordMobileCharacterRail: (value: boolean) => void;
-    openTelegramToolEntry: (toolId: TelegramRailToolEntry['id']) => void;
-    setTelegramDesktopLeftRoute: (route: TelegramDesktopLeftRoute) => void;
-    pushTelegramMobileRoute: (route: TelegramStackRoute) => void;
-    popTelegramMobileRoute: () => void;
+    /** 通用会话导航：不在聊天页时先切页再打开。 */
+    openConversationSession: (sessionId: string) => void;
+    createConversationSession: (payload: CreateChatConversationInput) => void;
+    /** 写当前模式的设置键（内部拼接 `desktop-mode-<id>.<key>`）。 */
+    updateDesktopModeSetting: (key: string, value: unknown) => void | Promise<void>;
     resizeStart: (event?: MouseEvent) => void;
-    telegramLeftRailResizeStart: (event?: MouseEvent) => void;
     toggleWidgetDropdown: () => void;
     switchRightPanel: (panelId: string) => void;
     closePanel: () => void;
-    updateShowNexus: (value: boolean) => void;
-    selectTelegramBottomNav: (itemId: 'chat' | 'characters' | 'settings' | 'profile') => void;
+    /** 模式 shell 注册 Activity 形态接管器；返回撤销函数。 */
+    registerActivityModeHandler: (handler: ActivityModeHandler) => () => void;
   };
   freeform: {
     createWorkspaceStage: () => void;

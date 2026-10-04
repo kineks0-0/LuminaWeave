@@ -1,76 +1,66 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const pathFromShellTest = (path: string) => new URL(`../${path}`, import.meta.url);
-const readTraditionalShellSource = () =>
-  readFileSync(pathFromShellTest('traditional/TraditionalShell.vue'), 'utf-8');
+const fromSrc = (path: string) => new URL(`../../${path}`, import.meta.url);
+const readSrc = (path: string) => readFileSync(fromSrc(path), 'utf-8');
 
-describe('shell mode directory structure', () => {
-  it('places mode-specific shell files under shell/modes', () => {
+const MODE_ID_LITERAL_PATTERN = /['"](classic|stage|discord|telegram)['"]/;
+
+describe('desktop mode package boundaries', () => {
+  it('keeps mode-specific shell UI out of the generic shell directory', () => {
+    expect(existsSync(fromSrc('shell/modes'))).toBe(false);
+
     [
-      'modes/discord/DiscordMobileShell.vue',
-      'modes/telegram/TelegramBottomNav.vue',
-      'modes/telegram/TelegramUserInfoPanel.vue',
-      'modes/telegram/TelegramUserProfilePage.vue',
-      'modes/telegram/telegramVisual.ts'
+      'desktop-modes/builtins/discord/shell/DiscordShell.vue',
+      'desktop-modes/builtins/discord/shell/DiscordMobileShell.vue',
+      'desktop-modes/builtins/discord/shell/DiscordGuildRail.vue',
+      'desktop-modes/builtins/telegram/shell/TelegramShell.vue',
+      'desktop-modes/builtins/telegram/shell/TelegramBottomNav.vue',
+      'desktop-modes/builtins/telegram/shell/TelegramUserInfoPanel.vue',
+      'desktop-modes/builtins/telegram/shell/TelegramUserProfilePage.vue',
+      'desktop-modes/builtins/telegram/shell/telegramVisual.ts'
     ].forEach((path) => {
-      expect(existsSync(pathFromShellTest(path)), path).toBe(true);
+      expect(existsSync(fromSrc(path)), path).toBe(true);
     });
   });
 
-  it('keeps traditional shell root free of mode-specific component files', () => {
+  it('keeps the generic shell and App free of mode id literals', () => {
     [
-      'traditional/DiscordMobileShell.vue',
-      'traditional/TelegramBottomNav.vue',
-      'traditional/TelegramCharacterOverview.vue',
-      'traditional/TelegramRoleListPage.vue',
-      'traditional/TelegramUserInfoPanel.vue',
-      'traditional/TelegramUserProfilePage.vue',
-      'traditional/telegramVisual.ts'
+      'App.vue',
+      'shell/LuminaShellRoot.vue',
+      'shell/traditional/TraditionalShell.vue',
+      'shell/freeform/FreeformShell.vue',
+      'shell/types.ts',
+      'composables/shell/useWidgetPanels.ts',
+      'composables/shell/useShellRuntimePayload.ts'
     ].forEach((path) => {
-      expect(existsSync(pathFromShellTest(path)), path).toBe(false);
+      expect(readSrc(path), path).not.toMatch(MODE_ID_LITERAL_PATTERN);
     });
   });
 
-  it('imports mode-specific components through shell mode directories', () => {
-    const source = readTraditionalShellSource();
-
+  it('keeps generic shell sources from importing mode packages', () => {
     [
-      "from '../modes/discord/DiscordMobileShell.vue';",
-      "from '../modes/telegram/TelegramBottomNav.vue';",
-      "from '../modes/telegram/TelegramDesktopPane.vue';",
-      "from '../modes/telegram/TelegramMobileStack.vue';"
-    ].forEach((importPath) => {
-      expect(source).toContain(importPath);
+      'shell/LuminaShellRoot.vue',
+      'shell/traditional/TraditionalShell.vue',
+      'shell/freeform/FreeformShell.vue',
+      'composables/shell/useWidgetPanels.ts',
+      'composables/shell/useShellRuntimePayload.ts'
+    ].forEach((path) => {
+      expect(readSrc(path), path).not.toContain('desktop-modes/builtins');
     });
-
-    [
-      "from './DiscordMobileShell.vue';",
-      "from './TelegramBottomNav.vue';",
-      "from './TelegramCharacterOverview.vue';",
-      "from './TelegramDesktopPane.vue';",
-      "from './TelegramMobileStack.vue';",
-      "from './TelegramRoleListPage.vue';",
-      "from './TelegramUserProfilePage.vue';"
-    ].forEach((importPath) => {
-      expect(source).not.toContain(importPath);
-    });
-
-    expect(source).not.toContain("from '../modes/telegram/TelegramCharacterOverview.vue';");
   });
 
-  it('removes business presentation components replaced by official surfaces', () => {
-    [
-      '../components/DiscordCharacterRail.vue',
-      'modes/telegram/TelegramCharacterOverview.vue',
-      'modes/telegram/TelegramRoleListPage.vue'
-    ].forEach((path) => {
-      expect(existsSync(pathFromShellTest(path)), path).toBe(false);
-    });
+  it('binds mode renderers only in the builtin bindings table', () => {
+    const bindings = readSrc('desktop-modes/builtins/bindings.ts');
+
+    expect(bindings).toContain("['telegram'");
+    expect(bindings).toContain("['discord'");
+    expect(bindings).toContain('shellRenderer');
+    expect(bindings).toContain('shellChrome');
   });
 
   it('keeps Forge presentation components inside the Forge plugin boundary', () => {
-    expect(existsSync(pathFromShellTest('../plugins/forge/app/ForgeSidebar.vue'))).toBe(true);
-    expect(existsSync(pathFromShellTest('../components/ForgeSidebar.vue'))).toBe(false);
+    expect(existsSync(fromSrc('plugins/forge/app/ForgeSidebar.vue'))).toBe(true);
+    expect(existsSync(fromSrc('components/ForgeSidebar.vue'))).toBe(false);
   });
 });

@@ -278,12 +278,4 @@ watch(stageElement, (element) => {
   --lw-glass-blur: 20px;
   --lw-glass-saturate: 125%;
 }
-
-.lw-freeform-stage[data-skin-variant='discord']::before {
-  opacity: 0.12;
-}
-
-.lw-freeform-stage[data-skin-variant='discord']::after {
-  opacity: 0.22;
-}
 </style>

@@ -16,7 +16,7 @@ import {
 import type { DesktopModeManifest } from '../../../desktop-modes/core/types.js';
 import type { DesktopModeRuntimeDescriptor } from '../types.js';
 
-vi.mock('../../../shell/modes/telegram/TelegramUserInfoPanel.vue', () => ({
+vi.mock('../../../desktop-modes/builtins/telegram/shell/TelegramUserInfoPanel.vue', () => ({
     default: defineComponent({ name: 'TelegramUserInfoPanelStub', template: '<div />' })
 }));
 vi.mock('../../../shell/traditional/TraditionalShell.vue', () => ({
@@ -333,6 +333,44 @@ describe('DesktopModeRuntimeRegistry', () => {
             expect(runtimeMode?.settingsSchema?.density?.default).toBe('compact');
         } finally {
             unregisterDesktopMode(customId, customManifest);
+        }
+    });
+
+    it('adapts a mode package with a custom shell renderer and component overrides', () => {
+        desktopModeRuntimeRegistry.clearForTests();
+        initializeDesktopModeRuntime();
+
+        const customId = `runtime-package-${Math.random().toString(36).slice(2, 8)}`;
+        const ShellStub = defineComponent({ name: 'CustomModeShell', render: () => null });
+        const overrideComponent = defineComponent({ name: 'CustomSettingsRoot', render: () => null });
+        const manifest: DesktopModeManifest = {
+            id: customId,
+            name: 'Runtime Package Desktop',
+            shell: { kind: 'traditional' },
+            composition: {
+                version: 1,
+                desktop: { id: `${customId}-desktop`, kind: 'activity-slot', size: 'fill', visibility: 'visible' },
+                mobile: { id: `${customId}-mobile`, kind: 'activity-slot', size: 'fill', visibility: 'visible' }
+            }
+        };
+
+        registerDesktopMode({
+            manifest,
+            shellRenderer: ShellStub,
+            componentOverrides: [
+                { contractId: 'settings.root', component: overrideComponent }
+            ]
+        });
+
+        try {
+            const descriptor = desktopModeRuntimeRegistry.get(customId);
+
+            expect(descriptor?.shellRenderer).toBe(ShellStub);
+            expect(descriptor?.componentOverrides?.['settings.root']?.component).toBe(overrideComponent);
+            expect(descriptor?.componentOverrides?.['settings.root']?.kind).toBe('desktop-override');
+            expect(descriptor?.componentOverrides?.['settings.root']?.ownerId).toBe(customId);
+        } finally {
+            unregisterDesktopMode(customId, manifest);
         }
     });
 

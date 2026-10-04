@@ -54,9 +54,9 @@
 
 <script setup lang="ts">
 import { computed, type CSSProperties } from 'vue';
-import DiscordGuildRail from '../../../components/DiscordGuildRail.vue';
-import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
-import ThemedSurfaceOutlet from '../../../platform/surface/ThemedSurfaceOutlet.vue';
+import DiscordGuildRail from './DiscordGuildRail.vue';
+import { useSurfaceSkin } from '../../../core/useSurfaceSkin.js';
+import ThemedSurfaceOutlet from '../../../../platform/surface/ThemedSurfaceOutlet.vue';
 
 defineProps<{
   isDiscordMobileMode: boolean;

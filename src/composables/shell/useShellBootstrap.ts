@@ -22,9 +22,7 @@ export const useShellBootstrap = ({
   onShowConflictPanel,
   onShowSyncReportPanel,
   onLayoutReady,
-  initSettings,
-  onOpenTelegramProfile,
-  onOpenTelegramCharacters
+  initSettings
 }: {
   isApiReady: Ref<boolean>;
   initStatusText: Ref<string>;
@@ -43,34 +41,11 @@ export const useShellBootstrap = ({
   onShowSyncReportPanel: () => void;
   onLayoutReady: () => void;
   initSettings: () => void;
-  onOpenTelegramProfile?: () => void;
-  onOpenTelegramCharacters?: () => void;
 }) => {
   const themeMedia = window.matchMedia('(prefers-color-scheme: dark)');
   const desktopSurfaceService = lwApi.services.desktopSurface;
 
   registerLuminaPlugins();
-
-  const handleTelegramContextTool = (panelId: string) => {
-    if (panelId === 'characters') {
-      onOpenTelegramCharacters?.();
-      return;
-    }
-
-    if (panelId === 'lumina-chat') {
-      handleSwitchMainView('lumina-chat');
-      return;
-    }
-
-    if (panelId === 'telegram-profile') {
-      onOpenTelegramProfile?.();
-      return;
-    }
-
-    if (panelId.startsWith('lumina-')) {
-      handleSwitchWidgetPanel(panelId);
-    }
-  };
 
   onMounted(async () => {
     themeMedia.addEventListener('change', onThemeChange);
@@ -99,7 +74,6 @@ export const useShellBootstrap = ({
     lwApi.on('SWITCH_AUX_SIDEBAR_MODE', (mode: 'left' | 'right' | 'widget') => {
       setSidebarMode(mode);
     });
-    lwApi.on('TELEGRAM_CONTEXT_TOOL', handleTelegramContextTool);
     lwApi.on('OPEN_PANEL_CONFLICT', onShowConflictPanel);
     lwApi.on('OPEN_PANEL_SYNC_REPORT', onShowSyncReportPanel);
 

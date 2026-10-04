@@ -148,7 +148,7 @@ describe('Official Surface Kit', () => {
     it('keeps shell chat navigation inside generic typed presentation inputs', () => {
         const contractSource = readSource('../../../platform/surface/officialContracts.ts');
         const chatMainSource = readSource('../surfaces/ChatMainSurface.vue');
-        const telegramStackSource = readSource('../../../shell/modes/telegram/TelegramMobileStack.vue');
+        const telegramStackSource = readSource('../../../desktop-modes/builtins/telegram/shell/TelegramMobileStack.vue');
 
         expect(contractSource).toContain('onBack?: () => void;');
         expect(contractSource).toContain('onOpenRoleProfile?: () => void;');
@@ -167,19 +167,21 @@ describe('Official Surface Kit', () => {
 
     it('projects Telegram desktop header actions through generic chat.main input', () => {
         const traditionalShellSource = readSource('../../../shell/traditional/TraditionalShell.vue');
+        const telegramShellSource = readSource('../../../desktop-modes/builtins/telegram/shell/TelegramShell.vue');
 
-        expect(traditionalShellSource).toContain("contractId === 'chat.main' && isTelegramDesktopMode.value");
-        expect(traditionalShellSource).toContain('onOpenRoleProfile: onOpenTelegramDesktopRoleProfile');
-        expect(traditionalShellSource).toContain('onOpenPanel: onSwitchRightPanel');
-        expect(traditionalShellSource).toContain("onSwitchRightPanel('telegram-profile')");
-        expect(traditionalShellSource).not.toContain('onTelegramOpenRoleProfile:');
+        expect(traditionalShellSource).toContain('surfaceInputResolver');
+        expect(traditionalShellSource).not.toContain('Telegram');
+        expect(telegramShellSource).toContain("contractId === 'chat.main' && !props.runtimeContext.isMobile");
+        expect(telegramShellSource).toContain('onOpenRoleProfile: openProfilePanel');
+        expect(telegramShellSource).toContain('onOpenPanel: onClearAndSwitchRightPanel');
+        expect(telegramShellSource).not.toContain('onTelegramOpenRoleProfile:');
     });
 
     it('assembles Discord and Telegram business content through official surface contracts', () => {
         const traditionalShellSource = readSource('../../../shell/traditional/TraditionalShell.vue');
-        const discordMobileSource = readSource('../../../shell/modes/discord/DiscordMobileShell.vue');
-        const telegramDesktopSource = readSource('../../../shell/modes/telegram/TelegramDesktopPane.vue');
-        const telegramMobileSource = readSource('../../../shell/modes/telegram/TelegramMobileStack.vue');
+        const discordMobileSource = readSource('../../../desktop-modes/builtins/discord/shell/DiscordMobileShell.vue');
+        const telegramDesktopSource = readSource('../../../desktop-modes/builtins/telegram/shell/TelegramDesktopPane.vue');
+        const telegramMobileSource = readSource('../../../desktop-modes/builtins/telegram/shell/TelegramMobileStack.vue');
 
         expect(traditionalShellSource).not.toContain('<DiscordCharacterRail');
         expect(traditionalShellSource).not.toContain('<TelegramCharacterOverview');
@@ -202,8 +204,8 @@ describe('Official Surface Kit', () => {
 
     it('keeps composed roster and session surfaces constrained by their shell containers', () => {
         const rosterSource = readSource('../surfaces/CharacterRosterSurface.vue');
-        const discordMobileSource = readSource('../../../shell/modes/discord/DiscordMobileShell.vue');
-        const telegramDesktopSource = readSource('../../../shell/modes/telegram/TelegramDesktopPane.vue');
+        const discordMobileSource = readSource('../../../desktop-modes/builtins/discord/shell/DiscordMobileShell.vue');
+        const telegramDesktopSource = readSource('../../../desktop-modes/builtins/telegram/shell/TelegramDesktopPane.vue');
 
         expect(rosterSource).toContain('.character-roster-surface.is-compact');
         expect(rosterSource).toContain('var(--lw-character-rail-width, 292px)');
@@ -271,7 +273,7 @@ describe('Official Surface Kit', () => {
             '../../../shell/ShellPrimaryActivityOutlet.vue',
             '../../../shell/traditional/TraditionalShell.vue',
             '../../../shell/DynamicTabOutlet.vue',
-            '../../../shell/modes/telegram/TelegramMobileStack.vue'
+            '../../../desktop-modes/builtins/telegram/shell/TelegramMobileStack.vue'
         ]) {
             expect(readSource(relativePath), relativePath).toContain('<ThemedSurfaceOutlet');
         }
