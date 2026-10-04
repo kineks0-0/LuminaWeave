@@ -138,13 +138,21 @@ describe('GenerationCommandService send routing', () => {
     });
 });
 
-describe('GenerationCommandService local character injection', () => {
+describe('GenerationCommandService lumina assembly composition', () => {
     afterEach(() => {
         vi.restoreAllMocks();
         resolverMock.resolve.mockReset();
     });
 
-    it('prepends persona and character card when the chat is bound to a local character', async () => {
+    const assemble = async (service: GenerationCommandService): Promise<{
+        messages: Array<{ role: string; content: string }>;
+        settings: Record<string, unknown>;
+    }> => Reflect.get(service, 'assembleLuminaPromptPayload').call(service) as Promise<{
+        messages: Array<{ role: string; content: string }>;
+        settings: Record<string, unknown>;
+    }>;
+
+    it('binds local character, persona and default preset when the chat is bound to a local character', async () => {
         vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ charId: 'Alice', chatId: 'lw_chat_1' });
         vi.spyOn(lwStorage, 'get').mockImplementation((key: string, fallback: unknown) => (
             key === 'lumina-chat.personaDescription' ? '旅行者设定' : fallback
@@ -152,27 +160,28 @@ describe('GenerationCommandService local character injection', () => {
         resolverMock.resolve.mockResolvedValue(characterBundle());
 
         const service = createService();
-        const result = await Reflect.get(service, 'resolveLocalCharacterPromptInjection')
-            .call(service, [{ role: 'user', content: '你好' }]);
+        const result = await assemble(service);
 
         expect(resolverMock.resolve).toHaveBeenCalledWith([expect.objectContaining({
             sourceId: 'local',
             resourceType: 'character',
             resourceId: 'Alice'
         })]);
-        expect(result.messages[0].content).toBe('# 用户设定\n旅行者设定');
-        expect(result.messages[1].content).toContain('Alice 是一名骑士。');
-        expect(result.messages[2]).toEqual({ role: 'user', content: '你好' });
+        expect(result.messages[0]).toEqual({ role: 'system', content: '旅行者设定' });
+        expect(result.messages[1].content).toContain('Alice');
+        expect(result.settings).toMatchObject({ temperature: 1 });
     });
 
-    it('returns null for non-local character ids', async () => {
+    it('falls back to default preset composition when no local character resolves', async () => {
         vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ charId: '42', chatId: 'chat_1' });
+        vi.spyOn(lwStorage, 'get').mockImplementation((_key: string, fallback: unknown) => fallback);
         resolverMock.resolve.mockResolvedValue({ ...characterBundle(), charCard: null, documents: [] });
 
         const service = createService();
-        const result = await Reflect.get(service, 'resolveLocalCharacterPromptInjection')
-            .call(service, [{ role: 'user', content: '你好' }]);
+        const result = await assemble(service);
 
-        expect(result).toBeNull();
+        expect(result.messages).toHaveLength(1);
+        expect(result.messages[0].role).toBe('system');
+        expect(result.messages[0].content).toContain('Alice');
     });
 });

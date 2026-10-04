@@ -1,0 +1,745 @@
+<template>
+  <SettingsSectionPanel class="regex-block" :class="{ 'is-expanded': expanded }" core>
+    <div ref="rootRef" class="regex-manager">
+      <SettingsBlockHeader title="正则脚本">
+        <template #icon>
+          <Regex :size="18" :stroke-width="2" aria-hidden="true" />
+        </template>
+        <template #actions>
+          <span v-if="saveState === 'saved'" class="save-state">已保存</span>
+          <span v-else-if="saveState === 'saving'" class="save-state">保存中…</span>
+          <LuminaIconButton ariaLabel="新建脚本" title="新建脚本" size="sm" @click="addScript">
+            <Plus :size="14" :stroke-width="2" aria-hidden="true" />
+          </LuminaIconButton>
+          <LuminaIconButton ariaLabel="导入脚本" title="导入 ST 正则 JSON" size="sm" @click="openImport">
+            <Upload :size="14" :stroke-width="2" aria-hidden="true" />
+          </LuminaIconButton>
+          <LuminaIconButton ariaLabel="导出脚本" title="导出" size="sm" :disabled="scripts.length === 0" @click="exportScripts">
+            <Download :size="14" :stroke-width="2" aria-hidden="true" />
+          </LuminaIconButton>
+          <LuminaIconButton
+            :ariaLabel="expanded ? '退出展开' : '展开编辑'"
+            :title="expanded ? '退出展开' : '展开编辑'"
+            size="sm"
+            @click="expanded = !expanded"
+          >
+            <Minimize2 v-if="expanded" :size="14" :stroke-width="2" aria-hidden="true" />
+            <Maximize2 v-else :size="14" :stroke-width="2" aria-hidden="true" />
+          </LuminaIconButton>
+        </template>
+      </SettingsBlockHeader>
+
+      <input ref="fileInput" class="tw:hidden" type="file" accept=".json,application/json" @change="handleImportFile" />
+
+      <LuminaEmptyState
+        v-if="scripts.length === 0"
+        title="还没有正则脚本"
+        description="新建一条脚本，或导入 ST 导出的正则 JSON。"
+      >
+        <template #action>
+          <div class="tw:flex tw:gap-2">
+            <LuminaButton variant="soft" size="sm" @click="addScript">新建脚本</LuminaButton>
+            <LuminaButton variant="soft" size="sm" @click="openImport">导入</LuminaButton>
+          </div>
+        </template>
+      </LuminaEmptyState>
+
+      <div v-else class="regex-body" :data-view="isWide ? 'split' : view">
+        <aside class="regex-list">
+          <button
+            v-for="(script, index) in scripts"
+            :key="script.id"
+            type="button"
+            class="regex-row"
+            :class="{ 'is-selected': script.id === selectedId, 'is-disabled': !script.enabled }"
+            @click="selectScript(script.id)"
+          >
+            <span class="regex-row-name">{{ script.scriptName || '未命名脚本' }}</span>
+            <span class="regex-row-tags">
+              <span v-for="placement in script.placement" :key="placement" class="tag">
+                {{ placementLabel(placement) }}
+              </span>
+            </span>
+            <span class="regex-row-actions" @click.stop>
+              <LuminaToggle v-model="script.enabled" />
+              <LuminaIconButton ariaLabel="上移" title="上移" size="sm" :disabled="index === 0" @click="moveScript(index, -1)">
+                <ArrowUp :size="13" :stroke-width="2" aria-hidden="true" />
+              </LuminaIconButton>
+              <LuminaIconButton
+                ariaLabel="下移"
+                title="下移"
+                size="sm"
+                :disabled="index === scripts.length - 1"
+                @click="moveScript(index, 1)"
+              >
+                <ArrowDown :size="13" :stroke-width="2" aria-hidden="true" />
+              </LuminaIconButton>
+              <LuminaIconButton ariaLabel="删除" title="删除" size="sm" tone="danger" @click="requestDelete(script)">
+                <Trash2 :size="13" :stroke-width="2" aria-hidden="true" />
+              </LuminaIconButton>
+            </span>
+          </button>
+        </aside>
+
+        <section v-if="draft" class="regex-detail">
+          <header class="detail-head">
+            <button v-if="!isWide" type="button" class="back-button" @click="view = 'list'">
+              <ChevronLeft :size="16" :stroke-width="2" aria-hidden="true" />
+              列表
+            </button>
+            <input v-model="draft.scriptName" class="detail-name" aria-label="脚本名称" />
+          </header>
+
+          <div class="regex-editor">
+            <div class="editor-column">
+              <label class="field">
+                <span>匹配（支持 /pattern/flags）</span>
+                <textarea v-model="draft.findRegex" class="mono-input" rows="2" spellcheck="false"></textarea>
+              </label>
+              <label class="field">
+                <span>替换（支持 $1 等捕获组）</span>
+                <textarea v-model="draft.replaceString" class="mono-input" rows="2" spellcheck="false"></textarea>
+              </label>
+              <label class="field">
+                <span>裁剪字符串（每行一条）</span>
+                <textarea
+                  class="mono-input"
+                  rows="2"
+                  spellcheck="false"
+                  :value="draft.trimStrings.join('\n')"
+                  @input="updateTrimStrings($event)"
+                ></textarea>
+              </label>
+
+              <div class="field">
+                <span>作用位置</span>
+                <div class="placement-grid">
+                  <label v-for="option in placementOptions" :key="option.value" class="placement-option">
+                    <LuminaCheckbox
+                      :modelValue="draft.placement.includes(option.value)"
+                      @update:modelValue="togglePlacement(option.value, $event)"
+                    />
+                    <span>{{ option.label }}</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="editor-grid">
+                <label class="field">
+                  <span>宏替换</span>
+                  <select v-model.number="draft.substituteRegex">
+                    <option :value="0">不替换</option>
+                    <option :value="1">原始替换</option>
+                    <option :value="2">替换并转义</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>最小深度</span>
+                  <input
+                    type="number"
+                    min="0"
+                    :value="draft.minDepth ?? ''"
+                    placeholder="不限"
+                    @input="draft.minDepth = nullableNumber($event)"
+                  />
+                </label>
+                <label class="field">
+                  <span>最大深度</span>
+                  <input
+                    type="number"
+                    min="0"
+                    :value="draft.maxDepth ?? ''"
+                    placeholder="不限"
+                    @input="draft.maxDepth = nullableNumber($event)"
+                  />
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <label class="field field-toggle">
+                  <span>仅显示层</span>
+                  <LuminaToggle v-model="draft.markdownOnly" />
+                </label>
+                <label class="field field-toggle">
+                  <span>仅提示词</span>
+                  <LuminaToggle v-model="draft.promptOnly" />
+                </label>
+                <label class="field field-toggle">
+                  <span>编辑时运行</span>
+                  <LuminaToggle v-model="draft.runOnEdit" />
+                </label>
+              </div>
+            </div>
+
+            <div class="test-column">
+              <div class="test-head">
+                <span class="test-title">测试</span>
+                <select v-model.number="testSource" aria-label="测试作用位置">
+                  <option v-for="option in placementOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+              <textarea
+                v-model="testInput"
+                class="mono-input"
+                rows="5"
+                spellcheck="false"
+                placeholder="输入示例文本，实时查看替换结果"
+              ></textarea>
+              <div class="test-result" aria-live="polite">
+                <p class="test-result-label">匹配预览</p>
+                <pre class="test-preview"><template v-for="(segment, index) in matchSegments" :key="index"><mark v-if="segment.match">{{ segment.text }}</mark><span v-else>{{ segment.text }}</span></template></pre>
+                <p class="test-result-label">替换结果</p>
+                <pre class="test-preview">{{ testResult.text || '（无输出）' }}</pre>
+                <p v-if="testResult.warnings.length > 0" class="test-error">{{ testResult.warnings.join('；') }}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </SettingsSectionPanel>
+</template>
+
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  Download,
+  Maximize2,
+  Minimize2,
+  Plus,
+  Regex,
+  Trash2,
+  Upload
+} from 'lucide-vue-next';
+import { SettingsBlockHeader, SettingsSectionPanel } from '../components';
+import {
+  LuminaButton,
+  LuminaCheckbox,
+  LuminaEmptyState,
+  LuminaIconButton,
+  LuminaToggle
+} from '../../../ui/primitives';
+import { useModalStore } from '../../../stores/useModalStore.js';
+import {
+  regexScriptLibraryService
+} from '../../../api/core/hal/prompt/chat/RegexScriptLibraryService.js';
+import { compileFindRegex } from '../../../api/core/hal/regex/RegexScriptEngine.js';
+import { REGEX_PLACEMENTS, type RegexPlacement, type RegexScript } from '../../../types/RegexScriptTypes.js';
+
+type ToastKind = 'success' | 'warning' | 'error' | 'info';
+
+interface LuminaToastHost {
+  LuminaWeave?: {
+    showToast?: (message: string, kind?: ToastKind) => void;
+  };
+}
+
+interface MatchSegment {
+  text: string;
+  match: boolean;
+}
+
+const modal = useModalStore();
+const rootRef = ref<HTMLElement | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
+const scripts = ref<RegexScript[]>([]);
+const selectedId = ref('');
+const view = ref<'list' | 'detail'>('list');
+const isWide = ref(false);
+const expanded = ref(false);
+const saveState = ref<'idle' | 'saving' | 'saved'>('idle');
+const testSource = ref<RegexPlacement>(REGEX_PLACEMENTS.aiOutput);
+const testInput = ref('');
+
+let saveTimer: number | null = null;
+let suppressSave = false;
+let resizeObserver: ResizeObserver | null = null;
+
+const placementOptions = [
+  { value: REGEX_PLACEMENTS.userInput, label: '用户输入' },
+  { value: REGEX_PLACEMENTS.aiOutput, label: 'AI 输出' },
+  { value: REGEX_PLACEMENTS.slashCommand, label: '斜杠命令' },
+  { value: REGEX_PLACEMENTS.worldInfo, label: '世界书' },
+  { value: REGEX_PLACEMENTS.reasoning, label: '推理' }
+];
+
+const draft = computed<RegexScript | null>(() => scripts.value.find(script => script.id === selectedId.value) ?? null);
+
+const placementLabel = (placement: RegexPlacement): string =>
+  placementOptions.find(option => option.value === placement)?.label ?? String(placement);
+
+const testResult = computed(() => {
+  const script = draft.value;
+  if (!script || !testInput.value) {
+    return { text: '', applied: [] as string[], warnings: [] as string[] };
+  }
+  return regexScriptLibraryService.test(script, testInput.value, testSource.value);
+});
+
+const matchSegments = computed<MatchSegment[]>(() => {
+  const script = draft.value;
+  const text = testInput.value;
+  if (!script || !text) return [{ text, match: false }];
+  const compiled = compileFindRegex(script.findRegex);
+  if (!compiled) return [{ text, match: false }];
+  const global = new RegExp(compiled.source, compiled.flags.includes('g') ? compiled.flags : `${compiled.flags}g`);
+  const segments: MatchSegment[] = [];
+  let lastIndex = 0;
+  let guard = 0;
+  let match: RegExpExecArray | null;
+  while ((match = global.exec(text)) !== null && guard < 5000) {
+    guard += 1;
+    if (match[0].length === 0) {
+      global.lastIndex += 1;
+      continue;
+    }
+    if (match.index > lastIndex) segments.push({ text: text.slice(lastIndex, match.index), match: false });
+    segments.push({ text: match[0], match: true });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) segments.push({ text: text.slice(lastIndex), match: false });
+  return segments;
+});
+
+const showToast = (message: string, kind: ToastKind = 'info'): void => {
+  (window as LuminaToastHost).LuminaWeave?.showToast?.(message, kind);
+};
+
+const nullableNumber = (event: Event): number | null => {
+  const value = (event.target as HTMLInputElement).value;
+  if (value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const refresh = (): void => {
+  suppressSave = true;
+  scripts.value = regexScriptLibraryService.list();
+  if (!scripts.value.some(script => script.id === selectedId.value)) {
+    selectedId.value = scripts.value[0]?.id ?? '';
+  }
+  suppressSave = false;
+};
+
+const selectScript = (id: string): void => {
+  selectedId.value = id;
+  view.value = 'detail';
+};
+
+const addScript = (): void => {
+  const script = regexScriptLibraryService.add();
+  refresh();
+  selectScript(script.id);
+};
+
+const moveScript = (index: number, delta: number): void => {
+  const target = index + delta;
+  if (target < 0 || target >= scripts.value.length) return;
+  const [item] = scripts.value.splice(index, 1);
+  scripts.value.splice(target, 0, item);
+  scheduleSave();
+};
+
+const togglePlacement = (placement: RegexPlacement, enabled: boolean): void => {
+  const script = draft.value;
+  if (!script) return;
+  if (enabled) {
+    if (!script.placement.includes(placement)) script.placement.push(placement);
+  } else {
+    script.placement = script.placement.filter(item => item !== placement);
+  }
+  scheduleSave();
+};
+
+const updateTrimStrings = (event: Event): void => {
+  const script = draft.value;
+  if (!script) return;
+  script.trimStrings = (event.target as HTMLTextAreaElement).value
+    .split('\n')
+    .map(item => item.trim())
+    .filter(Boolean);
+  scheduleSave();
+};
+
+const requestDelete = async (script: RegexScript): Promise<void> => {
+  const confirmed = await modal.confirm({
+    title: '删除正则脚本',
+    message: `删除「${script.scriptName || '未命名脚本'}」？此操作不可撤销。`,
+    confirmText: '删除',
+    danger: true
+  });
+  if (!confirmed) return;
+  if (selectedId.value === script.id) selectedId.value = '';
+  scripts.value = scripts.value.filter(item => item.id !== script.id);
+  scheduleSave();
+};
+
+const openImport = (): void => fileInput.value?.click();
+
+const handleImportFile = async (event: Event): Promise<void> => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  try {
+    const raw: unknown = JSON.parse(await file.text());
+    const result = regexScriptLibraryService.importFromRaw(raw);
+    if (result.added === 0) {
+      showToast(result.diagnostics[0]?.message ?? '导入失败', 'error');
+      return;
+    }
+    refresh();
+    showToast(`已导入 ${result.added} 条脚本`, 'success');
+  } catch (error) {
+    console.warn('[ChatRegexScriptManagerPanel] 导入失败', error);
+    showToast('JSON 解析失败，请检查文件格式。', 'error');
+  }
+};
+
+const exportScripts = (): void => {
+  const data = JSON.stringify(regexScriptLibraryService.exportRaw(), null, 4);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'lumina-regex-scripts.json';
+  anchor.click();
+  URL.revokeObjectURL(url);
+};
+
+const scheduleSave = (): void => {
+  if (suppressSave) return;
+  saveState.value = 'saving';
+  if (saveTimer !== null) window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => {
+    saveTimer = null;
+    regexScriptLibraryService.replaceAll(scripts.value);
+    saveState.value = 'saved';
+  }, 400);
+};
+
+watch(scripts, () => {
+  scheduleSave();
+}, { deep: true });
+
+onMounted(() => {
+  refresh();
+  if (rootRef.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver((entries) => {
+      isWide.value = (entries[0]?.contentRect.width ?? 0) >= 840;
+    });
+    resizeObserver.observe(rootRef.value);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (saveTimer !== null) window.clearTimeout(saveTimer);
+  resizeObserver?.disconnect();
+});
+</script>
+
+<style scoped>
+.regex-block.is-expanded {
+  position: fixed;
+  inset: 12px;
+  z-index: 400;
+  overflow: auto;
+  border-radius: var(--lw-radius-md, 14px);
+  background: var(--lw-bg-surface);
+  border: 1px solid var(--lw-border-base);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+}
+
+.save-state {
+  font-size: var(--lw-type-label-small-size, 11px);
+  color: var(--lw-text-muted);
+}
+
+.regex-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.regex-body[data-view='split'] {
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+}
+
+.regex-body[data-view='detail'] .regex-list {
+  display: none;
+}
+
+.regex-body[data-view='list'] .regex-detail {
+  display: none;
+}
+
+.regex-list {
+  display: flex;
+  max-height: 520px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+  border-radius: var(--lw-radius-sm);
+  background: var(--lw-bg-subtle);
+  padding: 8px;
+}
+
+.regex-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--lw-radius-xs, 8px);
+  background: transparent;
+  padding: 7px 9px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.regex-row:hover {
+  background: var(--lw-bg-hover, var(--lw-bg-elevated));
+}
+
+.regex-row.is-selected {
+  border-color: var(--lw-primary);
+  background: var(--lw-bg-elevated);
+}
+
+.regex-row.is-disabled .regex-row-name {
+  opacity: 0.55;
+}
+
+.regex-row-name {
+  overflow: hidden;
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-label-size, 13px);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.regex-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag {
+  border-radius: 999px;
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-muted);
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+.regex-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.regex-detail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  color: var(--lw-text-secondary);
+  font: inherit;
+  font-size: var(--lw-type-label-small-size, 12px);
+  cursor: pointer;
+}
+
+.detail-name {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid transparent;
+  border-radius: var(--lw-radius-sm);
+  background: transparent;
+  color: var(--lw-text-main);
+  font: inherit;
+  font-size: var(--lw-type-title-small-size, 15px);
+  font-weight: 650;
+  padding: 5px 8px;
+  outline: none;
+}
+
+.detail-name:hover,
+.detail-name:focus {
+  border-color: var(--lw-border-base);
+  background: var(--lw-bg-elevated);
+}
+
+.regex-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.regex-body[data-view='split'] .regex-editor {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.editor-column,
+.test-column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.field > span {
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size, 11px);
+}
+
+.field input,
+.field select,
+.mono-input {
+  width: 100%;
+  border: 1px solid var(--lw-border-base);
+  border-radius: var(--lw-radius-sm);
+  background: var(--lw-bg-elevated);
+  color: var(--lw-text-main);
+  font: inherit;
+  font-size: var(--lw-type-body-small-size, 12px);
+  padding: 6px 8px;
+  outline: none;
+}
+
+.mono-input {
+  font-family: var(--lw-font-mono);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.mono-input:focus {
+  border-color: var(--lw-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lw-primary) 12%, transparent);
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
+  gap: 8px;
+}
+
+.placement-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.placement-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-label-small-size, 12px);
+}
+
+.toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.field-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.test-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.test-title {
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-label-size, 13px);
+  font-weight: 600;
+}
+
+.test-head select {
+  border: 1px solid var(--lw-border-base);
+  border-radius: var(--lw-radius-sm);
+  background: var(--lw-bg-elevated);
+  color: var(--lw-text-main);
+  font: inherit;
+  font-size: var(--lw-type-label-small-size, 12px);
+  padding: 4px 8px;
+}
+
+.test-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.test-result-label {
+  margin: 0;
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size, 11px);
+}
+
+.test-preview {
+  margin: 0;
+  min-height: 44px;
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--lw-border-base);
+  border-radius: var(--lw-radius-sm);
+  background: var(--lw-bg-subtle);
+  color: var(--lw-text-main);
+  font-family: var(--lw-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.test-preview mark {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--lw-primary) 22%, transparent);
+  color: inherit;
+  padding: 0 1px;
+}
+
+.test-error {
+  margin: 0;
+  color: var(--lw-danger, #b91c1c);
+  font-size: var(--lw-type-label-small-size, 12px);
+}
+</style>

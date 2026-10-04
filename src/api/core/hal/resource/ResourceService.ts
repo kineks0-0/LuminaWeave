@@ -50,6 +50,12 @@ export class ResourceService {
         return source.saveResource(ref, payload, options);
     }
 
+    async deleteResource(ref: ResourceRef): Promise<boolean> {
+        const source = this.requireSource(ref.sourceId);
+        if (!source.deleteResource) return false;
+        return source.deleteResource(ref);
+    }
+
     async forkResource(ref: ResourceRef, targetSourceId: string): Promise<ResourceDocument> {
         const document = await this.getResource(ref);
         if (!document) {

@@ -5,6 +5,8 @@ import type { SettingsPanelId } from './settingsTaxonomy.js';
 export const SETTINGS_PANEL_COMPONENTS: Record<SettingsPanelId, Component> = {
     'nexus-presets': defineAsyncComponent(() => import('./panels/SettingsNexusPanel.vue')),
     'generation-preset': defineAsyncComponent(() => import('./panels/SettingsGenerationPresetPanel.vue')),
+    'chat-prompt-presets': defineAsyncComponent(() => import('./panels/ChatPromptPresetLibraryPanel.vue')),
+    'chat-regex-scripts': defineAsyncComponent(() => import('./panels/ChatRegexScriptManagerPanel.vue')),
     'sync-status': defineAsyncComponent(() => import('./panels/SettingsSyncPanel.vue')),
     'storage-migration': defineAsyncComponent(() => import('./SettingsStoragePanel.vue')),
     'plugin-prompt-permissions': defineAsyncComponent(() => import('./panels/SettingsPromptPermissionsPanel.vue'))

@@ -81,6 +81,16 @@ export class LocalResourceSource implements ResourceSource {
         };
     }
 
+    async deleteResource(ref: ResourceRef): Promise<boolean> {
+        if (!(await this.getRaw(ref.resourceType, ref.resourceId))) return false;
+        await HALContext.instance.runtime.extensionStore.deleteJson({
+            namespace: NAMESPACE,
+            table: TABLE,
+            key: toKey(ref.resourceType, ref.resourceId)
+        });
+        return true;
+    }
+
     async importResource(resourceType: ResourceType, payload: unknown): Promise<ResourceDocument> {
         const raw = cloneSTRawPayload(payload);
         const resourceId = createResourceId(raw, resourceType);

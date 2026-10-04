@@ -22,12 +22,14 @@
     >
       <component :is="CHAT_MENU_ICONS[item.icon]" :size="20" :stroke-width="1.9" aria-hidden="true" />
       <span>{{ item.label }}</span>
+      <Check v-if="item.selected" :size="16" :stroke-width="2.4" class="chat-popover-menu__check" aria-hidden="true" />
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { Check } from 'lucide-vue-next';
 import type {
   ChatMenuItem,
   ChatMenuPlacement,
@@ -193,6 +195,11 @@ onMounted(() => {
 .chat-popover-menu__item svg {
   flex: 0 0 auto;
   color: var(--lw-text-secondary);
+}
+
+.chat-popover-menu__item .chat-popover-menu__check {
+  margin-left: auto;
+  color: var(--lw-primary);
 }
 
 .chat-popover-menu__item:hover:not(:disabled),

@@ -55,6 +55,8 @@ export const OVERVIEW_SETTING_KEYS: readonly string[] = [
 export type SettingsPanelId =
     | 'nexus-presets'
     | 'generation-preset'
+    | 'chat-prompt-presets'
+    | 'chat-regex-scripts'
     | 'sync-status'
     | 'storage-migration'
     | 'plugin-prompt-permissions';
@@ -82,6 +84,20 @@ export const SETTINGS_PANELS: readonly SettingsPanelDefinition[] = [
         title: '全局生成参数',
         description: '切换 SillyTavern 当前 API 使用的生成参数预设。',
         keywords: ['温度', 'temperature', '采样', '生成参数', 'preset']
+    },
+    {
+        id: 'chat-prompt-presets',
+        category: 'generation',
+        title: '提示词预设库',
+        description: '导入、编辑与启用聊天使用的提示词预设（ST Chat Completion 兼容）。',
+        keywords: ['预设', 'preset', '提示词', 'prompt', 'Chat Completion', '导入', '导出']
+    },
+    {
+        id: 'chat-regex-scripts',
+        category: 'generation',
+        title: '正则脚本',
+        description: '管理输入输出与提示词的正则替换，支持内联测试。',
+        keywords: ['正则', 'regex', '替换', '过滤', '脚本', '测试']
     },
     {
         id: 'sync-status',

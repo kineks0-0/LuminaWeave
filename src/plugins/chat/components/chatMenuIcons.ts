@@ -1,6 +1,8 @@
 import type { Component } from 'vue';
 import {
     Activity,
+    ArrowLeft,
+    BookMarked,
     BookOpen,
     Clapperboard,
     Copy,
@@ -9,6 +11,7 @@ import {
     MessageCirclePlus,
     Pencil,
     RefreshCw,
+    Regex,
     Search,
     SearchCode,
     Trash2,
@@ -31,5 +34,8 @@ export const CHAT_MENU_ICONS: Record<ChatMenuIconId, Component> = {
     timeline: Waypoints,
     lorebook: BookOpen,
     director: Clapperboard,
-    stats: Activity
+    stats: Activity,
+    preset: BookMarked,
+    regex: Regex,
+    back: ArrowLeft
 };

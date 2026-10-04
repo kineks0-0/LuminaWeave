@@ -4,6 +4,7 @@ import {
     buildChatHeaderMenu,
     buildChatMessageMenu,
     buildConversationSessionMenu,
+    buildPromptPresetMenu,
     resolveChatPopoverPosition,
     resolveSessionMenuPlacement
 } from '../presentation/chatMenus.js';
@@ -42,6 +43,33 @@ describe('chat header menu', () => {
             'lumina-director',
             'lumina-stats'
         ]);
+    });
+
+    it('appends prompt asset entries when the host provides the handlers', () => {
+        expect(buildChatHeaderMenu({ canOpenProfile: false, showPromptAssets: true }).map(item => item.id))
+            .toEqual(['search', 'prompt', 'prompt-presets', 'regex-scripts']);
+        expect(buildChatHeaderMenu({ canOpenProfile: true, showPromptAssets: true }).map(item => item.id))
+            .toEqual(['search', 'profile', 'prompt', 'prompt-presets', 'regex-scripts']);
+    });
+});
+
+describe('prompt preset menu', () => {
+    it('lists presets with the active one checked and always offers management', () => {
+        const items = buildPromptPresetMenu([
+            { id: 'a', name: '预设 A', promptCount: 3 },
+            { id: 'b', name: '预设 B', promptCount: 5 }
+        ], 'b');
+
+        expect(items.map(item => item.id)).toEqual(['preset:a', 'preset:b', 'manage-prompt-presets']);
+        expect(items[0].selected).toBe(false);
+        expect(items[1].selected).toBe(true);
+        expect(items[1].icon).toBe('preset');
+        expect(items[2].label).toBe('管理预设…');
+    });
+
+    it('keeps the management entry when there are no presets', () => {
+        const items = buildPromptPresetMenu([], '');
+        expect(items.map(item => item.id)).toEqual(['manage-prompt-presets']);
     });
 });
 

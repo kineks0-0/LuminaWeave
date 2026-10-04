@@ -14,7 +14,10 @@ export type ChatMenuIconId =
     | 'timeline'
     | 'lorebook'
     | 'director'
-    | 'stats';
+    | 'stats'
+    | 'preset'
+    | 'regex'
+    | 'back';
 
 export interface ChatMenuItem<Id extends string = string> {
     id: Id;
@@ -22,6 +25,15 @@ export interface ChatMenuItem<Id extends string = string> {
     icon: ChatMenuIconId;
     danger?: boolean;
     disabled?: boolean;
+    /** 当前生效项（预设切换等），视图层在行尾显示勾选。 */
+    selected?: boolean;
+}
+
+/** 提示词预设的菜单展示形态：只保留菜单需要的字段。 */
+export interface ChatPromptPresetOption {
+    id: string;
+    name: string;
+    promptCount: number;
 }
 
 export type ChatMessageMenuAction = 'copy' | 'edit' | 'regenerate' | 'branch' | 'branch-rerun' | 'delete';
@@ -46,14 +58,35 @@ export const buildChatMessageMenu = ({ isUser, disabled }: {
     return items;
 };
 
-export type ChatHeaderMenuAction = 'search' | 'profile' | 'prompt';
+export type ChatHeaderMenuAction = 'search' | 'profile' | 'prompt' | 'prompt-presets' | 'regex-scripts';
 
-export const buildChatHeaderMenu = ({ canOpenProfile }: {
+export const buildChatHeaderMenu = ({ canOpenProfile, showPromptAssets = false }: {
     canOpenProfile: boolean;
+    showPromptAssets?: boolean;
 }): ChatMenuItem<ChatHeaderMenuAction>[] => [
     { id: 'search', label: '搜索', icon: 'search' },
     ...(canOpenProfile ? [{ id: 'profile' as const, label: '角色资料', icon: 'profile' as const }] : []),
-    { id: 'prompt', label: 'Prompt 预览', icon: 'prompt' }
+    { id: 'prompt', label: 'Prompt 预览', icon: 'prompt' },
+    ...(showPromptAssets ? [
+        { id: 'prompt-presets' as const, label: '提示词预设', icon: 'preset' as const },
+        { id: 'regex-scripts' as const, label: '正则脚本', icon: 'regex' as const }
+    ] : [])
+];
+
+export type ChatPromptPresetMenuAction = 'manage-prompt-presets' | `preset:${string}`;
+
+/** 预设切换子菜单：当前项带勾选，末行永远提供管理入口。 */
+export const buildPromptPresetMenu = (
+    presets: ReadonlyArray<ChatPromptPresetOption>,
+    activeId: string
+): ChatMenuItem<ChatPromptPresetMenuAction>[] => [
+    ...presets.map(preset => ({
+        id: `preset:${preset.id}` as ChatPromptPresetMenuAction,
+        label: preset.name,
+        icon: 'preset' as const,
+        selected: preset.id === activeId
+    })),
+    { id: 'manage-prompt-presets', label: '管理预设…', icon: 'edit' }
 ];
 
 export type ConversationSessionMenuAction = 'rename' | 'duplicate' | 'delete';

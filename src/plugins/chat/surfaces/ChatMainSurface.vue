@@ -20,6 +20,10 @@
       :on-open-role-profile="input.onOpenRoleProfile"
       :on-open-panel="input.onOpenPanel"
       :on-toggle-prompt-inspector="surfaceContext.intents.togglePromptInspector"
+      :prompt-presets="promptPresetOptions"
+      :active-prompt-preset-id="activePromptPresetId"
+      :on-select-prompt-preset="selectPromptPreset"
+      :on-manage-prompt-assets="managePromptAssets"
     />
 
     <ChatTranscript
@@ -52,8 +56,13 @@
         v-if="messageLayout !== 'telegram'"
         :collapsed="composerCollapsed"
         :prompt-inspector-visible="snapshot.promptInspectorVisible"
+        :prompt-presets="promptPresetOptions"
+        :active-prompt-preset-id="activePromptPresetId"
         @toggle-collapsed="composerCollapsed = !composerCollapsed"
         @toggle-prompt-inspector="surfaceContext.intents.togglePromptInspector"
+        @select-prompt-preset="selectPromptPreset"
+        @refresh-prompt-presets="loadPromptPresets"
+        @manage-prompt-presets="managePromptPresets"
       />
       <ChatComposer
         v-show="!composerCollapsed"
@@ -78,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import type {
   ChatMessageEditIntentInput,
   ChatMessageIntentInput
@@ -91,9 +100,12 @@ import ChatComposer from '../components/ChatComposer.vue';
 import ChatComposerMenu from '../components/ChatComposerMenu.vue';
 import ChatHeader from '../components/ChatHeader.vue';
 import ChatToolbar from '../components/ChatToolbar.vue';
+import type { ChatPromptPresetOption } from '../presentation/chatMenus.js';
 import ChatTranscript from '../components/ChatTranscript.vue';
 import PromptInspector from '../PromptInspector.vue';
 import { resolveChatThemeRenderPreferences } from '../presentation/ChatMessageRenderPreferences.js';
+import { chatPromptPresetLibraryService } from '../../../api/core/hal/prompt/chat/ChatPromptPresetLibraryService.js';
+import { openSettingsCategory } from '../../settings/settingsViewState.js';
 
 const input = useSurfaceInput('chat.main');
 const context = useSurfaceRuntimeContext('chat.main');
@@ -163,6 +175,41 @@ const selectChoice = (text: string): void => {
   }
   void context.value.intents.sendMessage(text);
 };
+
+const promptPresetOptions = ref<ChatPromptPresetOption[]>([]);
+const activePromptPresetId = ref('');
+
+const loadPromptPresets = async (): Promise<void> => {
+  try {
+    const presets = await chatPromptPresetLibraryService.list();
+    promptPresetOptions.value = presets.map(preset => ({
+      id: preset.id,
+      name: preset.name,
+      promptCount: preset.promptCount
+    }));
+    activePromptPresetId.value = presets.find(preset => preset.isActive)?.id ?? '';
+  } catch (error) {
+    console.warn('[ChatMainSurface] 读取提示词预设失败', error);
+  }
+};
+
+const selectPromptPreset = (id: string): void => {
+  chatPromptPresetLibraryService.setActive(id);
+  activePromptPresetId.value = id;
+};
+
+const managePromptAssets = (target: 'prompt-presets' | 'regex-scripts'): void => {
+  openSettingsCategory('generation', `panel:chat-${target}`);
+  input.onOpenPanel?.('lumina-settings');
+};
+
+const managePromptPresets = (): void => {
+  managePromptAssets('prompt-presets');
+};
+
+onMounted(() => {
+  void loadPromptPresets();
+});
 
 watch(
   () => snapshot.value.presentation.composerFocusRequest?.revision,

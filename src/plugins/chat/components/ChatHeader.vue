@@ -67,18 +67,18 @@
             aria-label="更多"
             aria-haspopup="menu"
             :aria-expanded="menuVisible"
-            @click="menuVisible = !menuVisible"
+            @click="toggleMenu"
           >
             <EllipsisVertical :size="22" />
           </button>
           <ChatPopoverMenu
             v-if="menuVisible"
-            :items="headerMenu"
+            :items="headerMenuItems"
             label="会话操作"
             placement="below"
             align="end"
             @select="handleHeaderMenu"
-            @close="menuVisible = false"
+            @close="closeMenu"
           />
         </div>
       </template>
@@ -134,7 +134,7 @@
               aria-label="更多操作"
               aria-haspopup="menu"
               :aria-expanded="menuVisible"
-              @click="menuVisible = !menuVisible"
+              @click="toggleMenu"
             >
               <Ellipsis :size="18" />
             </button>
@@ -143,7 +143,7 @@
               :items="classicMenu"
               label="更多操作"
               @select="handleClassicMenu"
-              @close="menuVisible = false"
+              @close="closeMenu"
             />
           </div>
         </div>
@@ -165,8 +165,10 @@ import type { ChatMessageLayout } from '../presentation/ChatMessageRenderPrefere
 import {
   CHAT_CONTEXT_TOOLS,
   buildChatHeaderMenu,
+  buildPromptPresetMenu,
   type ChatHeaderMenuAction,
-  type ChatMenuItem
+  type ChatMenuItem,
+  type ChatPromptPresetOption
 } from '../presentation/chatMenus.js';
 import ChatPopoverMenu from './ChatPopoverMenu.vue';
 
@@ -185,25 +187,48 @@ const props = withDefaults(defineProps<{
   onOpenRoleProfile?: () => void;
   onOpenPanel?: (panelId: string) => void;
   onTogglePromptInspector: () => void;
+  /** 提示词预设快切（Telegram 头部菜单的子菜单） */
+  promptPresets?: ChatPromptPresetOption[];
+  activePromptPresetId?: string;
+  onSelectPromptPreset?: (id: string) => void;
+  /** 打开提示词资产管理面板（预设库 / 正则脚本） */
+  onManagePromptAssets?: (target: 'prompt-presets' | 'regex-scripts') => void;
 }>(), {
   layout: 'classic',
   typing: false,
   onBack: undefined,
   onToggleSidebar: undefined,
   onOpenRoleProfile: undefined,
-  onOpenPanel: undefined
+  onOpenPanel: undefined,
+  promptPresets: () => [],
+  activePromptPresetId: '',
+  onSelectPromptPreset: undefined,
+  onManagePromptAssets: undefined
 });
 
 const searchVisible = ref(false);
 const searchQuery = ref('');
 const searchInput = ref<HTMLInputElement | null>(null);
 const menuVisible = ref(false);
+const menuPage = ref<'root' | 'presets'>('root');
 
 const statusText = computed(() => (props.typing ? '正在输入…' : props.subtitle));
-const headerMenu = computed(() => buildChatHeaderMenu({ canOpenProfile: Boolean(props.onOpenRoleProfile) }));
+const headerMenuItems = computed<ChatMenuItem[]>(() => {
+  if (menuPage.value === 'presets') {
+    return [
+      { id: 'presets-back', label: '返回', icon: 'back' },
+      ...buildPromptPresetMenu(props.promptPresets, props.activePromptPresetId)
+    ];
+  }
+  return buildChatHeaderMenu({
+    canOpenProfile: Boolean(props.onOpenRoleProfile),
+    showPromptAssets: Boolean(props.onManagePromptAssets)
+  });
+});
 const classicMenu = computed<ChatMenuItem[]>(() => [
   ...CHAT_CONTEXT_TOOLS,
-  { id: 'prompt', label: 'Prompt 预览', icon: 'prompt' }
+  { id: 'prompt', label: 'Prompt 预览', icon: 'prompt' },
+  { id: 'regex-scripts', label: '正则脚本', icon: 'regex' }
 ]);
 
 const searchMatchCount = computed(() => {
@@ -234,17 +259,39 @@ const closeSearch = (): void => {
   searchQuery.value = '';
 };
 
-const handleHeaderMenu = (id: string): void => {
+const toggleMenu = (): void => {
+  menuVisible.value = !menuVisible.value;
+  menuPage.value = 'root';
+};
+
+const closeMenu = (): void => {
   menuVisible.value = false;
+  menuPage.value = 'root';
+};
+
+const handleHeaderMenu = (id: string): void => {
+  if (id === 'prompt-presets') {
+    menuPage.value = 'presets';
+    return;
+  }
+  if (id === 'presets-back') {
+    menuPage.value = 'root';
+    return;
+  }
+  closeMenu();
   const action = id as ChatHeaderMenuAction;
   if (action === 'search') openSearch();
   else if (action === 'profile') props.onOpenRoleProfile?.();
   else if (action === 'prompt') props.onTogglePromptInspector();
+  else if (action === 'regex-scripts') props.onManagePromptAssets?.('regex-scripts');
+  else if (id.startsWith('preset:')) props.onSelectPromptPreset?.(id.slice('preset:'.length));
+  else if (id === 'manage-prompt-presets') props.onManagePromptAssets?.('prompt-presets');
 };
 
 const handleClassicMenu = (id: string): void => {
-  menuVisible.value = false;
+  closeMenu();
   if (id === 'prompt') props.onTogglePromptInspector();
+  else if (id === 'regex-scripts') props.onManagePromptAssets?.('regex-scripts');
   else props.onOpenPanel?.(id);
 };
 </script>

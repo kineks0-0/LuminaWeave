@@ -16,15 +16,11 @@ import { LuminaGenerationTask } from './LuminaGenerationTask.js';
 import type { PromptCommandService } from './PromptCommandService.js';
 import type { GenerationStreamState } from '../../services/GenerationDomainService.js';
 import {
-    injectCharacterPromptMessages,
-    type CharacterPromptInjectionResult
-} from '../hal/prompt/CharacterPromptInjection.js';
-import { promptResourceResolver } from '../hal/resource/index.js';
-import {
-    buildSourceResourcePath,
-    characterBookToLorebookEntries,
-    type ResourceRef
-} from '@shared/resources/index.js';
+    CHAT_PROMPT_ENGINE_STORAGE_KEY,
+    chatPromptCompositionService
+} from '../hal/prompt/ChatPromptCompositionService.js';
+import { promptVariableStore } from '../hal/prompt/variables/PromptVariableStore.js';
+import type { StagedMacroVariables } from '../hal/prompt/macros/StagedMacroVariables.js';
 
 export interface GenerationCommandServiceDependencies {
     chatManager: ChatManager;
@@ -66,6 +62,7 @@ export class GenerationCommandService {
     private currentTask: LuminaGenerationTask | null = null;
     private nexus = new NexusClient();
     private abortController: AbortController | null = null;
+    private pendingPromptVariables: StagedMacroVariables | null = null;
 
     constructor(dependencies: GenerationCommandServiceDependencies) {
         this.chatManager = dependencies.chatManager;
@@ -112,9 +109,12 @@ export class GenerationCommandService {
         const targetPreset = presets.find((preset: any) => preset.id === chatPresetId);
         const firstNode = targetPreset?.nodes?.[0];
         const stNativeAvailable = Boolean(await getHostRuntimePort().getHostFunction('generate'));
-        const defaultEngine = stNativeAvailable
-            ? (!firstNode || firstNode.provider === 'st_current' ? 'st-native' : 'lumina')
-            : 'lumina-assembly';
+        const forcedEngine = lwStorage.get(CHAT_PROMPT_ENGINE_STORAGE_KEY, 'auto', 'Global');
+        const defaultEngine = forcedEngine === 'lumina-assembly'
+            ? 'lumina-assembly'
+            : stNativeAvailable
+                ? (!firstNode || firstNode.provider === 'st_current' ? 'st-native' : 'lumina')
+                : 'lumina-assembly';
         const promptRoute = PromptAssemblyRouter.route({
             target: 'chat.continuation',
             sessionBinding: options.promptAssembly?.sessionBinding ?? (
@@ -156,6 +156,7 @@ export class GenerationCommandService {
             : await this.promptCommandService.probePrompt();
         if (!prompt) {
             console.warn('[LuminaWeave] 无法获取刺探提示词，回退至原生 ST 生成电路');
+            this.discardPromptVariables();
             return this.triggerGenerate();
         }
 
@@ -317,11 +318,12 @@ export class GenerationCommandService {
             onError: () => {
                 this.streamHandler.handleEnd();
                 this.abortController = null;
+                this.discardPromptVariables();
             }
         });
     }
 
-    private async assembleLuminaPromptPayload(): Promise<{ messages: CleanedMessage[]; settings: Record<string, unknown>; trace: any[] }> {
+    private async assembleLuminaPromptPayload(): Promise<{ messages: CleanedMessage[]; settings: Record<string, unknown>; trace: unknown[] }> {
         const messages = await this.getConversationMessages();
         const payloadMessages = messages
             .filter(message => !message.is_hidden)
@@ -331,21 +333,33 @@ export class GenerationCommandService {
             }))
             .filter(message => message.content.trim().length > 0);
 
-        const injection = await this.resolveLocalCharacterPromptInjection(payloadMessages);
-        const finalMessages = injection?.messages ?? payloadMessages;
-        const historyTrace = messages.map((message, index) => ({
-            sourceUnitId: message.id,
-            sourceKind: 'history',
-            label: message.name || message.role || `message-${index}`,
-            outputMessageIndex: finalMessages.findIndex(item => item.content === (message.mesST || message.mesRaw || message.mes || '')),
-            rawLength: (message.pluginRaw || message.mesRaw || message.mes || '').length,
-            finalLength: (message.mesST || message.mesRaw || message.mes || '').length
-        }));
+        const { chatId, charId } = lwStorage._getContextIds();
+        let finalMessages: CleanedMessage[] = payloadMessages;
+        let settings: Record<string, unknown> = {};
+        let trace: unknown[] = [];
+
+        try {
+            const composition = await chatPromptCompositionService.compose({
+                history: payloadMessages,
+                chatId: typeof chatId === 'string' && chatId ? chatId : null,
+                charId: charId === undefined || charId === null ? null : String(charId),
+                userName: this.getUserName(),
+                charName: this.getCharName(),
+                inputText: [...payloadMessages].reverse().find(message => message.role === 'user')?.content ?? ''
+            });
+            finalMessages = composition.result.messages;
+            settings = composition.result.settings;
+            trace = composition.result.trace.entries;
+            this.pendingPromptVariables = composition.variables;
+        } catch (error) {
+            console.warn('[LuminaWeave] Lumina 提示词合成失败，按纯历史生成。', error);
+            this.pendingPromptVariables = null;
+        }
 
         const payload = {
             messages: finalMessages,
-            settings: {},
-            trace: [...historyTrace, ...(injection?.trace ?? [])]
+            settings,
+            trace
         };
 
         this.promptCommandService.lastPromptPayload = payload;
@@ -353,43 +367,19 @@ export class GenerationCommandService {
         return payload;
     }
 
-    /**
-     * 独立模式下当前会话绑定本地角色资源时，注入 persona、角色卡与卡内 character_book。
-     * ST 数字角色 id 无法命中本地资源，因此 ST 宿主路径行为不变。
-     */
-    private async resolveLocalCharacterPromptInjection(
-        messages: CleanedMessage[]
-    ): Promise<CharacterPromptInjectionResult | null> {
-        const { chatId, charId } = lwStorage._getContextIds();
-        const resourceId = typeof charId === 'string' ? charId : String(charId ?? '');
-        if (!chatId || !resourceId || resourceId === 'Global') return null;
+    private async commitPromptVariables(): Promise<void> {
+        const variables = this.pendingPromptVariables;
+        this.pendingPromptVariables = null;
+        if (!variables || !variables.hasChanges()) return;
+        const { chatId } = lwStorage._getContextIds();
+        await promptVariableStore.commit(
+            typeof chatId === 'string' && chatId ? chatId : null,
+            variables.toSnapshot()
+        );
+    }
 
-        try {
-            const ref: ResourceRef = {
-                sourceId: 'local',
-                resourceType: 'character',
-                resourceId,
-                path: buildSourceResourcePath('local', 'character', resourceId),
-                writable: true
-            };
-            const bundle = await promptResourceResolver.resolve([ref]);
-            if (!bundle.charCard) return null;
-
-            const personaDescription = lwStorage.get('lumina-chat.personaDescription', '', 'Global');
-            const characterDocument = bundle.documents.find(document => document.ref.resourceType === 'character');
-
-            return injectCharacterPromptMessages({
-                messages,
-                charCard: bundle.charCard,
-                personaDescription: typeof personaDescription === 'string' ? personaDescription : '',
-                worldbookEntries: characterDocument ? characterBookToLorebookEntries(characterDocument.raw) : [],
-                userName: this.getUserName(),
-                charName: bundle.charCard.name || this.getAssistantName()
-            });
-        } catch (error) {
-            console.warn('[LuminaWeave] 本地角色提示注入失败，按纯历史生成。', error);
-            return null;
-        }
+    private discardPromptVariables(): void {
+        this.pendingPromptVariables = null;
     }
 
     private normalizePromptRole(message: LuminaChatMessage): 'system' | 'user' | 'assistant' {
@@ -402,6 +392,7 @@ export class GenerationCommandService {
     async abortGenerate(): Promise<unknown> {
         this.setManualAbortPending(true);
         this.streamHandler.isGenerating = false;
+        this.discardPromptVariables();
 
         if (this.currentTask) {
             console.log('[LuminaWeave] 触发正在运行的任务中止...');
@@ -543,6 +534,7 @@ export class GenerationCommandService {
             session.isFinalizing = false;
 
             await this.finalizeGeneratedOutput(session.finalText || '');
+            await this.commitPromptVariables();
 
             this.streamHandler.finishSync();
             this.abortController = null;
