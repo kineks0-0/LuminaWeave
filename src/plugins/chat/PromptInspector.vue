@@ -59,20 +59,40 @@
       </nav>
 
       <div class="prompt-inspector__body">
-        <div v-if="inspection.isProbing && !hasPayload" class="prompt-inspector__loading">
-          <span class="probe-dots"></span>
-          <span>向 SillyTavern 发送探测请求，等待 Prompt 组装返回…</span>
+        <div
+          v-if="(inspection.isProbing || autoProbePending) && !hasPayload"
+          class="prompt-inspector__loading"
+        >
+          <div class="probe-skeleton" aria-hidden="true">
+            <div v-for="index in 3" :key="index" class="probe-skeleton__card">
+              <span class="probe-skeleton__label"></span>
+              <span class="probe-skeleton__line"></span>
+              <span class="probe-skeleton__line is-short"></span>
+            </div>
+          </div>
+          <span>{{ probingLabel }}</span>
+        </div>
+
+        <div v-else-if="!hasPayload && inspection.errorMessage" class="prompt-inspector__empty">
+          <TriangleAlert :size="28" />
+          <strong>探测失败</strong>
+          <span class="prompt-inspector__empty-message">{{ inspection.errorMessage }}</span>
+          <button type="button" class="prompt-inspector__cta" @click="runProbe">重试</button>
         </div>
 
         <div v-else-if="!hasPayload" class="prompt-inspector__empty">
           <SearchCode :size="28" />
-          <span>暂无 Prompt 数据</span>
+          <strong>还没有 Prompt 快照</strong>
+          <span class="prompt-inspector__empty-message">探测只让宿主组装一次请求，不会产生或发送消息。</span>
           <button type="button" class="prompt-inspector__cta" @click="runProbe">开始探测</button>
         </div>
 
         <div v-else-if="view === 'messages'" class="prompt-inspector__messages">
           <article v-for="(message, index) in messages" :key="index" :data-role="message.role">
-            <strong>{{ roleLabel(message.role) }}</strong>
+            <strong>
+              <span class="prompt-inspector__index">#{{ index + 1 }}</span>
+              {{ roleLabel(message.role) }}
+            </strong>
             <pre>{{ message.content }}</pre>
           </article>
           <pre v-if="messages.length === 0" class="prompt-inspector__raw">{{ rawPayload }}</pre>
@@ -82,15 +102,17 @@
 
         <div v-else class="prompt-inspector__sources">
           <article v-for="source in sources" :key="source.id">
-            <div>
+            <div class="prompt-inspector__source-head">
               <strong>{{ source.label }}</strong>
               <span>{{ source.kind }}</span>
               <span>{{ source.inclusion }}</span>
+              <small v-if="source.range">输出范围 {{ source.range }}</small>
             </div>
             <code>{{ source.path }}</code>
-            <small v-if="source.range">输出范围 {{ source.range }}</small>
           </article>
-          <div v-if="sources.length === 0" class="prompt-inspector__empty compact">暂无来源 trace</div>
+          <div v-if="sources.length === 0" class="prompt-inspector__empty compact">
+            <span>本次组装没有来源 trace</span>
+          </div>
         </div>
       </div>
     </template>
@@ -144,6 +166,7 @@ const props = defineProps<{
 const mode = ref<'preview' | 'edit'>('preview');
 const view = ref<'messages' | 'raw' | 'sources'>('messages');
 const editContent = ref('');
+const autoProbePending = ref(false);
 let probeTimer: ReturnType<typeof setTimeout> | null = null;
 
 
@@ -210,6 +233,12 @@ const payloadCountLabel = computed(() =>
   Array.isArray(payloadBody.value) ? `${payloadBody.value.length} 条 Messages` : '字符串'
 );
 
+const probingLabel = computed(() => {
+  if (props.inspection.source === 'st') return '正在向 SillyTavern 请求 Prompt 组装…';
+  if (props.inspection.source === 'lumina') return '正在调用 Lumina 合成管线…';
+  return '正在组装 Prompt…';
+});
+
 const roleLabel = (role: string): string => {
   const labels: Record<string, string> = {
     system: 'System',
@@ -225,6 +254,7 @@ const openEditor = (): void => {
 };
 
 const runProbe = async (): Promise<void> => {
+  autoProbePending.value = false;
   await props.onProbe();
 };
 
@@ -244,6 +274,7 @@ watch(
 
 onMounted(() => {
   if (props.autoProbe === false || hasPayload.value) return;
+  autoProbePending.value = true;
   probeTimer = setTimeout(() => {
     probeTimer = null;
     void runProbe();
@@ -263,9 +294,6 @@ onUnmounted(() => {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  border: 1px solid var(--lw-border-base);
-  border-radius: 8px;
-  background: var(--lw-bg-app);
   overflow: hidden;
 }
 
@@ -286,12 +314,12 @@ onUnmounted(() => {
 .prompt-inspector__modes .lw-btn {
   min-height: 32px;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: var(--lw-radius-xs);
   font-size: var(--lw-type-label-small-size);
 }
 
 .payload-badge {
-  border-radius: 4px;
+  border-radius: 999px;
   background: var(--lw-bg-subtle);
   color: var(--lw-text-secondary);
   padding: 2px 8px;
@@ -321,7 +349,7 @@ onUnmounted(() => {
 }
 
 .prompt-inspector__status .is-error {
-  color: var(--lw-danger, #b91c1c);
+  color: var(--lw-danger);
 }
 
 .prompt-inspector__probe {
@@ -335,13 +363,13 @@ onUnmounted(() => {
   margin: 10px 12px 0;
   padding: 3px;
   border: 1px solid var(--lw-border-base);
-  border-radius: 8px;
+  border-radius: var(--lw-radius-sm);
   background: var(--lw-bg-surface);
 }
 
 .prompt-inspector__views button {
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--lw-radius-xs);
   background: transparent;
   color: var(--lw-text-muted);
   padding: 4px 10px;
@@ -361,16 +389,36 @@ onUnmounted(() => {
   flex: 1;
   overflow: auto;
   padding: 12px;
+  overscroll-behavior: contain;
+}
+
+.prompt-inspector__body {
+  display: flex;
+  flex-direction: column;
 }
 
 .prompt-inspector__empty {
   display: flex;
   min-height: 180px;
+  flex: 1;
   align-items: center;
   justify-content: center;
   flex-direction: column;
   gap: 10px;
   color: var(--lw-text-muted);
+}
+
+.prompt-inspector__empty strong {
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-title-small-size);
+  line-height: var(--lw-type-title-small-line-height);
+  font-weight: var(--lw-type-title-small-weight);
+}
+
+.prompt-inspector__empty-message {
+  max-width: 36ch;
+  font-size: var(--lw-type-body-small-size);
+  line-height: 1.6;
 }
 
 .prompt-inspector__empty.compact {
@@ -379,28 +427,69 @@ onUnmounted(() => {
 
 .prompt-inspector__loading {
   display: flex;
-  min-height: 180px;
-  align-items: center;
-  justify-content: center;
+  flex: 1;
   flex-direction: column;
   gap: 12px;
+  padding-top: 4px;
   color: var(--lw-text-muted);
   font-size: var(--lw-type-body-small-size);
   text-align: center;
 }
 
-.probe-dots {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--lw-border-base);
-  border-top-color: var(--lw-primary);
-  border-radius: 50%;
-  animation: prompt-inspector-spin 0.9s linear infinite;
+.probe-skeleton {
+  display: flex;
+  width: min(100%, 560px);
+  align-self: center;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.probe-skeleton__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--lw-border-base);
+  border-radius: var(--lw-radius-sm);
+  background: var(--lw-bg-surface);
+  padding: 10px 12px;
+}
+
+.probe-skeleton__label {
+  width: 72px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--lw-bg-muted);
+}
+
+.probe-skeleton__line {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--lw-bg-muted);
+  animation: probe-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.probe-skeleton__line.is-short {
+  width: 62%;
+}
+
+@keyframes probe-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .probe-skeleton__line {
+    animation: none;
+  }
+}
+
+[data-motion='none'] .probe-skeleton__line {
+  animation: none;
 }
 
 .prompt-inspector__cta {
   border: 1px solid color-mix(in srgb, var(--lw-primary) 32%, var(--lw-border-base));
-  border-radius: 6px;
+  border-radius: var(--lw-radius-xs);
   background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
   color: var(--lw-primary);
   padding: 6px 14px;
@@ -418,37 +507,54 @@ onUnmounted(() => {
 .prompt-inspector__sources {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .prompt-inspector__messages article,
 .prompt-inspector__sources article {
   border: 1px solid var(--lw-border-base);
-  border-radius: 6px;
+  border-radius: var(--lw-radius-sm);
   background: var(--lw-bg-surface);
   overflow: hidden;
 }
 
 .prompt-inspector__messages strong {
-  display: block;
-  border-bottom: 1px solid var(--lw-border-base);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--lw-border-subtle);
+  background: var(--lw-bg-subtle);
   color: var(--lw-text-secondary);
-  padding: 6px 12px;
+  padding: 7px 12px;
   font-size: var(--lw-type-label-small-size);
+  letter-spacing: var(--lw-type-label-small-tracking);
 }
 
+.prompt-inspector__index {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  padding: 1px 7px;
+  font-family: var(--lw-font-mono);
+  font-size: var(--lw-type-label-small-size);
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+/* 角色色块保留识别度：与 surface 混合为不透明底色。 */
 .prompt-inspector__messages article[data-role='system'] strong {
-  background: color-mix(in srgb, var(--lw-success) 14%, transparent);
+  background: color-mix(in srgb, var(--lw-success) 14%, var(--lw-bg-surface));
   color: var(--lw-success);
 }
 
 .prompt-inspector__messages article[data-role='user'] strong {
-  background: color-mix(in srgb, var(--lw-primary) 14%, transparent);
+  background: color-mix(in srgb, var(--lw-primary) 14%, var(--lw-bg-surface));
   color: var(--lw-primary);
 }
 
 .prompt-inspector__messages article[data-role='assistant'] strong {
-  background: color-mix(in srgb, var(--lw-warning) 16%, transparent);
+  background: color-mix(in srgb, var(--lw-warning) 16%, var(--lw-bg-surface));
   color: color-mix(in srgb, var(--lw-warning) 72%, var(--lw-text-main));
 }
 
@@ -456,39 +562,54 @@ onUnmounted(() => {
 .prompt-inspector__raw {
   margin: 0;
   color: var(--lw-text-main);
-  padding: 10px;
+  padding: 12px 14px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--lw-font-mono);
   font-size: var(--lw-type-body-small-size);
+  line-height: 1.65;
 }
 
 .prompt-inspector__sources article {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px;
+  padding: 12px 14px;
 }
 
-.prompt-inspector__sources article div {
+.prompt-inspector__source-head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.prompt-inspector__sources article span {
-  border-radius: 4px;
+.prompt-inspector__source-head strong {
+  min-width: 0;
+  color: var(--lw-text-main);
+  font-size: var(--lw-type-label-medium-size);
+  font-weight: var(--lw-type-label-medium-weight);
+}
+
+.prompt-inspector__source-head span {
+  border-radius: 999px;
   background: var(--lw-bg-subtle);
   color: var(--lw-text-muted);
-  padding: 2px 5px;
+  padding: 2px 8px;
   font-size: var(--lw-type-label-small-size);
 }
 
-.prompt-inspector__sources code,
-.prompt-inspector__sources small {
+.prompt-inspector__source-head small {
+  margin-left: auto;
+  color: var(--lw-text-muted);
+  font-size: var(--lw-type-label-small-size);
+}
+
+.prompt-inspector__sources code {
   color: var(--lw-text-muted);
   overflow-wrap: anywhere;
+  font-family: var(--lw-font-mono);
+  font-size: var(--lw-type-label-small-size);
 }
 
 .prompt-inspector__editor {
@@ -502,7 +623,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   border: 1px solid color-mix(in srgb, var(--lw-warning) 36%, var(--lw-border-base));
-  border-radius: 6px;
+  border-radius: var(--lw-radius-xs);
   background: color-mix(in srgb, var(--lw-warning) 10%, transparent);
   color: var(--lw-text-secondary);
   padding: 7px 10px;
@@ -514,11 +635,11 @@ onUnmounted(() => {
   flex: 1;
   resize: none;
   border: 1px solid var(--lw-border-base);
-  border-radius: 6px;
+  border-radius: var(--lw-radius-sm);
   background: var(--lw-bg-surface);
   color: var(--lw-text-main);
   padding: 10px;
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--lw-font-mono);
 }
 
 .prompt-inspector__editor > button {

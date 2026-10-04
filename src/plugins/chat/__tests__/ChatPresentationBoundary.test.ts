@@ -58,4 +58,28 @@ describe('Chat presentation application boundary', () => {
         expect(transcriptSource).toContain('messagesPending');
         expect(transcriptSource).toContain('chat-transcript-reveal');
     });
+
+    it('opens prompt asset panels in a mobile sheet instead of navigating to settings', () => {
+        const mainSurfaceSource = readSource('../surfaces/ChatMainSurface.vue');
+        const sheetSource = readSource('../components/ChatPromptAssetsSheet.vue');
+
+        expect(mainSurfaceSource).toContain('ChatPromptAssetsSheet');
+        expect(mainSurfaceSource).toContain('input.isMobile');
+        expect(mainSurfaceSource).toContain('openPromptAssetsSheet(target)');
+        expect(mainSurfaceSource).toContain('promptAssetsSheetTarget');
+        expect(sheetSource).toContain('SETTINGS_PANEL_COMPONENTS');
+        expect(sheetSource).toContain('chat-regex-scripts');
+        expect(sheetSource).toContain('chat-prompt-presets');
+    });
+
+    it('hosts the prompt inspector in a bottom sheet on every layout', () => {
+        const mainSurfaceSource = readSource('../surfaces/ChatMainSurface.vue');
+        const sheetSource = readSource('../components/ChatPromptInspectorSheet.vue');
+
+        expect(mainSurfaceSource).toContain('ChatPromptInspectorSheet');
+        expect(mainSurfaceSource).not.toContain('chat-main-surface__inspector');
+        expect(sheetSource).toContain('role="dialog"');
+        expect(sheetSource).toContain("event.key !== 'Escape'");
+        expect(sheetSource).toContain('PromptInspector');
+    });
 });

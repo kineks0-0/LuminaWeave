@@ -90,6 +90,9 @@ export const buildChatMessageToolbar = ({ isUser, disabled }: {
 
 export type ChatHeaderMenuAction = 'search' | 'profile' | 'prompt' | 'prompt-presets' | 'regex-scripts';
 
+/** 聊天内管理的提示词资产面板（移动端以底部抽屉展示，桌面端跳设置页） */
+export type ChatPromptAssetsTarget = 'prompt-presets' | 'regex-scripts';
+
 export const buildChatHeaderMenu = ({ canOpenProfile, showPromptAssets = false }: {
     canOpenProfile: boolean;
     showPromptAssets?: boolean;

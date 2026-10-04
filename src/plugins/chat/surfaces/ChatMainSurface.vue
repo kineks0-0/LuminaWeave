@@ -46,14 +46,6 @@
       @branch="branchMessage"
     />
 
-    <div v-if="snapshot.promptInspectorVisible" class="chat-main-surface__inspector">
-      <PromptInspector
-        :inspection="snapshot.promptInspection"
-        :on-probe="surfaceContext.intents.probePrompt"
-        :on-run-edited-prompt="surfaceContext.intents.runEditedPrompt"
-      />
-    </div>
-
     <footer class="chat-main-surface__composer">
       <ChatToolbar
         v-if="messageLayout !== 'telegram'"
@@ -86,6 +78,20 @@
         </template>
       </ChatComposer>
     </footer>
+
+    <ChatPromptAssetsSheet
+      v-if="input.isMobile"
+      :target="promptAssetsSheetTarget"
+      @close="closePromptAssetsSheet"
+    />
+
+    <ChatPromptInspectorSheet
+      :visible="snapshot.promptInspectorVisible"
+      :inspection="snapshot.promptInspection"
+      :on-probe="surfaceContext.intents.probePrompt"
+      :on-run-edited-prompt="surfaceContext.intents.runEditedPrompt"
+      @close="surfaceContext.intents.togglePromptInspector"
+    />
   </main>
 </template>
 
@@ -102,13 +108,15 @@ import {
 import ChatComposer from '../components/ChatComposer.vue';
 import ChatComposerMenu from '../components/ChatComposerMenu.vue';
 import ChatHeader from '../components/ChatHeader.vue';
+import ChatPromptAssetsSheet from '../components/ChatPromptAssetsSheet.vue';
+import ChatPromptInspectorSheet from '../components/ChatPromptInspectorSheet.vue';
 import ChatToolbar from '../components/ChatToolbar.vue';
-import type { ChatPromptPresetOption } from '../presentation/chatMenus.js';
+import type { ChatPromptAssetsTarget, ChatPromptPresetOption } from '../presentation/chatMenus.js';
 import ChatTranscript from '../components/ChatTranscript.vue';
-import PromptInspector from '../PromptInspector.vue';
 import { resolveChatThemeRenderPreferences } from '../presentation/ChatMessageRenderPreferences.js';
 import { chatPromptPresetLibraryService } from '../../../api/core/hal/prompt/chat/ChatPromptPresetLibraryService.js';
 import { useMotionPreference } from '../../../composables/useMotionPreference.js';
+import { closePromptAssetsSheet, openPromptAssetsSheet, promptAssetsSheetTarget } from '../chatOverlayState.js';
 import { openSettingsCategory } from '../../settings/settingsViewState.js';
 
 const input = useSurfaceInput('chat.main');
@@ -251,7 +259,13 @@ const selectPromptPreset = (id: string): void => {
   activePromptPresetId.value = id;
 };
 
-const managePromptAssets = (target: 'prompt-presets' | 'regex-scripts'): void => {
+const managePromptAssets = (target: ChatPromptAssetsTarget): void => {
+  // 移动端优先留在聊天内：满屏底部抽屉承载面板，不跳转设置页。
+  // 开合状态放在模块级：主题/设置更新重建 surface 时抽屉不会被一起卸载。
+  if (input.isMobile) {
+    openPromptAssetsSheet(target);
+    return;
+  }
   openSettingsCategory('generation', `panel:chat-${target}`);
   input.onOpenPanel?.('lumina-settings');
 };
@@ -276,6 +290,7 @@ watch(
 
 <style scoped>
 .chat-main-surface {
+  position: relative;
   display: flex;
   width: 100%;
   height: 100%;
@@ -286,14 +301,6 @@ watch(
   font-family: var(--lw-chat-font, var(--lw-font-main));
   overflow: hidden;
 }
-
-.chat-main-surface__inspector {
-  display: flex;
-  min-height: 220px;
-  max-height: 48%;
-  padding: 0 12px 10px;
-}
-
 
 .chat-main-surface__composer {
   display: flex;
