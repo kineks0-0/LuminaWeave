@@ -10,7 +10,7 @@
     </header>
 
     <SettingsSectionPanel>
-      <div class="tw:flex tw:flex-col">
+      <div class="settings-overview__rows">
         <div v-for="item in overviewSettings" :key="item.storageKey" class="settings-overview__row">
           <SurfaceOutlet
             contract-id="settings.control"
@@ -83,8 +83,10 @@ const overviewSettings = computed(() => {
   line-height: var(--lw-type-body-medium-line-height);
 }
 
-.settings-overview__row + .settings-overview__row {
-  border-top: 1px solid var(--lw-border-base);
+.settings-overview__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .settings-overview__sync {
@@ -92,10 +94,10 @@ const overviewSettings = computed(() => {
   align-items: center;
   gap: 10px;
   min-height: 48px;
-  padding: 0 16px;
-  border: 1px solid var(--lw-border-base);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--lw-radius-xs);
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
   color: var(--lw-text-secondary);
   font: inherit;
   font-size: var(--lw-type-body-medium-size);

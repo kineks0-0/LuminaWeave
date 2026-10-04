@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
     clampSettingNumber,
     getActiveSettingOptionDescription,
-    getSettingControlBodyClass,
-    getSettingControlClass,
     getSettingScope,
     getSettingStorageKey,
     getSettingValue,
@@ -15,7 +13,6 @@ import {
     resolveDisplayedOptionValue,
     resolveSelectedOptionValue,
     resolveSettingOptions,
-    shouldUseVerticalSettingLayout,
     type SettingControlConfig
 } from '../settingControlModel.js';
 
@@ -53,14 +50,10 @@ describe('settingControlModel', () => {
         expect(getActiveSettingOptionDescription(options, 'missing')).toBeNull();
     });
 
-    it('derives layout metadata that desktop renderers can reuse', () => {
+    it('derives scope metadata that desktop renderers can reuse', () => {
         expect(hasSettingScopeSelector(createConfig({ allowedScopes: ['Global', 'Character'] }))).toBe(true);
-        expect(shouldUseVerticalSettingLayout(createConfig({ type: 'slider' }), 'volume')).toBe(true);
-        expect(shouldUseVerticalSettingLayout(createConfig({ type: 'password' }), 'tavilyApiKey')).toBe(true);
-        expect(shouldUseVerticalSettingLayout(createConfig({ type: 'stepper' }), 'count')).toBe(false);
+        expect(hasSettingScopeSelector(createConfig({ allowedScopes: ['Global'] }))).toBe(false);
         expect(isRowToggleSetting(createConfig({ type: 'boolean' }), 'discord-channel-mark')).toBe(true);
-        expect(getSettingControlClass(createConfig({ type: 'theme' }), true)).toBe('theme-options tw:flex-wrap tw:gap-2.5 full-width');
-        expect(getSettingControlBodyClass(createConfig({ type: 'options' }))).toBe('options-control');
     });
 
     it('clamps numeric input through schema limits', () => {

@@ -2,10 +2,7 @@
   <div
     v-if="isVisible"
     class="setting-row"
-    :class="[
-      isVerticalLayout ? 'layout-vertical' : 'layout-horizontal',
-      { 'is-row-toggle': isRowToggleEnabled }
-    ]"
+    :class="[`kind-${controlKind}`, { 'is-row-toggle': isRowToggleEnabled }]"
     :data-skin-variant="settingsControlVariant || 'default'"
     :style="settingControlStyle"
     :role="isRowToggleEnabled ? 'button' : undefined"
@@ -40,11 +37,8 @@
       <div class="setting-description" v-if="props.config.description">{{ props.config.description }}</div>
     </div>
 
-    <div
-      class="setting-options"
-      :class="[controlClass, !isVerticalLayout && controlKind !== 'toggle' && 'tw:max-[720px]:w-full tw:max-[720px]:justify-start']"
-    >
-      <div class="setting-control-body" :class="controlBodyClass">
+    <div class="setting-options">
+      <div class="setting-control-body">
         <!-- Theme Color Buttons -->
         <template v-if="props.config.type === 'theme'">
           <button v-for="theme in themes" :key="theme.value" :class="getThemeColorButtonClass(theme.value)"
@@ -90,9 +84,12 @@
           </template>
           <template v-else-if="controlKind === 'select'">
             <div class="segment-control-container">
-              <LuminaSelect class="lw-select" :modelValue="String(displayedOptionValue)" :aria-label="props.config.label" @update:modelValue="value => updateValue(resolveSelectedOptionValue(resolvedOptions, value))">
-                <option v-for="opt in resolvedOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-              </LuminaSelect>
+              <div class="setting-select-wrap">
+                <LuminaSelect class="lw-select setting-select-field" :modelValue="String(displayedOptionValue)" :aria-label="props.config.label" @update:modelValue="value => updateValue(resolveSelectedOptionValue(resolvedOptions, value))">
+                  <option v-for="opt in resolvedOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </LuminaSelect>
+                <ChevronDown class="setting-select-chevron" :size="14" :stroke-width="2" aria-hidden="true" />
+              </div>
               <div v-if="activeOptionDescription" class="option-description-tip">{{ activeOptionDescription }}</div>
             </div>
           </template>
@@ -148,12 +145,15 @@
 
         <!-- Nexus Select -->
         <template v-else-if="props.config.type === 'nexus-select'">
-          <LuminaSelect class="lw-select" :modelValue="currentValue" @update:modelValue="updateValue">
-            <option value="">未指定 (使用 ST 全局模型)</option>
-            <option v-for="preset in availableNexusPresets" :key="preset.id" :value="preset.id">
-              ★ {{ preset.name }}
-            </option>
-          </LuminaSelect>
+          <div class="setting-select-wrap">
+            <LuminaSelect class="lw-select setting-select-field" :modelValue="currentValue" @update:modelValue="updateValue">
+              <option value="">未指定 (使用 ST 全局模型)</option>
+              <option v-for="preset in availableNexusPresets" :key="preset.id" :value="preset.id">
+                ★ {{ preset.name }}
+              </option>
+            </LuminaSelect>
+            <ChevronDown class="setting-select-chevron" :size="14" :stroke-width="2" aria-hidden="true" />
+          </div>
         </template>
 
         <!-- Text Input -->
@@ -174,7 +174,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { RotateCcw } from 'lucide-vue-next';
+import { ChevronDown, RotateCcw } from 'lucide-vue-next';
 import { activeSettings, activeScopes, useSettings } from './useSettings.js';
 import { lwStorage } from '../../api/storage.js';
 import LuminaStepper from './LuminaStepper.vue';
@@ -185,8 +185,6 @@ import { useSurfaceInput } from '../../platform/surface/useSurfaceRuntimeContext
 import {
   clampSettingNumber,
   getActiveSettingOptionDescription,
-  getSettingControlBodyClass,
-  getSettingControlClass,
   getSettingScope,
   getSettingStorageKey,
   getSettingValue,
@@ -198,8 +196,7 @@ import {
   resolveDisplayedOptionValue,
   resolveSelectedOptionValue,
   resolveSettingOptions,
-  settingScopeLabels,
-  shouldUseVerticalSettingLayout
+  settingScopeLabels
 } from './settingControlModel.js';
 
 const { updateSetting, updateScope, resetSetting } = useSettings();
@@ -247,12 +244,6 @@ const defaultValueLabel = computed(() => {
 const hasScopeSelector = computed(() => hasSettingScopeSelector(props.config));
 
 const scopeLabels = settingScopeLabels;
-
-const isVerticalLayout = computed(() => shouldUseVerticalSettingLayout(props.config, props.settingKey));
-
-const controlClass = computed(() => getSettingControlClass(props.config, isVerticalLayout.value));
-
-const controlBodyClass = computed(() => getSettingControlBodyClass(props.config));
 
 // 主题色板 — 与 App.vue 中的主题实现保持同步
 const themes = [
@@ -341,19 +332,14 @@ const onScopeValueChange = (value: string) => {
 const settingControlStyle = computed(() => settingsControlSkinVars.value);
 </script>
 
-
 <style scoped>
+/* 字段式排版：每行 = 标签/说明，下面跟一个整行控件字段 */
 .setting-row {
   display: flex;
-  flex-wrap: wrap; /* 允许在窄屏时换行 */
-  gap: 8px 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--lw-border-base);
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
   transition: var(--lw-transition);
-}
-
-.setting-row:last-child {
-  border-bottom: none;
 }
 
 .setting-row.is-row-toggle {
@@ -366,41 +352,11 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   border-radius: var(--lw-radius-sm);
 }
 
-/* 水平排版：开关类控件（标签左，控件右） */
-.setting-row.layout-horizontal {
-  align-items: center;
-}
-
-/* 水平排版悬停时给予轻微背景反馈 */
-.setting-row.layout-horizontal:hover {
-  background: var(--lw-setting-row-hover-bg, var(--lw-bg-hover));
-  margin-left: -12px;
-  margin-right: -12px;
-  padding-left: 12px;
-  padding-right: 12px;
-  border-radius: var(--lw-radius-sm);
-  border-bottom-color: transparent;
-}
-
-/* 垂直排版：复杂控件（标签上，控件下） */
-.setting-row.layout-vertical {
-  align-items: flex-start;
-}
-
 .setting-left {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1; /* 恢复为自由伸缩，不再强制 180px 基础宽度 */
   min-width: 0;
-}
-
-.layout-horizontal .setting-left {
-  width: auto;
-}
-
-.layout-vertical .setting-left {
-  width: 100%;
 }
 
 .label-row {
@@ -411,24 +367,21 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   flex-wrap: wrap;
 }
 
-/* 水平布局：正常标签样式 */
 .setting-label {
   font-size: var(--lw-type-title-small-size);
   line-height: var(--lw-type-title-small-line-height);
   font-weight: var(--lw-type-title-small-weight);
   letter-spacing: var(--lw-type-title-small-tracking);
   color: var(--lw-text-main);
-  min-width: 120px; /* 防止在窄屏下被挤压导致文字垂直堆叠 */
+  min-width: 0;
 }
 
-/* 垂直布局：高对比度小标题样式（取消大写，提高可读性） */
-.layout-vertical .setting-label {
-  font-size: var(--lw-type-label-small-size);
-  line-height: var(--lw-type-label-small-line-height);
-  letter-spacing: var(--lw-type-label-small-tracking);
+.setting-description {
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   color: var(--lw-text-muted);
-  font-weight: var(--lw-type-label-small-weight);
-  text-transform: uppercase;
 }
 
 .setting-reset {
@@ -454,70 +407,129 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   color: var(--lw-primary);
 }
 
-.setting-description {
-  font-size: var(--lw-type-body-small-size);
-  line-height: var(--lw-type-body-small-line-height);
-  font-weight: var(--lw-type-body-small-weight);
-  letter-spacing: var(--lw-type-body-small-tracking);
-  color: var(--lw-text-muted);
-}
-
-/* 控件容器 */
+/* ---- 控件字段 ---- */
 .setting-options {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px 12px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
   min-width: 0;
 }
 
-.layout-horizontal .setting-options {
-  justify-content: flex-end;
-  flex: 0 1 auto;
-}
-
-.layout-vertical .setting-options {
-  justify-content: flex-start;
-  align-items: stretch;
-  width: 100%;
-}
-
-.setting-options.full-width {
-  width: 100%;
-}
-
-.setting-meta-control {
-  display: inline-flex;
+.setting-control-body {
+  display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* 开关：整行灰底字段，开关在左，标签/说明在右 */
+.kind-toggle {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--lw-radius-xs);
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
+}
+
+.kind-toggle .setting-options {
+  order: -1;
+  width: auto;
   flex: 0 0 auto;
 }
 
-.scope-select,
+.kind-toggle .setting-label {
+  display: block;
+  min-height: 20px;
+}
+
+.kind-toggle .setting-control-body {
+  width: auto;
+}
+
+.kind-toggle .setting-left {
+  gap: 2px;
+}
+
+/* 下拉/输入框：整行灰底字段 */
 .setting-control-body .lw-select,
 .setting-control-body .lw-input {
-  min-height: 36px;
-  border-radius: 18px;
-  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
-  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  /* 全局 .lw-select/.lw-input 用 !important 锁了盒装边框/背景，字段形态需要同级覆盖 */
+  border: 0 !important;
+  border-radius: var(--lw-radius-xs);
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle)) !important;
   color: var(--lw-text-main);
-  transition: var(--lw-transition);
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-body-medium-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
+  outline: none;
+}
+
+.setting-control-body .lw-select:hover,
+.setting-control-body .lw-input:hover {
+  background: var(--lw-bg-hover) !important;
+}
+
+.setting-control-body .lw-select:focus,
+.setting-control-body .lw-input:focus {
+  border: 0 !important;
+  background: var(--lw-bg-hover) !important;
+  box-shadow: 0 0 0 3px rgba(var(--lw-primary-rgb), 0.12);
+}
+
+.setting-select-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.setting-select-wrap .setting-select-field {
+  padding: 0 40px 0 14px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.setting-select-chevron {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: var(--lw-text-muted);
+  pointer-events: none;
+}
+
+/* 作用域选择器 */
+.setting-scope {
+  margin-left: auto;
 }
 
 .scope-select {
-  min-height: 32px;
+  min-height: 30px;
   width: 88px;
   min-width: 88px;
   max-width: 88px;
   padding: 0 32px 0 12px;
+  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
   border-radius: 16px;
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
+  color: var(--lw-text-secondary);
   font-size: var(--lw-type-label-small-size);
   line-height: var(--lw-type-label-small-line-height);
   font-weight: var(--lw-type-label-small-weight);
   letter-spacing: var(--lw-type-label-small-tracking);
-  color: var(--lw-text-secondary);
   outline: none;
   cursor: pointer;
+  transition: var(--lw-transition);
 }
 
 .compact-scope {
@@ -529,47 +541,7 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   border-radius: 15px;
 }
 
-.scope-select:hover,
-.setting-control-body .lw-select:hover,
-.setting-control-body .lw-input:hover {
-  border-color: var(--lw-setting-control-border, var(--lw-border-base));
-  background: var(--lw-bg-hover);
-}
-
-.scope-select:focus,
-.setting-control-body .lw-select:focus,
-.setting-control-body .lw-input:focus {
-  border-color: var(--lw-primary);
-  box-shadow: 0 0 0 3px rgba(92, 139, 246, 0.12);
-  background: var(--lw-setting-control-active-bg, var(--lw-bg-surface));
-}
-
-.setting-control-body {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.layout-horizontal .setting-control-body {
-  justify-content: flex-end;
-}
-
-.layout-vertical .setting-control-body {
-  width: 100%;
-}
-
-.setting-options.full-width > .setting-control-body {
-  width: 100%;
-  max-width: 100%;
-}
-
-.setting-control-body.options-control,
-.setting-control-body.theme-options {
-  width: 100%;
-}
-
-/* ---- Segment Control ---- */
+/* ---- 分段控件 ---- */
 .segment-control-container {
   display: flex;
   flex-direction: column;
@@ -578,99 +550,94 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
 }
 
 .segment-control {
-  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
-  border-radius: 18px;
-  padding: 2px;
   display: flex;
-  gap: 2px;
-  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
   flex-wrap: wrap;
-  min-height: 36px;
   align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--lw-radius-xs);
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
+  transition: var(--lw-transition);
 }
 
 .segment-control button {
-  background: transparent;
-  border: none;
+  flex: 1 1 auto;
+  min-height: 34px;
   padding: 0 14px;
-  min-height: 32px;
-  border-radius: 16px;
+  border: 0;
+  border-radius: calc(var(--lw-radius-xs) - 2px);
+  background: transparent;
   color: var(--lw-text-secondary);
-  font-size: var(--lw-type-label-medium-size);
-  line-height: var(--lw-type-label-medium-line-height);
-  font-weight: var(--lw-type-label-medium-weight);
-  letter-spacing: var(--lw-type-label-medium-tracking);
+  font-size: var(--lw-type-body-medium-size);
+  line-height: var(--lw-type-body-medium-line-height);
+  font-weight: var(--lw-type-label-large-weight);
+  letter-spacing: var(--lw-type-body-medium-tracking);
   cursor: pointer;
   transition: var(--lw-transition);
   white-space: nowrap;
-  flex: 1;
 }
 
 .segment-control button.active {
-  background: var(--lw-setting-control-active-bg, var(--lw-bg-surface));
+  background: var(--lw-setting-control-active-bg, var(--lw-bg-elevated));
   color: var(--lw-text-main);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .segment-control button:hover:not(.active) {
   color: var(--lw-text-main);
-  background: var(--lw-bg-active);
+  background: var(--lw-bg-hover);
 }
 
+/* 选中项说明 */
 .option-description-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--lw-text-muted);
   font-size: var(--lw-type-body-small-size);
   line-height: var(--lw-type-body-small-line-height);
   font-weight: var(--lw-type-body-small-weight);
   letter-spacing: var(--lw-type-body-small-tracking);
-  color: var(--lw-text-muted);
+}
+
+.option-description-tip svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+/* ---- 主题色板 ---- */
+.kind-theme .setting-control-body {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--lw-radius-xs);
   background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
-  padding: 6px 10px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid color-mix(in srgb, var(--lw-setting-tip-border, var(--lw-primary)) 22%, var(--lw-border-subtle));
 }
 
-.stepper-control {
-  align-items: center;
+/* ---- 步进器：自身已是盒装控件，不再套一层字段 ---- */
+.kind-stepper .setting-control-body {
+  justify-content: flex-start;
 }
 
-.stepper-control .setting-control-body {
+.kind-stepper .setting-control-body > * {
+  flex: 0 0 auto;
   width: auto;
 }
 
-.stepper-body {
-  flex: 0 0 auto;
+/* ---- 滑块 ---- */
+.kind-slider .setting-control-body {
+  padding: 14px;
+  border-radius: var(--lw-radius-xs);
+  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
 }
 
-.setting-control-body :deep(.lw-stepper) {
-  flex: 0 0 auto;
-}
-
-.setting-control-body :deep(.lw-select) {
-  width: 100%;
-  padding: 0 40px 0 14px;
-  font-size: var(--lw-type-label-medium-size);
-  line-height: var(--lw-type-label-medium-line-height);
-  font-weight: var(--lw-type-label-medium-weight);
-  letter-spacing: var(--lw-type-label-medium-tracking);
-}
-
-.setting-control-body :deep(.lw-input) {
-  width: 100%;
-  padding: 0 14px;
-  font-size: var(--lw-type-body-small-size);
-  line-height: var(--lw-type-body-small-line-height);
-  font-weight: var(--lw-type-body-small-weight);
-  letter-spacing: var(--lw-type-body-small-tracking);
-}
-
-.font-preset-select {
-  width: 100%;
-}
-
-/* ---- Slider ---- */
 .slider-wrapper {
   display: flex;
   align-items: center;
@@ -681,7 +648,7 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
 .lw-slider-input {
   flex: 1;
   height: 6px;
-  background: var(--lw-setting-slider-track, #f1f5f9);
+  background: color-mix(in srgb, var(--lw-text-muted) 20%, transparent);
   border-radius: 99px;
   appearance: none;
   outline: none;
@@ -705,33 +672,36 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
 }
 
 .slider-number-input {
-  width: 58px;
+  width: 64px;
+  min-height: 36px;
   padding: 6px 8px;
-  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
-  border-radius: var(--lw-radius-sm);
+  border: 0;
+  border-radius: calc(var(--lw-radius-xs) - 2px);
+  background: var(--lw-setting-control-active-bg, var(--lw-bg-elevated));
   font-size: var(--lw-type-label-medium-size);
   line-height: var(--lw-type-label-medium-line-height);
   font-weight: var(--lw-type-label-medium-weight);
   letter-spacing: var(--lw-type-label-medium-tracking);
   color: var(--lw-text-main);
   text-align: center;
-  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
-  transition: var(--lw-transition);
   outline: none;
   font-family: inherit;
+  transition: var(--lw-transition);
 }
 
 .slider-number-input:focus {
-  background: var(--lw-setting-control-active-bg, var(--lw-bg-surface));
-  border-color: var(--lw-accent);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 0 0 3px rgba(var(--lw-primary-rgb), 0.12);
 }
 
-/* ---- Font Selector ---- */
+/* ---- 字体选择 ---- */
 .font-selector-wrap {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
+}
+
+.font-preset-select {
   width: 100%;
 }
 
@@ -740,16 +710,18 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   flex-direction: column;
   gap: 12px;
   padding: 14px;
-  background: var(--lw-setting-control-bg, var(--lw-bg-subtle));
-  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
-  border-radius: var(--lw-radius-sm);
+  background: var(--lw-setting-control-active-bg, var(--lw-bg-elevated));
+  border-radius: var(--lw-radius-xs);
+}
+
+.font-custom-input {
+  width: 100%;
 }
 
 .font-preview-card {
   padding: 16px 20px;
-  background: var(--lw-setting-control-active-bg, var(--lw-bg-surface));
-  border: 1px solid var(--lw-setting-control-border, var(--lw-border-base));
-  border-radius: var(--lw-radius-sm);
+  background: var(--lw-setting-control-active-bg, var(--lw-bg-elevated));
+  border-radius: var(--lw-radius-xs);
   font-size: var(--lw-type-body-large-size);
   line-height: var(--lw-type-body-large-line-height);
   font-weight: var(--lw-type-body-large-weight);
@@ -760,23 +732,5 @@ const settingControlStyle = computed(() => settingsControlSkinVars.value);
   align-items: center;
   justify-content: center;
   text-align: center;
-  box-shadow: var(--lw-shadow);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 </style>

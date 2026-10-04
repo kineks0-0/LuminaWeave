@@ -1,5 +1,5 @@
 <template>
-  <div class="tw:inline-flex tw:min-h-9 tw:items-center tw:overflow-hidden tw:rounded-lw-pill tw:border tw:border-lw-border tw:bg-lw-subtle tw:focus-within:border-lw-primary tw:focus-within:bg-lw-surface tw:focus-within:shadow-[0_0_0_3px_rgba(92,139,246,0.12)]">
+  <div class="lw-stepper tw:inline-flex tw:min-h-9 tw:items-center tw:overflow-hidden tw:rounded-lw-pill tw:border tw:border-lw-border tw:bg-lw-subtle tw:focus-within:border-lw-primary tw:focus-within:bg-lw-surface tw:focus-within:shadow-[0_0_0_3px_rgba(92,139,246,0.12)]">
     <LuminaIconButton
       class="tw:rounded-none tw:border-r tw:border-lw-border-subtle"
       ariaLabel="减少数值"
@@ -83,3 +83,22 @@ const updateValue = (val: number) => {
   emit('change', clamped);
 };
 </script>
+
+<style scoped>
+.lw-stepper {
+  display: inline-flex;
+  width: auto;
+}
+
+/* 某些浏览器不吃 Tailwind 的 spinner 变体，这里兜底隐藏原生数字箭头 */
+.lw-stepper input::-webkit-outer-spin-button,
+.lw-stepper input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.lw-stepper input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+</style>

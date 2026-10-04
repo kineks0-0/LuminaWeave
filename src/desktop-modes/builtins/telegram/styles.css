@@ -174,13 +174,13 @@
   min-height: 44px;
 }
 
-.setting-row[data-skin-variant='telegram'].layout-horizontal:hover {
+.setting-row[data-skin-variant='telegram']:hover {
   background: color-mix(in srgb, var(--lw-primary) 7%, transparent);
 }
 
 .setting-row[data-skin-variant='telegram'] .segment-control,
 .setting-row[data-skin-variant='telegram'] .scope-select,
-.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select:not(.setting-select-field),
 .setting-row[data-skin-variant='telegram'] .setting-control-body .lw-input,
 .setting-row[data-skin-variant='telegram'] .slider-number-input,
 .setting-row[data-skin-variant='telegram'] .remote-font-picker,
@@ -193,7 +193,7 @@
 .setting-row[data-skin-variant='telegram'] .segment-control,
 .setting-row[data-skin-variant='telegram'] .segment-control button,
 .setting-row[data-skin-variant='telegram'] .scope-select,
-.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select,
+.setting-row[data-skin-variant='telegram'] .setting-control-body .lw-select:not(.setting-select-field),
 .setting-row[data-skin-variant='telegram'] .setting-control-body .lw-input {
   border-radius: 999px;
   min-height: 40px;

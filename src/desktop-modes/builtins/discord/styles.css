@@ -218,7 +218,7 @@
 }
 
 .setting-row[data-skin-variant='discord'] .scope-select,
-.setting-row[data-skin-variant='discord'] .setting-control-body .lw-select,
+.setting-row[data-skin-variant='discord'] .setting-control-body .lw-select:not(.setting-select-field),
 .setting-row[data-skin-variant='discord'] .setting-control-body .lw-input,
 .setting-row[data-skin-variant='discord'] .slider-number-input {
   border-radius: 12px;

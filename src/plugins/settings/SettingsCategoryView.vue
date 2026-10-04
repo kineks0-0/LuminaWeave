@@ -34,7 +34,7 @@
 
     <SettingsSectionPanel v-for="group in visibleGroups" :key="group.label">
       <SettingsBlockHeader :title="group.label" />
-      <div class="tw:flex tw:flex-col">
+      <div class="settings-category__rows">
         <div
           v-for="item in group.settings"
           :key="item.storageKey"
@@ -239,12 +239,16 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.settings-category__row {
-  transition: background-color 600ms cubic-bezier(0.22, 1, 0.36, 1);
+.settings-category__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
 }
 
-.settings-category__row + .settings-category__row {
-  border-top: 1px solid var(--lw-border-base);
+.settings-category__row {
+  border-radius: var(--lw-radius-xs);
+  transition: background-color 600ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .settings-category__row.is-highlighted,
