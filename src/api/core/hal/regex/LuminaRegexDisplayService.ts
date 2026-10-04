@@ -3,6 +3,7 @@ import { REGEX_PLACEMENTS, type RegexPlacement, type RegexScript } from '../../.
 import { RegexScriptEngine } from './RegexScriptEngine.js';
 import { mergeRegexScripts, parseRegexScripts } from './RegexScriptDocument.js';
 import { getCachedRegexScripts } from './LuminaRegexAssetCache.js';
+import { filterDisabledBoundRegexes } from './BoundRegexOverrideStore.js';
 import { CHAT_PROMPT_REGEX_STORAGE_KEY } from '../prompt/ChatPromptCompositionService.js';
 
 export type RegexSourceKey = 'user_input' | 'ai_output' | 'slash_command' | 'world_info' | 'reasoning';
@@ -20,13 +21,13 @@ const SOURCE_TO_PLACEMENT: Record<RegexSourceKey, RegexPlacement | undefined> = 
  * ST 宿主继续由 TavernHelper 处理宿主正则；本服务只补 Lumina 自有脚本集，避免重复。
  */
 export class LuminaRegexDisplayService {
-    /** 当前生效的 Lumina 正则脚本集（预设绑定 → 角色绑定 → 全局库）。 */
+    /** 当前生效的 Lumina 正则脚本集（预设绑定 → 角色绑定 → 全局库，应用 Lumina 级禁用覆盖）。 */
     public getActiveScripts(): RegexScript[] {
         const cached = getCachedRegexScripts();
-        return mergeRegexScripts(
+        return filterDisabledBoundRegexes(mergeRegexScripts(
             cached.presetScripts,
             mergeRegexScripts(cached.characterScripts, this.readGlobalScripts())
-        );
+        ));
     }
 
     public apply(

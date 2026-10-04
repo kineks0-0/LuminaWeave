@@ -1,5 +1,8 @@
 import { CoreXMLTagNames, globalXMLTagRegistry, type XMLTagDefinition } from '@shared/XMLTagRegistry.js';
 import { settingsDomainService } from '../../../api/services/SettingsDomainService.js';
+import { getCachedRegexScripts } from '../../../api/core/hal/regex/LuminaRegexAssetCache.js';
+import { readDisabledBoundRegexIds } from '../../../api/core/hal/regex/BoundRegexOverrideStore.js';
+import type { RegexPlacement } from '../../../types/RegexScriptTypes.js';
 
 /**
  * 「消息净化」面板内置处理区的只读视图模型。
@@ -92,3 +95,53 @@ export const resolveReplyFilterState = (
     implicitThinking: Boolean(read('lumina-chat.implicitThinkingInFilter', false)),
     aggressiveThinking: Boolean(read('lumina-chat.aggressiveThinking', false))
 });
+
+export type BoundRegexSource = 'preset' | 'character';
+
+export interface BoundRegexRule {
+    id: string;
+    name: string;
+    source: BoundRegexSource;
+    sourceLabel: string;
+    /** 资产原始 `enabled`；来源自身停用的脚本不允许在 Lumina 侧强制启用。 */
+    sourceEnabled: boolean;
+    /** Lumina 级禁用覆盖（`lumina-chat.boundRegexDisabled`）。 */
+    disabled: boolean;
+    /** 实际是否参与执行：来源启用且未被 Lumina 禁用。 */
+    effectiveEnabled: boolean;
+    placement: RegexPlacement[];
+}
+
+/**
+ * 预设 / 角色卡绑定正则的只读视图（含 Lumina 级禁用状态）。
+ * 与显示层同源（`LuminaRegexAssetCache`），按 预设 → 角色卡 顺序、同 id 去重；
+ * 同 id 时预设优先，与 `LuminaRegexDisplayService` 的应用顺序一致。
+ */
+export const listBoundRegexRules = (): BoundRegexRule[] => {
+    const cached = getCachedRegexScripts();
+    const disabledIds = new Set(readDisabledBoundRegexIds());
+    const seen = new Set<string>();
+    const rules: BoundRegexRule[] = [];
+
+    const append = (scripts: typeof cached.presetScripts, source: BoundRegexSource, label: string): void => {
+        scripts.forEach(script => {
+            if (seen.has(script.id)) return;
+            seen.add(script.id);
+            const disabled = disabledIds.has(script.id);
+            rules.push({
+                id: script.id,
+                name: script.scriptName || '未命名脚本',
+                source,
+                sourceLabel: label,
+                sourceEnabled: script.enabled,
+                disabled,
+                effectiveEnabled: script.enabled && !disabled,
+                placement: [...script.placement]
+            });
+        });
+    };
+
+    append(cached.presetScripts, 'preset', cached.presetName ? `预设「${cached.presetName}」` : '预设');
+    append(cached.characterScripts, 'character', cached.characterName ? `角色卡「${cached.characterName}」` : '角色卡');
+    return rules;
+};

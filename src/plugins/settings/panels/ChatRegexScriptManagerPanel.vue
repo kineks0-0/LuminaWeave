@@ -83,6 +83,38 @@
         </div>
       </section>
 
+      <section v-if="boundRegexRules.length > 0" class="bound-panel">
+        <div class="section-label">
+          <span>绑定正则</span>
+          <span class="section-hint">来自当前激活预设与角色卡；关闭仅在本机禁用，不改写资产，同 id 时优先于全局库</span>
+        </div>
+        <ul class="bound-list">
+          <li
+            v-for="rule in boundRegexRules"
+            :key="`${rule.source}:${rule.id}`"
+            class="bound-row"
+            :class="{ 'is-disabled': !rule.effectiveEnabled }"
+          >
+            <span class="bound-name">{{ rule.name }}</span>
+            <span class="bound-source" :data-source="rule.source">{{ rule.sourceLabel }}</span>
+            <span class="bound-placements">
+              <span v-for="placement in rule.placement" :key="placement" class="bound-tag">
+                {{ placementLabel(placement) }}
+              </span>
+            </span>
+            <LuminaToggle
+              class="bound-toggle"
+              :modelValue="rule.effectiveEnabled"
+              :disabled="!rule.sourceEnabled"
+              :title="rule.sourceEnabled
+                ? (rule.effectiveEnabled ? '禁用（Lumina 覆盖，不改写资产）' : '重新启用')
+                : '来源脚本已停用'"
+              @update:modelValue="toggleBoundRegex(rule, $event)"
+            />
+          </li>
+        </ul>
+      </section>
+
       <div class="section-label">
         <span>正则脚本</span>
         <span class="section-hint">按顺序应用，支持导入导出与内联测试</span>
@@ -276,8 +308,10 @@ import {
 import { SettingsBlockHeader, SettingsSectionPanel } from '../components';
 import { openSettingsCategory } from '../settingsViewState.js';
 import {
+  listBoundRegexRules,
   listBuiltinTagRules,
   resolveReplyFilterState,
+  type BoundRegexRule,
   type BuiltinReplyFilterState,
   type BuiltinTagRule
 } from './chatSanitizerBuiltins.js';
@@ -292,6 +326,8 @@ import { useModalStore } from '../../../stores/useModalStore.js';
 import {
   regexScriptLibraryService
 } from '../../../api/core/hal/prompt/chat/RegexScriptLibraryService.js';
+import { chatPromptCompositionService } from '../../../api/core/hal/prompt/ChatPromptCompositionService.js';
+import { setBoundRegexDisabled } from '../../../api/core/hal/regex/BoundRegexOverrideStore.js';
 import { compileFindRegex } from '../../../api/core/hal/regex/RegexScriptEngine.js';
 import { REGEX_PLACEMENTS, type RegexPlacement, type RegexScript } from '../../../types/RegexScriptTypes.js';
 
@@ -320,6 +356,7 @@ const rootRef = ref<HTMLElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const scripts = ref<RegexScript[]>([]);
 const builtinTagRules = ref<BuiltinTagRule[]>([]);
+const boundRegexRules = ref<BoundRegexRule[]>([]);
 const replyFilterState = ref<BuiltinReplyFilterState>(resolveReplyFilterState());
 const selectedId = ref('');
 const view = ref<'list' | 'detail'>('list');
@@ -392,7 +429,14 @@ const nullableNumber = (event: Event): number | null => {
 
 const refreshBuiltinState = (): void => {
   builtinTagRules.value = listBuiltinTagRules();
+  boundRegexRules.value = listBoundRegexRules();
   replyFilterState.value = resolveReplyFilterState();
+};
+
+const toggleBoundRegex = (rule: BoundRegexRule, enabled: boolean): void => {
+  if (!rule.sourceEnabled) return;
+  setBoundRegexDisabled(rule.id, !enabled);
+  boundRegexRules.value = listBoundRegexRules();
 };
 
 const openReplyFilterSettings = (): void => {
@@ -515,6 +559,10 @@ watch(scripts, () => {
 
 onMounted(() => {
   refresh();
+  // 绑定正则缓存可能停留在上一次合成；打开面板时按当前预设/角色补热一次。
+  void chatPromptCompositionService.warmBoundRegex().then(() => {
+    boundRegexRules.value = listBoundRegexRules();
+  });
   if (rootRef.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver((entries) => {
       isWide.value = (entries[0]?.contentRect.width ?? 0) >= 840;
@@ -707,6 +755,89 @@ onBeforeUnmount(() => {
 
 .builtin-link:hover {
   text-decoration: underline;
+}
+
+.bound-panel {
+  margin-top: 12px;
+  border-radius: var(--lw-radius-md, 14px);
+  background: var(--lw-bg-subtle);
+  padding: 10px 12px 12px;
+}
+
+.regex-manager.is-embedded .bound-panel {
+  background: var(--lw-bg-surface);
+}
+
+.bound-panel .section-label {
+  margin-top: 0;
+}
+
+.bound-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bound-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--lw-border-subtle);
+}
+
+.bound-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+
+.bound-row.is-disabled .bound-name,
+.bound-row.is-disabled .bound-source,
+.bound-row.is-disabled .bound-tag {
+  opacity: 0.55;
+}
+
+.bound-toggle {
+  flex-shrink: 0;
+}
+
+.bound-name {
+  min-width: 0;
+  color: var(--lw-text-main);
+  font-size: 11px;
+}
+
+.bound-source {
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--lw-text-main) 8%, transparent);
+  color: var(--lw-text-muted);
+  padding: 1px 7px;
+  font-size: 10px;
+}
+
+.bound-source[data-source='preset'] {
+  background: color-mix(in srgb, var(--lw-primary) 12%, transparent);
+  color: var(--lw-primary);
+}
+
+.bound-placements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.bound-tag {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lw-text-main) 7%, transparent);
+  color: var(--lw-text-muted);
+  padding: 1px 7px;
+  font-size: 10px;
 }
 
 .section-label {

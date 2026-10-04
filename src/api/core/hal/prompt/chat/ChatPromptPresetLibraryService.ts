@@ -73,7 +73,7 @@ export class ChatPromptPresetLibraryService {
     public async save(id: string, preset: ChatCompletionPreset): Promise<ResourceSaveResult> {
         const result = await this.resources.saveResource(this.ref(id), serializeChatCompletionPreset(preset));
         if (this.getActiveId() === id) {
-            setCachedPresetRegexScripts(id, extractEmbeddedPresetAssets(preset).regexScripts);
+            setCachedPresetRegexScripts(id, extractEmbeddedPresetAssets(preset).regexScripts, preset.name ?? null);
         }
         return result;
     }

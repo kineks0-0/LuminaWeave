@@ -9,30 +9,55 @@ import type { RegexScript } from '../../../../types/RegexScriptTypes.js';
 
 interface RegexAssetCache {
     presetId: string | null;
+    presetName: string | null;
     presetScripts: RegexScript[];
     characterId: string | null;
+    characterName: string | null;
     characterScripts: RegexScript[];
 }
 
 const cache: RegexAssetCache = {
     presetId: null,
+    presetName: null,
     presetScripts: [],
     characterId: null,
+    characterName: null,
     characterScripts: []
 };
 
-export const setCachedPresetRegexScripts = (id: string | null, scripts: RegexScript[]): void => {
+export const setCachedPresetRegexScripts = (
+    id: string | null,
+    scripts: RegexScript[],
+    name: string | null = null
+): void => {
     cache.presetId = id;
+    cache.presetName = name;
     cache.presetScripts = [...scripts];
 };
 
-export const setCachedCharacterRegexScripts = (id: string | null, scripts: RegexScript[]): void => {
+export const setCachedCharacterRegexScripts = (
+    id: string | null,
+    scripts: RegexScript[],
+    name: string | null = null
+): void => {
     cache.characterId = id;
+    cache.characterName = name;
     cache.characterScripts = [...scripts];
 };
 
-export const getCachedRegexScripts = (): { presetScripts: RegexScript[]; characterScripts: RegexScript[] } => ({
+export const getCachedRegexScripts = (): {
+    presetId: string | null;
+    presetName: string | null;
+    presetScripts: RegexScript[];
+    characterId: string | null;
+    characterName: string | null;
+    characterScripts: RegexScript[];
+} => ({
+    presetId: cache.presetId,
+    presetName: cache.presetName,
     presetScripts: [...cache.presetScripts],
+    characterId: cache.characterId,
+    characterName: cache.characterName,
     characterScripts: [...cache.characterScripts]
 });
 

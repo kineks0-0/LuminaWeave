@@ -12,6 +12,7 @@ import {
     setCachedCharacterRegexScripts,
     setCachedPresetRegexScripts
 } from '../regex/LuminaRegexAssetCache.js';
+import { filterDisabledBoundRegexes } from '../regex/BoundRegexOverrideStore.js';
 import { WorldbookActivationService } from './WorldbookActivationService.js';
 import { StagedMacroVariables } from './macros/StagedMacroVariables.js';
 import { resolveCharacterFields, type ChatCharacterFields } from './CharacterFields.js';
@@ -62,8 +63,12 @@ export class ChatPromptCompositionService {
         const characterRegexScripts = character ? extractCharacterRegexScripts(character.raw) : [];
 
         // 绑定正则缓存供显示层同步使用；预设/角色切换后无需等下一次生成。
-        setCachedPresetRegexScripts(resolvedPreset.id, presetAssets.regexScripts);
-        setCachedCharacterRegexScripts(character?.id ?? null, characterRegexScripts);
+        setCachedPresetRegexScripts(resolvedPreset.id, presetAssets.regexScripts, resolvedPreset.preset.name ?? null);
+        setCachedCharacterRegexScripts(
+            character?.id ?? null,
+            characterRegexScripts,
+            character?.fields.name ?? null
+        );
 
         const worldbookRefs = request.chatId
             ? promptResourceBindingService
@@ -87,10 +92,10 @@ export class ChatPromptCompositionService {
             userName: request.userName,
             charName: character?.fields.name || request.charName,
             worldbookActivation: activation.activation,
-            regexScripts: mergeRegexScripts(
+            regexScripts: filterDisabledBoundRegexes(mergeRegexScripts(
                 presetAssets.regexScripts,
                 mergeRegexScripts(characterRegexScripts, this.readRegexScripts())
-            ),
+            )),
             variables,
             pickSeed: request.chatId ?? undefined
         });
@@ -108,11 +113,34 @@ export class ChatPromptCompositionService {
         try {
             const bundle = await promptResourceResolver.resolve([localRef('preset', id)]);
             const parsed = bundle.presetRaw ? parseChatCompletionPreset(bundle.presetRaw, { nameHint: id }) : null;
-            setCachedPresetRegexScripts(id, parsed?.preset ? extractEmbeddedPresetAssets(parsed.preset).regexScripts : []);
+            setCachedPresetRegexScripts(
+                id,
+                parsed?.preset ? extractEmbeddedPresetAssets(parsed.preset).regexScripts : [],
+                parsed?.preset?.name ?? null
+            );
         } catch (error) {
             console.warn('[ChatPromptCompositionService] 预热预设正则失败。', error);
             setCachedPresetRegexScripts(id, []);
         }
+    }
+
+    /**
+     * 按需预热当前上下文的绑定正则（激活预设 + 当前角色卡），供设置面板等只读展示。
+     * 与显示层共用同一缓存，失败按空处理，不阻断调用方。
+     */
+    public async warmBoundRegex(): Promise<void> {
+        const presetIdRaw = lwStorage.get(CHAT_PROMPT_PRESET_STORAGE_KEY, '', 'Global');
+        const presetId = typeof presetIdRaw === 'string' && presetIdRaw.trim() ? presetIdRaw.trim() : null;
+        await this.warmPresetRegex(presetId);
+
+        const { charId } = lwStorage._getContextIds();
+        const normalizedCharId = typeof charId === 'string' && charId && charId !== 'Global' ? charId : null;
+        const character = await this.resolveCharacter(normalizedCharId);
+        setCachedCharacterRegexScripts(
+            character?.id ?? null,
+            character ? extractCharacterRegexScripts(character.raw) : [],
+            character?.fields.name ?? null
+        );
     }
 
     private async resolvePreset(): Promise<{ id: string | null; preset: ChatCompletionPreset }> {
