@@ -90,12 +90,15 @@ export class ShellWorkspaceService {
     private loadPromise: Promise<IFileSystem> | null = null;
     private bindingStore: ForgeProjectWorkspaceBindingStore | null = null;
     private testFilesystemName: string | null = null;
+    private seedQueue: Promise<void> = Promise.resolve();
 
     constructor(private readonly options: ShellWorkspaceServiceOptions = {}) {}
 
     async getFileSystem(seed?: { projectId?: string; conversationId?: string }): Promise<IFileSystem> {
         const fs = await this.load();
-        await this.ensureSeedDirectories(fs, seed);
+        const seedTask = this.seedQueue.then(() => this.ensureSeedDirectories(fs, seed));
+        this.seedQueue = seedTask.catch(() => undefined);
+        await seedTask;
         return fs;
     }
 
@@ -283,6 +286,7 @@ export class ShellWorkspaceService {
         this.fs = null;
         this.loadPromise = null;
         this.bindingStore = null;
+        this.seedQueue = Promise.resolve();
         if (options.clearStorage) {
             testFilesystemSerial += 1;
             const baseName = this.options.filesystemName ?? 'luminaweave-forge-workspace';

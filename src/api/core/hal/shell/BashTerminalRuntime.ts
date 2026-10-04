@@ -119,6 +119,12 @@ export class BashTerminalRuntime {
             cwd,
             env: this.state.env,
             ...this.resolveNetworkOptions(),
+            // ponytail: just-bash 3 defense-in-depth wraps promises inside bash.exec and breaks the host
+            // IndexedDB workspace FS (transactions never settle). Primary sandbox is the virtual FS +
+            // command/permission policy. Re-enable when upstream scopes patches off trusted host FS calls.
+            defenseInDepth: {
+                enabled: false
+            },
             executionLimits: {
                 maxCommandCount: 10000,
                 maxLoopIterations: 10000,

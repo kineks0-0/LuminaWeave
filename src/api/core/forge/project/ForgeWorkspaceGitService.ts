@@ -1,4 +1,6 @@
-import { createGit, type FileSystem, type Git } from 'just-git';
+import { createGit, type Git } from 'just-git';
+import type { IFileSystem } from 'just-bash';
+import { toJustGitFileSystem } from './JustGitFileSystemBridge.js';
 import { quote as shellQuote } from 'shell-quote';
 import {
     formatDiff,
@@ -42,7 +44,7 @@ export interface ForgeWorkspaceGitDiffResult {
 }
 
 export interface ForgeWorkspaceGitServiceInput {
-    fs: FileSystem;
+    fs: IFileSystem;
     repoRoot: string;
 }
 
@@ -81,7 +83,7 @@ const mapChangedFile = (entry: TreeDiffEntry): ForgeWorkspaceGitChangedFile => (
 export class ForgeWorkspaceGitService {
     createCommand(input: ForgeWorkspaceGitServiceInput): Git {
         return createGit({
-            fs: input.fs,
+            fs: toJustGitFileSystem(input.fs),
             cwd: normalizeRoot(input.repoRoot),
             identity: DEFAULT_IDENTITY,
             network: false
@@ -92,7 +94,7 @@ export class ForgeWorkspaceGitService {
         const repoRoot = normalizeRoot(input.repoRoot);
         await input.fs.mkdir(repoRoot, { recursive: true });
         const git = this.createCommand({ ...input, repoRoot });
-        const repo = await git.findRepo({ fs: input.fs, cwd: repoRoot });
+        const repo = await git.findRepo({ fs: toJustGitFileSystem(input.fs), cwd: repoRoot });
         if (repo) return;
         const result = await git.exec('init');
         if (result.exitCode !== 0) {
@@ -116,7 +118,7 @@ export class ForgeWorkspaceGitService {
         await this.init({ ...input, repoRoot });
         const git = this.createCommand({ ...input, repoRoot });
         const beforeStatus = await this.status({ ...input, repoRoot });
-        const repoBefore = await git.findRepo({ fs: input.fs, cwd: repoRoot });
+        const repoBefore = await git.findRepo({ fs: toJustGitFileSystem(input.fs), cwd: repoRoot });
         const headBefore = repoBefore ? await readHead(repoBefore) : { hash: null };
         if (!beforeStatus.trim()) {
             return {
@@ -148,7 +150,7 @@ export class ForgeWorkspaceGitService {
         if (commitResult.exitCode !== 0) {
             throw new Error(commitResult.stderr || commitResult.stdout || 'git commit failed');
         }
-        const repoAfter = await git.findRepo({ fs: input.fs, cwd: repoRoot });
+        const repoAfter = await git.findRepo({ fs: toJustGitFileSystem(input.fs), cwd: repoRoot });
         if (!repoAfter) throw new Error('git repository not found after commit');
         const headAfter = await readHead(repoAfter);
         if (!headAfter.hash) throw new Error('git HEAD missing after commit');
@@ -166,7 +168,7 @@ export class ForgeWorkspaceGitService {
         const repoRoot = normalizeRoot(input.repoRoot);
         await this.init({ ...input, repoRoot });
         const git = this.createCommand({ ...input, repoRoot });
-        const repo = await git.findRepo({ fs: input.fs, cwd: repoRoot });
+        const repo = await git.findRepo({ fs: toJustGitFileSystem(input.fs), cwd: repoRoot });
         if (!repo) return [];
         const head = await readHead(repo);
         if (!head.hash) return [];
@@ -192,7 +194,7 @@ export class ForgeWorkspaceGitService {
         const repoRoot = normalizeRoot(input.repoRoot);
         await this.init({ ...input, repoRoot });
         const git = this.createCommand({ ...input, repoRoot });
-        const repo = await git.findRepo({ fs: input.fs, cwd: repoRoot });
+        const repo = await git.findRepo({ fs: toJustGitFileSystem(input.fs), cwd: repoRoot });
         if (!repo) throw new Error('git repository not found');
         if (!input.baseHash) {
             const result = await git.exec(`show --format= --patch ${input.headHash}`);

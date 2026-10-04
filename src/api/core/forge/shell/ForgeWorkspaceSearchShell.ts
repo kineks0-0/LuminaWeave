@@ -1,5 +1,6 @@
 import type { ShellExecResult, ShellSessionRef } from '@shared/resources/index.js';
 import { createGit } from 'just-git';
+import { asJustBashGitCommand } from '../project/JustGitFileSystemBridge.js';
 import type { ForgeRuntimeContext } from '../../../../types/ForgeRuntimeTypes.js';
 import { BashTerminalRuntime } from '../../hal/shell/BashTerminalRuntime.js';
 import {
@@ -242,13 +243,13 @@ export class ForgeWorkspaceSearchShell {
                 fs: semanticFs
             }],
             customCommands: [
-                createGit({
+                asJustBashGitCommand(createGit({
                     identity: {
                         name: 'LuminaWeave Forge',
                         email: 'forge@luminaweave.local'
                     },
                     network: false
-                })
+                }))
             ]
         });
         const raw = await runtime.exec(command);

@@ -113,8 +113,8 @@ export class NexusOrchestrator {
         }
         if (providerType === 'google') {
             if (!apiKey) throw new Error('missing_api_key');
-            const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
-            return createGoogleGenerativeAI({ apiKey })(modelId);
+            const { createGoogle } = await import('@ai-sdk/google');
+            return createGoogle({ apiKey })(modelId);
         }
 
         const baseURL = this.normalizeBaseUrl(String(api?.url || node?.url || ''));

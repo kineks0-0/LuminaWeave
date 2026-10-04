@@ -83,7 +83,6 @@ export default defineConfig(({ command, mode }) => {
         '@': resolve(__dirname, './src'),
         '@shared': resolve(__dirname, './shared'),
         'ai': resolve(__dirname, './node_modules/ai'),
-        '@ai-sdk': resolve(__dirname, './node_modules/@ai-sdk'),
         'node:zlib': resolve(__dirname, './src/shims/node-zlib.ts'),
       }
     },

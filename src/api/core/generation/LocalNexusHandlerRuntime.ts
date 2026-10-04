@@ -79,6 +79,7 @@ export class LocalNexusHandler implements RuntimeStreamingHandle {
                     const result = await streamText({
                         model,
                         messages: modelMessages,
+                        allowSystemInMessages: true,
                         abortSignal: this.abortController.signal,
                         ...mappedSettings
                     });

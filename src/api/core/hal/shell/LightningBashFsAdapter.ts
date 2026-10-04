@@ -78,9 +78,11 @@ export interface LightningBashFsAdapterOptions {
 export class LightningBashFsAdapter implements IFileSystem {
     private readonly fs: LightningPromisifiedFS;
     private readonly paths = new Set<string>(['/']);
+    private readonly identityPrefix: string;
 
     constructor(options: LightningBashFsAdapterOptions = {}) {
         const filesystemName = options.filesystemName ?? 'luminaweave-forge-workspace';
+        this.identityPrefix = `lightning-fs:${filesystemName}`;
         this.fs = new LightningFS(filesystemName, options.wipe ? { wipe: true } : undefined).promises;
     }
 
@@ -133,13 +135,15 @@ export class LightningBashFsAdapter implements IFileSystem {
     }
 
     async stat(path: string): Promise<FsStat> {
-        const stat = await this.fs.stat(normalizeLocalPath(path));
-        return this.toFsStat(stat);
+        const normalized = normalizeLocalPath(path);
+        const stat = await this.fs.stat(normalized);
+        return this.toFsStat(stat, normalized);
     }
 
     async lstat(path: string): Promise<FsStat> {
-        const stat = await this.fs.lstat(normalizeLocalPath(path));
-        return this.toFsStat(stat);
+        const normalized = normalizeLocalPath(path);
+        const stat = await this.fs.lstat(normalized);
+        return this.toFsStat(stat, normalized);
     }
 
     async mkdir(path: string, options?: MkdirOptions): Promise<void> {
@@ -284,14 +288,15 @@ export class LightningBashFsAdapter implements IFileSystem {
         }
     }
 
-    private toFsStat(stat: LightningFS.Stats): FsStat {
+    private toFsStat(stat: LightningFS.Stats, path: string): FsStat {
         return {
             isFile: stat.isFile(),
             isDirectory: stat.isDirectory(),
             isSymbolicLink: stat.isSymbolicLink(),
             mode: typeof stat.mode === 'number' ? stat.mode : 0,
             size: stat.size,
-            mtime: new Date(typeof stat.mtimeMs === 'number' ? stat.mtimeMs : Date.now())
+            mtime: new Date(typeof stat.mtimeMs === 'number' ? stat.mtimeMs : Date.now()),
+            identity: `${this.identityPrefix}:${path}`
         };
     }
 

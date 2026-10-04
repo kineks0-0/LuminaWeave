@@ -73,8 +73,9 @@ export class ResourceBackedBashFs implements IFileSystem {
     async writeFile(path: string, content: FileContent, _options?: unknown): Promise<void> {
         const virtualPath = this.toVirtual(path);
         this.assertPath('write', virtualPath);
-        const payload = this.parseJsonPayload(virtualPath, content);
-        const result = await this.vfs.writeFile(virtualPath, payload, { policy: 'ask' });
+        const text = textContent(content);
+        if (text.length === 0) return;
+        const result = await this.vfs.writeFile(virtualPath, this.parseJsonPayload(virtualPath, text), { policy: 'ask' });
         if (result.status !== 'saved' && result.status !== 'forked') {
             const message = result.diagnostics?.map((diagnostic: unknown) =>
                 typeof diagnostic === 'object' && diagnostic !== null && 'message' in diagnostic
@@ -104,14 +105,21 @@ export class ResourceBackedBashFs implements IFileSystem {
     async stat(path: string): Promise<FsStat> {
         const virtualPath = this.toVirtual(path);
         this.assertPath('read', virtualPath);
-        const stat = await this.vfs.stat(virtualPath);
+        const stat = await this.vfs.stat(virtualPath).catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            if (message.includes('not found') || message.includes('does not resolve')) {
+                throw new Error(`ENOENT: no such file or directory, stat '${virtualPath}'`);
+            }
+            throw error;
+        });
         return {
             isFile: stat.type === 'file',
             isDirectory: stat.type === 'directory',
             isSymbolicLink: false,
             mode: stat.type === 'directory' ? 0o040555 : mode(stat.writable),
             size: stat.size ?? 0,
-            mtime: new Date()
+            mtime: new Date(),
+            identity: `lumina.resource:${virtualPath}`
         };
     }
 
@@ -192,8 +200,7 @@ export class ResourceBackedBashFs implements IFileSystem {
         if (!decision.allowed) throw new ResourceFsError('requires_grant', decision.reason ?? `permission denied: ${virtualPath}`);
     }
 
-    private parseJsonPayload(virtualPath: string, content: FileContent): unknown {
-        const text = textContent(content);
+    private parseJsonPayload(virtualPath: string, text: string): unknown {
         try {
             return JSON.parse(text);
         } catch (error) {

@@ -57,13 +57,14 @@ const parentDirectories = (path: string): string[] => {
     return dirs;
 };
 
-const createStat = (input: { kind: 'file' | 'directory'; size?: number }): FsStat => ({
+const createStat = (input: { kind: 'file' | 'directory'; size?: number; identity: string }): FsStat => ({
     isFile: input.kind === 'file',
     isDirectory: input.kind === 'directory',
     isSymbolicLink: false,
     mode: input.kind === 'file' ? 0o100644 : 0o040755,
     size: input.size ?? 0,
-    mtime: new Date(0)
+    mtime: new Date(0),
+    identity: input.identity
 });
 
 export class ForgeSemanticVfsProvider implements ForgeSemanticVfsReader {
@@ -179,14 +180,16 @@ export class ForgeSemanticBashFs implements IFileSystem {
 
     async stat(path: string): Promise<FsStat> {
         const semanticPath = localPathToSemantic(path);
+        const identity = `lumina.semantic:${semanticPath}`;
         const overlay = this.overlay.get(semanticPath);
-        if (typeof overlay === 'string') return createStat({ kind: 'file', size: overlay.length });
-        if (this.overlayDirectories.has(normalizeDirectoryPath(semanticPath))) return createStat({ kind: 'directory' });
+        if (typeof overlay === 'string') return createStat({ kind: 'file', size: overlay.length, identity });
+        if (this.overlayDirectories.has(normalizeDirectoryPath(semanticPath))) return createStat({ kind: 'directory', identity });
         const entry = await this.findEntry(semanticPath);
         if (!entry) throw new Error(`ENOENT: ${path}`);
         return createStat({
             kind: entry.kind,
-            size: entry.kind === 'file' ? (entry.content ?? '').length : 0
+            size: entry.kind === 'file' ? (entry.content ?? '').length : 0,
+            identity
         });
     }
 
