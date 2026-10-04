@@ -24,8 +24,11 @@ export const currentDetailedView = ref<string | null>(null);
 settingsDomainService.onAnyChange((data: SettingsStorageChange) => {
     if (!data?.key) return;
     const canonicalKey = settingsDomainService.canonicalizeStorageKey(data.key);
-    const targetKey = Object.prototype.hasOwnProperty.call(activeSettings, canonicalKey) ? canonicalKey : data.key;
-    activeSettings[targetKey] = settingsDomainService.getEffectiveValue(targetKey);
+    // 只同步已注册的设置项。存储里还承载正则脚本、工作区等非设置数据，
+    // 把这类键塞进 activeSettings 会触发读取它的主题/surface 重建
+    // （正则面板保存 → surface 重挂 → 再次保存的死循环）。
+    if (!Object.prototype.hasOwnProperty.call(activeSettings, canonicalKey)) return;
+    activeSettings[canonicalKey] = settingsDomainService.getEffectiveValue(canonicalKey);
 });
 
 export const setSettingValue = (storageKey: string, value: unknown): void => {

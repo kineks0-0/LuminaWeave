@@ -203,7 +203,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   ArrowDown,
   ArrowUp,
@@ -323,7 +323,10 @@ const refresh = (): void => {
   if (!scripts.value.some(script => script.id === selectedId.value)) {
     selectedId.value = scripts.value[0]?.id ?? '';
   }
-  suppressSave = false;
+  // deep watcher 是异步的，必须等它跑完再解除抑制，否则加载/刷新会被当成一次编辑并立即保存。
+  void nextTick(() => {
+    suppressSave = false;
+  });
 };
 
 const selectScript = (id: string): void => {
