@@ -27,6 +27,14 @@ export interface ChatPromptPresetImportResult {
     embeddedVariables: { global: number; local: number };
 }
 
+/** 预设缺顶级名称时写入解析结果（通常是文件名），保证资源 id 与列表展示稳定。 */
+const withResolvedPresetName = (raw: unknown, name: string): unknown => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+    const record = raw as Record<string, unknown>;
+    const hasName = [record.name, record.preset_name].some(value => typeof value === 'string' && value.trim());
+    return hasName ? raw : { ...record, name };
+};
+
 /**
  * 预设库 CRUD：本地 preset 资源 + 激活 id（lwStorage）。
  * 资源 raw 始终保持 ST 兼容 JSON，编辑往返通过 parser/serializer 保真。
@@ -82,7 +90,7 @@ export class ChatPromptPresetLibraryService {
         }
         const assets = extractEmbeddedPresetAssets(parsed.preset);
         const embeddedVariables = await promptVariableStore.merge(this.currentChatId(), assets.variables);
-        const document = await this.resources.importResource('local', 'preset', raw);
+        const document = await this.resources.importResource('local', 'preset', withResolvedPresetName(raw, parsed.preset.name));
         return {
             document,
             diagnostics: [...parsed.diagnostics, ...assets.diagnostics],

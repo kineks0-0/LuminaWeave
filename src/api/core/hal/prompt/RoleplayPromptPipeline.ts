@@ -2,6 +2,7 @@ import type { CleanedMessage } from '../../../../types/nexus.js';
 import type { ResourceDiagnostic } from '@shared/resources/index.js';
 import {
     ST_DEFAULT_CHARACTER_ID,
+    ST_GLOBAL_ORDER_ID,
     type ChatCompletionPreset,
     type ChatCompletionPresetEntry
 } from '../../../../types/ChatCompletionPresetTypes.js';
@@ -83,6 +84,7 @@ const MARKERS = {
     worldInfoBefore: 'worldInfoBefore',
     worldInfoAfter: 'worldInfoAfter',
     main: 'main',
+    personaDescription: 'personaDescription',
     charDescription: 'charDescription',
     charPersonality: 'charPersonality',
     scenario: 'scenario',
@@ -94,6 +96,7 @@ const MARKERS = {
 const DEFAULT_MARKER_ORDER: readonly string[] = [
     MARKERS.worldInfoBefore,
     MARKERS.main,
+    MARKERS.personaDescription,
     MARKERS.charDescription,
     MARKERS.charPersonality,
     MARKERS.scenario,
@@ -180,6 +183,7 @@ const resolveOrder = (
     const group = (normalizedCharacterId
         ? preset.promptOrder.find(item => item.characterId !== null && String(item.characterId) === normalizedCharacterId)
         : undefined)
+        ?? preset.promptOrder.find(item => item.characterId === ST_GLOBAL_ORDER_ID)
         ?? preset.promptOrder.find(item => item.characterId === ST_DEFAULT_CHARACTER_ID)
         ?? preset.promptOrder[0];
     if (group && group.order.length > 0) return group.order;
@@ -353,22 +357,42 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
         };
 
         const result = regexedHistory.map((message, index) => formatMessage(message, index));
-        const worldbookDepth = [...(buckets?.at_depth ?? [])]
-            .sort((left, right) => (right.depth ?? 0) - (left.depth ?? 0) || (left.order ?? 0) - (right.order ?? 0));
         const injects = [
-            ...worldbookDepth.map(entry => ({
+            ...(buckets?.at_depth ?? []).map(entry => ({
                 depth: Math.max(0, Number(entry.insertion.depth ?? entry.depth ?? 0)),
                 order: Number(entry.order ?? 0),
                 role: (entry.insertion.role ?? entry.role ?? 'system') as CleanedMessage['role'],
                 content: resolveWorldbookContent(entry)
             })),
             ...depthInjections
-        ].sort((left, right) => right.depth - left.depth || left.order - right.order);
-        for (const inject of injects) {
-            const index = Math.max(0, result.length - inject.depth);
-            result.splice(index, 0, { role: inject.role, content: inject.content });
+        ];
+        // 对齐 ST populationInjectionPrompts：在「最新在前」的数组上按 depth 插入，
+        // 同 depth 下按 injection_order 从高到低、同 order 同 role 用 \n 合并为一条消息。
+        const reversed = [...result].reverse();
+        const depths = Array.from(new Set(injects.map(inject => inject.depth))).sort((left, right) => left - right);
+        let totalInserted = 0;
+        for (const depth of depths) {
+            const atDepth = injects.filter(inject => inject.depth === depth && inject.content.trim());
+            if (atDepth.length === 0) continue;
+            const orderKeys = Array.from(new Set(atDepth.map(inject => inject.order))).sort((left, right) => right - left);
+            const roleMessages: CleanedMessage[] = [];
+            for (const order of orderKeys) {
+                const group = atDepth.filter(inject => inject.order === order);
+                for (const role of ['system', 'user', 'assistant'] as const) {
+                    const content = group
+                        .filter(inject => inject.role === role)
+                        .map(inject => inject.content.trim())
+                        .filter(Boolean)
+                        .join('\n');
+                    if (content) roleMessages.push({ role, content });
+                }
+            }
+            if (roleMessages.length > 0) {
+                reversed.splice(depth + totalInserted, 0, ...roleMessages);
+                totalInserted += roleMessages.length;
+            }
         }
-        return result;
+        return reversed.reverse();
     };
     const historyMessages = resolveHistory();
 
@@ -395,6 +419,11 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
             case MARKERS.charDescription:
                 pushFragment(item.identifier, '角色描述', 'character', entry?.role ?? 'system', character?.description || entry?.content || '');
                 break;
+            case MARKERS.personaDescription: {
+                const personaContent = input.personaDescription?.trim() ? input.personaDescription : (entry?.content ?? '');
+                pushFragment(item.identifier, '用户设定', 'persona', entry?.role ?? 'system', personaContent);
+                break;
+            }
             case MARKERS.charPersonality:
                 pushFragment(item.identifier, '角色性格', 'character', entry?.role ?? 'system', character?.personality || entry?.content || '');
                 break;
@@ -448,18 +477,20 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
         }
     }
 
-    for (const entry of buckets?.outlet ?? []) {
-        pushFragment('outlet', entry.comment ?? String(entry.uid ?? 'outlet'), 'worldbook', entry.insertion.role ?? 'system', resolveWorldbookContent(entry));
-    }
-
-    if (input.personaDescription?.trim()) {
-        fragments.unshift({
+    const personaInOrder = order.some(item => item.enabled && item.identifier === MARKERS.personaDescription);
+    if (!personaInOrder && input.personaDescription?.trim()) {
+        // ST：顺序里没有 personaDescription 标记时，追加到集合末尾（而不是最前）。
+        fragments.push({
             identifier: 'personaDescription',
             label: '用户设定',
             sourceKind: 'persona',
             role: 'system',
             content: input.personaDescription
         });
+    }
+
+    for (const entry of buckets?.outlet ?? []) {
+        pushFragment('outlet', entry.comment ?? String(entry.uid ?? 'outlet'), 'worldbook', entry.insertion.role ?? 'system', resolveWorldbookContent(entry));
     }
 
     const messages: CleanedMessage[] = [];

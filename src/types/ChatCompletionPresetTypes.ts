@@ -42,7 +42,7 @@ export interface ChatCompletionPresetOrderEntry {
 }
 
 export interface ChatCompletionPresetOrderGroup {
-    /** ST `character_id`；`100000` 是 ST 的默认/全局分组。 */
+    /** ST `character_id`：`100001` 为当前全局分组，`100000` 为旧版默认，其余按角色 id 匹配。 */
     characterId: number | null;
     order: ChatCompletionPresetOrderEntry[];
 }
@@ -122,5 +122,11 @@ export const DEFAULT_CHAT_COMPLETION_ENTRY = {
     injectionTrigger: null
 } as const satisfies Omit<ChatCompletionPresetEntry, 'identifier' | 'name' | 'content'>;
 
-/** ST 默认/全局 prompt_order 分组的 character_id。 */
+/**
+ * 当前 ST Chat Completion 的全局 prompt_order 分组 id（PromptManager `dummyId`，strategy 'global'）。
+ * 所有角色共用该分组，社区预设的实际生效顺序通常写在这里。
+ */
+export const ST_GLOBAL_ORDER_ID = 100001;
+
+/** 旧版 ST / 预设库默认 prompt_order 分组的 character_id，作为兼容回退。 */
 export const ST_DEFAULT_CHARACTER_ID = 100000;

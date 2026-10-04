@@ -5,6 +5,7 @@ import {
     DEFAULT_CHAT_COMPLETION_BEHAVIOR,
     DEFAULT_CHAT_COMPLETION_SAMPLING,
     ST_DEFAULT_CHARACTER_ID,
+    ST_GLOBAL_ORDER_ID,
     type ChatCompletionPreset,
     type ChatCompletionPresetEntry,
     type ChatCompletionPresetOrderEntry
@@ -167,28 +168,44 @@ describe('buildRoleplayPrompt 基础组装', () => {
         expect(result.settings).toEqual({});
     });
 
-    it('人物设定置于最前，自定义提示词按 order 插入', () => {
-        const preset = createPreset(
+    it('用户设定按 personaDescription 标记位置插入，自定义提示词按 order 插入', () => {
+        const withMarker = createPreset(
             [
                 entry('main', { content: '主' }),
                 entry('custom-style', { name: '文风', content: '简洁', role: 'assistant' }),
+                entry('personaDescription'),
                 entry('chatHistory')
             ],
             [
                 { identifier: 'main', enabled: true },
                 { identifier: 'custom-style', enabled: true },
+                { identifier: 'personaDescription', enabled: true },
                 { identifier: 'chatHistory', enabled: true }
             ]
         );
-        const result = buildRoleplayPrompt({
+        const ordered = buildRoleplayPrompt({
             history: [{ role: 'user', content: '嗨' }],
-            preset,
+            preset: withMarker,
             personaDescription: '一位旅人',
             variables: createVariables()
         });
+        expect(ordered.messages.map(item => item.content)).toEqual(['主', '简洁', '一位旅人', '嗨']);
+        expect(ordered.messages[1].role).toBe('assistant');
 
-        expect(result.messages.map(item => item.content)).toEqual(['一位旅人', '主', '简洁', '嗨']);
-        expect(result.messages[2].role).toBe('assistant');
+        const withoutMarker = createPreset(
+            [entry('main', { content: '主' }), entry('chatHistory')],
+            [
+                { identifier: 'main', enabled: true },
+                { identifier: 'chatHistory', enabled: true }
+            ]
+        );
+        const appended = buildRoleplayPrompt({
+            history: [{ role: 'user', content: '嗨' }],
+            preset: withoutMarker,
+            personaDescription: '一位旅人',
+            variables: createVariables()
+        });
+        expect(appended.messages.map(item => item.content)).toEqual(['主', '嗨', '一位旅人']);
     });
 });
 
@@ -314,6 +331,33 @@ describe('buildRoleplayPrompt 深度注入、宏、正则与参数', () => {
             '角色深度设定',
             '你好呀',
             '绝对注入',
+            '今天去哪'
+        ]);
+    });
+
+    it('同 depth 的深度注入按 order/role 合并为一条消息', () => {
+        const preset = createPreset(
+            [
+                entry('chatHistory'),
+                entry('deep-system', { content: '系统深度', injectionPosition: 1, injectionDepth: 1, injectionOrder: 100 }),
+                entry('deep-user', { content: '用户深度', injectionPosition: 1, injectionDepth: 1, injectionOrder: 100, role: 'user' }),
+                entry('deep-assistant', { content: '助手深度', injectionPosition: 1, injectionDepth: 1, injectionOrder: 100, role: 'assistant' })
+            ],
+            [
+                { identifier: 'chatHistory', enabled: true },
+                { identifier: 'deep-system', enabled: true },
+                { identifier: 'deep-user', enabled: true },
+                { identifier: 'deep-assistant', enabled: true }
+            ]
+        );
+        const result = buildRoleplayPrompt({ history, preset, variables: createVariables() });
+
+        expect(result.messages.map(item => item.content)).toEqual([
+            '你好',
+            '你好呀',
+            '助手深度',
+            '用户深度',
+            '系统深度',
             '今天去哪'
         ]);
     });
@@ -561,33 +605,57 @@ describe('buildRoleplayPrompt 预设兼容语义', () => {
         expect(result.messages.map(item => item.content)).toEqual(['继续']);
     });
 
-    it('按当前角色选择 prompt_order 分组', () => {
+    it('分组解析：角色精确匹配优先，其次 ST 全局 100001，最后回退旧版 100000', () => {
         const base = createPreset(
-            [entry('main', { content: '默认组' }), entry('custom-x', { content: '角色组' })],
+            [
+                entry('main', { content: '旧版默认组' }),
+                entry('custom-x', { content: '全局组' }),
+                entry('custom-y', { content: '角色组' })
+            ],
             []
         );
         const preset: ChatCompletionPreset = {
             ...base,
             promptOrder: [
                 { characterId: ST_DEFAULT_CHARACTER_ID, order: [{ identifier: 'main', enabled: true }] },
-                { characterId: 100001, order: [{ identifier: 'custom-x', enabled: true }] }
+                { characterId: ST_GLOBAL_ORDER_ID, order: [{ identifier: 'custom-x', enabled: true }] },
+                { characterId: 3, order: [{ identifier: 'custom-y', enabled: true }] }
             ]
         };
 
-        const defaultResult = buildRoleplayPrompt({
+        const exactResult = buildRoleplayPrompt({
             history: [],
             preset,
+            characterId: '3',
             variables: createVariables()
         });
-        expect(defaultResult.messages.map(item => item.content)).toEqual(['默认组']);
+        expect(exactResult.messages.map(item => item.content)).toEqual(['角色组']);
 
-        const characterResult = buildRoleplayPrompt({
+        const globalResult = buildRoleplayPrompt({
             history: [],
             preset,
-            characterId: '100001',
+            characterId: '0',
             variables: createVariables()
         });
-        expect(characterResult.messages.map(item => item.content)).toEqual(['角色组']);
+        expect(globalResult.messages.map(item => item.content)).toEqual(['全局组']);
+
+        const noCharacterResult = buildRoleplayPrompt({
+            history: [],
+            preset,
+            variables: createVariables()
+        });
+        expect(noCharacterResult.messages.map(item => item.content)).toEqual(['全局组']);
+
+        const legacyOnly: ChatCompletionPreset = {
+            ...base,
+            promptOrder: [{ characterId: ST_DEFAULT_CHARACTER_ID, order: [{ identifier: 'main', enabled: true }] }]
+        };
+        const legacyResult = buildRoleplayPrompt({
+            history: [],
+            preset: legacyOnly,
+            variables: createVariables()
+        });
+        expect(legacyResult.messages.map(item => item.content)).toEqual(['旧版默认组']);
     });
 });
 

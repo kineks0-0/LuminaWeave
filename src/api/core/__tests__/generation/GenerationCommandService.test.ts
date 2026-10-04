@@ -197,8 +197,9 @@ describe('GenerationCommandService lumina assembly composition', () => {
             resourceType: 'character',
             resourceId: 'Alice'
         })]);
-        expect(result.messages[0]).toEqual({ role: 'system', content: '旅行者设定' });
-        expect(result.messages[1].content).toContain('Alice');
+        expect(result.messages[0].content).toContain('Alice');
+        expect(result.messages[1]).toEqual({ role: 'system', content: '旅行者设定' });
+        expect(result.messages).toHaveLength(2);
         expect(result.settings).toMatchObject({ temperature: 1 });
     });
 

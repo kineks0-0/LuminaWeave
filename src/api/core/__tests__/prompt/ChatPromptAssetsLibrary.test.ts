@@ -226,6 +226,18 @@ describe('ChatPromptPresetLibraryService', () => {
         expect(regexScriptLibraryService.list()).toEqual([]);
     });
 
+    it('导入无名预设时以文件名命名并持久化', async () => {
+        const raw = stPresetFixture();
+        delete raw.name;
+
+        const service = createPresetService();
+        const result = await service.importFromRaw(raw, '夏瑾 天琴座 V2 Beta 1.0');
+
+        expect(result.document).not.toBeNull();
+        expect((result.document!.raw as Record<string, unknown>).name).toBe('夏瑾 天琴座 V2 Beta 1.0');
+        expect((await service.list())[0].name).toBe('夏瑾 天琴座 V2 Beta 1.0');
+    });
+
     it('导入预设时合并 TavernHelper 变量（全局 + 会话）', async () => {
         const variableStorage = new Map<string, unknown>();
         vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ chatId: 'chat-1' } as never);

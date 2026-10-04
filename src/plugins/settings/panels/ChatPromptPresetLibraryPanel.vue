@@ -114,10 +114,23 @@
           <div v-if="activeTab === 'structure'" class="tab-panel">
             <div class="structure-toolbar">
               <SettingsDescription>拖拽或使用箭头调整顺序；标记条目由角色卡、世界书或历史自动填充。</SettingsDescription>
-              <LuminaButton variant="soft" size="sm" @click="addCustomPrompt">
-                <Plus :size="14" :stroke-width="2" aria-hidden="true" />
-                自定义提示词
-              </LuminaButton>
+              <div class="structure-toolbar-actions">
+                <label v-if="(draft?.promptOrder.length ?? 0) > 1" class="group-select">
+                  <select :value="String(activeGroupIndex)" aria-label="顺序分组" @change="selectGroup($event)">
+                    <option
+                      v-for="(group, index) in draft!.promptOrder"
+                      :key="`${group.characterId}-${index}`"
+                      :value="String(index)"
+                    >
+                      角色 {{ group.characterId ?? '未标' }} · {{ group.order.length }} 条
+                    </option>
+                  </select>
+                </label>
+                <LuminaButton variant="soft" size="sm" @click="addCustomPrompt">
+                  <Plus :size="14" :stroke-width="2" aria-hidden="true" />
+                  自定义提示词
+                </LuminaButton>
+              </div>
             </div>
             <div class="prompt-rows">
               <div
@@ -141,7 +154,6 @@
                   <span class="prompt-badge" :data-role="item.entry?.role ?? 'system'">{{ roleLabel(item.entry?.role) }}</span>
                   <span v-if="item.entry?.marker" class="prompt-badge is-marker">自动填充</span>
                   <span v-else-if="item.entry?.injectionPosition === 1" class="prompt-badge">深度 {{ item.entry.injectionDepth }}</span>
-                  <span class="prompt-row-spacer"></span>
                   <LuminaIconButton
                     :ariaLabel="expandedPromptId === item.order.identifier ? '收起' : '展开'"
                     :title="expandedPromptId === item.order.identifier ? '收起' : '编辑'"
@@ -346,6 +358,7 @@ import { extractEmbeddedPresetAssets } from '../../../api/core/hal/prompt/chat/E
 import {
   DEFAULT_CHAT_COMPLETION_ENTRY,
   ST_DEFAULT_CHARACTER_ID,
+  ST_GLOBAL_ORDER_ID,
   type ChatCompletionNamesBehavior,
   type ChatCompletionPreset,
   type ChatCompletionPresetEntry,
@@ -415,17 +428,29 @@ const filteredPresets = computed(() => {
   return presets.value.filter(preset => preset.name.toLowerCase().includes(keyword));
 });
 
-const primaryGroup = computed(() => {
-  const preset = draft.value;
-  if (!preset) return null;
-  return preset.promptOrder.find(group => group.characterId === ST_DEFAULT_CHARACTER_ID)
-    ?? preset.promptOrder[0]
-    ?? null;
+const defaultGroupIndex = (preset: ChatCompletionPreset | null): number => {
+  if (!preset || preset.promptOrder.length === 0) return -1;
+  const index = preset.promptOrder.findIndex(group => group.characterId === ST_GLOBAL_ORDER_ID);
+  if (index >= 0) return index;
+  const legacyIndex = preset.promptOrder.findIndex(group => group.characterId === ST_DEFAULT_CHARACTER_ID);
+  return legacyIndex >= 0 ? legacyIndex : 0;
+};
+
+const activeGroupIndex = ref(-1);
+
+const activeGroup = computed(() => {
+  const groups = draft.value?.promptOrder ?? [];
+  return groups[activeGroupIndex.value] ?? groups[0] ?? null;
 });
+
+const selectGroup = (event: Event): void => {
+  const value = Number((event.target as HTMLSelectElement).value);
+  if (Number.isInteger(value)) activeGroupIndex.value = value;
+};
 
 const orderedPrompts = computed(() => {
   const preset = draft.value;
-  const group = primaryGroup.value;
+  const group = activeGroup.value;
   if (!preset || !group) return [];
   return group.order.map(item => ({
     order: item,
@@ -474,6 +499,7 @@ const selectPreset = async (id: string): Promise<void> => {
   suppressSave = true;
   const result = await chatPromptPresetLibraryService.load(id);
   draft.value = result.preset;
+  activeGroupIndex.value = defaultGroupIndex(result.preset);
   selectedId.value = id;
   expandedPromptId.value = null;
   jsonError.value = '';
@@ -567,7 +593,7 @@ const requestDelete = async (id: string, name: string): Promise<void> => {
 };
 
 const movePrompt = (index: number, delta: number): void => {
-  const group = primaryGroup.value;
+  const group = activeGroup.value;
   if (!group) return;
   const target = index + delta;
   if (target < 0 || target >= group.order.length) return;
@@ -596,7 +622,7 @@ const updateEntry = (identifier: string, patch: Partial<ChatCompletionPresetEntr
 
 const addCustomPrompt = (): void => {
   const preset = draft.value;
-  const group = primaryGroup.value;
+  const group = activeGroup.value;
   if (!preset || !group) return;
   const identifier = `custom-${Date.now().toString(36)}`;
   preset.prompts.push({
@@ -612,7 +638,7 @@ const addCustomPrompt = (): void => {
 
 const removeCustomPrompt = (identifier: string): void => {
   const preset = draft.value;
-  const group = primaryGroup.value;
+  const group = activeGroup.value;
   if (!preset || !group) return;
   preset.prompts = preset.prompts.filter(entry => entry.identifier !== identifier);
   const index = group.order.findIndex(item => item.identifier === identifier);
@@ -658,6 +684,7 @@ const applyJson = (): void => {
     }
     suppressSave = true;
     draft.value = parsed.preset;
+    activeGroupIndex.value = defaultGroupIndex(parsed.preset);
     suppressSave = false;
     jsonError.value = '';
     scheduleSave();
@@ -940,6 +967,30 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.structure-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-select select {
+  max-width: 100%;
+  border: 1px solid var(--lw-border-base);
+  border-radius: var(--lw-radius-sm);
+  background: var(--lw-bg-elevated);
+  color: var(--lw-text-main);
+  font: inherit;
+  font-size: var(--lw-type-body-small-size, 12px);
+  padding: 6px 8px;
+  outline: none;
+}
+
+.group-select select:focus {
+  border-color: var(--lw-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lw-primary) 12%, transparent);
+}
+
 .prompt-rows {
   display: flex;
   flex-direction: column;
@@ -980,7 +1031,7 @@ onBeforeUnmount(() => {
 
 .prompt-name {
   min-width: 0;
-  max-width: 32%;
+  flex: 1 1 auto;
   overflow: hidden;
   color: var(--lw-text-main);
   font-size: var(--lw-type-label-size, 13px);
@@ -1000,10 +1051,6 @@ onBeforeUnmount(() => {
 .prompt-badge.is-marker {
   background: color-mix(in srgb, var(--lw-primary) 12%, transparent);
   color: var(--lw-primary-strong, var(--lw-primary));
-}
-
-.prompt-row-spacer {
-  flex: 1;
 }
 
 .prompt-editor {

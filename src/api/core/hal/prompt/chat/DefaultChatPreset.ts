@@ -2,7 +2,7 @@ import {
     DEFAULT_CHAT_COMPLETION_BEHAVIOR,
     DEFAULT_CHAT_COMPLETION_ENTRY,
     DEFAULT_CHAT_COMPLETION_SAMPLING,
-    ST_DEFAULT_CHARACTER_ID,
+    ST_GLOBAL_ORDER_ID,
     type ChatCompletionPreset,
     type ChatCompletionPresetEntry
 } from '../../../../../types/ChatCompletionPresetTypes.js';
@@ -27,6 +27,7 @@ export const createDefaultChatPreset = (): ChatCompletionPreset => {
             content: "Write {{char}}'s next reply in this fictional roleplay between {{char}} and {{user}}. Stay in character, keep the scene moving, and reply in the user's language."
         },
         marker('worldInfoBefore', '世界书 (before)'),
+        marker('personaDescription', '用户设定'),
         marker('charDescription', '角色描述'),
         marker('charPersonality', '角色性格'),
         marker('scenario', '场景'),
@@ -39,7 +40,7 @@ export const createDefaultChatPreset = (): ChatCompletionPreset => {
         name: 'Lumina 默认（Chat Completion）',
         prompts,
         promptOrder: [{
-            characterId: ST_DEFAULT_CHARACTER_ID,
+            characterId: ST_GLOBAL_ORDER_ID,
             order: prompts.map(item => ({ identifier: item.identifier, enabled: true }))
         }],
         sampling: { ...DEFAULT_CHAT_COMPLETION_SAMPLING },
