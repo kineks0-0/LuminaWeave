@@ -19,7 +19,9 @@ vi.mock('@/api/storage.js', () => ({ lwStorage: mocks.lwStorage }));
 
 import {
     isWorldbookEnabledForCurrentChat,
-    setWorldbookEnabledForCurrentChat
+    isWorldbookEnabledGlobally,
+    setWorldbookEnabledForCurrentChat,
+    setWorldbookEnabledGlobally
 } from '../sessionWorldbookBindings.js';
 
 const worldbookRef = (id: string): ResourceRef => ({
@@ -49,5 +51,16 @@ describe('session worldbook bindings', () => {
         setWorldbookEnabledForCurrentChat(book, true);
         expect(isWorldbookEnabledForCurrentChat(book)).toBe(false);
         mocks.setChatId('chat-1');
+    });
+
+    it('enables and disables a worldbook globally without touching the chat state', () => {
+        const book = worldbookRef('book-global');
+
+        setWorldbookEnabledGlobally(book, true);
+        expect(isWorldbookEnabledGlobally(book)).toBe(true);
+        expect(isWorldbookEnabledForCurrentChat(book)).toBe(false);
+
+        setWorldbookEnabledGlobally(book, false);
+        expect(isWorldbookEnabledGlobally(book)).toBe(false);
     });
 });

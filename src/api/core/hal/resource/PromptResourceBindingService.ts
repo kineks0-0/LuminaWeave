@@ -1,7 +1,7 @@
 import { lwStorage, type StorageScope } from '../../../storage.js';
 import type { PromptSourceSelection, ResourceDiagnostic, ResourceRef, ResourceType } from '@shared/resources/index.js';
 
-export type PromptResourceBindingOwnerKind = 'session' | 'prompt-preset' | 'forge-workspace';
+export type PromptResourceBindingOwnerKind = 'session' | 'prompt-preset' | 'forge-workspace' | 'global';
 
 export interface PromptResourceBindingOwner {
     kind: PromptResourceBindingOwnerKind;
@@ -63,12 +63,33 @@ export class PromptResourceBindingService {
         return { kind: 'session', id: sessionId };
     }
 
+    /** 全局世界书启用列表：对所有会话生效。 */
+    static globalOwner(): PromptResourceBindingOwner {
+        return { kind: 'global', id: 'worldbooks' };
+    }
+
     static promptPresetOwner(profileId: string, presetId: string): PromptResourceBindingOwner {
         return { kind: 'prompt-preset', id: promptPresetOwnerId(profileId, presetId) };
     }
 
     static forgeWorkspaceOwner(workspaceId: string): PromptResourceBindingOwner {
         return { kind: 'forge-workspace', id: workspaceId };
+    }
+
+    /** 按来源顺序合并世界书 ref 并去重（全局在前、会话在后），只保留 worldbook 类型。 */
+    static mergeWorldbookRefs(...sources: ResourceRef[][]): ResourceRef[] {
+        const seen = new Set<string>();
+        const merged: ResourceRef[] = [];
+        for (const refs of sources) {
+            for (const ref of refs) {
+                if (ref.resourceType !== 'worldbook') continue;
+                const key = `${ref.sourceId}:${ref.resourceType}:${ref.resourceId}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                merged.push(ref);
+            }
+        }
+        return merged;
     }
 
     static createSourceSelectionDiagnostics(excludedRefs: ResourceRef[] = []): ResourceDiagnostic[] {

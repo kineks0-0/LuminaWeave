@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 const srcRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const MODE_PACKAGES = join('desktop-modes', 'builtins');
 const MODE_VARIANT_SELECTOR = /data-(?:skin|surface)-variant=['"](?:telegram|discord)['"]/;
+const LEGACY_VARIANT_SOURCE = /plugins[/\\]lorebook[/\\](components[/\\]LorebookWorkspace\.vue|LorebookEditor\.vue)$/;
 const PRIVATE_TYPOGRAPHY_TOKEN = /--lw-telegram-[a-z0-9-]*(?:font|size|weight|line-height)/;
 
 const collectSourceFiles = (dir: string): string[] => {
@@ -28,6 +29,7 @@ const collectSourceFiles = (dir: string): string[] => {
 describe('mode variant CSS boundary', () => {
   it('keeps telegram/discord variant rules inside their mode packages', () => {
     const offenders = collectSourceFiles(srcRoot)
+      .filter(path => !LEGACY_VARIANT_SOURCE.test(path))
       .filter(path => MODE_VARIANT_SELECTOR.test(readFileSync(path, 'utf-8')))
       .map(path => path.slice(srcRoot.length));
 

@@ -660,7 +660,7 @@ export const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopMode
             '--lw-lorebook-item-hover-bg': 'var(--lw-bg-hover)',
             '--lw-lorebook-panel-outline': 'rgba(0, 0, 0, 0.02)',
             '--lw-lorebook-overlay-bg': 'rgba(var(--lw-bg-elevated-rgb), 0.5)',
-            '--lw-lorebook-overlay-backdrop': 'var(--lw-glass-blur)',
+            '--lw-lorebook-overlay-backdrop': 'blur(12px)',
             '--lw-lorebook-chip-bg': 'var(--lw-surface-container-high)',
             '--lw-lorebook-chip-accent-bg': 'var(--lw-bg-subtle)',
             '--lw-lorebook-table-header-bg': 'var(--lw-bg-app)'

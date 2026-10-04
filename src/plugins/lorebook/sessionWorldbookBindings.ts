@@ -1,6 +1,10 @@
 import type { ResourceRef } from '@shared/resources/index.js';
 import { lwStorage } from '../../api/storage.js';
-import { PromptResourceBindingService, promptResourceBindingService } from '../../api/core/hal/resource/index.js';
+import {
+    PromptResourceBindingService,
+    promptResourceBindingService,
+    type PromptResourceBindingOwner
+} from '../../api/core/hal/resource/index.js';
 
 const refKey = (ref: ResourceRef): string => `${ref.sourceId}:${ref.resourceType}:${ref.resourceId}`;
 
@@ -21,6 +25,23 @@ export const isWorldbookEnabledForCurrentChat = (ref: ResourceRef): boolean => {
 export const setWorldbookEnabledForCurrentChat = (ref: ResourceRef, enabled: boolean): void => {
     const owner = currentChatOwner();
     if (!owner) return;
+    setWorldbookEnabledForOwner(owner, ref, enabled);
+};
+
+/** 全局启用状态：对所有会话生效（与角色卡内置书无关）。 */
+export const isWorldbookEnabledGlobally = (ref: ResourceRef): boolean =>
+    promptResourceBindingService.resolveBindings(PromptResourceBindingService.globalOwner()).enabledRefs
+        .some(item => refKey(item) === refKey(ref));
+
+export const setWorldbookEnabledGlobally = (ref: ResourceRef, enabled: boolean): void => {
+    setWorldbookEnabledForOwner(PromptResourceBindingService.globalOwner(), ref, enabled);
+};
+
+const setWorldbookEnabledForOwner = (
+    owner: PromptResourceBindingOwner,
+    ref: ResourceRef,
+    enabled: boolean
+): void => {
     if (enabled) {
         promptResourceBindingService.addBinding(owner, ref);
         return;

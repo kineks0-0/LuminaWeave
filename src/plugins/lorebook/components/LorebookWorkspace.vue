@@ -3,7 +3,7 @@
     class="lorebook-root"
     :data-mode="resolvedMode"
     :data-view="displayMode"
-    :data-skin-variant="props.skinVariant || 'default'"
+    :data-skin-variant="workspaceSkinVariant || props.skinVariant || 'default'"
     :style="props.skinStyle"
   >
     <!-- 顶部状态栏 -->
@@ -145,7 +145,7 @@
             </svg>
           </button>
         </div>
-        <button class="lw-btn lw-btn-primary" @click="createNewEntry">
+        <button v-if="!isBuiltinBookSelected" class="lw-btn lw-btn-primary" @click="createNewEntry">
           <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -155,13 +155,23 @@
       </div>
     </div>
 
-    <!-- 按聊天启用开关 -->
-    <div v-if="selectedBookRef" class="book-chat-toggle">
+    <!-- 启用开关：内置书只读，其余支持全局/本聊天两级启用 -->
+    <div v-if="isBuiltinBookSelected" class="book-chat-toggle">
+      <span class="book-chat-toggle-control is-static">
+        <span>角色卡内置 · 始终注入</span>
+      </span>
+      <span class="book-chat-toggle-hint">只读，复制到本地世界书后可编辑</span>
+    </div>
+    <div v-else-if="selectedBookRef" class="book-chat-toggle">
+      <label class="book-chat-toggle-control">
+        <input type="checkbox" :checked="enabledGlobally" @change="handleToggleGlobalEnable" />
+        <span>全局启用</span>
+      </label>
       <label class="book-chat-toggle-control">
         <input type="checkbox" :checked="enabledForCurrentChat" @change="handleToggleChatEnable" />
         <span>本聊天启用</span>
       </label>
-      <span class="book-chat-toggle-hint">{{ enabledForCurrentChat ? '生成时注入这本书' : '仅编辑，不参与生成' }}</span>
+      <span class="book-chat-toggle-hint">{{ enableStateHint }}</span>
     </div>
 
     <!-- 搜索栏 -->
@@ -299,15 +309,21 @@ import { LorebookTimelineResolver } from '../../../api/core/lorebook/LorebookTim
 import type { LorebookVersionMode } from '../../../types/LorebookViewTypes.js';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../../platform/activity/activityLaunchResolver.js';
 import { useSurfaceInput } from '../../../platform/surface/useSurfaceRuntimeContext.js';
+import { useSurfaceSkin } from '../../../desktop-modes/core/useSurfaceSkin.js';
 import LorebookEditor from '../LorebookEditor.vue';
-import { buildSourceResourcePath, type ResourceRef } from '@shared/resources/index.js';
+import { buildSourceResourcePath, characterBookToLorebookEntries, type ResourceRef } from '@shared/resources/index.js';
+import { resolveCharacterFields } from '../../../api/core/hal/prompt/CharacterFields.js';
+import { promptResourceResolver } from '../../../api/core/hal/resource/index.js';
 import {
   isWorldbookEnabledForCurrentChat,
-  setWorldbookEnabledForCurrentChat
+  isWorldbookEnabledGlobally,
+  setWorldbookEnabledForCurrentChat,
+  setWorldbookEnabledGlobally
 } from '../sessionWorldbookBindings.js';
 import { truncate, deepClone } from '@shared/CommonUtils.js';
 
 const props = useSurfaceInput('lorebook.workspace');
+const { variant: workspaceSkinVariant } = useSurfaceSkin('lorebook.workspace');
 
 const lwApi = inject('lwApi') as LuminaWeaveAPI;
 const lorebookManager = lwApi.lorebookManager;
@@ -333,8 +349,17 @@ const onEditingEntryChanged = (entry: LuminaLorebookEntry | null) => {
   }
 };
 
-const allBooks = computed(() => localBooks.value.length ? localBooks.value : lorebookManager.books || []);
 const currentSelectedBookName = ref(lorebookManager.selectedBook);
+const BUILTIN_CHARACTER_BOOK_ID = '__character_book__';
+const builtinBook = ref<{ id: string; name: string; entries: LuminaLorebookEntry[] } | null>(null);
+const isBuiltinBookSelected = computed(() => currentSelectedBookName.value === BUILTIN_CHARACTER_BOOK_ID);
+
+const allBooks = computed(() => {
+  const books = localBooks.value.length ? localBooks.value : lorebookManager.books || [];
+  return builtinBook.value
+    ? [{ id: builtinBook.value.id, name: builtinBook.value.name }, ...books]
+    : [...books];
+});
 
 const currentBookName = computed(() => {
   if (!allBooks.value.length) return '选择世界书';
@@ -356,6 +381,7 @@ const localBooks = ref([...lorebookManager.books]);
 const importInput = ref<HTMLInputElement | null>(null);
 const canDeleteBooks = computed(() => lorebookManager.canDeleteBooks());
 const selectedBookRef = computed<ResourceRef | null>(() => {
+  if (isBuiltinBookSelected.value) return null;
   const book = allBooks.value.find(item => item.id === currentSelectedBookName.value);
   if (!book?.sourceId) return null;
   return {
@@ -367,13 +393,59 @@ const selectedBookRef = computed<ResourceRef | null>(() => {
   };
 });
 const enabledForCurrentChat = ref(false);
+const enabledGlobally = ref(false);
+const enableStateHint = computed(() => {
+  if (enabledGlobally.value) return '所有聊天注入';
+  if (enabledForCurrentChat.value) return '仅当前聊天注入';
+  return '仅编辑，不参与生成';
+});
 const syncChatEnableState = (): void => {
   enabledForCurrentChat.value = selectedBookRef.value
     ? isWorldbookEnabledForCurrentChat(selectedBookRef.value)
     : false;
+  enabledGlobally.value = selectedBookRef.value
+    ? isWorldbookEnabledGlobally(selectedBookRef.value)
+    : false;
 };
 watch(selectedBookRef, syncChatEnableState, { immediate: true });
-watch(() => contextStore.activeSessionId, syncChatEnableState);
+watch(() => contextStore.activeSessionId, () => {
+  syncChatEnableState();
+  if (isBuiltinBookSelected.value) void loadBuiltinCharacterBook();
+});
+
+const characterBookRef = (charId: string): ResourceRef => ({
+  sourceId: 'local',
+  resourceType: 'character',
+  resourceId: charId,
+  path: buildSourceResourcePath('local', 'character', charId),
+  writable: true
+});
+
+const loadBuiltinCharacterBook = async (): Promise<void> => {
+  const rawCharId = lwStorage._getContextIds().charId;
+  const charId = rawCharId === undefined || rawCharId === null ? '' : String(rawCharId);
+  if (!charId || charId === 'Global') {
+    builtinBook.value = null;
+    if (isBuiltinBookSelected.value) localEntries.value = [];
+    return;
+  }
+  try {
+    const bundle = await promptResourceResolver.resolve([characterBookRef(charId)]);
+    const document = bundle.documents.find(item => item.ref.resourceType === 'character');
+    const entries = document ? characterBookToLorebookEntries(document.raw) : [];
+    if (entries.length === 0) {
+      builtinBook.value = null;
+      if (isBuiltinBookSelected.value) localEntries.value = [];
+      return;
+    }
+    const name = resolveCharacterFields(document?.raw).name || charId;
+    builtinBook.value = { id: BUILTIN_CHARACTER_BOOK_ID, name: `角色卡内置 · ${name}`, entries };
+    if (isBuiltinBookSelected.value) localEntries.value = [...entries];
+  } catch (error) {
+    console.warn('[LorebookWorkspace] 读取角色卡内置世界书失败', error);
+    builtinBook.value = null;
+  }
+};
 const resolvedSourceId = computed<TimelineSourceId>(() => props.timelineSourceId || contextStore.activeSourceId);
 const resolvedSource = computed(() => {
   return contextStore.sources.find(source => source.id === resolvedSourceId.value) || null;
@@ -498,12 +570,17 @@ const filteredEntries = computed(() => {
 });
 
 const captureCurrentSnapshot = () => {
-  if (!props.showTimelineChrome) return;
+  if (!props.showTimelineChrome || isBuiltinBookSelected.value) return;
   lorebookManager.captureSnapshot(activeContext.value, localEntries.value);
 };
 
 const handleBookChange = async () => {
   if (!currentSelectedBookName.value) return;
+  if (isBuiltinBookSelected.value) {
+    await loadBuiltinCharacterBook();
+    localEntries.value = builtinBook.value ? [...builtinBook.value.entries] : [];
+    return;
+  }
   const targetBookId = currentSelectedBookName.value;
   const success = await lorebookManager.loadLorebook(targetBookId);
   // 防止并发切换：只有当 lorebookManager 已切到目标书时才更新
@@ -544,6 +621,10 @@ const handleManualSnapshotChange = (event: Event) => {
 };
 
 const selectEntry = (entry: LuminaLorebookEntry) => {
+  if (isBuiltinBookSelected.value) {
+    lwApi.showToast('角色卡内置世界书只读，复制到本地世界书后才能编辑', 'info');
+    return;
+  }
   const mode = interactMode.value;
   const isLarge = resolvedMode.value === 'large';
 
@@ -580,6 +661,10 @@ const closeEditor = () => {
 };
 
 const createNewEntry = () => {
+  if (isBuiltinBookSelected.value) {
+    lwApi.showToast('角色卡内置世界书只读，复制到本地世界书后才能编辑', 'info');
+    return;
+  }
   const newEntry: LuminaLorebookEntry = {
     uid: '',
     key: [],
@@ -652,7 +737,7 @@ const handleImportFile = async (event: Event) => {
 
 const handleDeleteBook = async () => {
   const name = currentSelectedBookName.value;
-  if (!name) return;
+  if (!name || isBuiltinBookSelected.value) return;
   if (!(await lwApi.confirm(`确定删除世界书「${name}」吗？此操作不可恢复。`))) return;
   const success = await lorebookManager.deleteBook(name);
   if (!success) return;
@@ -668,6 +753,14 @@ const handleToggleChatEnable = (event: Event) => {
   const enabled = (event.target as HTMLInputElement).checked;
   setWorldbookEnabledForCurrentChat(bookRef, enabled);
   enabledForCurrentChat.value = enabled;
+};
+
+const handleToggleGlobalEnable = (event: Event) => {
+  const bookRef = selectedBookRef.value;
+  if (!bookRef) return;
+  const enabled = (event.target as HTMLInputElement).checked;
+  setWorldbookEnabledGlobally(bookRef, enabled);
+  enabledGlobally.value = enabled;
 };
 
 
@@ -717,6 +810,7 @@ onMounted(async () => {
   }
 
   await lorebookManager.syncFromST();
+  await loadBuiltinCharacterBook();
   // 初始化：将本窗口对齐到 lorebookManager 当前加载的书
   currentSelectedBookName.value = lorebookManager.selectedBook;
   localEntries.value = [...lorebookManager.entries];
@@ -763,10 +857,10 @@ onUnmounted(() => {
 }
 
 .lorebook-root[data-mode="small"] .lore-header {
-  padding: 12px 16px;
+  padding: 10px 14px;
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
+  gap: 8px;
 }
 
 .lorebook-root[data-mode="small"] .book-select {
@@ -785,13 +879,8 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.lorebook-root[data-mode="small"] .header-title {
-  font-size: var(--lw-type-title-large-size);
-}
-
 .lorebook-root[data-mode="small"] .lore-actions {
   width: 100%;
-  justify-content: space-between;
   align-items: center;
 }
 
@@ -831,16 +920,17 @@ onUnmounted(() => {
 /* 侧边栏详情页适配 */
 .lorebook-root[data-mode="small"] .lore-editor-overlay {
   background: var(--lw-lorebook-panel-bg, var(--lw-bg-surface));
-  /* 侧边栏不需要那种透明模糊感，直接白底 */
+  /* 侧边栏编辑器保持实底，避免窄栏里透出列表影响阅读 */
+  -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 
 .lore-header {
-  padding: 24px;
+  padding: 18px 22px;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
   background: var(--lw-lorebook-header-bg, color-mix(in srgb, var(--lw-bg-elevated) 90%, transparent));
   position: sticky;
   top: 0;
@@ -849,21 +939,27 @@ onUnmounted(() => {
 
 .header-content {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
 }
 
 .header-title {
+  min-width: 0;
+  overflow: hidden;
   font-size: var(--lw-type-headline-small-size);
   font-weight: var(--lw-type-title-small-weight);
   font-family: var(--lw-font-display);
   color: var(--lw-text-main);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .book-selector-trigger {
   position: relative;
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
   cursor: pointer;
@@ -1099,7 +1195,18 @@ onUnmounted(() => {
 
 .lore-actions {
   display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
   gap: 12px;
+  row-gap: 8px;
+}
+
+.lore-actions .lw-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .lore-search {
@@ -1288,8 +1395,9 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   z-index: 100;
-  background: var(--lw-lorebook-overlay-bg, rgba(var(--lw-bg-elevated-rgb), 0.5));
-  backdrop-filter: var(--lw-lorebook-overlay-backdrop, var(--lw-glass-blur));
+  background: var(--lw-lorebook-overlay-bg, rgba(var(--lw-bg-elevated-rgb), 0.72));
+  -webkit-backdrop-filter: var(--lw-lorebook-overlay-backdrop, blur(12px));
+  backdrop-filter: var(--lw-lorebook-overlay-backdrop, blur(12px));
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -1345,6 +1453,7 @@ onUnmounted(() => {
    ======================================== */
 .view-toggle-group {
   display: flex;
+  flex-shrink: 0;
   gap: 2px;
   background: var(--lw-lorebook-panel-bg, var(--lw-surface-container-lowest));
   border-radius: var(--lw-radius);
@@ -1605,8 +1714,13 @@ onUnmounted(() => {
 
 /* 侧边栏下视图切换组紧凑化 */
 .lorebook-root[data-mode="small"] .lore-actions {
+  justify-content: flex-start;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.lorebook-root[data-mode="small"] .lore-actions .lw-btn {
+  margin-left: auto;
 }
 
 .lorebook-root[data-mode="small"] .view-toggle-group {
@@ -1635,11 +1749,14 @@ onUnmounted(() => {
 
 .book-admin-group {
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
 
 .book-admin-btn {
+  flex-shrink: 0;
   padding: 5px 10px;
   border: 1px solid var(--lw-border-base);
   border-radius: 999px;
@@ -1647,6 +1764,7 @@ onUnmounted(() => {
   color: var(--lw-text-secondary);
   font-size: var(--lw-type-label-medium-size, 12px);
   cursor: pointer;
+  white-space: nowrap;
   transition: background-color var(--lw-transition), color var(--lw-transition);
 }
 
@@ -1681,9 +1799,70 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
+.book-chat-toggle-control.is-static {
+  color: var(--lw-text-secondary);
+  cursor: default;
+}
+
 .book-chat-toggle-hint {
   color: var(--lw-text-muted);
   font-size: var(--lw-type-label-small-size, 11px);
+}
+
+.lorebook-root[data-skin-variant='telegram'] {
+  background: var(--lw-lorebook-workspace-bg, radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.72), transparent 34%), rgba(232, 245, 255, 0.58));
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-header {
+  background: var(--lw-lorebook-header-bg, rgba(255, 255, 255, 0.62));
+  border-bottom-color: var(--lw-lorebook-header-border, rgba(148, 190, 219, 0.34));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(20px));
+}
+
+.lorebook-root[data-skin-variant='telegram'] .book-selector-trigger,
+.lorebook-root[data-skin-variant='telegram'] .view-toggle-group,
+.lorebook-root[data-skin-variant='telegram'] .version-status-bar,
+.lorebook-root[data-skin-variant='telegram'] .version-history-panel,
+.lorebook-root[data-skin-variant='telegram'] .search-input-wrapper {
+  background: var(--lw-lorebook-control-bg, rgba(255, 255, 255, 0.7));
+  border-color: var(--lw-lorebook-control-border, rgba(148, 190, 219, 0.34));
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-list {
+  background: transparent;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-item,
+.lorebook-root[data-skin-variant='telegram'] .grid-card,
+.lorebook-root[data-skin-variant='telegram'] .table-row {
+  min-height: 44px;
+  background: var(--lw-lorebook-item-bg, rgba(255, 255, 255, 0.72));
+  border-color: var(--lw-lorebook-item-border, rgba(148, 190, 219, 0.3));
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .lore-item:hover,
+.lorebook-root[data-skin-variant='telegram'] .grid-card:hover,
+.lorebook-root[data-skin-variant='telegram'] .table-row:hover {
+  background: var(--lw-lorebook-item-hover-bg, rgba(255, 255, 255, 0.88));
+  transform: none;
+}
+
+.lorebook-root[data-skin-variant='telegram'] .view-toggle-btn,
+.lorebook-root[data-skin-variant='telegram'] .version-mode-btn,
+.lorebook-root[data-skin-variant='telegram'] .history-toggle-btn,
+.lorebook-root[data-skin-variant='telegram'] .lw-btn {
+  min-height: 40px;
+  border-radius: 999px;
+}
+
+.lorebook-root[data-skin-variant='telegram'][data-mode='small'] .lore-list,
+.lorebook-root[data-skin-variant='telegram'].is-mobile .lore-list {
+  padding-bottom: calc(92px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
 }
 
 </style>

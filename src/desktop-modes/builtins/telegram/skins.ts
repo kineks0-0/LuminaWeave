@@ -390,7 +390,7 @@ export const createTelegramSurfaceSkinMap = (): DesktopModeManifest['surfaceSkin
                 '--lw-lorebook-item-hover-bg': resolvedAppearance === 'dark'
                     ? 'rgba(31, 56, 80, 0.82)'
                     : 'rgba(255, 255, 255, 0.88)',
-                '--lw-lorebook-overlay-bg': 'rgba(var(--lw-primary-rgb), 0.10)'
+                '--lw-lorebook-overlay-bg': 'color-mix(in srgb, var(--lw-bg-elevated) 78%, transparent)'
             }))
         },
         'lorebook.editor': {

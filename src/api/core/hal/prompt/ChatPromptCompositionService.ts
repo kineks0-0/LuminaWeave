@@ -47,6 +47,8 @@ const localRef = (resourceType: 'preset' | 'character', resourceId: string): Res
     writable: true
 });
 
+
+
 /**
  * 为聊天管线收集资源：激活预设、角色卡、世界书绑定、正则脚本与变量快照，
  * 然后调用 `buildRoleplayPrompt`。失败时各资源独立降级，不阻断历史生成。
@@ -70,12 +72,18 @@ export class ChatPromptCompositionService {
             character?.fields.name ?? null
         );
 
-        const worldbookRefs = request.chatId
+        const sessionWorldbookRefs = request.chatId
             ? promptResourceBindingService
                 .resolveBindings(PromptResourceBindingService.sessionOwner(request.chatId))
                 .enabledRefs
-                .filter(ref => ref.resourceType === 'worldbook')
             : [];
+        const globalWorldbookRefs = promptResourceBindingService
+            .resolveBindings(PromptResourceBindingService.globalOwner())
+            .enabledRefs;
+        const worldbookRefs = PromptResourceBindingService.mergeWorldbookRefs(
+            globalWorldbookRefs,
+            sessionWorldbookRefs
+        );
         const activation = await this.worldbookActivationService.activate({
             refs: worldbookRefs,
             entries: characterBookEntries,
