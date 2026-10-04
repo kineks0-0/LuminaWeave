@@ -50,8 +50,16 @@ export const resolveTelegramMobileToolContractId = (
 };
 
 export const resolveTelegramMobileToolActivity = (
-  route: TelegramStackRoute
-): ActivityDescriptor => route.activity || { size: 'default', pageType: 'standalone' };
+  route: TelegramStackRoute,
+  contractId?: SurfaceContractId | null
+): ActivityDescriptor => {
+  const activity = route.activity || { size: 'default', pageType: 'standalone' };
+  // 移动端设置页必须走单列小布局：深链工具路由的默认 size 会让设置回退到桌面双栏。
+  if (contractId === 'settings.root' && activity.size !== 'small') {
+    return { ...activity, size: 'small' };
+  }
+  return activity;
+};
 
 export const resolveTelegramMobileToolProps = (
   route: TelegramStackRoute

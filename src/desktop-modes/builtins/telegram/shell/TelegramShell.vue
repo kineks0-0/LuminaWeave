@@ -181,7 +181,7 @@ const mobileToolContractId = computed(() =>
   })
 );
 const mobileToolActivity = computed(() =>
-  resolveTelegramMobileToolActivity(telegramMobileCurrentRoute.value)
+  resolveTelegramMobileToolActivity(telegramMobileCurrentRoute.value, mobileToolContractId.value)
 );
 const mobileToolProps = computed(() =>
   resolveTelegramMobileToolProps(telegramMobileCurrentRoute.value)
@@ -204,7 +204,11 @@ const onCreateMobileSession = (payload: CreateChatConversationInput) => {
 };
 const onOpenMobilePanel = (panelId: string) => {
   props.runtimeActions.navigation.clearActivityMetadata();
-  pushTelegramMobileRoute({ name: 'tool', panelId });
+  pushTelegramMobileRoute({
+    name: 'tool',
+    panelId,
+    ...(panelId === 'lumina-settings' ? { title: '设置' } : {})
+  });
 };
 const onHandleRoleProfileTool = (panelId: string) => {
   if (panelId === 'none') {

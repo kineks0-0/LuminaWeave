@@ -63,6 +63,14 @@ describe('Telegram mode package shell structure', () => {
     )).toBe('lumina-forge.plugin');
     expect(viewModel.resolveTelegramMobileToolAuxSidebarMode('forge.workspace')).toBe('hidden');
     expect(viewModel.resolveTelegramMobileToolAuxSidebarMode('settings.root')).toBeUndefined();
+    expect(viewModel.resolveTelegramMobileToolActivity(
+      { name: 'tool', panelId: 'lumina-settings' },
+      'settings.root'
+    )).toEqual({ size: 'small', pageType: 'standalone' });
+    expect(viewModel.resolveTelegramMobileToolActivity(
+      { name: 'tool' },
+      'forge.workspace'
+    )).toEqual({ size: 'default', pageType: 'standalone' });
     expect(viewModel.resolveTelegramStackTransitionName('forward')).toBe('lw-telegram-stack-forward');
     expect(viewModel.resolveTelegramStackTransitionName('back')).toBe('lw-telegram-stack-back');
     expect(viewModel.resolveTelegramStackTransitionName('fade')).toBe('lw-telegram-stack-fade');

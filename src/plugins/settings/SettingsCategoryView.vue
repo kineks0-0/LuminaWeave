@@ -119,6 +119,7 @@ const categorySkinStyle = computed(() => cssVars.value);
 const rootElement = ref<HTMLElement | null>(null);
 const highlightedAnchor = ref<string | null>(null);
 let highlightTimer: ReturnType<typeof setTimeout> | null = null;
+let revealObserver: ResizeObserver | null = null;
 
 const category = computed(() => getSettingsCategory(props.categoryId));
 const categorySettings = computed(() => categoryIndex.value[props.categoryId]);
@@ -169,15 +170,53 @@ const resetCategory = async (): Promise<void> => {
   await Promise.all(targets.map(item => resetSetting(item.storageKey, item.definition)));
 };
 
+const stopRevealTracking = (): void => {
+  revealObserver?.disconnect();
+  revealObserver = null;
+};
+
+const findAnchorElement = (anchor: string): HTMLElement | null =>
+  rootElement.value?.querySelector<HTMLElement>(`[data-setting-anchor="${CSS.escape(anchor)}"]`) ?? null;
+
+const anchorIsVisible = (element: HTMLElement): boolean => {
+  const scroller = element.closest<HTMLElement>('.settings-scroll-area');
+  if (!scroller) return true;
+  const rect = element.getBoundingClientRect();
+  const scrollerRect = scroller.getBoundingClientRect();
+  return rect.bottom > scrollerRect.top && rect.top < scrollerRect.bottom;
+};
+
+/** 整块面板高于视口时对齐顶部（先看到面板标题），普通设置行居中 */
+const scrollAnchorIntoView = (element: HTMLElement, behavior: ScrollBehavior): void => {
+  const scroller = element.closest<HTMLElement>('.settings-scroll-area');
+  const isTall = Boolean(scroller && element.getBoundingClientRect().height > scroller.clientHeight);
+  element.scrollIntoView({ block: isTall ? 'start' : 'center', behavior });
+};
+
 const revealAnchor = async (anchor: string): Promise<void> => {
   const target = categorySettings.value.find(item => item.storageKey === anchor);
   if (target?.advanced) showAdvanced.value = true;
   await nextTick();
-  const element = rootElement.value?.querySelector<HTMLElement>(`[data-setting-anchor="${CSS.escape(anchor)}"]`);
-  element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  const element = findAnchorElement(anchor);
+  if (element) scrollAnchorIntoView(element, 'smooth');
   highlightedAnchor.value = anchor;
   if (highlightTimer) clearTimeout(highlightTimer);
-  highlightTimer = setTimeout(() => { highlightedAnchor.value = null; }, HIGHLIGHT_MS);
+  // 面板组件异步加载会撑开内容、把目标推走：高亮期间发现目标出视口就校正。
+  stopRevealTracking();
+  if (typeof ResizeObserver !== 'undefined' && rootElement.value) {
+    revealObserver = new ResizeObserver(() => {
+      if (highlightedAnchor.value !== anchor) return;
+      const current = findAnchorElement(anchor);
+      if (current && !anchorIsVisible(current)) {
+        scrollAnchorIntoView(current, 'auto');
+      }
+    });
+    revealObserver.observe(rootElement.value);
+  }
+  highlightTimer = setTimeout(() => {
+    highlightedAnchor.value = null;
+    stopRevealTracking();
+  }, HIGHLIGHT_MS);
 };
 
 watch(
@@ -192,6 +231,7 @@ watch(
 
 onBeforeUnmount(() => {
   if (highlightTimer) clearTimeout(highlightTimer);
+  stopRevealTracking();
 });
 </script>
 
