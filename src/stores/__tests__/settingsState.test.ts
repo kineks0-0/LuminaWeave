@@ -5,7 +5,7 @@ const onAnyChange = vi.fn((callback: (data: { key: string }) => void) => {
     changeCallbacks.push(callback);
     return () => undefined;
 });
-const getEffectiveValue = vi.fn(() => null);
+const getEffectiveValue = vi.fn<() => unknown>(() => null);
 
 vi.mock('@/api/services/SettingsDomainService.js', () => ({
     settingsDomainService: {
