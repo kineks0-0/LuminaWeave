@@ -200,6 +200,7 @@ export class GenerationCommandService {
             console.log('[LuminaWeave] 流式无限输出已开启，移除 max_tokens 限制');
             delete generationSettings.max_tokens;
             delete generationSettings.max_length;
+            delete generationSettings.maxTokens;
         }
 
         const task = new LuminaGenerationTask(this.session);

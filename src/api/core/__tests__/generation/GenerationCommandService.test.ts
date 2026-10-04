@@ -139,6 +139,29 @@ describe('GenerationCommandService send routing', () => {
         expect(generate).toHaveBeenCalled();
         expect(taskRunMock).not.toHaveBeenCalled();
     });
+
+    it('drops the composed maxTokens cap only when unlimited response is enabled', async () => {
+        hostMock.getHostFunction.mockResolvedValue(null);
+        vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ charId: undefined, chatId: 'lw_chat_1' } as never);
+        const storageGet = vi.spyOn(lwStorage, 'get').mockImplementation((_key: string, fallback: unknown) => fallback);
+
+        const service = createSendService();
+        await expect(service.sendMessage('你好')).resolves.toBe(true);
+
+        const lastSettings = (): Record<string, unknown> => {
+            const lastCall = taskRunMock.mock.calls.at(-1) as unknown as unknown[];
+            return lastCall[2] as Record<string, unknown>;
+        };
+        expect(lastSettings().maxTokens).toBe(300);
+
+        storageGet.mockImplementation((key: string, fallback: unknown) => (
+            key === 'lumina-chat.unlimitedResponse' ? true : fallback
+        ));
+        taskRunMock.mockClear();
+
+        await expect(service.sendMessage('再试一次')).resolves.toBe(true);
+        expect(lastSettings()).not.toHaveProperty('maxTokens');
+    });
 });
 
 describe('GenerationCommandService lumina assembly composition', () => {
