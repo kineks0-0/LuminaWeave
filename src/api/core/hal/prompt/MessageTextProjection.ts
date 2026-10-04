@@ -22,11 +22,13 @@ export class MessageTextProjection {
      * 将本地聊天节点的 pluginRaw/mesRaw 投影为展示用 mes：
      * 依据 mesRaw_ts/mes_ts 时间戳判断是否需要重新生成，并统一应用宿主展示正则。
      * pluginRaw 的重新提取由调用方注入（宿主 port），避免 HAL 反向依赖 Core。
+     * `force` 用于显示正则集合变化后强制重投影全部历史消息。
      */
     static projectForDisplay(
         chat: LuminaChatMessage[] | null | undefined,
         applyDisplayRegex: DisplayRegexApplier,
-        extractMessageText: MessageTextExtractor
+        extractMessageText: MessageTextExtractor,
+        options: { force?: boolean } = {}
     ): void {
         if (!chat) return;
         chat.forEach((msg, index) => {
@@ -36,6 +38,7 @@ export class MessageTextProjection {
 
             const mesRawTs = extra.mesRaw_ts || 0;
             const mesTs = extra.mes_ts || 0;
+            const shouldProject = options.force === true || !msg.mes || mesRawTs > mesTs || !extra.mes_ts;
 
             if (msg.pluginRaw) {
                 // 只要有 pluginRaw，我们就重新根据它生成最准确的展示版本
@@ -48,11 +51,11 @@ export class MessageTextProjection {
                 }
 
                 // 即使 mes 已经有值，如果其内容过旧或不包含预期标签，也重新生成
-                if (!msg.mes || mesRawTs > mesTs || !extra.mes_ts) {
+                if (shouldProject) {
                     msg.mes = applyDisplayRegex(msg.mesRaw, source, { depth });
                     msg.extra.mes_ts = Date.now();
                 }
-            } else if (!msg.mes || mesRawTs > mesTs || !extra.mes_ts) {
+            } else if (shouldProject) {
                 // 没有 pluginRaw 时，按常规逻辑从 mesRaw 同步到 mes
                 msg.mes = applyDisplayRegex(msg.mesRaw, source, { depth });
                 msg.extra.mes_ts = Date.now();

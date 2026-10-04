@@ -1,4 +1,5 @@
 import type { RegexScript } from '../../../../types/RegexScriptTypes.js';
+import { notifyRegexDisplayChanged } from './RegexDisplayChange.js';
 
 /**
  * 预设 / 角色绑定正则的展示缓存。
@@ -25,14 +26,22 @@ const cache: RegexAssetCache = {
     characterScripts: []
 };
 
+const sameScripts = (left: RegexScript[], right: RegexScript[]): boolean => (
+    left.length === right.length && JSON.stringify(left) === JSON.stringify(right)
+);
+
 export const setCachedPresetRegexScripts = (
     id: string | null,
     scripts: RegexScript[],
     name: string | null = null
 ): void => {
+    if (cache.presetId === id && cache.presetName === name && sameScripts(cache.presetScripts, scripts)) {
+        return;
+    }
     cache.presetId = id;
     cache.presetName = name;
     cache.presetScripts = [...scripts];
+    notifyRegexDisplayChanged();
 };
 
 export const setCachedCharacterRegexScripts = (
@@ -40,9 +49,13 @@ export const setCachedCharacterRegexScripts = (
     scripts: RegexScript[],
     name: string | null = null
 ): void => {
+    if (cache.characterId === id && cache.characterName === name && sameScripts(cache.characterScripts, scripts)) {
+        return;
+    }
     cache.characterId = id;
     cache.characterName = name;
     cache.characterScripts = [...scripts];
+    notifyRegexDisplayChanged();
 };
 
 export const getCachedRegexScripts = (): {

@@ -56,6 +56,20 @@ describe('MessageTextProjection.projectForDisplay', () => {
         expect(apply).not.toHaveBeenCalled();
         expect(chat[0].mes).toBe('current');
     });
+
+    it('force reprojects current mes when the display regex set changes', () => {
+        const apply = vi.fn((text: string) => `display:${text}`);
+        const chat = [buildMessage({
+            mes: 'current',
+            mesRaw: 'raw',
+            extra: { mesRaw_ts: 1, mes_ts: 2 }
+        })];
+
+        MessageTextProjection.projectForDisplay(chat, apply, (msg) => msg.mesRaw || '', { force: true });
+
+        expect(apply).toHaveBeenCalledWith('raw', 'user_input', { depth: 0 });
+        expect(chat[0].mes).toBe('display:raw');
+    });
 });
 
 describe('MessageTextProjection.extractMessageText', () => {

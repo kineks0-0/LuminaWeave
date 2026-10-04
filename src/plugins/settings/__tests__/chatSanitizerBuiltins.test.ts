@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     listBoundRegexRules,
     listBuiltinTagRules,
+    resolveBuiltinTagFilterRule,
     resolveReplyFilterState
 } from '../panels/chatSanitizerBuiltins.js';
 import {
@@ -9,9 +10,10 @@ import {
     setCachedPresetRegexScripts
 } from '../../../api/core/hal/regex/LuminaRegexAssetCache.js';
 import {
-    filterDisabledBoundRegexes,
-    setBoundRegexDisabled
+    applyBoundRegexOverrides,
+    setBoundRegexOverride
 } from '../../../api/core/hal/regex/BoundRegexOverrideStore.js';
+import { onRegexDisplayChanged } from '../../../api/core/hal/regex/RegexDisplayChange.js';
 import { REGEX_PLACEMENTS, type RegexScript } from '../../../types/RegexScriptTypes.js';
 
 const storageState = vi.hoisted(() => new Map<string, unknown>());
@@ -52,6 +54,14 @@ describe('chatSanitizerBuiltins', () => {
         expect(byTag.get('V')?.disposition).toBe('preserve');
         // Forge-only tags 不进入聊天的净化视图
         expect(byTag.has('forge_skill')).toBe(false);
+    });
+
+    it('exposes the built-in tag filter rule content', () => {
+        const rule = resolveBuiltinTagFilterRule();
+
+        expect(rule.name).toBe('[Lumina] Tag Filter');
+        expect(rule.tags).toContain('thinking');
+        expect(rule.pattern).toContain('<thinking\\b');
     });
 
     it('reads reply filter switches from the registered setting keys', () => {
@@ -107,7 +117,7 @@ describe('chatSanitizerBuiltins', () => {
                     source: 'preset',
                     sourceLabel: '预设「预设A」',
                     sourceEnabled: true,
-                    disabled: false,
+                    override: null,
                     effectiveEnabled: true,
                     placement: [REGEX_PLACEMENTS.aiOutput]
                 },
@@ -117,32 +127,64 @@ describe('chatSanitizerBuiltins', () => {
                     source: 'character',
                     sourceLabel: '角色卡「角色B」',
                     sourceEnabled: false,
-                    disabled: false,
+                    override: null,
                     effectiveEnabled: false,
                     placement: [REGEX_PLACEMENTS.userInput]
                 }
             ]);
         });
 
-        it('reflects Lumina-level disabled overrides and filters active scripts', () => {
+        it('supports disabling enabled scripts and force-enabling source-disabled scripts', () => {
             setCachedPresetRegexScripts('preset-a', [
-                buildScript({ id: 'p', scriptName: '预设脚本' })
+                buildScript({ id: 'p', scriptName: '预设脚本' }),
+                buildScript({ id: 'q', scriptName: '默认停用脚本', enabled: false })
             ], '预设A');
 
-            setBoundRegexDisabled('p', true);
-            expect(listBoundRegexRules()[0]).toMatchObject({
+            setBoundRegexOverride('p', 'disabled');
+            setBoundRegexOverride('q', 'enabled');
+
+            const [presetRule, forceEnabled] = listBoundRegexRules();
+            expect(presetRule).toMatchObject({
                 id: 'p',
                 sourceEnabled: true,
-                disabled: true,
+                override: 'disabled',
                 effectiveEnabled: false
             });
-            expect(filterDisabledBoundRegexes([
-                buildScript({ id: 'p' }),
-                buildScript({ id: 'q' })
-            ]).map(script => script.id)).toEqual(['q']);
+            expect(forceEnabled).toMatchObject({
+                id: 'q',
+                sourceEnabled: false,
+                override: 'enabled',
+                effectiveEnabled: true
+            });
 
-            setBoundRegexDisabled('p', false);
-            expect(listBoundRegexRules()[0].effectiveEnabled).toBe(true);
+            const active = applyBoundRegexOverrides([
+                buildScript({ id: 'p' }),
+                buildScript({ id: 'q', enabled: false }),
+                buildScript({ id: 'r' })
+            ]);
+            expect(active.map(script => script.id)).toEqual(['q', 'r']);
+            expect(active.find(script => script.id === 'q')?.enabled).toBe(true);
+
+            setBoundRegexOverride('p', null);
+            setBoundRegexOverride('q', null);
+            expect(listBoundRegexRules().map(rule => rule.effectiveEnabled)).toEqual([true, false]);
+        });
+
+        it('notifies display listeners only when the binding or override actually changes', () => {
+            const listener = vi.fn();
+            const dispose = onRegexDisplayChanged(listener);
+
+            setCachedPresetRegexScripts('preset-a', [buildScript({ id: 'a' })], '预设A');
+            expect(listener).toHaveBeenCalledTimes(1);
+            setCachedPresetRegexScripts('preset-a', [buildScript({ id: 'a' })], '预设A');
+            expect(listener).toHaveBeenCalledTimes(1);
+
+            setBoundRegexOverride('a', 'disabled');
+            expect(listener).toHaveBeenCalledTimes(2);
+            setBoundRegexOverride('a', 'disabled');
+            expect(listener).toHaveBeenCalledTimes(2);
+
+            dispose();
         });
 
         it('falls back to generic source labels and returns empty when nothing is bound', () => {
@@ -154,7 +196,7 @@ describe('chatSanitizerBuiltins', () => {
                     source: 'preset',
                     sourceLabel: '预设',
                     sourceEnabled: true,
-                    disabled: false,
+                    override: null,
                     effectiveEnabled: true,
                     placement: [REGEX_PLACEMENTS.aiOutput]
                 }

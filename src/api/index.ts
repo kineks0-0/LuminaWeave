@@ -10,6 +10,7 @@ import { PromptWorldInfoMount } from './core/lorebook/PromptWorldInfoMount.js';
 import { FontManager } from './core/runtime-utils/FontManager.js';
 import { MeasureService } from './core/runtime-utils/MeasureService.js';
 import { MessageTextProjection } from './core/hal/prompt/MessageTextProjection.js';
+import { onRegexDisplayChanged } from './core/hal/regex/RegexDisplayChange.js';
 import { HALBootstrap } from './core/hal/HALBootstrap.js';
 import { globalXMLInterceptor } from './core/xml-view/XMLInterceptor.js';
 import { globalPromptRegistry } from './core/hal/prompt/PromptRegistry.js';
@@ -135,6 +136,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     public readonly plugins: PluginRuntimeApi = createPluginRuntimeApi(pluginManager, pluginDomainRegistry, () => this.whenHostReady());
 
     private _ready: boolean = false;
+    private regexDisplayRefreshPending = false;
     private resolveHostReady: (() => void) | null = null;
     private readonly hostReady = new Promise<void>(resolve => {
         this.resolveHostReady = resolve;
@@ -376,6 +378,9 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             await this.chatManager.commitToST();
         });
 
+        // 显示正则集合（全局库 / 绑定缓存 / 禁用覆盖）变化后重投影历史消息。
+        onRegexDisplayChanged(() => this.scheduleRegexDisplayRefresh());
+
         // 转发子组件事件至主 API 实例
         [this.chatManager, this.streamHandler, this.timelineManager, this.lorebookManager, this.fontManager, this.measureService, this.messageListManager, this.conversationService].forEach(mgr => {
             mgr.on('CHAT_UPDATED', () => this.emit('CHAT_UPDATED'));
@@ -612,6 +617,36 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     getPhysicalHost() { return HostDetector.physicalHost; }
 
     // --- 门面方法：转发至 ChatManager ---
+
+    /** 合并同一轮内的多次正则变更通知（微任务后重投影一次）。 */
+    private scheduleRegexDisplayRefresh(): void {
+        if (this.regexDisplayRefreshPending) return;
+        this.regexDisplayRefreshPending = true;
+        void Promise.resolve().then(() => {
+            this.regexDisplayRefreshPending = false;
+            this.refreshRegexDisplayProjection();
+        });
+    }
+
+    /**
+     * 显示正则集合变化后，按新规则强制重投影历史消息的 mes，
+     * 并广播新的会话上下文给聊天 surface（否则旧消息会保留上一次的展示文本）。
+     */
+    private refreshRegexDisplayProjection(): void {
+        if (!this._ready) return;
+        MessageTextProjection.projectForDisplay(
+            this.chatManager.localChatData,
+            (text, source, regexOptions) => this.applySTRegex(text, source, 'display', regexOptions),
+            (msg) => getChatMessageMutationPort().extractMessageText(msg),
+            { force: true }
+        );
+        void this.conversationService
+            .getConversationContext({ sourceId: 'chat' })
+            .then(context => {
+                this.emit('CONVERSATION_CONTEXT_CHANGED', { context });
+            });
+    }
+
     async syncFromST(options: SyncFromOptions = {}): Promise<void> {
         await this.chatManager.syncFromST(0, options);
         await this.lorebookManager.syncFromST();

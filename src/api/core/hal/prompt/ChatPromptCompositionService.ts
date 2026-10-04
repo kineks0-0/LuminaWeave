@@ -12,7 +12,7 @@ import {
     setCachedCharacterRegexScripts,
     setCachedPresetRegexScripts
 } from '../regex/LuminaRegexAssetCache.js';
-import { filterDisabledBoundRegexes } from '../regex/BoundRegexOverrideStore.js';
+import { applyBoundRegexOverrides } from '../regex/BoundRegexOverrideStore.js';
 import { WorldbookActivationService } from './WorldbookActivationService.js';
 import { StagedMacroVariables } from './macros/StagedMacroVariables.js';
 import { resolveCharacterFields, type ChatCharacterFields } from './CharacterFields.js';
@@ -92,7 +92,7 @@ export class ChatPromptCompositionService {
             userName: request.userName,
             charName: character?.fields.name || request.charName,
             worldbookActivation: activation.activation,
-            regexScripts: filterDisabledBoundRegexes(mergeRegexScripts(
+            regexScripts: applyBoundRegexOverrides(mergeRegexScripts(
                 presetAssets.regexScripts,
                 mergeRegexScripts(characterRegexScripts, this.readRegexScripts())
             )),

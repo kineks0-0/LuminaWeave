@@ -7,6 +7,7 @@ import {
 } from '../../../../../types/RegexScriptTypes.js';
 import { parseRegexScripts, serializeRegexScripts } from '../../regex/RegexScriptDocument.js';
 import { RegexScriptEngine, type RegexApplyResult } from '../../regex/RegexScriptEngine.js';
+import { notifyRegexDisplayChanged } from '../../regex/RegexDisplayChange.js';
 import { CHAT_PROMPT_REGEX_STORAGE_KEY } from '../ChatPromptCompositionService.js';
 
 export interface RegexScriptImportResult {
@@ -48,6 +49,7 @@ export class RegexScriptLibraryService {
 
     public replaceAll(scripts: RegexScript[]): void {
         void lwStorage.set(CHAT_PROMPT_REGEX_STORAGE_KEY, serializeRegexScripts(scripts), 'Global');
+        notifyRegexDisplayChanged();
     }
 
     public add(partial: Partial<RegexScript> = {}): RegexScript {

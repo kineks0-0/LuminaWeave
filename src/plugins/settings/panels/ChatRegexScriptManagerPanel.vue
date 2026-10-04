@@ -49,6 +49,27 @@
             <span v-if="rule.description" class="builtin-tag-desc">{{ rule.description }}</span>
           </li>
         </ul>
+        <div class="builtin-regex">
+          <button
+            type="button"
+            class="builtin-regex-toggle"
+            :aria-expanded="showTagFilterPattern"
+            @click="showTagFilterPattern = !showTagFilterPattern"
+          >
+            <ChevronRight
+              :size="12"
+              :stroke-width="2"
+              class="builtin-regex-chevron"
+              :class="{ 'is-open': showTagFilterPattern }"
+              aria-hidden="true"
+            />
+            查看正则内容（{{ builtinTagFilter.tags.length }} 个标签）
+          </button>
+          <div v-if="showTagFilterPattern" class="builtin-regex-body">
+            <p class="builtin-regex-label">ST 宿主同步为全局正则「{{ builtinTagFilter.name }}」，以下为匹配模式。</p>
+            <pre class="builtin-regex-pattern">{{ builtinTagFilter.pattern }}</pre>
+          </div>
+        </div>
         <div class="builtin-filter">
           <div class="builtin-filter-head">
             <span class="builtin-filter-title">回复过滤</span>
@@ -86,7 +107,7 @@
       <section v-if="boundRegexRules.length > 0" class="bound-panel">
         <div class="section-label">
           <span>绑定正则</span>
-          <span class="section-hint">来自当前激活预设与角色卡；关闭仅在本机禁用，不改写资产，同 id 时优先于全局库</span>
+          <span class="section-hint">来自当前激活预设与角色卡；开关为本机覆盖，不改写资产，同 id 时优先于全局库</span>
         </div>
         <ul class="bound-list">
           <li
@@ -105,10 +126,7 @@
             <LuminaToggle
               class="bound-toggle"
               :modelValue="rule.effectiveEnabled"
-              :disabled="!rule.sourceEnabled"
-              :title="rule.sourceEnabled
-                ? (rule.effectiveEnabled ? '禁用（Lumina 覆盖，不改写资产）' : '重新启用')
-                : '来源脚本已停用'"
+              :title="boundToggleTitle(rule)"
               @update:modelValue="toggleBoundRegex(rule, $event)"
             />
           </li>
@@ -297,6 +315,7 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronLeft,
+  ChevronRight,
   Download,
   Maximize2,
   Minimize2,
@@ -310,9 +329,11 @@ import { openSettingsCategory } from '../settingsViewState.js';
 import {
   listBoundRegexRules,
   listBuiltinTagRules,
+  resolveBuiltinTagFilterRule,
   resolveReplyFilterState,
   type BoundRegexRule,
   type BuiltinReplyFilterState,
+  type BuiltinTagFilterRule,
   type BuiltinTagRule
 } from './chatSanitizerBuiltins.js';
 import {
@@ -327,7 +348,7 @@ import {
   regexScriptLibraryService
 } from '../../../api/core/hal/prompt/chat/RegexScriptLibraryService.js';
 import { chatPromptCompositionService } from '../../../api/core/hal/prompt/ChatPromptCompositionService.js';
-import { setBoundRegexDisabled } from '../../../api/core/hal/regex/BoundRegexOverrideStore.js';
+import { setBoundRegexOverride } from '../../../api/core/hal/regex/BoundRegexOverrideStore.js';
 import { compileFindRegex } from '../../../api/core/hal/regex/RegexScriptEngine.js';
 import { REGEX_PLACEMENTS, type RegexPlacement, type RegexScript } from '../../../types/RegexScriptTypes.js';
 
@@ -356,6 +377,8 @@ const rootRef = ref<HTMLElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const scripts = ref<RegexScript[]>([]);
 const builtinTagRules = ref<BuiltinTagRule[]>([]);
+const builtinTagFilter = ref<BuiltinTagFilterRule>(resolveBuiltinTagFilterRule());
+const showTagFilterPattern = ref(false);
 const boundRegexRules = ref<BoundRegexRule[]>([]);
 const replyFilterState = ref<BuiltinReplyFilterState>(resolveReplyFilterState());
 const selectedId = ref('');
@@ -429,13 +452,22 @@ const nullableNumber = (event: Event): number | null => {
 
 const refreshBuiltinState = (): void => {
   builtinTagRules.value = listBuiltinTagRules();
+  builtinTagFilter.value = resolveBuiltinTagFilterRule();
   boundRegexRules.value = listBoundRegexRules();
   replyFilterState.value = resolveReplyFilterState();
 };
 
+const boundToggleTitle = (rule: BoundRegexRule): string => {
+  if (rule.override === 'enabled') return '本机强制启用（来源默认停用）；关闭恢复来源状态';
+  if (rule.override === 'disabled') return '本机已禁用；开启恢复来源状态';
+  return rule.sourceEnabled ? '本机禁用（不改写预设/角色资产）' : '本机启用（不改写预设/角色资产）';
+};
+
 const toggleBoundRegex = (rule: BoundRegexRule, enabled: boolean): void => {
-  if (!rule.sourceEnabled) return;
-  setBoundRegexDisabled(rule.id, !enabled);
+  const override = enabled
+    ? (rule.sourceEnabled ? null : 'enabled')
+    : (rule.sourceEnabled ? 'disabled' : null);
+  setBoundRegexOverride(rule.id, override);
   boundRegexRules.value = listBoundRegexRules();
 };
 
@@ -663,6 +695,64 @@ onBeforeUnmount(() => {
   flex: 1 1 160px;
   color: var(--lw-text-muted);
   font-size: 11px;
+}
+
+.builtin-regex {
+  margin-top: 8px;
+}
+
+.builtin-regex-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--lw-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 0;
+}
+
+.builtin-regex-toggle:hover {
+  text-decoration: underline;
+}
+
+.builtin-regex-chevron {
+  transition: transform var(--lw-transition, 150ms ease);
+}
+
+.builtin-regex-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.builtin-regex-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.builtin-regex-label {
+  margin: 0;
+  color: var(--lw-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.builtin-regex-pattern {
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  border-radius: var(--lw-radius-sm);
+  background: color-mix(in srgb, var(--lw-text-main) 6%, transparent);
+  color: var(--lw-text-secondary);
+  font-family: var(--lw-font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .builtin-filter {

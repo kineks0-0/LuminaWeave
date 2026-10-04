@@ -16,6 +16,7 @@ import { CHAT_PROMPT_REGEX_STORAGE_KEY } from '@/api/core/hal/prompt/ChatPromptC
 import { extractEmbeddedPresetAssets, extractCharacterRegexScripts } from '@/api/core/hal/prompt/chat/EmbeddedPresetAssets.js';
 import { parseChatCompletionPreset } from '@/api/core/hal/prompt/chat/ChatCompletionPresetParser.js';
 import { mergeRegexScripts } from '@/api/core/hal/regex/RegexScriptDocument.js';
+import { onRegexDisplayChanged } from '@/api/core/hal/regex/RegexDisplayChange.js';
 import { REGEX_PLACEMENTS } from '@/types/RegexScriptTypes.js';
 import { lwStorage } from '@/api/storage.js';
 
@@ -334,5 +335,18 @@ describe('RegexScriptLibraryService', () => {
         const result = service.test(script, 'HP 状态：正常 结束', REGEX_PLACEMENTS.aiOutput);
 
         expect(result.text).toBe('HP 状态：? 结束');
+    });
+
+    it('库变更时通知显示层正则集合变化', () => {
+        const listener = vi.fn();
+        const dispose = onRegexDisplayChanged(listener);
+        const service = new RegexScriptLibraryService();
+
+        service.add({ scriptName: '通知一' });
+        expect(listener).toHaveBeenCalledTimes(1);
+
+        dispose();
+        service.add({ scriptName: '通知二' });
+        expect(listener).toHaveBeenCalledTimes(1);
     });
 });

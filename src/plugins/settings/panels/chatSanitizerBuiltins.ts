@@ -1,7 +1,16 @@
 import { CoreXMLTagNames, globalXMLTagRegistry, type XMLTagDefinition } from '@shared/XMLTagRegistry.js';
 import { settingsDomainService } from '../../../api/services/SettingsDomainService.js';
 import { getCachedRegexScripts } from '../../../api/core/hal/regex/LuminaRegexAssetCache.js';
-import { readDisabledBoundRegexIds } from '../../../api/core/hal/regex/BoundRegexOverrideStore.js';
+import {
+    readBoundRegexOverrides,
+    resolveBoundRegexEnabled,
+    type BoundRegexOverride
+} from '../../../api/core/hal/regex/BoundRegexOverrideStore.js';
+import {
+    buildTagFilterRegex,
+    resolveTagFilterTags,
+    TAG_FILTER_RULE_NAME
+} from '../../../api/core/hal/regex/TagFilterPattern.js';
 import type { RegexPlacement } from '../../../types/RegexScriptTypes.js';
 
 /**
@@ -96,6 +105,23 @@ export const resolveReplyFilterState = (
     aggressiveThinking: Boolean(read('lumina-chat.aggressiveThinking', false))
 });
 
+export interface BuiltinTagFilterRule {
+    /** ST 宿主同步的全局规则名。 */
+    name: string;
+    tags: string[];
+    pattern: string;
+}
+
+/** 内置标签过滤规则内容（与 `RegexSyncService` 同步的 find_regex 同源）。 */
+export const resolveBuiltinTagFilterRule = (): BuiltinTagFilterRule => {
+    const tags = resolveTagFilterTags();
+    return {
+        name: TAG_FILTER_RULE_NAME,
+        tags,
+        pattern: buildTagFilterRegex(tags)
+    };
+};
+
 export type BoundRegexSource = 'preset' | 'character';
 
 export interface BoundRegexRule {
@@ -103,23 +129,23 @@ export interface BoundRegexRule {
     name: string;
     source: BoundRegexSource;
     sourceLabel: string;
-    /** 资产原始 `enabled`；来源自身停用的脚本不允许在 Lumina 侧强制启用。 */
+    /** 资产原始 `enabled`。 */
     sourceEnabled: boolean;
-    /** Lumina 级禁用覆盖（`lumina-chat.boundRegexDisabled`）。 */
-    disabled: boolean;
-    /** 实际是否参与执行：来源启用且未被 Lumina 禁用。 */
+    /** 本机覆盖（`lumina-chat.boundRegexOverrides`）；无覆盖时跟随来源。 */
+    override: BoundRegexOverride | null;
+    /** 实际是否参与执行。 */
     effectiveEnabled: boolean;
     placement: RegexPlacement[];
 }
 
 /**
- * 预设 / 角色卡绑定正则的只读视图（含 Lumina 级禁用状态）。
+ * 预设 / 角色卡绑定正则的只读视图（含本机启用/禁用覆盖）。
  * 与显示层同源（`LuminaRegexAssetCache`），按 预设 → 角色卡 顺序、同 id 去重；
  * 同 id 时预设优先，与 `LuminaRegexDisplayService` 的应用顺序一致。
  */
 export const listBoundRegexRules = (): BoundRegexRule[] => {
     const cached = getCachedRegexScripts();
-    const disabledIds = new Set(readDisabledBoundRegexIds());
+    const overrides = readBoundRegexOverrides();
     const seen = new Set<string>();
     const rules: BoundRegexRule[] = [];
 
@@ -127,15 +153,14 @@ export const listBoundRegexRules = (): BoundRegexRule[] => {
         scripts.forEach(script => {
             if (seen.has(script.id)) return;
             seen.add(script.id);
-            const disabled = disabledIds.has(script.id);
             rules.push({
                 id: script.id,
                 name: script.scriptName || '未命名脚本',
                 source,
                 sourceLabel: label,
                 sourceEnabled: script.enabled,
-                disabled,
-                effectiveEnabled: script.enabled && !disabled,
+                override: overrides[script.id] ?? null,
+                effectiveEnabled: resolveBoundRegexEnabled(script.id, script.enabled, overrides),
                 placement: [...script.placement]
             });
         });

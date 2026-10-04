@@ -1,13 +1,16 @@
-import { BuiltinXMLTags } from '@shared/BaseXMLInterceptor.js';
 import { STEnvironmentDriver } from './STEnvironmentDriver.js';
-import { getTextInterceptor } from './SyncUtils.js';
+import {
+    buildTagFilterRegex,
+    resolveTagFilterTags,
+    TAG_FILTER_RULE_NAME
+} from '../../hal/regex/TagFilterPattern.js';
 
 /**
  * RegexSyncService (正则同步服务)
  * 负责将 LuminaWeave 的内部过滤标签同步至 SillyTavern 的全局正则扩展中。
  */
 export class RegexSyncService {
-    private static readonly RULE_NAME = '[Lumina] Tag Filter';
+    private static readonly RULE_NAME = TAG_FILTER_RULE_NAME;
     private lastSyncedRegex: string = '';
 
     /**
@@ -20,21 +23,15 @@ export class RegexSyncService {
             return;
         }
 
-        // 获取需要过滤的标签 (transient, ephemeral, 以及非显示的 persistent 标签，如 <M>)
-        // 注意：排除 Chat_Reply（核心对话内容）和 presentational 标签（展示层组件，应保留在消息中）
-        const excludeFromSTFilter = [BuiltinXMLTags.CHAT_REPLY.toLowerCase()];
-        const tags = getTextInterceptor().getTagsByLifecycle(['transient', 'ephemeral', 'persistent'])
-            .filter((tag: string) => !excludeFromSTFilter.includes(tag.toLowerCase()));
+        // 与消息净化面板展示的内置规则同源：transient / ephemeral / persistent（排除 Chat_Reply）
+        const tags = resolveTagFilterTags();
 
         if (tags.length === 0) {
             console.log('[RegexSyncService] 没有需要同步的标签');
             return;
         }
 
-        // 构建正则表达式
-        // 模式: /<tag\b[^>]*?>(?:[\s\S]*?)<\/tag>|<tag\b[^>]*?>(?:[\s\S]*?)$/gisu
-        const regexParts = tags.map((tag: string) => `<${tag}\\b[^>]*?>(?:[\\s\\S]*?)<\\/${tag}>|<${tag}\\b[^>]*?>(?:[\\s\\S]*?)$`);
-        const fullRegex = `/(?:${regexParts.join('|')})/gisu`;
+        const fullRegex = buildTagFilterRegex(tags);
 
         if (this.lastSyncedRegex === fullRegex) {
             console.log('[RegexSyncService] 正则规则未改变，跳过同步以防止循环重启');
