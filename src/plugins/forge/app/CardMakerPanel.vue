@@ -916,6 +916,18 @@ const handleAuxPanelClick = (panel: ForgeAuxPanelKind) => {
 
 const handleSwitchAuxMode = (mode: 'left' | 'right' | 'widget') => {
   luminaWeaveApi.emit('SWITCH_AUX_SIDEBAR_MODE', mode);
+  if (mode === 'widget') {
+    const widgetPanelId = FORGE_AUX_PANEL_META[store.activeAuxPanel].id;
+    if (props.activeRightPanelId !== widgetPanelId) {
+      launchForgeAuxActivity(store.activeAuxPanel);
+    }
+    return;
+  }
+  const openPanelId = props.activeRightPanelId;
+  if (!openPanelId) return;
+  const isForgeAuxPanel = FORGE_AUX_PANEL_ORDER.some((kind) => FORGE_AUX_PANEL_META[kind].id === openPanelId);
+  if (!isForgeAuxPanel) return;
+  luminaWeaveApi.emit('TOGGLE_WIDGET_PANEL', openPanelId);
 };
 
 const handleGlobalPointerDown = (event: PointerEvent) => {

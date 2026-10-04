@@ -42,7 +42,9 @@ const activeSurfaceContractId = computed(() => activePlugin.value
 const activeSurfaceInput = computed(() => activeSurfaceContractId.value
   ? projectSurfaceInput(activeSurfaceContractId.value, {}, {
       activity: { size: 'default', pageType: 'nested' },
-      isMobile: props.runtimeContext.isMobile
+      isMobile: props.runtimeContext.isMobile,
+      auxSidebarMode: props.runtimeContext.isMobile ? 'hidden' : props.runtimeContext.traditional.sidebarMode,
+      activeRightPanelId: props.runtimeContext.traditional.activeRightPanel
     })
   : {}
 );

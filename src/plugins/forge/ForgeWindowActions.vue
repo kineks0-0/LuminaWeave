@@ -194,10 +194,30 @@ const handleOpenProjectCenter = () => {
 const handleSwitchAuxMode = (mode: 'left' | 'right' | 'widget') => {
   store.setAuxPresentationMode(mode === 'widget' ? 'widget' : 'embedded');
   luminaWeaveApi.emit('SWITCH_AUX_SIDEBAR_MODE', mode);
+  if (mode === 'widget') {
+    openAuxPanelAsWidget(store.activeAuxPanel);
+  } else {
+    closeOpenAuxWidget();
+  }
   closeMenus();
 };
 
 const getWidgetPanelId = (kind: ForgeAuxPanelKind) => `forge_${kind}`;
+
+const closeOpenAuxWidget = () => {
+  const openPanelId = props.activeRightPanelId;
+  if (!openPanelId) return;
+  const isForgeAuxPanel = FORGE_AUX_PANEL_ORDER.some((kind) => FORGE_AUX_PANEL_META[kind].id === openPanelId);
+  if (!isForgeAuxPanel) return;
+  luminaWeaveApi.emit('TOGGLE_WIDGET_PANEL', openPanelId);
+};
+
+const openAuxPanelAsWidget = (kind: ForgeAuxPanelKind) => {
+  store.setActiveAuxPanel(kind);
+  if (props.activeRightPanelId === getWidgetPanelId(kind)) return;
+  launchAuxActivity(kind);
+};
+
 const launchAuxActivity = (kind: ForgeAuxPanelKind) => {
   const meta = FORGE_AUX_PANEL_META[kind];
   luminaWeaveApi.services.desktopSurface.launchActivity({
@@ -246,9 +266,7 @@ const handleOpenAuxPanel = (kind: ForgeAuxPanelKind) => {
   if (isSelected) {
     store.setAuxPresentationMode('widget');
     luminaWeaveApi.emit('SWITCH_AUX_SIDEBAR_MODE', 'widget');
-    if (props.activeRightPanelId === panelId) {
-      luminaWeaveApi.emit('TOGGLE_WIDGET_PANEL', panelId);
-    }
+    openAuxPanelAsWidget(kind);
     return;
   }
 

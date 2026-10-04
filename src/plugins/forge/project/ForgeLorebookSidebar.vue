@@ -276,6 +276,7 @@ onMounted(async () => {
 
 .sidebar-top {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 12px;
   padding: 18px 18px 14px;
@@ -287,6 +288,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .sidebar-kicker {
@@ -306,6 +309,7 @@ onMounted(async () => {
 .sidebar-meta {
   font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .sidebar-actions {
@@ -400,6 +404,7 @@ onMounted(async () => {
 
 .detail-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
@@ -508,6 +513,10 @@ onMounted(async () => {
 }
 
 .file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--lw-type-title-large-size);
   font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
@@ -518,6 +527,10 @@ onMounted(async () => {
 .file-item-meta {
   font-size: var(--lw-type-label-small-size);
   color: var(--lw-text-muted);
+}
+
+.file-id {
+  flex-shrink: 0;
 }
 
 .file-item-meta {

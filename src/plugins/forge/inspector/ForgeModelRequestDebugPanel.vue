@@ -513,6 +513,7 @@ const formatModelCallTitle = (index: number) => {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  container-type: inline-size;
   color: var(--lw-text-main);
   background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
 }
@@ -1079,6 +1080,28 @@ const formatModelCallTitle = (index: number) => {
   .debug-header,
   .detail-hero {
     flex-direction: column;
+  }
+
+  .debug-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .trace-list-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--lw-border-base);
+    max-height: 42vh;
+  }
+}
+
+/* 面板可能被放进窄侧栏或小窗，视口媒体查询覆盖不到，按容器宽度收成单列。 */
+@container (max-width: 560px) {
+  .debug-header,
+  .detail-hero {
+    flex-direction: column;
+  }
+
+  .debug-header-actions {
+    flex-wrap: wrap;
   }
 
   .debug-layout {

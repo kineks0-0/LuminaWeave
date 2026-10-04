@@ -142,6 +142,10 @@ describe('LuminaShellRoot runtime boundary', () => {
             new URL('../../plugins/forge/app/CardMakerPanel.vue', import.meta.url),
             'utf-8'
         );
+        const primaryActivitySource = readFileSync(
+            new URL('../ShellPrimaryActivityOutlet.vue', import.meta.url),
+            'utf-8'
+        );
 
         for (const source of [appSource, shellSource, payloadSource]) {
             expect(source).not.toContain('ForgeSidebar');
@@ -152,6 +156,9 @@ describe('LuminaShellRoot runtime boundary', () => {
 
         expect(shellSource).toContain("auxSidebarMode: props.runtimeContext.isMobile ? 'hidden' : props.runtimeContext.traditional.sidebarMode");
         expect(shellSource).toContain('activeRightPanelId: props.runtimeContext.traditional.activeRightPanel');
+        // 主 Activity outlet 是 traditional shell 实际渲染 surface 的入口，必须透传 aux 位置环境，否则 Forge 无法切换辅助侧栏模式。
+        expect(primaryActivitySource).toContain("auxSidebarMode: props.runtimeContext.isMobile ? 'hidden' : props.runtimeContext.traditional.sidebarMode");
+        expect(primaryActivitySource).toContain('activeRightPanelId: props.runtimeContext.traditional.activeRightPanel');
         expect(shellSource).not.toContain('officialPanelSurfaces');
         expect(widgetHostSource).not.toContain('officialPanelSurfaces');
         expect(forgeWorkspaceSource).toContain('<ForgeSidebar');

@@ -281,18 +281,20 @@ onMounted(async () => {
 }
 
 .forge-sidebar__aux-tabs {
-  display: flex;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
   padding: 0 8px;
-  flex-wrap: wrap;
   flex-shrink: 0;
 }
 
 .forge-sidebar__aux-tab {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 9px;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 5px;
   border-radius: 999px;
   border: 1px solid var(--lw-border-base);
   background: color-mix(in srgb, var(--lw-bg-elevated) 94%, transparent);
@@ -303,6 +305,13 @@ onMounted(async () => {
   letter-spacing: var(--lw-type-label-small-tracking);
   cursor: pointer;
   transition: var(--lw-transition);
+}
+
+.forge-sidebar__aux-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .forge-sidebar__aux-tab:hover {
