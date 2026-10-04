@@ -30,6 +30,7 @@ import { useSettings } from './plugins/settings/useSettings.js';
 import { useResponsiveLayout } from './composables/useResponsiveLayout.js';
 import { useWorkspaceManager } from './composables/useWorkspaceManager.js';
 import { useHostLayoutViewport } from './composables/shell/useHostLayoutViewport.js';
+import { useHostFontScale } from './composables/shell/useHostFontScale.js';
 import {
   resolveRootSafeAreaStyle,
   resolveRootSafeAreaResidualStyle
@@ -335,6 +336,8 @@ const {
   safeAreaCssSource: HostDetector.isGenericTauriApp && HostDetector.isAndroid ? 'lumina-native' : 'auto'
 });
 
+const { hostFontScale } = useHostFontScale();
+
 const {
   activeActivityStatusBar,
   activeRightPanelActivity,
@@ -406,6 +409,7 @@ watch(resolvedActivityStatusBarAppearance, (appearance) => {
 
 const appRootStyle = computed<CSSProperties>(() => ({
   pointerEvents: isExpanded.value ? 'auto' : 'none',
+  '--lw-type-scale': String(hostFontScale.value),
   '--lw-app-height': `${viewportHeightPx.value}px`,
   '--lw-app-width': `${viewportWidthPx.value}px`,
   '--lw-layout-viewport-height': `${viewportHeightPx.value}px`,

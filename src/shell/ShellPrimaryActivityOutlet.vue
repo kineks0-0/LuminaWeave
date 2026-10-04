@@ -14,9 +14,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, inject } from 'vue';
 import { getPrimarySurfaceContractIdForPlugin } from '../platform/plugin/officialPluginSurfaces.js';
 import { projectSurfaceInput } from '../platform/surface/surfaceInputProjection.js';
+import { desktopSurfaceInputResolverKey } from '../platform/surface/surfaceInputResolverContext.js';
 import DynamicTabOutlet from './DynamicTabOutlet.vue';
 import ThemedSurfaceOutlet from '../platform/surface/ThemedSurfaceOutlet.vue';
 import type { ShellRuntimeContext, ShellRuntimeSurfaces } from './types.js';
@@ -39,13 +40,19 @@ const activeSurfaceContractId = computed(() => activePlugin.value
   : null
 );
 
+const surfaceInputResolver = inject(desktopSurfaceInputResolverKey, undefined);
+
 const activeSurfaceInput = computed(() => activeSurfaceContractId.value
-  ? projectSurfaceInput(activeSurfaceContractId.value, {}, {
-      activity: { size: 'default', pageType: 'nested' },
-      isMobile: props.runtimeContext.isMobile,
-      auxSidebarMode: props.runtimeContext.isMobile ? 'hidden' : props.runtimeContext.traditional.sidebarMode,
-      activeRightPanelId: props.runtimeContext.traditional.activeRightPanel
-    })
+  ? projectSurfaceInput(
+      activeSurfaceContractId.value,
+      surfaceInputResolver?.(activeSurfaceContractId.value) ?? {},
+      {
+        activity: { size: 'default', pageType: 'nested' },
+        isMobile: props.runtimeContext.isMobile,
+        auxSidebarMode: props.runtimeContext.isMobile ? 'hidden' : props.runtimeContext.traditional.sidebarMode,
+        activeRightPanelId: props.runtimeContext.traditional.activeRightPanel
+      }
+    )
   : {}
 );
 </script>

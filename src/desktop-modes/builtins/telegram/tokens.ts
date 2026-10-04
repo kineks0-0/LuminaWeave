@@ -1,14 +1,16 @@
 import { getDesktopModeSettingValue } from '../../core/registry.js';
 import type { ComponentThemeContext, ThemeValueMap } from '../../core/types.js';
 
-/** 即时通讯的列表/标题排版：比通用 title-small 略大，保证手机上扫读（见 typography.md Desktop Theme Freedom） */
-const TELEGRAM_TYPE_TOKENS: ThemeValueMap = {
-    '--lw-telegram-page-title-size': '1.5rem',
-    '--lw-telegram-list-title-size': '1.0625rem',
-    '--lw-telegram-list-title-weight': 600,
-    '--lw-telegram-list-preview-size': '1rem',
-    '--lw-telegram-list-meta-size': '0.875rem',
-    '--lw-telegram-input-size': '1.0625rem',
+const TELEGRAM_FONT_STACK = 'system-ui, -apple-system, "Segoe UI", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif';
+
+/** 即时通讯排版：覆盖标准 Typography token（见 typography.md Desktop Theme Freedom），私有 token 只保留布局量 */
+const TELEGRAM_BASE_TOKENS: ThemeValueMap = {
+    '--lw-font-display': TELEGRAM_FONT_STACK,
+    '--lw-font-main': TELEGRAM_FONT_STACK,
+    /** 列表主标题：比通用 title-small 略大、字重略轻，保证手机上扫读；同步跟随宿主字号缩放 */
+    '--lw-type-title-small-size': 'calc(1rem * var(--lw-type-scale, 1))',
+    '--lw-type-title-small-line-height': 'calc(1.25rem * var(--lw-type-scale, 1))',
+    '--lw-type-title-small-weight': 600,
     /** 移动端悬浮底部导航占用的高度（不含安全区）：列表底部留白与悬浮键据此避让 */
     '--lw-telegram-bottom-nav-clearance': '96px'
 };
@@ -114,5 +116,5 @@ export const resolveTelegramDesignTokens = ({ activeSettings, resolvedAppearance
             '--lw-telegram-ai-bubble': 'rgba(255, 255, 255, 0.92)'
         };
 
-    return { ...TELEGRAM_TYPE_TOKENS, ...palette };
+    return { ...TELEGRAM_BASE_TOKENS, ...palette };
 };

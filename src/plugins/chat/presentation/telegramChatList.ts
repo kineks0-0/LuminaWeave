@@ -58,6 +58,17 @@ export const buildTelegramChatListRows = (
     return rows.sort((left, right) => right.updatedAt - left.updatedAt);
 };
 
+/**
+ * 判断头像是否只是宿主的占位图（ST 的 user-default.png 或 API 内置 DEFAULT_AVATAR）。
+ * Telegram 模式用本地剪影/首字母替代这些占位素材。
+ */
+export const isPlaceholderTelegramAvatar = (src?: string | null, defaultAvatar?: string | null): boolean => {
+    const trimmed = src?.trim();
+    if (!trimmed) return true;
+    if (defaultAvatar && trimmed === defaultAvatar) return true;
+    return trimmed.toLowerCase().includes('user-default');
+};
+
 /** 无头像时按名字给出稳定色相 */
 export const resolveAvatarHue = (name: string): number => {
     let hash = 0;

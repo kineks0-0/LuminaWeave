@@ -132,12 +132,30 @@ defineProps<{
   position: relative;
 }
 
-/* 移动端三个 tab 页共用桌面右栏同款的通透磨砂底，列表/资料页自身不再铺不透明底色 */
+/* 移动端一级页脱离壁纸，按原版使用纯色列表底；桌面三栏保持通透玻璃 */
 .lw-main-wrapper.lw-telegram-mobile-stack {
   --lw-telegram-pane-list-bg: transparent;
-  background:
-    var(--lw-telegram-pane-bg, linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(245, 251, 255, 0.62))),
-    var(--lw-telegram-frame-bg, var(--lw-bg-app));
+  --lw-telegram-mobile-page-bg: #ffffff;
+  --lw-telegram-search-bg: #f1f2f4;
+  --lw-border-base: rgba(0, 0, 0, 0.08);
+  --lw-text-secondary: #707579;
+  --lw-text-muted: #a2acb4;
+  background: var(--lw-telegram-mobile-page-bg, var(--lw-bg-surface));
+}
+
+[data-theme='dark'] .lw-main-wrapper.lw-telegram-mobile-stack {
+  --lw-telegram-mobile-page-bg: #17212b;
+  --lw-telegram-search-bg: #242f3d;
+  --lw-border-base: rgba(255, 255, 255, 0.08);
+  --lw-text-secondary: #708499;
+  --lw-text-muted: #6c7883;
+  --lw-primary: #5eb5f7;
+  --lw-primary-rgb: 94, 181, 247;
+}
+
+/* 移动端设置/工具页不再自带玻璃底，统一跟随移动页纯色背景 */
+.lw-main-wrapper.lw-telegram-mobile-stack .lw-settings-root[data-skin-variant='telegram'] {
+  background: transparent;
 }
 
 .lw-telegram-mobile-stack__bar {

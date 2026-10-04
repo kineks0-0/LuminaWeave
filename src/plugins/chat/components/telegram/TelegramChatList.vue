@@ -11,7 +11,7 @@
     <ul v-if="rows.length > 0" class="telegram-chat-list__rows">
       <li v-for="row in rows" :key="row.sessionId" class="telegram-chat-list__item">
         <form v-if="renamingSessionId === row.sessionId" class="telegram-chat-list__rename" @submit.prevent="saveRename(row.sessionId)">
-          <TelegramAvatar :src="row.avatarUrl" :name="row.name" :initial="row.initial" :size="avatarSize" />
+          <TelegramAvatar :src="row.avatarUrl" :name="row.name" :initial="row.initial" :size="avatarSize" :default-avatar="luminaWeaveApi.DEFAULT_AVATAR" />
           <input
             ref="renameInput"
             v-model="renameTitle"
@@ -37,7 +37,7 @@
             @pointerup="cancelLongPress"
             @pointerleave="cancelLongPress"
           >
-            <TelegramAvatar :src="row.avatarUrl" :name="row.name" :initial="row.initial" :size="avatarSize" />
+            <TelegramAvatar :src="row.avatarUrl" :name="row.name" :initial="row.initial" :size="avatarSize" :default-avatar="luminaWeaveApi.DEFAULT_AVATAR" />
             <span class="telegram-chat-list__copy">
               <span class="telegram-chat-list__line">
                 <strong>{{ row.name }}<small v-if="row.sessionTitle"> · {{ row.sessionTitle }}</small></strong>
@@ -73,22 +73,13 @@
         选择联系人
       </button>
     </div>
-    <button
-      v-if="page && canCompose"
-      type="button"
-      class="telegram-chat-list__fab"
-      title="新建聊天"
-      aria-label="新建聊天"
-      @click="emit('compose')"
-    >
-      <MessageCirclePlus :size="26" :stroke-width="2.2" />
-    </button>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
-import { Check, MessageCircle, MessageCirclePlus, Search, X } from 'lucide-vue-next';
+import { Check, MessageCircle, Search, X } from 'lucide-vue-next';
+import { luminaWeaveApi } from '@/api';
 import type { CharacterChannelGroup } from '../../../../types/ConversationContextTypes.js';
 import type { ChatMenuItem } from '../../presentation/chatMenus.js';
 import { buildTelegramChatListRows, type TelegramChatListRow } from '../../presentation/telegramChatList.js';
@@ -214,9 +205,9 @@ onBeforeUnmount(cancelLongPress);
   color: var(--lw-telegram-title-color, var(--lw-text-main));
   flex: 1;
   margin: 0;
-  font-size: var(--lw-telegram-page-title-size, 1.5rem);
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: var(--lw-type-headline-small-size);
+  font-weight: var(--lw-type-headline-small-weight);
+  letter-spacing: var(--lw-type-headline-small-tracking);
 }
 
 .telegram-chat-list__icon {
@@ -244,8 +235,11 @@ onBeforeUnmount(cancelLongPress);
   gap: 10px;
   margin: 10px 12px 6px;
   padding: 0 14px;
+  border: 1px solid var(--lw-telegram-glass-highlight, transparent);
   border-radius: 999px;
-  background: var(--lw-bg-subtle);
+  background: var(--lw-telegram-search-bg, var(--lw-telegram-glass-bg, var(--lw-bg-subtle)));
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
   color: var(--lw-text-muted);
 }
 
@@ -254,7 +248,7 @@ onBeforeUnmount(cancelLongPress);
   gap: 14px;
   margin: 6px 12px 8px;
   padding: 0 18px;
-  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
+  font-size: var(--lw-type-body-large-size);
 }
 
 .telegram-chat-list__search input {
@@ -340,14 +334,14 @@ onBeforeUnmount(cancelLongPress);
   min-width: 0;
   flex: 1;
   overflow: hidden;
-  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
-  font-weight: var(--lw-telegram-list-title-weight, 600);
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .telegram-chat-list__line strong small {
-  font-size: var(--lw-telegram-list-preview-size, 1rem);
+  font-size: var(--lw-type-body-medium-size);
   font-weight: 400;
   opacity: 0.7;
 }
@@ -359,13 +353,13 @@ onBeforeUnmount(cancelLongPress);
 
 .telegram-chat-list__line time {
   flex: 0 0 auto;
-  font-size: var(--lw-telegram-list-meta-size, 0.875rem);
+  font-size: var(--lw-type-body-small-size);
   font-variant-numeric: tabular-nums;
 }
 
 .telegram-chat-list__preview {
   overflow: hidden;
-  font-size: var(--lw-telegram-list-preview-size, 1rem);
+  font-size: var(--lw-type-body-medium-size);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -398,34 +392,15 @@ onBeforeUnmount(cancelLongPress);
   position: relative;
 }
 
-.telegram-chat-list__fab {
-  position: absolute;
-  right: 18px;
-  bottom: calc(var(--lw-telegram-bottom-nav-clearance, 96px) + 8px + var(--lw-content-safe-bottom, 0px));
-  display: grid;
-  width: 58px;
-  height: 58px;
-  place-items: center;
-  border: 0;
-  border-radius: 999px;
-  background: var(--lw-primary);
-  color: var(--lw-text-inverse);
-  box-shadow: var(--lw-shadow-card);
-  cursor: pointer;
-  transition: filter var(--lw-transition);
-}
-
-.telegram-chat-list__fab:hover {
-  filter: brightness(1.06);
-}
-
 .telegram-chat-list__empty {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   margin: 0;
-  padding: 56px 32px;
+  padding: 24px 32px;
   color: var(--lw-text-muted);
   text-align: center;
 }
@@ -443,14 +418,14 @@ onBeforeUnmount(cancelLongPress);
 
 .telegram-chat-list__empty strong {
   color: var(--lw-text-main);
-  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
-  font-weight: var(--lw-telegram-list-title-weight, 600);
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
 }
 
 .telegram-chat-list__empty p {
   max-width: 24ch;
   margin: 0;
-  font-size: var(--lw-telegram-list-preview-size, 1rem);
+  font-size: var(--lw-type-body-medium-size);
   line-height: 1.5;
 }
 

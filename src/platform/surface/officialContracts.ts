@@ -24,6 +24,8 @@ export interface ChatMainSurfaceInput {
     isMobile?: boolean;
     workspaceCompact?: boolean;
     onBack?: () => void;
+    /** 桌面端：折叠/展开会话列表侧栏 */
+    onToggleSidebar?: () => void;
     onOpenRoleProfile?: () => void;
     onOpenPanel?: (panelId: string) => void;
 }
@@ -396,6 +398,7 @@ export const OFFICIAL_SURFACE_INPUT_SCHEMAS = {
         isMobile: z.boolean().optional(),
         workspaceCompact: z.boolean().optional(),
         onBack: callbackSchema<() => void>().optional(),
+        onToggleSidebar: callbackSchema<() => void>().optional(),
         onOpenRoleProfile: callbackSchema<() => void>().optional(),
         onOpenPanel: callbackSchema<(panelId: string) => void>().optional()
     }).strict(),

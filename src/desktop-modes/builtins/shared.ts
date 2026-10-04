@@ -299,10 +299,10 @@ const resolveRoleTypographyVars = (
         : letterSpacing;
 
     return {
-        [`${prefix}-assistant-font-size`]: `${assistantFontSize}px`,
+        [`${prefix}-assistant-font-size`]: `calc(${assistantFontSize}px * var(--lw-type-scale, 1))`,
         [`${prefix}-assistant-line-height`]: String(assistantLineHeight),
         [`${prefix}-assistant-letter-spacing`]: `${assistantLetterSpacing}px`,
-        [`${prefix}-user-font-size`]: `${userFontSize}px`,
+        [`${prefix}-user-font-size`]: `calc(${userFontSize}px * var(--lw-type-scale, 1))`,
         [`${prefix}-user-line-height`]: String(userLineHeight),
         [`${prefix}-user-letter-spacing`]: `${userLetterSpacing}px`
     };
@@ -506,7 +506,7 @@ export const createSurfaceSkinMap = (overrides: ThemeValueMap = {}): DesktopMode
                 '--lw-chat-avatar-shadow': 'none',
                 '--lw-chat-font': resolveFontFamily(chatFontFamily),
                 '--lw-chat-font-weight': Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontWeight', 400)),
-                '--lw-chat-font-size': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontSize', 16))}px`,
+                '--lw-chat-font-size': `calc(${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatFontSize', 16))}px * var(--lw-type-scale, 1))`,
                 '--lw-chat-line-height': Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLineHeight', 1.6)),
                 '--lw-chat-paragraph-spacing': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatParagraphSpacing', 16))}px`,
                 '--lw-chat-letter-spacing': `${Number(getDesktopModeSettingValue(activeSettings, desktopModeId, 'chatLetterSpacing', 0))}px`,

@@ -2,13 +2,18 @@
   <section class="lw-telegram-user-profile" :style="infoPanelStyle" aria-label="Telegram user profile">
     <header class="lw-telegram-user-profile__hero">
       <div class="lw-telegram-user-profile__avatar-wrap">
-        <span class="lw-telegram-user-profile__avatar" :style="userAvatarStyle">
+        <span
+          class="lw-telegram-user-profile__avatar"
+          :class="{ 'is-placeholder': useUserPlaceholder }"
+          :style="useUserPlaceholder ? undefined : userAvatarStyle"
+        >
           <img
             v-if="userAvatar"
             :src="userAvatar"
             :alt="userName"
             @error="hideBrokenTelegramAvatar"
           >
+          <LuminaAvatarPlaceholder v-else-if="useUserPlaceholder" class="lw-telegram-user-profile__avatar-placeholder" />
           <span v-else>{{ userInitial }}</span>
         </span>
         <button
@@ -146,6 +151,9 @@
 import { computed, ref } from 'vue';
 import type { CSSProperties } from 'vue';
 import { useSurfaceSkin } from '../../../core/useSurfaceSkin.js';
+import LuminaAvatarPlaceholder from '../../../../ui/primitives/LuminaAvatarPlaceholder.vue';
+import { luminaWeaveApi } from '@/api';
+import { isPlaceholderTelegramAvatar } from '../../../../plugins/chat/presentation/telegramChatList.js';
 import type { WidgetPanelGroup } from '../../../../shell/types.js';
 import {
   TELEGRAM_ICON_STROKE_WIDTH,
@@ -179,7 +187,14 @@ const menuView = ref<'root' | 'desktopModes'>('root');
 
 const userName = computed(() => (window as any).LuminaWeave?.getUserName?.() || 'User');
 const rawUserAvatar = computed(() => (window as any).LuminaWeave?.getUserAvatar?.() || '');
-const userAvatar = computed(() => rawUserAvatar.value);
+const userAvatar = computed(() => (
+  isPlaceholderTelegramAvatar(rawUserAvatar.value, luminaWeaveApi.DEFAULT_AVATAR) ? '' : rawUserAvatar.value
+));
+const hasUserIdentity = computed(() => {
+  const name = userName.value.trim();
+  return Boolean(name) && name !== 'User';
+});
+const useUserPlaceholder = computed(() => !userAvatar.value && !hasUserIdentity.value);
 const userInitial = computed(() => getTelegramInitial(userName.value));
 const userAvatarStyle = computed(() => getTelegramAvatarStyle(userName.value));
 const panelItems = computed(() => props.widgetGroups.flatMap((group) => group.items));
@@ -242,6 +257,16 @@ const selectDesktopMode = (modeId: string) => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.lw-telegram-user-profile__avatar.is-placeholder {
+  background: color-mix(in srgb, var(--lw-text-muted) 18%, transparent);
+  color: var(--lw-text-muted);
+}
+
+.lw-telegram-user-profile__avatar-placeholder {
+  width: 56%;
+  height: 56%;
 }
 
 .lw-telegram-user-profile__menu-trigger {

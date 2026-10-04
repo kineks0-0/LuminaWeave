@@ -1,3 +1,4 @@
+export { default as LuminaAvatarPlaceholder } from './LuminaAvatarPlaceholder.vue';
 export { default as LuminaButton } from './LuminaButton.vue';
 export { default as LuminaCheckbox } from './LuminaCheckbox.vue';
 export { default as LuminaIconButton } from './LuminaIconButton.vue';

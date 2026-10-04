@@ -17,10 +17,8 @@
           <img :src="userAvatar" :alt="userName" @error="hideBrokenTelegramAvatar">
         </span>
         <component
-          :is="item.icon"
+          :is="item.active ? item.filledIcon : item.icon"
           v-else
-          :size="24"
-          :stroke-width="TELEGRAM_ICON_STROKE_WIDTH"
           aria-hidden="true"
         />
       </span>
@@ -32,12 +30,9 @@
 <script setup lang="ts">
 import { computed, inject } from 'vue';
 import { LuminaWeaveAPI } from '@/api';
-import {
-  TELEGRAM_ICON_STROKE_WIDTH,
-  getTelegramAvatarStyle,
-  getTelegramIconComponent,
-  hideBrokenTelegramAvatar
-} from './telegramVisual.js';
+import { getTelegramAvatarStyle, hideBrokenTelegramAvatar } from './telegramVisual.js';
+import { getTelegramMaterialIconComponent } from './telegramMaterialIcons.js';
+import { isPlaceholderTelegramAvatar } from '../../../../plugins/chat/presentation/telegramChatList.js';
 
 const props = defineProps<{
   activeMainTab: string;
@@ -53,7 +48,9 @@ const emit = defineEmits<{
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const userName = computed(() => lwApi?.getUserName?.() || 'User');
 const rawUserAvatar = computed(() => lwApi?.getUserAvatar?.() || '');
-const userAvatar = computed(() => rawUserAvatar.value);
+const userAvatar = computed(() => (
+  isPlaceholderTelegramAvatar(rawUserAvatar.value, lwApi?.DEFAULT_AVATAR) ? '' : rawUserAvatar.value
+));
 const avatarStyle = computed(() => getTelegramAvatarStyle(userName.value));
 
 const items = computed(() => [
@@ -61,25 +58,29 @@ const items = computed(() => [
     id: 'chat' as const,
     label: '聊天',
     active: props.activeMainTab === 'lumina-chat' && !props.characterSheetOpen && !props.settingsPanelOpen && !props.profilePanelOpen,
-    icon: getTelegramIconComponent('chat')
+    icon: getTelegramMaterialIconComponent('chat', 'outlined'),
+    filledIcon: getTelegramMaterialIconComponent('chat', 'filled')
   },
   {
     id: 'characters' as const,
     label: '联系人',
     active: props.characterSheetOpen,
-    icon: getTelegramIconComponent('contacts')
+    icon: getTelegramMaterialIconComponent('contacts', 'outlined'),
+    filledIcon: getTelegramMaterialIconComponent('contacts', 'filled')
   },
   {
     id: 'settings' as const,
     label: '设置',
     active: props.settingsPanelOpen || props.activeMainTab === 'lumina-settings' || props.activeMainTab === 'mobile-widget:lumina-settings',
-    icon: getTelegramIconComponent('settings')
+    icon: getTelegramMaterialIconComponent('settings', 'outlined'),
+    filledIcon: getTelegramMaterialIconComponent('settings', 'filled')
   },
   {
     id: 'profile' as const,
     label: '个人资料',
     active: props.profilePanelOpen,
-    icon: getTelegramIconComponent('user')
+    icon: getTelegramMaterialIconComponent('user', 'outlined'),
+    filledIcon: getTelegramMaterialIconComponent('user', 'filled')
   }
 ]);
 </script>
@@ -87,18 +88,18 @@ const items = computed(() => [
 <style scoped>
 .lw-telegram-bottom-nav {
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 14px;
+  right: 14px;
   bottom: calc(10px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
   z-index: 28;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  padding: 8px;
+  gap: 2px;
+  padding: 6px;
   border: 0.5px solid var(--lw-telegram-tab-rim, color-mix(in srgb, var(--lw-border-base) 42%, transparent));
-  border-radius: 24px;
+  border-radius: 999px;
   background: var(--lw-telegram-tab-bg, color-mix(in srgb, var(--lw-surface-container-high) 78%, transparent));
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 var(--lw-telegram-glass-highlight, transparent);
   backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
   -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
 }
@@ -106,25 +107,26 @@ const items = computed(() => [
 .lw-telegram-bottom-nav__item {
   min-width: 0;
   border: none;
-  border-radius: 18px;
-  padding: 8px 4px;
+  border-radius: 999px;
+  padding: 6px 2px;
   background: transparent;
   color: var(--lw-text-secondary);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  font-size: var(--lw-type-label-small-size);
-  line-height: var(--lw-type-label-small-line-height);
-  font-weight: var(--lw-type-label-small-weight);
-  letter-spacing: var(--lw-type-label-small-tracking);
+  gap: 2px;
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+  font-weight: 500;
+  letter-spacing: var(--lw-type-label-medium-tracking);
 }
 
 .lw-telegram-bottom-nav__item.active,
 .lw-telegram-bottom-nav__item:hover {
   background: var(--lw-telegram-active-pill, color-mix(in srgb, var(--lw-primary) 17%, transparent));
   color: var(--lw-primary);
+  font-weight: 600;
   box-shadow: none;
 }
 
@@ -132,7 +134,7 @@ const items = computed(() => [
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 25px;
+  height: 26px;
 }
 
 .lw-telegram-bottom-nav__avatar {

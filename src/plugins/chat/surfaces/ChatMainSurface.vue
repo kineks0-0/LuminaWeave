@@ -16,6 +16,7 @@
       :layout="messageLayout"
       :typing="snapshot.generation.isGenerating"
       :on-back="input.onBack"
+      :on-toggle-sidebar="input.onToggleSidebar"
       :on-open-role-profile="input.onOpenRoleProfile"
       :on-open-panel="input.onOpenPanel"
       :on-toggle-prompt-inspector="surfaceContext.intents.togglePromptInspector"

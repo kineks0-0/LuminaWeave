@@ -61,7 +61,7 @@
           @pointerup="cancelLongPress"
           @pointerleave="cancelLongPress"
         >
-          <TelegramAvatar :src="group.characterAvatarUrl" :name="group.characterName" :initial="group.characterInitial" :size="page ? 50 : 44" />
+          <TelegramAvatar :src="group.characterAvatarUrl" :name="group.characterName" :initial="group.characterInitial" :size="page ? 50 : 44" :default-avatar="luminaWeaveApi.DEFAULT_AVATAR" />
           <span class="telegram-contacts__copy">
             <strong>{{ group.characterName }}</strong>
             <small>{{ group.sessions.length > 0 ? `${group.sessions.length} 个会话 · ${group.recentPreview || '暂无消息'}` : '还没有会话，点按开始' }}</small>
@@ -85,6 +85,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import { ArrowLeft, Search, Upload } from 'lucide-vue-next';
+import { luminaWeaveApi } from '@/api';
 import type { CharacterChannelGroup } from '../../../../types/ConversationContextTypes.js';
 import type { ChatMenuItem } from '../../presentation/chatMenus.js';
 import ChatPopoverMenu from '../ChatPopoverMenu.vue';
@@ -208,9 +209,9 @@ onBeforeUnmount(cancelLongPress);
   color: var(--lw-telegram-title-color, var(--lw-text-main));
   flex: 1;
   margin: 0;
-  font-size: var(--lw-telegram-page-title-size, 1.5rem);
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: var(--lw-type-headline-small-size);
+  font-weight: var(--lw-type-headline-small-weight);
+  letter-spacing: var(--lw-type-headline-small-tracking);
 }
 
 .telegram-contacts__header-search {
@@ -257,8 +258,12 @@ onBeforeUnmount(cancelLongPress);
   align-items: center;
   gap: 10px;
   padding: 0 14px;
+  border: 1px solid var(--lw-telegram-glass-highlight, transparent);
   border-radius: 999px;
-  background: var(--lw-bg-subtle);
+  background: var(--lw-telegram-glass-bg, var(--lw-bg-subtle));
+  box-shadow: inset 0 1px 0 var(--lw-telegram-glass-highlight, transparent);
+  backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
+  -webkit-backdrop-filter: var(--lw-telegram-glass-blur, blur(18px));
   color: var(--lw-text-muted);
 }
 
@@ -340,13 +345,13 @@ onBeforeUnmount(cancelLongPress);
 }
 
 .telegram-contacts__copy strong {
-  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
-  font-weight: var(--lw-telegram-list-title-weight, 600);
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
 }
 
 .telegram-contacts__copy small {
   color: var(--lw-text-muted);
-  font-size: var(--lw-telegram-list-preview-size, 1rem);
+  font-size: var(--lw-type-body-medium-size);
 }
 
 .telegram-contacts__item :deep(.chat-popover-menu) {
@@ -355,8 +360,12 @@ onBeforeUnmount(cancelLongPress);
 }
 
 .telegram-contacts__empty {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
   margin: 0;
-  padding: 48px 32px;
+  padding: 24px 32px;
   color: var(--lw-text-muted);
   text-align: center;
 }

@@ -3,6 +3,7 @@ import type { CharacterChannelGroup, CharacterChannelSessionItem } from '../../.
 import {
     buildTelegramChatListRows,
     formatChatListDate,
+    isPlaceholderTelegramAvatar,
     resolveAvatarHue
 } from '../presentation/telegramChatList.js';
 
@@ -80,6 +81,20 @@ describe('buildTelegramChatListRows', () => {
         expect(filter('bob')).toEqual(['b1']);
         expect(filter('会话 a2')).toEqual(['a2']);
         expect(filter('旧预')).toEqual(['b1']);
+    });
+});
+
+describe('isPlaceholderTelegramAvatar', () => {
+    it('treats empty, host default persona and API default avatar as placeholder', () => {
+        expect(isPlaceholderTelegramAvatar('')).toBe(true);
+        expect(isPlaceholderTelegramAvatar(null)).toBe(true);
+        expect(isPlaceholderTelegramAvatar('/thumbnail?type=persona&file=user-default.png')).toBe(true);
+        expect(isPlaceholderTelegramAvatar('data:image/svg+xml;base64,abc', 'data:image/svg+xml;base64,abc')).toBe(true);
+    });
+
+    it('keeps real avatar urls', () => {
+        expect(isPlaceholderTelegramAvatar('https://example.com/a.png')).toBe(false);
+        expect(isPlaceholderTelegramAvatar('/thumbnail?type=avatar&file=alice.png')).toBe(false);
     });
 });
 

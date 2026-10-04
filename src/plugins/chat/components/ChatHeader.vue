@@ -27,7 +27,17 @@
       </template>
       <template v-else>
         <button
-          v-if="onBack"
+          v-if="onToggleSidebar"
+          type="button"
+          class="chat-header__round"
+          title="切换会话列表"
+          aria-label="切换会话列表"
+          @click="onToggleSidebar"
+        >
+          <PanelLeft :size="22" />
+        </button>
+        <button
+          v-else-if="onBack"
           type="button"
           class="chat-header__round"
           title="返回聊天列表"
@@ -150,7 +160,7 @@
 <script setup lang="ts">
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { computed, nextTick, ref } from 'vue';
-import { ArrowLeft, ContactRound, Ellipsis, EllipsisVertical, Search } from 'lucide-vue-next';
+import { ArrowLeft, ContactRound, Ellipsis, EllipsisVertical, PanelLeft, Search } from 'lucide-vue-next';
 import type { ChatMessageLayout } from '../presentation/ChatMessageRenderPreferences.js';
 import {
   CHAT_CONTEXT_TOOLS,
@@ -170,6 +180,8 @@ const props = withDefaults(defineProps<{
   /** 正在生成回复：状态行显示“正在输入…” */
   typing?: boolean;
   onBack?: () => void;
+  /** 桌面端：折叠/展开会话列表侧栏 */
+  onToggleSidebar?: () => void;
   onOpenRoleProfile?: () => void;
   onOpenPanel?: (panelId: string) => void;
   onTogglePromptInspector: () => void;
@@ -177,6 +189,7 @@ const props = withDefaults(defineProps<{
   layout: 'classic',
   typing: false,
   onBack: undefined,
+  onToggleSidebar: undefined,
   onOpenRoleProfile: undefined,
   onOpenPanel: undefined
 });
@@ -421,14 +434,14 @@ button.chat-header__peer {
 }
 
 .chat-header--floating .chat-header__identity strong {
-  font-size: var(--lw-telegram-list-title-size, 1.0625rem);
-  font-weight: var(--lw-telegram-list-title-weight, 600);
-  line-height: 1.25;
+  font-size: var(--lw-type-title-small-size);
+  font-weight: var(--lw-type-title-small-weight);
+  line-height: var(--lw-type-title-small-line-height);
 }
 
 .chat-header--floating .chat-header__identity small {
-  font-size: var(--lw-telegram-list-meta-size, 0.875rem);
-  line-height: 1.25;
+  font-size: var(--lw-type-body-small-size);
+  line-height: var(--lw-type-body-small-line-height);
 }
 
 /* 没有返回键（桌面）时，会话胶囊从第一列开始 */

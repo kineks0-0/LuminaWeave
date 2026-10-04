@@ -13,7 +13,7 @@
       <slot name="composition" v-bind="compositionProps" />
     </template>
 
-    <template v-if="showDesktopPane" #lead>
+    <template v-if="showDesktopPane && !isLeftPaneHidden" #lead>
       <TelegramDesktopPane
         :activeDesktopModeId="runtimeContext.activeDesktopModeId"
         :leftRoute="telegramDesktopLeftRoute"
@@ -73,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, type Component } from 'vue';
+import { computed, onMounted, onUnmounted, provide, type Component } from 'vue';
 import TraditionalShell from '../../../../shell/traditional/TraditionalShell.vue';
 import WidgetPanelHost from '../../../../shell/traditional/WidgetPanelHost.vue';
 import { useSurfaceSkin } from '../../../core/useSurfaceSkin.js';
@@ -81,6 +81,9 @@ import { createDesktopModeShellRuntime } from '../../../../platform/desktop-mode
 import type { DesktopModeShellProps } from '../../../../platform/desktop-mode-runtime/shellContracts.js';
 import type { CreateChatConversationInput } from '../../../../types/ConversationContextTypes.js';
 import type { SurfaceContractId } from '../../../../platform/surface/types.js';
+import { useSettings } from '../../../../plugins/settings/useSettings.js';
+import { getDesktopModeSettingStorageKey, getDesktopModeSettingValue } from '../../../core/registry.js';
+import { desktopSurfaceInputResolverKey } from '../../../../platform/surface/surfaceInputResolverContext.js';
 import { useTelegramShell } from './useTelegramShell.js';
 import { createTelegramActivityModeHandler } from './telegramActivityPlacement.js';
 import TelegramBottomNav from './TelegramBottomNav.vue';
@@ -116,6 +119,25 @@ const {
 
 const { cssVars: telegramFrameVars } = useSurfaceSkin('telegram.frame');
 const telegramFrameStyle = computed(() => telegramFrameVars.value);
+
+const { activeSettings, updateSetting } = useSettings();
+const leftPaneCollapsed = computed(() => getDesktopModeSettingValue(
+  activeSettings,
+  props.runtimeContext.activeDesktopModeId,
+  'leftPaneCollapsed',
+  false
+) === true);
+const toggleLeftPane = async () => {
+  const storageKey = getDesktopModeSettingStorageKey(
+    props.runtimeContext.activeDesktopModeId,
+    'leftPaneCollapsed'
+  );
+  await updateSetting(storageKey, !leftPaneCollapsed.value);
+};
+// 折叠只在会话打开时生效：空态仍显示列表，避免折叠后无处选择会话
+const isLeftPaneHidden = computed(() =>
+  leftPaneCollapsed.value && Boolean(props.runtimeContext.characterChannelState.activeSessionId)
+);
 
 const showDesktopPane = computed(() =>
   !props.runtimeContext.isMobile && props.runtimeContext.shellKind === 'traditional'
@@ -186,12 +208,16 @@ const onClearAndSwitchRightPanel = (panelId: string) => {
 const resolveSurfaceInput = (contractId: SurfaceContractId): Record<string, unknown> => {
   if (contractId === 'chat.main' && !props.runtimeContext.isMobile) {
     return {
+      onToggleSidebar: toggleLeftPane,
       onOpenRoleProfile: openProfilePanel,
       onOpenPanel: onClearAndSwitchRightPanel
     };
   }
   return {};
 };
+// 桌面组合出口（ShellPrimaryActivityOutlet）不经过 TraditionalShell 的 resolver prop，
+// 通过 provide 让主 surface 拿到模式回调（角色顶栏 / 侧栏切换）。
+provide(desktopSurfaceInputResolverKey, resolveSurfaceInput);
 
 // 宿主上下文工具事件由 Telegram 模式自己接管，不再经过 App / useShellBootstrap。
 const onTelegramContextTool = (...args: unknown[]) => {
@@ -240,7 +266,8 @@ const resolvedActivityComponentProps = computed<Record<string, unknown> | undefi
     showBottomNavPadding: showBottomNav.value,
     mainSurfaceVariant: props.runtimeSurfaces.traditional.mainSurfaceVariant,
     mainSurfaceStyle: props.runtimeSurfaces.traditional.mainSurfaceStyle,
-    mobileMainStyle: {},
+    // 移动端一级页脱离玻璃底：设置/工具页不再叠 shell 主面背景，统一用移动页纯色
+    mobileMainStyle: { '--lw-shell-main-bg': 'transparent' },
     state: props.runtimeContext.characterChannelState,
     desktopModes: props.runtimeContext.desktopModeOptions,
     activeDesktopModeId: props.runtimeContext.activeDesktopModeId,

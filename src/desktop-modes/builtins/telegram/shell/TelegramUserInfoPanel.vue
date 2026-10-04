@@ -48,12 +48,13 @@
         :is="canExpandCover ? 'button' : 'div'"
         :type="canExpandCover ? 'button' : undefined"
         class="lw-telegram-profile__avatar"
-        :class="{ 'is-expandable': canExpandCover }"
-        :style="getTelegramAvatarStyle(profile.name)"
+        :class="{ 'is-expandable': canExpandCover, 'is-placeholder': !hasProfile }"
+        :style="hasProfile ? getTelegramAvatarStyle(profile.name) : undefined"
         :aria-label="canExpandCover ? '展开头像' : undefined"
         @click="canExpandCover && (isCoverExpanded = true)"
       >
         <img v-if="profile.avatarUrl" :src="profile.avatarUrl" :alt="profile.name" @error="hideBrokenTelegramAvatar">
+        <LuminaAvatarPlaceholder v-else-if="!hasProfile" class="lw-telegram-profile__avatar-placeholder" />
         <span v-else>{{ getTelegramInitial(profile.name) }}</span>
       </component>
       <h2>{{ profile.name }}</h2>
@@ -142,6 +143,9 @@ import {
   X
 } from 'lucide-vue-next';
 import { useSurfaceSkin } from '../../../core/useSurfaceSkin.js';
+import LuminaAvatarPlaceholder from '../../../../ui/primitives/LuminaAvatarPlaceholder.vue';
+import { luminaWeaveApi } from '@/api';
+import { isPlaceholderTelegramAvatar } from '../../../../plugins/chat/presentation/telegramChatList.js';
 import type {
   CharacterChannelGroup,
   CharacterChannelSessionItem
@@ -187,11 +191,14 @@ const currentSession = computed<CharacterChannelSessionItem | null>(() => {
     || null;
 });
 
+const hasProfile = computed(() => Boolean(activeGroup.value));
+
 const profile = computed(() => {
   const group = activeGroup.value;
+  const avatarUrl = group?.characterAvatarUrl || '';
   return {
     name: group?.characterName?.trim() || '未选择角色',
-    avatarUrl: group?.characterAvatarUrl || ''
+    avatarUrl: isPlaceholderTelegramAvatar(avatarUrl, luminaWeaveApi.DEFAULT_AVATAR) ? '' : avatarUrl
   };
 });
 
@@ -266,10 +273,11 @@ const formatSessionTime = (timestamp: number): string => {
   --lw-telegram-profile-card-bg: color-mix(in srgb, var(--lw-telegram-info-card-bg, var(--lw-bg-surface)) 74%, transparent);
   /* 桌面右栏较窄，整体排版比手机整页收一档；.is-mobile 恢复为大号 */
   --lw-telegram-profile-avatar-size: 84px;
-  --lw-telegram-profile-name-size: var(--lw-type-title-large-size);
-  --lw-telegram-profile-name-line-height: var(--lw-type-title-large-line-height);
-  --lw-telegram-profile-body-size: var(--lw-type-body-large-size);
-  --lw-telegram-profile-secondary-size: var(--lw-type-body-medium-size);
+  --lw-telegram-profile-name-size: var(--lw-type-title-medium-size);
+  --lw-telegram-profile-name-line-height: var(--lw-type-title-medium-line-height);
+  --lw-telegram-profile-body-size: var(--lw-type-body-medium-size);
+  --lw-telegram-profile-secondary-size: var(--lw-type-body-small-size);
+  --lw-telegram-profile-secondary-line-height: var(--lw-type-body-small-line-height);
   background: transparent;
   color: var(--lw-text-main);
   overflow: auto;
@@ -279,8 +287,9 @@ const formatSessionTime = (timestamp: number): string => {
   --lw-telegram-profile-avatar-size: 108px;
   --lw-telegram-profile-name-size: var(--lw-type-headline-small-size);
   --lw-telegram-profile-name-line-height: var(--lw-type-headline-small-line-height);
-  --lw-telegram-profile-body-size: var(--lw-telegram-list-title-size, 1.0625rem);
-  --lw-telegram-profile-secondary-size: var(--lw-telegram-list-meta-size, 0.875rem);
+  --lw-telegram-profile-body-size: var(--lw-type-body-large-size);
+  --lw-telegram-profile-secondary-size: var(--lw-type-body-medium-size);
+  --lw-telegram-profile-secondary-line-height: var(--lw-type-body-medium-line-height);
 }
 
 .lw-telegram-profile > * {
@@ -348,6 +357,16 @@ const formatSessionTime = (timestamp: number): string => {
   color: var(--lw-text-inverse);
   font-size: calc(var(--lw-telegram-profile-avatar-size) * 0.4);
   font-weight: 600;
+}
+
+.lw-telegram-profile__avatar.is-placeholder {
+  background: color-mix(in srgb, var(--lw-text-muted) 18%, transparent);
+  color: var(--lw-text-muted);
+}
+
+.lw-telegram-profile__avatar-placeholder {
+  width: 56%;
+  height: 56%;
 }
 
 .lw-telegram-profile__avatar.is-expandable {
@@ -422,7 +441,7 @@ const formatSessionTime = (timestamp: number): string => {
   margin: 0;
   color: var(--lw-text-muted);
   font-size: var(--lw-telegram-profile-secondary-size);
-  line-height: var(--lw-type-body-medium-line-height);
+  line-height: var(--lw-telegram-profile-secondary-line-height);
 }
 
 .lw-telegram-profile__actions {
@@ -459,7 +478,7 @@ const formatSessionTime = (timestamp: number): string => {
   margin: 0;
   padding: 4px 20px 8px;
   color: var(--lw-text-muted);
-  font-size: var(--lw-telegram-list-meta-size, 0.875rem);
+  font-size: var(--lw-type-body-small-size);
   line-height: 1.5;
   text-align: center;
 }
@@ -554,9 +573,9 @@ const formatSessionTime = (timestamp: number): string => {
 .lw-telegram-profile__section-title {
   margin: 8px 6px -4px;
   color: var(--lw-primary);
-  font-size: var(--lw-type-title-small-size);
-  line-height: var(--lw-type-title-small-line-height);
-  font-weight: var(--lw-type-title-small-weight);
+  font-size: var(--lw-type-label-large-size);
+  line-height: var(--lw-type-label-large-line-height);
+  font-weight: var(--lw-type-label-large-weight);
 }
 
 .lw-telegram-profile__session-copy {
