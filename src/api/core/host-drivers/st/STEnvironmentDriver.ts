@@ -103,6 +103,13 @@ export class STEnvironmentDriver {
             return foundFunc;
         }
 
+        // 宿主原生函数缺失时，使用酒馆助手等价能力兜底
+        const helper = this.stHelper;
+        if (helper && funcName === 'stopGeneration' && typeof helper.stopAllGeneration === 'function') {
+            console.debug('[LuminaWeave] [ST_API] 未找到 stopGeneration，改用 TavernHelper.stopAllGeneration');
+            return helper.stopAllGeneration.bind(helper);
+        }
+
         const apiKeys = stApi ? Object.keys(stApi) : [];
         const globalKeys = glob ? Object.keys(glob).filter((key) => key.toLowerCase().includes('generate')) : [];
         console.error(`[LuminaWeave] [ST_API] 无法定位到函数: ${funcName}.`, {

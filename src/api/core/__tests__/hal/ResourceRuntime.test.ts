@@ -51,6 +51,7 @@ vi.mock('@/api/core/host-drivers/st/STClient.js', () => ({
             ? { name: 'Current Preset', prompts: [{ id: 'main', enabled: true, content: 'Hello' }] }
             : null),
         getCharacters: vi.fn(() => ctxRef.value?.characters ?? []),
+        getCharacterData: vi.fn(() => null),
         getWorldbookNames: vi.fn(() => [])
     }
 }));

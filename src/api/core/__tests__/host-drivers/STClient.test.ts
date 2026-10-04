@@ -1265,4 +1265,71 @@ describe('STClient - extra normalization', () => {
             windowMock.this_chid = previousThisChid;
         }
     });
+
+    it('substituteMacros should prefer TavernHelper.substitudeMacros', () => {
+        helper = {
+            substitudeMacros: (text: string) => `${text} [helper]`
+        };
+        stGlobal = {
+            substituteParams: (text: string) => `${text} [glob]`
+        };
+
+        expect(STClient.substituteMacros('hi')).toBe('hi [helper]');
+    });
+
+    it('substituteMacros should fall back to substituteParams when helper is missing', () => {
+        stGlobal = {
+            substituteParams: (text: string) => `${text} [glob]`
+        };
+
+        expect(STClient.substituteMacros('hi')).toBe('hi [glob]');
+    });
+
+    it('getWorldbookNames should prefer TavernHelper.getWorldbookNames', () => {
+        helper = {
+            getWorldbookNames: () => ['Alpha', 'Beta']
+        };
+        stGlobal = {
+            worldbooks: { Gamma: {} }
+        };
+
+        expect(STClient.getWorldbookNames()).toEqual(['Alpha', 'Beta']);
+    });
+
+    it('getPresets should use TavernHelper for completion presets and preset manager otherwise', () => {
+        helper = {
+            getPresetNames: () => ['PresetA'],
+            getLoadedPresetName: () => 'PresetA',
+        };
+        const selectPreset = vi.fn();
+        const getAllPresets = vi.fn(() => ['ContextPreset']);
+        (globalThis as unknown as { window: { getPresetManager?: unknown } }).window.getPresetManager = (type: string) => (
+            type === 'context' ? { getAllPresets, getSelectedPresetName: () => 'ContextPreset', selectPreset } : undefined
+        );
+        try {
+            expect(STClient.getPresets('openai')).toEqual(['PresetA']);
+            expect(STClient.getPresets('context')).toEqual(['ContextPreset']);
+            expect(STClient.getActivePresetName('openai')).toBe('PresetA');
+            expect(STClient.getActivePresetName('context')).toBe('ContextPreset');
+        } finally {
+            delete (globalThis as unknown as { window: { getPresetManager?: unknown } }).window.getPresetManager;
+        }
+    });
+
+    it('selectPreset should use TavernHelper.loadPreset for completion presets', () => {
+        const loadPreset = vi.fn(() => true);
+        helper = { loadPreset };
+
+        STClient.selectPreset('openai', 'PresetA');
+
+        expect(loadPreset).toHaveBeenCalledWith('PresetA');
+    });
+
+    it('getCharacterData should delegate to TavernHelper.getCharData', () => {
+        const character = { name: 'Alpha', avatar: 'alpha.png' };
+        helper = { getCharData: vi.fn(() => character) };
+
+        expect(STClient.getCharacterData('alpha.png')).toBe(character);
+        expect(STClient.getCharacterData(null)).toBeNull();
+    });
 });

@@ -128,17 +128,37 @@ export class STResourceSource implements ResourceSource {
 
     private async getByType(resourceType: ResourceType, resourceId: string): Promise<ResourceDocument | null> {
         if (resourceType === 'character') {
-            const characters = getContextCharacters();
-            const match = characters.find((character, index) =>
-                normalizeCharacterResourceId(character?.avatar ?? character?.name, String(index)) === resourceId
-                || normalizeLegacyCharacterResourceId(character?.avatar ?? character?.name, String(index)) === resourceId
-                || String(index) === resourceId
-            );
-            return match ? this.toDocument(resourceType, resourceId, this.normalizeCharacterRaw(match, characters.indexOf(match))) : null;
+            const resolved = this.resolveCharacterEntry(resourceId);
+            return resolved
+                ? this.toDocument(resourceType, resourceId, this.normalizeCharacterRaw(resolved.character, resolved.index))
+                : null;
         }
         if (resourceType === 'worldbook') return this.getWorldbookDocument(resourceId);
         if (resourceType === 'preset') return this.getPresetDocument(resourceId);
         return null;
+    }
+
+    private resolveCharacterEntry(resourceId: string): { character: any; index: number } | null {
+        const characters = getContextCharacters();
+
+        // 酒馆助手 getCharData 优先：resourceId 可能是头像 id（.json 归一化）或显示名
+        const helperCandidates = resourceId.endsWith('.json')
+            ? [resourceId.replace(/\.json$/i, '.png'), resourceId.replace(/\.json$/i, '')]
+            : [resourceId];
+        for (const candidate of helperCandidates) {
+            const raw = STClient.getCharacterData(candidate);
+            if (!raw) continue;
+            const index = characters.findIndex((character) => character?.avatar === raw.avatar);
+            return { character: raw, index: index === -1 ? -1 : index };
+        }
+
+        // 回退宿主角色数组（兼容数字索引与旧 id 口径）
+        const matchIndex = characters.findIndex((character, index) =>
+            normalizeCharacterResourceId(character?.avatar ?? character?.name, String(index)) === resourceId
+            || normalizeLegacyCharacterResourceId(character?.avatar ?? character?.name, String(index)) === resourceId
+            || String(index) === resourceId
+        );
+        return matchIndex === -1 ? null : { character: characters[matchIndex], index: matchIndex };
     }
 
     private normalizeCharacterRaw(character: any, index: number): Record<string, unknown> {

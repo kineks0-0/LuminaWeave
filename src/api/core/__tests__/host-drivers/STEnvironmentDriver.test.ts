@@ -38,4 +38,18 @@ describe('STEnvironmentDriver.waitForReady', () => {
             STEnvironmentDriver.waitForReady({ timeoutMs: 1, requireReady: true })
         ).rejects.toThrow('酒馆助手');
     });
+
+    it('getHostFunction should fall back to TavernHelper.stopAllGeneration for stopGeneration', async () => {
+        const stopAllGeneration = vi.fn();
+        vi.spyOn(STGlobalAccessor, 'stMain', 'get').mockReturnValue(undefined);
+        vi.spyOn(STGlobalAccessor, 'ctx', 'get').mockReturnValue(undefined);
+        vi.spyOn(STGlobalAccessor, 'stGlobal', 'get').mockReturnValue({} as any);
+        vi.spyOn(STGlobalAccessor, 'stHelper', 'get').mockReturnValue({ stopAllGeneration } as any);
+
+        const fn = await STEnvironmentDriver.getHostFunction('stopGeneration');
+
+        expect(fn).toBeTypeOf('function');
+        fn?.();
+        expect(stopAllGeneration).toHaveBeenCalledTimes(1);
+    });
 });

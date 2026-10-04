@@ -4,6 +4,18 @@ import { STGlobalAccessor } from './STGlobalAccessor.js';
 
 export class STCharacterProfileDriver {
     static getAssistantName(fallback = 'Assistant'): string {
+        const helper = STEnvironmentDriver.stHelper;
+        if (helper && typeof helper.getCurrentCharacterName === 'function') {
+            try {
+                const name = helper.getCurrentCharacterName();
+                if (name && name.trim()) {
+                    return name.trim();
+                }
+            } catch {
+                // Ignore helper failures and fall back to host context.
+            }
+        }
+
         const ctx = STEnvironmentDriver.ctx as any;
         const charId = ctx?.characterId;
         if (charId !== undefined && ctx?.characters && ctx.characters[Number(charId)]) {
@@ -13,6 +25,18 @@ export class STCharacterProfileDriver {
     }
 
     static getUserName(fallback = 'User'): string {
+        const helper = STEnvironmentDriver.stHelper;
+        if (helper && typeof helper.getCurrentPersonaName === 'function') {
+            try {
+                const name = helper.getCurrentPersonaName();
+                if (name && name.trim()) {
+                    return name.trim();
+                }
+            } catch {
+                // Ignore helper failures and fall back to host context.
+            }
+        }
+
         const ctx = STEnvironmentDriver.ctx as any;
         if (ctx?.user?.name) return ctx.user.name;
         return ctx?.name1 || (STGlobalAccessor.stGlobal as any)?.name1 || fallback;
@@ -22,21 +46,26 @@ export class STCharacterProfileDriver {
         if (!name) return defaultAvatar;
 
         const targetName = name || this.getAssistantName();
-        const helper = STEnvironmentDriver.stHelper as any;
+        const helper = STEnvironmentDriver.stHelper;
         const ctx = STEnvironmentDriver.ctx as any;
         const stMain = STEnvironmentDriver.stMain as any;
         const glob = STGlobalAccessor.stGlobal as any;
 
+        // 酒馆助手头像路径为首选来源
+        if (helper && typeof helper.getCharAvatarPath === 'function') {
+            try {
+                const path = helper.getCharAvatarPath(targetName);
+                if (path) return path;
+            } catch {
+                // Ignore helper failures and fall back to host context.
+            }
+        }
         if (ctx && typeof ctx.getCharAvatarPath === 'function') {
             const path = ctx.getCharAvatarPath(targetName);
             if (path) return path;
         }
         if (stMain && typeof stMain.getCharAvatarPath === 'function') {
             const path = stMain.getCharAvatarPath(targetName);
-            if (path) return path;
-        }
-        if (helper && typeof helper.getCharAvatarPath === 'function') {
-            const path = helper.getCharAvatarPath(targetName);
             if (path) return path;
         }
 
@@ -76,6 +105,7 @@ export class STCharacterProfileDriver {
         const ctx = STEnvironmentDriver.ctx as any;
         const stMain = STEnvironmentDriver.stMain as any;
         const glob = STGlobalAccessor.stGlobal as any;
+        const helper = STEnvironmentDriver.stHelper;
 
         if (userName && ctx && Array.isArray(ctx.chat)) {
             const msg = ctx.chat
@@ -86,6 +116,18 @@ export class STCharacterProfileDriver {
                 return msg.force_avatar.startsWith('http') || msg.force_avatar.startsWith('data:')
                     ? msg.force_avatar
                     : `/thumbnail?type=persona&file=${encodeURIComponent(msg.force_avatar)}`;
+            }
+        }
+
+        // 酒馆助手 persona 头像路径优先
+        if (helper && typeof helper.getPersonaAvatarPath === 'function') {
+            try {
+                const personaPath = helper.getPersonaAvatarPath();
+                if (personaPath && personaPath.trim()) {
+                    return personaPath.trim();
+                }
+            } catch {
+                // Ignore helper failures and fall back to host globals.
             }
         }
 

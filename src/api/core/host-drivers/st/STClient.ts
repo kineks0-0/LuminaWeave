@@ -291,6 +291,21 @@ export class STClient {
      * 获取世界书列表名称
      */
     public static getWorldbookNames(): string[] {
+        const helper = this.stHelper;
+        if (helper && typeof helper.getWorldbookNames === 'function') {
+            try {
+                const names = helper.getWorldbookNames();
+                if (Array.isArray(names)) {
+                    return names
+                        .filter((name): name is string => typeof name === 'string')
+                        .map((name) => name.trim())
+                        .filter(Boolean);
+                }
+            } catch (e) {
+                console.warn('[STClient] TavernHelper 获取世界书列表失败，回退全局对象:', e);
+            }
+        }
+
         const glob = STGlobalAccessor.stGlobal;
         if (glob && typeof glob.worldbooks === 'object' && glob.worldbooks !== null) {
             return Object.keys(glob.worldbooks);
@@ -2454,6 +2469,16 @@ export class STClient {
     static substituteMacros(content: string): string {
         if (!content) return '';
 
+        // 酒馆助手宏替换能力更全，强依赖环境下优先使用
+        const helper = this.stHelper;
+        if (helper && typeof helper.substitudeMacros === 'function') {
+            try {
+                return helper.substitudeMacros(content);
+            } catch (e) {
+                console.warn('[STClient] substitudeMacros 调用失败，回退 substituteParams:', e);
+            }
+        }
+
         const glob = STGlobalAccessor.stGlobal;
         const substituteParams = glob?.substituteParams || (typeof window !== 'undefined' && (window as any).substituteParams);
         if (typeof substituteParams === 'function') {
@@ -2461,15 +2486,6 @@ export class STClient {
                 return substituteParams(content);
             } catch (e) {
                 console.warn('[STClient] substituteParams 调用失败:', e);
-            }
-        }
-
-        const helper = this.stHelper;
-        if (helper && typeof helper.substitudeMacros === 'function') {
-            try {
-                return helper.substitudeMacros(content);
-            } catch (e) {
-                console.warn('[STClient] substitudeMacros 调用失败:', e);
             }
         }
 
@@ -2518,23 +2534,73 @@ export class STClient {
 
     // --- 预设管理桥接 (ST 原生) ---
 
+    private static isCompletionPresetType(type: string): boolean {
+        return type === 'openai';
+    }
+
     static getPresets(type: string): string[] {
+        const helper = this.stHelper;
+        if (this.isCompletionPresetType(type) && helper && typeof helper.getPresetNames === 'function') {
+            try {
+                const names = helper.getPresetNames();
+                if (Array.isArray(names)) {
+                    return names.filter((name): name is string => typeof name === 'string');
+                }
+            } catch (e) {
+                console.warn('[STClient] TavernHelper 获取预设列表失败，回退 preset manager:', e);
+            }
+        }
+
         const glob = typeof window !== 'undefined' ? (window as any) : {};
         const manager = glob.getPresetManager?.(type);
         return manager?.getAllPresets() || [];
     }
 
     static getActivePresetName(type: string): string | null {
+        const helper = this.stHelper;
+        if (this.isCompletionPresetType(type) && helper && typeof helper.getLoadedPresetName === 'function') {
+            try {
+                return helper.getLoadedPresetName() || null;
+            } catch (e) {
+                console.warn('[STClient] TavernHelper 获取当前预设失败，回退 preset manager:', e);
+            }
+        }
+
         const glob = typeof window !== 'undefined' ? (window as any) : {};
         const manager = glob.getPresetManager?.(type);
         return manager?.getSelectedPresetName() || null;
     }
 
     static selectPreset(type: string, name: string): void {
+        const helper = this.stHelper;
+        if (this.isCompletionPresetType(type) && helper && typeof helper.loadPreset === 'function') {
+            try {
+                helper.loadPreset(name);
+                return;
+            } catch (e) {
+                console.warn('[STClient] TavernHelper 切换预设失败，回退 preset manager:', e);
+            }
+        }
+
         const glob = typeof window !== 'undefined' ? (window as any) : {};
         const manager = glob.getPresetManager?.(type);
         if (manager && typeof manager.selectPreset === 'function') {
             manager.selectPreset(name);
         }
+    }
+
+    static getCharacterData(identifier: string | null | undefined): SillyTavern.v1CharData | null {
+        if (!identifier) {
+            return null;
+        }
+        const helper = this.stHelper;
+        if (helper && typeof helper.getCharData === 'function') {
+            try {
+                return helper.getCharData(identifier) ?? null;
+            } catch {
+                return null;
+            }
+        }
+        return null;
     }
 }
