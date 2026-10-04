@@ -2,11 +2,19 @@ import {
     CharacterChannelService,
     type CharacterChannelApiPort
 } from '../api/core/conversation/CharacterChannelService.js';
-import type { DesktopCharacterRuntime } from '../api/services/DesktopExperienceRuntime.js';
+import type {
+    DesktopCharacterRuntime
+} from '../api/services/DesktopExperienceRuntime.js';
+import type { HostConfirmHandler } from '../api/services/HostInteractionService.js';
 import { useConversationContextStore } from '../stores/useConversationContextStore.js';
+import { useModalStore } from '../stores/useModalStore.js';
 
 export type CharacterRuntimeHost = CharacterChannelApiPort & {
     attachCharacterRuntime(runtime: DesktopCharacterRuntime): void;
+};
+
+export type HostInteractionRuntimeHost = {
+    host: { setConfirmHandler(handler: HostConfirmHandler | null): void };
 };
 
 /**
@@ -18,4 +26,12 @@ export const installCharacterRuntime = (api: CharacterRuntimeHost): DesktopChara
     const runtime = new CharacterChannelService(api, useConversationContextStore());
     api.attachCharacterRuntime(runtime);
     return runtime;
+};
+
+/**
+ * 在 Pinia 安装后把确认弹窗端口注入 HostInteractionService；
+ * Core API 不再直接依赖 useModalStore。
+ */
+export const installHostInteractionRuntime = (api: HostInteractionRuntimeHost): void => {
+    api.host.setConfirmHandler((options) => useModalStore().confirm(options));
 };

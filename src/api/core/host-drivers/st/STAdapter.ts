@@ -1,19 +1,10 @@
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import type { DiffResult } from '@shared/api/SyncEngine.js';
 import { STProtocol } from './STProtocol.js';
 import { STClient } from './STClient.js';
-import { MessageListGateway } from '../../conversation/MessageListGateway.js';
+import { STConversationHostDriver } from './STConversationHostDriver.js';
 
-export interface DiffResult {
-    onlyInIndependent: any[];
-    onlyInST: any[];
-    updated: any[];
-    independentSequence: any[];
-    stSequence: any[];
-    diffCount: number;
-    hasConflict: boolean;
-    hasDivergence: boolean;
-    divergenceIndex: number;
-}
+export type { DiffResult };
 
 export class STAdapter {
     private static isComparableStateEqual(left: any, right: any): boolean {
@@ -368,17 +359,17 @@ export class STAdapter {
         return { localIds, stIds };
     }
 
-    // 暴露常用的高阶接口
+    // 暴露常用的高阶接口（同层委托 STConversationHostDriver，避免 driver → Core 反向依赖）
     public static async pullMessages(options: { ensureStableIds?: boolean } = {}): Promise<LuminaChatMessage[]> {
-        const snap = await MessageListGateway.getSnapshot(options);
+        const snap = await STConversationHostDriver.getSnapshot(options);
         return snap.lumina;
     }
 
     public static getSnapshotSync() {
-        return MessageListGateway.getSnapshotSync();
+        return STConversationHostDriver.getSnapshotSync();
     }
 
     public static async getSnapshot(options: { ensureStableIds?: boolean } = {}) {
-        return await MessageListGateway.getSnapshot(options);
+        return await STConversationHostDriver.getSnapshot(options);
     }
 }

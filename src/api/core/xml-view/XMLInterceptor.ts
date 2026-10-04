@@ -16,7 +16,7 @@ export const BuiltinXMLTags = SharedBuiltinXMLTags;
 
 export type InterceptorCallback = (tagContent: string, fullMatchText: string) => string | void;
 
-export interface ParserRegistration {
+export interface XMLHandlerRegistration {
     sourceId?: string;
     canonicalTag?: string;
     regex?: RegExp;
@@ -32,8 +32,8 @@ export type { StreamSemanticState, LifecycleType };
  * 元数据来自 XMLTagRegistry，解析副作用由 handler 动态挂载。
  */
 export class XMLInterceptor extends BaseXMLInterceptor {
-    private extensionHandlers: ParserRegistration[] = [];
-    private patternParsers: ParserRegistration[] = [];
+    private extensionHandlers: XMLHandlerRegistration[] = [];
+    private patternParsers: XMLHandlerRegistration[] = [];
 
     constructor() {
         super();
@@ -65,7 +65,7 @@ export class XMLInterceptor extends BaseXMLInterceptor {
         const normalizedCanonical = globalXMLTagRegistry.resolveCanonical(canonicalTag) || canonicalTag;
         const handlerSource = sourceId || `xml-handler:${normalizedCanonical.toLowerCase()}`;
         this.extensionHandlers = this.extensionHandlers.filter(item => !(item.sourceId === handlerSource && item.canonicalTag === normalizedCanonical));
-        const registration: ParserRegistration = {
+        const registration: XMLHandlerRegistration = {
             sourceId: handlerSource,
             canonicalTag: normalizedCanonical,
             lifecycle: this.getLifecycle(normalizedCanonical) || 'persistent',
@@ -91,7 +91,7 @@ export class XMLInterceptor extends BaseXMLInterceptor {
         lifecycle: LifecycleType,
         handler: InterceptorCallback
     ): RegistrationDisposer {
-        const registration: ParserRegistration = { regex, lifecycle, handler };
+        const registration: XMLHandlerRegistration = { regex, lifecycle, handler };
         this.patternParsers.push(registration);
         console.debug(`[XMLInterceptor] Registered pattern parser: ${regex.source}`);
         return () => {

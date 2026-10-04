@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { luminaWeaveApi, LuminaWeaveAPI, TimelineNode } from '../api';
+import type { TimelineSourceId } from '../types/ConversationContextTypes.js';
 import { useConversationContextStore } from './useConversationContextStore.js';
 
 type TimelineGraph = Record<string, TimelineNode>;
-export type TimelineSourceId = 'chat' | 'forge';
+export type { TimelineSourceId };
 
 export interface TimelineSourceOption {
     id: TimelineSourceId;

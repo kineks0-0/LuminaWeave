@@ -9,6 +9,7 @@ import { ConversationCommandService } from './core/conversation/ConversationComm
 import { PromptWorldInfoMount } from './core/lorebook/PromptWorldInfoMount.js';
 import { FontManager } from './core/runtime-utils/FontManager.js';
 import { MeasureService } from './core/runtime-utils/MeasureService.js';
+import { MessageTextProjection } from './core/hal/prompt/MessageTextProjection.js';
 import { HALBootstrap } from './core/hal/HALBootstrap.js';
 import { globalXMLInterceptor } from './core/xml-view/XMLInterceptor.js';
 import { globalPromptRegistry } from './core/hal/prompt/PromptRegistry.js';
@@ -21,7 +22,7 @@ import { pluginDomainRegistry } from '../platform/plugin/PluginDomainRegistry.js
 import { createPluginRuntimeApi, type PluginRuntimeApi } from './services/PluginRuntimeService.js';
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { LuminaWeaveAPIBase } from './core/facade/LuminaWeaveAPIBase.js';
-import { HOST_EVENT, getHostRuntimePort } from './core/facade/HostRuntimePort.js';
+import { getHostRuntimePort } from './core/facade/HostRuntimePort.js';
 import { ChatDiffInspector, ChatDiffReport } from './debug/ChatDiffInspector.js';
 import { ChatDebugGateway } from './debug/ChatDebugGateway.js';
 import {
@@ -52,12 +53,14 @@ import {
 } from './services/DesktopExperienceRuntime.js';
 import { CharacterRuntimeSlot } from './services/CharacterRuntimeSlot.js';
 import { ChatPresentationCommandService } from './services/ChatPresentationCommandService.js';
+import { HostEventWiring, type SyncFromOptions } from './services/HostEventWiring.js';
 import type { DesktopModeManifest } from '../desktop-modes/core/types.js';
 
 // 全局变量声明已移动至 src/types/sillytavern.d.ts
 
 import { getChatMessageMutationPort } from './core/conversation/ChatMessageMutationPort.js';
 import { getConversationHostFacadePort } from './core/facade/ConversationHostFacadePort.js';
+import { HostDetector } from './core/host-drivers/HostDetector.js';
 import { characterImportService } from './core/hal/resource/index.js';
 import type { ResourceDocument } from '@shared/resources/index.js';
 import { PromptCommandService } from './core/generation/PromptCommandService.js';
@@ -138,11 +141,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     private _readyPromise: Promise<boolean> | null = null;
 
     public lastStreamState: GenerationStreamState | null = null;
-    private _manualAbortPending: boolean = false;
-    private _lastGeneralChatLoadChatId: string | null = null;
-    private _lastGeneralChatLoadAt: number = 0;
-    private _chatChangedFallbackTimer: ReturnType<typeof setTimeout> | null = null;
-    private readonly controlledChatCreation = new ControlledChatCreationCoordinator();
+    public readonly controlledChatCreation = new ControlledChatCreationCoordinator();
+    private readonly hostEvents: HostEventWiring;
     public registeredPanels: Map<string, RegisteredPanelEntry>;
     private readonly characterRuntimeSlot = new CharacterRuntimeSlot();
 
@@ -173,6 +173,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
     constructor() {
         super();
+        // 宿主事件接线（DOM 生命周期 + ST 事件 → 领域同步）
+        this.hostEvents = new HostEventWiring(this);
         // 核心子组件
         this.chatManager = new ChatManager(this);
         this.streamHandler = new StreamHandler();
@@ -220,7 +222,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
             emit: (event, ...args) => this.emit(event, ...args),
             getLastStreamState: () => this.lastStreamState,
             setManualAbortPending: (value) => {
-                this._manualAbortPending = value;
+                this.hostEvents.setManualAbortPending(value);
             }
         });
         this.debugChat = new ChatDebugGateway(this as any);
@@ -541,8 +543,6 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         return true;
     }
 
-    private _globalEventsInited = false;
-
     private async syncPromptWorldInfo(
         reason: string,
         options: { deferDuringControlledChatCreation?: boolean } = {}
@@ -556,7 +556,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         await this.promptWorldInfoMount.syncToWorldInfo();
     }
 
-    private shouldSuppressControlledChatCreationHostSync(reason: string, chatId: string | null): boolean {
+    public shouldSuppressControlledChatCreationHostSync(reason: string, chatId: string | null): boolean {
         const shouldSuppress = this.controlledChatCreation.suppressHostSync(reason, chatId);
         if (shouldSuppress) {
             console.debug('[LuminaWeave] 受控新建事务期间跳过宿主同步事件', {
@@ -568,43 +568,13 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         return shouldSuppress;
     }
 
-    private initGlobalEvents() {
-        if (this._globalEventsInited) return;
+    private initGlobalEvents(): void {
+        this.hostEvents.initGlobalEvents();
+    }
 
-        // 核心增强：页面可见性变化时主动同步后端状态
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                const { chatId } = lwStorage._getContextIds();
-                if (chatId) {
-                    console.log(`[LuminaWeave] Tab became visible, syncing stream status for ${chatId}...`);
-                    this.streamHandler.resumeToTerminal(chatId);
-                }
-            }
-        });
-
-        window.addEventListener('online', () => {
-            const { chatId } = lwStorage._getContextIds();
-            if (chatId) {
-                this.streamHandler.resumeToTerminal(chatId);
-            }
-        });
-
-        window.addEventListener('offline', () => {
-            this.streamHandler.cancelResume();
-        });
-
-        window.addEventListener('pageshow', () => {
-            const { chatId } = lwStorage._getContextIds();
-            if (chatId) {
-                this.streamHandler.resumeToTerminal(chatId);
-            }
-        });
-
-        window.addEventListener('pagehide', () => {
-            this.streamHandler.cancelResume();
-        });
-
-        this._globalEventsInited = true;
+    /** 供宿主事件接线查询初始化是否完成（替代直接读取私有 _ready）。 */
+    public isReady(): boolean {
+        return this._ready;
     }
 
     /**
@@ -618,336 +588,8 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         }
         return this._readyPromise;
     }
-    private _stRawBuffer: string = '';
-    private _isSyncing = false;
-    private _stEventsInited = false;
     async initSTEvents(): Promise<void> {
-        if (this._stEventsInited) return;
-
-        // 核心修复：初始加载时物理重置生成锁定标志，防止“假死”
-        if (this.chatManager && this.chatManager.sync) {
-            this.chatManager.sync.isSTGenerating = false;
-        }
-        if (this.streamHandler) {
-            this.streamHandler.isGenerating = false;
-        }
-        this._stRawBuffer = '';
-        const { chatId } = lwStorage._getContextIds();
-
-        // 初始同步一次后端状态
-        if (chatId) {
-            // 初始化时的状态同步失败
-            this.streamHandler.resumeToTerminal(chatId).catch(e => console.warn('[LuminaWeave] 初始化流状态同步失败:', e));
-        }
-
-        const hostRuntime = getHostRuntimePort();
-        const diagnostics = hostRuntime.getDiagnostics();
-
-        console.log('[LuminaWeave] initSTEvents, stEventSource check:', {
-            hasStCore: diagnostics.hasHostCore,
-            hasEventSource: diagnostics.hasEventSource,
-            hasEventTypes: diagnostics.hasEventTypes,
-            source: diagnostics.source
-        });
-
-        if (diagnostics.hasEventSource && diagnostics.hasEventTypes) {
-            this.streamHandler.init();
-
-            const handleGeneralChatLoad = async (reason: string) => {
-                if (this.chatManager.sync.isAutoSyncPaused) {
-                    console.debug('[LuminaWeave] 自动同步已暂停，忽略 general chat load');
-                    return;
-                }
-                if (this._isSyncing || !this._ready) return; // 增加 !this._ready 判定是为了防止初始化尚未完成时的外部监听同步
-
-                const currentChatId = getChatMessageMutationPort().normalizeChatId(lwStorage._getContextIds().chatId);
-                if (this.shouldSuppressControlledChatCreationHostSync(reason, currentChatId)) {
-                    this.chatManager._stLoading = false;
-                    return;
-                }
-                const now = Date.now();
-                const isDuplicateLoad = Boolean(
-                    currentChatId
-                    && currentChatId === this._lastGeneralChatLoadChatId
-                    && now - this._lastGeneralChatLoadAt < 600
-                );
-                if (isDuplicateLoad) {
-                    console.debug(`[LuminaWeave] 跳过重复 general chat load: reason=${reason}, chatId=${currentChatId}`);
-                    return;
-                }
-
-                this._isSyncing = true;
-                try {
-                    this.chatManager._stLoading = false;
-                    this._lastGeneralChatLoadChatId = currentChatId;
-                    this._lastGeneralChatLoadAt = now;
-                    await this.syncFromST(); 
-                    this.emit('CHAT_CHANGED');
-                } finally {
-                    this._isSyncing = false;
-                }
-            };
-
-            // CHAT_CHANGED 在主聊天切换时先于 CHAT_LOADED 触发；部分切换路径只发 CHAT_CHANGED，
-            // 因此这里做一次去抖兜底加载。事件之后若已有成功发起的 general load，则兜底跳过。
-            const scheduleChatChangedFallback = (changedAt: number, attempt: number = 0): void => {
-                if (this._chatChangedFallbackTimer) {
-                    clearTimeout(this._chatChangedFallbackTimer);
-                }
-                this._chatChangedFallbackTimer = setTimeout(() => {
-                    this._chatChangedFallbackTimer = null;
-                    if (!this._ready) return;
-                    if (this._lastGeneralChatLoadAt >= changedAt) {
-                        return;
-                    }
-                    if (this.chatManager.sync.isAutoSyncPaused || this._isSyncing) {
-                        if (attempt < 6) {
-                            scheduleChatChangedFallback(changedAt, attempt + 1);
-                        } else {
-                            console.warn('[LuminaWeave] CHAT_CHANGED 兜底加载放弃：同步持续被占用');
-                        }
-                        return;
-                    }
-                    void handleGeneralChatLoad('CHAT_CHANGED_FALLBACK');
-                }, 300);
-            };
-
-            hostRuntime.on(HOST_EVENT.CHAT_CHANGED, () => {
-                console.log('[LuminaWeave] detect chat_id_changed, preparing for reload...');
-                this.chatManager._stLoading = true;
-                scheduleChatChangedFallback(Date.now());
-            });
-
-            hostRuntime.on(HOST_EVENT.CHAT_LOADED, async () => {
-                await handleGeneralChatLoad('CHAT_LOADED');
-                const { chatId } = lwStorage._getContextIds();
-                if (chatId) this.streamHandler.resumeToTerminal(chatId);
-            });
-            // 核心增强：监听新对话创建与删除事件
-            hostRuntime.on(HOST_EVENT.CHAT_CREATED, () => {
-                console.log('[LuminaWeave] detect chat_created');
-                this.emit('CHAT_CREATED');
-                handleGeneralChatLoad('CHAT_CREATED');
-            });
-
-            hostRuntime.on(HOST_EVENT.CHAT_DELETED, () => {
-                console.log('[LuminaWeave] detect chat_deleted');
-                this.emit('CHAT_DELETED');
-                handleGeneralChatLoad('CHAT_DELETED'); // 删除后通常会载入一个空对话或另一个对话
-            });
-
-            hostRuntime.on(HOST_EVENT.MESSAGE_RECEIVED, async () => {
-                handleIncrementalSync('MESSAGE_RECEIVED');
-            });
-
-            // --- 核心增强：监听官方提示词准备就绪事件 ---
-            // 兼容性监听器：同时捕获多种可能的提示词准备事件
-            const unifiedIntercept = (evtName: string, data: any, isDryRunArg: any = undefined) => {
-                const candidate = this.promptCommandService.recordPromptCandidate(evtName, data, isDryRunArg);
-
-                console.debug(`[LuminaWeave] [EVENT_TRACE] 监听到提示词候选 [${evtName}]: exists=${!!candidate.prompt}, isDryRun=${candidate.isDryRun}, isProbing=${this.promptCommandService.isProbing}`);
-
-                if (candidate.shouldEmitPrompt) {
-                    console.log(`[LuminaWeave] 成功从事件 ${evtName} 截获提示词负载:`, candidate.prompt);
-                    this.emit('ST_PROMPT_INTERCEPTED', candidate.prompt);
-                }
-            };
-
-            // 监听所有可能触发提示词组装完成的事件
-            const promptEvents = [
-                HOST_EVENT.GENERATE_AFTER_DATA,
-                HOST_EVENT.CHAT_COMPLETION_PROMPT_READY,
-                HOST_EVENT.GENERATE_AFTER_COMBINE_PROMPTS
-            ];
-
-            promptEvents.forEach(evtKey => {
-                hostRuntime.on(evtKey, (data: any, isDryRunArg: any) => unifiedIntercept(evtKey, data, isDryRunArg));
-            });
-
-            // 监听ST的信息更新
-            hostRuntime.on(HOST_EVENT.GENERATION_ENDED, async (data: any) => {
-                console.log('[LuminaWeave] 截获信息更新 (generation_ended)');
-                console.log('[LuminaWeave] (generation_ended)data:', data);
-
-                this.chatManager.sync.isSTGenerating = false;
-                this._manualAbortPending = false;
-                this._stRawBuffer = '';
-                this.emit('ST_GENERATION_ENDED', data);
-
-                // 核心修复：无论 Lumina 内部状态如何，只要监听到 ST 结束信号，就强制执行收尾
-                // todo：注意，插件内部在生成时不走ST生成时应该无效
-                // 这能有效防止因事件丢失或状态机异常导致的 UI 卡死
-                const chatMessages = hostRuntime.getCurrentChatMessages();
-                const lastMessage = chatMessages[chatMessages.length - 1] as any;
-                if (lastMessage && !lastMessage.is_user) {
-                    const finalText = lastMessage.mes || '';
-                    await this.generationCommandService.finalizeGeneratedOutput(finalText);
-                }
-
-                // 核心修复：延迟 100ms 触发最终同步，确保 ST 本地数据库已写入完毕，然后发送结束信号
-                setTimeout(async () => {
-                    await this.syncFromST();
-                    // 只有当是 ST 原生生成时才调用 handleEnd
-                    if (!this.isGenerating) {
-                        this.streamHandler.handleEnd();
-                    }
-                }, 100);
-            });
-
-            hostRuntime.on(HOST_EVENT.GENERATION_STARTED, (type: string, options: any, dryRun: boolean) => {
-                if (this.promptCommandService.isProbing || dryRun) {
-                    if (!this.promptCommandService.isProbing && dryRun && this.controlledChatCreation.shouldSuppressDryRunRestart()) {
-                        console.debug('[LuminaWeave] 受控新建事务期间跳过重复 DryRun 重启');
-                        return;
-                    }
-                    console.log(`[LuminaWeave] 监测到 ${this.promptCommandService.isProbing ? '探针' : 'DryRun'} 触发的 ST 开始生成，静默处理...`);
-                    // 如果我们自己正在生成，不要去干扰 StreamHandler 的状态
-                    if (!this.isGenerating) {
-                        this.streamHandler.handleRestart({ silent: true });
-                    }
-                    return;
-                }
-                console.log('[LuminaWeave] 监测到 ST 开始生成，屏蔽自动同步...');
-                this.chatManager.sync.isSTGenerating = true;
-                this._stRawBuffer = '';
-                this.lastStreamState = null; // 重置缓存
-                // 同时也标记流式处理器开始工作，确保双向状态同步
-                // 仅当非 Lumina 侧触发时才重置
-                if (!this.isGenerating) {
-                    this.streamHandler.handleRestart();
-                }
-                this.emit('GENERATION_STARTED');
-            });
-
-            hostRuntime.on(HOST_EVENT.GENERATION_STOPPED, () => {
-                console.log('[LuminaWeave] 监测到 ST 停止生成，恢复自动同步并释放状态...');
-                this.chatManager.sync.isSTGenerating = false;
-                this._stRawBuffer = '';
-                const wasManualAbort = this._manualAbortPending;
-                this._manualAbortPending = false;
-                setTimeout(async () => {
-                    await handleIncrementalSync('ST_GENERATION_STOPPED');
-                    if (!this.isGenerating) {
-                        if (wasManualAbort) {
-                            this.streamHandler.clearSmoothTimer();
-                            this.emit('GENERATION_FAILED', '已停止生成', 'aborted');
-                        } else {
-                            this.streamHandler.handleEnd();
-                        }
-                    }
-                }, 500);
-            });
-
-            // --- 核心增强：监听更多更新事件，实现增量同步 ---
-            const handleIncrementalSync = async (reason: string) => {
-                const syncService = this.chatManager.sync;
-                if (syncService.isAutoSyncPaused) {
-                    console.debug(`[LuminaWeave] 自动同步已暂停，忽略事件: ${reason}`);
-                    return;
-                }
-
-                const currentChatId = getChatMessageMutationPort().normalizeChatId(lwStorage._getContextIds().chatId);
-                if (this.shouldSuppressControlledChatCreationHostSync(reason, currentChatId)) {
-                    return;
-                }
-
-                // 核心修复：防止初始化过程中 ST 事件触发增量同步导致竞态条件
-                if (!this._ready) {
-                    console.debug(`[LuminaWeave] 初始化尚未完成，忽略增量同步事件: ${reason}`);
-                    return;
-                }
-
-                // 核心修复：如果在生成过程中 (无论是 ST 侧还是 Lumina 侧)，跳过由 MESSAGE_UPDATED 触发的同步。
-                // 因为流式过程中 handleStreamToken 已经通过 StreamHandler 接管了 UI 预览，
-                // 此时频繁调用 syncFromST 会导致 UI 整个列表不断重新渲染渲染。
-                if ((this.isGenerating || syncService.isSTGenerating)) {
-                    if (reason === 'MESSAGE_UPDATED' || reason === 'MESSAGE_RECEIVED') {
-                        return;
-                    }
-                }
-
-                if (this._isSyncing) return;
-
-                // 核心修复：安全守卫 (SafetyGuard)
-                // 仅在 ST 原生生成模式下 (`isSTGenerating`) 检查全局标志位。
-                // 如果是 Lumina Nexus 模式 (`this.isGenerating` 为 true 但 `isSTGenerating` 为 false), 
-                // `window.is_generating` 本来就是 false，此时绝不能触发 cleanup。
-                const generationFlags = hostRuntime.getGenerationFlags();
-                const isActuallyGenerating = generationFlags.isGenerating || generationFlags.isTyping;
-                if (!isActuallyGenerating && syncService.isSTGenerating) {
-                    // ST 认为没在生成，但我们认为在生成
-                    // 如果这个事件是 STREAM_TOKEN 相关的，说明可能还在收尾，暂时忽略
-                    if (reason.includes('STREAM_TOKEN')) return;
-                    console.log('[LuminaWeave] [SafetyGuard] 检测到 ST 原生生成状态可能已挂起，准备检查 cleanup...');
-                    setTimeout(() => {
-                        const latestGenerationFlags = hostRuntime.getGenerationFlags();
-                        const stillNotGenerating = !latestGenerationFlags.isGenerating && !latestGenerationFlags.isTyping;
-                        if (stillNotGenerating && syncService.isSTGenerating) {
-                            console.log('[LuminaWeave] [SafetyGuard] 确认 ST 生成已停止，执行强制 cleanup');
-                            this.chatManager.sync.isSTGenerating = false;
-                            this.streamHandler.handleEnd();
-                        }
-                    }, 200);
-                    return;
-                }
-
-                this._isSyncing = true;
-                try {
-                    console.log(`[LuminaWeave] 由事件驱动触发同步: ${reason}`);
-                    await this.syncFromST();
-                } finally {
-                    this._isSyncing = false;
-                }
-            };
-
-            // 核心增强：监听流式 Token 接收，支持同步显示 ST 原生生成状态线
-            const handleStreamToken = (capturedText: string) => {
-                // 仅在 ST 正在原生生成（且 Lumina 本地未在生成）时执行同步，防止冲突
-                if (this.chatManager.sync.isSTGenerating && !this.isGenerating) {
-
-                    // 1. 增量/全量自适应判断
-                    // 如果这次传来的 text 包含了 buffer 的内容，说明是全量
-                    if (capturedText.startsWith(this._stRawBuffer)) {
-                        this._stRawBuffer = capturedText;
-                    }
-                    // 如果 buffer 包含 capturedText，说明可能是重发，忽略
-                    else if (this._stRawBuffer.includes(capturedText) && capturedText.length < this._stRawBuffer.length) {
-                        return;
-                    }
-                    // 否则，视为增量 Token
-                    else {
-                        this._stRawBuffer += capturedText;
-                    }
-
-                    // 2. 保持原始 XML Buffer，交给 StreamHandler 统一决定过滤与展示
-                    const lastLen = this.streamHandler.responseBuffer.length;
-                    const rawDelta = this._stRawBuffer.startsWith(this.streamHandler.responseBuffer)
-                        ? this._stRawBuffer.substring(lastLen)
-                        : this._stRawBuffer;
-
-                    if (rawDelta.length > 0 || this._stRawBuffer !== this.streamHandler.responseBuffer) {
-                        this.streamHandler.handleChunk(rawDelta, this._stRawBuffer);
-                    }
-                }
-            };
-
-            hostRuntime.on(HOST_EVENT.STREAM_TOKEN_RECEIVED, handleStreamToken);
-            hostRuntime.on(HOST_EVENT.SMOOTH_STREAM_TOKEN_RECEIVED, handleStreamToken);
-
-            // 核心事件：切换对话或对话加载完成 (解决启动时 ChatID 无效导致的同步跳过)
-            hostRuntime.on(HOST_EVENT.CHAT_LOADED, () => handleIncrementalSync('CHAT_LOADED'));
-            hostRuntime.on(HOST_EVENT.CHAT_CHANGED, () => handleIncrementalSync('CHAT_CHANGED'));
-            hostRuntime.on(HOST_EVENT.CHARACTER_PAGE_LOADED, () => handleIncrementalSync('CHARACTER_PAGE_LOADED'));
-
-            // 消息编辑、删除、更新事件
-            hostRuntime.on(HOST_EVENT.MESSAGE_EDITED, () => handleIncrementalSync('MESSAGE_EDITED'));
-            hostRuntime.on(HOST_EVENT.MESSAGE_DELETED, () => handleIncrementalSync('MESSAGE_DELETED'));
-            hostRuntime.on(HOST_EVENT.MESSAGE_UPDATED, () => handleIncrementalSync('MESSAGE_UPDATED'));
-            // 核心增强：监听切换回复 (Swipe) 事件
-            hostRuntime.on(HOST_EVENT.MESSAGE_SWIPED, () => handleIncrementalSync('MESSAGE_SWIPED'));
-            // 批量加载更多消息
-            hostRuntime.on(HOST_EVENT.MORE_MESSAGES_LOADED, () => handleIncrementalSync('MORE_MESSAGES_LOADED'));
-        }
+        await this.hostEvents.initSTEvents();
     }
 
     // --- 门面属性代理 ---
@@ -965,44 +607,19 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     getPresets(type: string) { return getConversationHostFacadePort().getPresets(type); }
     getActivePresetName(type: string) { return getConversationHostFacadePort().getActivePresetName(type); }
     selectPreset(type: string, name: string) { return getConversationHostFacadePort().selectPreset(type, name); }
+    getCurrentApiType() { return getConversationHostFacadePort().getMainApi(); }
+    getPhysicalHost() { return HostDetector.physicalHost; }
 
     // --- 门面方法：转发至 ChatManager ---
-    async syncFromST(options: { skipSave?: boolean; forceOverwrite?: boolean; skipIndependentLoad?: boolean; forceIndependentLoad?: boolean; resolveIntent?: 'st' | 'lumina' } = {}): Promise<void> {
+    async syncFromST(options: SyncFromOptions = {}): Promise<void> {
         await this.chatManager.syncFromST(0, options);
         await this.lorebookManager.syncFromST();
 
-        const chat = this.chatManager.localChatData;
-        if (chat) {
-            chat.forEach((msg, index) => {
-                const extra = msg.extra || {};
-                const source = msg.is_user ? 'user_input' : 'ai_output';
-                const depth = chat.length - 1 - index;
-
-                const mesRawTs = extra.mesRaw_ts || 0;
-                const mesTs = extra.mes_ts || 0;
-
-                if (msg.pluginRaw) {
-                    // 只要有 pluginRaw，我们就重新根据它生成最准确的展示版本
-                    const finalSourceText = getChatMessageMutationPort().extractMessageText(msg);
-                    
-                    // 强力对齐：确保 mesRaw 包含标签，mes 紧随其后同步
-                    if (msg.mesRaw !== finalSourceText) {
-                        msg.mesRaw = finalSourceText;
-                        msg.extra.mesRaw_ts = Date.now();
-                    }
-
-                    // 即使 mes 已经有值，如果其内容过旧或不包含预期标签，也重新生成
-                    if (!msg.mes || mesRawTs > mesTs || !extra.mes_ts) {
-                        msg.mes = this.applySTRegex(msg.mesRaw, source, 'display', { depth });
-                        msg.extra.mes_ts = Date.now();
-                    }
-                } else if (!msg.mes || mesRawTs > mesTs || !extra.mes_ts) {
-                    // 没有 pluginRaw 时，按常规逻辑从 mesRaw 同步到 mes
-                    msg.mes = this.applySTRegex(msg.mesRaw, source, 'display', { depth });
-                    msg.extra.mes_ts = Date.now();
-                }
-            });
-        }
+        MessageTextProjection.projectForDisplay(
+            this.chatManager.localChatData,
+            (text, source, regexOptions) => this.applySTRegex(text, source, 'display', regexOptions),
+            (msg) => getChatMessageMutationPort().extractMessageText(msg)
+        );
 
         // 核心架构重构：TimelineManager 现在是响应式的，会自动监听 store 变动并同步视图流。
         // 此处不再需要手动触发 Timeline 刷新。
@@ -1172,6 +789,10 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         override: ConversationContextOverride = {}
     ): Promise<Record<string, ConversationTimelineNode>> {
         return this.conversation.getTimelineGraph(override);
+    }
+
+    getTimelineTrace(leafId: string): TimelineNode[] {
+        return this.timelineManager.getTrace(leafId);
     }
 
     async switchConversationContext(input: ConversationContextSwitchInput): Promise<ConversationViewContext> {
@@ -1479,4 +1100,5 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
 
 export const luminaWeaveApi = new LuminaWeaveAPI();
 export type { TimelineNode, LuminaChatMessage };
-export { SyncUtils, DiffVisualizer } from './core/host-drivers/st/SyncUtils.js';
+export { SyncUtils } from './core/host-drivers/st/SyncUtils.js';
+export { DiffVisualizer } from '../components/common/DiffVisualizer.js';

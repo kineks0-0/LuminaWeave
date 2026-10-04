@@ -2,7 +2,7 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
 import { boot } from './bootstrap/boot.js';
-import { installCharacterRuntime } from './bootstrap/installCharacterRuntime.js';
+import { installCharacterRuntime, installHostInteractionRuntime } from './bootstrap/installCharacterRuntime.js';
 import { luminaWeaveApi } from './api/index.js';
 import './style.css';
 
@@ -17,6 +17,7 @@ async function startApp() {
     app.use(createPinia());
     // character 服务依赖 Pinia store，须在 pinia 安装后、挂载前创建，插件 init 阶段才能使用。
     installCharacterRuntime(luminaWeaveApi);
+    installHostInteractionRuntime(luminaWeaveApi);
     app.mount('#app');
 
     console.log('[Main] Boot complete. UI mounted.');

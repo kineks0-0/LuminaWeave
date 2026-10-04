@@ -1464,6 +1464,10 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         if (forgeControllerBridgeBound) return;
         forgeControllerBridgeBound = true;
 
+        luminaWeaveApi.forgeAgent.setOperationRecorder({
+            addOperationTimelineItem: (payload) => addOperation(payload)
+        });
+
         luminaWeaveApi.on(FORGE_LAYER_ADVANCE_REQUESTED, (layerName: ForgeLayer) => {
             requestLayerAdvance(layerName);
         });

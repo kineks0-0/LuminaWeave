@@ -127,7 +127,8 @@ export class HALBootstrap {
     private static async initTauriRuntime(options: { onProgress?: (msg: string) => void }): Promise<void> {
         options.onProgress?.('加载 Tauri runtime ports...');
         const { TauriNativeRuntime } = await import('./adapters/tauri/TauriNativeRuntime.js');
-        HALContext.instance.runtime = new TauriNativeRuntime();
+        const { createTauriTavernHostBridge } = await import('../host-drivers/st/STTauriHostBridge.js');
+        HALContext.instance.runtime = new TauriNativeRuntime(createTauriTavernHostBridge());
     }
 
     private static async initSTPluginRuntime(options: { onProgress?: (msg: string) => void }): Promise<void> {

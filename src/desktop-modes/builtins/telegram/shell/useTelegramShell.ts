@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue';
 import { getDesktopModeSettingValue } from '../../../core/registry.js';
-import { useSettings } from '../../../../plugins/settings/useSettings.js';
+import { activeSettings } from '../../../../stores/settingsState.js';
 import type { DesktopModeShellRuntime } from '../../../../platform/desktop-mode-runtime/shellContracts.js';
 import type {
   TelegramDesktopLeftRoute,
@@ -20,7 +20,6 @@ const rootRouteForMobileTab = (tabId: TelegramMobileTabId): TelegramStackRoute =
  * 只通过通用 shell runtime 读写平台状态，不引用 App。
  */
 export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
-  const { activeSettings } = useSettings();
   const activeDesktopModeId = computed(() => shell.context.value.activeDesktopModeId);
   const layoutMode = computed(() => shell.context.value.shellKind);
   const isMobile = computed(() => shell.context.value.isMobile);

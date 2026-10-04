@@ -12,6 +12,8 @@ export type SettingsHostApi = Pick<
     | 'getPresets'
     | 'getActivePresetName'
     | 'selectPreset'
+    | 'getCurrentApiType'
+    | 'getPhysicalHost'
     | 'on'
     | 'off'
 >;

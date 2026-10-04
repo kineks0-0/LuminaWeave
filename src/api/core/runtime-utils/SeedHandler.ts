@@ -1,5 +1,3 @@
-import { useForgeStore } from '../../../stores/useForgeStore.js';
-
 export interface Snippet {
     id: string;
     content: string;

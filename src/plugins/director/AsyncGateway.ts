@@ -4,7 +4,6 @@ import { lwStorage } from '../../api/storage.js';
 import { useDirectorStore } from './DirectorStore.js';
 import { globalXMLInterceptor } from '../../api/core/xml-view/XMLInterceptor.js';
 import { useTier1Store } from './Tier1Store.js';
-import { SyncUtils } from '../../api/core/host-drivers/st/SyncUtils.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 
 export class AsyncGateway {

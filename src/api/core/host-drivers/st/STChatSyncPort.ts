@@ -1,4 +1,4 @@
-import { configureChatSyncPortFactory, type ChatSyncPort } from '../../conversation/ChatSyncPort.js';
+import { configureChatSyncPortFactory, type ChatSyncPort, type TraceCompactor } from '../../conversation/ChatSyncPort.js';
 import type { WorldlineStore } from '../../storage/WorldlineStore.js';
 import { STSyncService } from './STSyncService.js';
 
@@ -63,5 +63,7 @@ let registered = false;
 export function registerSTChatSyncPort(): void {
     if (registered) return;
     registered = true;
-    configureChatSyncPortFactory((store: WorldlineStore) => new STChatSyncPort(new STSyncService(store)));
+    configureChatSyncPortFactory((store: WorldlineStore, compactTrace: TraceCompactor) => (
+        new STChatSyncPort(new STSyncService(store, compactTrace))
+    ));
 }

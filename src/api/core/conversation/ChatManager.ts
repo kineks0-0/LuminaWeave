@@ -3,6 +3,7 @@ import { PersistenceService } from '../storage/PersistenceService.js';
 import { WorldlineStore } from '../storage/WorldlineStore.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { HALContext } from '../hal/HALContext.js';
+import { ContextCompactor } from '../hal/prompt/ContextCompactor.js';
 import { pluginManager } from '../../../core/PluginManager.js';
 import { globalMemoryManager } from '../runtime-utils/MemoryManager.js';
 import { LuminaWeaveAPIBase } from '../facade/LuminaWeaveAPIBase.js';
@@ -51,7 +52,8 @@ export class ChatManager extends LuminaWeaveAPIBase {
         this.store = new WorldlineStore();
         
         // 宿主同步端口：负责将 Lumina 内存池与当前宿主聊天视图进行双向对齐
-        this.sync = createChatSyncPort(this.store);
+        // 压缩回调由 Core 侧注入，驱动层不依赖 HAL
+        this.sync = createChatSyncPort(this.store, (trace, settings) => ContextCompactor.compact(trace, settings));
         
         // 持久化服务：负责与后端独立存储进行通讯
         // 第二个参数 (() => this._isIndependentLoaded) 是加载状态提供者。

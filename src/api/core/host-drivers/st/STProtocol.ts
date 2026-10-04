@@ -1,11 +1,11 @@
 import { STSwipeInfo, LuminaChatMessage, MessageUtils } from '@shared/LuminaMessage.js';
 import { digestString } from '@shared/hash.js';
-import { BuiltinXMLTags, XMLInterceptor, globalXMLInterceptor } from '../../xml-view/XMLInterceptor.js';
 import { StoredChatMessage } from '../../storage/types.js';
+import { getTextInterceptor, sanitizeText } from './SyncUtils.js';
 
 export class STProtocol {
     public static normalize(text: string): string {
-        const cleaned = globalXMLInterceptor.processAndCleanText(text, false);
+        const cleaned = sanitizeText(text);
         return MessageUtils.normalize(cleaned);
     }
 
@@ -61,7 +61,7 @@ export class STProtocol {
             ?? pluginRaw
             ?? '';
 
-        const cleaned = globalXMLInterceptor.processAndCleanText(raw, false);
+        const cleaned = sanitizeText(raw);
         return this.normalizeForFingerprint(cleaned);
     }
 
@@ -82,7 +82,7 @@ export class STProtocol {
         }
 
         // 2. 统一标签清洗 (剥离 Story_Summary, Chat_Reply, 丢弃 thinking, 保留 V)
-        let cleaned = globalXMLInterceptor.processAndCleanText(text, false);
+        let cleaned = sanitizeText(text);
 
         // 3. 终极清理 (不可见字符处理)
         return this.normalize(cleaned);
@@ -178,7 +178,7 @@ export class STProtocol {
      */
     public static syncMessageCalculatedFields(msg: LuminaChatMessage, options: { force?: boolean; skipFingerprint?: boolean } = {}): void {
         // 1. 调用共享层核心逻辑 (同步 mesRaw, mes, fingerprint)
-        MessageUtils.syncCore(msg, globalXMLInterceptor, options);
+        MessageUtils.syncCore(msg, getTextInterceptor(), options);
 
         // 2. 同步 ST 特有内容 mesST
         // 如果 mesST 缺失，根据 ST 优先级策略 (mesST > mesRaw > mes) 进行初始化

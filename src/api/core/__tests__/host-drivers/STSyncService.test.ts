@@ -6,6 +6,7 @@ import { STAdapter } from '@/api/core/host-drivers/st/STAdapter.js';
 import { STProtocol } from '@/api/core/host-drivers/st/STProtocol.js';
 import { STClient } from '@/api/core/host-drivers/st/STClient.js';
 import { SyncUtils } from '@/api/core/host-drivers/st/SyncUtils.js';
+import { ContextCompactor } from '@/api/core/hal/prompt/ContextCompactor.js';
 import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
 
 // Mock STAdapter
@@ -71,7 +72,7 @@ describe('STSyncService', () => {
 
     beforeEach(() => {
         store = new WorldlineStore();
-        service = new STSyncService(store);
+        service = new STSyncService(store, (trace, settings) => ContextCompactor.compact(trace, settings));
         vi.clearAllMocks();
         initMockHAL();
         (STClient.hasActiveLiveChat as any).mockReturnValue(true);

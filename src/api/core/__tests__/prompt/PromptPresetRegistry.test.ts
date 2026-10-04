@@ -13,12 +13,14 @@ vi.mock('@/api/storage.js', () => ({
     }
 }));
 
-import { promptPresetRegistry } from '@/api/core/hal/prompt/PromptPresetRegistry.js';
+import { promptPresetRegistry, configurePresetFolderResources } from '@/api/core/hal/prompt/PromptPresetRegistry.js';
+import { forgeAgentPresetResourceRegistry } from '@/api/core/forge/presets/ForgeAgentPresetResourceRegistry.js';
 
 describe('PromptPresetRegistry', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         initMockHAL();
+        configurePresetFolderResources((presetId) => forgeAgentPresetResourceRegistry.resolve(presetId));
         promptPresetRegistry.resetForTests();
         storageGet.mockImplementation((key: string, defaultValue?: unknown) => defaultValue);
     });

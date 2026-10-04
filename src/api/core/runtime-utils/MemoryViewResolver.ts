@@ -4,7 +4,7 @@ import type {
     ResolvedLorebookMemoryEntry,
     ResolvedLorebookMemoryItem
 } from '../../../types/MemorySnapshotTypes.js';
-import type { TimelineSourceId } from '../../../stores/useTimelineStore.js';
+import type { TimelineSourceId } from '../../../types/ConversationContextTypes.js';
 import type { ResolvedLorebookViewState } from '../../../types/LorebookViewTypes.js';
 
 export interface ResolveMemoryViewParams {

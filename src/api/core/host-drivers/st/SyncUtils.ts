@@ -1,9 +1,34 @@
 import { LuminaChatMessage, MessageUtils } from '@shared/LuminaMessage.js';
 import { digestString } from '@shared/hash.js';
+import { BaseXMLInterceptor, BuiltinXMLTags, type StreamingPolicy } from '@shared/BaseXMLInterceptor.js';
+import type { LifecycleType } from '@shared/XMLTagRegistry.js';
 import { lwStorage } from '../../../storage.js';
-import { BuiltinXMLTags, XMLInterceptor, globalXMLInterceptor } from '../../xml-view/XMLInterceptor.js';
 import { DiffResult } from '@shared/api/SyncEngine.js';
 import { ContextControlSettings } from '../../storage/types.js';
+
+/**
+ * 文本清洗端口：驱动层只依赖此形状，由组合根注入 Core 的全局拦截器实例；
+ * 未注入时退化为共享 BaseXMLInterceptor（无扩展 pattern parser）。
+ */
+export type TextSanitizer = {
+    cleanText(text: string, policy?: StreamingPolicy): string;
+    processAndCleanText?(text: string, executeHandlers?: boolean): string;
+    getTagsByLifecycle(lifecycles: LifecycleType[]): string[];
+};
+
+let textSanitizer: TextSanitizer = new BaseXMLInterceptor();
+
+export const configureTextInterceptor = (interceptor: TextSanitizer): void => {
+    textSanitizer = interceptor;
+};
+
+export const getTextInterceptor = (): TextSanitizer => textSanitizer;
+
+export const sanitizeText = (text: string): string => (
+    typeof textSanitizer.processAndCleanText === 'function'
+        ? textSanitizer.processAndCleanText(text, false)
+        : textSanitizer.cleanText(text, { allowTopLevel: true })
+);
 
 export class MessageTextResolver {
     public static normalize(text: string): string {
@@ -53,7 +78,7 @@ export class MessageTextResolver {
             ?? pluginRaw
             ?? '';
 
-        const cleaned = globalXMLInterceptor.processAndCleanText(raw, false);
+        const cleaned = sanitizeText(raw);
         return MessageTextResolver.normalizeForFingerprint(cleaned);
     }
 
@@ -75,7 +100,7 @@ export class MessageTextResolver {
 
         // 2. 统一策略清洗 (对齐流式过滤偏好)
         const policy = SyncUtils.getStreamingPolicy();
-        let cleaned = globalXMLInterceptor.cleanText(text, policy);
+        let cleaned = textSanitizer.cleanText(text, policy);
 
         // 3. 终极清理 (不可见字符处理)
         return MessageTextResolver.normalize(cleaned);
@@ -127,57 +152,9 @@ export class MessageComparator {
 }
 
 /**
- * 差异可视化工具
+ * 差异可视化工具已移至 `src/components/common/DiffVisualizer.ts`（纯展示层，不依赖宿主实现）。
  */
 export type { DiffResult };
-
-export class DiffVisualizer {
-    public static generateDiffRows(diffResult: DiffResult): any[] {
-        const rows = [];
-        const maxLen = Math.max(diffResult.independentSequence.length, diffResult.stSequence.length);
-        let leftLineNo = 1;
-        let rightLineNo = 1;
-
-        for (let i = 0; i < maxLen; i++) {
-            const left = diffResult.independentSequence[i];
-            const right = diffResult.stSequence[i];
-            const leftExists = !!left;
-            const rightExists = !!right;
-
-            const leftText = leftExists ? left.mes : '';
-            const rightText = rightExists ? right.mes : '';
-
-            const isHiddenEqual = leftExists && rightExists && (!!left.is_hidden === !!right.is_hidden);
-            const isNameEqual = leftExists && rightExists && MessageTextResolver.normalize(left.name ?? '') === MessageTextResolver.normalize(right.name ?? '');
-            const isRoleEqual = leftExists && rightExists && MessageTextResolver.normalize(left.role ?? '') === MessageTextResolver.normalize(right.role ?? '');
-
-            const leftStFp = leftExists
-                ? (typeof left.stFingerprint === 'string' && left.stFingerprint ? left.stFingerprint : SyncUtils.getSTFingerprint(String(leftText ?? '')))
-                : '';
-            const rightStFp = rightExists
-                ? (typeof right.stFingerprint === 'string' && right.stFingerprint ? right.stFingerprint : SyncUtils.getSTFingerprint(String(rightText ?? '')))
-                : '';
-
-            const isSame = leftExists && rightExists && isHiddenEqual && isNameEqual && isRoleEqual && leftStFp === rightStFp;
-            const isModified = leftExists && rightExists && !isSame;
-            const onlyLocal = leftExists && !rightExists;
-            const onlySt = !leftExists && rightExists;
-
-            rows.push({
-                index: i,
-                leftLine: leftExists ? String(leftLineNo++) : '',
-                rightLine: rightExists ? String(rightLineNo++) : '',
-                leftSign: isSame ? ' ' : onlyLocal || isModified ? '+' : ' ',
-                rightSign: isSame ? ' ' : onlySt || isModified ? '+' : ' ',
-                leftText,
-                rightText,
-                leftClass: onlyLocal ? 'is-add' : isModified ? 'is-mod' : leftExists ? 'is-same' : 'is-empty',
-                rightClass: onlySt ? 'is-add' : isModified ? 'is-mod' : rightExists ? 'is-same' : 'is-empty'
-            });
-        }
-        return rows;
-    }
-}
 
 export class SyncUtils {
     /**
@@ -295,11 +272,11 @@ export class SyncUtils {
         // 2. 从 pluginRaw 或 mesRaw 中寻找标签
         const rawSource = msg.pluginRaw || msg.mesRaw || msg.extra?.mesRaw;
         if (rawSource) {
-            const summaryBlocks = XMLInterceptor.extractTagContent(rawSource, BuiltinXMLTags.STORY_SUMMARY);
+            const summaryBlocks = BaseXMLInterceptor.extractTagContent(rawSource, BuiltinXMLTags.STORY_SUMMARY);
             if (summaryBlocks.length > 0) return summaryBlocks.join('\n');
 
             // 3. 补托：尝试从 Current_Plan 提取
-            const planBlocks = XMLInterceptor.extractTagContent(rawSource, 'Current_Plan');
+            const planBlocks = BaseXMLInterceptor.extractTagContent(rawSource, 'Current_Plan');
             if (planBlocks.length > 0) return planBlocks.join('\n');
         }
         

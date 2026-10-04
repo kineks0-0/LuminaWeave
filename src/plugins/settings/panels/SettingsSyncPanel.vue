@@ -48,7 +48,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { RefreshCcw } from 'lucide-vue-next';
-import { HostDetector } from '../../../api/core/host-drivers/HostDetector.js';
 import { useModalStore } from '../../../stores/useModalStore.js';
 import { LuminaButton } from '../../../ui/primitives';
 import {
@@ -65,7 +64,7 @@ import { useSettingsSyncStatus } from './useSettingsSyncStatus.js';
 const { syncState, diffCount, statusLabel, refresh } = useSettingsSyncStatus();
 const actionMessage = ref('');
 
-const storageDescription = computed(() => (HostDetector.isTauriTavern
+const storageDescription = computed(() => (getSettingsHostApi()?.getPhysicalHost() === 'tauritavern'
   ? '数据保存在 TauriTavern 应用目录（独立 JSON），不需要 LuminaServer。'
   : '数据保存在 LuminaServer 数据目录（独立 JSONL），支持时间线分支回溯。'));
 

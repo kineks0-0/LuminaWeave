@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { viewComponentRegistry } from '@/api/core/xml-view/ViewComponentRegistry.js';
+import { viewComponentRegistry } from '@shared/ViewComponentRegistry.js';
 
 describe('ViewComponentRegistry documentation', () => {
     it('Forge 示例应使用可读占位词，而不是泛化的“示例”', () => {

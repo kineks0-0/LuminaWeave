@@ -1,4 +1,4 @@
-import type { TimelineSourceId } from '../stores/useTimelineStore.js';
+import type { TimelineSourceId } from './ConversationContextTypes.js';
 import type { LorebookVersionMode } from './LorebookViewTypes.js';
 
 export interface ResolvedLorebookMemoryItem {

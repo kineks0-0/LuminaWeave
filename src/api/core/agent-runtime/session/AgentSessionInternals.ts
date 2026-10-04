@@ -73,6 +73,7 @@ export interface AgentSessionToolOutcome {
     isError: boolean;
 }
 
+/** SDK 边界要求：agent-runtime 不得 import shared，此处保留本地实现。 */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 

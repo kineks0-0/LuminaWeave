@@ -6,7 +6,7 @@ import {
     renderForgeStructuredState,
     renderForgeWorkflowSnapshot
 } from '../../../../resources/prompts/forgePrompts.js';
-import { ForgePromptPayloadResolver } from '../../forge/prompt/ForgePromptPayloadResolver.js';
+import { ForgePromptPayloadResolver } from './ForgePromptPayloadResolver.js';
 import type { CleanedMessage } from '../../../../types/nexus.js';
 import type {
     PromptComposeSources,

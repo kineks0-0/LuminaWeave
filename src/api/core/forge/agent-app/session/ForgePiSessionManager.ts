@@ -21,7 +21,7 @@ export interface ForgePiSessionMetadata {
     workspaceTitle: string;
 }
 
-export type ForgePiSessionEntryPayload = SharedForgePiSessionEntryPayload & {
+export type ForgePiSessionManagerEntryPayload = SharedForgePiSessionEntryPayload & {
     agentMessage?: AgentMessage;
     contextBundle?: ForgePiContextBundleSummary;
     text?: string;
@@ -87,7 +87,7 @@ export class ForgePiSessionManager {
         kind: ForgePiRuntimeEventType,
         title: string,
         summary: string,
-        payload: ForgePiSessionEntryPayload | unknown,
+        payload: ForgePiSessionManagerEntryPayload | unknown,
         parentId: string | null = this.tree.getActiveNodeId(),
         createdAt?: number
     ): ForgePiTreeNode {
@@ -182,9 +182,9 @@ export class ForgePiSessionManager {
         };
     }
 
-    private clonePayload(payload: unknown): ForgePiSessionEntryPayload {
+    private clonePayload(payload: unknown): ForgePiSessionManagerEntryPayload {
         if (!this.isRecord(payload)) return {};
-        return { ...payload } as ForgePiSessionEntryPayload;
+        return { ...payload } as ForgePiSessionManagerEntryPayload;
     }
 
     private toTreeNode(entry: ForgePiSessionEntry): ForgePiTreeNode {

@@ -1,12 +1,26 @@
-import { WorldlineStore, WorldlineEvent } from '../../storage/WorldlineStore.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { WorldlineEvent } from '@shared/api/WorldlineEvents.js';
 import { lwStorage } from '../../../storage.js';
-import { ContextCompactor } from '../../hal/prompt/ContextCompactor.js';
-import { ContextControlSettings } from '../../storage/types.js';
+import type { TraceCompactor } from '../../conversation/ChatSyncPort.js';
 import { STAdapter } from './STAdapter.js';
 import { STProtocol } from './STProtocol.js';
 import { STClient } from './STClient.js';
 import { SyncUtils } from './SyncUtils.js';
+
+/**
+ * 驱动侧消费者定义的世界线同步端口：只包含物理同步所需的窄接口，
+ * 由真实 WorldlineStore 结构化满足，驱动层因此不再 import Core 实现。
+ */
+export interface WorldlineSyncTarget {
+    activeLeafId: string | null;
+    readonly nodePool: LuminaChatMessage[];
+    getNode(id: string): LuminaChatMessage | undefined;
+    getTrace(leafId: string | null): LuminaChatMessage[];
+    upsertNode(node: LuminaChatMessage, options?: boolean | { silent?: boolean; source?: 'local' | 'backend' }): void;
+    selfDeduplicate(): { count: number; changed: boolean };
+    hasNode(id: string): boolean;
+    emit(event: string): void;
+}
 
 /**
  * STSyncService
@@ -18,7 +32,10 @@ export class STSyncService {
     private _autoSyncPaused: boolean = false;
     private _stGenerating: boolean = false;
 
-    constructor(private store: WorldlineStore) {}
+    constructor(
+        private store: WorldlineSyncTarget,
+        private readonly compactTrace: TraceCompactor
+    ) {}
 
     public get isSTLoading(): boolean { return this._stLoading; }
     public set isSTLoading(val: boolean) { this._stLoading = val; }
@@ -324,7 +341,7 @@ export class STSyncService {
 
             // 2. 执行压缩计算
             console.log(`[STSyncService] 执行上下文压缩逻辑 (${settings.fullMode}, ${settings.summaryMode})...`);
-            const compactedTrace = await ContextCompactor.compact(activeTrace, settings);
+            const compactedTrace = await this.compactTrace(activeTrace, settings);
             
             const snapshot = await STAdapter.getSnapshot({ ensureStableIds: true });
             const stCurrent = snapshot.lumina;

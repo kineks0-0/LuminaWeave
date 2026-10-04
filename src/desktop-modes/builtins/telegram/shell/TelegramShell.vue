@@ -84,7 +84,7 @@ import { createDesktopModeShellRuntime } from '../../../../platform/desktop-mode
 import type { DesktopModeShellProps } from '../../../../platform/desktop-mode-runtime/shellContracts.js';
 import type { CreateChatConversationInput } from '../../../../types/ConversationContextTypes.js';
 import type { SurfaceContractId } from '../../../../platform/surface/types.js';
-import { useSettings } from '../../../../plugins/settings/useSettings.js';
+import { activeSettings, updateSetting } from '../../../../stores/settingsState.js';
 import { getDesktopModeSettingStorageKey, getDesktopModeSettingValue } from '../../../core/registry.js';
 import { desktopSurfaceInputResolverKey } from '../../../../platform/surface/surfaceInputResolverContext.js';
 import { useTelegramShell } from './useTelegramShell.js';
@@ -123,7 +123,6 @@ const {
 const { cssVars: telegramFrameVars } = useSurfaceSkin('telegram.frame');
 const telegramFrameStyle = computed(() => telegramFrameVars.value);
 
-const { activeSettings, updateSetting } = useSettings();
 const leftPaneCollapsed = computed(() => getDesktopModeSettingValue(
   activeSettings,
   props.runtimeContext.activeDesktopModeId,

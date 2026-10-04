@@ -5,10 +5,13 @@ import { registerSTConversationHostFacadePort } from '../../../host-drivers/st/S
 import { registerSTFacadeRuntimeDriver } from '../../../host-drivers/st/STFacadeRuntimeDriver.js';
 import { registerSTForgeTestChatHostPort } from '../../../host-drivers/st/STForgeTestChatDriver.js';
 import { registerSTLorebookHostPort } from '../../../host-drivers/st/STLorebookHostPort.js';
+import { configureTextInterceptor } from '../../../host-drivers/st/SyncUtils.js';
+import { globalXMLInterceptor } from '../../../xml-view/XMLInterceptor.js';
 import { registerSTResourceSource } from './STResourceSourceProvider.js';
 import { registerLocalResourceSource } from '../standalone/LocalResourceSourceProvider.js';
 
 export function registerSTRuntimePorts(): void {
+    configureTextInterceptor(globalXMLInterceptor);
     registerSTFacadeRuntimeDriver();
     registerSTChatHostProvider();
     registerSTChatSyncPort();

@@ -1,5 +1,5 @@
 import { computed } from 'vue';
-import { activeSettings, useSettings } from '../../plugins/settings/useSettings.js';
+import { activeSettings } from '../../stores/settingsState.js';
 import {
     getActiveDesktopModeIdFromSettings,
     getDesktopModeNavigationPreset,
@@ -34,8 +34,6 @@ const resolveAppearance = (): ResolvedDesktopAppearance => {
 };
 
 export const useDesktopMode = () => {
-    useSettings();
-
     const desktopModeId = computed(() =>
         resolveRegisteredDesktopModeId(getActiveDesktopModeIdFromSettings(activeSettings)));
     const desktopMode = computed(() => getDesktopModeOrDefault(desktopModeId.value));

@@ -51,16 +51,10 @@ const presets = ref<string[]>([]);
 const activePreset = ref('');
 const engine = ref('auto');
 
-const detectCurrentApi = (): string => {
-  if (typeof window.main_api === 'string' && window.main_api) return window.main_api;
-  const selected = typeof window.$ === 'function' ? window.$('#main_api').val() : undefined;
-  return typeof selected === 'string' && selected ? selected : 'unknown';
-};
-
 const refresh = (): void => {
   const host = getSettingsHostApi();
   if (!host) return;
-  currentApi.value = detectCurrentApi();
+  currentApi.value = host.getCurrentApiType() || 'unknown';
   presets.value = host.getPresets(currentApi.value) ?? [];
   activePreset.value = host.getActivePresetName(currentApi.value) ?? '';
 };

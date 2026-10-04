@@ -13,8 +13,6 @@ import { TauriGlobalAccessor } from '../../../host-drivers/tauri/TauriGlobalAcce
 import { globalNexusOrchestrator } from '@shared/api/llm/NexusOrchestrator.js';
 import { base64ToBytes } from '@shared/CommonUtils.js';
 import { lwStorage } from '../../../../storage.js';
-import { STClient } from '../../../host-drivers/st/STClient.js';
-import { STGlobalAccessor } from '../../../host-drivers/st/STGlobalAccessor.js';
 import { LocalNexusHandler } from '../../../generation/LocalNexusHandler.js';
 import { PersistenceDelegate } from '@shared/api/NexusGenerationFlow.js';
 import type { ConversationDocument, ConversationMutation } from '@shared/ConversationTypes.js';
@@ -33,6 +31,19 @@ interface WriteBufferEntry {
     params: any;
     at: number;
 }
+
+/**
+ * TauriTavern 宿主桥接端口：由 ST 驱动层实现并注入，避免 HAL 适配器直连 STClient/全局变量。
+ */
+export interface TauriHostBridge {
+    getMainApi(): string;
+    getCharacterName(): string;
+}
+
+const EMPTY_TAURI_HOST_BRIDGE: TauriHostBridge = {
+    getMainApi: () => '',
+    getCharacterName: () => 'Global'
+};
 
 /**
  * TauriNativeRuntime
@@ -98,7 +109,7 @@ export class TauriNativeRuntime implements HALRuntimePorts {
             || normalized.includes('failed to delete chat');
     }
 
-    constructor() {
+    constructor(private readonly hostBridge: TauriHostBridge = EMPTY_TAURI_HOST_BRIDGE) {
         this.conversation = {
             listConversations: async () => {
                 // 读取前强制 flush 缓冲，保证对齐
@@ -308,9 +319,8 @@ export class TauriNativeRuntime implements HALRuntimePorts {
     }
 
     private getCharacterName(): string {
-        const ctx = STGlobalAccessor.ctx as any;
-        // 优先从官方上下文获取 characterName，用于 Native 端的隔离识别
-        return ctx?.characterName || ctx?.name || 'Global';
+        // 角色名来自注入的 TauriTavern 宿主桥；通用 Tauri 回退 Global
+        return this.hostBridge.getCharacterName();
     }
 
     /**
@@ -683,8 +693,8 @@ export class TauriNativeRuntime implements HALRuntimePorts {
 
     presets = {
         listPresets: async () => {
-            // 修复：传递 apiId 参数
-            const apiId = STClient.getMainApi();
+            // 传递 apiId 参数
+            const apiId = this.hostBridge.getMainApi();
             return await this.invoke('list_presets', { apiId });
         },
         importPreset: async (payload: { name?: string; blob: any }) => {

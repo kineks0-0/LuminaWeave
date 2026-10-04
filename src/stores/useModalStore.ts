@@ -1,13 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import type { ModalOptions } from '../api/services/HostInteractionService.js';
 
-export interface ModalOptions {
-    title?: string;
-    message: string;
-    confirmText?: string;
-    cancelText?: string;
-    danger?: boolean;
-}
+export type { ModalOptions };
 
 /**
  * useModalStore

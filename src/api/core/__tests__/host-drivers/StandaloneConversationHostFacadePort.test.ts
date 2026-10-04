@@ -43,6 +43,13 @@ describe('StandaloneConversationHostFacadePort', () => {
         expect(port.getUserName()).toBe('旅行者');
     });
 
+    it('reports no host main api in standalone mode', () => {
+        const port = new StandaloneConversationHostFacadePort();
+
+        expect(port.getMainApi()).toBe('');
+        expect(port.getPresets()).toEqual([]);
+    });
+
     it('resolves roster, avatar and name from the local character cache', async () => {
         await resourceService.importResource('local', 'character', {
             data: { name: 'Alice' },

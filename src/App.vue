@@ -157,7 +157,10 @@ const resolvedTheme = computed(() => resolvedAppearance.value);
 
 const workspaceShowStageStripSetting = computed(() => activeSettings['lumina-settings.workspaceShowStageStrip'] !== false);
 const workspaceShowDockSetting = computed(() => activeSettings['lumina-settings.workspaceShowDock'] !== false);
-const motionPerformanceSetting = computed(() => activeSettings['lumina-settings.motionPerformance'] || 'full');
+const motionPerformanceSetting = computed<string>(() => {
+  const value = activeSettings['lumina-settings.motionPerformance'];
+  return typeof value === 'string' && value ? value : 'full';
+});
 const traditionalHeaderDesktopPosition = computed(() => {
   if (traditionalNavigationPreset.value.headerDesktopPosition === 'top' || traditionalNavigationPreset.value.headerDesktopPosition === 'bottom') {
     return traditionalNavigationPreset.value.headerDesktopPosition;

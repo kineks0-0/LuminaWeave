@@ -3,6 +3,7 @@ import type { ChatSessionRef, ForgeWorkspaceSessionRef } from './SessionTypes.js
 
 export type ConversationSourceId = Extract<LuminaConversationType, 'chat' | 'forge'>;
 export type ConversationContextSource = ConversationSourceId;
+export type TimelineSourceId = ConversationSourceId;
 
 export interface ConversationTimelineNode extends LuminaChatMessage {
     text: string;

@@ -28,6 +28,10 @@ export class StandaloneConversationHostFacadePort implements ConversationHostFac
         return false;
     }
 
+    getMainApi(): string {
+        return '';
+    }
+
     getAssistantName(fallback = 'Assistant'): string {
         const name = getStandaloneChatContext()?.characterName?.trim();
         return name || fallback;

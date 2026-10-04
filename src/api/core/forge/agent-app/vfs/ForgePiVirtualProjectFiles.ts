@@ -9,7 +9,7 @@ import { lwStorage } from '../../../../storage.js';
 import {
     viewComponentRegistry,
     type ViewSyntaxStyle
-} from '../../../xml-view/ViewComponentRegistry.js';
+} from '@shared/ViewComponentRegistry.js';
 
 export const FORGE_AGENT_DEFAULT_CONTEXT_PATH = './AGENTS.md';
 export const FORGE_AGENT_SYSTEM_PROMPT_PATH = './.forge/agent/SYSTEM.md';

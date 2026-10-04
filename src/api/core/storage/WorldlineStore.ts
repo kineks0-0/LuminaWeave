@@ -1,14 +1,9 @@
 import { LuminaWeaveAPIBase } from '../facade/LuminaWeaveAPIBase.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { WorldlineEvent } from '@shared/api/WorldlineEvents.js';
 import { MessageStorageProjection } from './MessageStorageProjection.js';
 
-export enum WorldlineEvent {
-    SWITCHED = 'WORLDLINE_SWITCHED',
-    BRANCHED = 'WORLDLINE_BRANCHED',
-    ROLLED_BACK = 'WORLDLINE_ROLLED_BACK',
-    UPDATED = 'WORLDLINE_UPDATED',
-    NODE_UPDATED = 'WORLDLINE_NODE_UPDATED'
-}
+export { WorldlineEvent };
 
 /**
  * WorldlineStore

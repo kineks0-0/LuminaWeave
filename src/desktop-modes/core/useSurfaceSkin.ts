@@ -1,5 +1,5 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue';
-import { activeSettings, useSettings } from '../../plugins/settings/useSettings.js';
+import { activeSettings } from '../../stores/settingsState.js';
 import {
     DEFAULT_DESKTOP_MODE_ID,
     getActiveDesktopModeIdFromSettings,
@@ -32,8 +32,6 @@ const resolveAppearance = (): ResolvedDesktopAppearance => {
 };
 
 export const useSurfaceSkin = (componentId: MaybeRefOrGetter<string>) => {
-    useSettings();
-
     const desktopModeId = computed(() => getActiveDesktopModeIdFromSettings(activeSettings) || DEFAULT_DESKTOP_MODE_ID);
     const resolvedAppearance = computed<ResolvedDesktopAppearance>(() => resolveAppearance());
     const resolved = computed(() => resolveSurfaceSkin(desktopModeId.value, toValue(componentId), {

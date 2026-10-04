@@ -1,6 +1,6 @@
 import { computed, ref, watch, type CSSProperties } from 'vue';
 import { getDesktopModeSettingStorageKey, getDesktopModeSettingValue } from '../../../core/registry.js';
-import { useSettings } from '../../../../plugins/settings/useSettings.js';
+import { activeSettings, updateSetting } from '../../../../stores/settingsState.js';
 import type { DesktopModeShellRuntime } from '../../../../platform/desktop-mode-runtime/shellContracts.js';
 
 type DiscordMobileEdge = 'top' | 'bottom' | 'left' | 'right';
@@ -13,7 +13,6 @@ const resolveDiscordMobileEdge = (value: unknown, fallback: DiscordMobileEdge): 
 
 /** Discord 模式自有导航状态与移动端安全区，只通过通用 shell runtime 读写平台状态。 */
 export const useDiscordShell = (shell: DesktopModeShellRuntime) => {
-  const { activeSettings, updateSetting } = useSettings();
   const activeDesktopModeId = computed(() => shell.context.value.activeDesktopModeId);
   const layoutMode = computed(() => shell.context.value.shellKind);
   const isMobile = computed(() => shell.context.value.isMobile);

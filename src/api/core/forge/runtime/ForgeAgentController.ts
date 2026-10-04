@@ -1,6 +1,9 @@
 import { LuminaWeaveAPIBase } from '../../facade/LuminaWeaveAPIBase.js';
-import { useForgeStore } from '../../../../stores/useForgeStore.js';
 import type { ForgeLayer } from '../../../../types/ForgeStructuredTypes.js';
+import type {
+    ForgeTimelineOperationKind,
+    ForgeTimelineOperationStatus
+} from '../../../../types/ForgeTimelineTypes.js';
 import {
     FORGE_FORM_RESULT_SUBMITTED,
     FORGE_LAYER_ADVANCE_REQUESTED,
@@ -17,18 +20,39 @@ export {
     FORGE_WORKSPACE_FREEZE_REQUESTED
 };
 
+export interface ForgeOperationRecorderPort {
+    addOperationTimelineItem(payload: {
+        operationKind: ForgeTimelineOperationKind;
+        status: ForgeTimelineOperationStatus;
+        title: string;
+        summary: string;
+        detail?: string | null;
+        sourceTag?: string | null;
+        layer?: ForgeLayer | null;
+    }): void;
+}
+
 /**
  * ForgeAgentController now only exposes explicit user/control intents.
  * Forge Agent execution, tool trace and direct workspace patch auditing are owned
  * by the pi runtime path; XML action events are no longer consumed here.
+ *
+ * Operation recording is injected by the Forge plugin (composition root) so Core
+ * stays independent of Pinia stores.
  */
 export class ForgeAgentController extends LuminaWeaveAPIBase {
-    private get forgeStore() {
-        return useForgeStore();
-    }
+    private operationRecorder: ForgeOperationRecorderPort | null = null;
 
     constructor(private readonly parentApi: any) {
         super();
+    }
+
+    public setOperationRecorder(recorder: ForgeOperationRecorderPort | null): void {
+        this.operationRecorder = recorder;
+    }
+
+    private recordOperation(payload: Parameters<ForgeOperationRecorderPort['addOperationTimelineItem']>[0]): void {
+        this.operationRecorder?.addOperationTimelineItem(payload);
     }
 
     public async initialize(): Promise<void> {
@@ -36,7 +60,7 @@ export class ForgeAgentController extends LuminaWeaveAPIBase {
     }
 
     public requestLayerAdvance(targetLayer: ForgeLayer): void {
-        this.forgeStore.addOperationTimelineItem({
+        this.recordOperation({
             operationKind: 'user_action',
             status: 'completed',
             title: '请求推进设计层',
@@ -48,7 +72,7 @@ export class ForgeAgentController extends LuminaWeaveAPIBase {
     }
 
     public submitFormResult(formId: string, digest: string): void {
-        this.forgeStore.addOperationTimelineItem({
+        this.recordOperation({
             operationKind: 'user_action',
             status: 'completed',
             title: '已提交表单结果',
@@ -60,7 +84,7 @@ export class ForgeAgentController extends LuminaWeaveAPIBase {
     }
 
     public applyPlannerIntent(intent: string): void {
-        this.forgeStore.addOperationTimelineItem({
+        this.recordOperation({
             operationKind: 'plan',
             status: 'completed',
             title: 'Planner 产出控制意图',
@@ -84,7 +108,7 @@ export class ForgeAgentController extends LuminaWeaveAPIBase {
     }
 
     public freezeWorkspaceDraft(): void {
-        this.forgeStore.addOperationTimelineItem({
+        this.recordOperation({
             operationKind: 'workspace_write',
             status: 'completed',
             title: '请求冻结虚拟工作区',

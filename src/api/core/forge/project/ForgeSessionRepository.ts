@@ -1,4 +1,3 @@
-import { useForgeStore } from '../../../../stores/useForgeStore.js';
 import type { ForgeWorkspaceSession, ForgeWorkspaceSessionRef } from '../../../../types/SessionTypes.js';
 import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
 import {
@@ -434,7 +433,6 @@ export class ForgeSessionRepository {
 
     async createSession(partial?: Partial<ForgeWorkspaceSession>): Promise<ForgeWorkspaceSession> {
         const now = Date.now();
-        const forgeStore = useForgeStore();
         const id = partial?.id || `forge_ws_${now.toString(36)}`;
         const sessionChatId = partial?.sessionChatId || partial?.conversationId || generateSessionChatId();
         const forgeProjectId = partial?.forgeProjectId || id;
@@ -457,14 +455,14 @@ export class ForgeSessionRepository {
             draftInput: partial?.draftInput || '',
             timelineItems: partial?.timelineItems || [],
             piSession: partial?.piSession,
-            stagingEntries: (partial?.stagingEntries || forgeStore.stagingArea || []).map((entry) => ({
+            stagingEntries: (partial?.stagingEntries || []).map((entry) => ({
                 ...entry,
                 layer: entry.layer || null,
                 sourceTag: entry.sourceTag || null,
                 sourceMessageId: entry.sourceMessageId || null,
                 sourceSessionId: entry.sourceSessionId || null
             })),
-            commitReadyEntries: (partial?.commitReadyEntries || forgeStore.commitReadyEntries || []).map((entry) => ({
+            commitReadyEntries: (partial?.commitReadyEntries || []).map((entry) => ({
                 ...entry,
                 layer: entry.layer || null,
                 sourceTag: entry.sourceTag || null,

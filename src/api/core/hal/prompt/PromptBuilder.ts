@@ -13,7 +13,7 @@ import {
     renderForgeDraftTree,
     renderForgeWorkflowSnapshot,
 } from '../../../../resources/prompts/forgePrompts.js';
-import { ForgePromptPayloadResolver } from '../../forge/prompt/ForgePromptPayloadResolver.js';
+import { ForgePromptPayloadResolver } from './ForgePromptPayloadResolver.js';
 import type { ForgeWorkflowSnapshot } from '../../../../types/ForgeWorkflowTypes.js';
 import type { ForgeDraftTree, ForgeStructuredState } from '../../../../types/ForgeStructuredTypes.js';
 import type { ForgeMemoryTree } from '../../../../types/ForgeMemoryTypes.js';

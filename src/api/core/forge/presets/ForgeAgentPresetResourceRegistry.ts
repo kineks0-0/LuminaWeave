@@ -1,5 +1,6 @@
 import { AgentSkillParser } from '../../agent-runtime/skills/AgentSkillParser.js';
 import type { PiExtensionFactory } from '../../agent-runtime/extensions/pi/PiExtensionCompatHost.js';
+import { configurePresetFolderResources } from '../../hal/prompt/PromptPresetRegistry.js';
 import type {
     ForgeAgentExtensionResource,
     ForgeAgentPromptResource,
@@ -238,3 +239,7 @@ export const forgeAgentPresetResourceRegistry = createForgeAgentPresetResourceRe
     baseExtensions: defaultBaseExtensions,
     presetExtensions: defaultPresetExtensions
 });
+
+// Core → HAL 注册：HAL 预设注册表通过此解析器读取 Forge agent 目录资源；
+// 该模块加载即可用，保持原先静态 import 的加载语义。
+configurePresetFolderResources((presetId) => forgeAgentPresetResourceRegistry.resolve(presetId));

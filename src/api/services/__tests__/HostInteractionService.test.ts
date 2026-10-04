@@ -24,4 +24,21 @@ describe('HostInteractionService', () => {
 
         expect(() => service.showToast('Saved')).not.toThrow();
     });
+
+    it('delegates confirm to the registered handler', async () => {
+        const service = new HostInteractionService();
+        const handler = vi.fn(async () => true);
+        service.setConfirmHandler(handler);
+
+        await expect(service.confirm({ message: 'Delete?' })).resolves.toBe(true);
+        expect(handler).toHaveBeenCalledWith({ message: 'Delete?' });
+    });
+
+    it('returns false when no confirm handler is registered', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const service = new HostInteractionService();
+
+        await expect(service.confirm('Delete?')).resolves.toBe(false);
+        expect(warn).toHaveBeenCalled();
+    });
 });

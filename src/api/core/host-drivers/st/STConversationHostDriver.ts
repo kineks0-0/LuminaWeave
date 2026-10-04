@@ -75,6 +75,10 @@ export class STConversationHostDriver {
         return STClient.getPresets(type);
     }
 
+    static getMainApi(): string {
+        return STClient.getMainApi();
+    }
+
     static getActivePresetName(type: string): string | null {
         return STClient.getActivePresetName(type);
     }

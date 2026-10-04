@@ -4,13 +4,6 @@ import { initMockHAL } from '@/api/core/__tests__/support/halMock.js';
 import { ForgeSessionRepository } from '@/api/core/forge/project/ForgeSessionRepository.js';
 import { shellWorkspaceService } from '@/api/core/hal/shell/ShellWorkspaceService.js';
 
-vi.mock('@/stores/useForgeStore.js', () => ({
-    useForgeStore: () => ({
-        stagingArea: [],
-        commitReadyEntries: []
-    })
-}));
-
 function injectMockBridge(serverStorage: Map<string, any>) {
     const runtimeStore = new Map<string, unknown>();
     const bridge = {

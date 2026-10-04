@@ -1,7 +1,6 @@
 import * as forgePrompts from '../../../../resources/prompts/forgePrompts.js';
 import { lwStorage } from '../../../storage.js';
 import { getPromptPresetProfile, listPromptPresetProfiles } from './PromptPresetProfiles.js';
-import { forgeAgentPresetResourceRegistry } from '../../forge/presets/ForgeAgentPresetResourceRegistry.js';
 import {
     clonePromptPresetGenerationSettings,
     sanitizePromptPresetGenerationSettings
@@ -31,6 +30,27 @@ const LEGACY_TEST_CHAT_PRESETS_KEY = 'lumina-forge.testChatPresets';
 const LEGACY_TEST_CHAT_ACTIVE_KEY = 'lumina-forge.testChatActivePreset';
 
 type PromptPresetBuiltInOverrideMap = Record<string, Record<string, boolean>>;
+
+/**
+ * 预设文件夹资源（Forge agent 目录）由 Core 侧在组合根注入，
+ * HAL 不再直接 import forge / agent-runtime。
+ */
+export interface PresetFolderResources {
+    system?: ForgeAgentPromptResource;
+    executor?: ForgeAgentPromptResource;
+    skills: ForgeAgentSkillResource[];
+    extensions: Array<ForgeAgentExtensionResource & { factory?: unknown }>;
+}
+
+export type PresetFolderResourceResolver = (presetId: string) => PresetFolderResources;
+
+const EMPTY_PRESET_FOLDER_RESOURCES: PresetFolderResources = { skills: [], extensions: [] };
+
+let presetFolderResourceResolver: PresetFolderResourceResolver = () => EMPTY_PRESET_FOLDER_RESOURCES;
+
+export const configurePresetFolderResources = (resolver: PresetFolderResourceResolver | null): void => {
+    presetFolderResourceResolver = resolver ?? (() => EMPTY_PRESET_FOLDER_RESOURCES);
+};
 type RawPresetModule = Omit<PromptPresetDefinition, 'profileId' | 'forgeAgentResources'> & {
     profileId: PromptPresetProfileId | LegacyPromptPresetProfileId;
     forgeAgentResources?: Partial<Omit<ForgeAgentPromptResourceSet, 'contract' | 'system' | 'executor' | 'skills' | 'extensions'>> & {
@@ -99,7 +119,7 @@ const resolveForgeAgentResources = (
     resources: RawPresetModule['forgeAgentResources'] | undefined
 ): ForgeAgentPromptResourceSet | undefined => {
     if (!resources?.contract) return undefined;
-    const folderResources = forgeAgentPresetResourceRegistry.resolve(presetId);
+    const folderResources = presetFolderResourceResolver(presetId);
     const system = folderResources.system
         ?? resolveForgeAgentResource(resources.system)
         ?? resolveForgeAgentResource(resources.modes?.conversation);

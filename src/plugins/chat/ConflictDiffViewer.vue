@@ -110,7 +110,7 @@
 import { computed, ref, onMounted, onUnmounted, inject } from 'vue';
 import { LuminaWeaveAPI } from '../../api/index.js';
 
-import { DiffVisualizer } from '../../api/core/host-drivers/st/SyncUtils.js';
+import { DiffVisualizer } from '../../components/common/DiffVisualizer.js';
 
 const lwApi = inject<LuminaWeaveAPI>('lwApi');
 const props = defineProps<{

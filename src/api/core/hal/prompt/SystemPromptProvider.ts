@@ -1,7 +1,7 @@
 import { globalPromptRegistry, PromptSlot, PromptType, STIdentifier } from './PromptRegistry.js';
 import { lwStorage } from '../../../storage.js';
 
-import { viewComponentRegistry, type ViewSyntaxStyle } from '../../xml-view/ViewComponentRegistry.js';
+import { viewComponentRegistry, type ViewSyntaxStyle } from '@shared/ViewComponentRegistry.js';
 
 /**
  * 系统级提示词提供者

@@ -1,7 +1,7 @@
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { BaseXMLInterceptor, BuiltinXMLTags } from '@shared/BaseXMLInterceptor.js';
 import { HALContext } from '../HALContext.js';
-import { BuiltinXMLTags, XMLInterceptor } from '../../xml-view/XMLInterceptor.js';
-import { MessageTextProjection } from '../../runtime-utils/MessageTextProjection.js';
+import { MessageTextProjection } from './MessageTextProjection.js';
 import { ContextControlSettings } from '../../storage/types.js';
 
 /**
@@ -206,7 +206,7 @@ export class ContextCompactor {
         
         // 2. pluginRaw 或 mesRaw 中的标签
         const rawSource = msg.pluginRaw || msg.mesRaw || msg.extra?.mesRaw;
-        if (rawSource && XMLInterceptor.extractTagContent(rawSource, BuiltinXMLTags.STORY_SUMMARY).length > 0) return true;
+        if (rawSource && BaseXMLInterceptor.extractTagContent(rawSource, BuiltinXMLTags.STORY_SUMMARY).length > 0) return true;
         
         // 3. 编导计划
         if (msg.extra?.Current_Plan) return true;
@@ -228,7 +228,7 @@ export class ContextCompactor {
 
         const rawSource = msg.pluginRaw || msg.mesRaw || msg.extra?.mesRaw;
         if (rawSource) {
-            const summaryBlocks = XMLInterceptor.extractTagContent(rawSource as string, BuiltinXMLTags.STORY_SUMMARY);
+            const summaryBlocks = BaseXMLInterceptor.extractTagContent(rawSource as string, BuiltinXMLTags.STORY_SUMMARY);
             if (summaryBlocks.length > 0) return `[📌 钉固] ${summaryBlocks.join('\n')}`;
         }
 
@@ -248,7 +248,7 @@ export class ContextCompactor {
         // 2. 尝试从 pluginRaw 或 mesRaw 中提取 Story_Summary 标签内容
         const rawSource = msg.pluginRaw || msg.mesRaw || msg.extra?.mesRaw;
         if (rawSource) {
-             const summaryBlocks = XMLInterceptor.extractTagContent(rawSource, BuiltinXMLTags.STORY_SUMMARY);
+             const summaryBlocks = BaseXMLInterceptor.extractTagContent(rawSource, BuiltinXMLTags.STORY_SUMMARY);
              if (summaryBlocks.length > 0) return summaryBlocks.join('\n');
         }
 

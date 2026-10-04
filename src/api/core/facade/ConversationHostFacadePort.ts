@@ -4,6 +4,8 @@ export interface ConversationHostFacadePort {
     getPresets(type: string): string[];
     getActivePresetName(type: string): string | null;
     selectPreset(type: string, name: string): void | Promise<void> | boolean | Promise<boolean>;
+    /** 当前宿主生成引擎类型（ST mainApi，如 openai/kobold）；非 ST 宿主返回空串。 */
+    getMainApi(): string;
     getAssistantName(fallback?: string): string;
     getUserName(fallback?: string): string;
     getCharacterNames(): string[];
@@ -25,6 +27,7 @@ class EmptyConversationHostFacadePort implements ConversationHostFacadePort {
     getPresets(): string[] { return []; }
     getActivePresetName(): string | null { return null; }
     selectPreset(): boolean { return false; }
+    getMainApi(): string { return ''; }
     getAssistantName(fallback = 'Assistant'): string { return fallback; }
     getUserName(fallback = 'User'): string { return fallback; }
     getCharacterNames(): string[] { return []; }

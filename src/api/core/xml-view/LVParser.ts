@@ -9,7 +9,7 @@
  * 解析器通过行首特征自动判别语法模式。
  */
 
-import { viewComponentRegistry, type ParsedViewComponent } from './ViewComponentRegistry.js';
+import { viewComponentRegistry, type ParsedViewComponent } from '@shared/ViewComponentRegistry.js';
 import { splitForgePipeTokens } from '../utils/forgeDslUtils.js';
 
 /** 消息段落类型 */

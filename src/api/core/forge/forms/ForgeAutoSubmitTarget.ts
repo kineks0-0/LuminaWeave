@@ -1,5 +1,5 @@
 import type { MessageSegment } from '../../xml-view/LVParser.js';
-import type { ParsedViewComponent } from '../../xml-view/ViewComponentRegistry.js';
+import type { ParsedViewComponent } from '@shared/ViewComponentRegistry.js';
 import { parseCompositePath } from '../../utils/forgeDslUtils.js';
 
 export type ForgeAutoSubmitTarget =

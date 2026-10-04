@@ -1,4 +1,14 @@
+import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { WorldlineStore } from '../storage/WorldlineStore.js';
+import type { ContextControlSettings } from '../storage/types.js';
+
+/**
+ * 回写前的动态上下文压缩回调（Core → HAL 方向注入，驱动层不 import HAL）。
+ */
+export type TraceCompactor = (
+    trace: LuminaChatMessage[],
+    settings: ContextControlSettings
+) => Promise<LuminaChatMessage[]>;
 
 export interface ChatSyncPort {
     isHostLoading: boolean;
@@ -42,12 +52,14 @@ class EmptyChatSyncPort implements ChatSyncPort {
     }
 }
 
-let chatSyncPortFactory: (store: WorldlineStore) => ChatSyncPort = () => new EmptyChatSyncPort();
+let chatSyncPortFactory: (store: WorldlineStore, compactTrace: TraceCompactor) => ChatSyncPort = () => new EmptyChatSyncPort();
 
-export function configureChatSyncPortFactory(factory: (store: WorldlineStore) => ChatSyncPort): void {
+export function configureChatSyncPortFactory(
+    factory: (store: WorldlineStore, compactTrace: TraceCompactor) => ChatSyncPort
+): void {
     chatSyncPortFactory = factory;
 }
 
-export function createChatSyncPort(store: WorldlineStore): ChatSyncPort {
-    return chatSyncPortFactory(store);
+export function createChatSyncPort(store: WorldlineStore, compactTrace: TraceCompactor): ChatSyncPort {
+    return chatSyncPortFactory(store, compactTrace);
 }

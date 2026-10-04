@@ -1,5 +1,6 @@
 import { PromptSlot, PromptType, STIdentifier } from '../../api/core/hal/prompt/PromptRegistry.js';
 import { globalMemoryManager } from '../../api/core/runtime-utils/MemoryManager.js';
+import { luminaWeaveApi } from '../../api/index.js';
 
 // 导出核心引擎组件
 export * from './DirectorStore.js';
@@ -96,13 +97,10 @@ export const DirectorPlugin: LuminaPlugin = {
             } else if (activeLeafId) {
                 // 核心修复：加载已有对话时，必须基于当前活跃节点回溯恢复记忆状态
                 // 否则初始加载后内存将为空，直到下一次生成或手动切换节点
-                const timelineManager = (window as any).LuminaWeave?.timelineManager;
-                if (timelineManager) {
-                    const trace = timelineManager.getTrace(activeLeafId);
-                    if (trace && trace.length > 0) {
-                        console.log(`[LuminaDirector] Initializing memory from active node: ${activeLeafId}`);
-                        globalMemoryManager.restoreState(activeLeafId, trace);
-                    }
+                const trace = luminaWeaveApi.getTimelineTrace(activeLeafId);
+                if (trace && trace.length > 0) {
+                    console.log(`[LuminaDirector] Initializing memory from active node: ${activeLeafId}`);
+                    globalMemoryManager.restoreState(activeLeafId, trace);
                 }
             }
         },

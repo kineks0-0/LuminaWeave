@@ -16,6 +16,10 @@ class STConversationHostFacadePort implements ConversationHostFacadePort {
         STConversationHostDriver.selectPreset(type, name);
     }
 
+    getMainApi(): string {
+        return STConversationHostDriver.getMainApi();
+    }
+
     getAssistantName(fallback = 'Assistant'): string {
         return STCharacterProfileDriver.getAssistantName(fallback);
     }
