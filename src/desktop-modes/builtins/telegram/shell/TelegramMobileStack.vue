@@ -141,6 +141,8 @@ defineProps<{
 
 /* 移动端一级页脱离壁纸，按原版使用纯色列表底；桌面三栏保持通透玻璃 */
 .lw-main-wrapper.lw-telegram-mobile-stack {
+  /* 移动端满幅：基础 .lw-main-wrapper 的边框只保留了左右 1px，这里一并去掉 */
+  border: 0;
   --lw-telegram-pane-list-bg: transparent;
   --lw-telegram-mobile-page-bg: #ffffff;
   --lw-telegram-search-bg: #f1f2f4;
