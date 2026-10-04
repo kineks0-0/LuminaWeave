@@ -342,6 +342,17 @@ const currentBookName = computed(() => {
   return book ? book.name : '选择世界书';
 });
 
+const interactMode = computed(() => lwStorage.get('lumina-lorebook.interactMode', 'none', 'Global'));
+const autoOpenSidebar = computed(() => lwStorage.get('lumina-lorebook.autoOpenSidebar', true, 'Global'));
+const displayMode = ref(lwStorage.get('lumina-lorebook.displayMode', 'list', 'Global'));
+const setDisplayMode = (mode: string): void => {
+  displayMode.value = mode;
+  lwStorage.set('lumina-lorebook.displayMode', mode, 'Global');
+};
+
+const localEntries = ref<LuminaLorebookEntry[]>([]);
+const localBooks = ref([...lorebookManager.books]);
+
 const importInput = ref<HTMLInputElement | null>(null);
 const canDeleteBooks = computed(() => lorebookManager.canDeleteBooks());
 const selectedBookRef = computed<ResourceRef | null>(() => {
@@ -363,17 +374,6 @@ const syncChatEnableState = (): void => {
 };
 watch(selectedBookRef, syncChatEnableState, { immediate: true });
 watch(() => contextStore.activeSessionId, syncChatEnableState);
-
-const interactMode = computed(() => lwStorage.get('lumina-lorebook.interactMode', 'none', 'Global'));
-const autoOpenSidebar = computed(() => lwStorage.get('lumina-lorebook.autoOpenSidebar', true, 'Global'));
-const displayMode = ref(lwStorage.get('lumina-lorebook.displayMode', 'list', 'Global'));
-const setDisplayMode = (mode: string): void => {
-  displayMode.value = mode;
-  lwStorage.set('lumina-lorebook.displayMode', mode, 'Global');
-};
-
-const localEntries = ref<LuminaLorebookEntry[]>([]);
-const localBooks = ref([...lorebookManager.books]);
 const resolvedSourceId = computed<TimelineSourceId>(() => props.timelineSourceId || contextStore.activeSourceId);
 const resolvedSource = computed(() => {
   return contextStore.sources.find(source => source.id === resolvedSourceId.value) || null;
