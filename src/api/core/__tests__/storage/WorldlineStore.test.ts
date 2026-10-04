@@ -59,4 +59,43 @@ describe('WorldlineStore', () => {
         expect(store.hasNode('3')).toBe(false);
         expect(store.hasNode('4')).toBe(false);
     });
+
+    it('selfDeduplicate should keep same-content siblings anchored to different ST messages', () => {
+        store.setNodes([
+            { id: 'a', parentId: 'root', fingerprint: 'fp_same', mesRaw: '继续', extra: { message_id: 10 } },
+            { id: 'b', parentId: 'root', fingerprint: 'fp_same', mesRaw: '继续', extra: { message_id: 11 } }
+        ] as any);
+
+        const result = store.selfDeduplicate();
+
+        expect(result.count).toBe(0);
+        expect(store.hasNode('a')).toBe(true);
+        expect(store.hasNode('b')).toBe(true);
+    });
+
+    it('selfDeduplicate should merge same-content siblings anchored to the same ST message', () => {
+        store.setNodes([
+            { id: 'a', parentId: 'root', fingerprint: 'fp_same', mesRaw: '继续', extra: { message_id: 10 } },
+            { id: 'b', parentId: 'root', fingerprint: 'fp_same', mesRaw: '继续', extra: { message_id: 10 } }
+        ] as any);
+
+        const result = store.selfDeduplicate();
+
+        expect(result.count).toBe(1);
+        expect(store.hasNode('a')).toBe(true);
+        expect(store.hasNode('b')).toBe(false);
+    });
+
+    it('selfDeduplicate should keep same-content siblings without any identity anchor', () => {
+        store.setNodes([
+            { id: 'a', parentId: 'root', fingerprint: 'fp_same', mesRaw: '继续', extra: {} },
+            { id: 'b', parentId: 'root', fingerprint: 'fp_same', mesRaw: '继续', extra: {} }
+        ] as any);
+
+        const result = store.selfDeduplicate();
+
+        expect(result.count).toBe(0);
+        expect(store.hasNode('a')).toBe(true);
+        expect(store.hasNode('b')).toBe(true);
+    });
 });

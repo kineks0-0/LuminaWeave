@@ -137,6 +137,7 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     private _manualAbortPending: boolean = false;
     private _lastGeneralChatLoadChatId: string | null = null;
     private _lastGeneralChatLoadAt: number = 0;
+    private _chatChangedFallbackTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly controlledChatCreation = new ControlledChatCreationCoordinator();
     public registeredPanels: Map<string, RegisteredPanelEntry>;
     private readonly characterRuntimeSlot = new CharacterRuntimeSlot();
@@ -644,11 +645,6 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         if (diagnostics.hasEventSource && diagnostics.hasEventTypes) {
             this.streamHandler.init();
 
-            hostRuntime.on(HOST_EVENT.CHAT_CHANGED, () => {
-                console.log('[LuminaWeave] detect chat_id_changed, preparing for reload...');
-                this.chatManager._stLoading = true;
-            });
-
             const handleGeneralChatLoad = async (reason: string) => {
                 if (this.chatManager.sync.isAutoSyncPaused) {
                     console.debug('[LuminaWeave] 自动同步已暂停，忽略 general chat load');
@@ -683,6 +679,36 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
                     this._isSyncing = false;
                 }
             };
+
+            // CHAT_CHANGED 在主聊天切换时先于 CHAT_LOADED 触发；部分切换路径只发 CHAT_CHANGED，
+            // 因此这里做一次去抖兜底加载。事件之后若已有成功发起的 general load，则兜底跳过。
+            const scheduleChatChangedFallback = (changedAt: number, attempt: number = 0): void => {
+                if (this._chatChangedFallbackTimer) {
+                    clearTimeout(this._chatChangedFallbackTimer);
+                }
+                this._chatChangedFallbackTimer = setTimeout(() => {
+                    this._chatChangedFallbackTimer = null;
+                    if (!this._ready) return;
+                    if (this._lastGeneralChatLoadAt >= changedAt) {
+                        return;
+                    }
+                    if (this.chatManager.sync.isAutoSyncPaused || this._isSyncing) {
+                        if (attempt < 6) {
+                            scheduleChatChangedFallback(changedAt, attempt + 1);
+                        } else {
+                            console.warn('[LuminaWeave] CHAT_CHANGED 兜底加载放弃：同步持续被占用');
+                        }
+                        return;
+                    }
+                    void handleGeneralChatLoad('CHAT_CHANGED_FALLBACK');
+                }, 300);
+            };
+
+            hostRuntime.on(HOST_EVENT.CHAT_CHANGED, () => {
+                console.log('[LuminaWeave] detect chat_id_changed, preparing for reload...');
+                this.chatManager._stLoading = true;
+                scheduleChatChangedFallback(Date.now());
+            });
 
             hostRuntime.on(HOST_EVENT.CHAT_LOADED, async () => {
                 await handleGeneralChatLoad('CHAT_LOADED');

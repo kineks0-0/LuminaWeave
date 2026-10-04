@@ -1,10 +1,8 @@
 import { LuminaChatMessage, MessageUtils } from '@shared/LuminaMessage.js';
 import { lwStorage } from '../../../storage.js';
 import { BuiltinXMLTags, XMLInterceptor, globalXMLInterceptor } from '../../xml-view/XMLInterceptor.js';
-import { SyncEngine, SharedMessageTextResolver, DiffResult } from '@shared/api/SyncEngine.js';
+import { DiffResult } from '@shared/api/SyncEngine.js';
 import { ContextControlSettings } from '../../storage/types.js';
-import { STClient } from './STClient.js';
-import { STProtocol } from './STProtocol.js';
 
 export class MessageTextResolver {
     public static normalize(text: string): string {
@@ -138,13 +136,8 @@ export class MessageComparator {
 }
 
 /**
- * 同步工具类 (SyncUtils) - 扩展层适配版
- * 职责：
- * 1. 组合共享的 SyncEngine 提供差异比对支持。
- * 2. 处理 ST 特有的物理同步逻辑 (applyDelta)。
+ * 差异可视化工具
  */
-const engine = new SyncEngine(globalXMLInterceptor);
-
 export type { DiffResult };
 
 export class DiffVisualizer {
@@ -211,6 +204,7 @@ export class SyncUtils {
     public static readonly SYNC_SOURCE_KEY = '_lw_sync_source';
     public static readonly SYNC_TS_KEY = '_lw_sync_ts';
     public static readonly SYNC_CHAT_KEY = '_lw_sync_chat_id';
+    public static readonly SYNC_WRITTEN_HASH_KEY = '_lw_written_hash';
     public static readonly SYNC_SOURCE_LUMINA = 'lumina';
 
     /**
@@ -235,13 +229,17 @@ export class SyncUtils {
         };
     }
 
-    public static createSyncSourceMeta(): Record<string, any> {
+    public static createSyncSourceMeta(writtenText?: string): Record<string, any> {
         const { chatId } = lwStorage._getContextIds();
-        return {
+        const meta: Record<string, any> = {
             [this.SYNC_SOURCE_KEY]: this.SYNC_SOURCE_LUMINA,
             [this.SYNC_TS_KEY]: Date.now(),
             [this.SYNC_CHAT_KEY]: chatId || null
         };
+        if (typeof writtenText === 'string') {
+            meta[this.SYNC_WRITTEN_HASH_KEY] = this.getSTFingerprint(writtenText);
+        }
+        return meta;
     }
 
     /**
@@ -271,13 +269,25 @@ export class SyncUtils {
     }
 
     /**
-     * 判断消息是否为 Lumina 同步消息
+     * 判断消息是否为 Lumina 同步消息 (自写回读)
+     * 优先使用写回时记录的内容哈希做状态判定：哈希一致说明这条就是插件自己刚写入且未被外部修改的回声，
+     * 不再依赖时间窗；哈希不一致说明消息已被 ST 侧修改，应作为外部变更处理。
+     * 仅当缺少哈希记录时才回退到旧的时间窗判定。
      */
     public static isLuminaSyncMessage(msg: LuminaChatMessage, nowTs: number = Date.now(), windowMs: number = 1600): boolean {
         const extra = msg?.extra || msg || {};
         if (extra?.[this.SYNC_SOURCE_KEY] !== this.SYNC_SOURCE_LUMINA) {
             return false;
         }
+
+        const writtenHash = extra?.[this.SYNC_WRITTEN_HASH_KEY];
+        if (typeof writtenHash === 'string' && writtenHash.length > 0) {
+            const currentText = typeof msg?.mes === 'string' && msg.mes.length > 0
+                ? msg.mes
+                : (typeof msg?.mesST === 'string' ? msg.mesST : '');
+            return writtenHash === this.getSTFingerprint(currentText);
+        }
+
         const markedTs = Number(extra?.[this.SYNC_TS_KEY]);
         if (!Number.isFinite(markedTs)) return false;
         const delta = nowTs - markedTs;
@@ -305,37 +315,6 @@ export class SyncUtils {
         return null;
     }
 
-    /**
-     * 转换为可比较的消息对象 (内部重构：使用 SharedMessageTextResolver)
-     */
-    private static toComparableMessage(msg: LuminaChatMessage, side: 'st' | 'lumina'): any {
-        const { id, fingerprint } = this.identifyMessage(msg);
-        const finalMes = side === 'st'
-            ? MessageUtils.normalize(msg.mes ?? SharedMessageTextResolver.resolveForSTWrite(msg))
-            : MessageUtils.normalize(SharedMessageTextResolver.resolveForSTWrite(msg));
-
-        const stFingerprintStored =
-            (typeof msg?.extra?.stFingerprint === 'string' ? msg.extra.stFingerprint : '')
-            || (typeof msg.stFingerprint === 'string' ? msg.stFingerprint : '');
-
-        const compareText = side === 'st'
-            ? (msg.mes ?? SharedMessageTextResolver.resolveForSTWrite(msg))
-            : (msg.mesST ?? (typeof msg?.extra?.mesST === 'string' ? msg.extra.mesST : undefined) ?? SharedMessageTextResolver.resolveForSTWrite(msg));
-        const stFingerprint = MessageUtils.getFingerprint(compareText);
-        const normalizedRole = STProtocol.normalizeRole(msg.role, msg.is_user === true || msg.role === 'user');
-
-        return {
-            id,
-            name: msg?.name || '',
-            role: normalizedRole,
-            mes: finalMes,
-            fingerprint,
-            stFingerprint,
-            stFingerprintStored,
-            is_hidden: msg.is_hidden
-        };
-    }
-
     public static getFingerprint(content: string): string {
         return MessageUtils.getFingerprint(content);
     }
@@ -344,160 +323,10 @@ export class SyncUtils {
         return MessageUtils.getFingerprint(stWriteText);
     }
 
-    private static _hashFingerprint(cleaned: string): string {
-        return MessageUtils.getFingerprint(cleaned);
-    }
-
     /**
      * 生成随机稳定的节点 ID
      */
     public static generateNodeId(): string {
         return MessageUtils.generateNodeId();
-    }
-
-    /**
-     * 统一标识消息 (委托给共享引擎)
-     */
-    public static identifyMessage(m: any): { id: string; fingerprint: string } {
-        return engine.identifyMessage(m);
-    }
-
-    /**
-     * 确保消息数组中的每一条都有指纹 ID
-     */
-    public static ensureFingerprints(messages: LuminaChatMessage[]): LuminaChatMessage[] {
-        const { charId } = lwStorage._getContextIds();
-
-        return messages.map((m) => {
-            const { id, fingerprint } = this.identifyMessage(m);
-            m.id = id;
-            m.fingerprint = fingerprint;
-            m.stFingerprint = m.stFingerprint || this.getSTFingerprint(MessageTextResolver.resolveForSTWrite(m));
-            m.characterId = m.characterId || charId;
-            const isUser = m.is_user === true || m.role === 'user';
-            const normalizedRole = STProtocol.normalizeRole(m.role, isUser);
-            m.role = normalizedRole;
-            m.extra = m.extra || {};
-            m.extra.role = normalizedRole;
-            return m;
-        });
-    }
-
-    /**
-     * 对比两个节点池的差异 (委托给共享引擎)
-     */
-    public static comparePools(localNodes: LuminaChatMessage[], remoteNodes: LuminaChatMessage[]): {
-        added: LuminaChatMessage[],
-        updated: LuminaChatMessage[],
-        deletedIds: string[]
-    } {
-        return engine.comparePools(localNodes, remoteNodes);
-    }
-
-    /**
-     * 计算并汇总 Lumina 与 ST 的同步分歧 (委托给共享引擎)
-     */
-    public static compareStates(localChat: LuminaChatMessage[], stChat: LuminaChatMessage[]): DiffResult {
-        return engine.compareStates(localChat, stChat);
-    }
-
-    /**
-     * 执行差量写入 (Delta Apply)
-     */
-    public static async applyDelta(
-        diffResult: DiffResult,
-        localTrace: LuminaChatMessage[],
-        stChat: LuminaChatMessage[],
-        stIdToIndex?: Map<string, number>
-    ): Promise<void> {
-        console.log(`[SyncEngine] 开始应用差量更新 (Lumina:${localTrace.length} vs ST:${stChat.length})...`);
-
-        const updates: { index: number, content: string, name?: string, role?: string, is_hidden?: boolean, extra: any }[] = [];
-        const messagesToAppend: any[] = [];
-        const indicesToDelete: number[] = [];
-
-        const divergenceIndex = diffResult.divergenceIndex;
-        const resolveStIndex = (id: string, fallbackIndex: number): number | null => {
-            if (stIdToIndex) {
-                const idx = stIdToIndex.get(id);
-                return idx === undefined ? null : idx;
-            }
-            return fallbackIndex;
-        };
-
-        // 1. 处理在分歧点之前的部分属性更新
-        for (const updatedMsg of diffResult.updated) {
-            // 找到在 localTrace 中的索引
-            const index = localTrace.findIndex(m => m.id === updatedMsg.id);
-            if (index !== -1 && (divergenceIndex === -1 || index < divergenceIndex)) {
-                const localMsg = localTrace[index];
-                const stIndex = resolveStIndex(localMsg.id, index);
-                if (stIndex === null) continue;
-                const expectedContent = localMsg.mesST || MessageTextResolver.extractMessageText(localMsg, false);
-                
-                console.log(`[SyncEngine] 节点 ${localMsg.id} 需要更新. local is_hidden=${localMsg.is_hidden}`);
-                updates.push({
-                    index: stIndex,
-                    content: expectedContent,
-                    name: localMsg.name,
-                    role: localMsg.role,
-                    is_hidden: localMsg.is_hidden || false,
-                    extra: {
-                        ...localMsg.extra,
-                        ...this.createSyncSourceMeta(),
-                        id: localMsg.id,
-                        fingerprint: localMsg.fingerprint,
-                        stFingerprint: localMsg.stFingerprint || this.getSTFingerprint(expectedContent),
-                        mesRaw: localMsg.mesRaw,
-                        compressionState: localMsg.extra?.compressionState,
-                        mesSummary: localMsg.mesSummary,
-                        pluginRaw: localMsg.pluginRaw,
-                        is_hidden: localMsg.is_hidden
-                    }
-                });
-            }
-        }
-
-        // 处理分歧点：截断并追加
-        if (divergenceIndex !== -1) {
-            // 1. 记录需要删除的 ST 消息索引 (从分歧点到结尾)
-            for (let i = divergenceIndex; i < stChat.length; i++) {
-                const stNode = stChat[i];
-                const stIndex = resolveStIndex(stNode.id, i);
-                if (stIndex !== null) indicesToDelete.push(stIndex);
-            }
-            
-            // 2. 记录需要追加的 Local 消息 (从分歧点到结尾)
-            for (let i = divergenceIndex; i < localTrace.length; i++) {
-                const localMsg = localTrace[i];
-                const message = localMsg.mesST || MessageTextResolver.extractMessageText(localMsg, false);
-                messagesToAppend.push({
-                    message,
-                    role: localMsg.role,
-                    name: localMsg.name,
-                    mesST: message,
-                    mesRaw: localMsg.mesRaw,
-                    is_hidden: localMsg.is_hidden || false,
-                    extra: {
-                        ...localMsg.extra,
-                        ...this.createSyncSourceMeta(),
-                        id: localMsg.id,
-                        fingerprint: localMsg.fingerprint,
-                        stFingerprint: localMsg.stFingerprint || this.getSTFingerprint(message),
-                        mesRaw: localMsg.mesRaw,
-                        compressionState: localMsg.extra?.compressionState,
-                        mesSummary: localMsg.mesSummary,
-                        pluginRaw: localMsg.pluginRaw,
-                        is_hidden: localMsg.is_hidden
-                    }
-                });
-            }
-        }
-
-        if (updates.length > 0) await STClient.updateMessages(updates, true);
-        if (indicesToDelete.length > 0) await STClient.deleteMessages(indicesToDelete, true);
-        if (messagesToAppend.length > 0) await STClient.appendMessages(messagesToAppend, true);
-        
-        await STClient.flush();
     }
 }

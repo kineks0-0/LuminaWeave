@@ -1,19 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncUtils, MessageTextResolver, MessageComparator } from '@/api/core/host-drivers/st/SyncUtils.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
-import { STClient } from '@/api/core/host-drivers/st/STClient.js';
 import { STProtocol } from '@/api/core/host-drivers/st/STProtocol.js';
-
-vi.mock('@/api/core/host-drivers/st/STClient.js', () => ({
-    STClient: {
-        getRawMessages: vi.fn(),
-        updateMessages: vi.fn(),
-        appendMessage: vi.fn(),
-        appendMessages: vi.fn(),
-        deleteMessages: vi.fn(),
-        flush: vi.fn()
-    }
-}));
 
 vi.mock('@/api/storage.js', () => ({
     lwStorage: {
@@ -26,77 +14,6 @@ describe('SyncUtils', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
-
-    it('applyDelta should detect added messages and call appendMessages', async () => {
-        const localTrace: LuminaChatMessage[] = [
-            { id: '1', mes: 'Hello', mesRaw: 'Hello', fingerprint: 'fp1', role: 'user', extra: {} } as unknown as LuminaChatMessage
-        ];
-        const stChat: LuminaChatMessage[] = []; // ST is empty
-
-        const diffData = SyncUtils.compareStates(localTrace, stChat);
-        await SyncUtils.applyDelta(diffData, localTrace, stChat);
-
-        expect(STClient.appendMessages).toHaveBeenCalledTimes(1);
-        const appendArgs = vi.mocked(STClient.appendMessages).mock.calls[0][0] as unknown as Array<{ message: string; extra: Record<string, unknown> }>;
-        expect(appendArgs[0].message).toBe('Hello');
-        expect(appendArgs[0].extra[SyncUtils.SYNC_SOURCE_KEY]).toBe(SyncUtils.SYNC_SOURCE_LUMINA);
-        expect(typeof appendArgs[0].extra[SyncUtils.SYNC_TS_KEY]).toBe('number');
-        expect(STClient.flush).toHaveBeenCalledTimes(1);
-    });
-
-    it('applyDelta should detect deleted messages and call deleteMessages', async () => {
-        const localTrace: LuminaChatMessage[] = []; // Local is empty
-        const stChat: LuminaChatMessage[] = [
-            STProtocol.fromST({ message_id: 0, name: 'You', role: 'user', is_hidden: false, message: 'Hello', data: {}, extra: { id: '1', fingerprint: 'fp1' } })
-        ];
-
-        const diffData = SyncUtils.compareStates(localTrace, stChat);
-        await SyncUtils.applyDelta(diffData, localTrace, stChat);
-
-        expect(STClient.deleteMessages).toHaveBeenCalledTimes(1);
-        expect(STClient.deleteMessages).toHaveBeenCalledWith([0], true); // The index in ST to delete
-        expect(STClient.flush).toHaveBeenCalledTimes(1);
-    });
-
-    it('applyDelta should detect updated messages and call updateMessages', async () => {
-        const localTrace: LuminaChatMessage[] = [
-            { id: '1', mes: 'Hello World', mesRaw: 'Hello World', fingerprint: 'fp1_new', role: 'user', extra: {} } as unknown as LuminaChatMessage
-        ];
-        const stChat: LuminaChatMessage[] = [
-            STProtocol.fromST({ message_id: 0, name: 'You', role: 'user', is_hidden: false, message: 'Hello', data: {}, extra: { id: '1', fingerprint: 'fp1' } })
-        ];
-
-        const diffData = SyncUtils.compareStates(localTrace, stChat);
-        await SyncUtils.applyDelta(diffData, localTrace, stChat);
-
-        expect(STClient.updateMessages).toHaveBeenCalledTimes(1);
-        const updateArg = vi.mocked(STClient.updateMessages).mock.calls[0][0] as unknown as Array<{ index: number; content: string; extra?: Record<string, unknown> }>;
-        expect(updateArg[0].index).toBe(0);
-        expect(updateArg[0].content).toBe('Hello World');
-        expect(updateArg[0].extra?.[SyncUtils.SYNC_SOURCE_KEY]).toBe(SyncUtils.SYNC_SOURCE_LUMINA);
-        expect(STClient.flush).toHaveBeenCalledTimes(1);
-    });
-
-    it('compareStates should treat append-only local messages as mergeable', () => {
-        const local: LuminaChatMessage[] = [
-            { id: '1', mesRaw: 'A', fingerprint: SyncUtils.getFingerprint('A'), mes: 'A', name: 'User', role: 'user', parentId: null, extra: {} } as any,
-            { id: '2', mesRaw: 'B', fingerprint: SyncUtils.getFingerprint('B'), mes: 'B', name: 'User', role: 'user', parentId: '1', extra: {} } as any,
-            { id: '3', mesRaw: 'C', fingerprint: SyncUtils.getFingerprint('C'), mes: 'C', name: 'User', role: 'user', parentId: '2', extra: {} } as any
-        ];
-        const st = [
-            STProtocol.fromST({ message_id: 0, name: 'User', role: 'user', is_hidden: false, message: 'A', data: {}, extra: { id: '1', fingerprint: SyncUtils.getFingerprint('A') } }),
-            STProtocol.fromST({ message_id: 1, name: 'User', role: 'user', is_hidden: false, message: 'B', data: {}, extra: { id: '2', fingerprint: SyncUtils.getFingerprint('B') } })
-        ];
-
-        const diff = SyncUtils.compareStates(local, st);
-        expect(diff.hasDivergence).toBe(false);
-        expect(diff.onlyInIndependent).toHaveLength(1);
-        expect(diff.onlyInST).toHaveLength(0);
-        expect(diff.independentSequence).toHaveLength(3);
-        expect(diff.stSequence).toHaveLength(2);
-    });
-
-
 
     it('isLuminaSyncMessage should validate source and time window', () => {
         const now = Date.now();
@@ -113,6 +30,38 @@ describe('SyncUtils', () => {
                 [SyncUtils.SYNC_TS_KEY]: now - 2000
             }
         } as unknown as LuminaChatMessage, now, 500)).toBe(false);
+    });
+
+    it('isLuminaSyncMessage should trust written hash over the time window', () => {
+        const writtenHash = SyncUtils.getSTFingerprint('Hello');
+
+        // 时间窗早已过期，但内容与写回一致 → 仍是自写回声
+        expect(SyncUtils.isLuminaSyncMessage({
+            mes: 'Hello',
+            extra: {
+                [SyncUtils.SYNC_SOURCE_KEY]: SyncUtils.SYNC_SOURCE_LUMINA,
+                [SyncUtils.SYNC_TS_KEY]: Date.now() - 60_000,
+                [SyncUtils.SYNC_WRITTEN_HASH_KEY]: writtenHash
+            }
+        } as unknown as LuminaChatMessage, Date.now(), 500)).toBe(true);
+
+        // 时间窗内，但 ST 侧已改过内容 → 不再视为回声
+        expect(SyncUtils.isLuminaSyncMessage({
+            mes: 'Hello edited',
+            extra: {
+                [SyncUtils.SYNC_SOURCE_KEY]: SyncUtils.SYNC_SOURCE_LUMINA,
+                [SyncUtils.SYNC_TS_KEY]: Date.now() - 100,
+                [SyncUtils.SYNC_WRITTEN_HASH_KEY]: writtenHash
+            }
+        } as unknown as LuminaChatMessage, Date.now(), 500)).toBe(false);
+    });
+
+    it('createSyncSourceMeta should record the written hash when text is provided', () => {
+        const meta = SyncUtils.createSyncSourceMeta('Hello');
+        expect(meta[SyncUtils.SYNC_WRITTEN_HASH_KEY]).toBe(SyncUtils.getSTFingerprint('Hello'));
+
+        const metaWithoutText = SyncUtils.createSyncSourceMeta();
+        expect(metaWithoutText[SyncUtils.SYNC_WRITTEN_HASH_KEY]).toBeUndefined();
     });
 
     describe('MessageTextResolver', () => {
@@ -155,36 +104,9 @@ describe('SyncUtils', () => {
         });
 
         it('identifyMessage should ignore mesST when computing fingerprint', () => {
-            const a = SyncUtils.identifyMessage({ mesRaw: 'FULL', mesST: 'SUMMARY' } as any).fingerprint;
-            const b = SyncUtils.identifyMessage({ mesRaw: 'FULL', mesST: 'SUMMARY_CHANGED' } as any).fingerprint;
+            const a = STProtocol.identifyMessage({ mesRaw: 'FULL', mesST: 'SUMMARY' } as any).fingerprint;
+            const b = STProtocol.identifyMessage({ mesRaw: 'FULL', mesST: 'SUMMARY_CHANGED' } as any).fingerprint;
             expect(a).toBe(b);
-        });
-
-        it('compareStates should not treat DCC summary as ST edit when ST shows mesST', () => {
-            const local: LuminaChatMessage[] = [
-                { id: '1', mesRaw: 'FULL', mesST: 'SUMMARY', fingerprint: SyncUtils.getFingerprint('FULL'), mes: 'FULL', name: 'A', role: 'assistant', extra: {} } as unknown as LuminaChatMessage
-            ];
-            const st = [
-                STProtocol.fromST({ message_id: 0, name: 'A', role: 'assistant', is_hidden: false, message: 'SUMMARY', data: {}, extra: { id: '1', fingerprint: SyncUtils.getFingerprint('FULL'), mesRaw: 'FULL', mesST: 'SUMMARY' } })
-            ];
-
-            const diff = SyncUtils.compareStates(local, st);
-            expect(diff.updated).toHaveLength(0);
-            expect(diff.onlyInIndependent).toHaveLength(0);
-            expect(diff.onlyInST).toHaveLength(0);
-        });
-
-        it('compareStates should classify ST user edits when ST mes differs from stored mesST', () => {
-            const local: LuminaChatMessage[] = [
-                { id: '1', mesRaw: 'FULL', mesST: 'SUMMARY', fingerprint: SyncUtils.getFingerprint('FULL'), mes: 'FULL', name: 'A', role: 'assistant', extra: {} } as unknown as LuminaChatMessage
-            ];
-            const st = [
-                STProtocol.fromST({ message_id: 0, name: 'A', role: 'assistant', is_hidden: false, message: 'EDITED', data: {}, extra: { id: '1', fingerprint: SyncUtils.getFingerprint('FULL'), mesRaw: 'FULL', mesST: 'SUMMARY' } })
-            ];
-
-            const diff = SyncUtils.compareStates(local, st);
-            expect(diff.updated).toHaveLength(1);
-            expect(diff.updated[0]._isSTEdit).toBe(true);
         });
     });
 

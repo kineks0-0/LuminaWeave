@@ -181,8 +181,30 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
     }
 
     /**
+     * 判断两个节点是否确为同一条消息（可安全去重）
+     * 仅有文字指纹相同不足以证明是同一消息：同父级下内容相同的合法消息（连续“继续”等）必须保留。
+     */
+    private isSameMessageIdentity(left: LuminaChatMessage, right: LuminaChatMessage): boolean {
+        if (left.id === right.id) return true;
+
+        const leftMessageId = left.extra?.message_id;
+        const rightMessageId = right.extra?.message_id;
+        if (leftMessageId !== undefined && rightMessageId !== undefined) {
+            return String(leftMessageId) === String(rightMessageId);
+        }
+
+        const leftStableId = left.extra?.id;
+        const rightStableId = right.extra?.id;
+        if (typeof leftStableId === 'string' && typeof rightStableId === 'string') {
+            return leftStableId === rightStableId;
+        }
+
+        return false;
+    }
+
+    /**
      * 自去重 (selfDeduplicate)
-     * 职责：清洗并合并指纹相同的同父级节点，确保数据层面的单向唯一性。
+     * 职责：清洗并合并「同一条消息」的重复节点，确保数据层面的单向唯一性。
      * 从 STSyncService 迁移并下沉至此。
      */
     public selfDeduplicate(): { count: number, changed: boolean } {
@@ -205,8 +227,8 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
                 if (!child.fingerprint) continue;
 
                 const existing = fingerprintMap.get(child.fingerprint);
-                if (existing && existing.id !== child.id) {
-                    // 发现实质重复节点！保留 existing，将 child 移除
+                if (existing && existing.id !== child.id && this.isSameMessageIdentity(existing, child)) {
+                    // 发现同一消息的重复节点！保留 existing，将 child 移除
                     console.log(`[WorldlineStore] 自动去重: 移除同源重复节点 ${child.id} (保留 ${existing.id})`);
 
                     // 将以 child 为父节点的所有子节点转移给 existing 继承
@@ -220,7 +242,7 @@ export class WorldlineStore extends LuminaWeaveAPIBase {
                     this.removeNode(child.id, true);
                     deduplicatedCount++;
                     changed = true;
-                } else {
+                } else if (!existing) {
                     fingerprintMap.set(child.fingerprint, child);
                 }
             }

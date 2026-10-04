@@ -94,6 +94,7 @@ export class STAdapter {
                     const isSwipeBranchSwitch = this.isSwipeBranchSwitch(local, stNode);
                     const baselineFp =
                         (typeof stNode.stFingerprintStored === 'string' ? stNode.stFingerprintStored : '')
+                        || (typeof local.stFingerprintStored === 'string' ? local.stFingerprintStored : '')
                         || (typeof stNode.mesSTStored === 'string' && stNode.mesSTStored ? STProtocol.getSTFingerprint(stNode.mesSTStored) : '');
                     const isSTEdit =
                         !isSwipeBranchSwitch
@@ -101,7 +102,14 @@ export class STAdapter {
                             (baselineFp !== '' && baselineFp === local.stFingerprint && stNode.stFingerprint !== baselineFp)
                             || (local.fingerprint === stNode.fingerprint && local.stFingerprint !== stNode.stFingerprint)
                         );
-                    updated.push({ ...local, _isSTEdit: isSTEdit, _isSwipeBranchSwitch: isSwipeBranchSwitch });
+                    // 双方都改过同一条且结果不同：真正不可自动合并的内容冲突
+                    const isBothEdited =
+                        !isSwipeBranchSwitch
+                        && baselineFp !== ''
+                        && local.stFingerprint !== baselineFp
+                        && stNode.stFingerprint !== baselineFp
+                        && local.stFingerprint !== stNode.stFingerprint;
+                    updated.push({ ...local, _isSTEdit: isSTEdit, _isBothEdited: isBothEdited, _isSwipeBranchSwitch: isSwipeBranchSwitch });
                 }
             }
         }
@@ -127,7 +135,6 @@ export class STAdapter {
         const swipeBranchSwitches = this.collectSwipeBranchSwitches(localSequence, stSequence);
         const semanticNoopPairs = this.collectSemanticNoopPairs(onlyInIndependent, onlyInST);
         const effectiveUpdated = updated.filter(u => !u._isSwipeBranchSwitch);
-        const luminaOriginatedUpdates = effectiveUpdated.filter(u => !u._isSTEdit);
         const effectiveOnlyInIndependent = onlyInIndependent.filter(
             item => !swipeBranchSwitches.localIds.has(item.id) && !semanticNoopPairs.localIds.has(item.id)
         );
@@ -143,6 +150,16 @@ export class STAdapter {
                 return !this.isComparableStateEqual(left, right);
             }) || localSequence.length !== stSequence.length
             : false;
+        // 冲突只保留两类不可自动合并的分歧：
+        // 1. 同一条消息双方都改过且结果不同；
+        // 2. 两边完全没有共享 id 且各自都有独有内容（身份断裂，无法锚定对齐）。
+        // 世界线分支 / 单侧新增 / 单侧编辑均视为可自动收敛的差异。
+        const hasBothEditedConflict = effectiveUpdated.some(u => u._isBothEdited);
+        const hasIdentityDivergence = localSequence.length > 0
+            && stSequence.length > 0
+            && !localSequence.some(left => stMsgMap.has(left.id!))
+            && effectiveOnlyInIndependent.length > 0
+            && effectiveOnlyInST.length > 0;
 
         return {
             onlyInIndependent: effectiveOnlyInIndependent,
@@ -152,7 +169,7 @@ export class STAdapter {
             stSequence,
             diffCount: effectiveDiffCount,
             hasConflict: effectiveDiffCount > 0,
-            hasDivergence: (effectiveOnlyInIndependent.length > 0 || luminaOriginatedUpdates.length > 0) && effectiveOnlyInST.length > 0,
+            hasDivergence: hasBothEditedConflict || hasIdentityDivergence,
             divergenceIndex: hasStructuralDiff ? divergenceIndex : -1
         };
     }
@@ -211,7 +228,7 @@ export class STAdapter {
                             : localMsg.mesST,
                     extra: {
                         ...localMsg.extra,
-                        ...this.createSyncSourceMeta(),
+                        ...this.createSyncSourceMeta(expectedContent),
                         id: localMsg.id,
                         fingerprint: localMsg.fingerprint,
                         stFingerprint: localMsg.stFingerprint || STProtocol.getSTFingerprint(expectedContent),
@@ -243,7 +260,7 @@ export class STAdapter {
                     is_hidden: localMsg.is_hidden || false,
                     extra: {
                         ...localMsg.extra,
-                        ...this.createSyncSourceMeta(),
+                        ...this.createSyncSourceMeta(message),
                         id: localMsg.id,
                         fingerprint: localMsg.fingerprint,
                         stFingerprint: localMsg.stFingerprint || STProtocol.getSTFingerprint(message),
@@ -264,13 +281,17 @@ export class STAdapter {
         await STClient.flush();
     }
 
-    public static createSyncSourceMeta(): Record<string, any> {
+    public static createSyncSourceMeta(writtenText?: string): Record<string, any> {
         const chatId = STClient.getResolvedCurrentChatId();
-        return {
+        const meta: Record<string, any> = {
             '_lw_sync_source': 'lumina',
             '_lw_sync_ts': Date.now(),
             '_lw_sync_chat_id': chatId
         };
+        if (typeof writtenText === 'string') {
+            meta['_lw_written_hash'] = STProtocol.getSTFingerprint(writtenText);
+        }
+        return meta;
     }
 
     private static toComparableMessage(msg: LuminaChatMessage, side: 'st' | 'lumina'): any {

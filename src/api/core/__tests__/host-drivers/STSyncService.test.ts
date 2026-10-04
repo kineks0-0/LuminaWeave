@@ -453,12 +453,12 @@ describe('STSyncService', () => {
         expect(store.activeLeafId).toBe('node_local');
     });
 
-    it('should perform post-sync deduplication pass for identical fingerprints under same parent', async () => {
-        // Setup: Two branches with identical content under the same parent
+    it('should perform post-sync deduplication pass for identical fingerprints with the same message anchor', async () => {
+        // Setup: Two duplicate copies of the same anchored ST message under the same parent
         store.setNodes([
             createNode({ id: 'root', parentId: null, mesRaw: 'root', fingerprint: 'fp_root', role: 'user' }),
-            createNode({ id: 'branch1', parentId: 'root', mesRaw: 'duplicate_content', fingerprint: 'fp_dup', role: 'assistant' }),
-            createNode({ id: 'branch2', parentId: 'root', mesRaw: 'duplicate_content', fingerprint: 'fp_dup', role: 'assistant' }),
+            createNode({ id: 'branch1', parentId: 'root', mesRaw: 'duplicate_content', fingerprint: 'fp_dup', role: 'assistant', extra: { message_id: 7 } }),
+            createNode({ id: 'branch2', parentId: 'root', mesRaw: 'duplicate_content', fingerprint: 'fp_dup', role: 'assistant', extra: { message_id: 7 } }),
             createNode({ id: 'child_of_2', parentId: 'branch2', mesRaw: 'child', fingerprint: 'fp_child', role: 'user' })
         ]);
         store.activeLeafId = 'child_of_2';
