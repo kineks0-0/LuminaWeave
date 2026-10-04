@@ -13,7 +13,6 @@
     </button>
     <div class="discord-channel-copy">
       <strong>{{ activeTabLabel || '频道' }}</strong>
-      <span>当前桌面模式中的主工作区视图</span>
     </div>
   </div>
 </template>

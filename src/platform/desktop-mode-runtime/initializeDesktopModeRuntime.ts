@@ -85,13 +85,16 @@ export const createDesktopModeRuntimeDescriptor = (input: DesktopModePackage): D
 };
 
 export const registerDesktopModeRuntimeDescriptor = (modePackage: DesktopModePackage): void => {
-    const { manifest } = modePackage;
+    // 内置模式的 styles 绑定在 builtinDesktopModeBindings，registry 里的 manifest-only 包没有；
+    // 这里先取绑定后的包，否则 applyDesktopModeStyles 会拿到 undefined。
+    const boundPackage = withBuiltinBinding(modePackage);
+    const { manifest } = boundPackage;
     if (desktopModeRuntimeRegistry.get(manifest.id)) {
         return;
     }
 
-    desktopModeRuntimeRegistry.register(createDesktopModeRuntimeDescriptor(modePackage));
-    applyDesktopModeStyles(manifest.id, modePackage.styles);
+    desktopModeRuntimeRegistry.register(createDesktopModeRuntimeDescriptor(boundPackage));
+    applyDesktopModeStyles(manifest.id, boundPackage.styles);
 };
 
 export const assertCanRegisterDesktopModeRuntimeDescriptor = (modePackage: DesktopModePackage): void => {

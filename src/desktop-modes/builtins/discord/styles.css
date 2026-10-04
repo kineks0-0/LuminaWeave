@@ -44,8 +44,7 @@
 .discord-channel-copy {
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
 }
 
 .discord-channel-copy strong {
@@ -54,17 +53,6 @@
   font-weight: var(--lw-type-title-medium-weight);
   letter-spacing: var(--lw-type-title-medium-tracking);
   color: var(--lw-text-main);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.discord-channel-copy span {
-  font-size: var(--lw-type-body-small-size);
-  line-height: var(--lw-type-body-small-line-height);
-  font-weight: var(--lw-type-body-small-weight);
-  letter-spacing: var(--lw-type-body-small-tracking);
-  color: var(--lw-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
