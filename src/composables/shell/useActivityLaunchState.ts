@@ -1,4 +1,4 @@
-import { computed, ref, type CSSProperties } from 'vue';
+import { computed, ref } from 'vue';
 import type {
   ActivityLaunchResolution,
   ActivityPanelPayload,
@@ -10,15 +10,6 @@ export const useActivityLaunchState = () => {
   const activityStatusBarOverride = ref<ActivityStatusBarDescriptor | null>(null);
   const activeRightPanelActivity = ref<ActivityPanelPayload | null>(null);
   const activeActivityStatusBar = computed(() => activityStatusBarOverride.value || launchActivityStatusBar.value);
-
-  const activityStatusBarStyle = computed<CSSProperties>(() => ({
-    ...(activeActivityStatusBar.value?.background
-      ? { '--lw-activity-statusbar-bg': activeActivityStatusBar.value.background }
-      : {}),
-    ...(activeActivityStatusBar.value?.iconColor
-      ? { '--lw-activity-statusbar-icon-color': activeActivityStatusBar.value.iconColor }
-      : {})
-  }));
 
   const applyLaunchResolution = (resolved: ActivityLaunchResolution) => {
     launchActivityStatusBar.value = resolved.activity.statusBar || null;
@@ -38,17 +29,11 @@ export const useActivityLaunchState = () => {
     activeRightPanelActivity.value = null;
   };
 
-  const clearRightPanelActivity = () => {
-    activeRightPanelActivity.value = null;
-  };
-
   return {
     activeActivityStatusBar,
     activeRightPanelActivity,
-    activityStatusBarStyle,
     applyLaunchResolution,
     setActivityStatusBarOverride,
-    clearTransientActivityMetadata,
-    clearRightPanelActivity
+    clearTransientActivityMetadata
   };
 };

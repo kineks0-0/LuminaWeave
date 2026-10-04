@@ -45,7 +45,6 @@ import { useWorkspaceNavigation } from './composables/shell/useWorkspaceNavigati
 import { useActivityLaunchState } from './composables/shell/useActivityLaunchState.js';
 import { useDesktopExperienceRuntime } from './composables/useDesktopExperienceRuntime.js';
 import {
-  normalizeActivityDescriptor,
   resolveActivityLaunchPlacement
 } from './platform/activity/activityLaunchResolver.js';
 import {
@@ -517,18 +516,6 @@ const resolveWorkspaceActivityAppId = (preferredAppId: string | undefined, panel
   return candidates.find((candidate) => workspaceAppMap.value.has(candidate)) || candidates[0] || '';
 };
 
-const dispatchActivityChange = (
-  activity: ReturnType<typeof normalizeActivityDescriptor>,
-  placement: string,
-  panelId?: string
-) => {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('lw:activity-change', {
-      detail: { activity, placement, panelId }
-    }));
-  }
-};
-
 const handleLaunchActivity = (intent: ActivityLaunchIntent) => {
   const environment = {
     shellKind: shellKind.value,
@@ -540,17 +527,11 @@ const handleLaunchActivity = (intent: ActivityLaunchIntent) => {
   for (const handler of activityModeHandlers) {
     const result = handler(intent, environment);
     if (!result) continue;
-    if (result === true) {
-      dispatchActivityChange(normalizeActivityDescriptor(intent.activity), 'main');
-      return;
-    }
-    dispatchActivityChange(result.activity, result.placement, result.panelId);
     return;
   }
 
   const resolved = resolveActivityLaunchPlacement(intent, environment);
   applyLaunchResolution(resolved);
-  dispatchActivityChange(resolved.activity, resolved.placement, resolved.panelId);
 
   if (resolved.placement === 'modal') {
     if (resolved.modalEvent) {
