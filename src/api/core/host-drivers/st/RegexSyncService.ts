@@ -1,5 +1,4 @@
 import { BuiltinXMLTags } from '@shared/BaseXMLInterceptor.js';
-import { LuminaWeaveAPIBase } from '../../facade/LuminaWeaveAPIBase.js';
 import { STEnvironmentDriver } from './STEnvironmentDriver.js';
 import { getTextInterceptor } from './SyncUtils.js';
 
@@ -7,13 +6,9 @@ import { getTextInterceptor } from './SyncUtils.js';
  * RegexSyncService (正则同步服务)
  * 负责将 LuminaWeave 的内部过滤标签同步至 SillyTavern 的全局正则扩展中。
  */
-export class RegexSyncService extends LuminaWeaveAPIBase {
+export class RegexSyncService {
     private static readonly RULE_NAME = '[Lumina] Tag Filter';
     private lastSyncedRegex: string = '';
-
-    constructor() {
-        super();
-    }
 
     /**
      * 同步 Lumina 标签过滤规则到 ST 全局正则
