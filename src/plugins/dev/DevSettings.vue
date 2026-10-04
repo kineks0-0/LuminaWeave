@@ -365,10 +365,6 @@ onMounted(() => {
   selectedNodeId.value = debugChat.getActiveLeafId() || '';
 });
 
-watch([selectedNodeId, selectedField], () => {
-  resetEditor();
-}, { immediate: true });
-
 const resetEditor = () => {
   if (!currentNode.value) {
     editValue.value = '';
@@ -381,6 +377,10 @@ const resetEditor = () => {
     editValue.value = val || '';
   }
 };
+
+watch([selectedNodeId, selectedField], () => {
+  resetEditor();
+}, { immediate: true });
 
 const refreshCurrentNode = () => {
   selectedNodeId.value = debugChat.getActiveLeafId() || '';
