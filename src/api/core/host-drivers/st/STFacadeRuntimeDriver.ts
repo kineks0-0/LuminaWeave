@@ -44,6 +44,10 @@ export class STFacadeRuntimeDriver implements HostRuntimePort {
         return STEnvironmentDriver.getHostFunction(funcName);
     }
 
+    hasHostRegex(): boolean {
+        return Boolean(STEnvironmentDriver.stHelper);
+    }
+
     applyRegex(
         text: string,
         source: 'user_input' | 'ai_output' | 'slash_command' | 'world_info' | 'reasoning',

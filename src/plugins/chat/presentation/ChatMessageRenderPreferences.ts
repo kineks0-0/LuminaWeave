@@ -24,6 +24,8 @@ export interface ChatMessageRenderPreferences extends ChatThemeRenderPreferences
     allowTopLevelInFilter: boolean;
     implicitThinkingInFilter: boolean;
     streamingEffect: ChatStreamingEffect;
+    /** 是否把消息中的 ```html 代码块渲染为沙箱交互组件 */
+    renderHtmlBlocks: boolean;
 }
 
 export const DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES: Readonly<ChatMessageRenderPreferences> = Object.freeze({
@@ -38,7 +40,8 @@ export const DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES: Readonly<ChatMessageRender
     assistantAvatarPlacement: 'inline',
     userAvatarPlacement: 'inline',
     showUsernames: true,
-    streamingEffect: 'instant'
+    streamingEffect: 'instant',
+    renderHtmlBlocks: false
 });
 
 const resolveMessageShape = (value: unknown, fallback: ThemeMessageShape): ThemeMessageShape => (

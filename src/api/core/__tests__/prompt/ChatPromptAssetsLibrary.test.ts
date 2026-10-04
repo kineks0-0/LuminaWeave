@@ -8,14 +8,50 @@ import {
 } from '@/api/core/hal/prompt/chat/ChatPromptPresetLibraryService.js';
 import {
     RegexScriptLibraryService,
-    createDefaultRegexScript
+    createDefaultRegexScript,
+    regexScriptLibraryService
 } from '@/api/core/hal/prompt/chat/RegexScriptLibraryService.js';
 import { CHAT_PROMPT_PRESET_STORAGE_KEY } from '@/api/core/hal/prompt/ChatPromptCompositionService.js';
 import { CHAT_PROMPT_REGEX_STORAGE_KEY } from '@/api/core/hal/prompt/ChatPromptCompositionService.js';
+import { extractEmbeddedPresetAssets, extractCharacterRegexScripts } from '@/api/core/hal/prompt/chat/EmbeddedPresetAssets.js';
+import { parseChatCompletionPreset } from '@/api/core/hal/prompt/chat/ChatCompletionPresetParser.js';
+import { mergeRegexScripts } from '@/api/core/hal/regex/RegexScriptDocument.js';
 import { REGEX_PLACEMENTS } from '@/types/RegexScriptTypes.js';
 import { lwStorage } from '@/api/storage.js';
 
 const { store } = vi.hoisted(() => ({ store: new Map<string, unknown>() }));
+
+const EMBEDDED_SCRIPT_A = {
+    id: 'script-a',
+    scriptName: '包裹最新指示',
+    findRegex: '^([\\s\\S]*)$',
+    replaceString: '<最新互动>\n$1\n</最新互动>',
+    trimStrings: [],
+    placement: [1],
+    disabled: false,
+    markdownOnly: false,
+    promptOnly: true,
+    runOnEdit: true,
+    substituteRegex: 0,
+    minDepth: null,
+    maxDepth: 1
+};
+
+const EMBEDDED_SCRIPT_B = {
+    id: 'script-b',
+    scriptName: '行动选项 HTML',
+    findRegex: '(<SUOT\\b[^>]*>[\\s\\S]*?<\\/SUOT>)',
+    replaceString: '```html\n<!DOCTYPE html><html><body>hi</body></html>\n```',
+    trimStrings: [],
+    placement: [2],
+    disabled: false,
+    markdownOnly: true,
+    promptOnly: false,
+    runOnEdit: true,
+    substituteRegex: 0,
+    minDepth: null,
+    maxDepth: null
+};
 
 const stPresetFixture = (): Record<string, unknown> => ({
     name: '论坛预设',
@@ -31,6 +67,18 @@ const stPresetFixture = (): Record<string, unknown> => ({
             { identifier: 'chatHistory', enabled: true }
         ]
     }]
+});
+
+const stPresetWithEmbeddedRegex = (): Record<string, unknown> => ({
+    ...stPresetFixture(),
+    extensions: {
+        regex_scripts: [EMBEDDED_SCRIPT_A, EMBEDDED_SCRIPT_B],
+        SPreset: {
+            RegexBinding: {
+                regexes: [EMBEDDED_SCRIPT_A, { ...EMBEDDED_SCRIPT_B, id: 'script-c', scriptName: '额外脚本' }]
+            }
+        }
+    }
 });
 
 const createPresetService = (): ChatPromptPresetLibraryService => {
@@ -126,6 +174,77 @@ describe('ChatPromptPresetLibraryService', () => {
 
         expect(service.getActiveId()).toBe('preset-abc');
     });
+
+    it('extractEmbeddedPresetAssets 合并两类来源并按 id 去重', () => {
+        const preset = parseChatCompletionPreset(stPresetWithEmbeddedRegex()).preset!;
+        const assets = extractEmbeddedPresetAssets(preset);
+
+        expect(assets.regexScripts.map(item => item.id)).toEqual(['script-a', 'script-b', 'script-c']);
+        expect(assets.regexScripts[1].enabled).toBe(true);
+        expect(assets.regexScripts[1].markdownOnly).toBe(true);
+    });
+
+    it('extractEmbeddedPresetAssets 提取 TavernHelper 变量（作用域与扁平）', () => {
+        const scoped = parseChatCompletionPreset({
+            prompts: [{ identifier: 'x' }],
+            extensions: { tavern_helper: { variables: { global: { a: '1' }, local: { b: 2 } } } }
+        }).preset!;
+        expect(extractEmbeddedPresetAssets(scoped).variables).toEqual({ global: { a: '1' }, local: { b: '2' } });
+
+        const flat = parseChatCompletionPreset({
+            prompts: [{ identifier: 'x' }],
+            extensions: { tavern_helper: { variables: { hp: 10 } } }
+        }).preset!;
+        expect(extractEmbeddedPresetAssets(flat).variables).toEqual({ global: { hp: '10' }, local: {} });
+    });
+
+    it('extractCharacterRegexScripts 读取角色卡内嵌正则并按 id 去重', () => {
+        const scripts = extractCharacterRegexScripts({
+            data: {
+                name: 'Alice',
+                extensions: { regex_scripts: [EMBEDDED_SCRIPT_A, EMBEDDED_SCRIPT_A, EMBEDDED_SCRIPT_B] }
+            }
+        });
+
+        expect(scripts.map(item => item.id)).toEqual(['script-a', 'script-b']);
+    });
+
+    it('导入预设时正则作为绑定资产，不并入全局正则库', async () => {
+        const regexStorage = new Map<string, unknown>();
+        vi.spyOn(lwStorage, 'get').mockImplementation((key: string, fallback: unknown) => (
+            key === CHAT_PROMPT_REGEX_STORAGE_KEY ? (regexStorage.get(key) ?? fallback) : fallback
+        ));
+        vi.spyOn(lwStorage, 'set').mockImplementation(async (key: string, value: unknown) => {
+            regexStorage.set(key, value);
+        });
+
+        const service = createPresetService();
+        const result = await service.importFromRaw(stPresetWithEmbeddedRegex());
+
+        expect(result.document).not.toBeNull();
+        expect(result.embeddedRegex).toEqual({ bound: 3 });
+        expect(regexScriptLibraryService.list()).toEqual([]);
+    });
+
+    it('导入预设时合并 TavernHelper 变量（全局 + 会话）', async () => {
+        const variableStorage = new Map<string, unknown>();
+        vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ chatId: 'chat-1' } as never);
+        vi.spyOn(lwStorage, 'get').mockImplementation((key: string, fallback: unknown) => (
+            variableStorage.get(key) ?? fallback
+        ));
+        vi.spyOn(lwStorage, 'set').mockImplementation(async (key: string, value: unknown) => {
+            variableStorage.set(key, value);
+        });
+
+        const service = createPresetService();
+        const result = await service.importFromRaw({
+            ...stPresetFixture(),
+            extensions: { tavern_helper: { variables: { global: { hp: '10' }, local: { mood: '平静' } } } }
+        });
+
+        expect(result.embeddedVariables).toEqual({ global: 1, local: 1 });
+        expect(variableStorage.get('lumina.prompt-variables.global')).toEqual({ hp: '10' });
+    });
 });
 
 describe('RegexScriptLibraryService', () => {
@@ -169,6 +288,17 @@ describe('RegexScriptLibraryService', () => {
         expect(result.added).toBe(2);
         expect(result.scripts.map(item => item.scriptName)).toEqual(['导入一', '导入二']);
         expect(result.scripts[0].id).not.toBe('old-a');
+    });
+
+    it('mergeRegexScripts 按 id 去重且 primary 优先', () => {
+        const primary = { ...createDefaultRegexScript(), id: 'a', scriptName: 'A' };
+        const duplicate = { ...createDefaultRegexScript(), id: 'a', scriptName: 'A2' };
+        const secondary = { ...createDefaultRegexScript(), id: 'b', scriptName: 'B' };
+
+        const merged = mergeRegexScripts([primary], [duplicate, secondary]);
+
+        expect(merged.map(item => item.id)).toEqual(['a', 'b']);
+        expect(merged[0].scriptName).toBe('A');
     });
 
     it('导出为 ST 兼容 JSON', () => {

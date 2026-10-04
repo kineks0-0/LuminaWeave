@@ -141,3 +141,15 @@ export const serializeRegexScripts = (scripts: RegexScript[]): Array<Record<stri
         minDepth: script.minDepth,
         maxDepth: script.maxDepth
     }));
+
+/** 按 id 去重合并：primary 覆盖 secondary，保持各自顺序（primary 在前）。 */
+export const mergeRegexScripts = (primary: RegexScript[], secondary: RegexScript[]): RegexScript[] => {
+    const merged: RegexScript[] = [];
+    const seen = new Set<string>();
+    for (const script of [...primary, ...secondary]) {
+        if (seen.has(script.id)) continue;
+        seen.add(script.id);
+        merged.push(script);
+    }
+    return merged;
+};

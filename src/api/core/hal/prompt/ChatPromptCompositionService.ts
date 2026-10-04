@@ -6,7 +6,12 @@ import { promptResourceResolver } from '../resource/index.js';
 import { promptResourceBindingService, PromptResourceBindingService } from '../resource/PromptResourceBindingService.js';
 import { parseChatCompletionPreset } from './chat/ChatCompletionPresetParser.js';
 import { createDefaultChatPreset } from './chat/DefaultChatPreset.js';
-import { parseRegexScripts } from '../regex/RegexScriptDocument.js';
+import { extractCharacterRegexScripts, extractEmbeddedPresetAssets } from './chat/EmbeddedPresetAssets.js';
+import { mergeRegexScripts, parseRegexScripts } from '../regex/RegexScriptDocument.js';
+import {
+    setCachedCharacterRegexScripts,
+    setCachedPresetRegexScripts
+} from '../regex/LuminaRegexAssetCache.js';
 import { WorldbookActivationService } from './WorldbookActivationService.js';
 import { StagedMacroVariables } from './macros/StagedMacroVariables.js';
 import { resolveCharacterFields, type ChatCharacterFields } from './CharacterFields.js';
@@ -50,9 +55,15 @@ export class ChatPromptCompositionService {
 
     public async compose(request: ChatPromptCompositionRequest): Promise<ChatPromptCompositionResult> {
         const variables = new StagedMacroVariables(await promptVariableStore.getSnapshot(request.chatId));
-        const preset = await this.resolvePreset();
+        const resolvedPreset = await this.resolvePreset();
+        const presetAssets = extractEmbeddedPresetAssets(resolvedPreset.preset);
         const character = await this.resolveCharacter(request.charId);
         const characterBookEntries = character?.raw ? characterBookToLorebookEntries(character.raw) : [];
+        const characterRegexScripts = character ? extractCharacterRegexScripts(character.raw) : [];
+
+        // 绑定正则缓存供显示层同步使用；预设/角色切换后无需等下一次生成。
+        setCachedPresetRegexScripts(resolvedPreset.id, presetAssets.regexScripts);
+        setCachedCharacterRegexScripts(character?.id ?? null, characterRegexScripts);
 
         const worldbookRefs = request.chatId
             ? promptResourceBindingService
@@ -69,45 +80,67 @@ export class ChatPromptCompositionService {
 
         const result = buildRoleplayPrompt({
             history: request.history,
-            preset,
+            preset: resolvedPreset.preset,
             character: character?.fields ?? null,
+            characterId: request.charId,
             personaDescription: this.readPersonaDescription(),
             userName: request.userName,
             charName: character?.fields.name || request.charName,
             worldbookActivation: activation.activation,
-            regexScripts: this.readRegexScripts(),
+            regexScripts: mergeRegexScripts(
+                presetAssets.regexScripts,
+                mergeRegexScripts(characterRegexScripts, this.readRegexScripts())
+            ),
             variables,
             pickSeed: request.chatId ?? undefined
         });
 
-        result.trace.diagnostics.push(...activation.diagnostics);
+        result.trace.diagnostics.push(...activation.diagnostics, ...presetAssets.diagnostics);
         return { result, variables };
     }
 
-    private async resolvePreset(): Promise<ChatCompletionPreset> {
+    /** 预设切换/保存时预热绑定正则缓存（显示层在生成前也能生效）。 */
+    public async warmPresetRegex(id: string | null): Promise<void> {
+        if (!id) {
+            setCachedPresetRegexScripts(null, []);
+            return;
+        }
+        try {
+            const bundle = await promptResourceResolver.resolve([localRef('preset', id)]);
+            const parsed = bundle.presetRaw ? parseChatCompletionPreset(bundle.presetRaw, { nameHint: id }) : null;
+            setCachedPresetRegexScripts(id, parsed?.preset ? extractEmbeddedPresetAssets(parsed.preset).regexScripts : []);
+        } catch (error) {
+            console.warn('[ChatPromptCompositionService] 预热预设正则失败。', error);
+            setCachedPresetRegexScripts(id, []);
+        }
+    }
+
+    private async resolvePreset(): Promise<{ id: string | null; preset: ChatCompletionPreset }> {
         const presetId = lwStorage.get(CHAT_PROMPT_PRESET_STORAGE_KEY, '', 'Global');
-        if (typeof presetId !== 'string' || !presetId.trim()) return createDefaultChatPreset();
+        if (typeof presetId !== 'string' || !presetId.trim()) {
+            return { id: null, preset: createDefaultChatPreset() };
+        }
         try {
             const bundle = await promptResourceResolver.resolve([localRef('preset', presetId.trim())]);
-            if (!bundle.presetRaw) return createDefaultChatPreset();
+            if (!bundle.presetRaw) return { id: presetId.trim(), preset: createDefaultChatPreset() };
             const parsed = parseChatCompletionPreset(bundle.presetRaw, { nameHint: presetId.trim() });
-            return parsed.preset ?? createDefaultChatPreset();
+            return { id: presetId.trim(), preset: parsed.preset ?? createDefaultChatPreset() };
         } catch (error) {
             console.warn('[ChatPromptCompositionService] 读取激活预设失败，使用默认预设。', error);
-            return createDefaultChatPreset();
+            return { id: null, preset: createDefaultChatPreset() };
         }
     }
 
     private async resolveCharacter(
         charId: string | null
-    ): Promise<{ fields: ChatCharacterFields; raw: unknown } | null> {
+    ): Promise<{ id: string; fields: ChatCharacterFields; raw: unknown } | null> {
         if (!charId || charId === 'Global') return null;
         try {
             const ref = localRef('character', charId);
             const bundle = await promptResourceResolver.resolve([ref]);
             const document = bundle.documents.find(item => item.ref.resourceType === 'character');
             if (!document) return null;
-            return { fields: resolveCharacterFields(document.raw), raw: document.raw };
+            return { id: charId, fields: resolveCharacterFields(document.raw), raw: document.raw };
         } catch (error) {
             console.warn('[ChatPromptCompositionService] 读取角色卡失败。', error);
             return null;

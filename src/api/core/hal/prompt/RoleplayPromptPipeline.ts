@@ -29,12 +29,16 @@ export interface RoleplayPromptInput {
     history: CleanedMessage[];
     preset: ChatCompletionPreset | null;
     character?: ChatCharacterFields | null;
+    /** 当前角色 id；用于选择预设里按角色绑定的 prompt_order 分组。 */
+    characterId?: string | number | null;
     personaDescription?: string;
     userName?: string;
     charName?: string;
     worldbookActivation?: PromptWorldbookActivationSnapshot | null;
     regexScripts?: RegexScript[];
     variables: MacroVariableView;
+    /** 同步 token 估算；缺省使用 CJK 感知的字符估算。 */
+    estimateTokens?: (text: string) => number;
     now?: Date;
     random?: () => number;
     pickSeed?: string;
@@ -65,6 +69,8 @@ export interface RoleplayPromptTrace {
     warnings: string[];
     usedMacros: string[];
     regexApplied: string[];
+    /** 上下文预算结果；未配置 maxContext 时为 null。 */
+    budget: { maxContext: number; usedTokens: number; droppedHistory: number } | null;
 }
 
 export interface RoleplayPromptResult {
@@ -101,16 +107,80 @@ const KNOWN_MARKERS = new Set<string>(DEFAULT_MARKER_ORDER);
 
 const PREFILL_IDENTIFIER = 'assistant_prefill';
 
+/** 每条消息的固定开销（role/分隔符等），与 ST 预算口径接近。 */
+export const PROMPT_MESSAGE_OVERHEAD_TOKENS = 4;
+
+/** 同步 token 估算：CJK 约 1 token/字，其余约 1/4 token/字符。 */
+export const estimatePromptTokens = (text: string): number => {
+    let cjk = 0;
+    let other = 0;
+    for (const char of text) {
+        if (/[\u3000-\u303f\u3040-\u30ff\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]/.test(char)) cjk += 1;
+        else other += 1;
+    }
+    return Math.ceil(cjk + other / 4);
+};
+
+export interface PromptBudgetResult {
+    messages: CleanedMessage[];
+    usedTokens: number;
+    droppedHistory: number;
+    /** 保留下来的消息在原数组中的下标，用于重映射 trace。 */
+    keptIndices: number[];
+}
+
+/**
+ * 按 `maxContext` 裁剪提示词：只丢弃最早的历史消息，system / 角色 / 世界书 / prefill 等保留。
+ * 无法满足预算时保持原样（强保留部分不可安全裁剪），由 trace 反映实际用量。
+ */
+export const trimMessagesToContextBudget = (
+    messages: CleanedMessage[],
+    sourceKinds: readonly RoleplayPromptSourceKind[],
+    maxContext: number,
+    estimateTokens: (text: string) => number = estimatePromptTokens
+): PromptBudgetResult => {
+    const allIndices = messages.map((_, index) => index);
+    const costOf = (message: CleanedMessage): number => estimateTokens(message.content) + PROMPT_MESSAGE_OVERHEAD_TOKENS;
+    const costs = messages.map(costOf);
+    let total = costs.reduce((sum, value) => sum + value, 0);
+    if (maxContext <= 0 || messages.length === 0 || total <= maxContext) {
+        return { messages, usedTokens: total, droppedHistory: 0, keptIndices: allIndices };
+    }
+
+    const keep = messages.map(() => true);
+    let droppedHistory = 0;
+    for (let index = 0; index < messages.length && total > maxContext; index += 1) {
+        if (sourceKinds[index] !== 'history') continue;
+        keep[index] = false;
+        total -= costs[index];
+        droppedHistory += 1;
+    }
+
+    return {
+        messages: messages.filter((_, index) => keep[index]),
+        usedTokens: total,
+        droppedHistory,
+        keptIndices: allIndices.filter(index => keep[index])
+    };
+};
+
 interface OrderedPrompt {
     identifier: string;
     enabled: boolean;
 }
 
-const resolveOrder = (preset: ChatCompletionPreset | null): OrderedPrompt[] => {
+const resolveOrder = (
+    preset: ChatCompletionPreset | null,
+    characterId?: string | number | null
+): OrderedPrompt[] => {
     if (!preset) {
         return DEFAULT_MARKER_ORDER.map(identifier => ({ identifier, enabled: true }));
     }
-    const group = preset.promptOrder.find(item => item.characterId === ST_DEFAULT_CHARACTER_ID)
+    const normalizedCharacterId = characterId === undefined || characterId === null ? '' : String(characterId);
+    const group = (normalizedCharacterId
+        ? preset.promptOrder.find(item => item.characterId !== null && String(item.characterId) === normalizedCharacterId)
+        : undefined)
+        ?? preset.promptOrder.find(item => item.characterId === ST_DEFAULT_CHARACTER_ID)
         ?? preset.promptOrder[0];
     if (group && group.order.length > 0) return group.order;
     return preset.prompts.map(entry => ({ identifier: entry.identifier, enabled: true }));
@@ -141,7 +211,8 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
         diagnostics: [...(input.worldbookActivation?.diagnostics ?? [])],
         warnings: [],
         usedMacros: [],
-        regexApplied: []
+        regexApplied: [],
+        budget: null
     };
     const charName = input.charName ?? input.character?.name ?? '';
     const userName = input.userName ?? '';
@@ -227,11 +298,19 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
     };
 
     const buckets = input.worldbookActivation?.insertionBuckets;
-    const order = resolveOrder(input.preset);
+    const order = resolveOrder(input.preset, input.characterId);
     const enabledIdentifiers = resolveEnabledIdentifiers(order);
 
+    /** ST injection_trigger：条目带触发词时，仅在最近用户输入命中时注入。 */
+    const triggerMatches = (entry: ChatCompletionPresetEntry | null): boolean => {
+        const triggers = entry?.injectionTrigger ?? [];
+        if (triggers.length === 0) return true;
+        const haystack = lastUserContent.toLowerCase();
+        return triggers.some(trigger => trigger && haystack.includes(trigger.toLowerCase()));
+    };
+
     const presetDepthInjections = (input.preset?.prompts ?? []).filter(entry =>
-        enabledIdentifiers.has(entry.identifier) && entry.injectionPosition === 1
+        enabledIdentifiers.has(entry.identifier) && entry.injectionPosition === 1 && triggerMatches(entry)
     );
     for (const entry of presetDepthInjections) {
         depthInjections.push({
@@ -253,7 +332,27 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
     }
 
     const resolveHistory = (): CleanedMessage[] => {
-        const result = [...regexedHistory];
+        const behavior = input.preset?.behavior ?? null;
+        const lastUserIndex = regexedHistory.reduce(
+            (found, message, index) => message.role === 'user' ? index : found,
+            -1
+        );
+        const formatMessage = (message: CleanedMessage, index: number): CleanedMessage => {
+            let content = message.content;
+            if (behavior?.sendIfEmpty && index === lastUserIndex && content.trim() === '') {
+                content = behavior.sendIfEmpty;
+            }
+            if (behavior?.namesBehavior === 2) {
+                const name = message.role === 'user' ? userName : message.role === 'assistant' ? charName : '';
+                if (name) content = `${name}: ${content}`;
+            }
+            if (behavior?.wrapInQuotes && message.role !== 'system' && content.trim()) {
+                content = `"${content}"`;
+            }
+            return content === message.content ? message : { ...message, content };
+        };
+
+        const result = regexedHistory.map((message, index) => formatMessage(message, index));
         const worldbookDepth = [...(buckets?.at_depth ?? [])]
             .sort((left, right) => (right.depth ?? 0) - (left.depth ?? 0) || (left.order ?? 0) - (right.order ?? 0));
         const injects = [
@@ -277,6 +376,7 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
         if (!item.enabled) continue;
         const entry = entryById.get(item.identifier) ?? null;
         const character = input.character ?? null;
+        if (entry && !triggerMatches(entry)) continue;
 
         switch (item.identifier) {
             case MARKERS.worldInfoBefore:
@@ -286,7 +386,8 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
                 pushWorldbookBucket(item.identifier, buckets?.after);
                 break;
             case MARKERS.main: {
-                const override = character?.systemPrompt?.trim();
+                // forbid_overrides 条目不允许角色卡 system prompt 覆盖。
+                const override = entry?.forbidOverrides ? '' : character?.systemPrompt?.trim();
                 const content = override || entry?.content || '';
                 pushFragment(item.identifier, entry?.name ?? '主提示词', 'preset', entry?.role ?? 'system', content);
                 break;
@@ -326,7 +427,8 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
                 break;
             case MARKERS.jailbreak: {
                 pushWorldbookBucket(item.identifier, buckets?.an_top);
-                const override = character?.postHistoryInstructions?.trim();
+                // forbid_overrides 条目不允许角色卡 post_history_instructions 覆盖。
+                const override = entry?.forbidOverrides ? '' : character?.postHistoryInstructions?.trim();
                 const content = override || entry?.content || '';
                 pushFragment(item.identifier, entry?.name ?? '越狱', 'preset', entry?.role ?? 'system', content);
                 pushWorldbookBucket(item.identifier, buckets?.an_bottom);
@@ -361,6 +463,7 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
     }
 
     const messages: CleanedMessage[] = [];
+    const messageSourceKinds: RoleplayPromptSourceKind[] = [];
     for (const fragment of fragments) {
         const resolved = resolveMacros(fragment.content, baseContext);
         trace.warnings.push(...resolved.trace.warnings);
@@ -368,6 +471,7 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
         if (!resolved.text.trim()) continue;
         const index = messages.length;
         messages.push({ role: fragment.role, content: resolved.text });
+        messageSourceKinds.push(fragment.sourceKind);
         trace.entries.push({
             identifier: fragment.identifier,
             label: fragment.label,
@@ -390,12 +494,37 @@ export const buildRoleplayPrompt = (input: RoleplayPromptInput): RoleplayPromptR
                 finalLength: prefill.text.length
             });
             messages.push({ role: 'assistant', content: prefill.text });
+            messageSourceKinds.push('preset');
         }
+    }
+
+    const maxContext = input.preset?.sampling.maxContext ?? 0;
+    const budget = trimMessagesToContextBudget(
+        messages,
+        messageSourceKinds,
+        maxContext,
+        input.estimateTokens
+    );
+    if (budget.droppedHistory > 0) {
+        const remap = new Map(budget.keptIndices.map((original, next) => [original, next]));
+        trace.entries = trace.entries
+            .filter(entry => remap.has(entry.outputMessageIndex))
+            .map(entry => ({ ...entry, outputMessageIndex: remap.get(entry.outputMessageIndex)! }));
+    }
+    if (maxContext > 0) {
+        trace.budget = {
+            maxContext,
+            usedTokens: budget.usedTokens,
+            droppedHistory: budget.droppedHistory
+        };
+    }
+    if (budget.droppedHistory > 0) {
+        trace.warnings.push(`上下文预算裁剪：丢弃 ${budget.droppedHistory} 条最早的历史消息。`);
     }
 
     trace.usedMacros = Array.from(new Set(trace.usedMacros));
     return {
-        messages,
+        messages: budget.messages,
         settings: toSettings(input.preset),
         trace
     };

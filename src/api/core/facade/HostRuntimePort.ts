@@ -43,6 +43,8 @@ export interface HostRuntimePort {
     on(eventKey: HostEventKey, handler: (...args: any[]) => void): boolean;
     getGenerationFlags(): { isGenerating: boolean; isTyping: boolean };
     getHostFunction(funcName: string): Promise<Function | null>;
+    /** 宿主是否提供显示层正则能力（ST + TavernHelper）；无宿主时由 Lumina 脚本集兜底。 */
+    hasHostRegex?(): boolean;
     applyRegex(
         text: string,
         source: 'user_input' | 'ai_output' | 'slash_command' | 'world_info' | 'reasoning',
@@ -79,6 +81,10 @@ class EmptyHostRuntimePort implements HostRuntimePort {
 
     async getHostFunction(_funcName: string): Promise<Function | null> {
         return null;
+    }
+
+    hasHostRegex(): boolean {
+        return false;
     }
 
     applyRegex(text: string): string {

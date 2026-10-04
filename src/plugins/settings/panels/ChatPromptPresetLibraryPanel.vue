@@ -268,10 +268,6 @@
                 <span>消息加引号</span>
                 <LuminaToggle v-model="draft.behavior.wrapInQuotes" />
               </label>
-              <label class="field field-toggle">
-                <span>Assistant 冒充</span>
-                <LuminaToggle v-model="draft.behavior.assistantImpersonation" />
-              </label>
             </div>
             <label class="field">
               <span>空输入提示词</span>
@@ -285,6 +281,17 @@
                 @input="draft.behavior.assistantPrefill = inputValue($event)"
               />
             </label>
+            <label class="field">
+              <span>Assistant 冒充提示词</span>
+              <input
+                :value="draft.behavior.assistantImpersonation"
+                placeholder="冒充/续写时使用的提示词文本"
+                @input="draft.behavior.assistantImpersonation = inputValue($event)"
+              />
+            </label>
+            <SettingsDescription v-if="boundRegexCount > 0">
+              该预设自带 {{ boundRegexCount }} 条绑定正则，随预设激活生效（在 JSON 的 extensions 中维护，不并入全局正则库）。
+            </SettingsDescription>
           </div>
 
           <div v-else class="tab-panel">
@@ -335,6 +342,7 @@ import {
   parseChatCompletionPreset,
   serializeChatCompletionPreset
 } from '../../../api/core/hal/prompt/chat/ChatCompletionPresetParser.js';
+import { extractEmbeddedPresetAssets } from '../../../api/core/hal/prompt/chat/EmbeddedPresetAssets.js';
 import {
   DEFAULT_CHAT_COMPLETION_ENTRY,
   ST_DEFAULT_CHARACTER_ID,
@@ -425,6 +433,11 @@ const orderedPrompts = computed(() => {
   }));
 });
 
+/** 预设自带的绑定正则数量（随预设激活生效）。 */
+const boundRegexCount = computed(() =>
+  draft.value ? extractEmbeddedPresetAssets(draft.value).regexScripts.length : 0
+);
+
 const showToast = (message: string, kind: ToastKind = 'info'): void => {
   (window as LuminaToastHost).LuminaWeave?.showToast?.(message, kind);
 };
@@ -495,7 +508,12 @@ const handleImportFile = async (event: Event): Promise<void> => {
     }
     await refresh();
     await selectPreset(result.document.ref.resourceId);
-    showToast('预设已导入', 'success');
+    const regexCount = result.embeddedRegex.bound;
+    const variableCount = result.embeddedVariables.global + result.embeddedVariables.local;
+    const merged: string[] = [];
+    if (regexCount > 0) merged.push(`${regexCount} 条绑定正则`);
+    if (variableCount > 0) merged.push(`${variableCount} 个变量`);
+    showToast(merged.length > 0 ? `预设已导入（随预设生效：${merged.join('、')}）` : '预设已导入', 'success');
   } catch (error) {
     console.warn('[ChatPromptPresetLibraryPanel] 导入失败', error);
     showToast('JSON 解析失败，请检查文件格式。', 'error');

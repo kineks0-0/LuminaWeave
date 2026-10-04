@@ -5,7 +5,11 @@ import { lwStorage } from '../../../../storage.js';
 import type { ChatCompletionPreset } from '../../../../../types/ChatCompletionPresetTypes.js';
 import { parseChatCompletionPreset, serializeChatCompletionPreset } from './ChatCompletionPresetParser.js';
 import { createDefaultChatPreset } from './DefaultChatPreset.js';
+import { extractEmbeddedPresetAssets } from './EmbeddedPresetAssets.js';
+import { setCachedPresetRegexScripts } from '../../regex/LuminaRegexAssetCache.js';
+import { promptVariableStore } from '../variables/PromptVariableStore.js';
 import { CHAT_PROMPT_PRESET_STORAGE_KEY } from '../ChatPromptCompositionService.js';
+import { chatPromptCompositionService } from '../ChatPromptCompositionService.js';
 
 export interface ChatPromptPresetListEntry {
     id: string;
@@ -17,6 +21,10 @@ export interface ChatPromptPresetListEntry {
 export interface ChatPromptPresetImportResult {
     document: ResourceDocument | null;
     diagnostics: ResourceDiagnostic[];
+    /** 预设自带（绑定）的正则数量：随该预设激活生效，不并入全局正则库。 */
+    embeddedRegex: { bound: number };
+    /** 内嵌 TavernHelper 变量的导入数量。 */
+    embeddedVariables: { global: number; local: number };
 }
 
 /**
@@ -55,16 +63,32 @@ export class ChatPromptPresetLibraryService {
     }
 
     public async save(id: string, preset: ChatCompletionPreset): Promise<ResourceSaveResult> {
-        return this.resources.saveResource(this.ref(id), serializeChatCompletionPreset(preset));
+        const result = await this.resources.saveResource(this.ref(id), serializeChatCompletionPreset(preset));
+        if (this.getActiveId() === id) {
+            setCachedPresetRegexScripts(id, extractEmbeddedPresetAssets(preset).regexScripts);
+        }
+        return result;
     }
 
     public async importFromRaw(raw: unknown, nameHint?: string): Promise<ChatPromptPresetImportResult> {
         const parsed = parseChatCompletionPreset(raw, nameHint ? { nameHint } : {});
         if (!parsed.preset) {
-            return { document: null, diagnostics: parsed.diagnostics };
+            return {
+                document: null,
+                diagnostics: parsed.diagnostics,
+                embeddedRegex: { bound: 0 },
+                embeddedVariables: { global: 0, local: 0 }
+            };
         }
+        const assets = extractEmbeddedPresetAssets(parsed.preset);
+        const embeddedVariables = await promptVariableStore.merge(this.currentChatId(), assets.variables);
         const document = await this.resources.importResource('local', 'preset', raw);
-        return { document, diagnostics: parsed.diagnostics };
+        return {
+            document,
+            diagnostics: [...parsed.diagnostics, ...assets.diagnostics],
+            embeddedRegex: { bound: assets.regexScripts.length },
+            embeddedVariables
+        };
     }
 
     public async createFromDefault(name?: string): Promise<ResourceDocument> {
@@ -95,6 +119,7 @@ export class ChatPromptPresetLibraryService {
 
     public setActive(id: string | null): void {
         void lwStorage.set(CHAT_PROMPT_PRESET_STORAGE_KEY, id ?? '', 'Global');
+        void chatPromptCompositionService.warmPresetRegex(id);
     }
 
     private ref(id: string): ResourceRef {
@@ -105,6 +130,11 @@ export class ChatPromptPresetLibraryService {
             path: buildSourceResourcePath('local', 'preset', id),
             writable: true
         };
+    }
+
+    private currentChatId(): string | null {
+        const { chatId } = lwStorage._getContextIds();
+        return typeof chatId === 'string' && chatId ? chatId : null;
     }
 }
 

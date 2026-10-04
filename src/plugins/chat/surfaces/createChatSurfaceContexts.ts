@@ -55,6 +55,10 @@ const resolveMessageRenderPreferences = (): ChatMessageRenderPreferences => {
         streamingEffect: resolveChatStreamingEffect(settingsDomainService.getGlobalValue<unknown>(
             'lumina-chat.streamingEffect',
             DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.streamingEffect
+        )),
+        renderHtmlBlocks: Boolean(settingsDomainService.getGlobalValue<unknown>(
+            'lumina-chat.renderHtmlBlocks',
+            DEFAULT_CHAT_MESSAGE_RENDER_PREFERENCES.renderHtmlBlocks
         ))
     };
 };

@@ -17,6 +17,8 @@
         :render-fn="renderMarkdown"
         :streaming="Boolean(isStreaming) && idx === lastTextSegmentIndex"
         :presentation="streamingPresentation"
+        :render-html-blocks="renderPreferences.renderHtmlBlocks"
+        :on-html-action="onHtmlAction"
       />
 
       <!-- 视图段：遍历组件列表并动态渲染 -->
@@ -79,6 +81,8 @@ const props = defineProps<{
   thinkingVariant?: 'default' | 'codex';
   /** Chat Choices 组件提交的选项文本 */
   onSelectChoice?: (text: string) => void;
+  /** HTML 交互块请求填入输入框 / 直接发送 */
+  onHtmlAction?: (text: string, mode: 'fill' | 'send') => void;
   /** 由 Surface context 投影的消息渲染设置 */
   renderPreferences?: ChatMessageRenderPreferences;
   /** 流式显现效果（淡入 / 拖尾 / 光标） */

@@ -68,7 +68,8 @@ export interface ChatCompletionBehaviorSettings {
     wrapInQuotes: boolean;
     sendIfEmpty: string;
     assistantPrefill: string;
-    assistantImpersonation: boolean;
+    /** ST `assistant_impersonation`：冒充/续写时使用的提示词文本（字符串，非开关）。 */
+    assistantImpersonation: string;
 }
 
 export interface ChatCompletionPreset {
@@ -107,7 +108,7 @@ export const DEFAULT_CHAT_COMPLETION_BEHAVIOR: ChatCompletionBehaviorSettings = 
     wrapInQuotes: false,
     sendIfEmpty: '',
     assistantPrefill: '',
-    assistantImpersonation: false
+    assistantImpersonation: ''
 };
 
 export const DEFAULT_CHAT_COMPLETION_ENTRY = {

@@ -64,6 +64,7 @@ import { HostDetector } from './core/host-drivers/HostDetector.js';
 import { characterImportService } from './core/hal/resource/index.js';
 import type { ResourceDocument } from '@shared/resources/index.js';
 import { PromptCommandService } from './core/generation/PromptCommandService.js';
+import { luminaRegexDisplayService } from './core/hal/regex/LuminaRegexDisplayService.js';
 import { GenerationCommandService } from './core/generation/GenerationCommandService.js';
 import { ForgeAgentController } from './core/forge/runtime/ForgeAgentController.js';
 import type {
@@ -997,7 +998,14 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
     }
 
     public applySTRegex(text: string, source: 'user_input' | 'ai_output' | 'slash_command' | 'world_info' | 'reasoning', destination: 'display' | 'prompt', options: any = {}): string {
-        return getHostRuntimePort().applyRegex(text, source, destination, options);
+        const port = getHostRuntimePort();
+        const hostResult = port.hasHostRegex?.()
+            ? port.applyRegex(text, source, destination, options)
+            : text;
+        // 预设/角色绑定的 Lumina 正则不在宿主脚本集中，显示层需要再叠加应用。
+        return destination === 'display'
+            ? luminaRegexDisplayService.apply(hostResult, source, destination, options)
+            : hostResult;
     }
 
     getSTCore(): any {

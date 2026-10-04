@@ -23,7 +23,7 @@ const createChatCompletionFixture = (): Record<string, unknown> => ({
     names_behavior: 2,
     wrap_in_quotes: true,
     assistant_prefill: '好的，',
-    assistant_impersonation: false,
+    assistant_impersonation: '保持角色语气',
     prompts: [
         {
             identifier: 'main',
@@ -124,6 +124,7 @@ describe('parseChatCompletionPreset', () => {
         expect(preset.behavior.namesBehavior).toBe(2);
         expect(preset.behavior.wrapInQuotes).toBe(true);
         expect(preset.behavior.assistantPrefill).toBe('好的，');
+        expect(preset.behavior.assistantImpersonation).toBe('保持角色语气');
 
         expect(preset.prompts).toHaveLength(5);
         const main = preset.prompts[0];
@@ -194,6 +195,16 @@ describe('parseChatCompletionPreset', () => {
 
         expect(result.preset!.prompts[0].role).toBe('system');
         expect(result.diagnostics.some(item => item.code === 'preset.prompt_role_invalid')).toBe(true);
+    });
+
+    it('role "model" 映射为 assistant 且不报错', () => {
+        const result = parseChatCompletionPreset({
+            prompts: [{ identifier: 'prefill', role: 'model', content: 'x' }],
+            prompt_order: [{ character_id: 1, order: [{ identifier: 'prefill', enabled: true }] }]
+        });
+
+        expect(result.preset!.prompts[0].role).toBe('assistant');
+        expect(result.diagnostics.some(item => item.code === 'preset.prompt_role_invalid')).toBe(false);
     });
 
     it('prompt_order 引用不存在的 identifier 时警告', () => {

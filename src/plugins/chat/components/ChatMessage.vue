@@ -59,6 +59,8 @@
           v-if="message.is_user"
           :text="message.mesRaw || message.mes"
           :render-fn="renderChatMarkdown"
+          :render-html-blocks="renderPreferences.renderHtmlBlocks"
+          :on-html-action="onHtmlAction"
         />
         <MessageRenderer
           v-else
@@ -69,6 +71,7 @@
           :render-markdown="renderChatMarkdown"
           :render-preferences="renderPreferences"
           :on-select-choice="onSelectChoice"
+          :on-html-action="onHtmlAction"
           :is-streaming="streaming"
           :streaming-presentation="streamingPresentation"
         />
@@ -138,6 +141,8 @@ const props = withDefaults(defineProps<{
   disabled: boolean;
   renderPreferences: ChatMessageRenderPreferences;
   onSelectChoice: (text: string) => void;
+  /** HTML 交互块请求填入输入框 / 直接发送 */
+  onHtmlAction?: (text: string, mode: 'fill' | 'send') => void;
   /** 正在流式输出的回复：复用同一行布局，保证结束时无缝替换为最终消息 */
   streaming?: boolean;
   streamingPresentation?: ChatStreamingPresentation;
@@ -154,7 +159,8 @@ const props = withDefaults(defineProps<{
   streamingPresentation: undefined,
   groupStart: true,
   groupEnd: true,
-  timeLabel: ''
+  timeLabel: '',
+  onHtmlAction: undefined
 });
 
 const emit = defineEmits<{

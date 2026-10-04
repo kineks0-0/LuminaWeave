@@ -43,6 +43,10 @@ export class StandaloneFacadeRuntimeDriver implements HostRuntimePort {
         return null;
     }
 
+    hasHostRegex(): boolean {
+        return false;
+    }
+
     applyRegex(
         text: string,
         _source: any,

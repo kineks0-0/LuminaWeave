@@ -147,6 +147,16 @@ const settingsSchema = {
         type: 'boolean',
         allowedScopes: ['Global']
     },
+    renderHtmlBlocks: {
+        category: 'conversation',
+        group: '互动组件',
+        keywords: ['HTML', 'iframe', '沙箱', '互动', '选项'],
+        default: false,
+        label: '渲染消息中的 HTML 交互块',
+        description: '把消息里 ```html 代码块渲染为沙箱交互组件（如预设的选项面板）。组件无法访问宿主数据；填入/发送操作会转发到聊天。',
+        type: 'boolean',
+        allowedScopes: ['Global']
+    },
     'dialogueUIFrequency': {
         category: 'conversation',
         group: '互动组件',

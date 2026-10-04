@@ -459,3 +459,205 @@ describe('buildRoleplayPrompt 深度注入、宏、正则与参数', () => {
         expect(result.trace.warnings.some(item => item.includes('ghost-prompt'))).toBe(true);
     });
 });
+
+describe('buildRoleplayPrompt 预设兼容语义', () => {
+    it('forbid_overrides 阻止角色卡覆盖 main 与 jailbreak', () => {
+        const preset = createPreset(
+            [
+                entry('main', { content: '预设主提示词', forbidOverrides: true }),
+                entry('chatHistory'),
+                entry('jailbreak', { content: '预设越狱', forbidOverrides: true })
+            ],
+            [
+                { identifier: 'main', enabled: true },
+                { identifier: 'chatHistory', enabled: true },
+                { identifier: 'jailbreak', enabled: true }
+            ]
+        );
+        const result = buildRoleplayPrompt({
+            history: [{ role: 'user', content: '嗨' }],
+            preset,
+            character: createCharacter({ systemPrompt: '角色覆盖', postHistoryInstructions: '历史覆盖' }),
+            variables: createVariables()
+        });
+        const contents = result.messages.map(item => item.content);
+
+        expect(contents).toContain('预设主提示词');
+        expect(contents).toContain('预设越狱');
+        expect(contents).not.toContain('角色覆盖');
+        expect(contents).not.toContain('历史覆盖');
+    });
+
+    it('injection_trigger 只在最近用户输入命中时注入', () => {
+        const preset = createPreset(
+            [entry('custom-style', { content: '文风要求', injectionTrigger: ['文风'] })],
+            [{ identifier: 'custom-style', enabled: true }]
+        );
+        const hit = buildRoleplayPrompt({
+            history: [{ role: 'user', content: '帮我调下文风' }],
+            preset,
+            variables: createVariables()
+        });
+        expect(hit.messages.map(item => item.content)).toContain('文风要求');
+
+        const miss = buildRoleplayPrompt({
+            history: [{ role: 'user', content: '继续' }],
+            preset,
+            variables: createVariables()
+        });
+        expect(miss.messages.map(item => item.content)).not.toContain('文风要求');
+    });
+
+    it('names_behavior=2 给历史消息加角色/用户前缀', () => {
+        const preset = createPreset(
+            [entry('chatHistory')],
+            [{ identifier: 'chatHistory', enabled: true }],
+            { behavior: { ...DEFAULT_CHAT_COMPLETION_BEHAVIOR, namesBehavior: 2 } }
+        );
+        const result = buildRoleplayPrompt({
+            history: [
+                { role: 'user', content: '你好' },
+                { role: 'assistant', content: '你好呀' }
+            ],
+            preset,
+            charName: '爱丽丝',
+            userName: '玩家',
+            variables: createVariables()
+        });
+
+        expect(result.messages.map(item => item.content)).toEqual(['玩家: 你好', '爱丽丝: 你好呀']);
+    });
+
+    it('wrap_in_quotes 包裹非 system 历史消息', () => {
+        const preset = createPreset(
+            [entry('chatHistory')],
+            [{ identifier: 'chatHistory', enabled: true }],
+            { behavior: { ...DEFAULT_CHAT_COMPLETION_BEHAVIOR, wrapInQuotes: true } }
+        );
+        const result = buildRoleplayPrompt({
+            history: [
+                { role: 'user', content: '你好' },
+                { role: 'assistant', content: '你好呀' }
+            ],
+            preset,
+            variables: createVariables()
+        });
+
+        expect(result.messages.map(item => item.content)).toEqual(['"你好"', '"你好呀"']);
+    });
+
+    it('send_if_empty 替换空的最后一条用户消息', () => {
+        const preset = createPreset(
+            [entry('chatHistory')],
+            [{ identifier: 'chatHistory', enabled: true }],
+            { behavior: { ...DEFAULT_CHAT_COMPLETION_BEHAVIOR, sendIfEmpty: '继续' } }
+        );
+        const result = buildRoleplayPrompt({
+            history: [{ role: 'user', content: '   ' }],
+            preset,
+            variables: createVariables()
+        });
+
+        expect(result.messages.map(item => item.content)).toEqual(['继续']);
+    });
+
+    it('按当前角色选择 prompt_order 分组', () => {
+        const base = createPreset(
+            [entry('main', { content: '默认组' }), entry('custom-x', { content: '角色组' })],
+            []
+        );
+        const preset: ChatCompletionPreset = {
+            ...base,
+            promptOrder: [
+                { characterId: ST_DEFAULT_CHARACTER_ID, order: [{ identifier: 'main', enabled: true }] },
+                { characterId: 100001, order: [{ identifier: 'custom-x', enabled: true }] }
+            ]
+        };
+
+        const defaultResult = buildRoleplayPrompt({
+            history: [],
+            preset,
+            variables: createVariables()
+        });
+        expect(defaultResult.messages.map(item => item.content)).toEqual(['默认组']);
+
+        const characterResult = buildRoleplayPrompt({
+            history: [],
+            preset,
+            characterId: '100001',
+            variables: createVariables()
+        });
+        expect(characterResult.messages.map(item => item.content)).toEqual(['角色组']);
+    });
+});
+
+describe('buildRoleplayPrompt 上下文预算', () => {
+    const estimator = (text: string): number => text.length;
+
+    it('超过 maxContext 时从最早的历史消息裁剪并重映射 trace', () => {
+        const preset = createPreset(
+            [entry('main', { content: 'S' }), entry('chatHistory')],
+            [
+                { identifier: 'main', enabled: true },
+                { identifier: 'chatHistory', enabled: true }
+            ],
+            { sampling: { ...DEFAULT_CHAT_COMPLETION_SAMPLING, maxContext: 22 } }
+        );
+        const result = buildRoleplayPrompt({
+            history: [
+                { role: 'user', content: 'AAAA' },
+                { role: 'assistant', content: 'BBBB' },
+                { role: 'user', content: 'CCCC' }
+            ],
+            preset,
+            estimateTokens: estimator,
+            variables: createVariables()
+        });
+
+        expect(result.messages.map(item => item.content)).toEqual(['S', 'BBBB', 'CCCC']);
+        expect(result.trace.budget).toEqual({ maxContext: 22, usedTokens: 21, droppedHistory: 1 });
+        expect(result.trace.warnings.some(item => item.includes('预算裁剪'))).toBe(true);
+        const historyEntries = result.trace.entries.filter(item => item.sourceKind === 'history');
+        expect(historyEntries.map(item => item.outputMessageIndex)).toEqual([1, 2]);
+    });
+
+    it('预算不足时保留 system 内容、丢弃全部历史', () => {
+        const preset = createPreset(
+            [entry('main', { content: 'S' }), entry('chatHistory')],
+            [
+                { identifier: 'main', enabled: true },
+                { identifier: 'chatHistory', enabled: true }
+            ],
+            { sampling: { ...DEFAULT_CHAT_COMPLETION_SAMPLING, maxContext: 3 } }
+        );
+        const result = buildRoleplayPrompt({
+            history: [
+                { role: 'user', content: 'AAAA' },
+                { role: 'assistant', content: 'BBBB' }
+            ],
+            preset,
+            estimateTokens: estimator,
+            variables: createVariables()
+        });
+
+        expect(result.messages.map(item => item.content)).toEqual(['S']);
+        expect(result.trace.budget?.droppedHistory).toBe(2);
+    });
+
+    it('maxContext 为 0 时不做裁剪且 budget 为 null', () => {
+        const preset = createPreset(
+            [entry('chatHistory')],
+            [{ identifier: 'chatHistory', enabled: true }],
+            { sampling: { ...DEFAULT_CHAT_COMPLETION_SAMPLING, maxContext: 0 } }
+        );
+        const result = buildRoleplayPrompt({
+            history: [{ role: 'user', content: 'AAAA' }],
+            preset,
+            estimateTokens: estimator,
+            variables: createVariables()
+        });
+
+        expect(result.messages).toHaveLength(1);
+        expect(result.trace.budget).toBeNull();
+    });
+});

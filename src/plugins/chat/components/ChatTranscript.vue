@@ -26,6 +26,7 @@
           :disabled="interactionLocked"
           :render-preferences="renderPreferences"
           :on-select-choice="onSelectChoice"
+          :on-html-action="onHtmlAction"
           :group-start="messageGroups[index]?.groupStart ?? true"
           :group-end="messageGroups[index]?.groupEnd ?? true"
           :time-label="messageGroups[index]?.timeLabel ?? ''"
@@ -36,11 +37,6 @@
           @branch="emit('branch', $event)"
         />
       </template>
-
-      <div v-if="sessionSwitching" class="chat-transcript__switching">
-        <LoaderCircle :size="16" />
-        <span>{{ characterState.status.text || '正在切换聊天' }}</span>
-      </div>
 
       <ChatStreamingMessage
         :generation="generation"
@@ -62,7 +58,7 @@
 <script setup lang="ts">
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { computed, ref, watch } from 'vue';
-import { LoaderCircle, MessageCircle } from 'lucide-vue-next';
+import { MessageCircle } from 'lucide-vue-next';
 import type { CharacterChannelState, ConversationViewContext } from '../../../types/ConversationContextTypes.js';
 import type {
   ChatApplicationSnapshot,
@@ -89,6 +85,8 @@ const props = defineProps<{
   resolveMessageAvatar: (message: LuminaChatMessage) => string;
   renderPreferences: ChatMessageRenderPreferences;
   onSelectChoice: (text: string) => void;
+  /** HTML 交互块请求填入输入框 / 直接发送 */
+  onHtmlAction?: (text: string, mode: 'fill' | 'send') => void;
 }>();
 
 const emit = defineEmits<{
@@ -286,8 +284,7 @@ watch(
   -webkit-backdrop-filter: var(--lw-chat-floating-blur, none);
 }
 
-.chat-transcript__notice,
-.chat-transcript__switching {
+.chat-transcript__notice {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -298,13 +295,5 @@ watch(
   color: var(--lw-text-secondary);
   padding: 9px 11px;
   font-size: var(--lw-type-body-small-size);
-}
-
-.chat-transcript__switching svg {
-  animation: chat-transcript-spin 0.9s linear infinite;
-}
-
-@keyframes chat-transcript-spin {
-  to { transform: rotate(360deg); }
 }
 </style>

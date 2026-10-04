@@ -60,6 +60,30 @@ export class PromptVariableStore {
             console.warn('[PromptVariableStore] 写入会话变量失败', error);
         }
     }
+
+    /**
+     * 非破坏性合并（预设导入等场景）：incoming 覆盖同名键，其余保留。
+     * 无 chatId 时本地变量不落库，只合并全局。
+     */
+    public async merge(
+        chatId: string | null,
+        incoming: { global?: Record<string, string>; local?: Record<string, string> }
+    ): Promise<{ global: number; local: number }> {
+        const incomingGlobal = incoming.global ?? {};
+        const incomingLocal = chatId ? incoming.local ?? {} : {};
+        if (Object.keys(incomingGlobal).length === 0 && Object.keys(incomingLocal).length === 0) {
+            return { global: 0, local: 0 };
+        }
+        const current = await this.getSnapshot(chatId);
+        await this.commit(chatId, {
+            global: { ...current.global, ...incomingGlobal },
+            local: { ...current.local, ...incomingLocal }
+        });
+        return {
+            global: Object.keys(incomingGlobal).length,
+            local: Object.keys(incomingLocal).length
+        };
+    }
 }
 
 export const promptVariableStore = new PromptVariableStore();

@@ -87,6 +87,8 @@ const toBoolean = (value: unknown, fallback = false): boolean => {
 
 const toRole = (value: unknown, diagnostics: ResourceDiagnostic[], identifier: string): ChatCompletionPromptRole => {
     if (value === 'system' || value === 'user' || value === 'assistant') return value;
+    // 部分预设/生态用 "model" 表示模型侧消息，映射为 assistant。
+    if (value === 'model') return 'assistant';
     if (value !== undefined && value !== null && value !== '') {
         diagnostics.push({
             level: 'warning',
@@ -234,7 +236,9 @@ const parseBehavior = (record: Record<string, unknown>): ChatCompletionBehaviorS
     wrapInQuotes: toBoolean(record.wrap_in_quotes, DEFAULT_CHAT_COMPLETION_BEHAVIOR.wrapInQuotes),
     sendIfEmpty: typeof record.send_if_empty === 'string' ? record.send_if_empty : DEFAULT_CHAT_COMPLETION_BEHAVIOR.sendIfEmpty,
     assistantPrefill: typeof record.assistant_prefill === 'string' ? record.assistant_prefill : DEFAULT_CHAT_COMPLETION_BEHAVIOR.assistantPrefill,
-    assistantImpersonation: toBoolean(record.assistant_impersonation, DEFAULT_CHAT_COMPLETION_BEHAVIOR.assistantImpersonation)
+    assistantImpersonation: typeof record.assistant_impersonation === 'string'
+        ? record.assistant_impersonation
+        : DEFAULT_CHAT_COMPLETION_BEHAVIOR.assistantImpersonation
 });
 
 /**
