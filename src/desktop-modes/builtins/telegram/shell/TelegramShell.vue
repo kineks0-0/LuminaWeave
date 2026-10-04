@@ -225,6 +225,10 @@ const onClearAndSwitchRightPanel = (panelId: string) => {
   props.runtimeActions.navigation.clearActivityMetadata();
   props.runtimeActions.traditional.switchRightPanel(panelId);
 };
+// 稳定回调：内联箭头每次重算都会换引用，会让 SurfaceOutlet 判定 chat.main input 变化并重建 surface（聊天闪烁）。
+const onOpenMobileRoleProfile = () => {
+  pushTelegramMobileRoute({ name: 'roleProfile' });
+};
 
 const resolveSurfaceInput = (contractId: SurfaceContractId): Record<string, unknown> => {
   if (contractId === 'chat.main' && !props.runtimeContext.isMobile) {
@@ -306,7 +310,7 @@ const resolvedActivityComponentProps = computed<Record<string, unknown> | undefi
     onDeleteSession: props.runtimeActions.traditional.deleteConversationSession,
     onOpenPanel: onOpenMobilePanel,
     onHandleRoleProfileTool,
-    onOpenRoleProfile: () => pushTelegramMobileRoute({ name: 'roleProfile' }),
+    onOpenRoleProfile: onOpenMobileRoleProfile,
     onUpdateDesktopMode: props.runtimeActions.navigation.updateDesktopMode,
     onSelectBottomNav,
     onClose: props.runtimeActions.navigation.close

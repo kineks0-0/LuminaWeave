@@ -89,6 +89,9 @@ describe('Telegram mode package shell structure', () => {
     expect(shell).toContain('navDirection: telegramMobileNavDirection.value');
     expect(shell).toContain(':collapsed="isLeftPaneHidden"');
     expect(shell).toContain('class="lw-telegram-widget-slot"');
+    // chat.main input 的函数必须稳定引用：内联箭头会被 SurfaceOutlet 判定 input 变化并重建聊天 surface
+    expect(shell).toContain('onOpenRoleProfile: onOpenMobileRoleProfile');
+    expect(shell).not.toContain('onOpenRoleProfile: () =>');
 
     const desktopPane = readSource('telegram/shell/TelegramDesktopPane.vue');
     expect(desktopPane).toContain('lw-telegram-pane-swap');
