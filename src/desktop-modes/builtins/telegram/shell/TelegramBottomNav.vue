@@ -116,6 +116,7 @@ const items = computed(() => [
   align-items: center;
   justify-content: center;
   gap: 2px;
+  transition: background-color var(--lw-transition), color var(--lw-transition);
   font-size: var(--lw-type-label-medium-size);
   line-height: var(--lw-type-label-medium-line-height);
   font-weight: 500;

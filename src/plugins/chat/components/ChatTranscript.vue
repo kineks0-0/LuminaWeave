@@ -1,6 +1,6 @@
 <template>
   <div ref="scrollArea" class="chat-transcript" :class="{ 'is-compact': compact }">
-    <div ref="contentArea" class="chat-transcript__content">
+    <div ref="contentArea" class="chat-transcript__content" :class="{ 'is-revealing': contentRevealing }">
       <div v-if="showEmptyState" class="chat-transcript__empty">
         <div class="chat-transcript__empty-card">
           <span class="chat-transcript__empty-mark" aria-hidden="true">
@@ -76,6 +76,8 @@ import ChatStreamingMessage from './ChatStreamingMessage.vue';
 
 const props = defineProps<{
   messages: LuminaChatMessage[];
+  /** 消息暂缓挂载（会话切换中或宿主页面过渡中）：不显示空状态占位 */
+  messagesPending?: boolean;
   context: ConversationViewContext;
   generation: ChatGenerationState;
   presentation: ChatApplicationSnapshot['presentation'];
@@ -114,7 +116,19 @@ const showStreaming = computed(() => props.context.meta?.isLive === true && (
   || Boolean(props.generation.stream?.processed)
   || Boolean(props.generation.errorMessage)
 ));
-const showEmptyState = computed(() => props.messages.length === 0 && !showStreaming.value && !sessionSwitching.value);
+const showEmptyState = computed(() => props.messages.length === 0 && !showStreaming.value && !sessionSwitching.value && !props.messagesPending);
+
+// 消息从暂缓（会话切换 / 宿主页面过渡）恢复时做一次 150ms 淡入，避免整段消息硬弹出。
+const contentRevealing = ref(false);
+watch(() => props.messagesPending, (pending) => {
+  if (pending) {
+    contentRevealing.value = false;
+    return;
+  }
+  requestAnimationFrame(() => {
+    contentRevealing.value = true;
+  });
+});
 
 // 流式回复作为虚拟末条参与分组，结束后替换为正式消息时分组结果不变，不产生头像/名称跳动
 const streamingStartedAt = ref(Date.now());
@@ -295,5 +309,24 @@ watch(
   color: var(--lw-text-secondary);
   padding: 9px 11px;
   font-size: var(--lw-type-body-small-size);
+}
+
+/* 壁纸在滚动容器上、本体不参与淡入，只让消息内容淡入 */
+.chat-transcript__content.is-revealing {
+  animation: chat-transcript-reveal 150ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+@keyframes chat-transcript-reveal {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-transcript__content.is-revealing {
+    animation: none;
+  }
+}
+
+[data-motion='none'] .chat-transcript__content.is-revealing {
+  animation: none;
 }
 </style>

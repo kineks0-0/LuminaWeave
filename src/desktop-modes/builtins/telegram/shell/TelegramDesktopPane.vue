@@ -1,5 +1,11 @@
 <template>
-  <div class="lw-telegram-left-pane" :style="leftRailStyle">
+  <div
+    class="lw-telegram-left-pane"
+    :class="{ 'is-collapsed': collapsed, 'is-resizing': isLeftRailResizing }"
+    :style="leftRailStyle"
+    :inert="collapsed || undefined"
+    :aria-hidden="collapsed ? 'true' : undefined"
+  >
     <div class="lw-telegram-left-stack">
       <nav class="lw-telegram-left-stack__tabs" aria-label="Telegram left pane pages">
         <button
@@ -17,18 +23,22 @@
           角色
         </button>
       </nav>
-      <ThemedSurfaceOutlet
-        v-if="leftRoute === 'conversationList'"
-        contract-id="conversation.sessionList"
-        :input="{}"
-        :desktop-mode-id="activeDesktopModeId"
-      />
-      <ThemedSurfaceOutlet
-        v-else
-        contract-id="character.roster"
-        :input="{}"
-        :desktop-mode-id="activeDesktopModeId"
-      />
+      <Transition name="lw-telegram-pane-swap" mode="out-in">
+        <ThemedSurfaceOutlet
+          v-if="leftRoute === 'conversationList'"
+          key="conversationList"
+          contract-id="conversation.sessionList"
+          :input="{}"
+          :desktop-mode-id="activeDesktopModeId"
+        />
+        <ThemedSurfaceOutlet
+          v-else
+          key="roleList"
+          contract-id="character.roster"
+          :input="{}"
+          :desktop-mode-id="activeDesktopModeId"
+        />
+      </Transition>
     </div>
     <div
       class="lw-telegram-left-resizer"
@@ -50,6 +60,7 @@ import { useTelegramLeftRailWidth } from './useTelegramLeftRailWidth.js';
 const props = defineProps<{
   activeDesktopModeId: string;
   leftRoute: TelegramDesktopLeftRoute;
+  collapsed: boolean;
   widgetWidth: number;
   onSetLeftRoute: (route: TelegramDesktopLeftRoute) => void;
 }>();
@@ -58,7 +69,10 @@ const {
   leftRailStyle,
   isResizing: isLeftRailResizing,
   startResize: onLeftRailResizeStart
-} = useTelegramLeftRailWidth(computed(() => props.widgetWidth));
+} = useTelegramLeftRailWidth(
+  computed(() => props.widgetWidth),
+  computed(() => props.collapsed)
+);
 </script>
 
 <style>
@@ -69,6 +83,22 @@ const {
   display: flex;
   align-self: stretch;
   min-height: 0;
+  transition:
+    width 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    min-width 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    max-width 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lw-telegram-left-pane.is-resizing {
+  transition: none;
+}
+
+.lw-telegram-left-pane.is-collapsed {
+  pointer-events: none;
+}
+
+.lw-telegram-left-pane.is-collapsed .lw-telegram-left-stack {
+  opacity: 0;
 }
 
 .lw-telegram-left-stack {
@@ -85,6 +115,7 @@ const {
   background: var(--lw-telegram-pane-bg, var(--lw-telegram-chat-list-bg, var(--lw-character-rail-bg)));
   backdrop-filter: blur(18px) saturate(1.2);
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .lw-telegram-left-stack__tabs {
@@ -101,6 +132,7 @@ const {
   background: color-mix(in srgb, var(--lw-text-main) 6%, transparent);
   color: var(--lw-text-secondary);
   cursor: pointer;
+  transition: background-color var(--lw-transition), color var(--lw-transition);
   font-size: var(--lw-type-label-medium-size);
   line-height: var(--lw-type-label-medium-line-height);
   font-weight: var(--lw-type-label-medium-weight);
@@ -144,5 +176,35 @@ const {
 .lw-telegram-left-resizer:hover::after,
 .lw-telegram-left-resizer.is-resizing::after {
   background: color-mix(in srgb, var(--lw-primary) 28%, transparent);
+}
+
+/* 会话 / 角色 切换：短交叉淡入，不做整页滑动 */
+.lw-telegram-pane-swap-enter-active {
+  transition: opacity 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lw-telegram-pane-swap-leave-active {
+  transition: opacity 100ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lw-telegram-pane-swap-enter-from,
+.lw-telegram-pane-swap-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lw-telegram-left-pane,
+  .lw-telegram-left-stack,
+  .lw-telegram-pane-swap-enter-active,
+  .lw-telegram-pane-swap-leave-active {
+    transition: none !important;
+  }
+}
+
+[data-motion='none'] .lw-telegram-left-pane,
+[data-motion='none'] .lw-telegram-left-stack,
+[data-motion='none'] .lw-telegram-pane-swap-enter-active,
+[data-motion='none'] .lw-telegram-pane-swap-leave-active {
+  transition: none !important;
 }
 </style>

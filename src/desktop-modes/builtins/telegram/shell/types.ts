@@ -3,6 +3,7 @@ import type { SurfaceContractId } from '../../../../platform/surface/types.js';
 
 export type TelegramDesktopLeftRoute = 'conversationList' | 'roleList';
 export type TelegramMobileTabId = 'conversations' | 'roles' | 'settings' | 'profile';
+export type TelegramStackNavDirection = 'forward' | 'back' | 'fade';
 export type TelegramStackRouteName =
   | 'conversationList'
   | 'roleList'

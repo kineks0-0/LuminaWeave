@@ -5,6 +5,7 @@ import type { DesktopModeShellRuntime } from '../../../../platform/desktop-mode-
 import type {
   TelegramDesktopLeftRoute,
   TelegramMobileTabId,
+  TelegramStackNavDirection,
   TelegramStackRoute
 } from './types.js';
 
@@ -36,6 +37,7 @@ export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
   const isRightPanelExplicitlyOpened = ref(false);
   const telegramDesktopLeftRoute = ref<TelegramDesktopLeftRoute>('conversationList');
   const telegramMobileActiveTab = ref<TelegramMobileTabId>('conversations');
+  const telegramMobileNavDirection = ref<TelegramStackNavDirection>('fade');
   const telegramMobileStacks = ref<Record<TelegramMobileTabId, TelegramStackRoute[]>>({
     conversations: [{ name: 'conversationList' }],
     roles: [{ name: 'roleList' }],
@@ -81,6 +83,7 @@ export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
     ) {
       return;
     }
+    telegramMobileNavDirection.value = 'forward';
     telegramMobileStacks.value = {
       ...telegramMobileStacks.value,
       [tabId]: [...stack, route]
@@ -102,6 +105,7 @@ export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
     if (stack.length <= 1) {
       return;
     }
+    telegramMobileNavDirection.value = 'back';
     telegramMobileStacks.value = {
       ...telegramMobileStacks.value,
       [tabId]: stack.slice(0, -1)
@@ -110,6 +114,7 @@ export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
 
   const openProfilePanel = () => {
     if (isMobile.value) {
+      telegramMobileNavDirection.value = 'fade';
       telegramMobileActiveTab.value = 'profile';
       replaceTelegramMobileRoot('profile');
       return;
@@ -121,6 +126,7 @@ export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
 
   const openCharacters = () => {
     if (isMobile.value) {
+      telegramMobileNavDirection.value = 'fade';
       telegramMobileActiveTab.value = 'roles';
       replaceTelegramMobileRoot('roles');
       return;
@@ -130,6 +136,7 @@ export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
 
   const selectBottomNav = (itemId: 'chat' | 'characters' | 'settings' | 'profile') => {
     if (itemId === 'chat') {
+      telegramMobileNavDirection.value = 'fade';
       telegramMobileActiveTab.value = 'conversations';
       replaceTelegramMobileRoot('conversations');
       shell.actions.navigation.switchMainView('lumina-chat');
@@ -137,12 +144,14 @@ export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
     }
 
     if (itemId === 'characters') {
+      telegramMobileNavDirection.value = 'fade';
       telegramMobileActiveTab.value = 'roles';
       replaceTelegramMobileRoot('roles');
       return;
     }
 
     if (itemId === 'settings') {
+      telegramMobileNavDirection.value = 'fade';
       telegramMobileActiveTab.value = 'settings';
       replaceTelegramMobileRoot('settings');
       return;
@@ -179,6 +188,7 @@ export const useTelegramShell = (shell: DesktopModeShellRuntime) => {
     telegramDesktopLeftRoute,
     telegramMobileActiveTab,
     telegramMobileCurrentRoute,
+    telegramMobileNavDirection,
     openProfilePanel,
     openCharacters,
     selectBottomNav,

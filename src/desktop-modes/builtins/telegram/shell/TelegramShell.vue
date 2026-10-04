@@ -13,54 +13,63 @@
       <slot name="composition" v-bind="compositionProps" />
     </template>
 
-    <template v-if="showDesktopPane && !isLeftPaneHidden" #lead>
+    <template v-if="showDesktopPane" #lead>
       <TelegramDesktopPane
         :activeDesktopModeId="runtimeContext.activeDesktopModeId"
         :leftRoute="telegramDesktopLeftRoute"
+        :collapsed="isLeftPaneHidden"
         :widgetWidth="runtimeContext.traditional.widgetWidth"
         :onSetLeftRoute="setTelegramDesktopLeftRoute"
       />
     </template>
 
     <template #widget>
-      <TelegramInfoPanelHost
-        v-if="showWidget && isProfilePanel"
-        :desktopModeId="runtimeContext.activeDesktopModeId"
-        :isMobile="runtimeContext.isMobile"
-        :surfaceVariant="runtimeSurfaces.traditional.widgetSurfaceVariant"
-        :widgetStyle="runtimeSurfaces.traditional.widgetStyle"
-        :widgetWidth="visibleWidgetWidth"
-        :isResizing="runtimeContext.traditional.isResizing"
-        :state="runtimeContext.characterChannelState"
-        :onResizeStart="runtimeActions.traditional.resizeStart"
-        :onOpenTool="runtimeActions.traditional.switchRightPanel"
-        :onCreateSession="runtimeActions.traditional.createConversationSession"
-        :onOpenSession="runtimeActions.traditional.openConversationSession"
-        :onRenameSession="runtimeActions.traditional.renameConversationSession"
-        :onDuplicateSession="runtimeActions.traditional.duplicateConversationSession"
-        :onDeleteSession="runtimeActions.traditional.deleteConversationSession"
-      />
-      <WidgetPanelHost
-        v-else-if="showWidget"
-        :activeRightPanel="runtimeContext.traditional.activeRightPanel"
-        :desktopModeId="runtimeContext.activeDesktopModeId"
-        :isMobile="runtimeContext.isMobile"
-        :surfaceVariant="runtimeSurfaces.traditional.widgetSurfaceVariant"
-        :widgetStyle="runtimeSurfaces.traditional.widgetStyle"
-        :widgetWidth="visibleWidgetWidth"
-        :isResizing="runtimeContext.traditional.isResizing"
-        :saveStatus="runtimeContext.saveStatus"
-        :auxSidebarMode="runtimeContext.traditional.sidebarMode"
-        :activeWidgetPlugin="runtimeContext.traditional.activeWidgetPlugin"
-        :activeRegisteredPanel="runtimeContext.traditional.activeRegisteredPanel"
-        :activeRightPanelActivity="runtimeContext.traditional.activeRightPanelActivity"
-        :widgetGroups="runtimeContext.widgetGroups"
-        :showWidgetDropdown="runtimeContext.traditional.showWidgetDropdown"
-        @resizeStart="runtimeActions.traditional.resizeStart"
-        @toggleWidgetDropdown="runtimeActions.traditional.toggleWidgetDropdown"
-        @switchRightPanel="onClearAndSwitchRightPanel"
-        @closePanel="runtimeActions.traditional.closePanel"
-      />
+      <Transition name="lw-telegram-widget">
+        <div
+          v-if="showWidget"
+          class="lw-telegram-widget-slot"
+          :style="widgetSlotStyle"
+        >
+          <TelegramInfoPanelHost
+            v-if="isProfilePanel"
+            :desktopModeId="runtimeContext.activeDesktopModeId"
+            :isMobile="runtimeContext.isMobile"
+            :surfaceVariant="runtimeSurfaces.traditional.widgetSurfaceVariant"
+            :widgetStyle="runtimeSurfaces.traditional.widgetStyle"
+            :widgetWidth="visibleWidgetWidth"
+            :isResizing="runtimeContext.traditional.isResizing"
+            :state="runtimeContext.characterChannelState"
+            :onResizeStart="runtimeActions.traditional.resizeStart"
+            :onOpenTool="runtimeActions.traditional.switchRightPanel"
+            :onCreateSession="runtimeActions.traditional.createConversationSession"
+            :onOpenSession="runtimeActions.traditional.openConversationSession"
+            :onRenameSession="runtimeActions.traditional.renameConversationSession"
+            :onDuplicateSession="runtimeActions.traditional.duplicateConversationSession"
+            :onDeleteSession="runtimeActions.traditional.deleteConversationSession"
+          />
+          <WidgetPanelHost
+            v-else
+            :activeRightPanel="runtimeContext.traditional.activeRightPanel"
+            :desktopModeId="runtimeContext.activeDesktopModeId"
+            :isMobile="runtimeContext.isMobile"
+            :surfaceVariant="runtimeSurfaces.traditional.widgetSurfaceVariant"
+            :widgetStyle="runtimeSurfaces.traditional.widgetStyle"
+            :widgetWidth="visibleWidgetWidth"
+            :isResizing="runtimeContext.traditional.isResizing"
+            :saveStatus="runtimeContext.saveStatus"
+            :auxSidebarMode="runtimeContext.traditional.sidebarMode"
+            :activeWidgetPlugin="runtimeContext.traditional.activeWidgetPlugin"
+            :activeRegisteredPanel="runtimeContext.traditional.activeRegisteredPanel"
+            :activeRightPanelActivity="runtimeContext.traditional.activeRightPanelActivity"
+            :widgetGroups="runtimeContext.widgetGroups"
+            :showWidgetDropdown="runtimeContext.traditional.showWidgetDropdown"
+            @resizeStart="runtimeActions.traditional.resizeStart"
+            @toggleWidgetDropdown="runtimeActions.traditional.toggleWidgetDropdown"
+            @switchRightPanel="onClearAndSwitchRightPanel"
+            @closePanel="runtimeActions.traditional.closePanel"
+          />
+        </div>
+      </Transition>
     </template>
 
     <template v-if="showBottomNav" #trailing>
@@ -76,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, provide, type Component } from 'vue';
+import { computed, onMounted, onUnmounted, provide, type Component, type CSSProperties } from 'vue';
 import TraditionalShell from '../../../../shell/traditional/TraditionalShell.vue';
 import WidgetPanelHost from '../../../../shell/traditional/WidgetPanelHost.vue';
 import { useSurfaceSkin } from '../../../core/useSurfaceSkin.js';
@@ -112,6 +121,7 @@ const {
   telegramDesktopLeftRoute,
   telegramMobileActiveTab,
   telegramMobileCurrentRoute,
+  telegramMobileNavDirection,
   openProfilePanel,
   openCharacters,
   selectBottomNav,
@@ -151,6 +161,9 @@ const showWidget = computed(() =>
 );
 const isProfilePanel = computed(() => props.runtimeContext.traditional.activeRightPanel === 'telegram-profile');
 const visibleWidgetWidth = computed(() => Math.max(280, props.runtimeContext.traditional.widgetWidth));
+const widgetSlotStyle = computed<CSSProperties>(() => ({
+  '--lw-telegram-widget-width': `${visibleWidgetWidth.value}px`
+}));
 
 const showBottomNav = computed(() =>
   resolveShouldShowTelegramMobileBottomNav(isTelegramMobileMode.value, telegramMobileCurrentRoute.value)
@@ -179,13 +192,15 @@ const mobileToolAuxSidebarMode = computed(() =>
     : undefined
 );
 
+// 点击会话时先推路由并让加载与动画在同一批次里开始；把加载推迟到动画帧内
+// 会因其引发的重渲染打断过渡，所以不做延迟调度。
 const onOpenMobileSession = (sessionId: string) => {
-  props.runtimeActions.traditional.openConversationSession(sessionId);
   pushTelegramMobileRoute({ name: 'chat', sessionId });
+  props.runtimeActions.traditional.openConversationSession(sessionId);
 };
 const onCreateMobileSession = (payload: CreateChatConversationInput) => {
-  props.runtimeActions.traditional.createConversationSession(payload);
   pushTelegramMobileRoute({ name: 'chat' });
+  props.runtimeActions.traditional.createConversationSession(payload);
 };
 const onOpenMobilePanel = (panelId: string) => {
   props.runtimeActions.navigation.clearActivityMetadata();
@@ -263,6 +278,7 @@ const resolvedActivityComponentProps = computed<Record<string, unknown> | undefi
   if (!isTelegramMobileMode.value) return undefined;
   return {
     route: telegramMobileCurrentRoute.value,
+    navDirection: telegramMobileNavDirection.value,
     routeTitle: mobileStackTitle.value,
     showStackBar: mobileStackShowsBar.value,
     showBottomNavPadding: showBottomNav.value,
@@ -293,3 +309,39 @@ const resolvedActivityComponentProps = computed<Record<string, unknown> | undefi
   };
 });
 </script>
+
+<style>
+/* 右栏显隐：容器宽度从 0 到模式宽度过渡，仅过渡期间裁剪内容 */
+.lw-telegram-widget-slot {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: var(--lw-telegram-widget-width, 0px);
+}
+
+.lw-telegram-widget-enter-active {
+  overflow: hidden;
+  transition: width 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lw-telegram-widget-leave-active {
+  overflow: hidden;
+  transition: width 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lw-telegram-widget-enter-from,
+.lw-telegram-widget-leave-to {
+  width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lw-telegram-widget-enter-active,
+  .lw-telegram-widget-leave-active {
+    transition: none !important;
+  }
+}
+
+[data-motion='none'] .lw-telegram-widget-enter-active,
+[data-motion='none'] .lw-telegram-widget-leave-active {
+  transition: none !important;
+}
+</style>

@@ -1,5 +1,6 @@
 <template>
   <main
+    ref="chatRoot"
     class="chat-main-surface"
     :data-surface-variant="surfaceContext.theme.variant || 'default'"
     :data-layout="messageLayout"
@@ -27,7 +28,8 @@
     />
 
     <ChatTranscript
-      :messages="snapshot.messages"
+      :messages="transcriptMessages"
+      :messages-pending="messagesPending"
       :context="snapshot.context"
       :generation="snapshot.generation"
       :presentation="snapshot.presentation"
@@ -88,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type {
   ChatMessageEditIntentInput,
   ChatMessageIntentInput
@@ -106,6 +108,7 @@ import ChatTranscript from '../components/ChatTranscript.vue';
 import PromptInspector from '../PromptInspector.vue';
 import { resolveChatThemeRenderPreferences } from '../presentation/ChatMessageRenderPreferences.js';
 import { chatPromptPresetLibraryService } from '../../../api/core/hal/prompt/chat/ChatPromptPresetLibraryService.js';
+import { useMotionPreference } from '../../../composables/useMotionPreference.js';
 import { openSettingsCategory } from '../../settings/settingsViewState.js';
 
 const input = useSurfaceInput('chat.main');
@@ -121,12 +124,52 @@ const messageRenderPreferences = computed(() => ({
 const messageLayout = computed(() => messageRenderPreferences.value.messageLayout);
 const compact = computed(() => Boolean(input.isMobile || input.workspaceCompact));
 const sessionSwitching = computed(() => characterState.value.status.kind === 'switching');
+
+// 宿主页面过渡期间先不挂载消息：加载再快，消息重挂载也不抢过渡动画的帧。
+const chatRoot = ref<HTMLElement | null>(null);
+const enterTransitionMs = Math.max(0, Number(input.enterTransitionMs ?? 0));
+const transitionSettled = ref(enterTransitionMs <= 0);
+let transitionSettleTimer: ReturnType<typeof setTimeout> | null = null;
+const settleTransition = () => {
+  if (transitionSettleTimer !== null) {
+    clearTimeout(transitionSettleTimer);
+    transitionSettleTimer = null;
+  }
+  transitionSettled.value = true;
+};
+if (!transitionSettled.value) {
+  transitionSettleTimer = setTimeout(settleTransition, enterTransitionMs);
+}
+const motionPreference = useMotionPreference(chatRoot);
+watch(motionPreference, (preference) => {
+  if (preference.reducedMotion || preference.motion === 'none') settleTransition();
+});
+onBeforeUnmount(() => {
+  if (transitionSettleTimer !== null) {
+    clearTimeout(transitionSettleTimer);
+    transitionSettleTimer = null;
+  }
+});
+
+// 切换到别的会话时首帧不展示旧会话：消息列表留空、顶栏回退到目标角色，
+// 入场页保持轻量且不闪旧内容。
+const switchingToOtherSession = computed(() => {
+  if (!sessionSwitching.value) return false;
+  const targetSessionId = characterState.value.status.sessionId;
+  // 新建会话没有目标 id；只要不是重开当前会话，就先把消息区留空。
+  return !targetSessionId || targetSessionId !== snapshot.value.context.sessionId;
+});
+const messagesPending = computed(() => switchingToOtherSession.value || !transitionSettled.value);
+const transcriptMessages = computed(() => (
+  messagesPending.value ? [] : snapshot.value.messages
+));
 const showHeader = computed(() => Boolean(
   input.onBack
   || input.onOpenRoleProfile
   || input.onOpenPanel
 ));
 const latestAssistantMessage = computed(() => {
+  if (switchingToOtherSession.value) return null;
   for (let index = snapshot.value.messages.length - 1; index >= 0; index -= 1) {
     const message = snapshot.value.messages[index];
     if (!message.is_user) return message;

@@ -46,4 +46,16 @@ describe('Chat presentation application boundary', () => {
         expect(promptInspectorSource).not.toContain("inject(");
         expect(promptInspectorSource).toContain('clearTimeout(probeTimer)');
     });
+
+    it('keeps the switching chat page light by hiding the previous session transcript', () => {
+        const mainSurfaceSource = readSource('../surfaces/ChatMainSurface.vue');
+        const transcriptSource = readSource('../components/ChatTranscript.vue');
+
+        expect(mainSurfaceSource).toContain('transcriptMessages');
+        expect(mainSurfaceSource).toContain('targetSessionId !== snapshot.value.context.sessionId');
+        expect(mainSurfaceSource).toContain('enterTransitionMs');
+        expect(mainSurfaceSource).toContain('messagesPending');
+        expect(transcriptSource).toContain('messagesPending');
+        expect(transcriptSource).toContain('chat-transcript-reveal');
+    });
 });

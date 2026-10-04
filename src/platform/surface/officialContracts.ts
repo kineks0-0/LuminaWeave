@@ -28,6 +28,8 @@ export interface ChatMainSurfaceInput {
     onToggleSidebar?: () => void;
     onOpenRoleProfile?: () => void;
     onOpenPanel?: (panelId: string) => void;
+    /** 宿主页面过渡时长（毫秒）。> 0 时聊天页先不渲染消息，等过渡结束后再挂载，优先保证视图动画。 */
+    enterTransitionMs?: number;
 }
 
 export interface CharacterRosterSurfaceInput {
@@ -404,7 +406,8 @@ export const OFFICIAL_SURFACE_INPUT_SCHEMAS = {
         onBack: callbackSchema<() => void>().optional(),
         onToggleSidebar: callbackSchema<() => void>().optional(),
         onOpenRoleProfile: callbackSchema<() => void>().optional(),
-        onOpenPanel: callbackSchema<(panelId: string) => void>().optional()
+        onOpenPanel: callbackSchema<(panelId: string) => void>().optional(),
+        enterTransitionMs: z.number().min(0).max(2000).optional()
     }).strict(),
     'chat.preview': emptyInputSchema,
     'chat.composer': z.object({

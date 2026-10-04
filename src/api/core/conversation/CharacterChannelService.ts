@@ -547,12 +547,22 @@ export class CharacterChannelService {
             return;
         }
 
+        const switchStatusText = session.characterName
+            ? `正在切换到 ${session.characterName}...`
+            : '正在切换聊天...';
         this.contextStore.beginSessionSwitch({
             sessionId: session.id,
             characterName: session.characterName,
-            statusText: session.characterName
-                ? `正在切换到 ${session.characterName}...`
-                : '正在切换聊天...'
+            statusText: switchStatusText
+        });
+        // 同步进入 switching：视图第一帧就能切到轻量布局（空白 transcript、切换中顶栏），
+        // 不把旧会话的整段消息渲染和页面过渡动画挤在同一帧。
+        this.updateStatus({
+            kind: 'switching',
+            text: switchStatusText,
+            sessionId: session.id,
+            characterName: session.characterName || '',
+            error: null
         });
 
         try {
@@ -586,11 +596,20 @@ export class CharacterChannelService {
 
     async createSession(target: CreateChatConversationInput): Promise<void> {
         const characterName = normalizeCharacterName(target.characterName);
+        const switchStatusText = characterName
+            ? `正在为 ${characterName} 新建对话...`
+            : '正在新建对话...';
         this.contextStore.beginSessionSwitch({
             characterName,
-            statusText: characterName
-                ? `正在为 ${characterName} 新建对话...`
-                : '正在新建对话...'
+            statusText: switchStatusText
+        });
+        // 同 openSession：同步进入 switching，让入场页先以轻量布局参与过渡。
+        this.updateStatus({
+            kind: 'switching',
+            text: switchStatusText,
+            sessionId: null,
+            characterName,
+            error: null
         });
 
         try {

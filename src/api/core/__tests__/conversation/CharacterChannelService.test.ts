@@ -389,6 +389,26 @@ describe('CharacterChannelService', () => {
         expect(contextStore.selectViewSession).toHaveBeenCalledWith(null);
     });
 
+    it('marks the switching status synchronously before host I/O completes', async () => {
+        let resolveOpen: (value: boolean) => void = () => {};
+        hostProvider.openSession.mockImplementationOnce(() => new Promise<boolean>((resolve) => {
+            resolveOpen = resolve;
+        }));
+        const service = new CharacterChannelService(api as any, contextStore as any, hostProvider);
+        await service.refresh();
+
+        const pending = service.openSession('session_live');
+
+        expect(service.state.value.status).toMatchObject({
+            kind: 'switching',
+            sessionId: 'session_live',
+            characterName: 'Alice'
+        });
+
+        resolveOpen(true);
+        await pending;
+    });
+
     it('imports a character card and refreshes the roster', async () => {
         const service = new CharacterChannelService(api as any, contextStore as any, hostProvider);
         const refresh = vi.spyOn(service, 'refresh').mockResolvedValue();

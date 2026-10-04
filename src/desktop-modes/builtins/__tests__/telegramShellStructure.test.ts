@@ -63,5 +63,36 @@ describe('Telegram mode package shell structure', () => {
     )).toBe('lumina-forge.plugin');
     expect(viewModel.resolveTelegramMobileToolAuxSidebarMode('forge.workspace')).toBe('hidden');
     expect(viewModel.resolveTelegramMobileToolAuxSidebarMode('settings.root')).toBeUndefined();
+    expect(viewModel.resolveTelegramStackTransitionName('forward')).toBe('lw-telegram-stack-forward');
+    expect(viewModel.resolveTelegramStackTransitionName('back')).toBe('lw-telegram-stack-back');
+    expect(viewModel.resolveTelegramStackTransitionName('fade')).toBe('lw-telegram-stack-fade');
+    expect(viewModel.resolveTelegramStackPageKey({ name: 'chat', sessionId: 'session-1' })).toBe('chat:session-1');
+    expect(viewModel.resolveTelegramStackPageKey({ name: 'conversationList' })).toBe('conversationList');
+  });
+
+  it('wires Telegram navigation transitions through the mobile stack and desktop panes', () => {
+    const mobileStack = readSource('telegram/shell/TelegramMobileStack.vue');
+    expect(mobileStack).toContain('<Transition :name="transitionName">');
+    expect(mobileStack).toContain('class="lw-telegram-mobile-page"');
+    expect(mobileStack).toContain('resolveTelegramStackTransitionName');
+    expect(mobileStack).toContain('enterTransitionMs');
+
+    const shell = readSource('telegram/shell/TelegramShell.vue');
+    expect(shell).toContain('navDirection: telegramMobileNavDirection.value');
+    expect(shell).toContain(':collapsed="isLeftPaneHidden"');
+    expect(shell).toContain('class="lw-telegram-widget-slot"');
+
+    const desktopPane = readSource('telegram/shell/TelegramDesktopPane.vue');
+    expect(desktopPane).toContain('lw-telegram-pane-swap');
+    expect(desktopPane).toContain(':inert="collapsed || undefined"');
+
+    const composable = readSource('telegram/shell/useTelegramShell.ts');
+    expect(composable).toContain("telegramMobileNavDirection.value = 'forward'");
+    expect(composable).toContain("telegramMobileNavDirection.value = 'back'");
+
+    const openHandlerStart = shell.indexOf('const onOpenMobileSession');
+    expect(openHandlerStart).toBeGreaterThan(-1);
+    expect(shell.indexOf('pushTelegramMobileRoute', openHandlerStart))
+      .toBeLessThan(shell.indexOf('openConversationSession(sessionId)', openHandlerStart));
   });
 });

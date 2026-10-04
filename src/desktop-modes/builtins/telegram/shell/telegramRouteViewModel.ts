@@ -1,6 +1,6 @@
 import type { ActivityDescriptor } from '../../../../platform/activity/types.js';
 import type { SurfaceContractId } from '../../../../platform/surface/types.js';
-import type { TelegramStackRoute } from './types.js';
+import type { TelegramStackNavDirection, TelegramStackRoute } from './types.js';
 
 type SurfaceContractResolver = (id: string) => SurfaceContractId | null;
 
@@ -62,3 +62,20 @@ export const resolveTelegramMobileToolAuxSidebarMode = (
 ): 'hidden' | undefined => (
   contractId === 'forge.workspace' ? 'hidden' : undefined
 );
+
+export const resolveTelegramStackTransitionName = (
+  direction: TelegramStackNavDirection
+): string => {
+  if (direction === 'forward') return 'lw-telegram-stack-forward';
+  if (direction === 'back') return 'lw-telegram-stack-back';
+  return 'lw-telegram-stack-fade';
+};
+
+export const resolveTelegramStackPageKey = (route: TelegramStackRoute): string =>
+  [
+    route.name,
+    route.sessionId,
+    route.groupKey,
+    route.panelId,
+    route.toolId
+  ].filter(Boolean).join(':');

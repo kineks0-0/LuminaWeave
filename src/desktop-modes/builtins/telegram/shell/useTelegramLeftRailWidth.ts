@@ -14,16 +14,23 @@ interface ResizeStartState {
 }
 
 /** Telegram 桌面左列表宽度与拖拽：状态完全由模式包拥有。 */
-export const useTelegramLeftRailWidth = (widgetWidth: ComputedRef<number>) => {
+export const useTelegramLeftRailWidth = (
+    widgetWidth: ComputedRef<number>,
+    collapsed: ComputedRef<boolean>
+) => {
     const leftRailWidth = ref(Number(lwStorage.get(STORAGE_KEY, DEFAULT_WIDTH, 'Global')));
     const isResizing = ref(false);
     let resizeStart: ResizeStartState | null = null;
 
-    const leftRailStyle = computed(() => ({
-        width: `${leftRailWidth.value}px`,
-        minWidth: `${leftRailWidth.value}px`,
-        maxWidth: `${leftRailWidth.value}px`
-    }));
+    const leftRailStyle = computed(() => (
+        collapsed.value
+            ? { width: '0px', minWidth: '0px', maxWidth: '0px' }
+            : {
+                width: `${leftRailWidth.value}px`,
+                minWidth: `${leftRailWidth.value}px`,
+                maxWidth: `${leftRailWidth.value}px`
+            }
+    ));
 
     const handleResize = (event: MouseEvent) => {
         if (!isResizing.value) return;
