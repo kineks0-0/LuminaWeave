@@ -246,6 +246,8 @@ watch(
 
 /* ---------- Telegram：浮动胶囊，左侧菜单键、右侧圆形发送键 ---------- */
 .chat-composer[data-layout='telegram'] .chat-composer__input {
+  position: relative;
+  z-index: 0;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   align-items: end;
@@ -253,9 +255,19 @@ watch(
   border-radius: var(--lw-chat-input-radius, 26px);
   background: var(--lw-chat-floating-bg, var(--lw-chat-input-surface, var(--lw-bg-surface)));
   box-shadow: var(--lw-chat-floating-shadow, none);
+  padding: 4px;
+}
+
+/* 模糊由伪元素承担：容器自身带 backdrop-filter 会成为 backdrop root，
+   使菜单等子元素无法采样壁纸、失去磨砂效果 */
+.chat-composer[data-layout='telegram'] .chat-composer__input::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
   backdrop-filter: var(--lw-chat-floating-blur, none);
   -webkit-backdrop-filter: var(--lw-chat-floating-blur, none);
-  padding: 4px;
 }
 
 .chat-composer[data-layout='telegram'] .chat-composer__input.has-leading {

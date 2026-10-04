@@ -28,13 +28,33 @@
       </template>
     </ChatMessage>
 
-    <div v-else-if="generation.errorMessage" class="chat-streaming-message__pending is-error" role="alert">
+    <div
+      v-else-if="generation.errorMessage"
+      class="chat-streaming-message__pending is-error"
+      :data-layout="renderPreferences.messageLayout"
+      role="alert"
+    >
       <span>{{ generation.errorMessage }}</span>
       <button type="button" @click="emit('retry')">重试</button>
     </div>
-    <div v-else class="chat-streaming-message__pending">
-      <LoaderCircle :size="15" class="is-spinning" aria-hidden="true" />
-      <span>{{ generation.stream?.statusText || '正在生成' }}</span>
+    <div
+      v-else
+      class="chat-streaming-message__pending"
+      :class="{ 'is-motion-off': motionOff }"
+      :data-layout="renderPreferences.messageLayout"
+    >
+      <template v-if="isTelegram">
+        <span class="chat-streaming-message__typing-bubble">
+          <span class="chat-streaming-message__typing" aria-hidden="true">
+            <i /><i /><i />
+          </span>
+        </span>
+        <span class="chat-streaming-message__caption">{{ generation.stream?.statusText || '正在生成' }}</span>
+      </template>
+      <template v-else>
+        <LoaderCircle :size="15" class="is-spinning" aria-hidden="true" />
+        <span>{{ generation.stream?.statusText || '正在生成' }}</span>
+      </template>
     </div>
   </div>
 </template>
@@ -75,6 +95,10 @@ const streamPresentation = computed(() => resolveChatStreamingPresentation(
 ));
 const showMeta = computed(() => Boolean(
   props.generation.stream?.statusText || props.generation.stream?.filteredCount
+));
+const isTelegram = computed(() => props.renderPreferences.messageLayout === 'telegram');
+const motionOff = computed(() => (
+  motionPreference.value.motion === 'none' || motionPreference.value.reducedMotion
 ));
 
 const streamingMessage = computed<LuminaChatMessage>(() => ({
@@ -170,5 +194,108 @@ const ignoreChoice = (): void => {};
 
 @keyframes chat-spin {
   to { transform: rotate(360deg); }
+}
+
+/* Telegram：等待态为纯圆点气泡，阶段文案移到气泡下方的浮动注解 */
+.chat-streaming-message__pending[data-layout='telegram']:not(.is-error) {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 0;
+  align-self: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+}
+
+.chat-streaming-message__pending[data-layout='telegram'] .chat-streaming-message__typing-bubble,
+.chat-streaming-message__pending[data-layout='telegram'].is-error {
+  position: relative;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: min(100%, var(--lw-chat-message-max-width, 560px));
+  min-height: 36px;
+  border: 1px solid var(--lw-chat-border, transparent);
+  border-radius: var(--lw-chat-bubble-radius, 18px);
+  border-bottom-left-radius: 4px;
+  background: var(--lw-chat-bubble, var(--lw-bg-surface));
+  box-shadow: var(--lw-chat-bubble-shadow, none);
+  color: var(--lw-chat-meta-color, var(--lw-text-muted));
+  text-align: left;
+}
+
+.chat-streaming-message__pending[data-layout='telegram'] .chat-streaming-message__typing-bubble {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px 8px;
+}
+
+.chat-streaming-message__pending[data-layout='telegram'] .chat-streaming-message__typing-bubble::before,
+.chat-streaming-message__pending[data-layout='telegram'].is-error::before {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: -8px;
+  width: 9px;
+  height: 14px;
+  background: var(--lw-chat-bubble, var(--lw-bg-surface));
+  -webkit-mask: radial-gradient(10px 14px at 0 0, transparent 98%, #000 100%);
+  mask: radial-gradient(10px 14px at 0 0, transparent 98%, #000 100%);
+}
+
+.chat-streaming-message__pending[data-layout='telegram'].is-error {
+  align-self: flex-start;
+  border-color: color-mix(in srgb, var(--lw-danger) 26%, transparent);
+  background: color-mix(in srgb, var(--lw-danger) 8%, var(--lw-chat-bubble, var(--lw-bg-elevated)));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.chat-streaming-message__pending[data-layout='telegram'] .chat-streaming-message__caption {
+  max-width: 100%;
+  padding: 2px 10px;
+  border: 1px solid var(--lw-chat-floating-border, var(--lw-border-subtle));
+  border-radius: 999px;
+  background: var(--lw-chat-floating-bg, var(--lw-bg-elevated));
+  box-shadow: var(--lw-chat-floating-shadow, none);
+  backdrop-filter: var(--lw-chat-floating-blur, none);
+  -webkit-backdrop-filter: var(--lw-chat-floating-blur, none);
+  color: var(--lw-text-secondary);
+  font-size: var(--lw-type-label-medium-size);
+  line-height: var(--lw-type-label-medium-line-height);
+}
+
+.chat-streaming-message__typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-streaming-message__typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: chat-typing-dot 1.1s ease-in-out infinite;
+}
+
+.chat-streaming-message__typing i:nth-child(2) { animation-delay: 0.15s; }
+.chat-streaming-message__typing i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes chat-typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+
+.chat-streaming-message__pending.is-motion-off .chat-streaming-message__typing i {
+  animation: none;
+  opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-streaming-message__typing i {
+    animation: none;
+    opacity: 0.75;
+  }
 }
 </style>
