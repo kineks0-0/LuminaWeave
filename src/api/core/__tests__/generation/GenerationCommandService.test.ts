@@ -76,8 +76,11 @@ const characterBundle = () => ({
     diagnostics: []
 });
 
-const createSendService = (): GenerationCommandService => new GenerationCommandService({
-    chatManager: { activeLeafId: null } as never,
+const createSendService = (options: {
+    chatManager?: unknown;
+    getConversationMessages?: () => Promise<unknown>;
+} = {}): GenerationCommandService => new GenerationCommandService({
+    chatManager: (options.chatManager ?? { activeLeafId: null }) as never,
     streamHandler: {
         handleRestart: vi.fn(),
         responseBuffer: '',
@@ -92,7 +95,7 @@ const createSendService = (): GenerationCommandService => new GenerationCommandS
     getCharName: () => 'Alice',
     getUserName: () => '旅行者',
     getLastMessageId: () => null,
-    getConversationMessages: vi.fn(async () => []),
+    getConversationMessages: (options.getConversationMessages ?? vi.fn(async () => [])) as never,
     commitToST: vi.fn(),
     syncFromST: vi.fn(),
     emit: vi.fn(),
@@ -183,5 +186,74 @@ describe('GenerationCommandService lumina assembly composition', () => {
         expect(result.messages).toHaveLength(1);
         expect(result.messages[0].role).toBe('system');
         expect(result.messages[0].content).toContain('Alice');
+    });
+});
+
+describe('GenerationCommandService regenerate routing', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        hostMock.getHostFunction.mockReset();
+        taskRunMock.mockReset();
+        taskRunMock.mockImplementation(async () => {});
+        resolverMock.resolve.mockReset();
+    });
+
+    it('keeps ST native regeneration when the host owns generation', async () => {
+        const hostGenerate = vi.fn(async () => {});
+        const hostRegenerate = vi.fn(async () => 'st-regenerated');
+        hostMock.getHostFunction.mockImplementation(async (name: string) => {
+            if (name === 'generate') return hostGenerate;
+            if (name === 'regenerate') return hostRegenerate;
+            return null;
+        });
+        vi.spyOn(lwStorage, 'get').mockImplementation((_key: string, fallback: unknown) => fallback);
+
+        const service = createSendService();
+        await expect(service.regenerateLast()).resolves.toBe('st-regenerated');
+
+        expect(hostRegenerate).toHaveBeenCalledTimes(1);
+        expect(taskRunMock).not.toHaveBeenCalled();
+    });
+
+    it('regenerates through the Lumina pipeline in standalone and branches from the parent', async () => {
+        hostMock.getHostFunction.mockResolvedValue(null);
+        vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ charId: undefined, chatId: 'lw_chat_1' } as never);
+        vi.spyOn(lwStorage, 'get').mockImplementation((_key: string, fallback: unknown) => fallback);
+
+        const chatManager = { activeLeafId: 'a1' as string | null };
+        let leafDuringRun: string | null = null;
+        taskRunMock.mockImplementationOnce(async () => {
+            leafDuringRun = chatManager.activeLeafId;
+        });
+        const messages = [
+            { id: 'u1', parentId: null, is_user: true, is_hidden: false, mes: '你好' },
+            { id: 'a1', parentId: 'u1', is_user: false, is_hidden: false, mes: '你好呀' }
+        ];
+        const service = createSendService({
+            chatManager,
+            getConversationMessages: async () => messages as never
+        });
+
+        await expect(service.regenerateLast()).resolves.toBe(true);
+
+        expect(taskRunMock).toHaveBeenCalledTimes(1);
+        expect(leafDuringRun).toBe('u1');
+        expect(chatManager.activeLeafId).toBe('a1');
+    });
+
+    it('refuses to regenerate when the last visible message is from the user', async () => {
+        hostMock.getHostFunction.mockResolvedValue(null);
+        vi.spyOn(lwStorage, '_getContextIds').mockReturnValue({ charId: undefined, chatId: 'lw_chat_1' } as never);
+        vi.spyOn(lwStorage, 'get').mockImplementation((_key: string, fallback: unknown) => fallback);
+
+        const service = createSendService({
+            chatManager: { activeLeafId: 'u1' },
+            getConversationMessages: async () => ([
+                { id: 'u1', parentId: null, is_user: true, is_hidden: false, mes: '你好' }
+            ]) as never
+        });
+
+        await expect(service.regenerateLast()).resolves.toBe(false);
+        expect(taskRunMock).not.toHaveBeenCalled();
     });
 });

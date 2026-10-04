@@ -41,6 +41,13 @@ export interface GenerationCommandServiceDependencies {
     setManualAbortPending(value: boolean): void;
 }
 
+/** probe 或 Lumina 合成返回的 prompt payload。 */
+interface LuminaPromptPayload {
+    messages?: CleanedMessage[];
+    settings?: Record<string, unknown>;
+    [key: string]: unknown;
+}
+
 export class GenerationCommandService {
     private readonly chatManager: ChatManager;
     private readonly streamHandler: StreamHandler;
@@ -105,16 +112,7 @@ export class GenerationCommandService {
         });
 
         const chatPresetId = lwStorage.get('lumina-chat.nexusPreset', '', 'Global');
-        const presets = lwStorage.get('nexus.presets', [], 'Global');
-        const targetPreset = presets.find((preset: any) => preset.id === chatPresetId);
-        const firstNode = targetPreset?.nodes?.[0];
-        const stNativeAvailable = Boolean(await getHostRuntimePort().getHostFunction('generate'));
-        const forcedEngine = lwStorage.get(CHAT_PROMPT_ENGINE_STORAGE_KEY, 'auto', 'Global');
-        const defaultEngine = forcedEngine === 'lumina-assembly'
-            ? 'lumina-assembly'
-            : stNativeAvailable
-                ? (!firstNode || firstNode.provider === 'st_current' ? 'st-native' : 'lumina')
-                : 'lumina-assembly';
+        const defaultEngine = await this.resolveDefaultEngine();
         const promptRoute = PromptAssemblyRouter.route({
             target: 'chat.continuation',
             sessionBinding: options.promptAssembly?.sessionBinding ?? (
@@ -160,6 +158,25 @@ export class GenerationCommandService {
             return this.triggerGenerate();
         }
 
+        return this.executeLuminaGeneration(prompt);
+    }
+
+    /** 解析聊天默认引擎：强制设置 > ST 宿主生成可用性 > Nexus 首节点 provider。 */
+    private async resolveDefaultEngine(): Promise<'st-native' | 'lumina' | 'lumina-assembly'> {
+        const chatPresetId = lwStorage.get('lumina-chat.nexusPreset', '', 'Global');
+        const presets = lwStorage.get('nexus.presets', [], 'Global');
+        const targetPreset = presets.find((preset: any) => preset.id === chatPresetId);
+        const firstNode = targetPreset?.nodes?.[0];
+        const stNativeAvailable = Boolean(await getHostRuntimePort().getHostFunction('generate'));
+        const forcedEngine = lwStorage.get(CHAT_PROMPT_ENGINE_STORAGE_KEY, 'auto', 'Global');
+        if (forcedEngine === 'lumina-assembly') return 'lumina-assembly';
+        if (!stNativeAvailable) return 'lumina-assembly';
+        return !firstNode || firstNode.provider === 'st_current' ? 'st-native' : 'lumina';
+    }
+
+    /** 执行一次 Lumina 生成链路；sendMessage 与 regenerateLumina 共用。 */
+    private async executeLuminaGeneration(prompt: LuminaPromptPayload | CleanedMessage[]): Promise<boolean> {
+        const chatPresetId = lwStorage.get('lumina-chat.nexusPreset', '', 'Global');
         const nodes = llmEngine.resolveNodesFromPreset(chatPresetId);
 
         this.streamHandler.handleRestart();
@@ -171,9 +188,9 @@ export class GenerationCommandService {
         });
         this.emit('GENERATION_STARTED');
 
-        const finalPayload = prompt.messages || prompt;
+        const finalPayload = (Array.isArray(prompt) || !prompt.messages ? prompt : prompt.messages) as unknown[];
         const finalMessages = llmEngine.cleanMessages(finalPayload);
-        const generationSettings = prompt.settings || {};
+        const generationSettings: Record<string, unknown> = Array.isArray(prompt) ? {} : (prompt.settings ?? {});
 
         if (typeof generationSettings.seed === 'number' && generationSettings.seed < 0) {
             delete generationSettings.seed;
@@ -224,6 +241,7 @@ export class GenerationCommandService {
                     const errorMessage = err?.message || '后端生成失败';
                     this.streamHandler.isGenerating = false;
                     this.streamHandler.clearSmoothTimer();
+                    this.discardPromptVariables();
                     this.emit('GENERATION_FAILED', errorMessage, 'error');
                     this.abortController = null;
 
@@ -236,6 +254,7 @@ export class GenerationCommandService {
         } catch (error) {
             this.streamHandler.isGenerating = false;
             this.streamHandler.clearSmoothTimer();
+            this.discardPromptVariables();
             this.emit('GENERATION_FAILED', (error as any)?.message || '发送失败', 'error');
             this.session = null;
             console.error('[LuminaWeave] 发送异常:', error);
@@ -268,14 +287,50 @@ export class GenerationCommandService {
     }
 
     async regenerateLast(): Promise<unknown> {
-        const regenerate = await getHostRuntimePort().getHostFunction('regenerate');
-        if (regenerate) return regenerate();
+        const engine = await this.resolveDefaultEngine();
+        if (engine === 'st-native') {
+            const regenerate = await getHostRuntimePort().getHostFunction('regenerate');
+            if (regenerate) return regenerate();
 
-        const slash = await getHostRuntimePort().getHostFunction('executeSlashCommandsWithOptions');
-        if (slash) return slash('/regenerate');
+            const slash = await getHostRuntimePort().getHostFunction('executeSlashCommandsWithOptions');
+            if (slash) return slash('/regenerate');
 
-        console.warn('[LuminaWeave] 找不到有效的 ST regenerate 方法');
-        return undefined;
+            console.warn('[LuminaWeave] 找不到有效的 ST regenerate 方法');
+            return undefined;
+        }
+        return this.regenerateLumina(engine);
+    }
+
+    /**
+     * Lumina 自管线重新生成：把激活位移到上一条回复的父节点，
+     * 新回复作为旧回复的兄弟分支写入；旧回复保留在世界线中可回退。
+     */
+    private async regenerateLumina(engine: 'lumina' | 'lumina-assembly'): Promise<boolean> {
+        const messages = await this.getConversationMessages();
+        const lastMessage = [...messages].reverse().find(message => !message.is_hidden);
+        if (!lastMessage || lastMessage.is_user) {
+            this.emit('GENERATION_FAILED', '没有可重新生成的回复。', 'warning');
+            return false;
+        }
+
+        const previousLeafId = this.chatManager.activeLeafId;
+        this.chatManager.activeLeafId = lastMessage.parentId ?? null;
+
+        const prompt = engine === 'lumina-assembly'
+            ? await this.assembleLuminaPromptPayload()
+            : await this.promptCommandService.probePrompt();
+        if (!prompt) {
+            this.chatManager.activeLeafId = previousLeafId;
+            this.discardPromptVariables();
+            this.emit('GENERATION_FAILED', '无法组装提示词，重新生成已取消。', 'error');
+            return false;
+        }
+
+        const started = await this.executeLuminaGeneration(prompt);
+        // 生成会话已捕获父节点，立即恢复旧激活位；成功由 finalizeGeneration 切到新兄弟节点，失败则保持旧回复。
+        this.chatManager.activeLeafId = previousLeafId;
+        if (!started) this.discardPromptVariables();
+        return started;
     }
 
     async runEditedPrompt(customPayload: string): Promise<void> {

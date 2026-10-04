@@ -3,6 +3,7 @@ import {
     CHAT_CONTEXT_TOOLS,
     buildChatHeaderMenu,
     buildChatMessageMenu,
+    buildChatMessageToolbar,
     buildConversationSessionMenu,
     buildPromptPresetMenu,
     resolveChatPopoverPosition,
@@ -27,6 +28,25 @@ describe('chat message menu', () => {
         const items = buildChatMessageMenu({ isUser: false, disabled: true });
         expect(items.find(item => item.id === 'copy')?.disabled).toBeFalsy();
         expect(items.filter(item => item.id !== 'copy').every(item => item.disabled)).toBe(true);
+    });
+});
+
+describe('chat message toolbar', () => {
+    it('offers edit, regenerate, branch and delete for assistant messages', () => {
+        const items = buildChatMessageToolbar({ isUser: false, disabled: false });
+        expect(items.map(item => item.id)).toEqual(['edit', 'regenerate', 'branch', 'delete']);
+        expect(items.every(item => !item.disabled)).toBe(true);
+    });
+
+    it('offers only edit and delete for user messages', () => {
+        const items = buildChatMessageToolbar({ isUser: true, disabled: false });
+        expect(items.map(item => item.id)).toEqual(['edit', 'delete']);
+    });
+
+    it('locks mutating actions while a generation owns the chat', () => {
+        const items = buildChatMessageToolbar({ isUser: false, disabled: true });
+        expect(items.every(item => item.disabled)).toBe(true);
+        expect(items[1].icon).toBe('regenerate');
     });
 });
 

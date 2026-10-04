@@ -38,25 +38,55 @@ export interface ChatPromptPresetOption {
 
 export type ChatMessageMenuAction = 'copy' | 'edit' | 'regenerate' | 'branch' | 'branch-rerun' | 'delete';
 
+/** 消息动作单一来源：菜单、悬浮操作栏与分发共用同一份 label/icon/danger。 */
+const MESSAGE_ACTION_ITEMS: Record<ChatMessageMenuAction, ChatMenuItem<ChatMessageMenuAction>> = {
+    copy: { id: 'copy', label: '复制', icon: 'copy' },
+    edit: { id: 'edit', label: '编辑', icon: 'edit' },
+    regenerate: { id: 'regenerate', label: '重新生成', icon: 'regenerate' },
+    branch: { id: 'branch', label: '从此处分支', icon: 'branch' },
+    'branch-rerun': { id: 'branch-rerun', label: '从此分支重发', icon: 'branch' },
+    delete: { id: 'delete', label: '删除', icon: 'delete', danger: true }
+};
+
+const withDisabled = (
+    item: ChatMenuItem<ChatMessageMenuAction>,
+    disabled: boolean
+): ChatMenuItem<ChatMessageMenuAction> => ({ ...item, disabled });
+
 export const buildChatMessageMenu = ({ isUser, disabled }: {
     isUser: boolean;
     disabled: boolean;
 }): ChatMenuItem<ChatMessageMenuAction>[] => {
     const items: ChatMenuItem<ChatMessageMenuAction>[] = [
-        { id: 'copy', label: '复制', icon: 'copy' },
-        { id: 'edit', label: '编辑', icon: 'edit', disabled }
+        MESSAGE_ACTION_ITEMS.copy,
+        withDisabled(MESSAGE_ACTION_ITEMS.edit, disabled)
     ];
     if (!isUser) {
         items.push(
-            { id: 'regenerate', label: '重新生成', icon: 'regenerate', disabled },
-            { id: 'branch', label: '从此处分支', icon: 'branch', disabled }
+            withDisabled(MESSAGE_ACTION_ITEMS.regenerate, disabled),
+            withDisabled(MESSAGE_ACTION_ITEMS.branch, disabled)
         );
     } else {
-        items.push({ id: 'branch-rerun', label: '从此分支重发', icon: 'branch', disabled });
+        items.push(withDisabled(MESSAGE_ACTION_ITEMS['branch-rerun'], disabled));
     }
-    items.push({ id: 'delete', label: '删除', icon: 'delete', danger: true, disabled });
+    items.push(withDisabled(MESSAGE_ACTION_ITEMS.delete, disabled));
     return items;
 };
+
+/** 悬浮操作栏项目：不带复制；user = 编辑/删除；assistant = 编辑/重新生成/分支/删除。 */
+export const buildChatMessageToolbar = ({ isUser, disabled }: {
+    isUser: boolean;
+    disabled: boolean;
+}): ChatMenuItem<ChatMessageMenuAction>[] => [
+    withDisabled(MESSAGE_ACTION_ITEMS.edit, disabled),
+    ...(isUser
+        ? []
+        : [
+            withDisabled(MESSAGE_ACTION_ITEMS.regenerate, disabled),
+            withDisabled(MESSAGE_ACTION_ITEMS.branch, disabled)
+        ]),
+    withDisabled(MESSAGE_ACTION_ITEMS.delete, disabled)
+];
 
 export type ChatHeaderMenuAction = 'search' | 'profile' | 'prompt' | 'prompt-presets' | 'regex-scripts';
 

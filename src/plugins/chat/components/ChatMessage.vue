@@ -84,44 +84,23 @@
         label="消息操作"
         :anchor="menuAnchor"
         :bounds="menuBounds"
-        @select="handleMenuSelect"
+        @select="executeMessageAction"
         @close="menuOpen = false"
       />
     </div>
 
     <!-- 统一的悬浮操作栏：悬停、键盘聚焦或点选消息（触屏）时显示，不占布局空间 -->
     <div v-if="!editing && !streaming && !usesMessageMenu" class="chat-message__actions" role="toolbar" aria-label="消息操作">
-      <button type="button" title="编辑消息" aria-label="编辑消息" :disabled="disabled" @click="startEditing">
-        <Pencil :size="15" />
-      </button>
       <button
-        v-if="!message.is_user"
+        v-for="action in toolbarActions"
+        :key="action.id"
         type="button"
-        title="重新生成"
-        aria-label="重新生成"
-        :disabled="disabled"
-        @click="emit('regenerate')"
+        :title="action.label"
+        :aria-label="action.label"
+        :disabled="action.disabled"
+        @click="executeMessageAction(action.id)"
       >
-        <RefreshCw :size="15" />
-      </button>
-      <button
-        v-if="!message.is_user"
-        type="button"
-        title="从此消息创建分支"
-        aria-label="从此消息创建分支"
-        :disabled="disabled"
-        @click="emit('branch', { message, index })"
-      >
-        <GitBranch :size="15" />
-      </button>
-      <button
-        type="button"
-        title="删除消息"
-        aria-label="删除消息"
-        :disabled="disabled"
-        @click="emit('delete', { message, index })"
-      >
-        <Trash2 :size="15" />
+        <component :is="CHAT_MENU_ICONS[action.icon]" :size="15" :stroke-width="2" aria-hidden="true" />
       </button>
     </div>
   </article>
@@ -130,7 +109,7 @@
 <script setup lang="ts">
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { Check, CheckCheck, GitBranch, Pencil, RefreshCw, Trash2, X } from 'lucide-vue-next';
+import { Check, CheckCheck, X } from 'lucide-vue-next';
 import { useImeSubmitGuard } from '../../../composables/useImeSubmitGuard.js';
 import type {
   ChatMessageEditIntentInput,
@@ -140,10 +119,12 @@ import type { ChatMessageRenderPreferences } from '../presentation/ChatMessageRe
 import type { ChatStreamingPresentation } from '../presentation/ChatStreamingPresentation.js';
 import {
   buildChatMessageMenu,
+  buildChatMessageToolbar,
   type ChatMessageMenuAction,
   type ChatPopoverAnchorPoint,
   type ChatPopoverBounds
 } from '../presentation/chatMenus.js';
+import { CHAT_MENU_ICONS } from './chatMenuIcons.js';
 import ChatPopoverMenu from './ChatPopoverMenu.vue';
 import MessageRenderer from './MessageRenderer.vue';
 import TextBlock from './blocks/TextBlock.vue';
@@ -270,6 +251,7 @@ const menuAnchor = ref<ChatPopoverAnchorPoint | null>(null);
 const menuBounds = ref<ChatPopoverBounds | null>(null);
 const bubbleRef = ref<HTMLElement | null>(null);
 const messageMenu = computed(() => buildChatMessageMenu({ isUser: props.message.is_user === true, disabled: props.disabled }));
+const toolbarActions = computed(() => buildChatMessageToolbar({ isUser: props.message.is_user === true, disabled: props.disabled }));
 
 const transcriptScroller = (): HTMLElement | null => rootRef.value?.closest('.chat-transcript') ?? null;
 
@@ -340,7 +322,7 @@ const copyMessage = async (): Promise<void> => {
   }
 };
 
-const handleMenuSelect = (id: string): void => {
+const executeMessageAction = (id: string): void => {
   menuOpen.value = false;
   const action = id as ChatMessageMenuAction;
   if (action === 'copy') void copyMessage();
