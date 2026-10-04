@@ -53,9 +53,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import type { TimelineViewNode } from './useTimelineGraphViewModel.js';
 
 const props = defineProps<{
-  node: any;
+  node: TimelineViewNode;
 }>();
 
 const emit = defineEmits(['close', 'branch']);
@@ -93,19 +94,13 @@ const renderedContent = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px;
-}
-
-@media (max-width: 768px) {
-  .l-modal-overlay {
-    padding: 8px !important;
-  }
+  container-type: inline-size;
 }
 
 .l-modal-container {
   width: 1000px;
-  max-width: 95vw;
-  max-height: 85vh;
+  max-width: calc(100% - 48px);
+  max-height: calc(100% - 48px);
   background: var(--lw-bg-surface);
   border-radius: var(--lw-radius-lg, 20px);
   display: flex;
@@ -115,16 +110,6 @@ const renderedContent = computed(() => {
   border: 1px solid var(--lw-border-base);
 }
 
-@media (max-width: 768px) {
-  .l-modal-container {
-    width: 100%;
-    max-width: 100%;
-    max-height: 100%;
-    height: auto;
-    border-radius: 16px;
-  }
-}
-
 .l-modal-header {
   padding: 24px 32px;
   background: var(--lw-bg-surface);
@@ -132,43 +117,30 @@ const renderedContent = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-@media (max-width: 768px) {
-  .l-modal-header {
-    padding: 20px 20px 16px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
+  gap: 16px;
+  min-width: 0;
 }
 
 .title-area {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-
-@media (max-width: 768px) {
-  .title-area {
-    flex-direction: row;
-    align-items: center;
-    gap: 14px;
-  }
+  min-width: 0;
 }
 
 .brand-badge {
   display: inline-block;
   padding: 4px 10px;
-  background: rgba(139, 92, 246, 0.1);
-  color: var(--lw-purple);
+  background: color-mix(in srgb, var(--lw-primary) 10%, transparent);
+  color: var(--lw-primary);
   border-radius: 8px;
   font-size: var(--lw-type-label-small-size);
   font-weight: var(--lw-type-title-small-weight);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   width: fit-content;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .l-modal-id {
@@ -176,20 +148,19 @@ const renderedContent = computed(() => {
   font-size: var(--lw-type-title-small-size);
   font-weight: var(--lw-type-title-small-weight);
   color: var(--lw-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 20px;
-}
-
-@media (max-width: 768px) {
-  .header-actions {
-    width: 100%;
-    justify-content: space-between;
-    gap: 10px !important;
-  }
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .tabs-group {
@@ -198,6 +169,7 @@ const renderedContent = computed(() => {
   padding: 4px;
   border-radius: 10px;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .tab-btn {
@@ -210,6 +182,7 @@ const renderedContent = computed(() => {
   color: var(--lw-text-dim);
   cursor: pointer;
   transition: var(--lw-transition);
+  white-space: nowrap;
 }
 
 .tab-btn.active {
@@ -225,14 +198,15 @@ const renderedContent = computed(() => {
   cursor: pointer;
   padding: 8px;
   border-radius: 10px;
-  transition: 0.2s;
+  transition: var(--lw-transition);
   display: flex;
+  flex-shrink: 0;
 }
 
 .l-modal-close:hover {
-  background: #fee2e2;
-  color: #ef4444;
-  border-color: #fecaca;
+  background: color-mix(in srgb, var(--lw-danger) 12%, transparent);
+  color: var(--lw-danger);
+  border-color: color-mix(in srgb, var(--lw-danger) 30%, transparent);
 }
 
 .l-modal-body {
@@ -240,15 +214,6 @@ const renderedContent = computed(() => {
   overflow-y: auto;
   padding: 40px;
   background: var(--lw-bg-app);
-}
-
-@media (max-width: 768px) {
-  .l-modal-body {
-    padding: 18px 16px;
-  }
-  .l-modal-content-wrapper {
-    max-width: 100%;
-  }
 }
 
 .l-modal-content-wrapper {
@@ -268,7 +233,7 @@ const renderedContent = computed(() => {
 }
 
 :deep(.highlight-purple) {
-  color: var(--lw-purple);
+  color: var(--lw-primary);
   font-style: italic;
 }
 
@@ -299,25 +264,24 @@ pre {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
   background: var(--lw-bg-surface);
-}
-
-@media (max-width: 768px) {
-  .l-modal-footer {
-    padding: 16px 20px;
-    flex-direction: column;
-    gap: 16px;
-    align-items: stretch;
-  }
 }
 
 .l-footer-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  min-width: 0;
   font-size: var(--lw-type-body-medium-size);
   color: var(--lw-text-dim);
   font-weight: var(--lw-type-label-medium-weight);
+}
+
+.l-footer-meta > span {
+  white-space: nowrap;
 }
 
 .l-footer-meta .divider {
@@ -327,6 +291,8 @@ pre {
 .footer-actions {
   display: flex;
   gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .l-modal-action-btn {
@@ -335,26 +301,19 @@ pre {
   font-weight: var(--lw-type-title-small-weight);
   font-size: var(--lw-type-title-small-size);
   cursor: pointer;
-  transition: 0.2s;
+  transition: var(--lw-transition);
   border: none;
-}
-
-@media (max-width: 768px) {
-  .l-modal-action-btn {
-    flex: 1;
-    padding: 12px;
-    font-size: var(--lw-type-body-medium-size);
-  }
+  white-space: nowrap;
 }
 
 .l-modal-action-btn.primary {
   background: var(--lw-primary);
-  color: white;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+  color: var(--lw-text-inverse);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--lw-primary) 20%, transparent);
 }
 
 .l-modal-action-btn.primary:hover {
-  background: var(--lw-purple);
+  background: var(--lw-primary-strong);
   transform: translateY(-1px);
 }
 
@@ -366,6 +325,70 @@ pre {
 .l-modal-action-btn.secondary:hover {
   background: var(--lw-bg-subtle);
   color: var(--lw-text-main);
+}
+
+/* 弹窗可能落在窄侧栏或小窗里，viewport 媒体查询覆盖不到，按容器宽度重排。 */
+@container (max-width: 640px) {
+  .l-modal-container {
+    max-width: calc(100% - 16px);
+    max-height: calc(100% - 16px);
+    border-radius: 16px;
+  }
+
+  .l-modal-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 18px 18px 14px;
+  }
+
+  .title-area {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .tabs-group {
+    flex: 1;
+  }
+
+  .tab-btn {
+    flex: 1;
+    text-align: center;
+    min-height: 36px;
+  }
+
+  .l-modal-body {
+    padding: 18px 16px;
+  }
+
+  .l-modal-content-wrapper {
+    max-width: 100%;
+  }
+
+  .l-modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 14px 18px calc(14px + var(--lw-content-safe-bottom, var(--lw-safe-bottom, 0px)));
+  }
+
+  .footer-actions {
+    gap: 10px;
+  }
+
+  .l-modal-action-btn {
+    flex: 1;
+    min-height: 44px;
+    padding: 12px 14px;
+    font-size: var(--lw-type-body-medium-size);
+  }
 }
 
 /* Scrollbar */
@@ -381,12 +404,22 @@ pre {
 /* Animations */
 .modal-scale-enter-active,
 .modal-scale-leave-active {
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition:
+    opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .modal-scale-enter-from,
 .modal-scale-leave-to {
   opacity: 0;
-  transform: scale(0.9) translateY(20px);
+  transform: scale(0.96) translateY(12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .modal-scale-enter-active,
+  .modal-scale-leave-active {
+    transition: none;
+  }
 }
 </style>
