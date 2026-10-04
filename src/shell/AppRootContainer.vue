@@ -4,6 +4,7 @@
     :data-theme="resolvedTheme"
     :data-desktop-mode="activeDesktopModeId"
     :data-motion="motionPerformanceSetting"
+    :data-smooth-scroll="smoothScrollSetting ? 'true' : undefined"
     :data-layout-mode="layoutMode"
     :style="appRootStyle"
   >
@@ -39,6 +40,7 @@ defineProps<{
   resolvedTheme: string;
   activeDesktopModeId: string;
   motionPerformanceSetting: string;
+  smoothScrollSetting: boolean;
   layoutMode: 'traditional' | 'freeform';
   appRootStyle: CSSProperties;
   rootFrameStyle: CSSProperties;

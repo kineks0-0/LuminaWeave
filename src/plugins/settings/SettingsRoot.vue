@@ -104,7 +104,10 @@ const openSearchResult = (result: SettingsSearchResult): void => {
 
 // 切换页面时回到顶部；搜索跳转由分类页自行滚动到目标行
 watch(currentDetailedView, () => {
-  if (!pendingSettingsAnchor.value && scrollArea.value) scrollArea.value.scrollTop = 0;
+  // 页面切换的内容已替换，回顶必须瞬时，避免全局平滑滚动把新页面从中间滚上来。
+  if (!pendingSettingsAnchor.value && scrollArea.value) {
+    scrollArea.value.scrollTo({ top: 0, behavior: 'instant' });
+  }
 });
 
 onMounted(initSettings);

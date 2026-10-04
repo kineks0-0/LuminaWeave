@@ -33,7 +33,8 @@ export function useStickToBottom(
         const scroller = scrollerRef.value;
         if (!scroller) return;
         const target = controller.resolveFollowTarget(scroller);
-        if (target !== null) scroller.scrollTop = target;
+        // 流式跟底必须瞬时：显式 instant，避免全局平滑滚动把每帧跟底变成动画。
+        if (target !== null) scroller.scrollTo({ top: target, behavior: 'instant' });
         sync();
     };
 

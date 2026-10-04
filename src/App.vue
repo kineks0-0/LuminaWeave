@@ -8,7 +8,7 @@
     />
   </transition>
   <AppRootContainer :isExpanded="isExpanded" :resolvedTheme="resolvedTheme" :activeDesktopModeId="activeDesktopModeId"
-    :motionPerformanceSetting="motionPerformanceSetting" :layoutMode="layoutMode" :appRootStyle="appRootStyle"
+    :motionPerformanceSetting="motionPerformanceSetting" :smoothScrollSetting="smoothScrollSetting" :layoutMode="layoutMode" :appRootStyle="appRootStyle"
     :rootFrameStyle="rootFrameStyle" :shellAppVariant="shellAppVariant || 'default'" :showMiniSidebar="!isStandalone" @expand="toggleExpand">
     <LuminaShellRoot
       ref="shellRootRef"
@@ -160,6 +160,7 @@ const motionPerformanceSetting = computed<string>(() => {
   const value = activeSettings['lumina-settings.motionPerformance'];
   return typeof value === 'string' && value ? value : 'full';
 });
+const smoothScrollSetting = computed<boolean>(() => activeSettings['lumina-settings.smoothScroll'] === true);
 const traditionalHeaderDesktopPosition = computed(() => {
   if (traditionalNavigationPreset.value.headerDesktopPosition === 'top' || traditionalNavigationPreset.value.headerDesktopPosition === 'bottom') {
     return traditionalNavigationPreset.value.headerDesktopPosition;

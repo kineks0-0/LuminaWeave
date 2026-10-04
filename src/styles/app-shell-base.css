@@ -363,3 +363,21 @@
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* 平滑滚动（lumina-settings.smoothScroll）：显式禁用动效或系统减少动效时关闭。 */
+.luminaweave-app-root[data-smooth-scroll='true'],
+.luminaweave-app-root[data-smooth-scroll='true'] * {
+  scroll-behavior: smooth;
+}
+
+.luminaweave-app-root[data-motion='none'][data-smooth-scroll='true'],
+.luminaweave-app-root[data-motion='none'][data-smooth-scroll='true'] * {
+  scroll-behavior: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .luminaweave-app-root[data-smooth-scroll='true'],
+  .luminaweave-app-root[data-smooth-scroll='true'] * {
+    scroll-behavior: auto;
+  }
+}

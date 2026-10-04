@@ -48,6 +48,16 @@ const settingsSchema = {
             { value: 'none', label: '禁用动效 (None)', description: '完全关闭所有 UI 过渡与动画。' }
         ]
     },
+    smoothScroll: {
+        category: 'appearance',
+        group: '外观',
+        keywords: ['滚动', '平滑', 'scroll', 'smooth'],
+        default: false,
+        label: '平滑滚动',
+        description: '为聊天、设置等所有滚动区域启用平滑滚动。流式生成的自动跟底始终保持瞬时；禁用动效或系统减少动效时自动关闭。',
+        type: 'boolean',
+        allowedScopes: ['Global']
+    },
     thinkingDisplayMode: {
         category: 'conversation',
         group: '思维链',
