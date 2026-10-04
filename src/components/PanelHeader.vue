@@ -250,7 +250,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref, onMounted, onUnmounted, type CSSProperties } from 'vue';
+import { computed, inject, ref, type CSSProperties } from 'vue';
+import { useOutsidePointer } from '../composables/useOutsidePointer.js';
 import { LuminaWeaveAPI } from '@/api';
 import { pluginManager } from '@/core/PluginManager';
 import { useSurfaceSkin } from '../desktop-modes/core/useSurfaceSkin.js';
@@ -377,26 +378,15 @@ function closeWorkspace() {
   emit('close');
 }
 
-onMounted(() => {
-  document.addEventListener('pointerdown', onDocPointerDown);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('pointerdown', onDocPointerDown);
-});
-
-function onDocPointerDown(e: PointerEvent) {
+useOutsidePointer([widgetBtnWrapperRef, profileMenuWrapperRef], () => {
   if (!showWidgetMenu.value && !showProfileMenu.value) return;
-  const path = e.composedPath();
-  if (widgetBtnWrapperRef.value && path.includes(widgetBtnWrapperRef.value)) return;
-  if (profileMenuWrapperRef.value && path.includes(profileMenuWrapperRef.value)) return;
   if (showWidgetMenu.value) {
     showWidgetMenu.value = false;
     widgetMenuGroup.value = null;
   }
   //showProfileMenu.value = false;
   profileMenuView.value = 'root';
-}
+});
 
 </script>
 

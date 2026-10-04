@@ -3,6 +3,7 @@ import { STGlobalAccessor } from './STGlobalAccessor.js';
 import { configureForgeTestChatHostPort } from '../../forge/test-chat/ForgeTestChatHostPort.js';
 import type { ForgeTestChatCharCard } from '../../../../types/ForgeTestChatTypes.js';
 import type { PromptPresetCharCard, PromptPresetGenerationSettings } from '../../../../types/PromptPresetTypes.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 export interface STForgeTestChatPromptContext {
     charCard: Partial<ForgeTestChatCharCard> | null;
@@ -20,7 +21,7 @@ export interface STVariableSnapshot {
 
 function cloneRecord(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-    return JSON.parse(JSON.stringify(value));
+    return deepClone(value as Record<string, unknown>);
 }
 
 export class STForgeTestChatDriver {

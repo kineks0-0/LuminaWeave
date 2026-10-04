@@ -1,5 +1,6 @@
 import type { CleanedMessage } from '../../../../types/nexus.js';
 import type { ResourceDiagnostic, ResourceRef } from '@shared/resources/index.js';
+import { escapeRegExp } from '@shared/CommonUtils.js';
 
 export interface LuminaWorldbookTriggerContext {
     messages?: CleanedMessage[];
@@ -135,8 +136,6 @@ interface MatchDetail {
 
 const uniqueStrings = (values: any[]): string[] =>
     Array.from(new Set(values.filter(v => typeof v === 'string').map(value => value.trim()).filter(Boolean)));
-
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const shouldUseRegex = (entry: LuminaLorebookEntry): boolean => {
     const value = (entry as LuminaLorebookEntry & { useRegex?: boolean; use_regex?: boolean }).useRegex

@@ -223,6 +223,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
 import { useSurfaceSkin } from '../../desktop-modes/core/useSurfaceSkin.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 const props = defineProps<{
   entry: LuminaLorebookEntry,
@@ -278,7 +279,7 @@ const isSaveSuccess = ref(false);
 watch(() => props.entry, (newVal) => {
   if (newVal) {
     // 使用 Object.assign 同步所有属性，确保表单对象保持引用不变但内容更新
-    Object.assign(form, JSON.parse(JSON.stringify(newVal)));
+    Object.assign(form, deepClone(newVal));
     isSaveSuccess.value = false;
     isSaving.value = false;
   }

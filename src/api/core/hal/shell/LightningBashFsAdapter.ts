@@ -8,6 +8,7 @@ import type {
     MkdirOptions,
     RmOptions
 } from 'just-bash';
+import { cleanPath as normalizeLocalPath } from '@shared/resources/vfsPath.js';
 
 type LightningPromisifiedFS = LightningFS['promises'];
 
@@ -25,9 +26,6 @@ interface DirentEntry {
     isDirectory: boolean;
     isSymbolicLink: boolean;
 }
-
-const normalizeLocalPath = (path: string): string =>
-    `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 
 const parentPath = (path: string): string => {
     const normalized = normalizeLocalPath(path);

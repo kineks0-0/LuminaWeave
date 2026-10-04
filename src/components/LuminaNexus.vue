@@ -119,6 +119,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { formatTimeWithToday } from '../api/utils/dateFormat.js';
 import { useConversationContextStore } from '../stores/useConversationContextStore.js';
 
 const props = defineProps<{
@@ -219,19 +220,7 @@ const handleSelect = (session: NexusSessionRef) => {
   void contextStore.selectViewSession(session.id);
 };
 
-const formatDate = (ts?: number) => {
-  if (!ts) return '';
-  const date = new Date(ts);
-  const now = new Date();
-  
-  const isToday = date.toDateString() === now.toDateString();
-  const format = (n: number) => String(n).padStart(2, '0');
-  
-  if (isToday) {
-    return `${format(date.getHours())}:${format(date.getMinutes())}`;
-  }
-  return `${format(date.getMonth() + 1)}/${format(date.getDate())} ${format(date.getHours())}:${format(date.getMinutes())}`;
-};
+const formatDate = (ts?: number) => (ts ? formatTimeWithToday(ts) : '');
 </script>
 
 <style scoped>

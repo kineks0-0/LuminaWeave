@@ -12,6 +12,7 @@ import {
     type NetworkConfig
 } from 'just-bash';
 import type { ShellExecResult, ShellSessionRef, VFSCompletionCandidate, VFSCompletionResult } from '@shared/resources/index.js';
+import { quote as shellQuote } from 'shell-quote';
 import type { VirtualFileSystemService } from '../resource/VirtualFileSystemService.js';
 import { ResourceBackedBashFs, WorkspaceBashFs } from './ResourceBackedBashFs.js';
 import { ShellPermissionService } from './ShellPermissionService.js';
@@ -47,7 +48,7 @@ export const createUserTerminalSession = (): ShellSessionRef => ({
     ownerId: 'local-user'
 });
 
-const escapeShell = (value: string): string => value.replace(/'/g, "'\\''");
+const escapeShell = (value: string): string => shellQuote([value]);
 
 const normalizeCwd = (session: ShellSessionRef, cwd?: string): string => {
     if (cwd) return cwd;

@@ -1,14 +1,12 @@
 import type { ForgePiPersistedSessionState } from '@shared/ForgePiTypes.js';
 import { HALContext } from '../../hal/HALContext.js';
+import { isRecord, deepClone } from '@shared/CommonUtils.js';
 
 const FORGE_RUNTIME_NAMESPACE = 'lumina.forge';
 const PI_SESSION_TABLE = 'pi-sessions';
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
-
 const cloneJson = <T>(value: T): T =>
-    JSON.parse(JSON.stringify(value)) as T;
+    deepClone(value) as T;
 
 const isForgePiPersistedSessionState = (value: unknown): value is ForgePiPersistedSessionState => {
     if (!isRecord(value)) return false;

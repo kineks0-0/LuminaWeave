@@ -8,6 +8,7 @@ import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
 import type {
     ForgePiPersistedSessionState
 } from '@shared/ForgePiTypes.js';
+import { createPrefixedId, deepClone } from '@shared/CommonUtils.js';
 import type { CleanedMessage } from '../../types/nexus.js';
 import { WorldlineStore } from '../../api/core/storage/WorldlineStore.js';
 import { MessageUtils, type LuminaChatMessage } from '@shared/LuminaMessage.js';
@@ -572,7 +573,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
     const hydrateFromSession = (session: ForgeWorkspaceSession): void => getSessionController().hydrateFromSession(session);
     const createWorkspaceSession = (title?: string): Promise<ForgeWorkspaceSession> => getSessionController().createWorkspaceSession(title);
     const createWorkspaceThread = (projectId: string, title?: string): Promise<ForgeWorkspaceSession> => getSessionController().createWorkspaceThread(projectId, title);
-    const renameWorkspaceSession = (title: string): boolean => getSessionController().renameWorkspaceSession(title);
+    const renameWorkspaceSession = (title: string): Promise<boolean> => getSessionController().renameWorkspaceSession(title);
     const openWorkspaceSession = (id: string): Promise<boolean> => getSessionController().openWorkspaceSession(id);
 
     const attachChatSessionReference = async (chatSessionId: string | null): Promise<void> => {
@@ -1047,7 +1048,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         commitReadyEntries: forgeStore.commitReadyEntries.map(entry => ({ ...entry })),
         virtualLorebookEntries: virtualLorebookEntries.value.map(entry => ({
             ...entry,
-            entry: JSON.parse(JSON.stringify(entry.entry))
+            entry: deepClone(entry.entry)
         })),
         latestUserInput: latestUserInput ?? input.value.trim(),
         latestUserCommand: command,
@@ -1181,7 +1182,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
                 const entryId = entry.targetEntryId;
                 const existingVirtualEntry = findVirtualLorebookEntry(virtualLorebookEntries.value, entryId);
                 const nextEntry = buildFrozenVirtualLorebookContent({
-                    id: `auto_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                    id: createPrefixedId('auto'),
                     timestamp: Date.now(),
                     ...entry
                 }, existingVirtualEntry?.entry);
@@ -1849,7 +1850,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
             id: typeof entry.uid === 'string' && entry.uid.trim()
                 ? `forge_lore_import_${entry.uid}`
                 : `${generateVirtualLorebookEntryId()}_${index}`,
-            entry: JSON.parse(JSON.stringify(entry)),
+            entry: deepClone(entry),
             sourceBookId: normalizedBookId,
             createdAt: now,
             updatedAt: now
@@ -1867,7 +1868,7 @@ export const useCardMakerStore = defineStore('lumina-card-maker', () => {
         const nextId = existingEntry?.id || payload.id || generateVirtualLorebookEntryId();
         const nextEntry: ForgeVirtualLorebookEntry = {
             id: nextId,
-            entry: JSON.parse(JSON.stringify(payload.entry)),
+            entry: deepClone(payload.entry),
             sourceBookId: payload.sourceBookId ?? existingEntry?.sourceBookId ?? importedLorebookId.value ?? null,
             createdAt: existingEntry?.createdAt ?? now,
             updatedAt: now

@@ -15,6 +15,7 @@ import { PromptPresetComposer } from '../../hal/prompt/PromptPresetComposer.js';
 import { promptPresetRegistry } from '../../hal/prompt/PromptPresetRegistry.js';
 import { buildSTPresetMessages } from './ForgeTestChatPromptBuilder.js';
 import { getForgeTestChatHostPort } from './ForgeTestChatHostPort.js';
+import { createPrefixedId } from '@shared/CommonUtils.js';
 import { clonePromptPresetGenerationSettings } from '../../utils/promptPresetGenerationSettings.js';
 import {
     promptResourceResolver,
@@ -456,10 +457,7 @@ export class ForgeTestChatService {
     }
 
     private _generateTraceId(): string {
-        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-            return `forge_req_${crypto.randomUUID()}`;
-        }
-        return `forge_req_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+        return createPrefixedId('forge_req');
     }
 
     private async _resolveSTPreset(): Promise<Record<string, any> | null> {

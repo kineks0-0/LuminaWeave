@@ -5,6 +5,7 @@ import type { PluginInitContext } from '../../platform/plugin/PluginInitContext.
 import type { RegistrationDisposer } from '../../platform/plugin/PluginRegistrationScope.js';
 import { globalMutationEngine } from './MutationEngine.js';
 import { MemoryFragment } from './MemoryVectorService.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 /**
  * 结构化记忆条目 (长效记忆)
@@ -112,7 +113,7 @@ export const useDirectorStore = defineStore('lumina-director', () => {
         overallOutline: overallOutline.value,
         characterProfiles: [...characterProfiles.value],
         pastMemories: [...pastMemories.value],
-        vectorMemories: JSON.parse(JSON.stringify(vectorMemories.value))
+        vectorMemories: deepClone(vectorMemories.value)
     });
 
     const importSnapshot = (snapshot: any) => {
@@ -123,7 +124,7 @@ export const useDirectorStore = defineStore('lumina-director', () => {
         overallOutline.value = snapshot.overallOutline || '';
         characterProfiles.value = Array.isArray(snapshot.characterProfiles) ? [...snapshot.characterProfiles] : [];
         pastMemories.value = Array.isArray(snapshot.pastMemories) ? [...snapshot.pastMemories] : [];
-        vectorMemories.value = Array.isArray(snapshot.vectorMemories) ? JSON.parse(JSON.stringify(snapshot.vectorMemories)) : [];
+        vectorMemories.value = Array.isArray(snapshot.vectorMemories) ? deepClone(snapshot.vectorMemories) : [];
     };
 
     const reset = () => {

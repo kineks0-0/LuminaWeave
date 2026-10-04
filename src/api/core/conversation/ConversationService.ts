@@ -328,7 +328,7 @@ class ForgeConversationSourceAdapter implements ConversationSourceAdapter {
 
     async listSessions(): Promise<ConversationSessionRef[]> {
         await forgeSessionRepository.refreshFromServer();
-        return forgeSessionRepository.listSessions().map((session) => ({
+        return (await forgeSessionRepository.listSessions()).map((session) => ({
             ...session,
             sourceId: 'forge'
         }));

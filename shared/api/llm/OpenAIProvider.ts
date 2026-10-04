@@ -1,3 +1,4 @@
+import { createParser } from 'eventsource-parser';
 import { ILLMProvider, LLMMessage, GenerationOptions, IStreamingCallbacks } from './ILLMProvider.js';
 import { LuminaFetch } from './LuminaFetch.js';
 
@@ -42,39 +43,36 @@ export class OpenAIProvider implements ILLMProvider {
 
             const reader = stream.getReader();
             const decoder = new TextDecoder();
-            let buffer = '';
+            let completed = false;
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                
-                // 解析 SSE 格式 (data: {...})
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || ''; // 最后一个可能不完整
-
-                for (const line of lines) {
-                    const cleanLine = line.trim();
-                    if (!cleanLine || !cleanLine.startsWith('data: ')) continue;
-                    
-                    const dataStr = cleanLine.slice(6);
-                    if (dataStr === '[DONE]') {
+            const parser = createParser({
+                onEvent: (event) => {
+                    if (event.data === '[DONE]') {
+                        completed = true;
                         callbacks.onDone();
                         return;
                     }
 
                     try {
-                        const json = JSON.parse(dataStr);
+                        const json = JSON.parse(event.data);
                         const delta = json.choices?.[0]?.delta?.content;
                         if (delta) {
                             callbacks.onToken(delta);
                         }
                     } catch (e) {
-                        console.warn('[OpenAIProvider] Failed to parse SSE line:', dataStr);
+                        console.warn('[OpenAIProvider] Failed to parse SSE line:', event.data);
                     }
                 }
+            });
+
+            while (!completed) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                parser.feed(decoder.decode(value, { stream: true }));
             }
+
+            if (completed) return;
 
             callbacks.onDone();
 

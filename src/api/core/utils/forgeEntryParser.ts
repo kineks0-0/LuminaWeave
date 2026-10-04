@@ -1,6 +1,41 @@
 import { tokenize } from '@shared/TagTokenizer.js';
+import { createPrefixedId } from '@shared/CommonUtils.js';
+import { parse as parseYaml } from 'yaml';
 
 export type ForgeEntryAction = 'upsert' | 'delete';
+
+/**
+ * 从条目内容中提取可读标题。
+ * 优先取 JSON 对象的 title / 标题 / name 字段，其次 YAML / TOML 的 title 行，最后截取首行文本。
+ */
+export function extractEntryTitle(content: string): string {
+    const trimmed = content.trim();
+
+    // JSON（含 ```json 代码块）
+    const jsonCandidate = trimmed.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
+    if (jsonCandidate.startsWith('{') || jsonCandidate.startsWith('[')) {
+        try {
+            const obj = JSON.parse(jsonCandidate);
+            const src = Array.isArray(obj) ? obj[0] : obj;
+            if (src && typeof src === 'object') {
+                const t = src.title || src['标题'] || src.name || src.comment || src.description;
+                if (t && typeof t === 'string') return t.trim();
+            }
+        } catch { /* ignore */ }
+    }
+
+    // YAML: `title: value`
+    const yamlMatch = trimmed.match(/^title\s*:\s*["']?(.+?)["']?\s*$/im);
+    if (yamlMatch) return yamlMatch[1].trim();
+
+    // TOML: `title = "value"`
+    const tomlMatch = trimmed.match(/^title\s*=\s*["'](.+?)["']\s*$/im);
+    if (tomlMatch) return tomlMatch[1].trim();
+
+    // 首行非空文本（最多 40 字）
+    const firstLine = trimmed.split('\n').find(l => l.trim().length > 0) || '';
+    return firstLine.slice(0, 40).trim();
+}
 
 export interface ParsedEntryUpdate {
     targetEntryId: string | null;
@@ -33,7 +68,7 @@ export function parseEntryUpdates(xmlRaw: string, fallbackLayer: string | null =
         return jsonMatches.map(item => {
             const pathInfo = item.path || {};
             const nodeId = item.node || pathInfo.node;
-            const entryId = nodeId || attrs.id || attrs.entry_id || attrs.target || attrs.uid || `forge_entry_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+            const entryId = nodeId || attrs.id || attrs.entry_id || attrs.target || attrs.uid || createPrefixedId('forge_entry');
             const action = (item.action || attrs.action || '').toLowerCase() === 'delete' ? 'delete' : 'upsert';
             
             // 处理内容序列化
@@ -60,7 +95,7 @@ export function parseEntryUpdates(xmlRaw: string, fallbackLayer: string | null =
     }
 
     // 2. Legacy Fallback (XML 属性式)
-    const entryId = attrs.id || attrs.entry_id || attrs.target || attrs.uid || `forge_entry_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const entryId = attrs.id || attrs.entry_id || attrs.target || attrs.uid || createPrefixedId('forge_entry');
     const action = (attrs.action || '').toLowerCase() === 'delete' ? 'delete' : 'upsert';
 
     return [{
@@ -83,11 +118,13 @@ function tryExtractJson(text: string): any[] | null {
         } catch { /* ignore */ }
     }
 
-    // 2. 尝试 YAML 代码块 → 转换为结构化对象（仅提取 title/content/tags 等顶层字段）
+    // 2. 尝试 YAML 代码块 → 转换为结构化对象
     const yamlBlockMatch = text.match(/```yaml\s*([\s\S]*?)\s*```/i);
     if (yamlBlockMatch) {
-        const parsed = parseSimpleYaml(yamlBlockMatch[1]);
-        if (parsed) return [parsed];
+        const parsed = parseYaml(yamlBlockMatch[1]);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length > 0) {
+            return [parsed];
+        }
     }
 
     // 3. 尝试 TOML 代码块
@@ -110,50 +147,8 @@ function tryExtractJson(text: string): any[] | null {
 }
 
 /**
- * 极简 YAML 解析器：仅处理顶层 key: value 对（字符串/数字/简单数组）
- */
-function parseSimpleYaml(yaml: string): Record<string, any> | null {
-    const result: Record<string, any> = {};
-    let hasFields = false;
-    const lines = yaml.split('\n');
-    let i = 0;
-    while (i < lines.length) {
-        const line = lines[i];
-        const m = line.match(/^([a-zA-Z_\u4e00-\u9fff][a-zA-Z0-9_\u4e00-\u9fff]*)\s*:\s*(.*)/);
-        if (m) {
-            const key = m[1];
-            const val = m[2].trim();
-            if (val === '' || val === '|' || val === '>') {
-                // 多行字符串块：收集缩进内容
-                const block: string[] = [];
-                i++;
-                while (i < lines.length && (lines[i].startsWith('  ') || lines[i].trim() === '')) {
-                    block.push(lines[i].replace(/^  /, ''));
-                    i++;
-                }
-                result[key] = block.join('\n').trim();
-                hasFields = true;
-                continue;
-            } else if (val.startsWith('[')) {
-                // 内联数组
-                try { result[key] = JSON.parse(val.replace(/'/g, '"')); hasFields = true; } catch { result[key] = val; hasFields = true; }
-            } else if (val.startsWith('"') || val.startsWith("'")) {
-                result[key] = val.replace(/^["']|["']$/g, '');
-                hasFields = true;
-            } else {
-                result[key] = val;
-                hasFields = true;
-            }
-        } else if (line.match(/^\s*-\s+/)) {
-            // 跳过纯列表行（未关联 key）
-        }
-        i++;
-    }
-    return hasFields ? result : null;
-}
-
-/**
- * 极简 TOML 解析器：仅处理顶层 key = value 对（字符串/数字）
+ * 极简 TOML 解析器：仅处理顶层 key = value 对（字符串/数字）。
+ * 注意：LLM 输出的 TOML 常包含未加引号的值，严格 TOML 库会直接拒绝，故保留宽容实现。
  */
 function parseSimpleToml(toml: string): Record<string, any> | null {
     const result: Record<string, any> = {};

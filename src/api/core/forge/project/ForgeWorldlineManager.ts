@@ -14,6 +14,7 @@ import {
     cloneDraftTree,
     cloneStructuredState
 } from '../../utils/forgeStateDefaults.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 // ────────────────── Deps Interface ──────────────────
 
@@ -134,7 +135,7 @@ export class ForgeWorldlineManager {
             createdAt: Date.now(),
             virtualLorebookEntries: d.getVirtualLorebookEntries().map(item => ({
                 ...item,
-                entry: JSON.parse(JSON.stringify(item.entry))
+                entry: deepClone(item.entry)
             })),
             commitReadyEntries: d.getCommitReadyEntries().map(e => ({ ...e })),
             stagingEntries: d.getStagingEntries().map(e => ({ ...e })),
@@ -153,7 +154,7 @@ export class ForgeWorldlineManager {
         const d = this.deps;
         d.setVirtualLorebookEntries(snapshot.virtualLorebookEntries.map(item => ({
             ...item,
-            entry: JSON.parse(JSON.stringify(item.entry))
+            entry: deepClone(item.entry)
         })));
         d.setCommitReadyEntries(snapshot.commitReadyEntries.map(e => ({ ...e })));
         d.setStagingEntries(snapshot.stagingEntries.map(e => ({ ...e })));

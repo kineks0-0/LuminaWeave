@@ -20,6 +20,7 @@ import type {
     ForgePiTreeNode
 } from '@shared/ForgePiTypes.js';
 import type { AgentRuntimeSnapshot } from '../api/core/agent-runtime/events/AgentRuntimeEventBus.js';
+import { createPrefixedId, deepClone } from '@shared/CommonUtils.js';
 
 const clonePiPayload = <TPayload>(payload: TPayload): TPayload => {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
@@ -40,7 +41,7 @@ const clonePiTreeNode = (node: ForgePiTreeNode): ForgePiTreeNode => ({
 });
 
 const cloneAgentRuntimeSnapshot = (snapshot: AgentRuntimeSnapshot): AgentRuntimeSnapshot =>
-    JSON.parse(JSON.stringify(snapshot)) as AgentRuntimeSnapshot;
+    deepClone(snapshot) as AgentRuntimeSnapshot;
 
 const buildPiTreeFromEntries = (entries: ForgePiSessionEntry[]): ForgePiTreeNode[] => {
     const byId = new Map<string, ForgePiTreeNode>();
@@ -405,7 +406,7 @@ export const useForgeStore = defineStore('forge', {
         }): ForgeTimelineOperationItem {
             const now = Date.now();
             const item: ForgeTimelineOperationItem = {
-                id: Math.random().toString(36).substring(2, 11),
+                id: createPrefixedId('forge_op'),
                 kind: 'operation',
                 operationKind: payload.operationKind,
                 status: payload.status,
@@ -619,7 +620,7 @@ export const useForgeStore = defineStore('forge', {
         addToStaging(entry: Omit<StagingEntry, 'id' | 'timestamp'>) {
             this.stagingArea.push({
                 ...entry,
-                id: Math.random().toString(36).substring(2, 9),
+                id: createPrefixedId('staging'),
                 timestamp: Date.now(),
                 layer: entry.layer || null,
                 sourceTag: entry.sourceTag || null,
@@ -634,7 +635,7 @@ export const useForgeStore = defineStore('forge', {
                 ...entry,
                 id: entry.id || (existingIndex >= 0
                     ? this.stagingArea[existingIndex].id
-                    : Math.random().toString(36).substring(2, 9)),
+                    : createPrefixedId('staging')),
                 operation: entry.operation || this.stagingArea[existingIndex]?.operation || 'upsert',
                 timestamp: entry.timestamp || Date.now(),
                 layer: entry.layer || this.stagingArea[existingIndex]?.layer || null,

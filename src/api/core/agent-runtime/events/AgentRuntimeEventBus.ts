@@ -1,4 +1,5 @@
 import type { AgentRuntimeToolResult } from '../tools/AgentToolRegistry.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 export type AgentRuntimeEventType =
     | 'agent_start'
@@ -419,5 +420,5 @@ const findMessageBlockIndex = (
 
 const clone = <T>(value: T): T => {
     if (value === undefined || value === null) return value;
-    return JSON.parse(JSON.stringify(value)) as T;
+    return deepClone(value) as T;
 };

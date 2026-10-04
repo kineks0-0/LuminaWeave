@@ -13,6 +13,7 @@ import type {
     AgentRuntimeResourceScanner,
     AgentRuntimeSetupInput
 } from '../runtime/AgentRuntimeTypes.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 export interface AgentRuntimeExtensionHostOptions {
     runtimeId: string;
@@ -153,5 +154,5 @@ const mergeArrayField = (
 
 const clone = <T>(value: T): T => {
     if (value === null || value === undefined) return value;
-    return JSON.parse(JSON.stringify(value)) as T;
+    return deepClone(value) as T;
 };

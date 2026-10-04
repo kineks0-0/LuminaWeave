@@ -100,6 +100,7 @@
 
 <script setup lang="ts">
 import { computed, ref, inject, onMounted, onUnmounted, watch } from 'vue';
+import { formatClockTime } from '../../api/utils/dateFormat.js';
 import { LuminaWeaveAPI } from '../../api/index.js';
 import { type TimelineViewNode } from './useTimelineGraphViewModel.js';
 
@@ -184,11 +185,7 @@ const getPreviewText = (text?: string): string => {
   return plain.length > 500 ? plain.substring(0, 500) + '...' : plain;
 };
 
-const formatTime = (ts?: number) => {
-  if (!ts) return '00:00';
-  const date = new Date(ts);
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-};
+const formatTime = (ts?: number) => (ts ? formatClockTime(ts) : '00:00');
 </script>
 
 <style scoped>

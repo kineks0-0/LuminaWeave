@@ -2,6 +2,7 @@
  * ForgeShellWriteParser — 解析 shell 写入产物为 StagingEntry 数组
  */
 
+import { parse as parseYaml } from 'yaml';
 import type { StagingEntry } from '../../../../types/ForgeRuntimeTypes.js';
 import type { ForgeShellWriteLogEntry } from '../shell/ForgeWorkspaceSearchShell.js';
 
@@ -79,9 +80,7 @@ export class ForgeShellWriteParser {
         // YAML / YML
         if (ext === 'yaml' || ext === 'yml') {
             try {
-                // lazy require to avoid dependency overhead when unused
-                const yaml = require('yaml');
-                const obj = yaml.parse(content);
+                const obj = parseYaml(content);
                 if (obj && typeof obj === 'object') {
                     const title = obj.title || obj.name || basename.replace(/\.ya?ml$/, '');
                     const entryContent = obj.content || obj.body || content;

@@ -2,6 +2,8 @@ import {
     forgeThreadWorkspacePath,
     forgeWorkspacePath
 } from '../../../hal/shell/ShellWorkspaceService.js';
+import { cleanPath as normalizeAbsolutePath } from '@shared/resources/vfsPath.js';
+import { escapeRegExp } from '@shared/CommonUtils.js';
 
 export type ForgeSemanticPathResolution =
     | {
@@ -36,12 +38,6 @@ export interface ForgeSemanticThreadEntry {
 }
 
 const RESOURCE_ROOT_PATTERN = /^\/(?:sources|library)(?:\/|$)/;
-
-const escapeRegExp = (value: string): string =>
-    value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const normalizeAbsolutePath = (path: string): string =>
-    `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 
 const normalizeAgentRelativePath = (path: string): string => {
     const normalized = path.trim().replace(/\\/g, '/').replace(/\/+/g, '/');

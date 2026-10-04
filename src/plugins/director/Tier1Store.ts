@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { RegistrationDisposer } from '../../platform/plugin/PluginRegistrationScope.js';
 import { globalMutationEngine } from './MutationEngine.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 /**
  * 动态表格元数据定义
@@ -166,13 +167,13 @@ export const useTier1Store = defineStore('lumina-tier1', () => {
      */
     const exportSnapshot = () => {
         // 深度拷贝以确保快照隔离
-        return JSON.parse(JSON.stringify(tables.value));
+        return deepClone(tables.value);
     };
 
     const importSnapshot = (snapshot: any) => {
         if (!snapshot) return;
         // 彻底覆盖现有数据，确保状态完全同步到快照点
-        tables.value = JSON.parse(JSON.stringify(snapshot));
+        tables.value = deepClone(snapshot);
     };
 
     const reset = () => {

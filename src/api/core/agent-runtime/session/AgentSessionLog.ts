@@ -214,7 +214,7 @@ const trimToUserWindow = (messages: AgentMessage[], maxMessages: number): AgentM
     return messages;
 };
 
-const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const cloneJson = <T>(value: T): T => structuredClone(value) as T;
 
 const userText = (message: AgentMessage): string => {
     if (message.role !== 'user') return '';

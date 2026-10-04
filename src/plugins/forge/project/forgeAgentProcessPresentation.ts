@@ -1,5 +1,6 @@
 import type { ForgeTimelineOperationItem, ForgeTimelineOperationStatus } from '../../../types/ForgeTimelineTypes.js';
 import type { ForgeFeedWorkspaceChange } from './forgeWorkspaceChangePresentation.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export type ForgeAgentProcessStepTone = 'model' | 'tool' | 'file' | 'system' | 'gate';
 
@@ -304,5 +305,3 @@ const cleanDetail = (value: string | null | undefined): string | null => {
     return trimmed ? trimmed : null;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);

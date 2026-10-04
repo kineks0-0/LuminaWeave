@@ -1,6 +1,7 @@
 import type { FileContent, IFileSystem } from 'just-bash';
 import { HALContext } from '../HALContext.js';
 import { LightningBashFsAdapter } from './LightningBashFsAdapter.js';
+import { cleanPath as normalizeLocalPath } from '@shared/resources/vfsPath.js';
 
 const WORKSPACE_NAMESPACE = 'lumina.resource-runtime';
 const WORKSPACE_TABLE = 'shell-workspaces';
@@ -56,9 +57,6 @@ export interface ShellWorkspaceResetOptions {
 }
 
 let testFilesystemSerial = 0;
-
-const normalizeLocalPath = (path: string): string =>
-    `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 
 const toContentText = (content: FileContent): string =>
     content instanceof Uint8Array ? new TextDecoder().decode(content) : String(content);

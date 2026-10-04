@@ -31,6 +31,7 @@ import {
     resolveForgeConversationId,
     resolveForgeProjectId
 } from '../../hal/shell/ShellWorkspaceService.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 export interface ForgeWorkspaceSerializableState {
     workspaceSessionId: string;
@@ -122,7 +123,7 @@ export class ForgeWorkspaceSessionService {
             })),
             virtualLorebookEntries: input.virtualLorebookEntries.map(item => ({
                 ...item,
-                entry: JSON.parse(JSON.stringify(item.entry))
+                entry: deepClone(item.entry)
             })),
             importedLorebookId: input.importedLorebookId,
             workflowSnapshot: input.workflowSnapshot,
@@ -189,7 +190,7 @@ export class ForgeWorkspaceSessionService {
             })),
             virtualLorebookEntries: (session.virtualLorebookEntries || []).map(item => ({
                 ...item,
-                entry: JSON.parse(JSON.stringify(item.entry))
+                entry: deepClone(item.entry)
             })),
             importedLorebookId: session.importedLorebookId || null,
             workflowSnapshot: session.workflowSnapshot || null,

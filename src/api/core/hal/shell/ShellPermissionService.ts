@@ -6,14 +6,10 @@ import type {
     ShellPermissionScope,
     ShellSessionRef
 } from '@shared/resources/index.js';
+import { cleanPath as normalizePath } from '@shared/resources/vfsPath.js';
+import { createPrefixedId as randomId } from '@shared/CommonUtils.js';
 
 const now = () => Date.now();
-
-const randomId = (prefix: string): string =>
-    `${prefix}-${Math.random().toString(36).slice(2, 10)}-${now().toString(36)}`;
-
-const normalizePath = (path: string): string =>
-    `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 
 const isSameOrChildPath = (path: string, prefix: string): boolean => {
     const normalizedPath = normalizePath(path);

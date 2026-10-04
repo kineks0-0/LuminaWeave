@@ -3,6 +3,7 @@ import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import type { ConversationTimelineNode } from '../../../../types/ConversationContextTypes.js';
 import type { WorldlineStore } from '../../storage/WorldlineStore.js';
 import type { ForgeTimelinePiOrigin } from '@shared/ForgePiTypes.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export interface ForgeConversationLiveState {
     workspaceSessionId: string;
@@ -193,8 +194,5 @@ const resolveForgePiOrigin = (node: ConversationTimelineNode | undefined): Forge
         toolCallId: typeof origin.toolCallId === 'string' ? origin.toolCallId : undefined
     };
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export const forgeConversationGateway = new ForgeConversationGateway();

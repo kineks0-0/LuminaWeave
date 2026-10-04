@@ -4,9 +4,7 @@ import type { VirtualFileSystemService } from '../resource/VirtualFileSystemServ
 import type { VFSDirEntry } from '@shared/resources/index.js';
 import type { ShellPermissionService } from './ShellPermissionService.js';
 import { shellWorkspaceService, type ShellWorkspaceService } from './ShellWorkspaceService.js';
-
-const normalizeLocalPath = (path: string): string =>
-    `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+import { cleanPath as normalizeLocalPath } from '@shared/resources/vfsPath.js';
 
 const joinVirtualPath = (mountPoint: string, path: string): string => {
     const local = normalizeLocalPath(path);

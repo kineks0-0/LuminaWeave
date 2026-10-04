@@ -1,6 +1,7 @@
 import { lwStorage } from '../../storage.js';
 import { HALContext } from '../hal/HALContext.js';
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { digestString } from '@shared/hash.js';
 import { WorldlineStore } from './WorldlineStore.js';
 import { MessageStorageProjection } from './MessageStorageProjection.js';
 import { pluginManager } from '../../../core/PluginManager.js';
@@ -53,12 +54,7 @@ export class PersistenceService {
 
     private _digestPayload(payload: unknown): string {
         const text = JSON.stringify(payload) || '';
-        let hash = 0;
-        for (let i = 0; i < text.length; i++) {
-            hash = ((hash << 5) - hash) + text.charCodeAt(i);
-            hash |= 0;
-        }
-        return `dg_${Math.abs(hash).toString(16)}`;
+        return `dg_${digestString(text)}`;
     }
 
     private _getLastCommittedSeq(chatId: string): number {

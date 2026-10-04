@@ -1,5 +1,5 @@
 import { JSONPath } from 'jsonpath-plus';
-import { parse as parseShellQuote } from 'shell-quote';
+import { parse as parseShellQuote, quote as quoteShellArg } from 'shell-quote';
 import type {
     ResourceDiagnostic,
     VFSCommandDefinition,
@@ -16,10 +16,10 @@ import type {
     VFSStat
 } from '@shared/resources/index.js';
 import type { VirtualFileSystemService } from '../resource/VirtualFileSystemService.js';
+import { cleanPath as normalizeTreePath } from '@shared/resources/vfsPath.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 const SHELL_DOLLAR_SENTINEL = '\uE000';
-
-const quote = (value: string): string => value.includes(' ') ? `"${value}"` : value;
 
 const formatEntry = (entry: VFSDirEntry): string =>
     [
@@ -45,11 +45,6 @@ const formatMatch = (match: VFSSearchResult): string =>
 
 const formatJson = (value: unknown): string =>
     JSON.stringify(value === undefined ? null : value, null, 2);
-
-const normalizeTreePath = (path: string): string => {
-    const normalized = `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/');
-    return normalized.length > 1 ? normalized.replace(/\/$/, '') : normalized;
-};
 
 const basename = (path: string): string => {
     const normalized = normalizeTreePath(path);
@@ -792,7 +787,7 @@ export class VFSCommandService {
             command: 'find',
             ok: true,
             matches,
-            text: matches.map(match => quote(match.path)).join('\n')
+            text: matches.map(match => quoteShellArg([match.path])).join('\n')
         };
     }
 
@@ -976,7 +971,7 @@ export class VFSCommandService {
     }
 
     private cloneJson(value: unknown): unknown {
-        return JSON.parse(JSON.stringify(value));
+        return deepClone(value);
     }
 
     private setJsonPathValue(json: unknown, path: string, value: unknown): void {

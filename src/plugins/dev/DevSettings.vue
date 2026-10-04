@@ -261,6 +261,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { luminaWeaveApi } from '../../api/index.js';
 import { vfsCommandService } from '../../api/core/hal/shell/index.js';
+import { createPrefixedId } from '@shared/CommonUtils.js';
 
 const debugChat = luminaWeaveApi.debugChat;
 
@@ -438,7 +439,7 @@ const handleSaveNode = async () => {
 const handleAddNode = async () => {
   const role = confirm('添加为 [助手] 消息吗？(取消则添加为 [用户] 消息)') ? 'assistant' : 'user';
   const newNode = {
-    id: 'lw_' + Math.random().toString(36).substring(2, 11),
+    id: createPrefixedId('lw'),
     parentId: selectedNodeId.value || null,
     role,
     mesRaw: `[新${role === 'user' ? '用户' : '助手'}节点]`,
@@ -513,14 +514,14 @@ const executeVfsCommand = async (line = vfsCommandLine.value) => {
   try {
     const result = await vfsCommandService.executeLine(command);
     vfsHistory.value.unshift({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: createPrefixedId('vfs_hist'),
       command,
       ok: result.ok,
       output: result.ok ? (result.text || '(empty)') : (result.error || 'Command failed')
     });
   } catch (error) {
     vfsHistory.value.unshift({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: createPrefixedId('vfs_hist'),
       command,
       ok: false,
       output: error instanceof Error ? error.message : String(error)

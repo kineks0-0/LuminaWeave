@@ -63,6 +63,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { formatShortDateTime } from '../../../api/utils/dateFormat.js';
 import { luminaWeaveApi } from '../../../api/index.js';
 import { shellWorkspaceService } from '../../../api/core/hal/shell/ShellWorkspaceService.js';
 import { forgeWorkspaceGitService } from '../../../api/core/forge/project/ForgeWorkspaceGitService.js';
@@ -182,12 +183,7 @@ const restoreSelected = async (): Promise<void> => {
   }
 };
 
-const formatTime = (value: number): string => new Date(value).toLocaleString([], {
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-});
+const formatTime = formatShortDateTime;
 
 onMounted(() => {
   void loadVersions();

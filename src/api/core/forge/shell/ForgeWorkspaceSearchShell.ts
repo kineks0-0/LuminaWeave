@@ -21,6 +21,7 @@ import {
     type ForgeSemanticThreadEntry
 } from '../agent-app/vfs/ForgeSemanticVfsMapper.js';
 import { ForgeSemanticBashFs } from '../agent-app/vfs/ForgeSemanticVfsProvider.js';
+import { cleanPath as normalizePath } from '@shared/resources/vfsPath.js';
 
 export type ForgeShellAccessMode =
     | 'project-readonly'
@@ -108,9 +109,6 @@ const WRITE_COMMANDS = new Set([
     ...WRITE_ALLOWED_COMMANDS,
     ...DANGEROUS_COMMANDS
 ]);
-
-const normalizePath = (path: string): string =>
-    `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 
 const firstCommandWord = (segment: string): string | null => {
     const match = segment.trim().match(/^([A-Za-z0-9_.-]+)/);

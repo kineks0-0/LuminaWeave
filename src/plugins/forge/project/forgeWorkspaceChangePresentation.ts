@@ -4,6 +4,7 @@ import type {
     ForgeWorkspaceChangedFile
 } from '@shared/ForgePiTypes.js';
 import { resolveForgePiActiveBranchEntries } from '../store/forgeStoreHelpers.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export interface ForgeFeedWorkspaceChange {
     id: string;
@@ -65,5 +66,3 @@ const isWorkspaceWriteSummary = (value: unknown): value is ForgeTurnWorkspaceWri
         && Array.isArray(value.errors);
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);

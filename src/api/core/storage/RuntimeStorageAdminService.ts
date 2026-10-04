@@ -8,6 +8,7 @@ import type {
 import { settingsDomainService } from '../../services/SettingsDomainService.js';
 import { HALContext } from '../hal/HALContext.js';
 import { shellWorkspaceService } from '../hal/shell/ShellWorkspaceService.js';
+import { isRecord, bytesToBase64, base64ToBytes } from '@shared/CommonUtils.js';
 
 export type RuntimeStorageUsageCategoryId =
     | 'settings'
@@ -85,28 +86,6 @@ const isForgeGitPath = (path: string): boolean =>
 
 const isForgeProjectRootPath = (path: string): boolean =>
     /^\/forge\/[^/]+$/.test(path);
-
-const bytesToBase64 = (bytes: Uint8Array): string => {
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let index = 0; index < bytes.length; index += chunkSize) {
-        const chunk = bytes.slice(index, index + chunkSize);
-        binary += String.fromCharCode(...chunk);
-    }
-    return btoa(binary);
-};
-
-const base64ToBytes = (value: string): Uint8Array => {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-    }
-    return bytes;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const isRuntimeStorageExportEnvelope = (value: unknown): value is RuntimeStorageExportEnvelope =>
     isRecord(value)

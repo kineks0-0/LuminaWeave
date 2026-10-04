@@ -1,11 +1,17 @@
 import { LuminaWeaveAPIBase } from '../facade/LuminaWeaveAPIBase.js';
 import { LorebookTimelineResolver } from './LorebookTimelineResolver.js';
 import { getLorebookHostPort, type LorebookHostPort } from './LorebookHostPort.js';
+import { HALContext } from '../hal/HALContext.js';
 import type {
     LorebookEntrySnapshot,
     LorebookTimelineContext,
     LorebookVersionMode
 } from '../../../types/LorebookViewTypes.js';
+import { deepClone } from '@shared/CommonUtils.js';
+
+const LOREBOOK_SNAPSHOT_NAMESPACE = 'lumina.lorebook';
+const LOREBOOK_SNAPSHOT_TABLE = 'snapshots';
+const LOREBOOK_SNAPSHOT_KEY = 'entry-snapshots';
 
 /**
  * LorebookManager (世界书管理器)
@@ -14,7 +20,6 @@ import type {
 export class LorebookManager extends LuminaWeaveAPIBase {
     private parentApi: any;
     private readonly host: LorebookHostPort;
-    private readonly snapshotStorageKey = 'lumina-lorebook.entry-snapshots';
     /** 每本书最多保留的快照数量，超出时删除最旧的 */
     private readonly MAX_SNAPSHOTS_PER_BOOK = 5;
     public entries: LuminaLorebookEntry[] = [];
@@ -33,65 +38,43 @@ export class LorebookManager extends LuminaWeaveAPIBase {
         super();
         this.parentApi = parentApi;
         this.host = host;
-        this.restoreSnapshots();
     }
 
-    private restoreSnapshots(): void {
-        if (typeof window === 'undefined' || !window.localStorage) return;
+    /**
+     * 在 HAL 就绪后恢复持久化快照（由 API 初始化流程调用）。
+     */
+    async initializeSnapshots(): Promise<void> {
         try {
-            const raw = window.localStorage.getItem(this.snapshotStorageKey);
-            if (!raw) return;
-            const list = JSON.parse(raw) as LorebookEntrySnapshot[];
-            this.snapshots = new Map(
-                list
-                    .filter(snapshot => snapshot?.key && snapshot?.bookId)
-                    .map(snapshot => [snapshot.key, snapshot])
-            );
+            const raw = await HALContext.instance.runtime.extensionStore.getJson({
+                namespace: LOREBOOK_SNAPSHOT_NAMESPACE,
+                table: LOREBOOK_SNAPSHOT_TABLE,
+                key: LOREBOOK_SNAPSHOT_KEY
+            });
+            if (!Array.isArray(raw)) return;
+            const restored = (raw as LorebookEntrySnapshot[])
+                .filter(snapshot => snapshot?.key && snapshot?.bookId);
+            for (const snapshot of restored) {
+                if (!this.snapshots.has(snapshot.key)) this.snapshots.set(snapshot.key, snapshot);
+            }
             this.snapshotRevision = this.snapshots.size;
         } catch (error) {
             console.warn('[LorebookManager] 恢复世界书快照失败', error);
         }
     }
 
-    private persistSnapshots(): void {
-        if (typeof window === 'undefined' || !window.localStorage) return;
-
-        const tryWrite = (list: LorebookEntrySnapshot[]): boolean => {
-            try {
-                window.localStorage.setItem(this.snapshotStorageKey, JSON.stringify(list));
-                return true;
-            } catch {
-                return false;
-            }
-        };
-
-        // 按时间倒序（最新优先）排列，优先保留最近的快照
-        let list = Array.from(this.snapshots.values())
-            .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
-
-        // 首次尝试
-        if (tryWrite(list)) return;
-
-        // QuotaExceededError：逐步裁剪最旧的快照直到写入成功
-        while (list.length > 0) {
-            list = list.slice(0, Math.max(1, Math.floor(list.length * 0.7)));
-            if (tryWrite(list)) {
-                // 同步内存中的快照 Map，移除已被裁剪的条目
-                const keepKeys = new Set(list.map(s => s.key));
-                for (const key of Array.from(this.snapshots.keys())) {
-                    if (!keepKeys.has(key)) this.snapshots.delete(key);
-                }
-                console.warn(`[LorebookManager] 存储配额不足，已裁剪至 ${list.length} 个快照`);
-                return;
-            }
-        }
-
-        // 完全无法写入时清空，避免后续持续报错
+    private async persistSnapshots(): Promise<void> {
         try {
-            window.localStorage.removeItem(this.snapshotStorageKey);
-            this.snapshots.clear();
-            console.warn('[LorebookManager] 存储配额严重不足，已清空所有世界书快照');
-        } catch { /* ignore */ }
+            const list = Array.from(this.snapshots.values())
+                .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+            await HALContext.instance.runtime.extensionStore.setJson({
+                namespace: LOREBOOK_SNAPSHOT_NAMESPACE,
+                table: LOREBOOK_SNAPSHOT_TABLE,
+                key: LOREBOOK_SNAPSHOT_KEY,
+                value: list
+            });
+        } catch (error) {
+            console.warn('[LorebookManager] 持久化世界书快照失败', error);
+        }
     }
 
     /**
@@ -352,7 +335,7 @@ export class LorebookManager extends LuminaWeaveAPIBase {
     }
 
     public setEditingEntry(entry: LuminaLorebookEntry | null): void {
-        this.activeEditingEntry = entry ? JSON.parse(JSON.stringify(entry)) : null;
+        this.activeEditingEntry = entry ? deepClone(entry) : null;
         this.emit('EDITING_ENTRY_CHANGED', this.activeEditingEntry);
         this.emit('UPDATED');
     }
@@ -369,13 +352,13 @@ export class LorebookManager extends LuminaWeaveAPIBase {
             sessionId: context.sessionId,
             capturedAt: new Date().toISOString(),
             label: LorebookTimelineResolver.createSnapshotLabel(context),
-            entries: JSON.parse(JSON.stringify(entries))
+            entries: deepClone(entries)
         };
 
         this.snapshots.set(key, snapshot);
         this.pruneSnapshotsForBook(context.bookId);
         this.snapshotRevision += 1;
-        this.persistSnapshots();
+        void this.persistSnapshots();
         this.emit('LOREBOOK_SNAPSHOTS_UPDATED', { key, revision: this.snapshotRevision });
         this.emit('UPDATED');
         return key;

@@ -11,8 +11,6 @@ vi.mock('@/stores/useForgeStore.js', () => ({
     })
 }));
 
-const STORAGE_KEY = 'lumina-forge.workspace-sessions';
-
 function injectMockBridge(serverStorage: Map<string, any>) {
     const runtimeStore = new Map<string, unknown>();
     const bridge = {
@@ -111,7 +109,7 @@ function injectMockBridge(serverStorage: Map<string, any>) {
     };
 
     initMockHAL({ runtime: { conversation: bridge.conversation, generation: bridge.nexus, settings: bridge.settings, presets: bridge.presets, extensionStore: bridge.extensionStore } });
-    return bridge;
+    return { ...bridge, runtimeStore };
 }
 
 describe('ForgeSessionRepository', () => {
@@ -252,7 +250,7 @@ describe('ForgeSessionRepository', () => {
         expect(bridge.conversation.getConversation).toHaveBeenCalledWith('forge_ws_2');
     });
 
-    it('应始终在 localStorage 中保存脱水后的存根', async () => {
+    it('应始终在存储索引中保存脱水后的存根', async () => {
         const repository = new ForgeSessionRepository();
 
         // 模拟同步失败
@@ -292,7 +290,7 @@ describe('ForgeSessionRepository', () => {
             workspaceMode: 'workspace'
         } as any);
 
-        const rawSessions = JSON.parse(globalThis.localStorage.getItem(STORAGE_KEY) || '[]');
+        const rawSessions = (bridge.runtimeStore.get('sessions') as any[]) ?? [];
         const sessionInLocal = rawSessions.find((s: any) => s.id === 'forge_ws_3');
 
         expect(sessionInLocal.worldlineNodes).toEqual([]);
@@ -420,7 +418,7 @@ describe('ForgeSessionRepository', () => {
             workspaceMode: 'workspace'
         });
 
-        const refs = repository.listSessions();
+        const refs = await repository.listSessions();
 
         expect(refs[0]).toMatchObject({
             id: 'forge_ws_thread_ref',
@@ -477,7 +475,7 @@ describe('ForgeSessionRepository', () => {
             title: '第二协作线程'
         });
         expect(created.structuredState?.forms.role_core_profile.fields.name.value).toBe('林雾');
-        expect(repository.listSessions().filter(ref => ref.forgeProjectId === 'forge_project_threadable').map(ref => ref.id))
+        expect((await repository.listSessions()).filter(ref => ref.forgeProjectId === 'forge_project_threadable').map(ref => ref.id))
             .toEqual(['forge_thread_new', 'forge_thread_seed']);
     });
 
@@ -503,7 +501,7 @@ describe('ForgeSessionRepository', () => {
 
         expect(serverStorage.has('forge_thread_delete_a')).toBe(false);
         expect(serverStorage.has('forge_thread_delete_b')).toBe(true);
-        expect(repository.listSessions().map(ref => ref.id)).toEqual(['forge_thread_delete_b']);
+        expect((await repository.listSessions()).map(ref => ref.id)).toEqual(['forge_thread_delete_b']);
         const fs = await shellWorkspaceService.getFileSystem({ projectId: 'forge_project_keep_resources' });
         await expect(fs.readFile('/forge/forge_project_keep_resources/project.json')).resolves.toContain('"forgeProjectId": "forge_project_keep_resources"');
         await expect(fs.readFile('/chat/conversation_delete_a/thread.json')).rejects.toThrow();
@@ -542,7 +540,7 @@ describe('ForgeSessionRepository', () => {
         expect(serverStorage.has('forge_thread_project_a1')).toBe(false);
         expect(serverStorage.has('forge_thread_project_a2')).toBe(false);
         expect(serverStorage.has('forge_thread_project_b1')).toBe(true);
-        expect(repository.listSessions().map(ref => ref.id)).toEqual(['forge_thread_project_b1']);
+        expect((await repository.listSessions()).map(ref => ref.id)).toEqual(['forge_thread_project_b1']);
         const fs = await shellWorkspaceService.getFileSystem({ projectId: 'forge_project_delete' });
         await expect(fs.readFile('/forge/forge_project_delete/project.json')).rejects.toThrow();
         await expect(fs.readFile('/chat/conversation_project_a1/thread.json')).rejects.toThrow();
@@ -596,7 +594,7 @@ describe('ForgeSessionRepository', () => {
 
         await repository.renameProject('forge_project_rename', '新项目名');
 
-        const refs = repository.listSessions().filter(ref => ref.forgeProjectId === 'forge_project_rename');
+        const refs = (await repository.listSessions()).filter(ref => ref.forgeProjectId === 'forge_project_rename');
         expect(refs.map(ref => ref.projectTitle)).toEqual(['新项目名', '新项目名']);
         expect(refs.find(ref => ref.id === 'forge_thread_rename_project_a')?.title).toBe('线程 A');
         expect(refs.find(ref => ref.id === 'forge_thread_rename_project_b')?.title).toBe('线程 B');
@@ -623,7 +621,7 @@ describe('ForgeSessionRepository', () => {
 
         await repository.renameThread('forge_thread_rename_thread', '新线程名');
 
-        const ref = repository.listSessions().find(item => item.id === 'forge_thread_rename_thread');
+        const ref = (await repository.listSessions()).find(item => item.id === 'forge_thread_rename_thread');
         expect(ref?.projectTitle).toBe('稳定项目名');
         expect(ref?.title).toBe('新线程名');
         expect(serverStorage.get('forge_thread_rename_thread').title).toBe('新线程名');

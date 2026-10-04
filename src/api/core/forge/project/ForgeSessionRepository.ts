@@ -20,16 +20,14 @@ import {
 } from '../../hal/shell/ShellWorkspaceService.js';
 import { forgeProjectDataService } from './ForgeProjectDataService.js';
 import { forgePiSessionStore } from './ForgePiSessionStore.js';
+import { createPrefixedId } from '@shared/CommonUtils.js';
 
-const STORAGE_KEY = 'lumina-forge.workspace-sessions';
-const ACTIVE_KEY = 'lumina-forge.active-session-id';
+const FORGE_INDEX_NAMESPACE = 'lumina.forge';
+const FORGE_INDEX_TABLE = 'workspace-index';
+const SESSIONS_KEY = 'sessions';
+const ACTIVE_KEY = 'active-session-id';
 
-const generateSessionChatId = (): string => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `lw_card_${crypto.randomUUID()}`;
-    }
-    return `lw_card_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-};
+const generateSessionChatId = (): string => createPrefixedId('lw_card');
 
 const resolveThreadWorkspacePath = (
     forgeProjectId: string,
@@ -92,13 +90,6 @@ export class ForgeSessionRepository {
         }, session.worldlineNodes);
     }
 
-    private pruneOldSessions(sessions: ForgeWorkspaceSession[], count: number = 3): ForgeWorkspaceSession[] {
-        if (sessions.length <= count) return sessions;
-        const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
-        // 修正：保留最近更新的 count 个，其余的截断
-        return sorted.slice(0, count);
-    }
-
     private mergeSessions(primary: ForgeWorkspaceSession[], secondary: ForgeWorkspaceSession[]): ForgeWorkspaceSession[] {
         const merged = new Map<string, ForgeWorkspaceSession>();
 
@@ -112,14 +103,15 @@ export class ForgeSessionRepository {
         return Array.from(merged.values()).sort((a, b) => b.updatedAt - a.updatedAt);
     }
 
-    private readLocal(): ForgeWorkspaceSession[] {
-        if (typeof localStorage === 'undefined') return [];
+    private async readLocal(): Promise<ForgeWorkspaceSession[]> {
         try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return [];
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed)
-                ? parsed.map((session: Partial<ForgeWorkspaceSession>) => {
+            const raw = await HALContext.instance.runtime.extensionStore.getJson({
+                namespace: FORGE_INDEX_NAMESPACE,
+                table: FORGE_INDEX_TABLE,
+                key: SESSIONS_KEY
+            });
+            return Array.isArray(raw)
+                ? raw.map((session: Partial<ForgeWorkspaceSession>) => {
                     const id = session.id || `forge_ws_${Date.now().toString(36)}`;
                     const sessionChatId = session.sessionChatId || session.conversationId || generateSessionChatId();
                     const forgeProjectId = session.forgeProjectId || id;
@@ -169,36 +161,23 @@ export class ForgeSessionRepository {
                         workspaceMode: ((session as any).workspaceMode === 'stub' ? 'stub' : 'workspace') as 'workspace'
                     };
                 })
-                .map(s => this.dehydrateSession(s)) // 强制脱水所有本地读取的数据，确保 localStorage 绝对轻量
+                .map(s => this.dehydrateSession(s)) // 强制脱水所有本地读取的数据，确保索引绝对轻量
                 : [];
         } catch {
             return [];
         }
     }
 
-    private writeLocal(sessions: ForgeWorkspaceSession[]): void {
-        if (typeof localStorage === 'undefined') return;
+    private async writeLocal(sessions: ForgeWorkspaceSession[]): Promise<void> {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-        } catch (e: any) {
-            if (e.name === 'QuotaExceededError') {
-                console.warn('[ForgeRepository] LocalStorage 额度溢出，尝试清理旧会话...');
-                // 仅保留最近的几个会话作为缓存，物理隔离新会话
-                const pruned = this.pruneOldSessions(sessions, 3);
-                try {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
-                } catch {
-                    console.error('[ForgeRepository] 清理后依然无法保存到本地，将仅依赖后端同步。');
-                    // 极致情况：只留当前正在编辑的 ID
-                    const activeId = this.getActiveSessionId();
-                    const minimal = sessions.filter(s => s.id === activeId);
-                    try {
-                        localStorage.setItem(STORAGE_KEY, JSON.stringify(minimal));
-                    } catch {
-                        localStorage.removeItem(STORAGE_KEY);
-                    }
-                }
-            }
+            await HALContext.instance.runtime.extensionStore.setJson({
+                namespace: FORGE_INDEX_NAMESPACE,
+                table: FORGE_INDEX_TABLE,
+                key: SESSIONS_KEY,
+                value: sessions
+            });
+        } catch (e) {
+            console.error('[ForgeRepository] 本地会话索引写入失败，将仅依赖后端同步。', e);
         }
     }
 
@@ -247,8 +226,8 @@ export class ForgeSessionRepository {
         };
     }
 
-    listSessions(): ForgeWorkspaceSessionRef[] {
-        return this.readLocal()
+    async listSessions(): Promise<ForgeWorkspaceSessionRef[]> {
+        return (await this.readLocal())
             .sort((a, b) => b.updatedAt - a.updatedAt)
             .map((session) => ({
                 id: session.id,
@@ -275,7 +254,7 @@ export class ForgeSessionRepository {
                 // 顺便更新下本地存根，保持元数据同步
                 const session = await this.hydratePiSession(await this.hydrateProjectData(this.conversationToSession(data.document)));
                 await this.writeConversationProjection(session);
-                this.updateLocalMeta(session);
+                await this.updateLocalMeta(session);
                 return session;
             }
         } catch (e) {
@@ -283,7 +262,7 @@ export class ForgeSessionRepository {
         }
 
         // 2. 后端不可用或 404，回退到本地
-        const local = this.readLocal().find(session => session.id === id);
+        const local = (await this.readLocal()).find(session => session.id === id);
         if (local) {
             if ((local as any).workspaceMode === 'stub') {
                 console.warn(`[ForgeRepository] 本地仅存在会话存根，且后端不可达: ${id}`);
@@ -295,8 +274,8 @@ export class ForgeSessionRepository {
         return null;
     }
 
-    private updateLocalMeta(session: ForgeWorkspaceSession): void {
-        const sessions = this.readLocal();
+    private async updateLocalMeta(session: ForgeWorkspaceSession): Promise<void> {
+        const sessions = await this.readLocal();
         const index = sessions.findIndex(s => s.id === session.id);
         const stub = this.dehydrateSession(session);
         if (index === -1) {
@@ -304,21 +283,21 @@ export class ForgeSessionRepository {
         } else {
             sessions[index] = stub;
         }
-        this.writeLocal(sessions);
+        await this.writeLocal(sessions);
     }
 
     private getProjectId(session: ForgeWorkspaceSession | ForgeWorkspaceSessionRef): string {
         return session.forgeProjectId || session.id;
     }
 
-    private getProjectThreads(projectId: string): ForgeWorkspaceSession[] {
-        return this.readLocal()
+    private async getProjectThreads(projectId: string): Promise<ForgeWorkspaceSession[]> {
+        return (await this.readLocal())
             .filter((session) => this.getProjectId(session) === projectId)
             .sort((left, right) => right.updatedAt - left.updatedAt);
     }
 
     private async loadProjectSeed(projectId: string): Promise<ForgeWorkspaceSession | null> {
-        const threads = this.getProjectThreads(projectId);
+        const threads = await this.getProjectThreads(projectId);
         for (const thread of threads) {
             const loaded = await this.loadSession(thread.id).catch(() => null);
             if (loaded) return loaded;
@@ -347,11 +326,11 @@ export class ForgeSessionRepository {
         await this.writeConversationProjection(normalizedSession);
 
         // 2. 根据同步结果决定本地存储深度
-        const sessions = this.readLocal();
+        const sessions = await this.readLocal();
         const index = sessions.findIndex(item => item.id === session.id);
 
         // 本地禁止保存聊天记录与完整状态，仅保留元数据存根
-        // 即使同步失败也不回退到本地完整备份，以彻底避免 LocalStorage 溢出
+        // 即使同步失败也不回退到本地完整备份，以彻底避免存储膨胀
         const localContent = this.dehydrateSession(normalizedSession);
 
         if (index === -1) {
@@ -360,8 +339,8 @@ export class ForgeSessionRepository {
             sessions[index] = localContent;
         }
 
-        this.writeLocal(sessions);
-        this.setActiveSessionId(normalizedSession.id);
+        await this.writeLocal(sessions);
+        await this.setActiveSessionId(normalizedSession.id);
 
         if (syncSuccess) {
             console.log(`[ForgeRepository] 会话已成功同步至后端，本地存根已更新: ${session.id}`);
@@ -370,11 +349,11 @@ export class ForgeSessionRepository {
         }
     }
 
-    renameSession(id: string, title: string): ForgeWorkspaceSession | null {
+    async renameSession(id: string, title: string): Promise<ForgeWorkspaceSession | null> {
         const nextTitle = title.trim();
         if (!nextTitle) return null;
 
-        const sessions = this.readLocal();
+        const sessions = await this.readLocal();
         const index = sessions.findIndex(item => item.id === id);
         if (index === -1) return null;
 
@@ -384,7 +363,7 @@ export class ForgeSessionRepository {
             updatedAt: Date.now()
         };
         sessions[index] = updated;
-        this.writeLocal(sessions);
+        await this.writeLocal(sessions);
         void this.hydrateProjectData(updated)
             .then((hydrated) => this.saveSession({
                 ...hydrated,
@@ -401,7 +380,7 @@ export class ForgeSessionRepository {
         const nextTitle = title.trim();
         if (!nextTitle) return null;
 
-        const local = this.readLocal().find(session => session.id === id);
+        const local = (await this.readLocal()).find(session => session.id === id);
         if (!local) return null;
 
         const loaded = await this.loadSession(id).catch(() => null);
@@ -420,7 +399,7 @@ export class ForgeSessionRepository {
         const nextTitle = title.trim();
         if (!projectId || !nextTitle) return false;
 
-        const sessions = this.readLocal();
+        const sessions = await this.readLocal();
         const projectThreads = sessions.filter((session) => this.getProjectId(session) === projectId);
         if (projectThreads.length === 0) return false;
 
@@ -435,7 +414,7 @@ export class ForgeSessionRepository {
                 }
                 : session
         ));
-        this.writeLocal(nextLocal);
+        await this.writeLocal(nextLocal);
 
         for (const thread of projectThreads) {
             await this.renameProjectMetadataForThread(thread, nextTitle, timestamp);
@@ -564,7 +543,7 @@ export class ForgeSessionRepository {
     }
 
     async deleteThread(id: string): Promise<boolean> {
-        const sessions = this.readLocal();
+        const sessions = await this.readLocal();
         const target = sessions.find((session) => session.id === id);
         if (!target) return false;
 
@@ -574,11 +553,11 @@ export class ForgeSessionRepository {
             console.warn(`[ForgeRepository] 删除协作线程远端会话失败，将继续清理本地索引: ${id}`, error);
         }
 
-        this.writeLocal(sessions.filter((session) => session.id !== id));
+        await this.writeLocal(sessions.filter((session) => session.id !== id));
         await forgePiSessionStore.delete(id);
-        if (this.getActiveSessionId() === id) {
+        if (await this.getActiveSessionId() === id) {
             const next = sessions.find((session) => session.id !== id) || null;
-            this.setActiveSessionId(next?.id ?? null);
+            await this.setActiveSessionId(next?.id ?? null);
         }
         await shellWorkspaceService.deleteForgeConversationProjection(
             resolveForgeProjectId(target),
@@ -592,7 +571,7 @@ export class ForgeSessionRepository {
         const projectId = forgeProjectId.trim();
         if (!projectId) return false;
 
-        const sessions = this.readLocal();
+        const sessions = await this.readLocal();
         const deleting = sessions.filter((session) => this.getProjectId(session) === projectId);
         if (deleting.length === 0) {
             await forgeProjectDataService.deleteProject(projectId);
@@ -611,9 +590,10 @@ export class ForgeSessionRepository {
 
         const deletingIds = new Set(deleting.map((session) => session.id));
         const remaining = sessions.filter((session) => !deletingIds.has(session.id));
-        this.writeLocal(remaining);
-        if (this.getActiveSessionId() && deletingIds.has(this.getActiveSessionId()!)) {
-            this.setActiveSessionId(remaining[0]?.id ?? null);
+        await this.writeLocal(remaining);
+        const activeId = await this.getActiveSessionId();
+        if (activeId && deletingIds.has(activeId)) {
+            await this.setActiveSessionId(remaining[0]?.id ?? null);
         }
 
         for (const session of deleting) {
@@ -722,7 +702,7 @@ export class ForgeSessionRepository {
             }));
             const remoteSessions = hydratedRemote.filter((session): session is ForgeWorkspaceSession => Boolean(session));
 
-            const local = this.readLocal();
+            const local = await this.readLocal();
 
             // 迁移逻辑：如果本地有远端没有的会话，尝试同步给远端
             const remoteIds = new Set(remoteSessions.map((s) => s.id));
@@ -749,25 +729,45 @@ export class ForgeSessionRepository {
             for (const session of remoteSessions) {
                 await this.writeConversationProjection(session);
             }
-            this.writeLocal(merged);
+            await this.writeLocal(merged);
             console.log(`[ForgeRepository] 会话同步完成，当前共 ${merged.length} 个活跃会话。`);
         } catch (e) {
             console.warn('[ForgeRepository] 刷新服务端 Forge 项目列表失败，降级为本地模式', e);
         }
     }
 
-    getActiveSessionId(): string | null {
-        if (typeof localStorage === 'undefined') return null;
-        return localStorage.getItem(ACTIVE_KEY);
+    async getActiveSessionId(): Promise<string | null> {
+        try {
+            const value = await HALContext.instance.runtime.extensionStore.getJson({
+                namespace: FORGE_INDEX_NAMESPACE,
+                table: FORGE_INDEX_TABLE,
+                key: ACTIVE_KEY
+            });
+            return typeof value === 'string' && value ? value : null;
+        } catch {
+            return null;
+        }
     }
 
-    setActiveSessionId(id: string | null): void {
-        if (typeof localStorage === 'undefined') return;
-        if (!id) {
-            localStorage.removeItem(ACTIVE_KEY);
-            return;
+    async setActiveSessionId(id: string | null): Promise<void> {
+        try {
+            if (!id) {
+                await HALContext.instance.runtime.extensionStore.deleteJson({
+                    namespace: FORGE_INDEX_NAMESPACE,
+                    table: FORGE_INDEX_TABLE,
+                    key: ACTIVE_KEY
+                });
+                return;
+            }
+            await HALContext.instance.runtime.extensionStore.setJson({
+                namespace: FORGE_INDEX_NAMESPACE,
+                table: FORGE_INDEX_TABLE,
+                key: ACTIVE_KEY,
+                value: id
+            });
+        } catch (e) {
+            console.warn('[ForgeRepository] 活跃会话 ID 写入失败。', e);
         }
-        localStorage.setItem(ACTIVE_KEY, id);
     }
 }
 

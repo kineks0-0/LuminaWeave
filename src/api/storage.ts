@@ -4,6 +4,7 @@
  */
 
 import { HALContext } from './core/hal/HALContext.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 export type StorageScope = 'Global' | 'Character' | 'Chat' | 'Session';
 
@@ -115,7 +116,7 @@ export class StorageCore {
         for (const key of selectedKeys) {
             if (data[key] !== undefined) {
                 // 如果是对象或数组，进行深度拷贝
-                this.globalIndependentData[key] = JSON.parse(JSON.stringify(data[key]));
+                this.globalIndependentData[key] = deepClone(data[key]);
                 changed = true;
                 this.emit(key, this.globalIndependentData[key], 'Global');
             }

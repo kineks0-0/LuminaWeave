@@ -1,4 +1,5 @@
 import type { CharacterChannelGroup } from '../../../types/ConversationContextTypes.js';
+import { padNumber as pad } from '../../../api/utils/dateFormat.js';
 
 export interface TelegramChatListRow {
     sessionId: string;
@@ -16,7 +17,6 @@ export interface TelegramChatListRow {
 }
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-const pad = (value: number): string => String(value).padStart(2, '0');
 
 const startOfDay = (timestamp: number): number => {
     const date = new Date(timestamp);

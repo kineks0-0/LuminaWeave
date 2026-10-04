@@ -24,6 +24,7 @@ import {
     shellWorkspaceService,
     type ShellWorkspaceService
 } from '../../hal/shell/ShellWorkspaceService.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 export interface ForgeProjectFile {
     version: 1;
@@ -70,7 +71,7 @@ const normalizeLocalWorkspacePath = (workspacePath: string): string => (
     workspacePath.replace(/^\/workspaces(?=\/|$)/, '') || '/'
 );
 
-const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+const cloneJson = <T>(value: T): T => deepClone(value);
 
 const entryFileName = (entryId: string): string => `${encodeURIComponent(entryId)}.json`;
 

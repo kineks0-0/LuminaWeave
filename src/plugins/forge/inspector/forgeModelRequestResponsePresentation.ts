@@ -1,5 +1,6 @@
 import type { ForgePiTreeNode } from '@shared/ForgePiTypes.js';
 import type { ForgeModelRequestTrace } from '../../../types/ForgeRuntimeTypes.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export interface ResolveForgeModelRequestResponseTextInput {
     trace: ForgeModelRequestTrace | null;
@@ -81,6 +82,3 @@ const resolveAssistantPayloadText = (payload: unknown): string => {
         .join('');
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-};

@@ -13,7 +13,7 @@ export interface Token {
 }
 
 const TAG_REGEX = /<(\/?)([a-zA-Z_][a-zA-Z0-9_]*)\b([^>]*?)(\/?)>/g;
-const ATTR_REGEX = /([a-zA-Z_][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g;
+const ATTR_REGEX = /([a-zA-Z_][\w:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g;
 
 export function tokenize(input: string): Token[] {
     const tokens: Token[] = [];
@@ -84,7 +84,7 @@ export function tokenize(input: string): Token[] {
     return tokens;
 }
 
-function parseAttributes(attrStr: string): Record<string, string> {
+export function parseAttributes(attrStr: string): Record<string, string> {
     if (!attrStr || !attrStr.trim()) return {};
     const attrs: Record<string, string> = {};
     ATTR_REGEX.lastIndex = 0;

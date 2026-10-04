@@ -3,6 +3,7 @@ import type {
     ForgePiMessagePayload,
     ForgePiSessionEntry
 } from '@shared/ForgePiTypes.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export type ForgeSemanticVfsNodeKind = 'directory' | 'file' | 'alias' | 'resource-root';
 export type ForgeSemanticVfsSource = 'virtual' | 'context' | 'session' | 'workspace' | 'resource';
@@ -397,5 +398,3 @@ const isMessagePayload = (value: unknown): value is ForgePiMessagePayload =>
     && (value.role === 'user' || value.role === 'assistant' || value.role === 'system' || value.role === 'toolResult')
     && (typeof value.text === 'string' || value.text === undefined);
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null;

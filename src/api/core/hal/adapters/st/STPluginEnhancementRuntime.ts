@@ -9,6 +9,7 @@ import type {
     RuntimeStreamingHandle
 } from '@shared/api/HALRuntimePorts.js';
 import { API_BASE, API_ROUTES } from '@shared/ApiEndpoints.js';
+import { base64ToBytes, bytesToBase64 } from '@shared/CommonUtils.js';
 import { STClient } from '../../../host-drivers/st/STClient.js';
 import type { ConversationDocument, ConversationMutation } from '@shared/ConversationTypes.js';
 import { migrateLegacyChatArray, migrateLegacyForgeSession } from '@shared/ConversationMigration.js';
@@ -357,7 +358,10 @@ export class STPluginEnhancementRuntime implements HALRuntimePorts {
                         reader.readAsDataURL(data);
                     });
                 } else if (data instanceof ArrayBuffer || (ArrayBuffer.isView(data))) {
-                     base64 = btoa(String.fromCharCode(...new Uint8Array(data as any)));
+                     const bytes = data instanceof ArrayBuffer
+                         ? new Uint8Array(data)
+                         : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+                     base64 = bytesToBase64(bytes);
                 } else {
                      base64 = String(data);
                 }
@@ -372,7 +376,7 @@ export class STPluginEnhancementRuntime implements HALRuntimePorts {
                     const res = await fetch(base64);
                     return await res.blob();
                 }
-                return new Blob([base64]);
+                return new Blob([base64ToBytes(base64)]);
             }
         };
     }

@@ -1,4 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export interface ForgePiReplayTarget {
     providerId?: string | null;
@@ -14,9 +15,6 @@ export interface ForgePiAssistantMessageClassification {
 }
 
 type AssistantLike = Extract<AgentMessage, { role: 'assistant' }>;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null;
 
 const hasSignature = (part: Record<string, unknown>): boolean =>
     [part.thinkingSignature, part.reasoningSignature, part.thoughtSignature]

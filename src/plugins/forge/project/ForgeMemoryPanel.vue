@@ -33,6 +33,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { formatShortDateTime } from '../../../api/utils/dateFormat.js';
 import { useCardMakerStore } from '../CardMakerStore.js';
 import ForgeAuxPanelShell from '../app/ForgeAuxPanelShell.vue';
 import type { ForgeMemorySource } from '../../../types/ForgeMemoryTypes.js';
@@ -43,12 +44,7 @@ const sortedEntries = computed(() =>
   [...store.forgeMemoryTree.entries].sort((left, right) => right.updatedAt - left.updatedAt)
 );
 
-const formatTime = (value: number) => new Date(value).toLocaleString([], {
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-});
+const formatTime = formatShortDateTime;
 
 const sourceLabel = (source: ForgeMemorySource) => {
   switch (source) {

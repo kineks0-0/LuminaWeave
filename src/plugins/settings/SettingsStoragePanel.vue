@@ -82,6 +82,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { formatDateTime } from '../../api/utils/dateFormat.js';
 import { Database, Download, RefreshCw, RotateCcw, Upload } from 'lucide-vue-next';
 import {
   runtimeStorageAdminService,
@@ -131,7 +132,7 @@ const formatBytes = (bytes: number): string => {
 
 const formatUpdatedAt = (value: number | null): string => {
   if (!value) return '无记录';
-  return new Date(value).toLocaleString();
+  return formatDateTime(value);
 };
 
 const downloadJson = (filename: string, payload: unknown): void => {

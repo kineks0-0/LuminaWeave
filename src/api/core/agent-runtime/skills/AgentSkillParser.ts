@@ -1,3 +1,5 @@
+import { parse as parseYaml } from 'yaml';
+
 export interface AgentSkillSource {
     path: string;
     content: string;
@@ -156,62 +158,43 @@ export class AgentSkillParser {
         }
         return {
             ok: true,
-            frontmatter: this.parseYamlSubset(lines.slice(1, endIndex)),
+            frontmatter: this.parseYamlFrontmatter(lines.slice(1, endIndex)),
             body: lines.slice(endIndex + 1).join('\n').trim()
         };
     }
 
-    private parseYamlSubset(lines: string[]): Record<string, ParsedFrontmatterValue> {
+    private parseYamlFrontmatter(lines: string[]): Record<string, ParsedFrontmatterValue> {
+        const parsed = parseYaml(lines.join('\n'));
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
         const result: Record<string, ParsedFrontmatterValue> = {};
-        let activeKey: string | null = null;
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            const listMatch = /^\s+-\s*(.*)$/.exec(line);
-            if (listMatch && activeKey) {
-                const current = result[activeKey];
-                result[activeKey] = Array.isArray(current)
-                    ? [...current, this.unquote(listMatch[1].trim())]
-                    : [this.unquote(listMatch[1].trim())];
-                continue;
-            }
-            const nestedMatch = /^\s+([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
-            if (nestedMatch && activeKey) {
-                const current = this.asRecord(result[activeKey]);
-                result[activeKey] = {
-                    ...current,
-                    [nestedMatch[1]]: this.unquote(nestedMatch[2].trim())
-                };
-                continue;
-            }
-            const fieldMatch = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
-            if (!fieldMatch) continue;
-            activeKey = fieldMatch[1];
-            result[activeKey] = fieldMatch[2].trim()
-                ? this.parseScalarOrInlineList(fieldMatch[2].trim())
-                : [];
+        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+            const normalized = this.normalizeFrontmatterValue(value);
+            if (normalized !== undefined) result[key] = normalized;
         }
         return result;
     }
 
-    private parseScalarOrInlineList(value: string): string | string[] {
-        if (value.startsWith('[') && value.endsWith(']')) {
-            return value
-                .slice(1, -1)
-                .split(',')
-                .map(item => this.unquote(item.trim()))
-                .filter(Boolean);
+    private normalizeFrontmatterValue(value: unknown): ParsedFrontmatterValue | undefined {
+        if (value === null || value === undefined) return [];
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+        if (Array.isArray(value)) {
+            return value.map(item => (item === null || item === undefined
+                ? ''
+                : typeof item === 'object' ? JSON.stringify(item) : String(item)));
         }
-        return this.unquote(value);
-    }
-
-    private unquote(value: string): string {
-        if (
-            (value.startsWith('"') && value.endsWith('"'))
-            || (value.startsWith("'") && value.endsWith("'"))
-        ) {
-            return value.slice(1, -1);
+        if (typeof value === 'object') {
+            const record: Record<string, string | string[]> = {};
+            for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+                const normalized = this.normalizeFrontmatterValue(nested);
+                if (normalized === undefined) continue;
+                record[key] = typeof normalized === 'string' || Array.isArray(normalized)
+                    ? normalized
+                    : JSON.stringify(normalized);
+            }
+            return record;
         }
-        return value;
+        return undefined;
     }
 
     private asString(value: ParsedFrontmatterValue | undefined): string | undefined {

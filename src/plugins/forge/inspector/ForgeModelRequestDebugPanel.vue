@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { formatClockSeconds } from '../../../api/utils/dateFormat.js';
 import { useCardMakerStore } from '../CardMakerStore.js';
 import { useForgeStore } from '../../../stores/useForgeStore.js';
 import type { ForgeModelRequestTrace } from '../../../types/ForgeRuntimeTypes.js';
@@ -47,12 +48,7 @@ const clearTraces = () => {
 
 const formatTime = (value: number | null) => {
     if (!value) return '—';
-    return new Date(value).toLocaleTimeString([], {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    });
+    return formatClockSeconds(value);
 };
 
 const formatDuration = (trace: ForgeModelRequestTrace) => {

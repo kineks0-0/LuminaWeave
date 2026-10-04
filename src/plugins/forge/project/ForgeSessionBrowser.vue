@@ -128,6 +128,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { formatShortDateTime } from '../../../api/utils/dateFormat.js';
 import {
   Archive,
   ChevronDown,
@@ -170,12 +171,7 @@ const projectRows = computed<ForgeProjectCenterRow[]>(() => buildForgeProjectCen
   activeThreadId: store.workspaceSessionId
 }));
 
-const formatTime = (timestamp: number): string => new Date(timestamp).toLocaleString([], {
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-});
+const formatTime = formatShortDateTime;
 
 const rowKey = (row: ForgeProjectCenterRow): string => `${row.kind}:${row.id}`;
 
@@ -263,7 +259,7 @@ const handleRenameThread = async (id: string, currentTitle: string): Promise<voi
   if (!nextTitle || nextTitle === currentTitle) return;
 
   if (id === store.workspaceSessionId) {
-    store.renameWorkspaceSession(nextTitle);
+    await store.renameWorkspaceSession(nextTitle);
     await sessionIndexStore.refresh();
     return;
   }

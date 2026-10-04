@@ -1,4 +1,5 @@
 import { LuminaChatMessage, MessageUtils } from '@shared/LuminaMessage.js';
+import { digestString } from '@shared/hash.js';
 import { lwStorage } from '../../../storage.js';
 import { BuiltinXMLTags, XMLInterceptor, globalXMLInterceptor } from '../../xml-view/XMLInterceptor.js';
 import { DiffResult } from '@shared/api/SyncEngine.js';
@@ -100,12 +101,7 @@ export class MessageComparator {
         const isHidden = msg.is_hidden ? '1' : '0';
         
         const rawString = `${name}|${role}|${isHidden}|${normText}`;
-        let hash = 0;
-        for (let i = 0; i < rawString.length; i++) {
-            hash = ((hash << 5) - hash) + rawString.charCodeAt(i);
-            hash |= 0;
-        }
-        return `snap_${Math.abs(hash).toString(16).substring(0, 8)}`;
+        return `snap_${digestString(rawString)}`;
     }
 
     public static getCanonicalSnapshot(msg: any): string {
@@ -115,12 +111,7 @@ export class MessageComparator {
         const isHidden = msg?.is_hidden ? '1' : '0';
 
         const rawString = `${name}|${role}|${isHidden}|${text}`;
-        let hash = 0;
-        for (let i = 0; i < rawString.length; i++) {
-            hash = ((hash << 5) - hash) + rawString.charCodeAt(i);
-            hash |= 0;
-        }
-        return `canon_${Math.abs(hash).toString(16).substring(0, 8)}`;
+        return `canon_${digestString(rawString)}`;
     }
 
     /**

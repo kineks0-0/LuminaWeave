@@ -17,6 +17,8 @@ import type {
     ForgeTimelineOperationStatus
 } from '../../../types/ForgeTimelineTypes.js';
 import type { ForgePiSessionEntry } from '@shared/ForgePiTypes.js';
+import { isRecord, createPrefixedId } from '@shared/CommonUtils.js';
+
 
 export type BackendPresetMeta = {
     id: string;
@@ -62,13 +64,6 @@ export interface ForgePiConversationProjection {
     timelineGraph: Record<string, TimelineNode>;
     activeLeafId: string | null;
 }
-
-const createPrefixedId = (prefix: string): string => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return `${prefix}_${crypto.randomUUID()}`;
-    }
-    return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-};
 
 export const generateSessionChatId = (): string => createPrefixedId('lw_card');
 
@@ -388,9 +383,6 @@ const stringifyPiPayload = (payload: unknown): string | null => {
         return null;
     }
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null;
 
 export const summarizeLorebookEntries = (entries: LuminaLorebookEntry[]): ForgeRequestLorebookEntrySummary[] =>
     entries.map((entry: any) => {

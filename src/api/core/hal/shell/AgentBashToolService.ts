@@ -9,6 +9,7 @@ import { ShellPermissionService } from './ShellPermissionService.js';
 import { createShellCommandManual, type ShellCommandMetadata } from './ShellCommandManual.js';
 import { shellNetworkPolicyService } from './ShellNetworkPolicyService.js';
 import { forgeWorkspacePath } from './ShellWorkspaceService.js';
+import { cleanPath as normalizePath } from '@shared/resources/vfsPath.js';
 
 export interface AgentBashToolTraceEvent {
     phase: 'before' | 'after';
@@ -86,9 +87,6 @@ export type AgentBashSkillToolkit = BashToolkit & {
 
 const textContent = (content: string | Uint8Array): string =>
     typeof content === 'string' ? content : new TextDecoder().decode(content);
-
-const normalizePath = (path: string): string =>
-    `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
 
 const dirname = (path: string): string => {
     const normalized = normalizePath(path);

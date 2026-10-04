@@ -27,6 +27,7 @@ import {
     createEmptyDraftTree,
     createEmptyStructuredState
 } from '../../utils/forgeStateDefaults.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 // ────────────────── Helpers ──────────────────
 
@@ -170,7 +171,7 @@ export class ForgeSessionController {
             commitReadyEntries: d.getCommitReadyEntries().map(entry => ({ ...entry })),
             virtualLorebookEntries: d.getVirtualLorebookEntries().map(item => ({
                 ...item,
-                entry: JSON.parse(JSON.stringify(item.entry))
+                entry: deepClone(item.entry)
             })),
             importedLorebookId: d.getImportedLorebookId(),
             workflowSnapshot: d.getWorkflowSnapshot(),
@@ -227,7 +228,7 @@ export class ForgeSessionController {
         d.setIsProcessing(false);
         d.setVirtualLorebookEntries((session.virtualLorebookEntries || []).map(item => ({
             ...item,
-            entry: JSON.parse(JSON.stringify(item.entry))
+            entry: deepClone(item.entry)
         })));
         d.setImportedLorebookId(session.importedLorebookId || null);
         d.setStructuredState(cloneStructuredState(session.structuredState || createEmptyStructuredState()));
@@ -322,10 +323,10 @@ export class ForgeSessionController {
         return created;
     }
 
-    renameWorkspaceSession(title: string): boolean {
+    async renameWorkspaceSession(title: string): Promise<boolean> {
         const wsId = this.deps.getWorkspaceSessionId();
         if (!wsId) return false;
-        const updated = forgeSessionRepository.renameSession(wsId, title);
+        const updated = await forgeSessionRepository.renameSession(wsId, title);
         if (!updated) return false;
         this.deps.setWorkspaceTitle(updated.title);
         this.deps.setWorkspaceUpdatedAt(updated.updatedAt);
@@ -337,7 +338,7 @@ export class ForgeSessionController {
         const session = await forgeSessionRepository.loadSession(id);
         if (!session) return false;
         this.hydrateFromSession(session);
-        forgeSessionRepository.setActiveSessionId(session.id);
+        await forgeSessionRepository.setActiveSessionId(session.id);
         return true;
     }
 
@@ -370,12 +371,12 @@ export class ForgeSessionController {
 
     async ensureWorkspaceSession(): Promise<void> {
         await forgeSessionRepository.refreshFromServer();
-        const activeId = forgeSessionRepository.getActiveSessionId();
+        const activeId = await forgeSessionRepository.getActiveSessionId();
         if (activeId && await this.openWorkspaceSession(activeId)) {
             return;
         }
 
-        const sessions = forgeSessionRepository.listSessions();
+        const sessions = await forgeSessionRepository.listSessions();
         if (sessions.length > 0 && await this.openWorkspaceSession(sessions[0].id)) {
             return;
         }

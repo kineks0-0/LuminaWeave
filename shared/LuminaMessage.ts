@@ -1,3 +1,6 @@
+import { createPrefixedId } from './CommonUtils.js';
+import { digestString } from './hash.js';
+
 export interface STSwipeInfo {
     text: string;
     send_date: number;
@@ -66,19 +69,14 @@ export class MessageUtils {
      */
     public static getFingerprint(content: string): string {
         const cleaned = this.normalizeForFingerprint(content);
-        let hash = 0;
-        for (let i = 0; i < cleaned.length; i++) {
-            hash = ((hash << 5) - hash) + cleaned.charCodeAt(i);
-            hash |= 0;
-        }
-        return `fp_${Math.abs(hash).toString(16).substring(0, 8)}`;
+        return `fp_${digestString(cleaned)}`;
     }
 
     /**
      * 生成节点 ID
      */
     public static generateNodeId(): string {
-        return 'node_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36).substring(4);
+        return createPrefixedId('node');
     }
 
     /**

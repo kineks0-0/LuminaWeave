@@ -3,6 +3,7 @@ import type {
     AgentRuntimeResourceScanResult,
     AgentRuntimeResourceScanner
 } from '../../runtime/AgentRuntimeTypes.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export type AgentRuntimeResourceScanEntryKind = 'file' | 'directory' | 'symlink';
 
@@ -240,9 +241,6 @@ const readStringArray = (value: unknown): string[] | undefined =>
     Array.isArray(value) && value.every(item => typeof item === 'string')
         ? [...value]
         : undefined;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null;
 
 const joinPath = (...parts: string[]): string =>
     normalizePath(parts

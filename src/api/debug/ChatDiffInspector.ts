@@ -1,6 +1,7 @@
 import { LuminaChatMessage } from '@shared/LuminaMessage.js';
 import { globalXMLInterceptor } from '../core/xml-view/XMLInterceptor.js';
 import { MessageComparator, MessageTextResolver, SyncUtils } from '../core/host-drivers/st/SyncUtils.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export type ChatDiffSide = 'lumina' | 'st';
 
@@ -64,10 +65,6 @@ type SnapshotBuildResult = {
     snapshot: ChatMessageSnapshot;
     rawCanonicalSource: 'mesRaw' | 'extra.mesRaw' | 'message' | 'mes' | 'pluginRaw' | 'none';
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-}
 
 function getString(value: unknown): string | undefined {
     return typeof value === 'string' ? value : undefined;

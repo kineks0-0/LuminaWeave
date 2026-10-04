@@ -4,6 +4,7 @@ import {
     type AgentRuntimeToolResult
 } from '../tools/AgentToolRegistry.js';
 import { AgentRuntimeEventBus } from '../events/AgentRuntimeEventBus.js';
+import { deepClone } from '@shared/CommonUtils.js';
 
 export interface AgentRuntimeMockModel<TRequest = unknown> {
     requests: TRequest[];
@@ -158,5 +159,5 @@ const normalizePath = (path: string): string =>
 
 const clone = <T>(value: T): T => {
     if (value === null || value === undefined) return value;
-    return JSON.parse(JSON.stringify(value)) as T;
+    return deepClone(value) as T;
 };

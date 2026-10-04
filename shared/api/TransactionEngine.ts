@@ -4,6 +4,7 @@ import {
     TransactionMutationResponse, 
     TransactionErrorPayload 
 } from './TransactionTypes.js';
+import { digestString } from '../hash.js';
 
 /**
  * 物理存储接口适配
@@ -79,11 +80,6 @@ export class TransactionEngine {
      */
     public static digest(payload: unknown): string {
         const text = JSON.stringify(payload) || '';
-        let hash = 0;
-        for (let i = 0; i < text.length; i++) {
-            hash = ((hash << 5) - hash) + text.charCodeAt(i);
-            hash |= 0;
-        }
-        return `dg_${Math.abs(hash).toString(16)}`;
+        return `dg_${digestString(text)}`;
     }
 }

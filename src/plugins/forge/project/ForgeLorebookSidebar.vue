@@ -111,11 +111,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { formatShortDateTime } from '../../../api/utils/dateFormat.js';
 import { luminaWeaveApi } from '../../../api';
 import { useCardMakerStore } from '../CardMakerStore.js';
 import type { ForgeVirtualLorebookEntry } from '../../../types/SessionTypes.js';
 import ForgeLorebookEditor from './ForgeLorebookEditor.vue';
 import ForgeLorebookPreview from './ForgeLorebookPreview.vue';
+import { truncate, deepClone } from '@shared/CommonUtils.js';
 
 defineProps<{
   workspaceSessionId?: string;
@@ -150,17 +152,8 @@ const filteredEntries = computed(() => {
   );
 });
 
-const truncate = (text: string | null | undefined, length: number) => {
-  if (!text) return '';
-  return text.length > length ? `${text.slice(0, length)}...` : text;
-};
 
-const formatTime = (value: number) => new Date(value).toLocaleString([], {
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-});
+const formatTime = formatShortDateTime;
 
 const previewKeywords = computed(() => (previewEntry.value?.key || []).slice(0, 6));
 
@@ -174,8 +167,8 @@ const clearSelection = () => {
 const selectFile = (id: string) => {
   selectedFileId.value = id;
   const target = files.value.find((item: ForgeVirtualLorebookEntry) => item.id === id) || null;
-  previewEntry.value = target ? JSON.parse(JSON.stringify(target.entry)) : null;
-  editorEntry.value = target ? JSON.parse(JSON.stringify(target.entry)) : null;
+  previewEntry.value = target ? deepClone(target.entry) : null;
+  editorEntry.value = target ? deepClone(target.entry) : null;
   editorOverlayOpen.value = false;
 };
 
@@ -202,7 +195,7 @@ const createNewEntry = () => {
 };
 
 const openEditorOverlay = () => {
-  editorEntry.value = previewEntry.value ? JSON.parse(JSON.stringify(previewEntry.value)) : editorEntry.value;
+  editorEntry.value = previewEntry.value ? deepClone(previewEntry.value) : editorEntry.value;
   editorOverlayOpen.value = true;
 };
 

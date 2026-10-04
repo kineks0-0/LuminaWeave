@@ -1,6 +1,6 @@
 <template>
   <transition name="lw-fade-scale">
-    <LuminaModalShell v-if="modal.isOpen" @click="modal.handleCancel">
+    <LuminaModalShell v-if="modal.isOpen" @dismiss="modal.handleCancel">
       <div class="tw:flex tw:items-center tw:gap-3 tw:pb-4">
         <div
           :class="[

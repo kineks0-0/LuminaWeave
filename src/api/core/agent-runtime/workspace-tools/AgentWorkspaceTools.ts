@@ -4,6 +4,7 @@ import type {
     AgentRuntimeToolResult,
     AgentToolRegistry
 } from '../tools/AgentToolRegistry.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export type AgentWorkspaceToolName = 'read' | 'write' | 'edit' | 'delete' | 'bash' | 'grep' | 'find' | 'ls' | 'search';
 
@@ -464,10 +465,6 @@ function assertBashArgs(args: unknown): asserts args is BashToolArgs {
     if (args.cwd !== undefined && typeof args.cwd !== 'string') {
         throw new Error('bash cwd must be a string.');
     }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
 }
 
 const readRequiredStringArg = (args: unknown, key: string): string => {

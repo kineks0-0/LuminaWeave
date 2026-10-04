@@ -1,5 +1,6 @@
 import { LuminaChatMessage, MessageUtils } from '../LuminaMessage.js';
 import { BaseXMLInterceptor, type StreamingPolicy } from '../BaseXMLInterceptor.js';
+import { digestString } from '../hash.js';
 
 /**
  * 差异比对结果接口
@@ -65,12 +66,7 @@ export class SharedMessageComparator {
     }
 
     private static hash(text: string, prefix: string): string {
-        let hash = 0;
-        for (let i = 0; i < text.length; i++) {
-            hash = ((hash << 5) - hash) + text.charCodeAt(i);
-            hash |= 0;
-        }
-        return `${prefix}_${Math.abs(hash).toString(16).substring(0, 8)}`;
+        return `${prefix}_${digestString(text)}`;
     }
 }
 

@@ -25,9 +25,10 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import type { ChatMenuItem, ChatMenuPlacement } from '../presentation/chatMenus.js';
 import { CHAT_MENU_ICONS } from './chatMenuIcons.js';
+import { useOutsidePointer } from '../../../composables/useOutsidePointer.js';
 
 withDefaults(defineProps<{
   items: ReadonlyArray<ChatMenuItem>;
@@ -82,19 +83,11 @@ const handleKeydown = (event: KeyboardEvent): void => {
   }
 };
 
-// 菜单之外的按下即关闭；用 composedPath 以兼容 Shadow DOM
-const handleOutsidePointer = (event: PointerEvent): void => {
-  const anchor = rootRef.value?.parentElement;
-  if (anchor && !event.composedPath().includes(anchor)) emit('close');
-};
+// 菜单之外的按下即关闭
+useOutsidePointer([() => rootRef.value?.parentElement ?? null], () => emit('close'));
 
 onMounted(() => {
-  rootRef.value?.ownerDocument.addEventListener('pointerdown', handleOutsidePointer, true);
   enabledButtons()[0]?.focus({ preventScroll: true });
-});
-
-onBeforeUnmount(() => {
-  rootRef.value?.ownerDocument.removeEventListener('pointerdown', handleOutsidePointer, true);
 });
 </script>
 

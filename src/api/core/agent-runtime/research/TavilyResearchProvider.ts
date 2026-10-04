@@ -10,6 +10,7 @@ import {
     type AgentResearchSource,
     type AgentResearchTimeRange
 } from './AgentResearchProvider.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 const TAVILY_API_BASE_URL = 'https://api.tavily.com';
 
@@ -332,10 +333,6 @@ const formatTavilyError = (status: number, data: unknown): string => {
     }
     return `${status} Error: ${JSON.stringify(data)}`;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> => (
-    typeof value === 'object' && value !== null
-);
 
 const formatSearchMarkdown = (
     query: string,

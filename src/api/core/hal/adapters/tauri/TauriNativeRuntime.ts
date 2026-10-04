@@ -11,6 +11,7 @@ import {
 import { HostDetector } from '../../../host-drivers/HostDetector.js';
 import { TauriGlobalAccessor } from '../../../host-drivers/tauri/TauriGlobalAccessor.js';
 import { globalNexusOrchestrator } from '@shared/api/llm/NexusOrchestrator.js';
+import { base64ToBytes } from '@shared/CommonUtils.js';
 import { lwStorage } from '../../../../storage.js';
 import { STClient } from '../../../host-drivers/st/STClient.js';
 import { STGlobalAccessor } from '../../../host-drivers/st/STGlobalAccessor.js';
@@ -878,13 +879,7 @@ export class TauriNativeRuntime implements HALRuntimePorts {
                 const res = await this.invoke('get_extension_store_blob', safeParams);
                 // 容错：如果后端返回的是 base64 字符串（常见于 invoke 降级路径），转换为 Blob
                 if (typeof res === 'string' && res.length > 100 && !res.startsWith('blob:')) {
-                    const byteCharacters = atob(res);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                        byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    return new Blob([byteArray]);
+                    return new Blob([base64ToBytes(res)]);
                 }
                 return res;
             } catch (err: any) {

@@ -1,4 +1,5 @@
 import { createGit, type FileSystem, type Git } from 'just-git';
+import { quote as shellQuote } from 'shell-quote';
 import {
     formatDiff,
     getChangedFiles,
@@ -6,6 +7,7 @@ import {
     walkCommitHistory,
     type TreeDiffEntry
 } from 'just-git/repo';
+import { cleanPath as normalizeRoot } from '@shared/resources/vfsPath.js';
 
 export interface ForgeWorkspaceGitChangedFile {
     path: string;
@@ -67,11 +69,7 @@ const DEFAULT_IDENTITY = {
     email: 'forge@luminaweave.local'
 };
 
-const normalizeRoot = (path: string): string =>
-    `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '') || '/';
-
-const quoteGitArg = (value: string): string =>
-    `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+const quoteGitArg = (value: string): string => shellQuote([value]);
 
 const mapChangedFile = (entry: TreeDiffEntry): ForgeWorkspaceGitChangedFile => ({
     path: entry.path,

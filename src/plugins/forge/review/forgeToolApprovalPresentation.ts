@@ -1,3 +1,4 @@
+import { isRecord } from '@shared/CommonUtils.js';
 export type ForgeToolApprovalDetailTone = 'neutral' | 'pending';
 
 export interface ForgeToolApprovalDetailBlock {
@@ -13,9 +14,6 @@ export interface ForgeToolApprovalPresentation {
   blocks: ForgeToolApprovalDetailBlock[];
   rawArgs: string;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const asString = (value: unknown): string =>
   typeof value === 'string' ? value : value == null ? '' : String(value);

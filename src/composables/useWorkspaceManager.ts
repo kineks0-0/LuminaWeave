@@ -2,6 +2,7 @@ import { computed, onUnmounted, ref, watch, type Component, type ComputedRef, ty
 import { lwStorage } from '../api/storage.js';
 import ThemedSurfaceOutlet from '../platform/surface/ThemedSurfaceOutlet.vue';
 import DynamicTabOutlet from '../shell/DynamicTabOutlet.vue';
+import { createPrefixedId } from '@shared/CommonUtils.js';
 import { normalizeActivityDescriptor } from '../platform/activity/activityLaunchResolver.js';
 import type { LuminaPlugin } from '../types/plugin.js';
 import type { DynamicTabConfig } from '../shell/types.js';
@@ -82,8 +83,8 @@ const applyElasticBounds = (value: number, min: number, max: number, resistance 
   if (value > max) return max + (value - max) * resistance;
   return value;
 };
-const createWorkspaceStageId = () => `stage_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-const createWorkspaceWindowId = () => `window_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+const createWorkspaceStageId = () => createPrefixedId('stage');
+const createWorkspaceWindowId = () => createPrefixedId('window');
 
 const normalizeWorkspaceStages = (input: unknown): WorkspaceStageRecord[] => {
   if (!Array.isArray(input)) return [];

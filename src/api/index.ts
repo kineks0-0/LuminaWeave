@@ -480,6 +480,9 @@ export class LuminaWeaveAPI extends LuminaWeaveAPIBase {
         // 加载独立全局存储
         await lwStorage.loadIndependentGlobalData();
 
+        // 恢复世界书快照（依赖 HAL extensionStore）
+        await this.lorebookManager.initializeSnapshots();
+
         // 核心修复：激活组件。激活后，ChatManager 才会响应 lwStorage 的变动，
         // 从而确保在 loadIndependentGlobalData 完成且环境确认就绪后才开始逻辑监听。
         this.chatManager.activate();

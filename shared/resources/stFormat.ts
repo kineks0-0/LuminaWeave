@@ -6,6 +6,7 @@ import type {
     STResourceRawPayload,
     STWorldbookRawPayload
 } from './types.js';
+import { deepClone } from '../CommonUtils.js';
 
 const asRecord = (value: unknown): Record<string, unknown> =>
     value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -128,7 +129,7 @@ export const summarizeSTResource = (
     };
 };
 
-export const cloneSTRawPayload = <T>(payload: T): T => JSON.parse(JSON.stringify(payload ?? null)) as T;
+export const cloneSTRawPayload = <T>(payload: T): T => deepClone(payload ?? null) as T;
 
 export const toSTResourcePayload = (
     resourceType: ResourceType,

@@ -1,4 +1,6 @@
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { createPrefixedId } from '@shared/CommonUtils.js';
+import { digestString } from '@shared/hash.js';
 
 export interface ChatMessageMutationPort {
     normalizeChatId(chatId: string | null | undefined): string | null;
@@ -47,11 +49,7 @@ class EmptyChatMessageMutationPort implements ChatMessageMutationPort {
     }
 
     getFingerprint(text: string): string {
-        let hash = 0;
-        for (let index = 0; index < text.length; index += 1) {
-            hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
-        }
-        return `fp_${Math.abs(hash)}`;
+        return `fp_${digestString(text)}`;
     }
 
     getHostFingerprint(text: string): string {
@@ -59,7 +57,7 @@ class EmptyChatMessageMutationPort implements ChatMessageMutationPort {
     }
 
     generateNodeId(): string {
-        return `node_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        return createPrefixedId('node');
     }
 
     syncMessageCalculatedFields(message: LuminaChatMessage): void {

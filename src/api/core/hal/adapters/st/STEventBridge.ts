@@ -1,33 +1,12 @@
-import { IEventBridge } from '../../interfaces.js';
+import { EventBridgeBase } from '../EventBridgeBase.js';
 import { STGlobalAccessor } from '../../../host-drivers/st/STGlobalAccessor.js';
 
 /**
  * SillyTavern 宿主的事件桥接实现
  * 负责将 ST 的原生 EventEmitter 事件转发为 Lumina 标准领域事件
  */
-export class STEventBridge implements IEventBridge {
-    private handlers: Map<string, ((...args: any[]) => void)[]> = new Map();
+export class STEventBridge extends EventBridgeBase {
     private hostListeners: { event: string; handler: Function }[] = [];
-
-    on(event: string, callback: (...args: any[]) => void): void {
-        const handlers = this.handlers.get(event) || [];
-        handlers.push(callback);
-        this.handlers.set(event, handlers);
-    }
-
-    off(event: string, callback: (...args: any[]) => void): void {
-        const handlers = this.handlers.get(event);
-        if (handlers) {
-            this.handlers.set(event, handlers.filter(h => h !== callback));
-        }
-    }
-
-    emit(event: string, ...args: any[]): void {
-        const handlers = this.handlers.get(event);
-        if (handlers) {
-            handlers.forEach(h => h(...args));
-        }
-    }
 
     bindHostEvents(): void {
         const source = STGlobalAccessor.stEventSource;

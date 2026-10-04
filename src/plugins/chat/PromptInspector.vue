@@ -85,6 +85,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Eye, LoaderCircle, Pencil, Play, RefreshCw, SearchCode } from 'lucide-vue-next';
 import type { ChatPromptInspectionState } from './application/ChatApplicationController.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 interface PromptMessagePresentation {
   role: string;
@@ -112,9 +113,6 @@ const view = ref<'messages' | 'raw' | 'sources'>('messages');
 const editContent = ref('');
 let probeTimer: ReturnType<typeof setTimeout> | null = null;
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 const readString = (record: Record<string, unknown>, key: string): string => {
   const value = record[key];

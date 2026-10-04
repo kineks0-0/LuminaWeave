@@ -6,44 +6,13 @@ import {
     type StreamingPolicy
 } from '@shared/BaseXMLInterceptor.js';
 import type { RegistrationDisposer } from '../../../platform/plugin/PluginRegistrationScope.js';
-import { tokenize, extractBlocks, type Token, type TagBlock } from '@shared/TagTokenizer.js';
+import { tokenize, extractBlocks, parseAttributes, type Token, type TagBlock } from '@shared/TagTokenizer.js';
+import { extractEntryTitle } from '../utils/forgeEntryParser.js';
 
 /**
  * 核心 XML 标签字典 (兼容导出)
  */
 export const BuiltinXMLTags = SharedBuiltinXMLTags;
-
-/**
- * 从 entry_update 内容中提取可读标题。
- * 支持 JSON（title/标题/name 字段）、YAML（title: 行）、TOML（title = 行）以及纯文本首行。
- */
-function extractTitleFromEntryContent(content: string): string {
-    const trimmed = content.trim();
-
-    // JSON
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        try {
-            const obj = JSON.parse(trimmed);
-            const src = Array.isArray(obj) ? obj[0] : obj;
-            if (src && typeof src === 'object') {
-                const t = src.title || src['标题'] || src.name || src.comment || src.description;
-                if (t && typeof t === 'string') return t.trim();
-            }
-        } catch { /* ignore */ }
-    }
-
-    // YAML: `title: value` or `title: "value"`
-    const yamlMatch = trimmed.match(/^title\s*:\s*["']?(.+?)["']?\s*$/im);
-    if (yamlMatch) return yamlMatch[1].trim();
-
-    // TOML: `title = "value"` or `title = 'value'`
-    const tomlMatch = trimmed.match(/^title\s*=\s*["'](.+?)["']\s*$/im);
-    if (tomlMatch) return tomlMatch[1].trim();
-
-    // 纯文本：首行非空文本（最多 40 字）
-    const firstLine = trimmed.split('\n').find(l => l.trim().length > 0) || '';
-    return firstLine.slice(0, 40).trim();
-}
 
 export type InterceptorCallback = (tagContent: string, fullMatchText: string) => string | void;
 
@@ -296,16 +265,6 @@ export class XMLInterceptor extends BaseXMLInterceptor {
         return lifecycle === 'persistent' ? content : '';
     }
 
-    private parseAttributes(xmlOpenTag: string): Record<string, string> {
-        const attributes: Record<string, string> = {};
-        const attributeRegex = /([a-zA-Z_][\w:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/g;
-        let match: RegExpExecArray | null = null;
-        while ((match = attributeRegex.exec(xmlOpenTag)) !== null) {
-            attributes[match[1]] = match[2] ?? match[3] ?? match[4] ?? '';
-        }
-        return attributes;
-    }
-
     public static override extractTagContent(text: string, tagName: string): string[] {
         const definition = globalXMLTagRegistry.getDefinition(tagName);
         const canonicalTag = definition?.tag || tagName;
@@ -331,12 +290,12 @@ export class XMLInterceptor extends BaseXMLInterceptor {
             return '';
         }, 'core-draft-plan-handler');
         this.registerXMLParser(BuiltinXMLTags.ENTRY_UPDATE, 'persistent', (content, fullMatch) => {
-            const attrs = this.parseAttributes(fullMatch);
+            const attrs = parseAttributes(fullMatch);
             const id = attrs.id || attrs.entry_id || `new_entry_${Date.now().toString(36)}`;
             const category = attrs.type || attrs.category || '';
             // title 优先取 XML 属性，其次从内容中提取（支持 JSON / YAML / TOML）
             const titleFromAttrs = attrs.title || attrs.description || '';
-            const title = titleFromAttrs || extractTitleFromEntryContent(content) || id;
+            const title = titleFromAttrs || extractEntryTitle(content) || id;
             return `<V>ForgeEntryProposal(${JSON.stringify(id)}, ${JSON.stringify(title)}, ${JSON.stringify(content)}, ${JSON.stringify(category)})</V>`;
         }, 'core-entry-update-handler');
 
@@ -346,7 +305,7 @@ export class XMLInterceptor extends BaseXMLInterceptor {
         }, 'core-forge-auto-list-handler');
 
         this.registerXMLParser(BuiltinXMLTags.MEMORY_UPDATE, 'ephemeral', (content, fullMatch) => {
-            const attrs = this.parseAttributes(fullMatch);
+            const attrs = parseAttributes(fullMatch);
             const path = attrs.path || 'Forge Memory';
             const title = attrs.title || path.split('/').slice(-1)[0] || 'Memory Update';
             const escaped = content.replace(/`/g, '\\`').replace(/\$/g, '\\$');

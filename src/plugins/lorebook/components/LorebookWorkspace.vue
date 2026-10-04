@@ -272,6 +272,7 @@ import type { LorebookVersionMode } from '../../../types/LorebookViewTypes.js';
 import { activityFromLegacyMode, normalizeActivityDescriptor } from '../../../platform/activity/activityLaunchResolver.js';
 import { useSurfaceInput } from '../../../platform/surface/useSurfaceRuntimeContext.js';
 import LorebookEditor from '../LorebookEditor.vue';
+import { truncate, deepClone } from '@shared/CommonUtils.js';
 
 const props = useSurfaceInput('lorebook.workspace');
 
@@ -295,7 +296,7 @@ const onEditingEntryChanged = (entry: LuminaLorebookEntry | null) => {
 
   if (resolvedMode.value === 'small') {
     globalEditingEntry.value = entry;
-    editingEntry.value = entry ? JSON.parse(JSON.stringify(entry)) : null;
+    editingEntry.value = entry ? deepClone(entry) : null;
   }
 };
 
@@ -503,10 +504,10 @@ const selectEntry = (entry: LuminaLorebookEntry) => {
       lwApi.emit('SWITCH_WIDGET_PANEL', 'lumina-lorebook');
     }
   } else if (shouldGotoLarge) {
-    lwApi.emit('OPEN_LOREBOOK_OVERLAY', JSON.parse(JSON.stringify(entry)));
+    lwApi.emit('OPEN_LOREBOOK_OVERLAY', deepClone(entry));
     editingUid.value = entry.uid !== undefined ? entry.uid : null;
   } else {
-    editingEntry.value = JSON.parse(JSON.stringify(entry));
+    editingEntry.value = deepClone(entry);
     editingUid.value = entry.uid !== undefined ? entry.uid : null;
     if (resolvedMode.value === 'small') {
       lorebookManager.setEditingEntry(entry);
@@ -562,10 +563,6 @@ const handleDelete = async (uid: string | number) => {
   }
 };
 
-const truncate = (text: string | null | undefined, length: number) => {
-  if (!text) return '';
-  return text.length > length ? text.substring(0, length) + '...' : text;
-};
 
 const syncData = (payload?: { book?: string }) => {
   const incomingBook = payload?.book ?? lorebookManager.selectedBook;
@@ -586,7 +583,7 @@ const syncSnapshots = () => {
 
 const handleSwap = () => {
   if (!editingEntry.value) return;
-  const entry = JSON.parse(JSON.stringify(editingEntry.value));
+  const entry = deepClone(editingEntry.value);
 
   if (resolvedMode.value === 'large') {
     lorebookManager.setEditingEntry(entry);

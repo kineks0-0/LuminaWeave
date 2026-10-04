@@ -15,6 +15,7 @@ import type {
 } from '../../tools/AgentToolRegistry.js';
 import type { AgentRuntimeExtensionSetupContext } from '../AgentRuntimeExtensionRunner.js';
 import type { AgentRuntimeDiagnostic } from '../../runtime/AgentRuntimeTypes.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export type PiExtensionFactory = (pi: PiExtensionAPI) => Promise<void> | void;
 
@@ -496,9 +497,6 @@ const resolveToolCallArgsAfterHandler = (
 
 const toMutableToolInput = (args: unknown): Record<string, unknown> =>
     isRecord(args) ? args : {};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const toAgentToolBlockResult = (result: PiToolCallResult): AgentToolBlockResult => {
     const message = result.reason ?? 'Tool call blocked by pi extension.';

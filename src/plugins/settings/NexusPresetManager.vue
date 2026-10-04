@@ -327,6 +327,7 @@ import { llmEngine } from '../../api/llmEngine.js';
 import { LuminaWeaveAPI } from '../../api/index.js';
 import LuminaButton from '../../ui/primitives/LuminaButton.vue';
 import { cn } from '../../ui/cn.js';
+import { createPrefixedId, deepClone } from '@shared/CommonUtils.js';
 import { useModalStore } from '../../stores/useModalStore.js';
 
 
@@ -361,29 +362,29 @@ const presets = ref<NexusPreset[]>([]);
 const customApis = ref<NexusApi[]>([]);
 const useSSE = ref<boolean>(true);
 
-const _generateId = () => 'nx_' + Math.random().toString(36).substring(2, 11);
+const _generateId = () => createPrefixedId('nx');
 
 onMounted(() => {
     // 从全局存储加载 API 配置
     const loadedApis = settingsDomainService.getGlobalValue<NexusApi[]>('nexus.apis', []);
-    customApis.value = JSON.parse(JSON.stringify(loadedApis));
+    customApis.value = deepClone(loadedApis);
     for (const api of customApis.value) {
         if (!api.type) api.type = 'openai_compatible';
     }
 
     // 从全局存储加载 Preset 配置
     const loadedPresets = settingsDomainService.getGlobalValue<NexusPreset[]>('nexus.presets', []);
-    presets.value = JSON.parse(JSON.stringify(loadedPresets));
+    presets.value = deepClone(loadedPresets);
 
     useSSE.value = settingsDomainService.getGlobalValue('nexus.useSSE', true) === true;
 });
 
 const saveApis = () => {
-    void settingsDomainService.setGlobalValue('nexus.apis', JSON.parse(JSON.stringify(customApis.value)));
+    void settingsDomainService.setGlobalValue('nexus.apis', deepClone(customApis.value));
 };
 
 const save = () => {
-    void settingsDomainService.setGlobalValue('nexus.presets', JSON.parse(JSON.stringify(presets.value)));
+    void settingsDomainService.setGlobalValue('nexus.presets', deepClone(presets.value));
 };
 
 const saveFlags = () => {

@@ -48,6 +48,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import gsap from 'gsap';
 
 const props = withDefaults(defineProps<{
   x: number;
@@ -125,7 +126,7 @@ let lastPointerY = 0;
 let lastMoveAt = 0;
 let velocityX = 0;
 let velocityY = 0;
-let settleFrame = 0;
+let settleTween: gsap.core.Tween | null = null;
 const rootStyle = computed(() => ({
   left: `${props.x}px`,
   top: `${props.y}px`,
@@ -165,9 +166,9 @@ const getParentSize = () => {
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 const cancelSettleAnimation = () => {
-  if (settleFrame) {
-    cancelAnimationFrame(settleFrame);
-    settleFrame = 0;
+  if (settleTween) {
+    settleTween.kill();
+    settleTween = null;
   }
 };
 
@@ -210,30 +211,29 @@ const releasePointerCapture = () => {
 
 const animateSettle = (initialX: number, initialY: number, initialScale = 1, duration = 240) => {
   cancelSettleAnimation();
-  const start = performance.now();
   settleX.value = initialX;
   settleY.value = initialY;
   settleScale.value = initialScale;
 
-  const tick = (now: number) => {
-    const t = Math.min(1, (now - start) / duration);
-    const eased = 1 - Math.pow(1 - t, 4);
-    settleX.value = initialX * (1 - eased);
-    settleY.value = initialY * (1 - eased);
-    settleScale.value = initialScale + (1 - initialScale) * eased;
-
-    if (t < 1) {
-      settleFrame = requestAnimationFrame(tick);
-      return;
+  const state = { x: initialX, y: initialY, scale: initialScale };
+  settleTween = gsap.to(state, {
+    x: 0,
+    y: 0,
+    scale: 1,
+    duration: duration / 1000,
+    ease: 'power4.out',
+    onUpdate: () => {
+      settleX.value = state.x;
+      settleY.value = state.y;
+      settleScale.value = state.scale;
+    },
+    onComplete: () => {
+      settleX.value = 0;
+      settleY.value = 0;
+      settleScale.value = 1;
+      settleTween = null;
     }
-
-    settleX.value = 0;
-    settleY.value = 0;
-    settleScale.value = 1;
-    settleFrame = 0;
-  };
-
-  settleFrame = requestAnimationFrame(tick);
+  });
 };
 
 const captureVelocity = (event: PointerEvent) => {

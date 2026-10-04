@@ -3,6 +3,7 @@ import type {
     AgentWorkspaceBashExecutor,
     AgentWorkspaceFileSystem
 } from './AgentWorkspaceTools.js';
+import { cleanPath as normalizeAbsolutePath } from '@shared/resources/vfsPath.js';
 
 export interface CreateJustBashWorkspaceFileSystemOptions {
     fs: IFileSystem;
@@ -108,11 +109,6 @@ const joinAbsolutePath = (root: string, child: string): string => {
     return normalizedChild
         ? `${root.replace(/\/$/, '')}/${normalizedChild}`.replace(/\/+/g, '/')
         : root;
-};
-
-const normalizeAbsolutePath = (path: string): string => {
-    const normalized = `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
-    return normalized || '/';
 };
 
 const normalizeWorkspacePath = (path: string): string =>

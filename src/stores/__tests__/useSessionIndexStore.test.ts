@@ -12,12 +12,14 @@ vi.mock('../../api/core/conversation/ChatSessionIndexService.js', () => ({
     }
 }));
 
+const forgeState = vi.hoisted(() => ({ activeSessionId: null as string | null }));
+
 vi.mock('../../api/core/forge/project/ForgeSessionRepository.js', () => ({
     forgeSessionRepository: {
         refreshFromServer: vi.fn(async () => undefined),
-        listSessions: vi.fn(() => []),
-        getActiveSessionId: vi.fn(() => null),
-        setActiveSessionId: vi.fn(),
+        listSessions: vi.fn(async () => []),
+        getActiveSessionId: vi.fn(async () => forgeState.activeSessionId),
+        setActiveSessionId: vi.fn(async (id: string | null) => { forgeState.activeSessionId = id; }),
         createThread: vi.fn(),
         renameProject: vi.fn(),
         renameThread: vi.fn(),
@@ -36,6 +38,7 @@ describe('useSessionIndexStore', () => {
     beforeEach(() => {
         setActivePinia(createPinia());
         vi.clearAllMocks();
+        forgeState.activeSessionId = null;
         vi.mocked(chatSessionIndexService.listChatSessions).mockResolvedValue([
             {
                 id: 'chat_a',
@@ -66,7 +69,7 @@ describe('useSessionIndexStore', () => {
                 characterAvatarUrl: null
             }
         ]);
-        vi.mocked(forgeSessionRepository.listSessions).mockReturnValue([]);
+        vi.mocked(forgeSessionRepository.listSessions).mockResolvedValue([]);
         vi.mocked(lwStorage._getContextIds).mockReturnValue({ charId: 'Global', chatId: '' });
     });
 
@@ -81,7 +84,7 @@ describe('useSessionIndexStore', () => {
     });
 
     it('derives collaboration threads from the selected Forge project', async () => {
-        vi.mocked(forgeSessionRepository.listSessions).mockReturnValue([
+        vi.mocked(forgeSessionRepository.listSessions).mockResolvedValue([
             {
                 id: 'forge_thread_a1',
                 forgeProjectId: 'forge_project_a',
@@ -139,7 +142,7 @@ describe('useSessionIndexStore', () => {
     });
 
     it('treats legacy Forge sessions without project ids as single-thread projects', async () => {
-        vi.mocked(forgeSessionRepository.listSessions).mockReturnValue([
+        vi.mocked(forgeSessionRepository.listSessions).mockResolvedValue([
             {
                 id: 'legacy_forge_ws',
                 conversationId: 'legacy_conversation',
@@ -163,8 +166,8 @@ describe('useSessionIndexStore', () => {
     });
 
     it('falls back to the most recently updated project when the selected thread is no longer indexed', async () => {
-        vi.mocked(forgeSessionRepository.getActiveSessionId).mockReturnValue('deleted_thread');
-        vi.mocked(forgeSessionRepository.listSessions).mockReturnValue([
+        forgeState.activeSessionId = 'deleted_thread';
+        vi.mocked(forgeSessionRepository.listSessions).mockResolvedValue([
             {
                 id: 'forge_thread_old',
                 forgeProjectId: 'forge_project_old',
@@ -203,7 +206,7 @@ describe('useSessionIndexStore', () => {
 
     it('creates and deletes Forge project threads through the session index boundary', async () => {
         vi.mocked(forgeSessionRepository.listSessions)
-            .mockReturnValueOnce([
+            .mockResolvedValueOnce([
                 {
                     id: 'forge_thread_seed',
                     forgeProjectId: 'forge_project_a',
@@ -218,7 +221,7 @@ describe('useSessionIndexStore', () => {
                     selectedChatSessionId: null
                 }
             ])
-            .mockReturnValueOnce([
+            .mockResolvedValueOnce([
                 {
                     id: 'forge_thread_new',
                     forgeProjectId: 'forge_project_a',
@@ -233,7 +236,7 @@ describe('useSessionIndexStore', () => {
                     selectedChatSessionId: null
                 }
             ])
-            .mockReturnValueOnce([]);
+            .mockResolvedValueOnce([]);
         vi.mocked(forgeSessionRepository.createThread).mockResolvedValue({
             id: 'forge_thread_new',
             forgeProjectId: 'forge_project_a',
@@ -312,7 +315,7 @@ describe('useSessionIndexStore', () => {
     });
 
     it('renames Forge projects and collaboration threads through separate repository commands', async () => {
-        vi.mocked(forgeSessionRepository.listSessions).mockReturnValue([
+        vi.mocked(forgeSessionRepository.listSessions).mockResolvedValue([
             {
                 id: 'forge_thread_a1',
                 forgeProjectId: 'forge_project_a',

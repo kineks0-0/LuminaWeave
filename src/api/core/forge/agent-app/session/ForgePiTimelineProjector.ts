@@ -9,6 +9,7 @@ import type {
     ForgeTimelineOperationKind,
     ForgeTimelineOperationStatus
 } from '../../../../../types/ForgeTimelineTypes.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 export interface ForgePiTimelineProjectionOptions {
     activeNodeId?: string | null;
@@ -189,5 +190,3 @@ const stringifyPayload = (payload: unknown): string | null => {
     }
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null;

@@ -9,7 +9,7 @@ export const useSessionIndexStore = defineStore('lumina-session-index', () => {
     const chatSessions = ref<ChatSessionRef[]>([]);
     const forgeSessions = ref<ForgeWorkspaceSessionRef[]>([]);
     const selectedChatSessionId = ref<string | null>(null);
-    const selectedForgeSessionId = ref<string | null>(forgeSessionRepository.getActiveSessionId());
+    const selectedForgeSessionId = ref<string | null>(null);
     const isLoading = ref(false);
 
     const refresh = async (): Promise<void> => {
@@ -17,7 +17,8 @@ export const useSessionIndexStore = defineStore('lumina-session-index', () => {
         try {
             await forgeSessionRepository.refreshFromServer();
             chatSessions.value = await chatSessionIndexService.listChatSessions();
-            forgeSessions.value = forgeSessionRepository.listSessions();
+            forgeSessions.value = await forgeSessionRepository.listSessions();
+            selectedForgeSessionId.value = await forgeSessionRepository.getActiveSessionId();
             // _getContextIds 已通过 HAL sessionIdNormalizer 规范化，无当前会话时为空串
             const currentChatId = lwStorage._getContextIds().chatId || null;
             const matchedCurrentChat = chatSessions.value.find(chat => chat.id === currentChatId);
@@ -40,7 +41,7 @@ export const useSessionIndexStore = defineStore('lumina-session-index', () => {
 
     const selectForgeSession = (id: string | null): void => {
         selectedForgeSessionId.value = id;
-        forgeSessionRepository.setActiveSessionId(id);
+        void forgeSessionRepository.setActiveSessionId(id);
     };
 
     const getForgeProjectId = (session: ForgeWorkspaceSessionRef): string => session.forgeProjectId || session.id;

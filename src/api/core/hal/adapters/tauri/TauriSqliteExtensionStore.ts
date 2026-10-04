@@ -9,6 +9,7 @@ import type {
     RuntimeStorageRecordLocation,
     RuntimeStorageScope
 } from '@shared/api/HALRuntimePorts.js';
+import { bytesToBase64, base64ToBytes } from '@shared/CommonUtils.js';
 
 interface TauriSqliteExtensionStoreOptions {
     databasePath?: string;
@@ -37,23 +38,6 @@ const recordId = (
 ): string => `${kind}\u0000${namespace}\u0000${table}\u0000${key}`;
 
 const bytesOfText = (text: string): number => new TextEncoder().encode(text).byteLength;
-
-const bytesToBase64 = (bytes: Uint8Array): string => {
-    let binary = '';
-    for (const byte of bytes) {
-        binary += String.fromCharCode(byte);
-    }
-    return btoa(binary);
-};
-
-const base64ToBytes = (value: string): Uint8Array => {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-    }
-    return bytes;
-};
 
 const bytesToArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
     const buffer = new ArrayBuffer(bytes.byteLength);

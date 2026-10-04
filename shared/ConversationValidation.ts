@@ -1,17 +1,17 @@
+import { z } from 'zod';
 import type { ConversationDocument } from './ConversationTypes.js';
 import { CONVERSATION_SCHEMA_VERSION, createEmptyConversationDocument } from './ConversationTypes.js';
 import { resolveConversationSummary } from './ConversationSummaryResolver.js';
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-    value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+const conversationDocumentSchema = z.object({
+    id: z.string(),
+    conversationType: z.enum(['chat', 'forge']),
+    nodes: z.array(z.unknown()),
+    schemaVersion: z.number()
+});
 
-export const isConversationDocument = (value: unknown): value is ConversationDocument => {
-    const record = asRecord(value);
-    return typeof record.id === 'string'
-        && (record.conversationType === 'chat' || record.conversationType === 'forge')
-        && Array.isArray(record.nodes)
-        && typeof record.schemaVersion === 'number';
-};
+export const isConversationDocument = (value: unknown): value is ConversationDocument =>
+    conversationDocumentSchema.safeParse(value).success;
 
 export const validateConversationDocument = (value: unknown): ConversationDocument => {
     if (!isConversationDocument(value)) {

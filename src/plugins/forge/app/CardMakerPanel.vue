@@ -491,6 +491,7 @@ import {
   createForgeWorkspaceInstanceState,
   resolveForgeWorkspacePlacement
 } from './forgeWorkspacePlacementPresentation.js';
+import { isRecord } from '@shared/CommonUtils.js';
 
 const props = useSurfaceInput('forge.workspace');
 
@@ -534,8 +535,6 @@ const forgeTypographySettings = reactive<Record<ForgeTypographySettingKey, numbe
   ...FORGE_TYPOGRAPHY_DEFAULTS
 });
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 const activeComposerApproval = computed<ForgeToolApprovalRequest | null>(() =>
   forgeStore.composerToolApprovalsForSession({

@@ -12,7 +12,7 @@ const SEGMENT_RESOURCE_TYPES = Object.fromEntries(
     Object.entries(RESOURCE_TYPE_SEGMENTS).map(([type, segment]) => [segment, type])
 ) as Record<string, ResourceType>;
 
-const cleanPath = (path: string): string => {
+export const cleanPath = (path: string): string => {
     const normalized = `/${path || ''}`.replace(/\\/g, '/').replace(/\/+/g, '/');
     return normalized.length > 1 ? normalized.replace(/\/$/, '') : normalized;
 };

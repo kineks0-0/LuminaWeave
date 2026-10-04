@@ -1,4 +1,5 @@
 import type { LuminaChatMessage } from '@shared/LuminaMessage.js';
+import { padNumber as pad } from '../../../api/utils/dateFormat.js';
 
 /** 同一作者相邻消息归为一组的最大时间间隔 */
 const GROUP_WINDOW_MS = 7 * 60 * 1000;
@@ -29,8 +30,6 @@ export const resolveChatMessageTimestamp = (message: LuminaChatMessage): number 
     }
     return parseSendDate(message.extra?.send_date);
 };
-
-const pad = (value: number): string => String(value).padStart(2, '0');
 
 const startOfDay = (timestamp: number): number => {
     const date = new Date(timestamp);
